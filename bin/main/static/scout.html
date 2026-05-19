@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Scout</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body data-page="scout">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand">ObsidianScout</div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link" data-page="dashboard" href="/dashboard.html">Dashboard</a>
+                <a class="sidebar-link" data-page="scout" href="/scout.html">Scout</a>
+                <a class="sidebar-link" data-page="analytics" href="/analytics.html">Analytics</a>
+                <a class="sidebar-link" data-page="graphs" href="/graphs.html">Graphs</a>
+                <a class="sidebar-link" data-page="events" href="/events.html">Events</a>
+                <a class="sidebar-link" data-page="teams" href="/teams.html">Teams</a>
+                <a class="sidebar-link" data-page="matches" href="/matches.html">Matches</a>
+                <a class="sidebar-link" data-page="users" href="/users.html">Users</a>
+                <a class="sidebar-link" data-page="settings" href="/config.html">Settings</a>
+            </nav>
+            <div class="sidebar-footer">
+                <span id="nav-user" class="badge"></span>
+                <button class="btn ghost" data-action="toggle-theme" type="button">Toggle theme</button>
+                <button class="btn ghost" data-action="logout" type="button">Sign out</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="card">
+                <h1>Dynamic scouting form</h1>
+                <p class="notice">Pick event, team, and match, then fill in the form driven by config JSON.</p>
+                <div class="split mb-18">
+                    <div class="field">
+                        <label>Event</label>
+                        <div id="event-badge" class="badge"></div>
+                    </div>
+                    <div class="field">
+                        <label for="team-select">Team</label>
+                        <select id="team-select"></select>
+                    </div>
+                    <div class="field">
+                        <label for="match-select">Match</label>
+                        <select id="match-select" class="select-wide"></select>
+                    </div>
+                    <div class="field">
+                        <label>Timezone</label>
+                        <div id="timezone-badge" class="badge"></div>
+                    </div>
+                </div>
+                <form id="scouting-form" class="form-grid">
+                    <div id="form-blocked" class="notice">Select a team and match to start scouting.</div>
+                    <div id="form-fields" class="form-grid"></div>
+                    <div id="points-preview" class="card soft">
+                        <h3>Points preview</h3>
+                        <p class="notice">Auto, teleop, endgame, and total update as you fill out the form.</p>
+                        <div class="metrics">
+                            <div>
+                                <h4>Auto</h4>
+                                <div id="points-auto" class="metric-value">0</div>
+                            </div>
+                            <div>
+                                <h4>Teleop</h4>
+                                <div id="points-teleop" class="metric-value">0</div>
+                            </div>
+                            <div>
+                                <h4>Endgame</h4>
+                                <div id="points-endgame" class="metric-value">0</div>
+                            </div>
+                            <div>
+                                <h4>Total</h4>
+                                <div id="points-total" class="metric-value">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row gap-12 wrap">
+                        <button id="scout-submit" class="btn" type="submit">Save entry</button>
+                        <button id="scout-clear" class="btn ghost" type="button">Clear form</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/scout.js"></script>
+</body>
+</html>

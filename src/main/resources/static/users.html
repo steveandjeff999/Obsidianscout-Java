@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Users</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body data-page="users">
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand">ObsidianScout</div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link" data-page="dashboard" href="/dashboard.html">Dashboard</a>
+                <a class="sidebar-link" data-page="scout" href="/scout.html">Scout</a>
+                <a class="sidebar-link" data-page="analytics" href="/analytics.html">Analytics</a>
+                <a class="sidebar-link" data-page="graphs" href="/graphs.html">Graphs</a>
+                <a class="sidebar-link" data-page="events" href="/events.html">Events</a>
+                <a class="sidebar-link" data-page="teams" href="/teams.html">Teams</a>
+                <a class="sidebar-link" data-page="matches" href="/matches.html">Matches</a>
+                <a class="sidebar-link" data-page="users" href="/users.html">Users</a>
+                <a class="sidebar-link" data-page="settings" href="/config.html">Settings</a>
+            </nav>
+            <div class="sidebar-footer">
+                <span id="nav-user" class="badge"></span>
+                <button class="btn ghost" data-action="toggle-theme" type="button">Toggle theme</button>
+                <button class="btn ghost" data-action="logout" type="button">Sign out</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div id="admin-locked" class="card hidden">
+                <h2>Admin only</h2>
+                <p class="notice">You need admin access to manage users.</p>
+            </div>
+
+            <div id="admin-panel" class="card">
+                <h1>User management</h1>
+                <form id="user-form" class="form-grid">
+                    <div class="field">
+                        <label for="user-username">Username</label>
+                        <input id="user-username" type="text" required />
+                    </div>
+                    <div class="field">
+                        <label for="user-team">Team Number</label>
+                        <input id="user-team" type="number" required />
+                    </div>
+                    <div class="field">
+                        <label for="user-password">Password</label>
+                        <input id="user-password" type="password" required />
+                    </div>
+                    <div class="field">
+                        <label for="user-role">Role</label>
+                        <select id="user-role">
+                            <option value="SCOUT">Scout</option>
+                            <option value="ANALYTICS">Analytics</option>
+                            <option value="ADMIN">Admin</option>
+                            <option value="SUPERADMIN" class="superadmin-option">Super Admin</option>
+                        </select>
+                    </div>
+                    <button class="btn dark" type="submit">Create user</button>
+                </form>
+
+                <div class="mt-20">
+                    <h3>Current users</h3>
+                    <table id="user-table" class="table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Team</th>
+                                <th>Role</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/users.js"></script>
+</body>
+</html>

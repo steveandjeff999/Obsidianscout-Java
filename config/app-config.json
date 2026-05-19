@@ -1,0 +1,34 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "sessionSecret": "change-me",
+    "cookieSecure": false,
+    "https": {
+      "enabled": true,
+      "port": 8443,
+      "keystorePath": "config/obsidianscout.jks",
+      "keystorePassword": "change-me",
+      "keyAlias": "obsidianscout"
+    }
+  },
+  "database": {
+    "type": "sqlite",
+    "sqlite": {
+      "file": "data/obsidianscout.db"
+    },
+    "postgres": {
+      "host": "localhost",
+      "port": 5432,
+      "database": "obsidianscout",
+      "user": "postgres",
+      "password": "postgres",
+      "ssl": false
+    }
+  },
+  "seed": {
+    "adminUsername": "admin",
+    "adminTeamNumber": 0,
+    "adminPassword": "changeme"
+  }
+}

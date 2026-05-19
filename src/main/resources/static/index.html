@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Login</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body data-page="login">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <main class="shell">
+        <section class="hero">
+            <div>
+                <div class="brand">ObsidianScout</div>
+                <h1>Scout smarter, move faster.</h1>
+                <p>Log in with your team credentials to start capturing match data and live analytics.</p>
+                <div class="card soft">
+                    <strong>Multi-team ready.</strong> Each team gets its own isolated data, settings, and scouting config.
+                </div>
+            </div>
+            <div class="card">
+                <div class="tab-row" id="auth-tabs">
+                    <button class="tab active" data-tab="login" type="button">Sign in</button>
+                    <button class="tab" data-tab="register" type="button">Create account</button>
+                </div>
+
+                <div id="login-panel">
+                    <form id="login-form" class="form-grid">
+                        <div class="field">
+                            <label for="username">Username</label>
+                            <input id="username" name="username" type="text" required />
+                        </div>
+                        <div class="field">
+                            <label for="teamNumber">Team Number</label>
+                            <input id="teamNumber" name="teamNumber" type="number" required />
+                        </div>
+                        <div class="field">
+                            <label for="password">Password</label>
+                            <input id="password" name="password" type="password" required />
+                        </div>
+                        <button id="login-submit" class="btn" type="submit">Sign in</button>
+                    </form>
+                </div>
+
+                <div id="register-panel" class="hidden">
+                    <form id="register-form" class="form-grid">
+                        <div class="field">
+                            <label for="reg-username">Username</label>
+                            <input id="reg-username" type="text" required />
+                        </div>
+                        <div class="field">
+                            <label for="reg-team">Team Number</label>
+                            <input id="reg-team" type="number" required min="1" />
+                        </div>
+                        <div class="field">
+                            <label for="reg-password">Password</label>
+                            <input id="reg-password" type="password" required minlength="4" />
+                        </div>
+                        <div class="field">
+                            <label for="reg-confirm">Confirm Password</label>
+                            <input id="reg-confirm" type="password" required minlength="4" />
+                        </div>
+                        <div class="field">
+                            <label for="reg-role">Role</label>
+                            <select id="reg-role" required>
+                                <option value="SCOUT">Scout</option>
+                                <option value="ANALYTICS">Analytics</option>
+                                <option value="ADMIN">Admin</option>
+                            </select>
+                        </div>
+                        <button id="register-submit" class="btn dark" type="submit">Create account</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/login.js"></script>
+</body>
+</html>

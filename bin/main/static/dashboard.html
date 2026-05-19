@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Dashboard</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body data-page="dashboard">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand">ObsidianScout</div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link" data-page="dashboard" href="/dashboard.html">Dashboard</a>
+                <a class="sidebar-link" data-page="scout" href="/scout.html">Scout</a>
+                <a class="sidebar-link" data-page="analytics" href="/analytics.html">Analytics</a>
+                <a class="sidebar-link" data-page="graphs" href="/graphs.html">Graphs</a>
+                <a class="sidebar-link" data-page="events" href="/events.html">Events</a>
+                <a class="sidebar-link" data-page="teams" href="/teams.html">Teams</a>
+                <a class="sidebar-link" data-page="matches" href="/matches.html">Matches</a>
+                <a class="sidebar-link" data-page="users" href="/users.html">Users</a>
+                <a class="sidebar-link" data-page="settings" href="/config.html">Settings</a>
+            </nav>
+            <div class="sidebar-footer">
+                <span id="nav-user" class="badge"></span>
+                <button class="btn ghost" data-action="toggle-theme" type="button">Toggle theme</button>
+                <button class="btn ghost" data-action="logout" type="button">Sign out</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="card">
+                <h1>Dashboard</h1>
+                <p class="notice">Track scouting progress, sync status, and event context.</p>
+            </div>
+
+            <div class="metrics mt-20">
+                <div class="card">
+                    <h3>Entries</h3>
+                    <div id="summary-entries" class="metric-value">0</div>
+                </div>
+                <div class="card">
+                    <h3>Events</h3>
+                    <div id="summary-events" class="metric-value">0</div>
+                </div>
+                <div class="card">
+                    <h3>Teams</h3>
+                    <div id="summary-teams" class="metric-value">0</div>
+                </div>
+                <div class="card">
+                    <h3>Matches</h3>
+                    <div id="summary-matches" class="metric-value">0</div>
+                </div>
+            </div>
+
+            <div class="split mt-24">
+                <div class="card">
+                    <h2>Event context</h2>
+                    <p class="notice">Season and event settings are used for API sync and match times.</p>
+                    <div class="form-grid">
+                        <div class="field">
+                            <label>Season</label>
+                            <div id="summary-year"></div>
+                        </div>
+                        <div class="field">
+                            <label>Event key</label>
+                            <div id="summary-event"></div>
+                        </div>
+                        <div class="field">
+                            <label>Timezone</label>
+                            <div id="summary-timezone"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>Quick sync</h2>
+                    <p class="notice">Teams and matches auto-sync every 7.5 minutes while the server is running.</p>
+                    <p id="sync-status" class="notice mt-8"></p>
+                    <div class="row gap-12 wrap mt-12">
+                        <button class="btn" id="sync-teams-matches" type="button">Sync teams &amp; matches</button>
+                        <button class="btn secondary" id="sync-events" type="button">Sync events</button>
+                        <button class="btn ghost" id="sync-stats" type="button">Sync stats</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>

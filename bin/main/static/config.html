@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Settings</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body data-page="settings">
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand">ObsidianScout</div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link" data-page="dashboard" href="/dashboard.html">Dashboard</a>
+                <a class="sidebar-link" data-page="scout" href="/scout.html">Scout</a>
+                <a class="sidebar-link" data-page="analytics" href="/analytics.html">Analytics</a>
+                <a class="sidebar-link" data-page="graphs" href="/graphs.html">Graphs</a>
+                <a class="sidebar-link" data-page="events" href="/events.html">Events</a>
+                <a class="sidebar-link" data-page="teams" href="/teams.html">Teams</a>
+                <a class="sidebar-link" data-page="matches" href="/matches.html">Matches</a>
+                <a class="sidebar-link" data-page="users" href="/users.html">Users</a>
+                <a class="sidebar-link" data-page="settings" href="/config.html">Settings</a>
+            </nav>
+            <div class="sidebar-footer">
+                <span id="nav-user" class="badge"></span>
+                <button class="btn ghost" data-action="toggle-theme" type="button">Toggle theme</button>
+                <button class="btn ghost" data-action="logout" type="button">Sign out</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div id="admin-locked" class="card hidden">
+                <h2>Admin only</h2>
+                <p class="notice">You need admin access to edit configuration and API settings.</p>
+            </div>
+
+            <div id="admin-panel" class="card">
+                <h1>Settings</h1>
+                <div class="tab-row">
+                    <button class="tab active" data-tab="config" type="button">Scouting config</button>
+                    <button class="tab" data-tab="api" type="button">API keys</button>
+                </div>
+
+                <div data-panel="config">
+                    <div class="tab-row mt-6 mb-18">
+                        <button class="tab active" id="btn-visual-editor" type="button">Visual Editor</button>
+                        <button class="tab" id="btn-raw-editor" type="button">Raw JSON</button>
+                    </div>
+
+                    <!-- Visual Form Editor -->
+                    <div id="visual-editor-container" class="grid gap-16">
+                        <p class="notice">Build your scouting form visually. Create fields, specify scoring points, and reorder elements using simple forms.</p>
+                        
+                        <!-- Configuration Metadata Card -->
+                        <div class="card soft grid gap-12" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                            <div class="field">
+                                <label for="config-title">Config Title</label>
+                                <input id="config-title" type="text" placeholder="e.g. FRC Season 2026" />
+                            </div>
+                            <div class="field">
+                                <label for="config-version">Config Version</label>
+                                <input id="config-version" type="number" min="1" step="1" />
+                            </div>
+                        </div>
+
+                        <!-- Fields List Header and Add Button -->
+                        <div class="row justify-between align-center mt-12">
+                            <h2 style="margin: 0; font-size: 20px;">Form Fields</h2>
+                            <button id="btn-add-field" class="btn secondary" style="padding: 8px 16px; font-size: 13px;" type="button">+ Add Field</button>
+                        </div>
+
+                        <!-- Fields list container -->
+                        <div id="visual-fields-list" class="grid gap-12">
+                            <!-- Dynamic field cards will be injected here -->
+                        </div>
+                    </div>
+
+                    <!-- Raw JSON Textarea (Hidden by default) -->
+                    <div id="raw-editor-container" class="hidden">
+                        <p class="notice">Directly edit the scouting form JSON. Useful for backing up configurations or advanced customizations.</p>
+                        <label for="config-editor" class="sr-only">Scouting config JSON</label>
+                        <textarea id="config-editor" class="code-input"></textarea>
+                    </div>
+
+                    <div class="row gap-12 wrap mt-24">
+                        <button id="config-save" class="btn" type="button">Save config</button>
+                        <button id="config-export" class="btn ghost" type="button">Export</button>
+                        <label class="btn ghost btn-file">
+                            Import
+                            <input id="config-import" class="input-hidden" type="file" accept="application/json" />
+                        </label>
+                    </div>
+                </div>
+
+                <div data-panel="api" class="hidden">
+                    <p class="notice">Set season, event code, and API keys. When both TBA and FIRST keys are set, sync merges teams and matches (e.g. QM 4 and Qualification 4 dedupe to one row).</p>
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="settings-year">Season year</label>
+                            <input id="settings-year" type="number" />
+                        </div>
+                        <div class="field">
+                            <label for="settings-event-code">Event code</label>
+                            <input id="settings-event-code" type="text" placeholder="ex: okok" />
+                            <p class="notice mt-6">Event key is year + code (e.g. 2026 + okok → 2026okok).</p>
+                        </div>
+                        <div class="field">
+                            <label for="settings-timezone">Timezone</label>
+                            <input id="settings-timezone" type="text" placeholder="America/New_York" />
+                        </div>
+                        <div class="field">
+                            <label for="settings-source">Preferred source</label>
+                            <select id="settings-source">
+                                <option value="tba">The Blue Alliance</option>
+                                <option value="first">FIRST API</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Optional stats</label>
+                            <div class="grid gap-8">
+                                <label><input id="settings-epa" type="checkbox" /> Use Statbotics EPA</label>
+                                <label><input id="settings-opr" type="checkbox" /> Use TBA OPR</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="split mt-20">
+                        <div class="card soft">
+                            <h3>The Blue Alliance</h3>
+                            <div class="field">
+                                <label for="settings-tba-key">TBA key</label>
+                                <input id="settings-tba-key" type="password" />
+                            </div>
+                        </div>
+                        <div class="card soft">
+                            <h3>FIRST API</h3>
+                            <div class="field">
+                                <label for="settings-first-user">FIRST username</label>
+                                <input id="settings-first-user" type="text" />
+                            </div>
+                            <div class="field">
+                                <label for="settings-first-key">FIRST key</label>
+                                <input id="settings-first-key" type="password" />
+                            </div>
+                        </div>
+                        <div class="card soft">
+                            <h3>Statbotics</h3>
+                            <div class="field">
+                                <label for="settings-statbotics-key">Statbotics key (optional)</label>
+                                <input id="settings-statbotics-key" type="password" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-18">
+                        <button id="settings-save" class="btn" type="button">Save API settings</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/settings.js"></script>
+</body>
+</html>

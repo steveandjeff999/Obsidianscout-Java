@@ -1,0 +1,136 @@
+{
+  "version": 3,
+  "title": "ObsidianScout Default",
+  "fields": [
+    {
+      "id": "eventKey",
+      "label": "Event Key",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "matchKey",
+      "label": "Match Key",
+      "type": "text"
+    },
+    {
+      "id": "matchNumber",
+      "label": "Match Number",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "max": 200
+    },
+    {
+      "id": "targetTeamNumber",
+      "label": "Scouted Team Number",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "max": 9999
+    },
+    {
+      "id": "sectionAuto",
+      "label": "Auto",
+      "type": "section"
+    },
+    {
+      "id": "autoScore",
+      "label": "Auto Score",
+      "type": "counter",
+      "min": 0,
+      "max": 10,
+      "step": 1,
+      "pointsPer": 3
+    },
+    {
+      "id": "sectionTeleop",
+      "label": "Teleop",
+      "type": "section"
+    },
+    {
+      "id": "teleopCycles",
+      "label": "Teleop Cycles",
+      "type": "counter",
+      "min": 0,
+      "max": 30,
+      "step": 1,
+      "pointsPer": 1
+    },
+    {
+      "id": "sectionEndgame",
+      "label": "Endgame",
+      "type": "section"
+    },
+    {
+      "id": "endgame",
+      "label": "Endgame Result",
+      "type": "select",
+      "options": [
+        {
+          "label": "Park",
+          "value": "Park",
+          "points": 5
+        },
+        {
+          "label": "Climb",
+          "value": "Climb",
+          "points": 12
+        },
+        {
+          "label": "Fail",
+          "value": "Fail",
+          "points": 0
+        }
+      ]
+    },
+    {
+      "id": "driverRating",
+      "label": "Driver Rating",
+      "type": "rating",
+      "min": 1,
+      "max": 5,
+      "pointsPer": 2
+    },
+    {
+      "id": "notes",
+      "label": "Notes",
+      "type": "text"
+    }
+  ],
+  "analytics": [
+    {
+      "id": "entryCount",
+      "title": "Entries Collected",
+      "type": "count"
+    },
+    {
+      "id": "avgScore",
+      "title": "Average Score",
+      "type": "score_avg"
+    },
+    {
+      "id": "autoAvg",
+      "title": "Auto Score Avg",
+      "type": "avg",
+      "fieldId": "autoScore"
+    },
+    {
+      "id": "teleopAvg",
+      "title": "Teleop Cycles Avg",
+      "type": "avg",
+      "fieldId": "teleopCycles"
+    },
+    {
+      "id": "totalScore",
+      "title": "Total Points",
+      "type": "score_total"
+    },
+    {
+      "id": "endgameBreakdown",
+      "title": "Endgame Results",
+      "type": "bar",
+      "fieldId": "endgame"
+    }
+  ]
+}
