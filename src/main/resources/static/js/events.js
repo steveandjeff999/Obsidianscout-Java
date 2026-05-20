@@ -27,7 +27,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         actionHeaders.forEach(h => h.classList.remove("hidden"));
     }
 
-    await loadEvents(year, false);
+    await loadEvents(year, true);
 
     const syncButton = document.getElementById("sync-events");
     if (!isAdmin) {
@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             try {
                 await Obsidianscout.request("/api/integrations/sync/events", { method: "POST" });
                 Obsidianscout.showToast("Events synced", "success");
-                await loadEvents(year, false);
+                await loadEvents(year, true);
             } catch (error) {
                 Obsidianscout.showToast(error.message || "Sync failed", "error");
             } finally {
@@ -99,7 +99,7 @@ async function loadEvents(year, cachedOnly) {
                         try {
                             await Obsidianscout.request(`/api/events?eventKey=${key}`, { method: "DELETE" });
                             Obsidianscout.showToast("Event deleted successfully", "success");
-                            await loadEvents(year, false);
+                            await loadEvents(year, true);
                         } catch (error) {
                             Obsidianscout.showToast(error.message || "Failed to delete event", "error");
                         }
@@ -175,7 +175,7 @@ function setupModal(defaultYear) {
             });
             Obsidianscout.showToast("Event saved successfully", "success");
             closeModal();
-            await loadEvents(defaultYear, false);
+            await loadEvents(defaultYear, true);
         } catch (error) {
             Obsidianscout.showToast(error.message || "Failed to save event", "error");
         }

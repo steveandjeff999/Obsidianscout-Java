@@ -1,5 +1,6 @@
 (function () {
     const toastRootId = "toast-root";
+    const sidebarCollapseKey = "obsidian-sidebar-collapsed";
 
     // Role hierarchy (lower index = higher privilege)
     const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "SCOUT"];
@@ -28,7 +29,7 @@
                 throw new Error(message);
             }
 
-            if (opts.method === "GET") {
+            if (opts.method === "GET" && path !== "/api/auth/me") {
                 try {
                     localStorage.setItem("cache:" + path, text);
                 } catch (e) {
@@ -38,7 +39,7 @@
 
             return data;
         } catch (error) {
-            if (opts.method === "GET") {
+            if (opts.method === "GET" && path !== "/api/auth/me") {
                 const cachedText = localStorage.getItem("cache:" + path);
                 if (cachedText !== null) {
                     console.log("[Offline Cache] Serving cached response for:", path);
@@ -167,6 +168,7 @@
         button.addEventListener("click", async () => {
             try {
                 await request("/api/auth/logout", { method: "POST" });
+                localStorage.removeItem("cache:/api/auth/me");
                 window.location.href = "/";
             } catch (error) {
                 showToast(error.message || "Failed to sign out", "error");
@@ -230,7 +232,8 @@
             <button id="btn-sync-offline" class="btn-sync-offline hidden">Sync (0)</button>
         `;
 
-        brand.after(widget);
+        const anchor = sidebar.querySelector(".sidebar-header") || brand;
+        anchor.after(widget);
 
         const syncBtn = widget.querySelector("#btn-sync-offline");
         syncBtn.addEventListener("click", (e) => {
@@ -239,6 +242,66 @@
         });
 
         updateConnectionStatus();
+    }
+
+    function wireSidebarToggle() {
+        const sidebar = document.querySelector(".sidebar");
+        if (!sidebar) {
+            return;
+        }
+
+        const brand = sidebar.querySelector(".sidebar-brand");
+        if (!brand) {
+            return;
+        }
+
+        let header = sidebar.querySelector(".sidebar-header");
+        if (!header) {
+            header = document.createElement("div");
+            header.className = "sidebar-header";
+            brand.parentNode.insertBefore(header, brand);
+            header.appendChild(brand);
+        }
+
+        if (!brand.dataset.short) {
+            const brandText = (brand.textContent || "").trim();
+            const compact = brandText.replace(/[^a-z0-9]/gi, "");
+            brand.dataset.short = (compact.slice(0, 2) || brandText.slice(0, 2) || "OS").toUpperCase();
+            brand.title = brandText;
+        }
+
+        sidebar.querySelectorAll(".sidebar-link").forEach((link) => {
+            const label = (link.textContent || "").trim();
+            if (!link.dataset.short) {
+                const compact = label.replace(/[^a-z0-9]/gi, "");
+                link.dataset.short = (compact.slice(0, 2) || label.slice(0, 2) || "?").toUpperCase();
+            }
+            if (!link.title) {
+                link.title = label;
+            }
+        });
+
+        let toggle = sidebar.querySelector(".sidebar-toggle");
+        if (!toggle) {
+            toggle = document.createElement("button");
+            toggle.type = "button";
+            toggle.className = "sidebar-toggle";
+            header.appendChild(toggle);
+        }
+
+        const applyCollapsedState = (collapsed) => {
+            sidebar.classList.toggle("collapsed", collapsed);
+            toggle.textContent = collapsed ? ">>" : "<<";
+            toggle.setAttribute("aria-expanded", (!collapsed).toString());
+            localStorage.setItem(sidebarCollapseKey, collapsed ? "1" : "0");
+        };
+
+        const initial = localStorage.getItem(sidebarCollapseKey) === "1";
+        applyCollapsedState(initial);
+
+        toggle.addEventListener("click", () => {
+            applyCollapsedState(!sidebar.classList.contains("collapsed"));
+        });
     }
 
     function updateConnectionStatus() {
@@ -325,6 +388,8 @@
         if (sidebar) {
             injectConnectionWidget(sidebar);
         }
+
+        wireSidebarToggle();
 
         window.addEventListener("online", () => {
             updateConnectionStatus();

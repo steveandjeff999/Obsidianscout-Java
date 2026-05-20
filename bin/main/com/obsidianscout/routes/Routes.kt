@@ -139,12 +139,17 @@ fun Application.configureRoutes() {
 
             route("/events") {
                 get {
-                    call.requireSession()
+                    val session = call.requireSession()
                     val year = call.request.queryParameters["year"]?.toIntOrNull()
                     val cachedOnly = call.request.queryParameters["cached"]?.let { value ->
                         value == "1" || value.equals("true", ignoreCase = true)
                     } ?: false
-                    call.respond(IntegrationService.listEvents(year, cachedOnly))
+
+                    val settings = SettingsService.getSettings(session.teamNumber)
+                    val activeKey = settings.resolvedEventKey()
+
+                    val events = IntegrationService.listEvents(year, cachedOnly, activeKey, settings)
+                    call.respond(events)
                 }
                 post {
                     call.requireAdmin()

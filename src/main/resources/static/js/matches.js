@@ -28,7 +28,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Populate event filter select dropdown
     const eventFilter = document.getElementById("event-filter");
     try {
-        const events = await Obsidianscout.request(`/api/events?year=${settings.year}`);
+        const events = await Obsidianscout.request(`/api/events?year=${settings.year}&cached=1`);
         eventFilter.innerHTML = "";
         events.forEach(e => {
             const opt = document.createElement("option");
@@ -165,7 +165,7 @@ async function setupModal(defaultEventKey, timezone) {
 
     // Populate events dropdown
     try {
-        const events = await Obsidianscout.request("/api/events");
+        const events = await Obsidianscout.request("/api/events?cached=1");
         eventSelect.innerHTML = "";
         events.forEach(e => {
             const opt = document.createElement("option");

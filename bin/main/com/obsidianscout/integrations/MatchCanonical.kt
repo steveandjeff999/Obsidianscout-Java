@@ -33,6 +33,7 @@ object MatchCanonical {
     private val log = LoggerFactory.getLogger("MatchCanonical")
 
     private val TBA_KEY_SUFFIX = Regex("""^([a-z]+)(\d+)(?:m(\d+))?$""", RegexOption.IGNORE_CASE)
+    private val KNOWN_COMP_LEVELS = setOf("qm", "qf", "sf", "f", "ef", "practice", "playoff")
 
     data class Identity(
         val eventKey: String,
@@ -51,11 +52,12 @@ object MatchCanonical {
         return when {
             compact.isEmpty() -> ""
             compact in setOf("qm", "qual", "qualification", "quals", "q") -> "qm"
+            compact in setOf("m", "match", "matches") -> "qm"
             compact in setOf("qf", "quarterfinal", "quarterfinals") -> "qf"
             compact in setOf("sf", "semifinal", "semifinals") -> "sf"
             compact == "f" || compact == "final" || compact == "finals" -> "f"
             compact == "ef" || compact == "einstein" -> "ef"
-            compact in setOf("practice", "prac") -> "practice"
+            compact in setOf("practice", "prac", "pr", "prc") -> "practice"
             compact == "playoff" || compact == "playoffs" -> "playoff"
             else -> compact.take(16)
         }
@@ -105,16 +107,19 @@ object MatchCanonical {
         if (compLevel.isBlank()) {
             compLevel = parsedFromKey?.compLevel ?: "qm"
         }
-        if (compLevel == "playoff") {
-            compLevel = playoffSetToCompLevel(setNumber)
-        }
-
         if (parsedFromKey != null && compLevel == "qm" && parsedFromKey.compLevel.isNotBlank()) {
             if (record.compLevel.isBlank() || normalizeCompLevel(record.compLevel) == "qm") {
-                compLevel = parsedFromKey.compLevel
-                setNumber = parsedFromKey.setNumber
-                matchNumber = parsedFromKey.matchNumber
+                val parsedLevel = parsedFromKey.compLevel
+                if (KNOWN_COMP_LEVELS.contains(parsedLevel)) {
+                    compLevel = parsedLevel
+                    setNumber = parsedFromKey.setNumber
+                    matchNumber = parsedFromKey.matchNumber
+                }
             }
+        }
+
+        if (compLevel == "playoff") {
+            compLevel = playoffSetToCompLevel(setNumber)
         }
 
         return Identity(
