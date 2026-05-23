@@ -620,6 +620,11 @@ button {
     margin: 12px 0 0;
 }
 
+.metric-value.text-compact {
+    font-size: 20px;
+    line-height: 1.25;
+}
+
 .bar-chart {
     display: grid;
     gap: 10px;
@@ -705,6 +710,99 @@ body.theme-dark .line-grid {
 body.theme-dark .table th,
 body.theme-dark .table td {
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.table-scroll {
+    max-height: 560px;
+    overflow: auto;
+}
+
+.clickable-row {
+    cursor: pointer;
+}
+
+.clickable-row:hover,
+.clickable-row.selected {
+    background: var(--surface-2);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 4px 9px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.status-badge.complete {
+    color: var(--accent);
+    background: rgba(11, 143, 136, 0.12);
+}
+
+.status-badge.missing {
+    color: #c84b31;
+    background: rgba(200, 75, 49, 0.12);
+}
+
+.inline-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 43px;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink);
+}
+
+.inline-control input {
+    padding: 0;
+}
+
+.section-title {
+    margin: 0;
+    font-size: 20px;
+}
+
+.pit-detail {
+    display: grid;
+    gap: 14px;
+}
+
+.pit-detail-group {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+
+.pit-detail-group h3 {
+    margin: 0 0 4px;
+    font-size: 16px;
+}
+
+.pit-detail-item {
+    display: grid;
+    grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr);
+    gap: 12px;
+    align-items: start;
+    padding: 8px 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+body.theme-dark .pit-detail-item {
+    border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.pit-detail-item span {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.pit-detail-item strong {
+    overflow-wrap: anywhere;
 }
 
 .notice {

@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ObsidianScout | Analytics</title>
+    <title>ObsidianScout | Pit Scout</title>
     <link rel="stylesheet" href="/css/app.css" />
 </head>
-<body data-page="analytics">
+<body data-page="pit-scout">
     <div class="orb orb-1"></div>
     <div class="orb orb-3"></div>
 
@@ -35,14 +35,35 @@
 
         <main class="main-content">
             <div class="card">
-                <h1>Analytics from config</h1>
-                <p class="notice">Widgets are generated from the analytics section of the config JSON.</p>
+                <h1>Pit scouting form</h1>
+                <p class="notice">Pick event and team, then fill in the form driven by pit scouting config JSON.</p>
+                <div class="split mb-18">
+                    <div class="field">
+                        <label>Event</label>
+                        <div id="event-badge" class="badge"></div>
+                    </div>
+                    <div class="field">
+                        <label for="team-select">Team</label>
+                        <select id="team-select"></select>
+                    </div>
+                    <div class="field">
+                        <label>Timezone</label>
+                        <div id="timezone-badge" class="badge"></div>
+                    </div>
+                </div>
+                <form id="pit-scouting-form" class="form-grid">
+                    <div id="form-blocked" class="notice">Select a team to start pit scouting.</div>
+                    <div id="form-fields" class="form-grid"></div>
+                    <div class="row gap-12 wrap">
+                        <button id="pit-submit" class="btn" type="submit">Save pit entry</button>
+                        <button id="pit-clear" class="btn ghost" type="button">Clear form</button>
+                    </div>
+                </form>
             </div>
-            <div id="analytics-grid" class="metrics mt-20"></div>
         </main>
     </div>
 
     <script src="/js/common.js"></script>
-    <script src="/js/analytics.js"></script>
+    <script src="/js/pit-scout.js"></script>
 </body>
 </html>

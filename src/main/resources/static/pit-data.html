@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Pit Data</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body data-page="pit-data">
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand">ObsidianScout</div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
+                <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
+                <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
+                <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
+                <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
+                <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
+                <a class="sidebar-link" data-page="events" href="/events">Events</a>
+                <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
+                <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
+                <a class="sidebar-link" data-page="users" href="/users">Users</a>
+                <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
+            </nav>
+            <div class="sidebar-footer">
+                <span id="nav-user" class="badge"></span>
+                <button class="btn ghost" data-action="toggle-theme" type="button">Toggle theme</button>
+                <button class="btn ghost" data-action="logout" type="button">Sign out</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="card">
+                <h1>Pit data</h1>
+                <p class="notice">Review pit scouting coverage, find missing teams, and inspect each team's latest pit entry.</p>
+
+                <div class="metrics mt-20">
+                    <div>
+                        <h4>Entries</h4>
+                        <div id="pit-entry-count" class="metric-value">0</div>
+                    </div>
+                    <div>
+                        <h4>Teams Scouted</h4>
+                        <div id="pit-team-count" class="metric-value">0</div>
+                    </div>
+                    <div>
+                        <h4>Coverage</h4>
+                        <div id="pit-coverage" class="metric-value">0%</div>
+                    </div>
+                    <div>
+                        <h4>Last Update</h4>
+                        <div id="pit-last-updated" class="metric-value text-compact">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-20">
+                <div class="split">
+                    <div class="field">
+                        <label for="event-filter">Event</label>
+                        <select id="event-filter" class="select-wide"></select>
+                    </div>
+                    <div class="field">
+                        <label for="team-search">Search teams</label>
+                        <input id="team-search" type="search" placeholder="Team number or name" />
+                    </div>
+                    <div class="field">
+                        <label for="field-filter">Quick field</label>
+                        <select id="field-filter" class="select-wide"></select>
+                    </div>
+                    <div class="field">
+                        <label>Coverage filter</label>
+                        <label class="inline-control">
+                            <input id="missing-only" type="checkbox" />
+                            Needs pit scouting
+                        </label>
+                    </div>
+                </div>
+                <div class="row gap-12 wrap mt-18">
+                    <button id="export-pit-csv" class="btn ghost" type="button">Export CSV</button>
+                    <span id="pit-filter-status" class="badge">Showing all teams</span>
+                </div>
+            </div>
+
+            <div class="split mt-20">
+                <div class="card">
+                    <div class="row justify-between align-center wrap gap-12">
+                        <h2 class="section-title">Team Coverage</h2>
+                        <span id="pit-table-count" class="badge">0 teams</span>
+                    </div>
+                    <div class="table-scroll mt-12">
+                        <table class="table" id="pit-data-table">
+                            <thead>
+                                <tr>
+                                    <th>Team</th>
+                                    <th>Status</th>
+                                    <th>Updated</th>
+                                    <th id="quick-field-header">Quick Field</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="row justify-between align-center wrap gap-12">
+                        <h2 id="pit-detail-title" class="section-title">Select a team</h2>
+                        <span id="pit-detail-status" class="badge">No team selected</span>
+                    </div>
+                    <div id="pit-detail" class="pit-detail mt-12">
+                        <p class="notice">Choose a team from the coverage table to see its pit scouting answers.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/pit-data.js"></script>
+</body>
+</html>

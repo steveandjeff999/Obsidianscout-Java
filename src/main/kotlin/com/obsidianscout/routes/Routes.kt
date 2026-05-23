@@ -11,12 +11,17 @@ import com.obsidianscout.integrations.ApiSettings
 import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.IntegrationService
 import com.obsidianscout.integrations.SyncScheduler
+import com.obsidianscout.scouting.PitScoutingService
 import com.obsidianscout.scouting.ScoutingService
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondRedirect
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
@@ -99,6 +104,19 @@ fun Application.configureRoutes() {
                 }
             }
 
+            route("/pit-config") {
+                get {
+                    val session = call.requireSession()
+                    call.respond(ConfigService.getPitConfig(session.teamNumber))
+                }
+                put {
+                    val session = call.requireAdmin()
+                    val request = call.receive<ConfigUpdateRequest>()
+                    val updated = ConfigService.updatePitConfig(session.teamNumber, request.configJson)
+                    call.respond(updated)
+                }
+            }
+
             route("/settings") {
                 get {
                     val session = call.requireSession()
@@ -123,6 +141,20 @@ fun Application.configureRoutes() {
                     val request = call.receive<ScoutingEntryRequest>()
                     val config = ConfigService.getConfig(session.teamNumber)
                     val entry = ScoutingService.createEntry(session, request, config)
+                    call.respond(entry)
+                }
+            }
+
+            route("/pit-scouting") {
+                get {
+                    val session = call.requireSession()
+                    call.respond(PitScoutingService.listEntries(session))
+                }
+                post {
+                    val session = call.requireSession()
+                    val request = call.receive<ScoutingEntryRequest>()
+                    val config = ConfigService.getPitConfig(session.teamNumber)
+                    val entry = PitScoutingService.createEntry(session, request, config)
                     call.respond(entry)
                 }
             }
@@ -275,10 +307,44 @@ fun Application.configureRoutes() {
             }
         }
 
+        val pages = mapOf(
+            "index" to "index.html",
+            "dashboard" to "dashboard.html",
+            "scout" to "scout.html",
+            "pit-scout" to "pit-scout.html",
+            "pit-data" to "pit-data.html",
+            "analytics" to "analytics.html",
+            "graphs" to "graphs.html",
+            "events" to "events.html",
+            "teams" to "teams.html",
+            "matches" to "matches.html",
+            "users" to "users.html",
+            "config" to "config.html"
+        )
+
+        pages.forEach { (path, fileName) ->
+            get("/$path") {
+                call.respondStaticHtml(fileName)
+            }
+            get("/$fileName") {
+                val target = if (path == "index") "/" else "/$path"
+                call.respondRedirect(target, permanent = true)
+            }
+        }
+
         staticResources("/", "static") {
             default("index.html")
         }
     }
+}
+
+private suspend fun ApplicationCall.respondStaticHtml(fileName: String) {
+    val resource = Thread.currentThread().contextClassLoader.getResource("static/$fileName")
+    if (resource == null) {
+        respond(HttpStatusCode.NotFound)
+        return
+    }
+    respondText(resource.readText(), ContentType.Text.Html)
 }
 
 private fun ApiSettings.toPayload(): ApiSettingsPayload {

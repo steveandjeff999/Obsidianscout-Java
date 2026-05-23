@@ -1,5 +1,6 @@
 package com.obsidianscout.config
 
+import com.obsidianscout.db.PitScoutingConfigs
 import com.obsidianscout.db.ScoutingConfigs
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -32,6 +33,7 @@ data class ScoutingField(
     val label: String,
     val type: String,
     val required: Boolean = false,
+    val phase: String? = null,
     val options: List<ScoutingOption> = emptyList(),
     val min: Int? = null,
     val max: Int? = null,
@@ -56,6 +58,7 @@ data class AnalyticsWidget(
 
 object ConfigService {
     private val defaultConfigPath = Paths.get("config", "default-scouting-config.json")
+    private val defaultPitConfigPath = Paths.get("config", "default-pit-scouting-config.json")
 
     fun ensureDefaultConfig() {
         transaction {
@@ -66,6 +69,19 @@ object ConfigService {
             if (!existing) {
                 val jsonText = loadDefaultConfigText()
                 ScoutingConfigs.insert {
+                    it[teamNumber] = 0
+                    it[configJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            }
+
+            val existingPit = PitScoutingConfigs
+                .select { PitScoutingConfigs.teamNumber eq 0 }
+                .limit(1)
+                .firstOrNull() != null
+            if (!existingPit) {
+                val jsonText = loadDefaultPitConfigText()
+                PitScoutingConfigs.insert {
                     it[teamNumber] = 0
                     it[configJson] = jsonText
                     it[updatedAt] = Instant.now()
@@ -125,11 +141,68 @@ object ConfigService {
         return parsed
     }
 
+    fun getPitConfigJson(teamNumber: Int): String {
+        return transaction {
+            val teamConfig = PitScoutingConfigs
+                .select { PitScoutingConfigs.teamNumber eq teamNumber }
+                .limit(1)
+                .firstOrNull()
+                ?.get(PitScoutingConfigs.configJson)
+
+            if (teamConfig != null) {
+                return@transaction teamConfig
+            }
+
+            PitScoutingConfigs
+                .select { PitScoutingConfigs.teamNumber eq 0 }
+                .limit(1)
+                .firstOrNull()
+                ?.get(PitScoutingConfigs.configJson)
+        } ?: loadDefaultPitConfigText()
+    }
+
+    fun getPitConfig(teamNumber: Int): ScoutingConfig {
+        val jsonText = normalizeConfigJson(getPitConfigJson(teamNumber))
+        return JsonSupport.json.decodeFromString(jsonText)
+    }
+
+    fun updatePitConfig(teamNumber: Int, newJson: String): ScoutingConfig {
+        val normalizedJson = normalizeConfigJson(newJson)
+        val parsed = JsonSupport.json.decodeFromString<ScoutingConfig>(normalizedJson)
+        transaction {
+            val row = PitScoutingConfigs
+                .select { PitScoutingConfigs.teamNumber eq teamNumber }
+                .limit(1)
+                .firstOrNull()
+            if (row == null) {
+                PitScoutingConfigs.insert {
+                    it[PitScoutingConfigs.teamNumber] = teamNumber
+                    it[configJson] = normalizedJson
+                    it[updatedAt] = Instant.now()
+                }
+            } else {
+                PitScoutingConfigs.update({ PitScoutingConfigs.id eq row[PitScoutingConfigs.id] }) {
+                    it[configJson] = normalizedJson
+                    it[updatedAt] = Instant.now()
+                }
+            }
+        }
+        return parsed
+    }
+
     private fun loadDefaultConfigText(): String {
         return if (Files.exists(defaultConfigPath)) {
             Files.readString(defaultConfigPath)
         } else {
             JsonSupport.json.encodeToString(defaultConfig())
+        }
+    }
+
+    private fun loadDefaultPitConfigText(): String {
+        return if (Files.exists(defaultPitConfigPath)) {
+            Files.readString(defaultPitConfigPath)
+        } else {
+            JsonSupport.json.encodeToString(defaultPitConfig())
         }
     }
 
@@ -238,6 +311,86 @@ object ConfigService {
                     id = "totalScore",
                     title = "Total Points",
                     type = "score_total"
+                )
+            )
+        )
+    }
+
+    private fun defaultPitConfig(): ScoutingConfig {
+        return ScoutingConfig(
+            version = 1,
+            title = "ObsidianScout Pit Scouting",
+            fields = listOf(
+                ScoutingField(
+                    id = "eventKey",
+                    label = "Event Key",
+                    type = "text",
+                    required = true
+                ),
+                ScoutingField(
+                    id = "targetTeamNumber",
+                    label = "Scouted Team Number",
+                    type = "number",
+                    required = true,
+                    min = 1,
+                    max = 9999
+                ),
+                ScoutingField(
+                    id = "sectionRobot",
+                    label = "Robot",
+                    type = "section"
+                ),
+                ScoutingField(
+                    id = "teamName",
+                    label = "Team Name",
+                    type = "text"
+                ),
+                ScoutingField(
+                    id = "driveTrain",
+                    label = "Drive Train",
+                    type = "select",
+                    options = listOf(
+                        ScoutingOption("Swerve", "swerve"),
+                        ScoutingOption("Tank", "tank"),
+                        ScoutingOption("Mecanum", "mecanum"),
+                        ScoutingOption("Other", "other")
+                    )
+                ),
+                ScoutingField(
+                    id = "robotWeight",
+                    label = "Robot Weight",
+                    type = "number",
+                    min = 0,
+                    max = 150
+                ),
+                ScoutingField(
+                    id = "sectionCapabilities",
+                    label = "Capabilities",
+                    type = "section"
+                ),
+                ScoutingField(
+                    id = "hasAuto",
+                    label = "Has Autonomous",
+                    type = "checkbox"
+                ),
+                ScoutingField(
+                    id = "spareBatteries",
+                    label = "Spare Batteries",
+                    type = "counter",
+                    min = 0,
+                    step = 1
+                ),
+                ScoutingField(
+                    id = "pitNotes",
+                    label = "Pit Notes",
+                    type = "textarea"
+                )
+            ),
+            analytics = listOf(
+                AnalyticsWidget(
+                    id = "pitEntryCount",
+                    title = "Pit Entries Collected",
+                    type = "count"
                 )
             )
         )

@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const existing = await Obsidianscout.getMe();
     if (existing) {
-        window.location.href = "/dashboard.html";
+        window.location.href = "/dashboard";
         return;
     }
 
@@ -48,7 +48,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     password
                 }
             });
-            window.location.href = "/dashboard.html";
+            window.location.href = "/dashboard";
         } catch (error) {
             Obsidianscout.showToast(error.message || "Sign in failed", "error");
         } finally {
@@ -90,7 +90,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             });
             Obsidianscout.showToast("Account created!", "success");
-            window.location.href = "/dashboard.html";
+            window.location.href = "/dashboard";
         } catch (error) {
             Obsidianscout.showToast(error.message || "Registration failed", "error");
         } finally {

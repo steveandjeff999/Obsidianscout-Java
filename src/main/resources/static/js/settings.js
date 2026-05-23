@@ -31,8 +31,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     const configVersionInput = document.getElementById("config-version");
     const btnAddField = document.getElementById("btn-add-field");
     const visualFieldsList = document.getElementById("visual-fields-list");
+    const configModeButtons = document.querySelectorAll("[data-config-kind]");
+    const configModes = {
+        game: {
+            apiPath: "/api/config",
+            defaultTitle: "ObsidianScout",
+            exportName: "scouting-config.json"
+        },
+        pit: {
+            apiPath: "/api/pit-config",
+            defaultTitle: "ObsidianScout Pit Scouting",
+            exportName: "pit-scouting-config.json"
+        }
+    };
 
     // Local configuration state
+    let activeConfigKind = "game";
     let currentConfig = { version: 1, title: "ObsidianScout", fields: [], analytics: [] };
 
     // Sub-tab switching logic
@@ -86,8 +100,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         btnAddField.addEventListener("click", addField);
     }
 
+    configModeButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+            const nextKind = button.dataset.configKind;
+            if (!nextKind || nextKind === activeConfigKind || !configModes[nextKind]) {
+                return;
+            }
+            activeConfigKind = nextKind;
+            updateConfigModeButtons();
+            await loadActiveConfig();
+        });
+    });
+
     wireTabs();
-    await loadConfig(editor);
+    await loadActiveConfig();
     await loadSettings();
 
     // Save configuration
@@ -113,7 +139,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         try {
-            await Obsidianscout.request("/api/config", {
+            await Obsidianscout.request(configModes[activeConfigKind].apiPath, {
                 method: "PUT",
                 json: {
                     configJson: text
@@ -132,7 +158,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = "scouting-config.json";
+        link.download = configModes[activeConfigKind].exportName;
         link.click();
         URL.revokeObjectURL(url);
     });
@@ -195,6 +221,51 @@ document.addEventListener("DOMContentLoaded", async () => {
             Obsidianscout.showToast(error.message || "Save failed", "error");
         }
     });
+
+    async function loadActiveConfig() {
+        const mode = configModes[activeConfigKind];
+        try {
+            const config = await Obsidianscout.request(mode.apiPath);
+            currentConfig = normalizeConfig(config, mode.defaultTitle);
+            editor.value = JSON.stringify(currentConfig, null, 2);
+            if (configTitleInput) {
+                configTitleInput.value = currentConfig.title || "";
+            }
+            if (configVersionInput) {
+                configVersionInput.value = currentConfig.version || 1;
+            }
+            renderVisualFields();
+            showVisualEditor();
+        } catch (error) {
+            Obsidianscout.showToast("Unable to load config", "error");
+        }
+    }
+
+    function normalizeConfig(config, defaultTitle) {
+        const parsed = typeof config === "string" ? JSON.parse(config) : (config || {});
+        return {
+            title: parsed.title || defaultTitle,
+            version: Number(parsed.version) || 1,
+            fields: Array.isArray(parsed.fields) ? parsed.fields : [],
+            analytics: Array.isArray(parsed.analytics) ? parsed.analytics : []
+        };
+    }
+
+    function updateConfigModeButtons() {
+        configModeButtons.forEach((button) => {
+            button.classList.toggle("active", button.dataset.configKind === activeConfigKind);
+        });
+    }
+
+    function showVisualEditor() {
+        if (!btnVisual || !btnRaw || !containerVisual || !containerRaw) {
+            return;
+        }
+        btnRaw.classList.remove("active");
+        btnVisual.classList.add("active");
+        containerRaw.classList.add("hidden");
+        containerVisual.classList.remove("hidden");
+    }
 
     /**
      * Renders all form fields in currentConfig.fields to the visualFieldsList container.
@@ -483,12 +554,45 @@ document.addEventListener("DOMContentLoaded", async () => {
             const inputMax = document.createElement("input");
             inputMax.type = "number";
             inputMax.value = field.max !== undefined && field.max !== null ? field.max : "";
+            const counterHasNoLimit = field.type === "counter" && (field.max === undefined || field.max === null || field.max === "");
+            let inputNoLimit = null;
+            inputMax.disabled = counterHasNoLimit;
             inputMax.addEventListener("input", (e) => {
                 field.max = e.target.value !== "" ? Number(e.target.value) : null;
+                if (inputNoLimit && e.target.value !== "") {
+                    inputNoLimit.checked = false;
+                    inputMax.disabled = false;
+                }
                 updateRawFromVisual();
             });
             divMax.appendChild(labelMax);
             divMax.appendChild(inputMax);
+            if (field.type === "counter") {
+                const noLimitWrap = document.createElement("label");
+                noLimitWrap.style.display = "flex";
+                noLimitWrap.style.alignItems = "center";
+                noLimitWrap.style.gap = "8px";
+                noLimitWrap.style.cursor = "pointer";
+                noLimitWrap.style.marginTop = "8px";
+                inputNoLimit = document.createElement("input");
+                inputNoLimit.type = "checkbox";
+                inputNoLimit.checked = counterHasNoLimit;
+                inputNoLimit.addEventListener("change", (e) => {
+                    if (e.target.checked) {
+                        field.max = null;
+                        inputMax.value = "";
+                        inputMax.disabled = true;
+                    } else {
+                        field.max = 10;
+                        inputMax.value = "10";
+                        inputMax.disabled = false;
+                    }
+                    updateRawFromVisual();
+                });
+                noLimitWrap.appendChild(inputNoLimit);
+                noLimitWrap.appendChild(document.createTextNode("No limit"));
+                divMax.appendChild(noLimitWrap);
+            }
             boundsDiv.appendChild(divMax);
             
             // Step
@@ -847,12 +951,12 @@ function wireTabs() {
     const panels = document.querySelectorAll("[data-panel]");
     tabs.forEach((tab) => {
         // Skip sub-tabs
-        if (tab.id === "btn-visual-editor" || tab.id === "btn-raw-editor") {
+        if (tab.id === "btn-visual-editor" || tab.id === "btn-raw-editor" || tab.dataset.configKind) {
             return;
         }
         tab.addEventListener("click", () => {
             tabs.forEach((item) => {
-                if (item.id !== "btn-visual-editor" && item.id !== "btn-raw-editor") {
+                if (item.id !== "btn-visual-editor" && item.id !== "btn-raw-editor" && !item.dataset.configKind) {
                     item.classList.remove("active");
                 }
             });
@@ -862,36 +966,6 @@ function wireTabs() {
             document.querySelector(`[data-panel='${target}']`).classList.remove("hidden");
         });
     });
-}
-
-async function loadConfig(editor) {
-    try {
-        const config = await Obsidianscout.request("/api/config");
-        // Deep copy to local config variable
-        const titleInput = document.getElementById("config-title");
-        const versionInput = document.getElementById("config-version");
-        
-        // Trigger event loop switch to allow DOM rendering context to bind
-        setTimeout(() => {
-            const btnVisual = document.getElementById("btn-visual-editor");
-            if (btnVisual) {
-                // Parse loaded config
-                const parsed = typeof config === "string" ? JSON.parse(config) : config;
-                
-                // Assign to top scope currentConfig in memory
-                // Find currentConfig via closing over state or updating raw
-                const settingsScope = document.querySelector("[data-page='settings']");
-                if (settingsScope) {
-                    // Let's programmatically load and trigger visual tabs
-                    editor.value = JSON.stringify(parsed, null, 2);
-                    btnVisual.click();
-                }
-            }
-        }, 100);
-        
-    } catch (error) {
-        Obsidianscout.showToast("Unable to load config", "error");
-    }
 }
 
 async function loadSettings() {

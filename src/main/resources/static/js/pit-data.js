@@ -1,0 +1,428 @@
+document.addEventListener("DOMContentLoaded", async () => {
+    Obsidianscout.initTheme();
+    const me = await Obsidianscout.requireAuth();
+    if (!me) {
+        return;
+    }
+
+    Obsidianscout.setUserBadge(me);
+    Obsidianscout.setActiveNav();
+    Obsidianscout.adjustNavForRole(me);
+    Obsidianscout.wireLogout();
+    Obsidianscout.wireThemeToggle();
+
+    const state = {
+        settings: null,
+        config: null,
+        fields: [],
+        events: [],
+        teams: [],
+        entries: [],
+        eventKey: "",
+        selectedTeamNumber: null,
+        quickFieldId: ""
+    };
+
+    try {
+        const settingsResponse = await Obsidianscout.request("/api/settings");
+        state.settings = settingsResponse.settings;
+        state.eventKey = Obsidianscout.resolveEventKey(state.settings);
+
+        const [config, entries, events] = await Promise.all([
+            Obsidianscout.request("/api/pit-config"),
+            Obsidianscout.request("/api/pit-scouting"),
+            Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
+        ]);
+
+        state.config = config;
+        state.fields = buildDisplayFields(config.fields || []);
+        state.entries = Array.isArray(entries) ? entries : [];
+        state.events = normalizeEvents(events, state.eventKey, state.settings);
+        state.quickFieldId = pickDefaultQuickField(state.fields);
+
+        initControls(state);
+        await loadTeamsForEvent(state);
+        renderAll(state);
+    } catch (error) {
+        Obsidianscout.showToast("Unable to load pit data", "error");
+    }
+});
+
+const RESERVED_FIELDS = new Set(["eventKey", "targetTeamNumber"]);
+
+function initControls(state) {
+    const eventFilter = document.getElementById("event-filter");
+    const teamSearch = document.getElementById("team-search");
+    const fieldFilter = document.getElementById("field-filter");
+    const missingOnly = document.getElementById("missing-only");
+    const exportButton = document.getElementById("export-pit-csv");
+
+    eventFilter.innerHTML = "";
+    state.events.forEach((event) => {
+        const option = document.createElement("option");
+        option.value = event.eventKey;
+        option.textContent = `${event.name} (${event.eventKey})`;
+        option.selected = event.eventKey === state.eventKey;
+        eventFilter.appendChild(option);
+    });
+    eventFilter.addEventListener("change", async () => {
+        state.eventKey = eventFilter.value;
+        state.selectedTeamNumber = null;
+        await loadTeamsForEvent(state);
+        renderAll(state);
+    });
+
+    fieldFilter.innerHTML = "";
+    state.fields.forEach((field) => {
+        const option = document.createElement("option");
+        option.value = field.id;
+        option.textContent = field.label;
+        option.selected = field.id === state.quickFieldId;
+        fieldFilter.appendChild(option);
+    });
+    fieldFilter.addEventListener("change", () => {
+        state.quickFieldId = fieldFilter.value;
+        renderTable(state);
+    });
+
+    teamSearch.addEventListener("input", () => renderTable(state));
+    missingOnly.addEventListener("change", () => renderTable(state));
+    exportButton.addEventListener("click", () => exportCsv(state));
+}
+
+async function loadTeamsForEvent(state) {
+    if (!state.eventKey) {
+        state.teams = [];
+        return;
+    }
+    try {
+        const teams = await Obsidianscout.request(`/api/teams?eventKey=${state.eventKey}`);
+        state.teams = Array.isArray(teams) ? teams : [];
+    } catch (error) {
+        state.teams = [];
+    }
+}
+
+function renderAll(state) {
+    renderMetrics(state);
+    renderTable(state);
+    renderDetail(state);
+}
+
+function renderMetrics(state) {
+    const entries = entriesForEvent(state);
+    const latestByTeam = latestEntriesByTeam(entries);
+    const totalTeams = buildRows(state, latestByTeam).length;
+    const scoutedTeams = latestByTeam.size;
+    const lastUpdated = entries
+        .map((entry) => new Date(entry.createdAt))
+        .filter((date) => !Number.isNaN(date.getTime()))
+        .sort((a, b) => b - a)[0];
+
+    document.getElementById("pit-entry-count").textContent = entries.length.toString();
+    document.getElementById("pit-team-count").textContent = scoutedTeams.toString();
+    document.getElementById("pit-coverage").textContent = totalTeams ? `${Math.round((scoutedTeams / totalTeams) * 100)}%` : "0%";
+    document.getElementById("pit-last-updated").textContent = lastUpdated ? lastUpdated.toLocaleDateString() : "--";
+}
+
+function renderTable(state) {
+    const table = document.getElementById("pit-data-table");
+    const body = table.querySelector("tbody");
+    const rows = filteredRows(state);
+    const quickField = fieldById(state, state.quickFieldId);
+    const header = document.getElementById("quick-field-header");
+    const countBadge = document.getElementById("pit-table-count");
+    const status = document.getElementById("pit-filter-status");
+
+    header.textContent = quickField ? quickField.label : "Quick Field";
+    countBadge.textContent = `${rows.length} ${rows.length === 1 ? "team" : "teams"}`;
+    status.textContent = summarizeFilters(state, rows.length);
+    body.innerHTML = "";
+
+    if (!rows.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 4;
+        cell.textContent = "No teams match the current filters.";
+        row.appendChild(cell);
+        body.appendChild(row);
+        return;
+    }
+
+    rows.forEach((rowData) => {
+        const row = document.createElement("tr");
+        row.className = "clickable-row";
+        if (rowData.teamNumber === state.selectedTeamNumber) {
+            row.classList.add("selected");
+        }
+
+        appendCell(row, teamLabel(rowData));
+        appendStatusCell(row, rowData.entry ? "Scouted" : "Missing", Boolean(rowData.entry));
+        appendCell(row, rowData.entry ? formatDateTime(rowData.entry.createdAt) : "--");
+        appendCell(row, rowData.entry && quickField ? formatValue(quickField, rowData.entry.data[quickField.id]) : "--");
+
+        row.addEventListener("click", () => {
+            state.selectedTeamNumber = rowData.teamNumber;
+            renderTable(state);
+            renderDetail(state);
+        });
+        body.appendChild(row);
+    });
+}
+
+function renderDetail(state) {
+    const detail = document.getElementById("pit-detail");
+    const title = document.getElementById("pit-detail-title");
+    const status = document.getElementById("pit-detail-status");
+    const latestByTeam = latestEntriesByTeam(entriesForEvent(state));
+    const rows = buildRows(state, latestByTeam);
+    const selected = rows.find((row) => row.teamNumber === state.selectedTeamNumber);
+
+    detail.innerHTML = "";
+    if (!selected) {
+        title.textContent = "Select a team";
+        status.textContent = "No team selected";
+        const notice = document.createElement("p");
+        notice.className = "notice";
+        notice.textContent = "Choose a team from the coverage table to see its pit scouting answers.";
+        detail.appendChild(notice);
+        return;
+    }
+
+    title.textContent = teamLabel(selected);
+    status.textContent = selected.entry ? `Updated ${formatDateTime(selected.entry.createdAt)}` : "Needs pit scouting";
+
+    if (!selected.entry) {
+        const notice = document.createElement("p");
+        notice.className = "notice";
+        notice.textContent = "No pit entry has been submitted for this team at the selected event.";
+        detail.appendChild(notice);
+        return;
+    }
+
+    const groups = groupFields(state.config.fields || []);
+    groups.forEach((group) => {
+        const groupNode = document.createElement("div");
+        groupNode.className = "pit-detail-group";
+
+        if (group.title) {
+            const groupTitle = document.createElement("h3");
+            groupTitle.textContent = group.title;
+            groupNode.appendChild(groupTitle);
+        }
+
+        group.fields.forEach((field) => {
+            const item = document.createElement("div");
+            item.className = "pit-detail-item";
+            const label = document.createElement("span");
+            label.textContent = field.label;
+            const value = document.createElement("strong");
+            value.textContent = formatValue(field, selected.entry.data[field.id]);
+            item.appendChild(label);
+            item.appendChild(value);
+            groupNode.appendChild(item);
+        });
+
+        if (group.fields.length) {
+            detail.appendChild(groupNode);
+        }
+    });
+}
+
+function filteredRows(state) {
+    const latestByTeam = latestEntriesByTeam(entriesForEvent(state));
+    const query = document.getElementById("team-search").value.trim().toLowerCase();
+    const missingOnly = document.getElementById("missing-only").checked;
+    return buildRows(state, latestByTeam)
+        .filter((row) => !missingOnly || !row.entry)
+        .filter((row) => {
+            if (!query) {
+                return true;
+            }
+            return [
+                row.teamNumber,
+                row.team?.nickname,
+                row.team?.name,
+                row.team?.city,
+                row.team?.state
+            ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
+}
+
+function buildRows(state, latestByTeam) {
+    const rows = [];
+    const seen = new Set();
+    state.teams.forEach((team) => {
+        seen.add(team.teamNumber);
+        rows.push({
+            team,
+            teamNumber: team.teamNumber,
+            entry: latestByTeam.get(team.teamNumber) || null
+        });
+    });
+
+    latestByTeam.forEach((entry, teamNumber) => {
+        if (!seen.has(teamNumber)) {
+            rows.push({
+                team: null,
+                teamNumber,
+                entry
+            });
+        }
+    });
+
+    return rows.sort((a, b) => a.teamNumber - b.teamNumber);
+}
+
+function latestEntriesByTeam(entries) {
+    const map = new Map();
+    entries
+        .slice()
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .forEach((entry) => {
+            if (entry.targetTeamNumber && !map.has(entry.targetTeamNumber)) {
+                map.set(entry.targetTeamNumber, entry);
+            }
+        });
+    return map;
+}
+
+function entriesForEvent(state) {
+    return state.entries.filter((entry) => !state.eventKey || entry.eventKey === state.eventKey);
+}
+
+function buildDisplayFields(fields) {
+    return fields.filter((field) =>
+        field.type !== "section" && !RESERVED_FIELDS.has(field.id)
+    );
+}
+
+function groupFields(fields) {
+    const groups = [];
+    let current = { title: "", fields: [] };
+    fields.forEach((field) => {
+        if (field.type === "section") {
+            if (current.title || current.fields.length) {
+                groups.push(current);
+            }
+            current = { title: field.label, fields: [] };
+            return;
+        }
+        if (!RESERVED_FIELDS.has(field.id)) {
+            current.fields.push(field);
+        }
+    });
+    if (current.title || current.fields.length) {
+        groups.push(current);
+    }
+    return groups;
+}
+
+function pickDefaultQuickField(fields) {
+    const preferred = fields.find((field) => ["select", "number", "counter", "rating", "checkbox"].includes(field.type));
+    return (preferred || fields[0] || {}).id || "";
+}
+
+function fieldById(state, id) {
+    return state.fields.find((field) => field.id === id);
+}
+
+function normalizeEvents(events, activeKey, settings) {
+    const list = [{ eventKey: "", name: "All events", year: settings.year }]
+        .concat(Array.isArray(events) ? events.slice() : []);
+    if (activeKey && !list.some((event) => event.eventKey === activeKey)) {
+        list.splice(1, 0, {
+            eventKey: activeKey,
+            name: `Configured Event: ${activeKey}`,
+            year: settings.year
+        });
+    }
+    return list;
+}
+
+function teamLabel(row) {
+    const name = row.team?.nickname || row.team?.name || "";
+    return `${row.teamNumber}${name ? ` ${name}` : ""}`;
+}
+
+function appendCell(row, text) {
+    const cell = document.createElement("td");
+    cell.textContent = text;
+    row.appendChild(cell);
+}
+
+function appendStatusCell(row, text, complete) {
+    const cell = document.createElement("td");
+    const badge = document.createElement("span");
+    badge.className = complete ? "status-badge complete" : "status-badge missing";
+    badge.textContent = text;
+    cell.appendChild(badge);
+    row.appendChild(cell);
+}
+
+function formatValue(field, value) {
+    if (value === null || value === undefined || value === "") {
+        return "--";
+    }
+    if (field.type === "checkbox") {
+        return value ? "Yes" : "No";
+    }
+    if (field.type === "select") {
+        const option = (field.options || []).find((item) => item.value === value || item.label === value);
+        return option ? option.label : String(value);
+    }
+    return String(value);
+}
+
+function formatDateTime(value) {
+    if (!value) {
+        return "--";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "--";
+    }
+    return date.toLocaleString();
+}
+
+function summarizeFilters(state, count) {
+    const pieces = [`${count} visible`];
+    if (document.getElementById("missing-only").checked) {
+        pieces.push("missing only");
+    }
+    const query = document.getElementById("team-search").value.trim();
+    if (query) {
+        pieces.push(`search: ${query}`);
+    }
+    return pieces.join(" | ");
+}
+
+function exportCsv(state) {
+    const rows = filteredRows(state);
+    const header = ["Team Number", "Team Name", "Status", "Updated"].concat(state.fields.map((field) => field.label));
+    const csvRows = [header];
+
+    rows.forEach((row) => {
+        const entry = row.entry;
+        csvRows.push([
+            row.teamNumber,
+            row.team?.nickname || row.team?.name || "",
+            entry ? "Scouted" : "Missing",
+            entry ? formatDateTime(entry.createdAt) : ""
+        ].concat(state.fields.map((field) => entry ? formatValue(field, entry.data[field.id]) : "")));
+    });
+
+    const csvText = csvRows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob([csvText], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `pit-data-${state.eventKey || "all"}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function csvCell(value) {
+    const text = value === null || value === undefined ? "" : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+}

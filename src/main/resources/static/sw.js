@@ -1,22 +1,25 @@
-const CACHE_NAME = 'obsidianscout-shell-v1';
+const CACHE_NAME = 'obsidianscout-shell-v3';
 
 const ASSETS = [
     '/',
-    '/index.html',
-    '/dashboard.html',
-    '/scout.html',
-    '/analytics.html',
-    '/graphs.html',
-    '/events.html',
-    '/teams.html',
-    '/matches.html',
-    '/users.html',
-    '/config.html',
+    '/dashboard',
+    '/scout',
+    '/pit-scout',
+    '/pit-data',
+    '/analytics',
+    '/graphs',
+    '/events',
+    '/teams',
+    '/matches',
+    '/users',
+    '/config',
     '/css/app.css',
     '/js/common.js',
     '/js/login.js',
     '/js/dashboard.js',
     '/js/scout.js',
+    '/js/pit-scout.js',
+    '/js/pit-data.js',
     '/js/analytics.js',
     '/js/graphs.js',
     '/js/events.js',
@@ -83,7 +86,7 @@ self.addEventListener('fetch', (event) => {
                             return cachedResponse;
                         }
                         // Fallback to index.html if we are completely offline and page is not cached
-                        return caches.match('/index.html');
+                        return caches.match('/');
                     });
                 })
         );

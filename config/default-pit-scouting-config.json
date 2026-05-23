@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "title": "ObsidianScout Pit Scouting",
+  "fields": [
+    {
+      "id": "eventKey",
+      "label": "Event Key",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "targetTeamNumber",
+      "label": "Scouted Team Number",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "max": 9999
+    },
+    {
+      "id": "sectionRobot",
+      "label": "Robot",
+      "type": "section"
+    },
+    {
+      "id": "teamName",
+      "label": "Team Name",
+      "type": "text"
+    },
+    {
+      "id": "driveTrain",
+      "label": "Drive Train",
+      "type": "select",
+      "options": [
+        {
+          "label": "Swerve",
+          "value": "swerve",
+          "points": 0
+        },
+        {
+          "label": "Tank",
+          "value": "tank",
+          "points": 0
+        },
+        {
+          "label": "Mecanum",
+          "value": "mecanum",
+          "points": 0
+        },
+        {
+          "label": "Other",
+          "value": "other",
+          "points": 0
+        }
+      ]
+    },
+    {
+      "id": "robotWeight",
+      "label": "Robot Weight",
+      "type": "number",
+      "min": 0,
+      "max": 150
+    },
+    {
+      "id": "sectionCapabilities",
+      "label": "Capabilities",
+      "type": "section"
+    },
+    {
+      "id": "hasAuto",
+      "label": "Has Autonomous",
+      "type": "checkbox"
+    },
+    {
+      "id": "spareBatteries",
+      "label": "Spare Batteries",
+      "type": "counter",
+      "min": 0,
+      "step": 1
+    },
+    {
+      "id": "pitNotes",
+      "label": "Pit Notes",
+      "type": "textarea"
+    }
+  ],
+  "analytics": [
+    {
+      "id": "pitEntryCount",
+      "title": "Pit Entries Collected",
+      "type": "count"
+    }
+  ]
+}
