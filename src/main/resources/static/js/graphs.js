@@ -713,11 +713,12 @@ function resolveThemeTokens() {
 
 function buildMetricOptions(config) {
     const options = [
-        { id: "count", label: "Entry count", kind: "count" },
         { id: "score_total", label: "Total points", kind: "score", scope: "total" },
         { id: "score_auto", label: "Auto points", kind: "score", scope: "auto" },
         { id: "score_teleop", label: "Teleop points", kind: "score", scope: "teleop" },
-        { id: "score_endgame", label: "Endgame points", kind: "score", scope: "endgame" }
+        { id: "score_endgame", label: "Endgame points", kind: "score", scope: "endgame" },
+        { id: "count", label: "Entry count", kind: "count" }
+
     ];
 
     (config.fields || []).forEach((field) => {

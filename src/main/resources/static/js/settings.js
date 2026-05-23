@@ -202,8 +202,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     function renderVisualFields() {
         if (!visualFieldsList) return;
         visualFieldsList.innerHTML = "";
-        
-        if (currentConfig.fields.length === 0) {
+
+        const fields = currentConfig.fields || [];
+        if (fields.length === 0) {
             const emptyNotice = document.createElement("div");
             emptyNotice.className = "notice";
             emptyNotice.style.textAlign = "center";
@@ -213,9 +214,46 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        currentConfig.fields.forEach((field, index) => {
-            const cardNode = createFieldCard(field, index);
-            visualFieldsList.appendChild(cardNode);
+        const hasManualSections = fields.some((field) => field.type === "section");
+        if (hasManualSections) {
+            fields.forEach((field, index) => {
+                const cardNode = createFieldCard(field, index);
+                visualFieldsList.appendChild(cardNode);
+            });
+            return;
+        }
+
+        const groups = [
+            { key: "auto", title: "Auto" },
+            { key: "teleop", title: "Teleop" },
+            { key: "endgame", title: "Endgame" },
+            { key: "", title: "General" }
+        ];
+
+        groups.forEach((group) => {
+            const groupFields = fields.filter((field) => {
+                const phase = resolveFieldPhase(field);
+                if (!group.key) {
+                    return !phase;
+                }
+                return phase === group.key;
+            });
+            if (!groupFields.length) {
+                return;
+            }
+
+            const header = document.createElement("div");
+            header.className = "form-section";
+            const headerTitle = document.createElement("h3");
+            headerTitle.textContent = group.title;
+            header.appendChild(headerTitle);
+            visualFieldsList.appendChild(header);
+
+            groupFields.forEach((field) => {
+                const fieldIndex = fields.indexOf(field);
+                const cardNode = createFieldCard(field, fieldIndex);
+                visualFieldsList.appendChild(cardNode);
+            });
         });
     }
 
@@ -293,9 +331,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             // Auto-slugify ID if it is blank or matches a default auto-generated format
             const inputId = divId.querySelector("input");
-            if (inputId && (!field.id || field.id.startsWith("field_"))) {
-                const autoId = slugify(e.target.value);
+            if (inputId && shouldAutoUpdateId(field, inputId.value)) {
+                const base = slugify(e.target.value);
+                const autoId = ensureUniqueSlug(base, collectFieldIds(index, field));
                 field.id = autoId;
+                field._autoId = autoId;
                 inputId.value = autoId;
             }
             updateRawFromVisual();
@@ -315,6 +355,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         inputId.placeholder = "e.g. teleopCycles";
         inputId.addEventListener("input", (e) => {
             field.id = e.target.value;
+            field._autoId = null;
             updateRawFromVisual();
         });
         divId.appendChild(labelId);
@@ -353,8 +394,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         divType.appendChild(labelType);
         divType.appendChild(selectType);
         body.appendChild(divType);
+
+        // 4. Phase Select (auto/teleop/endgame)
+        const divPhase = document.createElement("div");
+        divPhase.className = "field";
+        const labelPhase = document.createElement("label");
+        labelPhase.textContent = "Phase";
+        const selectPhase = document.createElement("select");
+        const phaseOptions = [
+            { value: "", label: "General" },
+            { value: "auto", label: "Auto" },
+            { value: "teleop", label: "Teleop" },
+            { value: "endgame", label: "Endgame" }
+        ];
+        phaseOptions.forEach((phase) => {
+            const option = document.createElement("option");
+            option.value = phase.value;
+            option.textContent = phase.label;
+            selectPhase.appendChild(option);
+        });
+        selectPhase.value = field.phase || resolveFieldPhase(field) || "";
+        selectPhase.addEventListener("change", (e) => {
+            field.phase = e.target.value || "";
+            updateRawFromVisual();
+        });
+        divPhase.appendChild(labelPhase);
+        divPhase.appendChild(selectPhase);
+        body.appendChild(divPhase);
         
-        // 4. Required Checkbox
+        // 5. Required Checkbox
         const divReq = document.createElement("div");
         divReq.className = "field";
         const labelReq = document.createElement("label");
@@ -381,6 +449,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Adjust for section type (doesn't need ID, Required etc in basic visual)
         if (field.type === "section") {
             divId.style.display = "none";
+            divPhase.style.display = "none";
             divReq.style.display = "none";
         }
         
@@ -500,9 +569,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 inLabel.placeholder = "Label (e.g. High)";
                 inLabel.addEventListener("input", (e) => {
                     option.label = e.target.value;
-                    if (!option.value || option.value === slugify(inLabel.placeholder)) {
-                        option.value = e.target.value;
-                        inVal.value = e.target.value;
+                    if (shouldAutoUpdateOptionValue(option)) {
+                        const base = slugify(e.target.value);
+                        const autoValue = ensureUniqueSlug(base, collectOptionValues(options, option));
+                        option.value = autoValue;
+                        option._autoValue = autoValue;
+                        inVal.value = autoValue;
                     }
                     updateRawFromVisual();
                 });
@@ -513,6 +585,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 inVal.placeholder = "Value";
                 inVal.addEventListener("input", (e) => {
                     option.value = e.target.value;
+                    option._autoValue = null;
                     updateRawFromVisual();
                 });
                 
@@ -603,8 +676,10 @@ document.addEventListener("DOMContentLoaded", async () => {
      * Create a new field to add to the config
      */
     function addField() {
+        const baseId = ensureUniqueSlug("newField", collectFieldIds());
         const newField = {
-            id: "field_" + Math.random().toString(36).substr(2, 5),
+            id: baseId,
+            _autoId: baseId,
             label: "New Field",
             type: "counter",
             required: false,
@@ -631,14 +706,67 @@ document.addEventListener("DOMContentLoaded", async () => {
     function slugify(text) {
         if (!text) return "";
         return text
-            .replace(/[^a-zA-Z0-9\s-_]/g, '')
+            .replace(/[^a-zA-Z0-9\s-_]/g, "")
             .trim()
             .split(/[\s\-_]+/)
             .map((word, index) => {
                 if (index === 0) return word.toLowerCase();
                 return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
             })
-            .join('');
+            .join("");
+    }
+
+    function collectFieldIds(excludeIndex = -1, excludeField = null) {
+        return new Set(
+            (currentConfig.fields || [])
+                .filter((field, index) => index !== excludeIndex && field !== excludeField)
+                .map((field) => field.id)
+                .filter((id) => id && id.trim())
+        );
+    }
+
+    function collectOptionValues(options, excludeOption) {
+        return new Set(
+            (options || [])
+                .filter((option) => option !== excludeOption)
+                .map((option) => option.value)
+                .filter((value) => value && String(value).trim())
+        );
+    }
+
+    function ensureUniqueSlug(base, existing) {
+        if (!base) return "";
+        let candidate = base;
+        let counter = 2;
+        while (existing && existing.has(candidate)) {
+            candidate = `${base}${counter}`;
+            counter += 1;
+        }
+        return candidate;
+    }
+
+    function shouldAutoUpdateId(field, currentValue) {
+        if (!currentValue) return true;
+        if (currentValue.startsWith("field_")) return true;
+        if (field && field._autoId && field._autoId === currentValue) return true;
+        return false;
+    }
+
+    function shouldAutoUpdateOptionValue(option) {
+        if (!option) return true;
+        if (!option.value) return true;
+        if (option._autoValue && option._autoValue === option.value) return true;
+        return false;
+    }
+
+    function resolveFieldPhase(field) {
+        if (!field) return "";
+        if (field.phase) return String(field.phase).toLowerCase();
+        const id = String(field.id || "").toLowerCase();
+        if (id.startsWith("auto")) return "auto";
+        if (id.startsWith("teleop")) return "teleop";
+        if (id.startsWith("endgame")) return "endgame";
+        return "";
     }
 
     /**
@@ -647,12 +775,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     function updateRawFromVisual() {
         const titleVal = configTitleInput ? configTitleInput.value.trim() : "ObsidianScout";
         const versionVal = configVersionInput ? (Number(configVersionInput.value) || 1) : 1;
-        
+
         currentConfig.title = titleVal;
         currentConfig.version = versionVal;
-        
+
         // Deep copy/cleanup fields structure to emit beautiful, validated JSON schemas
-        currentConfig.fields = currentConfig.fields.map((field) => {
+        const cleanedFields = (currentConfig.fields || []).map((field) => {
             const cleaned = {
                 id: field.id ? field.id.trim() : "",
                 label: field.label ? field.label.trim() : "",
@@ -665,6 +793,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (type === "section") {
                 delete cleaned.required;
                 return cleaned;
+            }
+
+            if (field.phase) {
+                cleaned.phase = String(field.phase);
             }
             
             // Numeric bounds
@@ -698,8 +830,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             return cleaned;
         });
-        
-        editor.value = JSON.stringify(currentConfig, null, 2);
+
+        const cleanedConfig = {
+            title: titleVal,
+            version: versionVal,
+            fields: cleanedFields,
+            analytics: currentConfig.analytics || []
+        };
+
+        editor.value = JSON.stringify(cleanedConfig, null, 2);
     }
 });
 

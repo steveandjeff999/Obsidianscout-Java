@@ -23,7 +23,8 @@ const ASSETS = [
     '/js/teams.js',
     '/js/matches.js',
     '/js/users.js',
-    '/js/settings.js'
+    '/js/settings.js',
+    '/vendor/plotly-2.32.0.min.js'
 ];
 
 // Install: Cache all the application shell assets

@@ -318,22 +318,36 @@ function injectSections(fields) {
     const result = [];
     const inserted = new Set();
     fields.forEach((field) => {
-        const id = (field.id || "").toLowerCase();
-        if (!inserted.has("auto") && id.startsWith("auto")) {
+        const phase = getFieldPhase(field);
+        if (!inserted.has("auto") && phase === "auto") {
             result.push({ id: "sectionAuto", label: "Auto", type: "section" });
             inserted.add("auto");
         }
-        if (!inserted.has("teleop") && id.startsWith("teleop")) {
+        if (!inserted.has("teleop") && phase === "teleop") {
             result.push({ id: "sectionTeleop", label: "Teleop", type: "section" });
             inserted.add("teleop");
         }
-        if (!inserted.has("endgame") && id.startsWith("endgame")) {
+        if (!inserted.has("endgame") && phase === "endgame") {
             result.push({ id: "sectionEndgame", label: "Endgame", type: "section" });
             inserted.add("endgame");
         }
         result.push(field);
     });
     return result;
+}
+
+function getFieldPhase(field) {
+    if (!field) {
+        return "";
+    }
+    if (field.phase) {
+        return String(field.phase).toLowerCase();
+    }
+    const id = String(field.id || "").toLowerCase();
+    if (id.startsWith("auto")) return "auto";
+    if (id.startsWith("teleop")) return "teleop";
+    if (id.startsWith("endgame")) return "endgame";
+    return "";
 }
 
 function buildCounter(field) {
@@ -455,12 +469,12 @@ function updatePointsPreview(fields, form, preview) {
         }
         const points = fieldPoints(field, value);
         totals.total += points;
-        const id = (field.id || "").toLowerCase();
-        if (id.startsWith("auto")) {
+        const phase = getFieldPhase(field);
+        if (phase === "auto") {
             totals.auto += points;
-        } else if (id.startsWith("teleop")) {
+        } else if (phase === "teleop") {
             totals.teleop += points;
-        } else if (id.startsWith("endgame")) {
+        } else if (phase === "endgame") {
             totals.endgame += points;
         }
     });
