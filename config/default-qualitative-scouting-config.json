@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "title": "ObsidianScout Qualitative Scouting",
+  "fields": [
+    {
+      "id": "eventKey",
+      "label": "Event Key",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "matchKey",
+      "label": "Match Key",
+      "type": "text",
+      "required": true
+    },
+    {
+      "id": "matchNumber",
+      "label": "Match Number",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "max": 200
+    },
+    {
+      "id": "targetTeamNumber",
+      "label": "Scouted Team Number",
+      "type": "number",
+      "required": true,
+      "min": 1,
+      "max": 9999
+    },
+    {
+      "id": "sectionObservations",
+      "label": "Observations",
+      "type": "section"
+    },
+    {
+      "id": "overallRating",
+      "label": "Overall Rating",
+      "type": "rating",
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "driveNotes",
+      "label": "Drive Notes",
+      "type": "textarea"
+    },
+    {
+      "id": "autoNotes",
+      "label": "Auto Notes",
+      "type": "textarea"
+    },
+    {
+      "id": "teleopNotes",
+      "label": "Teleop Notes",
+      "type": "textarea"
+    },
+    {
+      "id": "endgameNotes",
+      "label": "Endgame Notes",
+      "type": "textarea"
+    },
+    {
+      "id": "recommendation",
+      "label": "Recommendation",
+      "type": "textarea"
+    }
+  ],
+  "analytics": []
+}

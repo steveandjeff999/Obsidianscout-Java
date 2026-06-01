@@ -22,10 +22,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             tab.classList.add("active");
             if (tab.dataset.tab === "register") {
                 loginPanel.classList.add("hidden");
+                loginPanel.hidden = true;
                 registerPanel.classList.remove("hidden");
+                registerPanel.hidden = false;
             } else {
                 loginPanel.classList.remove("hidden");
+                loginPanel.hidden = false;
                 registerPanel.classList.add("hidden");
+                registerPanel.hidden = true;
             }
         });
     });

@@ -14,15 +14,20 @@
         <aside class="sidebar">
             <div class="sidebar-brand">ObsidianScout</div>
             <nav class="sidebar-nav">
-                <a class="sidebar-link" data-page="dashboard" href="/dashboard.html">Dashboard</a>
-                <a class="sidebar-link" data-page="scout" href="/scout.html">Scout</a>
-                <a class="sidebar-link" data-page="analytics" href="/analytics.html">Analytics</a>
-                <a class="sidebar-link" data-page="graphs" href="/graphs.html">Graphs</a>
-                <a class="sidebar-link" data-page="events" href="/events.html">Events</a>
-                <a class="sidebar-link" data-page="teams" href="/teams.html">Teams</a>
-                <a class="sidebar-link" data-page="matches" href="/matches.html">Matches</a>
-                <a class="sidebar-link" data-page="users" href="/users.html">Users</a>
-                <a class="sidebar-link" data-page="settings" href="/config.html">Settings</a>
+                <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
+                <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
+                <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
+                <a class="sidebar-link" data-page="qual-scout" href="/qual-scout">Qual Scout</a>
+                <a class="sidebar-link" data-page="qual-data" href="/qual-data">Qual Data</a>
+                <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
+                <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
+                <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
+                <a class="sidebar-link" data-page="events" href="/events">Events</a>
+                <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
+                <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
+                <a class="sidebar-link" data-page="predictor" href="/predictor">Predictor</a>
+                <a class="sidebar-link" data-page="users" href="/users">Users</a>
+                <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
             </nav>
             <div class="sidebar-footer">
                 <span id="nav-user" class="badge"></span>
@@ -33,8 +38,8 @@
 
         <main class="main-content">
             <div class="card">
-                <h1>Analytics from config</h1>
-                <p class="notice">Widgets are generated from the analytics section of the config JSON.</p>
+                <h1 data-i18n="analytics.title">Analytics from config</h1>
+                <p class="notice" data-i18n="analytics.notice">Widgets are generated from the analytics section of the config JSON.</p>
             </div>
             <div id="analytics-grid" class="metrics mt-20"></div>
         </main>

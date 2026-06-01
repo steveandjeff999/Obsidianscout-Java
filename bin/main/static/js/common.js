@@ -67,6 +67,161 @@
         }
     }
 
+    // i18n support
+    const DEFAULT_LANG = localStorage.getItem("obsidianscout:lang") || "en";
+    let currentLang = DEFAULT_LANG;
+    const i18nCache = {};
+
+    async function loadLocale(lang) {
+        if (!lang) lang = "en";
+        if (i18nCache[lang]) return i18nCache[lang];
+        // Try localStorage first
+        try {
+            const cached = localStorage.getItem(`i18n:${lang}`);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                i18nCache[lang] = parsed;
+                return parsed;
+            }
+        } catch (e) {
+            // ignore
+        }
+
+        try {
+            const res = await fetch(`/i18n/${lang}.json`);
+            if (!res.ok) throw new Error("Locale fetch failed");
+            const json = await res.json();
+            i18nCache[lang] = json;
+            try { localStorage.setItem(`i18n:${lang}`, JSON.stringify(json)); } catch (e) {}
+            return json;
+        } catch (error) {
+            if (lang !== "en") return loadLocale("en");
+            return {};
+        }
+    }
+
+    function t(key, fallback) {
+        const dict = i18nCache[currentLang] || {};
+        return dict[key] || (i18nCache['en'] && i18nCache['en'][key]) || fallback || key;
+    }
+
+    /**
+     * Localize a dynamic value which may be:
+     * - a string (either literal or an i18n key)
+     * - an object mapping language codes to translations { en: 'Label', es: 'Etiqueta' }
+     */
+    function localize(value) {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'object') {
+            // prefer exact language, fallback to en then any available
+            if (value[currentLang]) return value[currentLang];
+            if (value.en) return value.en;
+            // return first available value
+            const keys = Object.keys(value);
+            if (keys.length) return value[keys[0]];
+            return '';
+        }
+        if (typeof value === 'string') {
+            // if key exists in i18n dicts, return that translation
+            const dict = i18nCache[currentLang] || {};
+            if (dict[value]) return dict[value];
+            if (i18nCache['en'] && i18nCache['en'][value]) return i18nCache['en'][value];
+            return value;
+        }
+        return String(value);
+    }
+
+    async function setLanguage(lang) {
+        currentLang = lang || 'en';
+        localStorage.setItem('obsidianscout:lang', currentLang);
+        await loadLocale(currentLang);
+        applyTranslations();
+        window.dispatchEvent(new CustomEvent('obsidianscout:languagechange', { detail: { lang: currentLang } }));
+    }
+
+    function applyTranslations() {
+        // data-i18n attributes
+        document.querySelectorAll('[data-i18n]').forEach((el) => {
+            const key = el.dataset.i18n;
+            if (!key) return;
+            const text = t(key, el.textContent || '');
+            el.textContent = text;
+        });
+
+        document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+            const key = el.dataset.i18nPlaceholder;
+            if (!key) return;
+            el.setAttribute('placeholder', t(key, el.getAttribute('placeholder') || ''));
+        });
+
+        // Sidebar links by data-page
+        document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
+            const page = link.dataset.page;
+            const key = `nav.${page}`;
+            link.textContent = t(key, link.textContent);
+            link.title = link.textContent;
+        });
+
+        // Theme toggle and logout
+        const themeBtn = document.querySelector("[data-action='toggle-theme']");
+        if (themeBtn) themeBtn.textContent = t('btn.toggle_theme', themeBtn.textContent);
+        const logoutBtn = document.querySelector("[data-action='logout']");
+        if (logoutBtn) logoutBtn.textContent = t('btn.logout', logoutBtn.textContent);
+
+        // Connection widget status text
+        const widget = document.getElementById('connection-status-widget');
+        if (widget) {
+            const textEl = widget.querySelector('.status-text');
+            if (textEl) {
+                const isOnline = navigator.onLine;
+                textEl.textContent = isOnline ? t('connection.online') : t('connection.offline');
+            }
+        }
+
+        // Direction for RTL languages
+        if (currentLang === 'he') {
+            document.documentElement.dir = 'rtl';
+        } else {
+            document.documentElement.dir = 'ltr';
+        }
+    }
+
+    function injectLanguageSelector(sidebar) {
+        try {
+            const footer = sidebar.querySelector('.sidebar-footer');
+            if (!footer) return;
+            // Avoid duplicate
+            if (document.getElementById('lang-select')) return;
+            const wrap = document.createElement('div');
+            wrap.className = 'field';
+            wrap.style.marginTop = '8px';
+            const sel = document.createElement('select');
+            sel.id = 'lang-select';
+            sel.style.padding = '6px';
+            const opts = [
+                { v: 'en', l: 'English' },
+                { v: 'es', l: 'Español' },
+                { v: 'tr', l: 'Türkçe' },
+                { v: 'he', l: 'עברית' }
+            ];
+            opts.forEach((o) => {
+                const opt = document.createElement('option');
+                opt.value = o.v;
+                opt.textContent = o.l;
+                sel.appendChild(opt);
+            });
+            sel.value = localStorage.getItem('obsidianscout:lang') || 'en';
+            sel.addEventListener('change', async (e) => {
+                await setLanguage(e.target.value);
+                updateConnectionStatus();
+            });
+            wrap.appendChild(sel);
+            footer.insertBefore(wrap, footer.firstChild);
+        } catch (e) {
+            console.warn('Failed to inject language selector', e);
+        }
+    }
+
     async function requireAuth() {
         const me = await getMe();
         if (!me) {
@@ -250,6 +405,14 @@
             return;
         }
 
+        if (window.innerWidth < 900) {
+            const existingMobileToggle = sidebar.querySelector(".sidebar-toggle");
+            if (existingMobileToggle) {
+                existingMobileToggle.remove();
+            }
+            return;
+        }
+
         const brand = sidebar.querySelector(".sidebar-brand");
         if (!brand) {
             return;
@@ -289,18 +452,82 @@
             header.appendChild(toggle);
         }
 
-        const applyCollapsedState = (collapsed) => {
+        const applyCollapsedState = (collapsed, persist = true) => {
             sidebar.classList.toggle("collapsed", collapsed);
             toggle.textContent = collapsed ? ">>" : "<<";
             toggle.setAttribute("aria-expanded", (!collapsed).toString());
-            localStorage.setItem(sidebarCollapseKey, collapsed ? "1" : "0");
+            if (persist) {
+                localStorage.setItem(sidebarCollapseKey, collapsed ? "1" : "0");
+            }
         };
 
-        const initial = localStorage.getItem(sidebarCollapseKey) === "1";
+        const stored = localStorage.getItem(sidebarCollapseKey);
+        // If user has previously chosen a state, respect it. Otherwise default to
+        // collapsed on narrow viewports for better mobile UX.
+        const initial = (stored !== null) ? (stored === "1") : (window.innerWidth < 900);
         applyCollapsedState(initial);
 
         toggle.addEventListener("click", () => {
-            applyCollapsedState(!sidebar.classList.contains("collapsed"));
+            applyCollapsedState(!sidebar.classList.contains("collapsed"), true);
+        });
+    }
+
+    function injectMobileTopBar() {
+        if (window.innerWidth >= 900) {
+            return;
+        }
+
+        const sidebar = document.querySelector(".sidebar");
+        const appShell = document.querySelector(".app-shell");
+        if (!sidebar || !appShell) {
+            return;
+        }
+
+        if (document.querySelector(".mobile-topbar")) {
+            return;
+        }
+
+        const topBar = document.createElement("header");
+        topBar.className = "mobile-topbar";
+        topBar.innerHTML = `
+            <button type="button" class="mobile-menu-button" aria-label="Open menu" aria-expanded="false">
+                <span class="hamburger-icon">☰</span>
+            </button>
+            <div class="mobile-topbar-brand">ObsidianScout</div>
+        `;
+
+        appShell.parentNode.insertBefore(topBar, appShell);
+
+        let overlay = document.querySelector(".sidebar-overlay");
+        if (!overlay) {
+            overlay = document.createElement("div");
+            overlay.className = "sidebar-overlay";
+            document.body.appendChild(overlay);
+        }
+
+        const button = topBar.querySelector(".mobile-menu-button");
+
+        const setMobileOpen = (open) => {
+            sidebar.classList.toggle("mobile-open", open);
+            overlay.classList.toggle("visible", open);
+            button.setAttribute("aria-expanded", open.toString());
+            button.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+        };
+
+        button.addEventListener("click", () => {
+            setMobileOpen(!sidebar.classList.contains("mobile-open"));
+        });
+
+        overlay.addEventListener("click", () => setMobileOpen(false));
+
+        sidebar.querySelectorAll(".sidebar-link").forEach((link) => {
+            link.addEventListener("click", () => setMobileOpen(false));
+        });
+
+        window.addEventListener("resize", () => {
+            if (window.innerWidth >= 900) {
+                setMobileOpen(false);
+            }
         });
     }
 
@@ -319,20 +546,20 @@
 
         if (isOnline) {
             widget.className = "connection-widget online";
-            text.textContent = "Online";
+            text.textContent = (typeof t === 'function') ? t('connection.online', 'Online') : 'Online';
             if (count > 0) {
                 syncBtn.classList.remove("hidden");
-                syncBtn.textContent = `Sync (${count})`;
+                syncBtn.textContent = `${(typeof t === 'function' ? t('connection.sync','Sync') : 'Sync')} (${count})`;
                 syncBtn.disabled = false;
             } else {
                 syncBtn.classList.add("hidden");
             }
         } else {
             widget.className = "connection-widget offline";
-            text.textContent = "Offline";
+            text.textContent = (typeof t === 'function') ? t('connection.offline','Offline') : 'Offline';
             if (count > 0) {
                 syncBtn.classList.remove("hidden");
-                syncBtn.textContent = `Pending (${count})`;
+                syncBtn.textContent = `${(typeof t === 'function' ? t('connection.pending','Pending') : 'Pending')} (${count})`;
                 syncBtn.disabled = true;
             } else {
                 syncBtn.classList.add("hidden");
@@ -387,9 +614,11 @@
         const sidebar = document.querySelector(".sidebar");
         if (sidebar) {
             injectConnectionWidget(sidebar);
+            injectLanguageSelector(sidebar);
         }
 
         wireSidebarToggle();
+        injectMobileTopBar();
 
         window.addEventListener("online", () => {
             updateConnectionStatus();
@@ -400,12 +629,14 @@
         if (navigator.onLine) {
             syncOfflineEntries();
         }
+        // Load selected language bundle and apply translations
+        loadLocale(localStorage.getItem('obsidianscout:lang') || 'en').then(() => applyTranslations());
     });
 
     window.addEventListener("beforeunload", (event) => {
         const pending = JSON.parse(localStorage.getItem("pending_scouting_entries") || "[]");
         if (pending.length > 0) {
-            const message = "You have unsynced offline scouting entries! If you leave, they might not be synced to the server.";
+            const message = (typeof t === 'function') ? t('unsynced_entries','You have unsynced offline scouting entries! If you leave, they might not be synced to the server.') : "You have unsynced offline scouting entries! If you leave, they might not be synced to the server.";
             event.returnValue = message;
             return message;
         }
@@ -431,5 +662,8 @@
         ROLE_HIERARCHY,
         updateConnectionStatus,
         syncOfflineEntries
+        ,t
+        ,setLanguage
+        ,localize
     };
 })();

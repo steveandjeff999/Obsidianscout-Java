@@ -1,6 +1,8 @@
 package com.obsidianscout.config
 
+import com.obsidianscout.db.PitScoutingConfigs
 import com.obsidianscout.db.ScoutingConfigs
+import com.obsidianscout.db.QualitativeScoutingConfigs
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -32,6 +34,7 @@ data class ScoutingField(
     val label: String,
     val type: String,
     val required: Boolean = false,
+    val phase: String? = null,
     val options: List<ScoutingOption> = emptyList(),
     val min: Int? = null,
     val max: Int? = null,
@@ -56,6 +59,8 @@ data class AnalyticsWidget(
 
 object ConfigService {
     private val defaultConfigPath = Paths.get("config", "default-scouting-config.json")
+    private val defaultPitConfigPath = Paths.get("config", "default-pit-scouting-config.json")
+    private val defaultQualitativeConfigPath = Paths.get("config", "default-qualitative-scouting-config.json")
 
     fun ensureDefaultConfig() {
         transaction {
@@ -66,6 +71,32 @@ object ConfigService {
             if (!existing) {
                 val jsonText = loadDefaultConfigText()
                 ScoutingConfigs.insert {
+                    it[teamNumber] = 0
+                    it[configJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            }
+
+            val existingPit = PitScoutingConfigs
+                .select { PitScoutingConfigs.teamNumber eq 0 }
+                .limit(1)
+                .firstOrNull() != null
+            if (!existingPit) {
+                val jsonText = loadDefaultPitConfigText()
+                PitScoutingConfigs.insert {
+                    it[teamNumber] = 0
+                    it[configJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            }
+
+            val existingQualitative = QualitativeScoutingConfigs
+                .select { QualitativeScoutingConfigs.teamNumber eq 0 }
+                .limit(1)
+                .firstOrNull() != null
+            if (!existingQualitative) {
+                val jsonText = loadDefaultQualitativeConfigText()
+                QualitativeScoutingConfigs.insert {
                     it[teamNumber] = 0
                     it[configJson] = jsonText
                     it[updatedAt] = Instant.now()
@@ -125,11 +156,125 @@ object ConfigService {
         return parsed
     }
 
+    fun getPitConfigJson(teamNumber: Int): String {
+        return transaction {
+            val teamConfig = PitScoutingConfigs
+                .select { PitScoutingConfigs.teamNumber eq teamNumber }
+                .limit(1)
+                .firstOrNull()
+                ?.get(PitScoutingConfigs.configJson)
+
+            if (teamConfig != null) {
+                return@transaction teamConfig
+            }
+
+            PitScoutingConfigs
+                .select { PitScoutingConfigs.teamNumber eq 0 }
+                .limit(1)
+                .firstOrNull()
+                ?.get(PitScoutingConfigs.configJson)
+        } ?: loadDefaultPitConfigText()
+    }
+
+    fun getPitConfig(teamNumber: Int): ScoutingConfig {
+        val jsonText = normalizeConfigJson(getPitConfigJson(teamNumber))
+        return JsonSupport.json.decodeFromString(jsonText)
+    }
+
+    fun updatePitConfig(teamNumber: Int, newJson: String): ScoutingConfig {
+        val normalizedJson = normalizeConfigJson(newJson)
+        val parsed = JsonSupport.json.decodeFromString<ScoutingConfig>(normalizedJson)
+        transaction {
+            val row = PitScoutingConfigs
+                .select { PitScoutingConfigs.teamNumber eq teamNumber }
+                .limit(1)
+                .firstOrNull()
+            if (row == null) {
+                PitScoutingConfigs.insert {
+                    it[PitScoutingConfigs.teamNumber] = teamNumber
+                    it[configJson] = normalizedJson
+                    it[updatedAt] = Instant.now()
+                }
+            } else {
+                PitScoutingConfigs.update({ PitScoutingConfigs.id eq row[PitScoutingConfigs.id] }) {
+                    it[configJson] = normalizedJson
+                    it[updatedAt] = Instant.now()
+                }
+            }
+        }
+        return parsed
+    }
+
+    fun getQualitativeConfigJson(teamNumber: Int): String {
+        return transaction {
+            val teamConfig = QualitativeScoutingConfigs
+                .select { QualitativeScoutingConfigs.teamNumber eq teamNumber }
+                .limit(1)
+                .firstOrNull()
+                ?.get(QualitativeScoutingConfigs.configJson)
+
+            if (teamConfig != null) {
+                return@transaction teamConfig
+            }
+
+            QualitativeScoutingConfigs
+                .select { QualitativeScoutingConfigs.teamNumber eq 0 }
+                .limit(1)
+                .firstOrNull()
+                ?.get(QualitativeScoutingConfigs.configJson)
+        } ?: loadDefaultQualitativeConfigText()
+    }
+
+    fun getQualitativeConfig(teamNumber: Int): ScoutingConfig {
+        val jsonText = normalizeConfigJson(getQualitativeConfigJson(teamNumber))
+        return JsonSupport.json.decodeFromString(jsonText)
+    }
+
+    fun updateQualitativeConfig(teamNumber: Int, newJson: String): ScoutingConfig {
+        val normalizedJson = normalizeConfigJson(newJson)
+        val parsed = JsonSupport.json.decodeFromString<ScoutingConfig>(normalizedJson)
+        transaction {
+            val row = QualitativeScoutingConfigs
+                .select { QualitativeScoutingConfigs.teamNumber eq teamNumber }
+                .limit(1)
+                .firstOrNull()
+            if (row == null) {
+                QualitativeScoutingConfigs.insert {
+                    it[QualitativeScoutingConfigs.teamNumber] = teamNumber
+                    it[configJson] = normalizedJson
+                    it[updatedAt] = Instant.now()
+                }
+            } else {
+                QualitativeScoutingConfigs.update({ QualitativeScoutingConfigs.id eq row[QualitativeScoutingConfigs.id] }) {
+                    it[configJson] = normalizedJson
+                    it[updatedAt] = Instant.now()
+                }
+            }
+        }
+        return parsed
+    }
+
     private fun loadDefaultConfigText(): String {
         return if (Files.exists(defaultConfigPath)) {
             Files.readString(defaultConfigPath)
         } else {
             JsonSupport.json.encodeToString(defaultConfig())
+        }
+    }
+
+    private fun loadDefaultPitConfigText(): String {
+        return if (Files.exists(defaultPitConfigPath)) {
+            Files.readString(defaultPitConfigPath)
+        } else {
+            JsonSupport.json.encodeToString(defaultPitConfig())
+        }
+    }
+
+    private fun loadDefaultQualitativeConfigText(): String {
+        return if (Files.exists(defaultQualitativeConfigPath)) {
+            Files.readString(defaultQualitativeConfigPath)
+        } else {
+            JsonSupport.json.encodeToString(defaultQualitativeConfig())
         }
     }
 
@@ -240,6 +385,161 @@ object ConfigService {
                     type = "score_total"
                 )
             )
+        )
+    }
+
+    private fun defaultPitConfig(): ScoutingConfig {
+        return ScoutingConfig(
+            version = 1,
+            title = "ObsidianScout Pit Scouting",
+            fields = listOf(
+                ScoutingField(
+                    id = "eventKey",
+                    label = "Event Key",
+                    type = "text",
+                    required = true
+                ),
+                ScoutingField(
+                    id = "targetTeamNumber",
+                    label = "Scouted Team Number",
+                    type = "number",
+                    required = true,
+                    min = 1,
+                    max = 9999
+                ),
+                ScoutingField(
+                    id = "sectionRobot",
+                    label = "Robot",
+                    type = "section"
+                ),
+                ScoutingField(
+                    id = "teamName",
+                    label = "Team Name",
+                    type = "text"
+                ),
+                ScoutingField(
+                    id = "driveTrain",
+                    label = "Drive Train",
+                    type = "select",
+                    options = listOf(
+                        ScoutingOption("Swerve", "swerve"),
+                        ScoutingOption("Tank", "tank"),
+                        ScoutingOption("Mecanum", "mecanum"),
+                        ScoutingOption("Other", "other")
+                    )
+                ),
+                ScoutingField(
+                    id = "robotWeight",
+                    label = "Robot Weight",
+                    type = "number",
+                    min = 0,
+                    max = 150
+                ),
+                ScoutingField(
+                    id = "sectionCapabilities",
+                    label = "Capabilities",
+                    type = "section"
+                ),
+                ScoutingField(
+                    id = "hasAuto",
+                    label = "Has Autonomous",
+                    type = "checkbox"
+                ),
+                ScoutingField(
+                    id = "spareBatteries",
+                    label = "Spare Batteries",
+                    type = "counter",
+                    min = 0,
+                    step = 1
+                ),
+                ScoutingField(
+                    id = "pitNotes",
+                    label = "Pit Notes",
+                    type = "textarea"
+                )
+            ),
+            analytics = listOf(
+                AnalyticsWidget(
+                    id = "pitEntryCount",
+                    title = "Pit Entries Collected",
+                    type = "count"
+                )
+            )
+        )
+    }
+
+    private fun defaultQualitativeConfig(): ScoutingConfig {
+        return ScoutingConfig(
+            version = 1,
+            title = "ObsidianScout Qualitative Scouting",
+            fields = listOf(
+                ScoutingField(
+                    id = "eventKey",
+                    label = "Event Key",
+                    type = "text",
+                    required = true
+                ),
+                ScoutingField(
+                    id = "matchKey",
+                    label = "Match Key",
+                    type = "text",
+                    required = true
+                ),
+                ScoutingField(
+                    id = "matchNumber",
+                    label = "Match Number",
+                    type = "number",
+                    required = true,
+                    min = 1,
+                    max = 200
+                ),
+                ScoutingField(
+                    id = "targetTeamNumber",
+                    label = "Scouted Team Number",
+                    type = "number",
+                    required = true,
+                    min = 1,
+                    max = 9999
+                ),
+                ScoutingField(
+                    id = "sectionObservations",
+                    label = "Observations",
+                    type = "section"
+                ),
+                ScoutingField(
+                    id = "overallRating",
+                    label = "Overall Rating",
+                    type = "rating",
+                    min = 1,
+                    max = 5
+                ),
+                ScoutingField(
+                    id = "driveNotes",
+                    label = "Drive Notes",
+                    type = "textarea"
+                ),
+                ScoutingField(
+                    id = "autoNotes",
+                    label = "Auto Notes",
+                    type = "textarea"
+                ),
+                ScoutingField(
+                    id = "teleopNotes",
+                    label = "Teleop Notes",
+                    type = "textarea"
+                ),
+                ScoutingField(
+                    id = "endgameNotes",
+                    label = "Endgame Notes",
+                    type = "textarea"
+                ),
+                ScoutingField(
+                    id = "recommendation",
+                    label = "Recommendation",
+                    type = "textarea"
+                )
+            ),
+            analytics = emptyList()
         )
     }
 

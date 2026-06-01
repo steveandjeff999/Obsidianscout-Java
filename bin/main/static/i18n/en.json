@@ -1,0 +1,215 @@
+{
+  "nav.dashboard": "Dashboard",
+  "nav.scout": "Scout",
+  "nav.qual-data": "Qual Data",
+  "nav.analytics": "Analytics",
+  "nav.graphs": "Graphs",
+  "nav.events": "Events",
+  "nav.teams": "Teams",
+  "nav.matches": "Matches",
+  "nav.users": "Users",
+  "nav.settings": "Settings",
+  "btn.toggle_theme": "Toggle theme",
+  "btn.logout": "Sign out",
+  "connection.online": "Online",
+  "connection.offline": "Offline",
+  "connection.sync": "Sync",
+  "connection.pending": "Pending",
+  "settings.title": "Settings",
+  "settings.scouting_config": "Scouting config",
+  "settings.api": "API keys",
+  "settings.visual_editor": "Visual Editor",
+  "settings.raw_editor": "Raw JSON",
+  "settings.save": "Save config",
+  "scout.title": "Dynamic scouting form",
+  "scout.select_team": "Select team",
+  "scout.select_match": "Select match",
+  "scout.save_entry": "Save entry",
+  "scout.clear_form": "Clear form",
+  "graphs.title": "Graphs",
+  "graphs.empty": "Select teams and generate graphs.",
+  "graphs.notice": "Pick teams, metrics, and graph types to generate Plotly visuals from your scouting data.",
+  "graphs.clear_search": "Clear",
+  "graphs.select_all": "Select all",
+  "graphs.select_top": "Top 8",
+  "graphs.add_event": "Add event",
+  "graphs.clear_all": "Clear all",
+  "graphs.basic": "Basic",
+  "graphs.distribution": "Distribution",
+  "graphs.advanced": "Advanced",
+  "graphs.clear_types": "Clear",
+  "graphs.generate": "Generate graphs",
+  "dashboard.title": "Dashboard",
+  "dashboard.notice": "Track scouting progress, sync status, and event context.",
+  "dashboard.entries": "Entries",
+  "dashboard.events": "Events",
+  "dashboard.teams": "Teams",
+  "dashboard.matches": "Matches",
+  "dashboard.event_context": "Event context",
+  "dashboard.event_context_notice": "Season and event settings are used for API sync and match times.",
+  "dashboard.season": "Season",
+  "dashboard.event_key": "Event key",
+  "dashboard.timezone": "Timezone",
+  "dashboard.quick_sync": "Quick sync",
+  "dashboard.quick_sync_notice": "Teams and matches auto-sync every 7.5 minutes while the server is running.",
+  "dashboard.not_set": "Not set",
+  "dashboard.auto_sync_every": "Auto-sync every 7.5 min.",
+  "dashboard.last_sync": "Last sync:",
+  "dashboard.sync_complete": "Sync complete",
+  "dashboard.sync_failed": "Sync failed",
+  "dashboard.admin_sync_required": "Admin access required to sync.",
+  "dashboard.sync_summary": "Synced {teams} teams and {matches} matches for {teamCount} team(s)",
+  "dashboard.sync_no_teams": "No teams configured for auto-sync.",
+  "dashboard.sync_failed_teams": "{count} team sync(s) failed",
+  "dashboard.sync_teams_matches": "Sync teams & matches",
+  "dashboard.sync_events": "Sync events",
+  "dashboard.sync_stats": "Sync stats",
+  "analytics.title": "Analytics from config",
+  "analytics.notice": "Widgets are generated from the analytics section of the config JSON.",
+  "events.title": "Events",
+  "events.notice": "Sync events for the selected season and pick an event for scouting.",
+  "events.sync_events": "Sync events",
+  "events.add_manual": "Add Event Manually",
+  "events.cancel": "Cancel",
+  "events.save_event": "Save Event",
+  "events.event": "Event",
+  "events.key": "Key",
+  "events.dates": "Dates",
+  "events.timezone": "Timezone",
+  "events.action": "Action",
+  "events.create_custom": "Create Custom Event",
+  "events.edit_event": "Edit Event",
+  "events.event_key": "Event Key",
+  "events.event_key_help": "Enter a unique lowercase identifier.",
+  "events.event_key_placeholder": "e.g. 2026custom",
+  "events.event_name": "Event Name",
+  "events.event_name_placeholder": "e.g. Offseason Showdown",
+  "events.year": "Year",
+  "events.year_placeholder": "2026",
+  "events.start_date": "Start Date",
+  "events.end_date": "End Date",
+  "timezone.eastern": "America/New_York (Eastern)",
+  "timezone.central": "America/Chicago (Central)",
+  "timezone.mountain": "America/Denver (Mountain)",
+  "timezone.pacific": "America/Los_Angeles (Pacific)",
+  "timezone.arizona": "America/Phoenix (Arizona)",
+  "timezone.alaska": "America/Anchorage (Alaska)",
+  "timezone.hawaii": "Pacific/Honolulu (Hawaii)",
+  "timezone.utc": "UTC",
+  "timezone.london": "Europe/London",
+  "timezone.paris": "Europe/Paris",
+  "timezone.tokyo": "Asia/Tokyo",
+  "timezone.sydney": "Australia/Sydney",
+  "events.synced": "Events synced",
+  "events.sync_failed": "Sync failed",
+  "events.deleted_success": "Event deleted successfully",
+  "events.delete_failed": "Failed to delete event",
+  "events.load_failed": "Unable to load events",
+  "events.saved_success": "Event saved successfully",
+  "events.save_failed": "Failed to save event",
+  "events.confirm_delete": "Are you SURE you want to delete this event? This will permanently delete all associated teams, matches, and scouting entries!",
+  "teams.title": "Teams",
+  "teams.notice": "Sync teams for the selected event and review EPA/OPR stats.",
+  "teams.sync_teams": "Sync teams",
+  "teams.sync_stats": "Sync stats",
+  "teams.add_manual": "Add Team Manually",
+  "teams.cancel": "Cancel",
+  "teams.save_team": "Save Team",
+  "users.title": "User management",
+  "users.notice": "You need admin access to manage users.",
+  "users.create_user": "Create user",
+  "matches.title": "Matches",
+  "matches.notice": "Sync matches for the selected event and use them on the scouting form.",
+  "matches.sync_matches": "Sync matches",
+  "matches.add_manual": "Add Match Manually",
+  "matches.cancel": "Cancel",
+  "matches.save_match": "Save Match",
+  "matches.comp.practice": "Practice",
+  "matches.comp.qm": "Qualification",
+  "matches.comp.qf": "Quarterfinals",
+  "matches.comp.sf": "Semifinals",
+  "matches.comp.f": "Finals",
+  "matches.view_event": "View Event",
+  "matches.match": "Match",
+  "matches.time": "Time",
+  "matches.red": "Red",
+  "matches.blue": "Blue",
+  "matches.action": "Action",
+  "matches.event": "Event",
+  "matches.comp_level": "Comp Level",
+  "matches.match_number": "Match Number",
+  "matches.scheduled_time": "Scheduled Time",
+  "matches.red_alliance": "Red Alliance Teams",
+  "matches.blue_alliance": "Blue Alliance Teams",
+  "matches.synced": "Matches synced",
+  "matches.sync_failed": "Sync failed",
+  "matches.set_event_key": "Set an event key in settings",
+  "matches.deleted_success": "Match deleted successfully",
+  "matches.delete_failed": "Failed to delete match",
+  "matches.load_failed": "Unable to load matches",
+  "matches.confirm_delete": "Are you sure you want to delete this match?",
+  "matches.edit_match": "Edit Match",
+  "matches.alliances_invalid": "Alliances must have exactly 3 teams each",
+  "matches.saved_success": "Match saved successfully",
+  "matches.save_failed": "Failed to save match",
+  "common.edit": "Edit",
+  "common.delete": "Delete",
+  "index.tagline": "Scout smarter, move faster.",
+  "index.sign_in_tab": "Sign in",
+  "index.create_account_tab": "Create account",
+  "index.login_submit": "Sign in",
+  "index.register_submit": "Create account",
+  "pitdata.title": "Pit data",
+  "pitdata.notice": "Review pit scouting coverage, find missing teams, and inspect each team's latest pit entry.",
+  "pitdata.export_csv": "Export CSV",
+  "pitdata.choose_team_notice": "Choose a team from the coverage table to see its pit scouting answers.",
+  "pit_scout.title": "Pit scouting form",
+  "pit_scout.notice": "Pick event and team, then fill in the form driven by pit scouting config JSON.",
+  "pit_scout.form_blocked": "Select a team to start pit scouting.",
+  "pit_scout.save_entry": "Save pit entry",
+  "pit_scout.clear_form": "Clear form",
+  "predictor.title": "Match Predictor",
+  "predictor.notice": "Select any match in the active event to compare the alliances and predict the outcome using scouted data, EPA, or OPR.",
+  "settings.add_field": "+ Add Field",
+  "settings.export": "Export",
+  "settings.save_api": "Save API settings"
+  ,"settings.field_label": "Field Label"
+  ,"settings.field_id": "Field ID / Slug"
+  ,"settings.type": "Type"
+  ,"settings.phase": "Phase"
+  ,"phase.general": "General"
+  ,"phase.auto": "Auto"
+  ,"phase.teleop": "Teleop"
+  ,"phase.endgame": "Endgame"
+  ,"settings.required": "Required"
+  ,"settings.is_required": "Is Required"
+  ,"settings.min": "Min"
+  ,"settings.max": "Max"
+  ,"settings.no_limit": "No limit"
+  ,"settings.step": "Step"
+  ,"settings.points_per": "Points per action"
+  ,"settings.options_title": "Options (Label | Value | Points)"
+  ,"settings.add_option": "+ Add Option"
+  ,"settings.option_label_placeholder": "Label (e.g. High)"
+  ,"yes": "Yes"
+  ,"no": "No"
+  ,"scouted": "Scouted"
+  ,"missing": "Missing"
+  ,"pitdata.no_teams_match": "No teams match the current filters."
+  ,"pitdata.select_team": "Select a team"
+  ,"pitdata.no_team_selected": "No team selected"
+  ,"pitdata.no_pit_entry": "No pit entry has been submitted for this team at the selected event."
+  ,"pitdata.updated": "Updated"
+  ,"pitdata.needs_pit": "Needs pit scouting"
+  ,"quick_field": "Quick Field"
+  ,"team": "team"
+  ,"teams": "teams"
+  ,"visible": "visible"
+  ,"missing_only": "missing only"
+  ,"search_prefix": "search: "
+  ,"pitdata.csv.team_number": "Team Number"
+  ,"pitdata.csv.team_name": "Team Name"
+  ,"pitdata.csv.status": "Status"
+  ,"pitdata.csv.updated": "Updated"
+  ,"unsynced_entries": "You have unsynced offline scouting entries! If you leave, they might not be synced to the server."
+}

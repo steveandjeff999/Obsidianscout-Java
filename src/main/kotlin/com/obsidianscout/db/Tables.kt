@@ -35,6 +35,16 @@ object PitScoutingConfigs : IntIdTable("pit_scouting_configs") {
     }
 }
 
+object QualitativeScoutingConfigs : IntIdTable("qualitative_scouting_configs") {
+    val teamNumber = integer("team_number").default(0)
+    val configJson = text("config_json")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_qualitative_scouting_configs_team", teamNumber)
+    }
+}
+
 object ScoutingEntries : IntIdTable("scouting_entries") {
     val ownerTeamNumber = integer("owner_team_number")
     val targetTeamNumber = integer("target_team_number").nullable()
@@ -50,6 +60,17 @@ object PitScoutingEntries : IntIdTable("pit_scouting_entries") {
     val ownerTeamNumber = integer("owner_team_number")
     val targetTeamNumber = integer("target_team_number").nullable()
     val eventKey = varchar("event_key", 64).nullable()
+    val dataJson = text("data_json")
+    val submittedByUserId = reference("submitted_by_user_id", Users)
+    val createdAt = timestamp("created_at")
+}
+
+object QualitativeScoutingEntries : IntIdTable("qualitative_scouting_entries") {
+    val ownerTeamNumber = integer("owner_team_number")
+    val targetTeamNumber = integer("target_team_number").nullable()
+    val eventKey = varchar("event_key", 64).nullable()
+    val matchKey = varchar("match_key", 64).nullable()
+    val matchNumber = integer("match_number").nullable()
     val dataJson = text("data_json")
     val submittedByUserId = reference("submitted_by_user_id", Users)
     val createdAt = timestamp("created_at")

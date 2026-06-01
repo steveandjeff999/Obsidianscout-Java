@@ -16,12 +16,15 @@
                 <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
                 <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
                 <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
+                <a class="sidebar-link" data-page="qual-scout" href="/qual-scout">Qual Scout</a>
+                <a class="sidebar-link" data-page="qual-data" href="/qual-data">Qual Data</a>
                 <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
                 <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
                 <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
                 <a class="sidebar-link" data-page="events" href="/events">Events</a>
                 <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
                 <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
+                <a class="sidebar-link" data-page="predictor" href="/predictor">Predictor</a>
                 <a class="sidebar-link" data-page="users" href="/users">Users</a>
                 <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
             </nav>
@@ -34,12 +37,12 @@
 
         <main class="main-content">
             <div class="card">
-                <h1>Teams</h1>
-                <p class="notice">Sync teams for the selected event and review EPA/OPR stats.</p>
+                <h1 data-i18n="teams.title">Teams</h1>
+                <p class="notice" data-i18n="teams.notice">Sync teams for the selected event and review EPA/OPR stats.</p>
                 <div class="row gap-12 wrap align-center" style="width: 100%;">
-                    <button class="btn" id="sync-event" type="button">Sync teams</button>
-                    <button class="btn ghost" id="sync-stats" type="button">Sync stats</button>
-                    <button class="btn secondary hidden" id="add-team-btn" type="button">Add Team Manually</button>
+                    <button class="btn" id="sync-event" type="button" data-i18n="teams.sync_teams">Sync teams</button>
+                    <button class="btn ghost" id="sync-stats" type="button" data-i18n="teams.sync_stats">Sync stats</button>
+                    <button class="btn secondary hidden" id="add-team-btn" type="button" data-i18n="teams.add_manual">Add Team Manually</button>
                     <div style="flex-grow: 1;"></div>
                     <div class="field" style="min-width: 240px; margin-top: 0;">
                         <label for="event-filter" style="margin-bottom: 4px;">View Event</label>
@@ -115,8 +118,8 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn ghost" id="team-modal-cancel" type="button">Cancel</button>
-                    <button class="btn" type="submit">Save Team</button>
+                    <button class="btn ghost" id="team-modal-cancel" type="button" data-i18n="teams.cancel">Cancel</button>
+                    <button class="btn" type="submit" data-i18n="teams.save_team">Save Team</button>
                 </div>
             </form>
         </div>

@@ -77,7 +77,7 @@ function initMetricOptions(state) {
     metrics.forEach((metric) => {
         const option = document.createElement("option");
         option.value = metric.id;
-        option.textContent = metric.label;
+        option.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label;
         metricSelect.appendChild(option);
     });
     state.metricId = metrics.length ? metrics[0].id : "";
@@ -425,7 +425,7 @@ function generateGraphs(state) {
         const card = document.createElement("div");
         card.className = "card";
         const title = document.createElement("h3");
-        title.textContent = `${metric.label} - ${graphType}`;
+        title.textContent = `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label} - ${graphType}`;
         card.appendChild(title);
 
         const chart = createPlotlyContainer(320);
@@ -726,7 +726,7 @@ function buildMetricOptions(config) {
             return;
         }
         const type = String(field.type || "").toLowerCase();
-        const label = field.label || field.id;
+        const label = (window.Obsidianscout && typeof window.Obsidianscout.localize === 'function') ? (Obsidianscout.localize(field.label) || field.id) : (field.label || field.id);
         if (type === "number" || type === "counter" || type === "rating") {
             options.push({ id: `field:${field.id}`, label, kind: "numeric", fieldId: field.id, field });
         } else if (type === "select" || type === "checkbox") {
@@ -785,7 +785,7 @@ function buildTeamSeries(entries, metric, state) {
     if (state.dataView === "averages") {
         const stats = sortTeamStats(buildTeamStats(entries, metric, state), state.sort);
         return [{
-            name: metric.label,
+            name: (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label,
             x: stats.map((item) => item.teamNumber),
             y: stats.map((item) => item.value)
         }];
@@ -863,7 +863,7 @@ function buildDistributionTraces(entries, metric, state, graphType) {
         return traces;
     }
     const allValues = entriesList.flatMap(([, values]) => values);
-    traces.push(buildDistributionTrace(graphType, metric.label, allValues));
+    traces.push(buildDistributionTrace(graphType, (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label, allValues));
     return traces;
 }
 

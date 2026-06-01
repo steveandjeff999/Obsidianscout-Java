@@ -86,6 +86,11 @@ a {
     z-index: 4;
     display: flex;
     flex-direction: column;
+    /* allow the sidebar to scroll independently from the page */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* prevent scroll chaining to the body when reaching edges */
+    overscroll-behavior: contain;
     transition: width 0.2s ease, padding 0.2s ease;
 }
 
@@ -332,6 +337,40 @@ body.theme-dark .sidebar-toggle {
     color: var(--muted);
 }
 
+.login-shell {
+    padding-top: 56px;
+}
+
+.login-hero {
+    align-items: start;
+}
+
+.auth-card {
+    display: grid;
+    gap: 18px;
+}
+
+.auth-card .tab-row {
+    margin-bottom: 0;
+}
+
+.auth-card .tab {
+    flex: 1;
+}
+
+.auth-card .form-grid {
+    gap: 14px;
+}
+
+.auth-card .btn {
+    width: 100%;
+}
+
+.auth-card #login-panel[hidden],
+.auth-card #register-panel[hidden] {
+    display: none;
+}
+
 .form-grid {
     display: grid;
     gap: 18px;
@@ -393,6 +432,165 @@ body.theme-dark .sidebar-toggle {
 .mt-24 {
     margin-top: 24px;
 }
+
+/* Mobile / small-screen improvements */
+@media (max-width: 900px) {
+    .shell {
+        padding: 20px 12px;
+    }
+
+    .sidebar {
+        position: fixed;
+        left: 12px;
+        right: 12px;
+        top: 72px;
+        height: calc(100vh - 88px);
+        width: auto;
+        transform: translateY(-115%);
+        transition: transform 0.25s ease, visibility 0.25s ease;
+        z-index: 1000;
+        box-shadow: 0 16px 40px rgba(0,0,0,0.18);
+        border-radius: 20px;
+    }
+
+    .sidebar.mobile-open {
+        transform: translateY(0);
+    }
+
+    .app-shell {
+        margin-left: 0;
+    }
+
+    .nav-inner {
+        width: 100%;
+        padding: 0 12px;
+    }
+
+    .nav {
+        padding: 10px 0;
+    }
+
+    .nav-links {
+        display: none;
+    }
+
+    .nav-inner {
+        gap: 12px;
+    }
+
+    .brand {
+        font-size: 13px;
+        letter-spacing: 2px;
+    }
+
+    .nav-actions {
+        margin-left: auto;
+    }
+
+    .main-content {
+        padding: 20px 16px 80px;
+    }
+
+    .card {
+        padding: 18px;
+        border-radius: 14px;
+    }
+
+    .hero h1 {
+        font-size: 28px;
+    }
+
+    .nav-actions {
+        gap: 8px;
+    }
+
+    button, .btn {
+        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 16px;
+        touch-action: manipulation;
+    }
+
+    input, select, textarea {
+        font-size: 16px;
+    }
+
+    img, video, iframe {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .grid, .row {
+        gap: 12px;
+        display: block;
+    }
+
+    .mobile-topbar {
+        position: sticky;
+        top: 0;
+        z-index: 1100;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        justify-content: space-between;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.88);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    body.theme-dark .mobile-topbar {
+        background: rgba(28, 30, 34, 0.92);
+        border-bottom-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .mobile-topbar-brand {
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        font-size: 13px;
+    }
+
+    .mobile-menu-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: var(--surface);
+        border-radius: 8px;
+        font-size: 20px;
+        padding: 6px;
+        cursor: pointer;
+        width: 44px;
+        height: 44px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+    }
+
+    .hamburger-icon {
+        display: inline-block;
+        line-height: 1;
+        font-size: 20px;
+    }
+
+    .sidebar-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.36);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+        z-index: 900;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .sidebar-overlay.visible {
+        opacity: 1;
+        visibility: visible;
+    }
+
+}
+
 
 .mb-18 {
     margin-bottom: 18px;
@@ -935,7 +1133,7 @@ body.theme-dark .tab {
     }
 }
 
-@media (max-width: 960px) {
+@media (min-width: 901px) and (max-width: 960px) {
     .app-shell {
         flex-direction: column;
     }

@@ -24,6 +24,18 @@ object SyncScheduler {
     @Volatile
     var lastSyncError: String? = null
 
+    @Volatile
+    var lastSyncTeams: Int? = null
+
+    @Volatile
+    var lastSyncMatches: Int? = null
+
+    @Volatile
+    var lastSyncTeamCount: Int? = null
+
+    @Volatile
+    var lastSyncFailedTeams: Int? = null
+
     private var scope: CoroutineScope? = null
 
     fun start() {
@@ -52,6 +64,11 @@ object SyncScheduler {
         if (teams.isEmpty()) {
             lastSyncSummary = "No teams with event code and API keys configured"
             lastSyncAt = Instant.now()
+            lastSyncError = null
+            lastSyncTeams = null
+            lastSyncMatches = null
+            lastSyncTeamCount = null
+            lastSyncFailedTeams = null
             return
         }
 
@@ -73,6 +90,10 @@ object SyncScheduler {
 
         lastSyncAt = Instant.now()
         lastSyncError = if (failures > 0) "$failures team sync(s) failed" else null
+        lastSyncTeams = totalTeams
+        lastSyncMatches = totalMatches
+        lastSyncTeamCount = teams.size
+        lastSyncFailedTeams = if (failures > 0) failures else null
         lastSyncSummary = "Synced $totalTeams teams and $totalMatches matches for ${teams.size} team(s)"
         log.info("Auto-sync complete: $lastSyncSummary")
     }

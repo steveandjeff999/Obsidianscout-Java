@@ -33,6 +33,10 @@ import io.ktor.server.sessions.Sessions
 import io.ktor.server.sessions.cookie
 import io.ktor.server.sessions.SessionTransportTransformerMessageAuthentication
 import io.ktor.serialization.kotlinx.json.json
+import io.netty.channel.ChannelHandlerContext
+import io.netty.channel.ChannelInboundHandlerAdapter
+import javax.net.ssl.SSLException
+import javax.net.ssl.SSLHandshakeException
 import java.io.File
 import java.security.KeyStore
 
@@ -63,7 +67,19 @@ fun main() {
         }
     }
 
-    embeddedServer(Netty, environment).start(wait = true)
+    embeddedServer(Netty, environment) {
+        channelPipelineConfig = {
+            addLast("ssl-connection-closer", object : ChannelInboundHandlerAdapter() {
+                override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+                    if (cause.isSslFailure()) {
+                        ctx.close()
+                        return
+                    }
+                    ctx.fireExceptionCaught(cause)
+                }
+            })
+        }
+    }.start(wait = true)
 }
 
 fun Application.module(appConfig: AppConfig) {
@@ -120,4 +136,15 @@ private fun loadOrCreateKeyStore(appConfig: AppConfig): KeyStore {
         keyStore.load(input, httpsConfig.keystorePassword.toCharArray())
     }
     return keyStore
+}
+
+private fun Throwable.isSslFailure(): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is SSLHandshakeException || current is SSLException) {
+            return true
+        }
+        current = current.cause
+    }
+    return false
 }

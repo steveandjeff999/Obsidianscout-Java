@@ -101,7 +101,11 @@ data class SyncStatusResponse(
     val intervalMinutes: Double = 7.5,
     val lastSyncAt: String? = null,
     val lastSyncSummary: String? = null,
-    val lastSyncError: String? = null
+    val lastSyncError: String? = null,
+    val lastSyncTeams: Int? = null,
+    val lastSyncMatches: Int? = null,
+    val lastSyncTeamCount: Int? = null,
+    val lastSyncFailedTeams: Int? = null
 )
 
 @Serializable
@@ -150,3 +154,32 @@ data class SummaryResponse(
     val teams: Int,
     val matches: Int
 )
+
+@Serializable
+data class MatchTeamPrediction(
+    val teamNumber: Int,
+    val nickname: String?,
+    val averageScoutedScore: Double?,
+    val scoutedMatchesCount: Int,
+    val epa: Double?,
+    val opr: Double?
+)
+
+@Serializable
+data class AlliancePrediction(
+    val teams: List<MatchTeamPrediction>,
+    val totalScoutedScore: Double,
+    val totalEpa: Double,
+    val totalOpr: Double
+)
+
+@Serializable
+data class MatchPredictionResponse(
+    val matchKey: String,
+    val label: String,
+    val redAlliance: AlliancePrediction,
+    val blueAlliance: AlliancePrediction,
+    val useStatboticsEpa: Boolean,
+    val useTbaOpr: Boolean
+)
+

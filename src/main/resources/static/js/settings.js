@@ -42,12 +42,21 @@ document.addEventListener("DOMContentLoaded", async () => {
             apiPath: "/api/pit-config",
             defaultTitle: "ObsidianScout Pit Scouting",
             exportName: "pit-scouting-config.json"
+        },
+        qual: {
+            apiPath: "/api/qual-config",
+            defaultTitle: "ObsidianScout Qualitative Scouting",
+            exportName: "qualitative-scouting-config.json"
         }
     };
 
     // Local configuration state
     let activeConfigKind = "game";
     let currentConfig = { version: 1, title: "ObsidianScout", fields: [], analytics: [] };
+
+    function supportsPointsConfig() {
+        return activeConfigKind !== "qual";
+    }
 
     // Sub-tab switching logic
     if (btnVisual && btnRaw && containerVisual && containerRaw) {
@@ -340,7 +349,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         header.className = "field-card-header";
         
         const title = document.createElement("h4");
-        title.textContent = field.label || `Field ${index + 1}`;
+        title.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? (Obsidianscout.localize(field.label) || `Field ${index + 1}`) : (field.label || `Field ${index + 1}`);
         
         const controls = document.createElement("div");
         controls.className = "field-card-controls";
@@ -391,14 +400,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         const divLabel = document.createElement("div");
         divLabel.className = "field";
         const labelTag = document.createElement("label");
-        labelTag.textContent = "Field Label";
+        labelTag.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.field_label','Field Label') : 'Field Label';
         const inputLabel = document.createElement("input");
         inputLabel.type = "text";
-        inputLabel.value = field.label || "";
+        inputLabel.value = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
         inputLabel.placeholder = "e.g. Teleop Cycles";
         inputLabel.addEventListener("input", (e) => {
-            field.label = e.target.value;
-            title.textContent = e.target.value || `Field ${index + 1}`;
+            const lang = localStorage.getItem('obsidianscout:lang') || 'en';
+            const val = e.target.value;
+            if (field && typeof field.label === 'object' && field.label !== null) {
+                field.label[lang] = val;
+            } else {
+                field.label = val;
+            }
+            title.textContent = val || `Field ${index + 1}`;
             
             // Auto-slugify ID if it is blank or matches a default auto-generated format
             const inputId = divId.querySelector("input");
@@ -419,7 +434,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const divId = document.createElement("div");
         divId.className = "field";
         const labelId = document.createElement("label");
-        labelId.textContent = "Field ID / Slug";
+        labelId.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.field_id','Field ID / Slug') : 'Field ID / Slug';
         const inputId = document.createElement("input");
         inputId.type = "text";
         inputId.value = field.id || "";
@@ -437,7 +452,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const divType = document.createElement("div");
         divType.className = "field";
         const labelType = document.createElement("label");
-        labelType.textContent = "Type";
+        labelType.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.type','Type') : 'Type';
         const selectType = document.createElement("select");
         const types = ["text", "textarea", "number", "counter", "rating", "checkbox", "select", "section"];
         types.forEach((t) => {
@@ -470,13 +485,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         const divPhase = document.createElement("div");
         divPhase.className = "field";
         const labelPhase = document.createElement("label");
-        labelPhase.textContent = "Phase";
+        labelPhase.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.phase','Phase') : 'Phase';
         const selectPhase = document.createElement("select");
         const phaseOptions = [
-            { value: "", label: "General" },
-            { value: "auto", label: "Auto" },
-            { value: "teleop", label: "Teleop" },
-            { value: "endgame", label: "Endgame" }
+            { value: "", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.general','General') : 'General' },
+            { value: "auto", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.auto','Auto') : 'Auto' },
+            { value: "teleop", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.teleop','Teleop') : 'Teleop' },
+            { value: "endgame", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.endgame','Endgame') : 'Endgame' }
         ];
         phaseOptions.forEach((phase) => {
             const option = document.createElement("option");
@@ -497,7 +512,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const divReq = document.createElement("div");
         divReq.className = "field";
         const labelReq = document.createElement("label");
-        labelReq.textContent = "Required";
+        labelReq.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.required','Required') : 'Required';
         const labelWrap = document.createElement("label");
         labelWrap.style.display = "flex";
         labelWrap.style.alignItems = "center";
@@ -512,7 +527,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             updateRawFromVisual();
         });
         labelWrap.appendChild(inputReq);
-        labelWrap.appendChild(document.createTextNode(" Is Required"));
+        labelWrap.appendChild(document.createTextNode((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.is_required','Is Required') : ' Is Required'));
         divReq.appendChild(labelReq);
         divReq.appendChild(labelWrap);
         body.appendChild(divReq);
@@ -534,7 +549,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const divMin = document.createElement("div");
             divMin.className = "field";
             const labelMin = document.createElement("label");
-            labelMin.textContent = "Min";
+            labelMin.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.min','Min') : 'Min';
             const inputMin = document.createElement("input");
             inputMin.type = "number";
             inputMin.value = field.min !== undefined && field.min !== null ? field.min : "";
@@ -550,7 +565,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const divMax = document.createElement("div");
             divMax.className = "field";
             const labelMax = document.createElement("label");
-            labelMax.textContent = "Max";
+            labelMax.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.max','Max') : 'Max';
             const inputMax = document.createElement("input");
             inputMax.type = "number";
             inputMax.value = field.max !== undefined && field.max !== null ? field.max : "";
@@ -590,7 +605,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     updateRawFromVisual();
                 });
                 noLimitWrap.appendChild(inputNoLimit);
-                noLimitWrap.appendChild(document.createTextNode("No limit"));
+                noLimitWrap.appendChild(document.createTextNode((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.no_limit','No limit') : 'No limit'));
                 divMax.appendChild(noLimitWrap);
             }
             boundsDiv.appendChild(divMax);
@@ -599,7 +614,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const divStep = document.createElement("div");
             divStep.className = "field";
             const labelStep = document.createElement("label");
-            labelStep.textContent = "Step";
+            labelStep.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.step','Step') : 'Step';
             const inputStep = document.createElement("input");
             inputStep.type = "number";
             inputStep.value = field.step !== undefined && field.step !== null ? field.step : "";
@@ -615,11 +630,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         
         // 6. Scoring Points (visible for number, counter, rating, checkbox)
-        if (field.type === "number" || field.type === "counter" || field.type === "rating" || field.type === "checkbox") {
+        if (supportsPointsConfig() && (field.type === "number" || field.type === "counter" || field.type === "rating" || field.type === "checkbox")) {
             const divPoints = document.createElement("div");
             divPoints.className = "field";
             const labelPoints = document.createElement("label");
-            labelPoints.textContent = "Points per action";
+            labelPoints.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.points_per','Points per action') : 'Points per action';
             const inputPoints = document.createElement("input");
             inputPoints.type = "number";
             inputPoints.step = "any";
@@ -644,7 +659,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             const optTitle = document.createElement("div");
             optTitle.className = "options-builder-title";
-            optTitle.textContent = "Options (Label | Value | Points)";
+            optTitle.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.options_title', supportsPointsConfig() ? 'Options (Label | Value | Points)' : 'Options (Label | Value)') : (supportsPointsConfig() ? 'Options (Label | Value | Points)' : 'Options (Label | Value)');
             
             const btnAddOpt = document.createElement("button");
             btnAddOpt.type = "button";
@@ -652,7 +667,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             btnAddOpt.style.padding = "6px 12px";
             btnAddOpt.style.fontSize = "11px";
             btnAddOpt.style.boxShadow = "none";
-            btnAddOpt.textContent = "+ Add Option";
+            btnAddOpt.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.add_option','+ Add Option') : '+ Add Option';
             
             optHeader.appendChild(optTitle);
             optHeader.appendChild(btnAddOpt);
@@ -669,10 +684,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 
                 const inLabel = document.createElement("input");
                 inLabel.type = "text";
-                inLabel.value = option.label || "";
-                inLabel.placeholder = "Label (e.g. High)";
+                inLabel.value = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(option.label) : (option.label || "");
+                inLabel.placeholder = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.option_label_placeholder','Label (e.g. High)') : 'Label (e.g. High)';
                 inLabel.addEventListener("input", (e) => {
-                    option.label = e.target.value;
+                    const lang = localStorage.getItem('obsidianscout:lang') || 'en';
+                    const val = e.target.value;
+                    if (option && typeof option.label === 'object' && option.label !== null) {
+                        option.label[lang] = val;
+                    } else {
+                        option.label = val;
+                    }
                     if (shouldAutoUpdateOptionValue(option)) {
                         const base = slugify(e.target.value);
                         const autoValue = ensureUniqueSlug(base, collectOptionValues(options, option));
@@ -693,15 +714,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                     updateRawFromVisual();
                 });
                 
-                const inPts = document.createElement("input");
-                inPts.type = "number";
-                inPts.step = "any";
-                inPts.value = option.points !== undefined && option.points !== null ? option.points : 0;
-                inPts.placeholder = "Pts";
-                inPts.addEventListener("input", (e) => {
-                    option.points = e.target.value !== "" ? Number(e.target.value) : 0;
-                    updateRawFromVisual();
-                });
+                let inPts = null;
+                if (supportsPointsConfig()) {
+                    inPts = document.createElement("input");
+                    inPts.type = "number";
+                    inPts.step = "any";
+                    inPts.value = option.points !== undefined && option.points !== null ? option.points : 0;
+                    inPts.placeholder = "Pts";
+                    inPts.addEventListener("input", (e) => {
+                        option.points = e.target.value !== "" ? Number(e.target.value) : 0;
+                        updateRawFromVisual();
+                    });
+                }
                 
                 const btnDelOpt = document.createElement("button");
                 btnDelOpt.type = "button";
@@ -724,7 +748,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 
                 row.appendChild(inLabel);
                 row.appendChild(inVal);
-                row.appendChild(inPts);
+                if (inPts) {
+                    row.appendChild(inPts);
+                }
                 row.appendChild(btnDelOpt);
                 return row;
             };
@@ -734,7 +760,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             
             btnAddOpt.addEventListener("click", () => {
-                const newOpt = { label: "", value: "", points: 0 };
+                const newOpt = supportsPointsConfig() ? { label: "", value: "", points: 0 } : { label: "", value: "" };
                 options.push(newOpt);
                 updateRawFromVisual();
                 optList.appendChild(renderOptionRow(newOpt, options.length - 1));
@@ -780,8 +806,8 @@ document.addEventListener("DOMContentLoaded", async () => {
      * Create a new field to add to the config
      */
     function addField() {
-        const baseId = ensureUniqueSlug("newField", collectFieldIds());
-        const newField = {
+        const baseId = ensureUniqueSlug(supportsPointsConfig() ? "newField" : "newNote", collectFieldIds());
+        const newField = supportsPointsConfig() ? {
             id: baseId,
             _autoId: baseId,
             label: "New Field",
@@ -791,6 +817,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             max: 10,
             step: 1,
             pointsPer: 0
+        } : {
+            id: baseId,
+            _autoId: baseId,
+            label: "New Note",
+            type: "textarea",
+            required: false
         };
         currentConfig.fields.push(newField);
         updateRawFromVisual();
@@ -885,9 +917,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Deep copy/cleanup fields structure to emit beautiful, validated JSON schemas
         const cleanedFields = (currentConfig.fields || []).map((field) => {
+            // Preserve localized label objects; trim strings
+            let normalizedLabel = "";
+            if (field.label !== undefined && field.label !== null) {
+                if (typeof field.label === 'string') {
+                    normalizedLabel = field.label.trim();
+                } else if (typeof field.label === 'object') {
+                    const obj = {};
+                    Object.keys(field.label).forEach((k) => {
+                        const v = field.label[k];
+                        obj[k] = (typeof v === 'string') ? v.trim() : v;
+                    });
+                    normalizedLabel = obj;
+                }
+            }
+
             const cleaned = {
                 id: field.id ? field.id.trim() : "",
-                label: field.label ? field.label.trim() : "",
+                label: normalizedLabel,
                 type: field.type || "text",
                 required: !!field.required
             };
@@ -917,7 +964,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             
             // Points per action
-            if (type === "number" || type === "counter" || type === "rating" || type === "checkbox") {
+            if (supportsPointsConfig() && (type === "number" || type === "counter" || type === "rating" || type === "checkbox")) {
                 if (field.pointsPer !== undefined && field.pointsPer !== null && field.pointsPer !== "") {
                     cleaned.pointsPer = Number(field.pointsPer);
                 }
@@ -925,11 +972,26 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             // Select options
             if (type === "select") {
-                cleaned.options = (field.options || []).map((opt) => ({
-                    label: opt.label ? opt.label.trim() : "",
-                    value: opt.value ? opt.value.trim() : "",
-                    points: opt.points !== undefined && opt.points !== null ? Number(opt.points) : 0
-                }));
+                cleaned.options = (field.options || []).map((opt) => {
+                    let normalizedOptLabel = "";
+                    if (opt.label !== undefined && opt.label !== null) {
+                        if (typeof opt.label === 'string') {
+                            normalizedOptLabel = opt.label.trim();
+                        } else if (typeof opt.label === 'object') {
+                            const o = {};
+                            Object.keys(opt.label).forEach((k) => {
+                                const v = opt.label[k];
+                                o[k] = (typeof v === 'string') ? v.trim() : v;
+                            });
+                            normalizedOptLabel = o;
+                        }
+                    }
+                    return {
+                        label: normalizedOptLabel,
+                        value: opt.value ? opt.value.trim() : "",
+                        ...(supportsPointsConfig() ? { points: opt.points !== undefined && opt.points !== null ? Number(opt.points) : 0 } : {})
+                    };
+                });
             }
             
             return cleaned;

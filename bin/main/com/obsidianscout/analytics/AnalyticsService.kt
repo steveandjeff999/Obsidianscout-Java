@@ -123,7 +123,7 @@ object AnalyticsService {
         return totalScore(config, entries) / entries.size
     }
 
-    private fun scoreEntry(config: ScoutingConfig, entry: ScoutingEntryRecord): Double {
+    fun scoreEntry(config: ScoutingConfig, entry: ScoutingEntryRecord): Double {
         return config.fields.sumOf { field -> fieldScore(field, entry.data[field.id]) }
     }
 

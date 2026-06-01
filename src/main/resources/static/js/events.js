@@ -1,6 +1,14 @@
 let currentEvents = [];
 let currentUser = null;
 
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
+function localize(value) {
+    return (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(value) : value;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -37,10 +45,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             syncButton.disabled = true;
             try {
                 await Obsidianscout.request("/api/integrations/sync/events", { method: "POST" });
-                Obsidianscout.showToast("Events synced", "success");
+                Obsidianscout.showToast(t("events.synced", "Events synced"), "success");
                 await loadEvents(year, true);
             } catch (error) {
-                Obsidianscout.showToast(error.message || "Sync failed", "error");
+                Obsidianscout.showToast(error.message || t("events.sync_failed", "Sync failed"), "error");
             } finally {
                 syncButton.disabled = false;
             }
@@ -62,24 +70,54 @@ async function loadEvents(year, cachedOnly) {
 
         const isAdmin = currentUser && Obsidianscout.isAdmin(currentUser.role);
 
+        const fragment = document.createDocumentFragment();
+
         events.forEach((event) => {
             const row = document.createElement("tr");
-            let actionHtml = "";
+
+            const nameCell = document.createElement("td");
+            nameCell.textContent = localize(event.name);
+            const keyCell = document.createElement("td");
+            keyCell.textContent = event.eventKey;
+            const datesCell = document.createElement("td");
+            datesCell.textContent = `${event.startDate || ""} - ${event.endDate || ""}`;
+            const timezoneCell = document.createElement("td");
+            timezoneCell.textContent = event.timezone || "";
+
+            row.appendChild(nameCell);
+            row.appendChild(keyCell);
+            row.appendChild(datesCell);
+            row.appendChild(timezoneCell);
+
             if (isAdmin) {
-                actionHtml = `<td class="admin-only" style="display: flex; gap: 8px;">
-                    <button class="btn-icon-edit" data-action="edit" data-key="${event.eventKey}">Edit</button>
-                    <button class="btn-icon-edit delete" data-action="delete" data-key="${event.eventKey}" style="color: #c84b31; border-color: rgba(200, 75, 49, 0.25);">Delete</button>
-                </td>`;
+                const actionCell = document.createElement("td");
+                actionCell.className = "admin-only";
+                actionCell.style.display = "flex";
+                actionCell.style.gap = "8px";
+
+                const editButton = document.createElement("button");
+                editButton.className = "btn-icon-edit";
+                editButton.dataset.action = "edit";
+                editButton.dataset.key = event.eventKey;
+                editButton.textContent = t("common.edit", "Edit");
+
+                const deleteButton = document.createElement("button");
+                deleteButton.className = "btn-icon-edit delete";
+                deleteButton.dataset.action = "delete";
+                deleteButton.dataset.key = event.eventKey;
+                deleteButton.style.color = "#c84b31";
+                deleteButton.style.borderColor = "rgba(200, 75, 49, 0.25)";
+                deleteButton.textContent = t("common.delete", "Delete");
+
+                actionCell.appendChild(editButton);
+                actionCell.appendChild(deleteButton);
+                row.appendChild(actionCell);
             }
-            row.innerHTML = `
-                <td>${event.name}</td>
-                <td>${event.eventKey}</td>
-                <td>${event.startDate || ""} - ${event.endDate || ""}</td>
-                <td>${event.timezone || ""}</td>
-                ${actionHtml}
-            `;
-            body.appendChild(row);
+
+            fragment.appendChild(row);
         });
+
+        body.replaceChildren(fragment);
 
         // Wire edit & delete buttons
         if (isAdmin) {
@@ -95,20 +133,20 @@ async function loadEvents(year, cachedOnly) {
             body.querySelectorAll('[data-action="delete"]').forEach(btn => {
                 btn.addEventListener("click", async () => {
                     const key = btn.getAttribute("data-key");
-                    if (confirm("Are you SURE you want to delete this event? This will permanently delete all associated teams, matches, and scouting entries!")) {
+                    if (confirm(t("events.confirm_delete", "Are you SURE you want to delete this event? This will permanently delete all associated teams, matches, and scouting entries!"))) {
                         try {
                             await Obsidianscout.request(`/api/events?eventKey=${key}`, { method: "DELETE" });
-                            Obsidianscout.showToast("Event deleted successfully", "success");
+                            Obsidianscout.showToast(t("events.deleted_success", "Event deleted successfully"), "success");
                             await loadEvents(year, true);
                         } catch (error) {
-                            Obsidianscout.showToast(error.message || "Failed to delete event", "error");
+                            Obsidianscout.showToast(error.message || t("events.delete_failed", "Failed to delete event"), "error");
                         }
                     }
                 });
             });
         }
     } catch (error) {
-        Obsidianscout.showToast("Unable to load events", "error");
+        Obsidianscout.showToast(t("events.load_failed", "Unable to load events"), "error");
     }
 }
 
@@ -139,7 +177,7 @@ function setupModal(defaultYear) {
     }
 
     addBtn.addEventListener("click", () => {
-        titleEl.textContent = "Create Custom Event";
+        titleEl.textContent = t("events.create_custom", "Create Custom Event");
         keyInput.removeAttribute("disabled");
         yearInput.value = defaultYear;
         openModal();
@@ -173,11 +211,11 @@ function setupModal(defaultYear) {
                 method: "POST",
                 json: payload
             });
-            Obsidianscout.showToast("Event saved successfully", "success");
+            Obsidianscout.showToast(t("events.saved_success", "Event saved successfully"), "success");
             closeModal();
             await loadEvents(defaultYear, true);
         } catch (error) {
-            Obsidianscout.showToast(error.message || "Failed to save event", "error");
+            Obsidianscout.showToast(error.message || t("events.save_failed", "Failed to save event"), "error");
         }
     });
 }
@@ -192,7 +230,7 @@ function openEditModal(event) {
     const timezoneInput = document.getElementById("event-timezone");
     const titleEl = document.getElementById("event-modal-title");
 
-    titleEl.textContent = "Edit Event";
+    titleEl.textContent = t("events.edit_event", "Edit Event");
     keyInput.value = event.eventKey;
     keyInput.setAttribute("disabled", "true"); // Primary Key shouldn't be edited once created
 

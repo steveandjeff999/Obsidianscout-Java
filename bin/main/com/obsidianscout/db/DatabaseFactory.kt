@@ -37,7 +37,11 @@ object DatabaseFactory {
             SchemaUtils.createMissingTablesAndColumns(
                 Users,
                 ScoutingConfigs,
+                PitScoutingConfigs,
+                QualitativeScoutingConfigs,
                 ScoutingEntries,
+                PitScoutingEntries,
+                QualitativeScoutingEntries,
                 AppSettings,
                 ApiEvents,
                 ApiTeams,

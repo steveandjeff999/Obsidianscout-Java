@@ -1,5 +1,13 @@
 let currentEventKey = "";
 
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
+function localize(value) {
+    return (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(value) : value;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -33,7 +41,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         events.forEach(e => {
             const opt = document.createElement("option");
             opt.value = e.eventKey;
-            opt.textContent = `${e.name} (${e.eventKey})`;
+            opt.textContent = `${localize(e.name)} (${e.eventKey})`;
             if (e.eventKey === currentEventKey) {
                 opt.selected = true;
             }
@@ -59,13 +67,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             syncButton.disabled = true;
             try {
                 await Obsidianscout.request("/api/integrations/sync/event", { method: "POST" });
-                Obsidianscout.showToast("Matches synced", "success");
+                Obsidianscout.showToast(t("matches.synced", "Matches synced"), "success");
                 const refreshed = await Obsidianscout.request("/api/settings");
                 currentEventKey = Obsidianscout.resolveEventKey(refreshed.settings);
                 if (eventFilter) eventFilter.value = currentEventKey;
                 await loadMatches(currentEventKey, timezone);
             } catch (error) {
-                Obsidianscout.showToast(error.message || "Sync failed", "error");
+                Obsidianscout.showToast(error.message || t("matches.sync_failed", "Sync failed"), "error");
             } finally {
                 syncButton.disabled = false;
             }
@@ -81,7 +89,7 @@ async function loadMatches(eventKey, timezone) {
     body.innerHTML = "";
 
     if (!eventKey) {
-        Obsidianscout.showToast("Set an event key in settings", "error");
+        Obsidianscout.showToast(t("matches.set_event_key", "Set an event key in settings"), "error");
         return;
     }
 
@@ -89,28 +97,55 @@ async function loadMatches(eventKey, timezone) {
         const matches = await Obsidianscout.request(`/api/matches?eventKey=${eventKey}`);
         currentMatches = matches;
         const isAdmin = currentUser && Obsidianscout.isAdmin(currentUser.role);
+        const fragment = document.createDocumentFragment();
 
         matches.forEach((match) => {
             const row = document.createElement("tr");
             const red = match.redTeams.join(", ");
             const blue = match.blueTeams.join(", ");
             const timeLabel = Obsidianscout.formatTimestamp(match.scheduledTime, timezone);
-            let actionHtml = "";
+            const matchCell = document.createElement("td");
+            matchCell.textContent = localize(match.label) || (match.compLevel.toUpperCase() + " " + (match.matchNumber || ""));
+            const timeCell = document.createElement("td");
+            timeCell.textContent = timeLabel;
+            const redCell = document.createElement("td");
+            redCell.textContent = red;
+            const blueCell = document.createElement("td");
+            blueCell.textContent = blue;
+
+            row.appendChild(matchCell);
+            row.appendChild(timeCell);
+            row.appendChild(redCell);
+            row.appendChild(blueCell);
+
             if (isAdmin) {
-                actionHtml = `<td class="admin-only" style="display: flex; gap: 8px;">
-                    <button class="btn-icon-edit" data-action="edit" data-key="${match.matchKey}">Edit</button>
-                    <button class="btn-icon-edit delete" data-action="delete" data-key="${match.matchKey}" style="color: #c84b31; border-color: rgba(200, 75, 49, 0.25);">Delete</button>
-                </td>`;
+                const actionCell = document.createElement("td");
+                actionCell.className = "admin-only";
+                actionCell.style.display = "flex";
+                actionCell.style.gap = "8px";
+
+                const editButton = document.createElement("button");
+                editButton.className = "btn-icon-edit";
+                editButton.dataset.action = "edit";
+                editButton.dataset.key = match.matchKey;
+                editButton.textContent = t("common.edit", "Edit");
+
+                const deleteButton = document.createElement("button");
+                deleteButton.className = "btn-icon-edit delete";
+                deleteButton.dataset.action = "delete";
+                deleteButton.dataset.key = match.matchKey;
+                deleteButton.style.color = "#c84b31";
+                deleteButton.style.borderColor = "rgba(200, 75, 49, 0.25)";
+                deleteButton.textContent = t("common.delete", "Delete");
+
+                actionCell.appendChild(editButton);
+                actionCell.appendChild(deleteButton);
+                row.appendChild(actionCell);
             }
-            row.innerHTML = `
-                <td>${match.label || `${match.compLevel.toUpperCase()} ${match.matchNumber || ""}`}</td>
-                <td>${timeLabel}</td>
-                <td>${red}</td>
-                <td>${blue}</td>
-                ${actionHtml}
-            `;
-            body.appendChild(row);
+            fragment.appendChild(row);
         });
+
+        body.replaceChildren(fragment);
 
         // Wire edit & delete buttons
         if (isAdmin) {
@@ -126,20 +161,20 @@ async function loadMatches(eventKey, timezone) {
             body.querySelectorAll('[data-action="delete"]').forEach(btn => {
                 btn.addEventListener("click", async () => {
                     const key = btn.getAttribute("data-key");
-                    if (confirm("Are you sure you want to delete this match?")) {
+                    if (confirm(t("matches.confirm_delete", "Are you sure you want to delete this match?"))) {
                         try {
                             await Obsidianscout.request(`/api/matches?matchKey=${key}`, { method: "DELETE" });
-                            Obsidianscout.showToast("Match deleted successfully", "success");
+                            Obsidianscout.showToast(t("matches.deleted_success", "Match deleted successfully"), "success");
                             await loadMatches(eventKey, timezone);
                         } catch (error) {
-                            Obsidianscout.showToast(error.message || "Failed to delete match", "error");
+                            Obsidianscout.showToast(error.message || t("matches.delete_failed", "Failed to delete match"), "error");
                         }
                     }
                 });
             });
         }
     } catch (error) {
-        Obsidianscout.showToast("Unable to load matches", "error");
+        Obsidianscout.showToast(t("matches.load_failed", "Unable to load matches"), "error");
     }
 }
 
@@ -193,7 +228,7 @@ async function setupModal(defaultEventKey, timezone) {
     }
 
     addBtn.addEventListener("click", () => {
-        titleEl.textContent = "Add Match Manually";
+        titleEl.textContent = t("matches.add_manual", "Add Match Manually");
         eventSelect.removeAttribute("disabled");
         compLevelSelect.removeAttribute("disabled");
         matchNumberInput.removeAttribute("disabled");
@@ -228,7 +263,7 @@ async function setupModal(defaultEventKey, timezone) {
         ].filter(Boolean);
 
         if (redTeams.length !== 3 || blueTeams.length !== 3) {
-            Obsidianscout.showToast("Alliances must have exactly 3 teams each", "error");
+            Obsidianscout.showToast(t("matches.alliances_invalid", "Alliances must have exactly 3 teams each"), "error");
             return;
         }
 
@@ -250,7 +285,7 @@ async function setupModal(defaultEventKey, timezone) {
                 method: "POST",
                 json: payload
             });
-            Obsidianscout.showToast("Match saved successfully", "success");
+            Obsidianscout.showToast(t("matches.saved_success", "Match saved successfully"), "success");
             closeModal();
             const activeEvent = eventSelect.value;
             currentEventKey = activeEvent;
@@ -260,7 +295,7 @@ async function setupModal(defaultEventKey, timezone) {
             }
             await loadMatches(activeEvent, timezone);
         } catch (error) {
-            Obsidianscout.showToast(error.message || "Failed to save match", "error");
+            Obsidianscout.showToast(error.message || t("matches.save_failed", "Failed to save match"), "error");
         }
     });
 }
@@ -280,7 +315,7 @@ function openEditModal(match) {
     const keyInput = document.getElementById("match-key");
     const titleEl = document.getElementById("match-modal-title");
 
-    titleEl.textContent = "Edit Match";
+    titleEl.textContent = t("matches.edit_match", "Edit Match");
     eventSelect.value = match.eventKey;
     eventSelect.setAttribute("disabled", "true");
 

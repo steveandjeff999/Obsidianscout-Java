@@ -55,7 +55,7 @@ function renderBarChart(series) {
 
         const label = document.createElement("div");
         label.className = "bar-label";
-        label.textContent = `${item.label} (${item.value})`;
+        label.textContent = `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(item.label) : item.label} (${item.value})`;
 
         const track = document.createElement("div");
         track.className = "bar-track";

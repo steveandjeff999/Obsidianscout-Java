@@ -11,20 +11,20 @@
     <div class="orb orb-2"></div>
     <div class="orb orb-3"></div>
 
-    <main class="shell">
-        <section class="hero">
+    <main class="shell login-shell">
+        <section class="hero login-hero">
             <div>
                 <div class="brand">ObsidianScout</div>
-                <h1>Scout smarter, move faster.</h1>
+                <h1 data-i18n="index.tagline">Scout smarter, move faster.</h1>
                 <p>Log in with your team credentials to start capturing match data and live analytics.</p>
                 <div class="card soft">
                     <strong>Multi-team ready.</strong> Each team gets its own isolated data, settings, and scouting config.
                 </div>
             </div>
-            <div class="card">
+            <div class="card auth-card">
                 <div class="tab-row" id="auth-tabs">
-                    <button class="tab active" data-tab="login" type="button">Sign in</button>
-                    <button class="tab" data-tab="register" type="button">Create account</button>
+                    <button class="tab active" data-tab="login" type="button" data-i18n="index.sign_in_tab">Sign in</button>
+                    <button class="tab" data-tab="register" type="button" data-i18n="index.create_account_tab">Create account</button>
                 </div>
 
                 <div id="login-panel">
@@ -41,11 +41,11 @@
                             <label for="password">Password</label>
                             <input id="password" name="password" type="password" required />
                         </div>
-                        <button id="login-submit" class="btn" type="submit">Sign in</button>
+                        <button id="login-submit" class="btn" type="submit" data-i18n="index.login_submit">Sign in</button>
                     </form>
                 </div>
 
-                <div id="register-panel" class="hidden">
+                <div id="register-panel" class="hidden" hidden>
                     <form id="register-form" class="form-grid">
                         <div class="field">
                             <label for="reg-username">Username</label>
@@ -71,7 +71,7 @@
                                 <option value="ADMIN">Admin</option>
                             </select>
                         </div>
-                        <button id="register-submit" class="btn dark" type="submit">Create account</button>
+                        <button id="register-submit" class="btn dark" type="submit" data-i18n="index.register_submit">Create account</button>
                     </form>
                 </div>
             </div>

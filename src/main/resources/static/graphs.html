@@ -17,12 +17,15 @@
                 <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
                 <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
                 <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
+                <a class="sidebar-link" data-page="qual-scout" href="/qual-scout">Qual Scout</a>
+                <a class="sidebar-link" data-page="qual-data" href="/qual-data">Qual Data</a>
                 <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
                 <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
                 <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
                 <a class="sidebar-link" data-page="events" href="/events">Events</a>
                 <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
                 <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
+                <a class="sidebar-link" data-page="predictor" href="/predictor">Predictor</a>
                 <a class="sidebar-link" data-page="users" href="/users">Users</a>
                 <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
             </nav>
@@ -35,8 +38,8 @@
 
         <main class="main-content graphs-page">
             <div class="card graphs-hero">
-                <h1>Graphs Dashboard</h1>
-                <p class="notice">Pick teams, metrics, and graph types to generate Plotly visuals from your scouting data.</p>
+                <h1 data-i18n="graphs.title">Graphs Dashboard</h1>
+                <p class="notice" data-i18n="graphs.notice">Pick teams, metrics, and graph types to generate Plotly visuals from your scouting data.</p>
             </div>
 
             <div id="graphs-summary" class="metrics mt-20"></div>
@@ -58,16 +61,16 @@
                             <label for="team-search-input">Search teams</label>
                             <div class="row gap-12 wrap">
                                 <input id="team-search-input" type="text" placeholder="Type team number" />
-                                <button class="btn ghost" id="clear-search-btn" type="button">Clear</button>
+                                <button class="btn ghost" id="clear-search-btn" type="button" data-i18n="graphs.clear_search">Clear</button>
                             </div>
                         </div>
                     </div>
 
                     <div class="row gap-12 wrap mt-12">
-                        <button class="btn ghost" id="select-all-teams" type="button">Select all</button>
-                        <button class="btn ghost" id="select-top-teams" type="button">Top 8</button>
-                        <button class="btn ghost" id="add-event-teams" type="button">Add event</button>
-                        <button class="btn ghost" id="clear-teams" type="button">Clear all</button>
+                        <button class="btn ghost" id="select-all-teams" type="button" data-i18n="graphs.select_all">Select all</button>
+                        <button class="btn ghost" id="select-top-teams" type="button" data-i18n="graphs.select_top">Top 8</button>
+                        <button class="btn ghost" id="add-event-teams" type="button" data-i18n="graphs.add_event">Add event</button>
+                        <button class="btn ghost" id="clear-teams" type="button" data-i18n="graphs.clear_all">Clear all</button>
                     </div>
 
                     <div class="selected-pills mt-12" id="selected-pills-container"></div>
@@ -131,22 +134,22 @@
                     </div>
 
                     <div class="row gap-12 wrap mt-12">
-                        <button class="btn ghost" id="select-basic-graphs" type="button">Basic</button>
-                        <button class="btn ghost" id="select-distribution-graphs" type="button">Distribution</button>
-                        <button class="btn ghost" id="select-advanced-graphs" type="button">Advanced</button>
-                        <button class="btn ghost" id="clear-graph-types" type="button">Clear</button>
+                        <button class="btn ghost" id="select-basic-graphs" type="button" data-i18n="graphs.basic">Basic</button>
+                        <button class="btn ghost" id="select-distribution-graphs" type="button" data-i18n="graphs.distribution">Distribution</button>
+                        <button class="btn ghost" id="select-advanced-graphs" type="button" data-i18n="graphs.advanced">Advanced</button>
+                        <button class="btn ghost" id="clear-graph-types" type="button" data-i18n="graphs.clear_types">Clear</button>
                     </div>
 
                     <div class="row gap-12 wrap mt-16">
-                        <button class="btn" id="graph-generate" type="button">Generate graphs</button>
+                        <button class="btn" id="graph-generate" type="button" data-i18n="graphs.generate">Generate graphs</button>
                         <span class="badge hidden" id="graph-loading">Generating…</span>
                     </div>
                 </section>
             </div>
 
             <div class="card mt-24">
-                <h2>Generated graphs</h2>
-                <p class="notice" id="graphs-empty">Select teams and generate graphs.</p>
+                <h2 data-i18n="graphs.title">Generated graphs</h2>
+                <p class="notice" id="graphs-empty" data-i18n="graphs.empty">Select teams and generate graphs.</p>
                 <div id="graphs-output" class="graphs-output mt-16"></div>
             </div>
         </main>

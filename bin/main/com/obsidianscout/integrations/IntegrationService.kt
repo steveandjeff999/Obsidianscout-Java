@@ -4,6 +4,7 @@ import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.ApiEvents
 import com.obsidianscout.db.ApiMatches
 import com.obsidianscout.db.ApiTeams
+import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.routes.EventRecord
 import com.obsidianscout.routes.MatchRecord
@@ -519,6 +520,7 @@ object IntegrationService {
         return transaction {
             val key = eventKey.lowercase().trim()
             ScoutingEntries.deleteWhere { ScoutingEntries.eventKey eq key }
+            PitScoutingEntries.deleteWhere { PitScoutingEntries.eventKey eq key }
             ApiTeams.deleteWhere { ApiTeams.eventKey eq key }
             ApiMatches.deleteWhere { ApiMatches.eventKey eq key }
             val count = ApiEvents.deleteWhere { ApiEvents.eventKey eq key }

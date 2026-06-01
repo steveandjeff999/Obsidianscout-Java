@@ -1,29 +1,39 @@
-const CACHE_NAME = 'obsidianscout-shell-v1';
+const CACHE_NAME = 'obsidianscout-shell-v5';
 
 const ASSETS = [
     '/',
-    '/index.html',
-    '/dashboard.html',
-    '/scout.html',
-    '/analytics.html',
-    '/graphs.html',
-    '/events.html',
-    '/teams.html',
-    '/matches.html',
-    '/users.html',
-    '/config.html',
+    '/dashboard',
+    '/scout',
+    '/pit-scout',
+    '/qual-scout',
+    '/pit-data',
+    '/analytics',
+    '/graphs',
+    '/events',
+    '/teams',
+    '/matches',
+    '/users',
+    '/config',
     '/css/app.css',
     '/js/common.js',
     '/js/login.js',
     '/js/dashboard.js',
     '/js/scout.js',
+    '/js/pit-scout.js',
+    '/js/qual-scout.js',
+    '/js/pit-data.js',
     '/js/analytics.js',
     '/js/graphs.js',
     '/js/events.js',
     '/js/teams.js',
     '/js/matches.js',
     '/js/users.js',
-    '/js/settings.js'
+    '/js/settings.js',
+    '/vendor/plotly-2.32.0.min.js'
+    ,'/i18n/en.json'
+    ,'/i18n/es.json'
+    ,'/i18n/tr.json'
+    ,'/i18n/he.json'
 ];
 
 // Install: Cache all the application shell assets
@@ -82,7 +92,7 @@ self.addEventListener('fetch', (event) => {
                             return cachedResponse;
                         }
                         // Fallback to index.html if we are completely offline and page is not cached
-                        return caches.match('/index.html');
+                        return caches.match('/');
                     });
                 })
         );

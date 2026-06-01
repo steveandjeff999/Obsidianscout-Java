@@ -1,20 +1,30 @@
 package com.obsidianscout.routes
 
 import com.obsidianscout.analytics.AnalyticsService
+import com.obsidianscout.analytics.PredictorService
 import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.auth.requireAdmin
 import com.obsidianscout.auth.requireAnalyticsOrAbove
 import com.obsidianscout.auth.requireSession
 import com.obsidianscout.config.ConfigService
+import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.integrations.ApiSettings
-import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.IntegrationService
+import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.SyncScheduler
 import com.obsidianscout.scouting.PitScoutingService
+import com.obsidianscout.scouting.QualitativeScoutingService
 import com.obsidianscout.scouting.ScoutingService
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
@@ -94,7 +104,45 @@ fun Application.configureRoutes() {
             route("/config") {
                 get {
                     val session = call.requireSession()
-                    call.respond(ConfigService.getConfig(session.teamNumber))
+                    // Return JSON where any string `label` values are wrapped into { "en": "..." }
+                    val raw = ConfigService.getConfigJson(session.teamNumber)
+                    val elem = JsonSupport.json.parseToJsonElement(raw)
+                    val obj = elem as? JsonObject
+                    if (obj != null) {
+                        val fields = obj["fields"]
+                        if (fields is kotlinx.serialization.json.JsonArray) {
+                            val transformed = fields.map { f ->
+                                val fo = f as? JsonObject ?: return@map f
+                                val label = fo["label"]
+                                if (label is JsonPrimitive && label.isString) {
+                                    val newField = buildJsonObject {
+                                        fo.entries.forEach { (k, v) ->
+                                            if (k == "label") {
+                                                put(k, JsonObject(mapOf("en" to JsonPrimitive(v.toString().trim('"')))))
+                                            } else {
+                                                put(k, v)
+                                            }
+                                        }
+                                    }
+                                    return@map newField
+                                }
+                                f
+                            }
+                            val out = buildJsonObject {
+                                obj.entries.forEach { (k, v) ->
+                                    if (k == "fields") {
+                                        put(k, kotlinx.serialization.json.JsonArray(transformed))
+                                    } else {
+                                        put(k, v)
+                                    }
+                                }
+                            }
+                            call.respondText(JsonSupport.json.encodeToString(kotlinx.serialization.json.JsonElement.serializer(), out), ContentType.Application.Json)
+                            return@get
+                        }
+                    }
+                    // Fallback: respond with raw config JSON
+                    call.respondText(raw, ContentType.Application.Json)
                 }
                 put {
                     val session = call.requireAdmin()
@@ -107,12 +155,97 @@ fun Application.configureRoutes() {
             route("/pit-config") {
                 get {
                     val session = call.requireSession()
-                    call.respond(ConfigService.getPitConfig(session.teamNumber))
+                    val raw = ConfigService.getPitConfigJson(session.teamNumber)
+                    val elem = JsonSupport.json.parseToJsonElement(raw)
+                    val obj = elem as? JsonObject
+                    if (obj != null) {
+                        val fields = obj["fields"]
+                        if (fields is kotlinx.serialization.json.JsonArray) {
+                            val transformed = fields.map { f ->
+                                val fo = f as? JsonObject ?: return@map f
+                                val label = fo["label"]
+                                if (label is JsonPrimitive && label.isString) {
+                                    val newField = buildJsonObject {
+                                        fo.entries.forEach { (k, v) ->
+                                            if (k == "label") {
+                                                put(k, JsonObject(mapOf("en" to JsonPrimitive(v.toString().trim('"')))))
+                                            } else {
+                                                put(k, v)
+                                            }
+                                        }
+                                    }
+                                    return@map newField
+                                }
+                                f
+                            }
+                            val out = buildJsonObject {
+                                obj.entries.forEach { (k, v) ->
+                                    if (k == "fields") {
+                                        put(k, kotlinx.serialization.json.JsonArray(transformed))
+                                    } else {
+                                        put(k, v)
+                                    }
+                                }
+                            }
+                            call.respondText(JsonSupport.json.encodeToString(kotlinx.serialization.json.JsonElement.serializer(), out), ContentType.Application.Json)
+                            return@get
+                        }
+                    }
+                    call.respondText(raw, ContentType.Application.Json)
                 }
                 put {
                     val session = call.requireAdmin()
                     val request = call.receive<ConfigUpdateRequest>()
                     val updated = ConfigService.updatePitConfig(session.teamNumber, request.configJson)
+                    call.respond(updated)
+                }
+            }
+
+            route("/qual-config") {
+                get {
+                    val session = call.requireSession()
+                    val raw = ConfigService.getQualitativeConfigJson(session.teamNumber)
+                    val elem = JsonSupport.json.parseToJsonElement(raw)
+                    val obj = elem as? JsonObject
+                    if (obj != null) {
+                        val fields = obj["fields"]
+                        if (fields is kotlinx.serialization.json.JsonArray) {
+                            val transformed = fields.map { f ->
+                                val fo = f as? JsonObject ?: return@map f
+                                val label = fo["label"]
+                                if (label is JsonPrimitive && label.isString) {
+                                    val newField = buildJsonObject {
+                                        fo.entries.forEach { (k, v) ->
+                                            if (k == "label") {
+                                                put(k, JsonObject(mapOf("en" to JsonPrimitive(v.toString().trim('"')))))
+                                            } else {
+                                                put(k, v)
+                                            }
+                                        }
+                                    }
+                                    return@map newField
+                                }
+                                f
+                            }
+                            val out = buildJsonObject {
+                                obj.entries.forEach { (k, v) ->
+                                    if (k == "fields") {
+                                        put(k, kotlinx.serialization.json.JsonArray(transformed))
+                                    } else {
+                                        put(k, v)
+                                    }
+                                }
+                            }
+                            call.respondText(JsonSupport.json.encodeToString(kotlinx.serialization.json.JsonElement.serializer(), out), ContentType.Application.Json)
+                            return@get
+                        }
+                    }
+                    call.respondText(raw, ContentType.Application.Json)
+                }
+                put {
+                    val session = call.requireAdmin()
+                    val request = call.receive<ConfigUpdateRequest>()
+                    val updated = ConfigService.updateQualitativeConfig(session.teamNumber, request.configJson)
                     call.respond(updated)
                 }
             }
@@ -155,6 +288,20 @@ fun Application.configureRoutes() {
                     val request = call.receive<ScoutingEntryRequest>()
                     val config = ConfigService.getPitConfig(session.teamNumber)
                     val entry = PitScoutingService.createEntry(session, request, config)
+                    call.respond(entry)
+                }
+            }
+
+            route("/qual-scouting") {
+                get {
+                    val session = call.requireSession()
+                    call.respond(QualitativeScoutingService.listEntries(session))
+                }
+                post {
+                    val session = call.requireSession()
+                    val request = call.receive<ScoutingEntryRequest>()
+                    val config = ConfigService.getQualitativeConfig(session.teamNumber)
+                    val entry = QualitativeScoutingService.createEntry(session, request, config)
                     call.respond(entry)
                 }
             }
@@ -229,6 +376,13 @@ fun Application.configureRoutes() {
                         ?: SettingsService.getSettings(session.teamNumber).resolvedEventKey()
                     call.respond(IntegrationService.listMatches(eventKey))
                 }
+                get("/predict") {
+                    val session = call.requireSession()
+                    val matchKey = call.request.queryParameters["matchKey"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing matchKey parameter")
+                    val prediction = PredictorService.predict(session, matchKey)
+                    call.respond(prediction)
+                }
                 post {
                     call.requireAdmin()
                     val request = call.receive<MatchRecord>()
@@ -259,7 +413,11 @@ fun Application.configureRoutes() {
                             intervalMinutes = SyncScheduler.INTERVAL_MS / 60_000.0,
                             lastSyncAt = SyncScheduler.lastSyncAt?.toString(),
                             lastSyncSummary = SyncScheduler.lastSyncSummary,
-                            lastSyncError = SyncScheduler.lastSyncError
+                            lastSyncError = SyncScheduler.lastSyncError,
+                            lastSyncTeams = SyncScheduler.lastSyncTeams,
+                            lastSyncMatches = SyncScheduler.lastSyncMatches,
+                            lastSyncTeamCount = SyncScheduler.lastSyncTeamCount,
+                            lastSyncFailedTeams = SyncScheduler.lastSyncFailedTeams
                         )
                     )
                 }
@@ -276,6 +434,10 @@ fun Application.configureRoutes() {
                     SyncScheduler.lastSyncAt = java.time.Instant.now()
                     SyncScheduler.lastSyncSummary =
                         "Manual sync: ${counts.teams} teams, ${counts.matches} matches"
+                    SyncScheduler.lastSyncTeams = counts.teams
+                    SyncScheduler.lastSyncMatches = counts.matches
+                    SyncScheduler.lastSyncTeamCount = 1
+                    SyncScheduler.lastSyncFailedTeams = null
                     SyncScheduler.lastSyncError = null
                     call.respond(SyncResponse(counts.teams + counts.matches, settings.preferredSource, settings.resolvedEventKey()))
                 }
@@ -312,12 +474,15 @@ fun Application.configureRoutes() {
             "dashboard" to "dashboard.html",
             "scout" to "scout.html",
             "pit-scout" to "pit-scout.html",
+            "qual-scout" to "qual-scout.html",
+            "qual-data" to "qual-data.html",
             "pit-data" to "pit-data.html",
             "analytics" to "analytics.html",
             "graphs" to "graphs.html",
             "events" to "events.html",
             "teams" to "teams.html",
             "matches" to "matches.html",
+            "predictor" to "predictor.html",
             "users" to "users.html",
             "config" to "config.html"
         )

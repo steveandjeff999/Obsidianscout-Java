@@ -1,0 +1,214 @@
+{
+  "nav.dashboard": "Kontrol Paneli",
+  "nav.scout": "İzleme",
+  "nav.analytics": "Analiz",
+  "nav.graphs": "Grafikler",
+  "nav.events": "Etkinlikler",
+  "nav.teams": "Takımlar",
+  "nav.matches": "Maçlar",
+  "nav.users": "Kullanıcılar",
+  "nav.settings": "Ayarlar",
+  "btn.toggle_theme": "Temayı değiştir",
+  "btn.logout": "Çıkış",
+  "connection.online": "Çevrimiçi",
+  "connection.offline": "Çevrimdışı",
+  "connection.sync": "Eşitle",
+  "connection.pending": "Bekleyen",
+  "settings.title": "Ayarlar",
+  "settings.scouting_config": "Scouting yapılandırması",
+  "settings.api": "API anahtarları",
+  "settings.visual_editor": "Görsel Düzenleyici",
+  "settings.raw_editor": "Ham JSON",
+  "settings.save": "Ayarları kaydet",
+  "scout.title": "Dinamik scouting formu",
+  "scout.select_team": "Takım seç",
+  "scout.select_match": "Maçı seç",
+  "scout.save_entry": "Kaydet",
+  "scout.clear_form": "Formu temizle",
+  "graphs.title": "Grafikler",
+  "graphs.empty": "Takımları seçin ve grafik oluşturun.",
+  "graphs.notice": "Takımları, metrikleri ve grafik türlerini seçerek Plotly görselleri oluşturun.",
+  "graphs.clear_search": "Temizle",
+  "graphs.select_all": "Tümünü seç",
+  "graphs.select_top": "İlk 8",
+  "graphs.add_event": "Etkinlik ekle",
+  "graphs.clear_all": "Tümünü temizle",
+  "graphs.basic": "Temel",
+  "graphs.distribution": "Dağılım",
+  "graphs.advanced": "Gelişmiş",
+  "graphs.clear_types": "Temizle",
+  "graphs.generate": "Grafikleri oluştur",
+  "dashboard.title": "Kontrol Paneli",
+  "dashboard.notice": "Scouting ilerlemesini, senkronizasyon durumunu ve etkinlik bağlamını takip edin.",
+  "dashboard.entries": "Girdiler",
+  "dashboard.events": "Etkinlikler",
+  "dashboard.teams": "Takımlar",
+  "dashboard.matches": "Maçlar",
+  "dashboard.event_context": "Etkinlik bağlamı",
+  "dashboard.event_context_notice": "Sezon ve etkinlik ayarları API eşitlemesi ve maç zamanları için kullanılır.",
+  "dashboard.season": "Sezon",
+  "dashboard.event_key": "Etkinlik anahtarı",
+  "dashboard.timezone": "Saat dilimi",
+  "dashboard.quick_sync": "Hızlı eşitleme",
+  "dashboard.quick_sync_notice": "Sunucu çalışırken takımlar ve maçlar her 7,5 dakikada bir otomatik eşitlenir.",
+  "dashboard.not_set": "Ayarlanmadı",
+  "dashboard.auto_sync_every": "Otomatik eşitleme: 7,5 dakikada bir.",
+  "dashboard.last_sync": "Son eşitleme:",
+  "dashboard.sync_complete": "Eşitleme tamamlandı",
+  "dashboard.sync_failed": "Eşitleme başarısız",
+  "dashboard.admin_sync_required": "Eşitlemek için yönetici erişimi gerekir.",
+  "dashboard.sync_summary": "{teamCount} takım için {teams} takım ve {matches} maç eşitlendi",
+  "dashboard.sync_no_teams": "Otomatik eşitleme için yapılandırılmış takım yok.",
+  "dashboard.sync_failed_teams": "{count} takımın eşitlemesi başarısız oldu",
+  "dashboard.sync_teams_matches": "Takımları ve maçları eşitle",
+  "dashboard.sync_events": "Etkinlikleri eşitle",
+  "dashboard.sync_stats": "İstatistikleri eşitle",
+  "analytics.title": "Analizler (konfigürasyondan)",
+  "analytics.notice": "Widget'lar konfigürasyon JSON'unun analiz bölümünden oluşturulur.",
+  "events.title": "Etkinlikler",
+  "events.notice": "Seçilen sezon için etkinlikleri eşitleyin ve scouting için bir etkinlik seçin.",
+  "events.sync_events": "Etkinlikleri eşitle",
+  "events.add_manual": "Etkinlik manuel ekle",
+  "events.cancel": "İptal",
+  "events.save_event": "Etkinliği kaydet",
+  "events.event": "Etkinlik",
+  "events.key": "Anahtar",
+  "events.dates": "Tarihler",
+  "events.timezone": "Saat dilimi",
+  "events.action": "İşlem",
+  "events.create_custom": "Özel Etkinlik Oluştur",
+  "events.edit_event": "Etkinliği Düzenle",
+  "events.event_key": "Etkinlik Anahtarı",
+  "events.event_key_help": "Benzersiz, küçük harfli bir tanımlayıcı girin.",
+  "events.event_key_placeholder": "örn. 2026custom",
+  "events.event_name": "Etkinlik Adı",
+  "events.event_name_placeholder": "örn. Sezon Öncesi Gösteri",
+  "events.year": "Yıl",
+  "events.year_placeholder": "2026",
+  "events.start_date": "Başlangıç Tarihi",
+  "events.end_date": "Bitiş Tarihi",
+  "timezone.eastern": "Amerika/New York (Doğu)",
+  "timezone.central": "Amerika/Chicago (Merkez)",
+  "timezone.mountain": "Amerika/Denver (Dağ)",
+  "timezone.pacific": "Amerika/Los Angeles (Pasifik)",
+  "timezone.arizona": "Amerika/Phoenix (Arizona)",
+  "timezone.alaska": "Amerika/Anchorage (Alaska)",
+  "timezone.hawaii": "Pasifik/Honolulu (Hawaii)",
+  "timezone.utc": "UTC",
+  "timezone.london": "Avrupa/Londra",
+  "timezone.paris": "Avrupa/Paris",
+  "timezone.tokyo": "Asya/Tokyo",
+  "timezone.sydney": "Avustralya/Sidney",
+  "events.synced": "Etkinlikler eşitlendi",
+  "events.sync_failed": "Eşitleme başarısız",
+  "events.deleted_success": "Etkinlik başarıyla silindi",
+  "events.delete_failed": "Etkinlik silinemedi",
+  "events.load_failed": "Etkinlikler yüklenemedi",
+  "events.saved_success": "Etkinlik başarıyla kaydedildi",
+  "events.save_failed": "Etkinlik kaydedilemedi",
+  "events.confirm_delete": "Bu etkinliği silmek istediğinizden EMİN misiniz? Bu, ilişkili tüm takımları, maçları ve scouting kayıtlarını kalıcı olarak siler!",
+  "teams.title": "Takımlar",
+  "teams.notice": "Seçilen etkinlik için takımları eşitleyin ve EPA/OPR istatistiklerini inceleyin.",
+  "teams.sync_teams": "Takımları eşitle",
+  "teams.sync_stats": "İstatistikleri eşitle",
+  "teams.add_manual": "Takım manuel ekle",
+  "teams.cancel": "İptal",
+  "teams.save_team": "Takımı kaydet",
+  "users.title": "Kullanıcı yönetimi",
+  "users.notice": "Kullanıcıları yönetmek için yönetici erişimi gerekir.",
+  "users.create_user": "Kullanıcı oluştur",
+  "matches.title": "Maçlar",
+  "matches.notice": "Seçilen etkinlik için maçları eşitleyin ve scouting formunda kullanın.",
+  "matches.sync_matches": "Maçları eşitle",
+  "matches.add_manual": "Maç manuel ekle",
+  "matches.cancel": "İptal",
+  "matches.save_match": "Maçı kaydet",
+  "matches.comp.practice": "Antrenman",
+  "matches.comp.qm": "Eleme",
+  "matches.comp.qf": "Çeyrek final",
+  "matches.comp.sf": "Yarı final",
+  "matches.comp.f": "Final",
+  "matches.view_event": "Etkinliği Görüntüle",
+  "matches.match": "Maç",
+  "matches.time": "Saat",
+  "matches.red": "Kırmızı",
+  "matches.blue": "Mavi",
+  "matches.action": "İşlem",
+  "matches.event": "Etkinlik",
+  "matches.comp_level": "Karşılaşma Türü",
+  "matches.match_number": "Maç Numarası",
+  "matches.scheduled_time": "Planlanan Saat",
+  "matches.red_alliance": "Kırmızı ittifak takımları",
+  "matches.blue_alliance": "Mavi ittifak takımları",
+  "matches.synced": "Maçlar eşitlendi",
+  "matches.sync_failed": "Eşitleme başarısız",
+  "matches.set_event_key": "Ayarlar'da bir etkinlik anahtarı belirleyin",
+  "matches.deleted_success": "Maç başarıyla silindi",
+  "matches.delete_failed": "Maç silinemedi",
+  "matches.load_failed": "Maçlar yüklenemedi",
+  "matches.confirm_delete": "Bu maçı silmek istediğinizden emin misiniz?",
+  "matches.edit_match": "Maçı Düzenle",
+  "matches.alliances_invalid": "İttifaklarda tam 3 takım olmalı",
+  "matches.saved_success": "Maç başarıyla kaydedildi",
+  "matches.save_failed": "Maç kaydedilemedi",
+  "common.edit": "Düzenle",
+  "common.delete": "Sil",
+  "index.tagline": "Daha akıllıca scout yapın, daha hızlı hareket edin.",
+  "index.sign_in_tab": "Giriş yap",
+  "index.create_account_tab": "Hesap oluştur",
+  "index.login_submit": "Giriş yap",
+  "index.register_submit": "Hesap oluştur",
+  "pitdata.title": "Pit verileri",
+  "pitdata.notice": "Pit scouting kapsamını gözden geçirin, eksik takımları bulun ve her takımın son pit girişini inceleyin.",
+  "pitdata.export_csv": "CSV olarak dışa aktar",
+  "pitdata.choose_team_notice": "Pit scouting cevaplarını görmek için kapsama tablosundan bir takım seçin.",
+  "pit_scout.title": "Pit scouting formu",
+  "pit_scout.notice": "Etkinlik ve takımı seçin, ardından pit scouting yapılandırma JSON tarafından oluşturulan formu doldurun.",
+  "pit_scout.form_blocked": "Pit scouting'e başlamak için bir takım seçin.",
+  "pit_scout.save_entry": "Pit girişini kaydet",
+  "pit_scout.clear_form": "Formu temizle",
+  "predictor.title": "Maç Tahmincisi",
+  "predictor.notice": "Etkinlikteki herhangi bir maçı seçerek ittifakları karşılaştırın ve sonucu tahmin edin.",
+  "settings.add_field": "+ Alan ekle",
+  "settings.export": "Dışa aktar",
+  "settings.save_api": "API ayarlarını kaydet"
+  ,"settings.field_label": "Alan etiketi"
+  ,"settings.field_id": "Alan ID / Slug"
+  ,"settings.type": "Tür"
+  ,"settings.phase": "Aşama"
+  ,"phase.general": "Genel"
+  ,"phase.auto": "Auto"
+  ,"phase.teleop": "Teleop"
+  ,"phase.endgame": "Endgame"
+  ,"settings.required": "Gerekli"
+  ,"settings.is_required": "Gerekli mi"
+  ,"settings.min": "Min"
+  ,"settings.max": "Maks"
+  ,"settings.no_limit": "Sınır yok"
+  ,"settings.step": "Adım"
+  ,"settings.points_per": "Eylem başına puan"
+  ,"settings.options_title": "Seçenekler (Etiket | Değer | Puan)"
+  ,"settings.add_option": "+ Seçenek ekle"
+  ,"settings.option_label_placeholder": "Etiket (ör. Yüksek)"
+  ,"yes": "Evet"
+  ,"no": "Hayır"
+  ,"scouted": "Scouted"
+  ,"missing": "Missing"
+  ,"pitdata.no_teams_match": "Mevcut filtrelere uyan takım yok."
+  ,"pitdata.select_team": "Bir takım seçin"
+  ,"pitdata.no_team_selected": "Hiçbir takım seçilmedi"
+  ,"pitdata.no_pit_entry": "Seçilen etkinlik için bu takım adına pit girdisi gönderilmedi."
+  ,"pitdata.updated": "Güncellendi"
+  ,"pitdata.needs_pit": "Pit scouting gerekli"
+  ,"quick_field": "Hızlı Alan"
+  ,"team": "takım"
+  ,"teams": "takımlar"
+  ,"visible": "görünen"
+  ,"missing_only": "sadece eksik"
+  ,"search_prefix": "arama: "
+  ,"pitdata.csv.team_number": "Team Number"
+  ,"pitdata.csv.team_name": "Team Name"
+  ,"pitdata.csv.status": "Status"
+  ,"pitdata.csv.updated": "Updated"
+  ,"unsynced_entries": "Eşitlenmemiş çevrimdışı scouting girdileriniz var! Ayrılırsanız, sunucuya eşitlenmeyebilirler."
+}

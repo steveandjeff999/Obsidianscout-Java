@@ -16,12 +16,15 @@
                 <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
                 <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
                 <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
+                <a class="sidebar-link" data-page="qual-scout" href="/qual-scout">Qual Scout</a>
+                <a class="sidebar-link" data-page="qual-data" href="/qual-data">Qual Data</a>
                 <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
                 <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
                 <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
                 <a class="sidebar-link" data-page="events" href="/events">Events</a>
                 <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
                 <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
+                <a class="sidebar-link" data-page="predictor" href="/predictor">Predictor</a>
                 <a class="sidebar-link" data-page="users" href="/users">Users</a>
                 <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
             </nav>
@@ -35,11 +38,11 @@
         <main class="main-content">
             <div id="admin-locked" class="card hidden">
                 <h2>Admin only</h2>
-                <p class="notice">You need admin access to manage users.</p>
+                <p class="notice" data-i18n="users.notice">You need admin access to manage users.</p>
             </div>
 
             <div id="admin-panel" class="card">
-                <h1>User management</h1>
+                <h1 data-i18n="users.title">User management</h1>
                 <form id="user-form" class="form-grid">
                     <div class="field">
                         <label for="user-username">Username</label>
@@ -62,7 +65,7 @@
                             <option value="SUPERADMIN" class="superadmin-option">Super Admin</option>
                         </select>
                     </div>
-                    <button class="btn dark" type="submit">Create user</button>
+                    <button class="btn dark" type="submit" data-i18n="users.create_user">Create user</button>
                 </form>
 
                 <div class="mt-20">

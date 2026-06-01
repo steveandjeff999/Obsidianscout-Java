@@ -1,10 +1,11 @@
-const CACHE_NAME = 'obsidianscout-shell-v3';
+const CACHE_NAME = 'obsidianscout-shell-v5';
 
 const ASSETS = [
     '/',
     '/dashboard',
     '/scout',
     '/pit-scout',
+    '/qual-scout',
     '/pit-data',
     '/analytics',
     '/graphs',
@@ -19,6 +20,7 @@ const ASSETS = [
     '/js/dashboard.js',
     '/js/scout.js',
     '/js/pit-scout.js',
+    '/js/qual-scout.js',
     '/js/pit-data.js',
     '/js/analytics.js',
     '/js/graphs.js',
@@ -28,6 +30,10 @@ const ASSETS = [
     '/js/users.js',
     '/js/settings.js',
     '/vendor/plotly-2.32.0.min.js'
+    ,'/i18n/en.json'
+    ,'/i18n/es.json'
+    ,'/i18n/tr.json'
+    ,'/i18n/he.json'
 ];
 
 // Install: Cache all the application shell assets

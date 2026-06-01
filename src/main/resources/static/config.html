@@ -17,12 +17,15 @@
                 <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
                 <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
                 <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
+                <a class="sidebar-link" data-page="qual-scout" href="/qual-scout">Qual Scout</a>
+                <a class="sidebar-link" data-page="qual-data" href="/qual-data">Qual Data</a>
                 <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
                 <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
                 <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
                 <a class="sidebar-link" data-page="events" href="/events">Events</a>
                 <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
                 <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
+                <a class="sidebar-link" data-page="predictor" href="/predictor">Predictor</a>
                 <a class="sidebar-link" data-page="users" href="/users">Users</a>
                 <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
             </nav>
@@ -40,9 +43,9 @@
             </div>
 
             <div id="admin-panel" class="card">
-                <h1>Settings</h1>
+                <h1 data-i18n="settings.title">Settings</h1>
                 <div class="tab-row">
-                    <button class="tab active" data-tab="config" type="button">Scouting config</button>
+                    <button class="tab active" data-tab="config" type="button">Scouting configs</button>
                     <button class="tab" data-tab="api" type="button">API keys</button>
                 </div>
 
@@ -50,16 +53,17 @@
                     <div class="tab-row mt-6 mb-18">
                         <button class="tab active" data-config-kind="game" type="button">Game form</button>
                         <button class="tab" data-config-kind="pit" type="button">Pit form</button>
+                        <button class="tab" data-config-kind="qual" type="button">Qualitative form</button>
                     </div>
 
                     <div class="tab-row mt-6 mb-18">
-                        <button class="tab active" id="btn-visual-editor" type="button">Visual Editor</button>
-                        <button class="tab" id="btn-raw-editor" type="button">Raw JSON</button>
+                        <button class="tab active" id="btn-visual-editor" type="button" data-i18n="settings.visual_editor">Visual Editor</button>
+                        <button class="tab" id="btn-raw-editor" type="button" data-i18n="settings.raw_editor">Raw JSON</button>
                     </div>
 
                     <!-- Visual Form Editor -->
                     <div id="visual-editor-container" class="grid gap-16">
-                        <p class="notice">Build your scouting form visually. Create fields, specify scoring points, and reorder elements using simple forms.</p>
+                        <p class="notice">Build your scouting form visually. Create fields, labels, ratings, and reorder elements using simple forms.</p>
                         
                         <!-- Configuration Metadata Card -->
                         <div class="card soft grid gap-12" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
@@ -76,7 +80,7 @@
                         <!-- Fields List Header and Add Button -->
                         <div class="row justify-between align-center mt-12">
                             <h2 style="margin: 0; font-size: 20px;">Form Fields</h2>
-                            <button id="btn-add-field" class="btn secondary" style="padding: 8px 16px; font-size: 13px;" type="button">+ Add Field</button>
+                            <button id="btn-add-field" class="btn secondary" style="padding: 8px 16px; font-size: 13px;" type="button" data-i18n="settings.add_field">+ Add Field</button>
                         </div>
 
                         <!-- Fields list container -->
@@ -93,8 +97,8 @@
                     </div>
 
                     <div class="row gap-12 wrap mt-24">
-                        <button id="config-save" class="btn" type="button">Save config</button>
-                        <button id="config-export" class="btn ghost" type="button">Export</button>
+                        <button id="config-save" class="btn" type="button" data-i18n="settings.save">Save config</button>
+                        <button id="config-export" class="btn ghost" type="button" data-i18n="settings.export">Export</button>
                         <label class="btn ghost btn-file">
                             Import
                             <input id="config-import" class="input-hidden" type="file" accept="application/json" />
@@ -163,7 +167,7 @@
                     </div>
 
                     <div class="mt-18">
-                        <button id="settings-save" class="btn" type="button">Save API settings</button>
+                        <button id="settings-save" class="btn" type="button" data-i18n="settings.save_api">Save API settings</button>
                     </div>
                 </div>
             </div>

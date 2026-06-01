@@ -168,7 +168,7 @@ async function loadTeamsAndMatches(eventKey, teamSelect, matchSelect, timezone) 
     teamSelect.innerHTML = "";
     const teamPlaceholder = document.createElement("option");
     teamPlaceholder.value = "";
-    teamPlaceholder.textContent = "Select team";
+    teamPlaceholder.textContent = (window.Obsidianscout && Obsidianscout.t) ? Obsidianscout.t('scout.select_team', 'Select team') : 'Select team';
     teamSelect.appendChild(teamPlaceholder);
 
     teams.forEach((team) => {
@@ -187,7 +187,7 @@ function updateMatchOptions(matchSelect, matches, timezone, selectedTeam) {
     matchSelect.innerHTML = "";
     const matchPlaceholder = document.createElement("option");
     matchPlaceholder.value = "";
-    matchPlaceholder.textContent = "Select match";
+    matchPlaceholder.textContent = (window.Obsidianscout && Obsidianscout.t) ? Obsidianscout.t('scout.select_match', 'Select match') : 'Select match';
     matchSelect.appendChild(matchPlaceholder);
 
     const teamNumber = selectedTeam ? Number(selectedTeam) : null;
@@ -239,7 +239,7 @@ function buildField(field) {
         const section = document.createElement("div");
         section.className = "form-section";
         const title = document.createElement("h3");
-        title.textContent = field.label;
+        title.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
         section.appendChild(title);
         return section;
     }
@@ -248,7 +248,7 @@ function buildField(field) {
     wrapper.className = "field";
 
     const label = document.createElement("label");
-    label.textContent = field.label;
+    label.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
     label.htmlFor = `field-${field.id}`;
 
     let input;
@@ -275,7 +275,7 @@ function buildField(field) {
                     optionNode.textContent = option;
                 } else {
                     optionNode.value = option.value;
-                    optionNode.textContent = option.label;
+                    optionNode.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(option.label) : option.label;
                 }
                 input.appendChild(optionNode);
             });
@@ -429,7 +429,7 @@ function buildPayload(fields, form) {
         const value = readFieldValue(field, input);
 
         if (field.required && (value === null || value === "")) {
-            Obsidianscout.showToast(`Missing ${field.label}`, "error");
+            Obsidianscout.showToast(`Missing ${(window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label}`, "error");
             return null;
         }
 

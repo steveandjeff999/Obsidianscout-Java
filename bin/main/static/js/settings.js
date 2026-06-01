@@ -31,9 +31,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     const configVersionInput = document.getElementById("config-version");
     const btnAddField = document.getElementById("btn-add-field");
     const visualFieldsList = document.getElementById("visual-fields-list");
+    const configModeButtons = document.querySelectorAll("[data-config-kind]");
+    const configModes = {
+        game: {
+            apiPath: "/api/config",
+            defaultTitle: "ObsidianScout",
+            exportName: "scouting-config.json"
+        },
+        pit: {
+            apiPath: "/api/pit-config",
+            defaultTitle: "ObsidianScout Pit Scouting",
+            exportName: "pit-scouting-config.json"
+        },
+        qual: {
+            apiPath: "/api/qual-config",
+            defaultTitle: "ObsidianScout Qualitative Scouting",
+            exportName: "qualitative-scouting-config.json"
+        }
+    };
 
     // Local configuration state
+    let activeConfigKind = "game";
     let currentConfig = { version: 1, title: "ObsidianScout", fields: [], analytics: [] };
+
+    function supportsPointsConfig() {
+        return activeConfigKind !== "qual";
+    }
 
     // Sub-tab switching logic
     if (btnVisual && btnRaw && containerVisual && containerRaw) {
@@ -86,8 +109,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         btnAddField.addEventListener("click", addField);
     }
 
+    configModeButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+            const nextKind = button.dataset.configKind;
+            if (!nextKind || nextKind === activeConfigKind || !configModes[nextKind]) {
+                return;
+            }
+            activeConfigKind = nextKind;
+            updateConfigModeButtons();
+            await loadActiveConfig();
+        });
+    });
+
     wireTabs();
-    await loadConfig(editor);
+    await loadActiveConfig();
     await loadSettings();
 
     // Save configuration
@@ -113,7 +148,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         try {
-            await Obsidianscout.request("/api/config", {
+            await Obsidianscout.request(configModes[activeConfigKind].apiPath, {
                 method: "PUT",
                 json: {
                     configJson: text
@@ -132,7 +167,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = "scouting-config.json";
+        link.download = configModes[activeConfigKind].exportName;
         link.click();
         URL.revokeObjectURL(url);
     });
@@ -196,14 +231,60 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
+    async function loadActiveConfig() {
+        const mode = configModes[activeConfigKind];
+        try {
+            const config = await Obsidianscout.request(mode.apiPath);
+            currentConfig = normalizeConfig(config, mode.defaultTitle);
+            editor.value = JSON.stringify(currentConfig, null, 2);
+            if (configTitleInput) {
+                configTitleInput.value = currentConfig.title || "";
+            }
+            if (configVersionInput) {
+                configVersionInput.value = currentConfig.version || 1;
+            }
+            renderVisualFields();
+            showVisualEditor();
+        } catch (error) {
+            Obsidianscout.showToast("Unable to load config", "error");
+        }
+    }
+
+    function normalizeConfig(config, defaultTitle) {
+        const parsed = typeof config === "string" ? JSON.parse(config) : (config || {});
+        return {
+            title: parsed.title || defaultTitle,
+            version: Number(parsed.version) || 1,
+            fields: Array.isArray(parsed.fields) ? parsed.fields : [],
+            analytics: Array.isArray(parsed.analytics) ? parsed.analytics : []
+        };
+    }
+
+    function updateConfigModeButtons() {
+        configModeButtons.forEach((button) => {
+            button.classList.toggle("active", button.dataset.configKind === activeConfigKind);
+        });
+    }
+
+    function showVisualEditor() {
+        if (!btnVisual || !btnRaw || !containerVisual || !containerRaw) {
+            return;
+        }
+        btnRaw.classList.remove("active");
+        btnVisual.classList.add("active");
+        containerRaw.classList.add("hidden");
+        containerVisual.classList.remove("hidden");
+    }
+
     /**
      * Renders all form fields in currentConfig.fields to the visualFieldsList container.
      */
     function renderVisualFields() {
         if (!visualFieldsList) return;
         visualFieldsList.innerHTML = "";
-        
-        if (currentConfig.fields.length === 0) {
+
+        const fields = currentConfig.fields || [];
+        if (fields.length === 0) {
             const emptyNotice = document.createElement("div");
             emptyNotice.className = "notice";
             emptyNotice.style.textAlign = "center";
@@ -213,9 +294,46 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        currentConfig.fields.forEach((field, index) => {
-            const cardNode = createFieldCard(field, index);
-            visualFieldsList.appendChild(cardNode);
+        const hasManualSections = fields.some((field) => field.type === "section");
+        if (hasManualSections) {
+            fields.forEach((field, index) => {
+                const cardNode = createFieldCard(field, index);
+                visualFieldsList.appendChild(cardNode);
+            });
+            return;
+        }
+
+        const groups = [
+            { key: "auto", title: "Auto" },
+            { key: "teleop", title: "Teleop" },
+            { key: "endgame", title: "Endgame" },
+            { key: "", title: "General" }
+        ];
+
+        groups.forEach((group) => {
+            const groupFields = fields.filter((field) => {
+                const phase = resolveFieldPhase(field);
+                if (!group.key) {
+                    return !phase;
+                }
+                return phase === group.key;
+            });
+            if (!groupFields.length) {
+                return;
+            }
+
+            const header = document.createElement("div");
+            header.className = "form-section";
+            const headerTitle = document.createElement("h3");
+            headerTitle.textContent = group.title;
+            header.appendChild(headerTitle);
+            visualFieldsList.appendChild(header);
+
+            groupFields.forEach((field) => {
+                const fieldIndex = fields.indexOf(field);
+                const cardNode = createFieldCard(field, fieldIndex);
+                visualFieldsList.appendChild(cardNode);
+            });
         });
     }
 
@@ -231,7 +349,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         header.className = "field-card-header";
         
         const title = document.createElement("h4");
-        title.textContent = field.label || `Field ${index + 1}`;
+        title.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? (Obsidianscout.localize(field.label) || `Field ${index + 1}`) : (field.label || `Field ${index + 1}`);
         
         const controls = document.createElement("div");
         controls.className = "field-card-controls";
@@ -282,20 +400,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         const divLabel = document.createElement("div");
         divLabel.className = "field";
         const labelTag = document.createElement("label");
-        labelTag.textContent = "Field Label";
+        labelTag.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.field_label','Field Label') : 'Field Label';
         const inputLabel = document.createElement("input");
         inputLabel.type = "text";
-        inputLabel.value = field.label || "";
+        inputLabel.value = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
         inputLabel.placeholder = "e.g. Teleop Cycles";
         inputLabel.addEventListener("input", (e) => {
-            field.label = e.target.value;
-            title.textContent = e.target.value || `Field ${index + 1}`;
+            const lang = localStorage.getItem('obsidianscout:lang') || 'en';
+            const val = e.target.value;
+            if (field && typeof field.label === 'object' && field.label !== null) {
+                field.label[lang] = val;
+            } else {
+                field.label = val;
+            }
+            title.textContent = val || `Field ${index + 1}`;
             
             // Auto-slugify ID if it is blank or matches a default auto-generated format
             const inputId = divId.querySelector("input");
-            if (inputId && (!field.id || field.id.startsWith("field_"))) {
-                const autoId = slugify(e.target.value);
+            if (inputId && shouldAutoUpdateId(field, inputId.value)) {
+                const base = slugify(e.target.value);
+                const autoId = ensureUniqueSlug(base, collectFieldIds(index, field));
                 field.id = autoId;
+                field._autoId = autoId;
                 inputId.value = autoId;
             }
             updateRawFromVisual();
@@ -308,13 +434,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         const divId = document.createElement("div");
         divId.className = "field";
         const labelId = document.createElement("label");
-        labelId.textContent = "Field ID / Slug";
+        labelId.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.field_id','Field ID / Slug') : 'Field ID / Slug';
         const inputId = document.createElement("input");
         inputId.type = "text";
         inputId.value = field.id || "";
         inputId.placeholder = "e.g. teleopCycles";
         inputId.addEventListener("input", (e) => {
             field.id = e.target.value;
+            field._autoId = null;
             updateRawFromVisual();
         });
         divId.appendChild(labelId);
@@ -325,7 +452,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const divType = document.createElement("div");
         divType.className = "field";
         const labelType = document.createElement("label");
-        labelType.textContent = "Type";
+        labelType.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.type','Type') : 'Type';
         const selectType = document.createElement("select");
         const types = ["text", "textarea", "number", "counter", "rating", "checkbox", "select", "section"];
         types.forEach((t) => {
@@ -353,12 +480,39 @@ document.addEventListener("DOMContentLoaded", async () => {
         divType.appendChild(labelType);
         divType.appendChild(selectType);
         body.appendChild(divType);
+
+        // 4. Phase Select (auto/teleop/endgame)
+        const divPhase = document.createElement("div");
+        divPhase.className = "field";
+        const labelPhase = document.createElement("label");
+        labelPhase.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.phase','Phase') : 'Phase';
+        const selectPhase = document.createElement("select");
+        const phaseOptions = [
+            { value: "", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.general','General') : 'General' },
+            { value: "auto", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.auto','Auto') : 'Auto' },
+            { value: "teleop", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.teleop','Teleop') : 'Teleop' },
+            { value: "endgame", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.endgame','Endgame') : 'Endgame' }
+        ];
+        phaseOptions.forEach((phase) => {
+            const option = document.createElement("option");
+            option.value = phase.value;
+            option.textContent = phase.label;
+            selectPhase.appendChild(option);
+        });
+        selectPhase.value = field.phase || resolveFieldPhase(field) || "";
+        selectPhase.addEventListener("change", (e) => {
+            field.phase = e.target.value || "";
+            updateRawFromVisual();
+        });
+        divPhase.appendChild(labelPhase);
+        divPhase.appendChild(selectPhase);
+        body.appendChild(divPhase);
         
-        // 4. Required Checkbox
+        // 5. Required Checkbox
         const divReq = document.createElement("div");
         divReq.className = "field";
         const labelReq = document.createElement("label");
-        labelReq.textContent = "Required";
+        labelReq.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.required','Required') : 'Required';
         const labelWrap = document.createElement("label");
         labelWrap.style.display = "flex";
         labelWrap.style.alignItems = "center";
@@ -373,7 +527,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             updateRawFromVisual();
         });
         labelWrap.appendChild(inputReq);
-        labelWrap.appendChild(document.createTextNode(" Is Required"));
+        labelWrap.appendChild(document.createTextNode((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.is_required','Is Required') : ' Is Required'));
         divReq.appendChild(labelReq);
         divReq.appendChild(labelWrap);
         body.appendChild(divReq);
@@ -381,6 +535,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Adjust for section type (doesn't need ID, Required etc in basic visual)
         if (field.type === "section") {
             divId.style.display = "none";
+            divPhase.style.display = "none";
             divReq.style.display = "none";
         }
         
@@ -394,7 +549,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const divMin = document.createElement("div");
             divMin.className = "field";
             const labelMin = document.createElement("label");
-            labelMin.textContent = "Min";
+            labelMin.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.min','Min') : 'Min';
             const inputMin = document.createElement("input");
             inputMin.type = "number";
             inputMin.value = field.min !== undefined && field.min !== null ? field.min : "";
@@ -410,23 +565,56 @@ document.addEventListener("DOMContentLoaded", async () => {
             const divMax = document.createElement("div");
             divMax.className = "field";
             const labelMax = document.createElement("label");
-            labelMax.textContent = "Max";
+            labelMax.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.max','Max') : 'Max';
             const inputMax = document.createElement("input");
             inputMax.type = "number";
             inputMax.value = field.max !== undefined && field.max !== null ? field.max : "";
+            const counterHasNoLimit = field.type === "counter" && (field.max === undefined || field.max === null || field.max === "");
+            let inputNoLimit = null;
+            inputMax.disabled = counterHasNoLimit;
             inputMax.addEventListener("input", (e) => {
                 field.max = e.target.value !== "" ? Number(e.target.value) : null;
+                if (inputNoLimit && e.target.value !== "") {
+                    inputNoLimit.checked = false;
+                    inputMax.disabled = false;
+                }
                 updateRawFromVisual();
             });
             divMax.appendChild(labelMax);
             divMax.appendChild(inputMax);
+            if (field.type === "counter") {
+                const noLimitWrap = document.createElement("label");
+                noLimitWrap.style.display = "flex";
+                noLimitWrap.style.alignItems = "center";
+                noLimitWrap.style.gap = "8px";
+                noLimitWrap.style.cursor = "pointer";
+                noLimitWrap.style.marginTop = "8px";
+                inputNoLimit = document.createElement("input");
+                inputNoLimit.type = "checkbox";
+                inputNoLimit.checked = counterHasNoLimit;
+                inputNoLimit.addEventListener("change", (e) => {
+                    if (e.target.checked) {
+                        field.max = null;
+                        inputMax.value = "";
+                        inputMax.disabled = true;
+                    } else {
+                        field.max = 10;
+                        inputMax.value = "10";
+                        inputMax.disabled = false;
+                    }
+                    updateRawFromVisual();
+                });
+                noLimitWrap.appendChild(inputNoLimit);
+                noLimitWrap.appendChild(document.createTextNode((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.no_limit','No limit') : 'No limit'));
+                divMax.appendChild(noLimitWrap);
+            }
             boundsDiv.appendChild(divMax);
             
             // Step
             const divStep = document.createElement("div");
             divStep.className = "field";
             const labelStep = document.createElement("label");
-            labelStep.textContent = "Step";
+            labelStep.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.step','Step') : 'Step';
             const inputStep = document.createElement("input");
             inputStep.type = "number";
             inputStep.value = field.step !== undefined && field.step !== null ? field.step : "";
@@ -442,11 +630,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         
         // 6. Scoring Points (visible for number, counter, rating, checkbox)
-        if (field.type === "number" || field.type === "counter" || field.type === "rating" || field.type === "checkbox") {
+        if (supportsPointsConfig() && (field.type === "number" || field.type === "counter" || field.type === "rating" || field.type === "checkbox")) {
             const divPoints = document.createElement("div");
             divPoints.className = "field";
             const labelPoints = document.createElement("label");
-            labelPoints.textContent = "Points per action";
+            labelPoints.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.points_per','Points per action') : 'Points per action';
             const inputPoints = document.createElement("input");
             inputPoints.type = "number";
             inputPoints.step = "any";
@@ -471,7 +659,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             const optTitle = document.createElement("div");
             optTitle.className = "options-builder-title";
-            optTitle.textContent = "Options (Label | Value | Points)";
+            optTitle.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.options_title', supportsPointsConfig() ? 'Options (Label | Value | Points)' : 'Options (Label | Value)') : (supportsPointsConfig() ? 'Options (Label | Value | Points)' : 'Options (Label | Value)');
             
             const btnAddOpt = document.createElement("button");
             btnAddOpt.type = "button";
@@ -479,7 +667,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             btnAddOpt.style.padding = "6px 12px";
             btnAddOpt.style.fontSize = "11px";
             btnAddOpt.style.boxShadow = "none";
-            btnAddOpt.textContent = "+ Add Option";
+            btnAddOpt.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.add_option','+ Add Option') : '+ Add Option';
             
             optHeader.appendChild(optTitle);
             optHeader.appendChild(btnAddOpt);
@@ -496,13 +684,22 @@ document.addEventListener("DOMContentLoaded", async () => {
                 
                 const inLabel = document.createElement("input");
                 inLabel.type = "text";
-                inLabel.value = option.label || "";
-                inLabel.placeholder = "Label (e.g. High)";
+                inLabel.value = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(option.label) : (option.label || "");
+                inLabel.placeholder = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.option_label_placeholder','Label (e.g. High)') : 'Label (e.g. High)';
                 inLabel.addEventListener("input", (e) => {
-                    option.label = e.target.value;
-                    if (!option.value || option.value === slugify(inLabel.placeholder)) {
-                        option.value = e.target.value;
-                        inVal.value = e.target.value;
+                    const lang = localStorage.getItem('obsidianscout:lang') || 'en';
+                    const val = e.target.value;
+                    if (option && typeof option.label === 'object' && option.label !== null) {
+                        option.label[lang] = val;
+                    } else {
+                        option.label = val;
+                    }
+                    if (shouldAutoUpdateOptionValue(option)) {
+                        const base = slugify(e.target.value);
+                        const autoValue = ensureUniqueSlug(base, collectOptionValues(options, option));
+                        option.value = autoValue;
+                        option._autoValue = autoValue;
+                        inVal.value = autoValue;
                     }
                     updateRawFromVisual();
                 });
@@ -513,18 +710,22 @@ document.addEventListener("DOMContentLoaded", async () => {
                 inVal.placeholder = "Value";
                 inVal.addEventListener("input", (e) => {
                     option.value = e.target.value;
+                    option._autoValue = null;
                     updateRawFromVisual();
                 });
                 
-                const inPts = document.createElement("input");
-                inPts.type = "number";
-                inPts.step = "any";
-                inPts.value = option.points !== undefined && option.points !== null ? option.points : 0;
-                inPts.placeholder = "Pts";
-                inPts.addEventListener("input", (e) => {
-                    option.points = e.target.value !== "" ? Number(e.target.value) : 0;
-                    updateRawFromVisual();
-                });
+                let inPts = null;
+                if (supportsPointsConfig()) {
+                    inPts = document.createElement("input");
+                    inPts.type = "number";
+                    inPts.step = "any";
+                    inPts.value = option.points !== undefined && option.points !== null ? option.points : 0;
+                    inPts.placeholder = "Pts";
+                    inPts.addEventListener("input", (e) => {
+                        option.points = e.target.value !== "" ? Number(e.target.value) : 0;
+                        updateRawFromVisual();
+                    });
+                }
                 
                 const btnDelOpt = document.createElement("button");
                 btnDelOpt.type = "button";
@@ -547,7 +748,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 
                 row.appendChild(inLabel);
                 row.appendChild(inVal);
-                row.appendChild(inPts);
+                if (inPts) {
+                    row.appendChild(inPts);
+                }
                 row.appendChild(btnDelOpt);
                 return row;
             };
@@ -557,7 +760,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             
             btnAddOpt.addEventListener("click", () => {
-                const newOpt = { label: "", value: "", points: 0 };
+                const newOpt = supportsPointsConfig() ? { label: "", value: "", points: 0 } : { label: "", value: "" };
                 options.push(newOpt);
                 updateRawFromVisual();
                 optList.appendChild(renderOptionRow(newOpt, options.length - 1));
@@ -603,8 +806,10 @@ document.addEventListener("DOMContentLoaded", async () => {
      * Create a new field to add to the config
      */
     function addField() {
-        const newField = {
-            id: "field_" + Math.random().toString(36).substr(2, 5),
+        const baseId = ensureUniqueSlug(supportsPointsConfig() ? "newField" : "newNote", collectFieldIds());
+        const newField = supportsPointsConfig() ? {
+            id: baseId,
+            _autoId: baseId,
             label: "New Field",
             type: "counter",
             required: false,
@@ -612,6 +817,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             max: 10,
             step: 1,
             pointsPer: 0
+        } : {
+            id: baseId,
+            _autoId: baseId,
+            label: "New Note",
+            type: "textarea",
+            required: false
         };
         currentConfig.fields.push(newField);
         updateRawFromVisual();
@@ -631,14 +842,67 @@ document.addEventListener("DOMContentLoaded", async () => {
     function slugify(text) {
         if (!text) return "";
         return text
-            .replace(/[^a-zA-Z0-9\s-_]/g, '')
+            .replace(/[^a-zA-Z0-9\s-_]/g, "")
             .trim()
             .split(/[\s\-_]+/)
             .map((word, index) => {
                 if (index === 0) return word.toLowerCase();
                 return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
             })
-            .join('');
+            .join("");
+    }
+
+    function collectFieldIds(excludeIndex = -1, excludeField = null) {
+        return new Set(
+            (currentConfig.fields || [])
+                .filter((field, index) => index !== excludeIndex && field !== excludeField)
+                .map((field) => field.id)
+                .filter((id) => id && id.trim())
+        );
+    }
+
+    function collectOptionValues(options, excludeOption) {
+        return new Set(
+            (options || [])
+                .filter((option) => option !== excludeOption)
+                .map((option) => option.value)
+                .filter((value) => value && String(value).trim())
+        );
+    }
+
+    function ensureUniqueSlug(base, existing) {
+        if (!base) return "";
+        let candidate = base;
+        let counter = 2;
+        while (existing && existing.has(candidate)) {
+            candidate = `${base}${counter}`;
+            counter += 1;
+        }
+        return candidate;
+    }
+
+    function shouldAutoUpdateId(field, currentValue) {
+        if (!currentValue) return true;
+        if (currentValue.startsWith("field_")) return true;
+        if (field && field._autoId && field._autoId === currentValue) return true;
+        return false;
+    }
+
+    function shouldAutoUpdateOptionValue(option) {
+        if (!option) return true;
+        if (!option.value) return true;
+        if (option._autoValue && option._autoValue === option.value) return true;
+        return false;
+    }
+
+    function resolveFieldPhase(field) {
+        if (!field) return "";
+        if (field.phase) return String(field.phase).toLowerCase();
+        const id = String(field.id || "").toLowerCase();
+        if (id.startsWith("auto")) return "auto";
+        if (id.startsWith("teleop")) return "teleop";
+        if (id.startsWith("endgame")) return "endgame";
+        return "";
     }
 
     /**
@@ -647,15 +911,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     function updateRawFromVisual() {
         const titleVal = configTitleInput ? configTitleInput.value.trim() : "ObsidianScout";
         const versionVal = configVersionInput ? (Number(configVersionInput.value) || 1) : 1;
-        
+
         currentConfig.title = titleVal;
         currentConfig.version = versionVal;
-        
+
         // Deep copy/cleanup fields structure to emit beautiful, validated JSON schemas
-        currentConfig.fields = currentConfig.fields.map((field) => {
+        const cleanedFields = (currentConfig.fields || []).map((field) => {
+            // Preserve localized label objects; trim strings
+            let normalizedLabel = "";
+            if (field.label !== undefined && field.label !== null) {
+                if (typeof field.label === 'string') {
+                    normalizedLabel = field.label.trim();
+                } else if (typeof field.label === 'object') {
+                    const obj = {};
+                    Object.keys(field.label).forEach((k) => {
+                        const v = field.label[k];
+                        obj[k] = (typeof v === 'string') ? v.trim() : v;
+                    });
+                    normalizedLabel = obj;
+                }
+            }
+
             const cleaned = {
                 id: field.id ? field.id.trim() : "",
-                label: field.label ? field.label.trim() : "",
+                label: normalizedLabel,
                 type: field.type || "text",
                 required: !!field.required
             };
@@ -665,6 +944,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (type === "section") {
                 delete cleaned.required;
                 return cleaned;
+            }
+
+            if (field.phase) {
+                cleaned.phase = String(field.phase);
             }
             
             // Numeric bounds
@@ -681,7 +964,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             
             // Points per action
-            if (type === "number" || type === "counter" || type === "rating" || type === "checkbox") {
+            if (supportsPointsConfig() && (type === "number" || type === "counter" || type === "rating" || type === "checkbox")) {
                 if (field.pointsPer !== undefined && field.pointsPer !== null && field.pointsPer !== "") {
                     cleaned.pointsPer = Number(field.pointsPer);
                 }
@@ -689,17 +972,39 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             // Select options
             if (type === "select") {
-                cleaned.options = (field.options || []).map((opt) => ({
-                    label: opt.label ? opt.label.trim() : "",
-                    value: opt.value ? opt.value.trim() : "",
-                    points: opt.points !== undefined && opt.points !== null ? Number(opt.points) : 0
-                }));
+                cleaned.options = (field.options || []).map((opt) => {
+                    let normalizedOptLabel = "";
+                    if (opt.label !== undefined && opt.label !== null) {
+                        if (typeof opt.label === 'string') {
+                            normalizedOptLabel = opt.label.trim();
+                        } else if (typeof opt.label === 'object') {
+                            const o = {};
+                            Object.keys(opt.label).forEach((k) => {
+                                const v = opt.label[k];
+                                o[k] = (typeof v === 'string') ? v.trim() : v;
+                            });
+                            normalizedOptLabel = o;
+                        }
+                    }
+                    return {
+                        label: normalizedOptLabel,
+                        value: opt.value ? opt.value.trim() : "",
+                        ...(supportsPointsConfig() ? { points: opt.points !== undefined && opt.points !== null ? Number(opt.points) : 0 } : {})
+                    };
+                });
             }
             
             return cleaned;
         });
-        
-        editor.value = JSON.stringify(currentConfig, null, 2);
+
+        const cleanedConfig = {
+            title: titleVal,
+            version: versionVal,
+            fields: cleanedFields,
+            analytics: currentConfig.analytics || []
+        };
+
+        editor.value = JSON.stringify(cleanedConfig, null, 2);
     }
 });
 
@@ -708,12 +1013,12 @@ function wireTabs() {
     const panels = document.querySelectorAll("[data-panel]");
     tabs.forEach((tab) => {
         // Skip sub-tabs
-        if (tab.id === "btn-visual-editor" || tab.id === "btn-raw-editor") {
+        if (tab.id === "btn-visual-editor" || tab.id === "btn-raw-editor" || tab.dataset.configKind) {
             return;
         }
         tab.addEventListener("click", () => {
             tabs.forEach((item) => {
-                if (item.id !== "btn-visual-editor" && item.id !== "btn-raw-editor") {
+                if (item.id !== "btn-visual-editor" && item.id !== "btn-raw-editor" && !item.dataset.configKind) {
                     item.classList.remove("active");
                 }
             });
@@ -723,36 +1028,6 @@ function wireTabs() {
             document.querySelector(`[data-panel='${target}']`).classList.remove("hidden");
         });
     });
-}
-
-async function loadConfig(editor) {
-    try {
-        const config = await Obsidianscout.request("/api/config");
-        // Deep copy to local config variable
-        const titleInput = document.getElementById("config-title");
-        const versionInput = document.getElementById("config-version");
-        
-        // Trigger event loop switch to allow DOM rendering context to bind
-        setTimeout(() => {
-            const btnVisual = document.getElementById("btn-visual-editor");
-            if (btnVisual) {
-                // Parse loaded config
-                const parsed = typeof config === "string" ? JSON.parse(config) : config;
-                
-                // Assign to top scope currentConfig in memory
-                // Find currentConfig via closing over state or updating raw
-                const settingsScope = document.querySelector("[data-page='settings']");
-                if (settingsScope) {
-                    // Let's programmatically load and trigger visual tabs
-                    editor.value = JSON.stringify(parsed, null, 2);
-                    btnVisual.click();
-                }
-            }
-        }, 100);
-        
-    } catch (error) {
-        Obsidianscout.showToast("Unable to load config", "error");
-    }
 }
 
 async function loadSettings() {
