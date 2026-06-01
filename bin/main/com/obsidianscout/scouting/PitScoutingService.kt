@@ -37,7 +37,9 @@ object PitScoutingService {
         return transaction {
             val query = PitScoutingEntries.selectAll()
             if (session.role != UserRole.SUPERADMIN) {
-                query.andWhere { PitScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val visibleTeams = partnerTeams + session.teamNumber
+                query.andWhere { PitScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
             query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject

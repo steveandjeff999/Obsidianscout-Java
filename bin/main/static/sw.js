@@ -1,4 +1,5 @@
-const CACHE_NAME = 'obsidianscout-shell-v5';
+const CACHE_NAME = 'obsidianscout-shell-v6';
+const NAVIGATION_TIMEOUT_MS = 4000;
 
 const ASSETS = [
     '/',
@@ -12,8 +13,11 @@ const ASSETS = [
     '/events',
     '/teams',
     '/matches',
+    '/predictor',
+    '/alliances',
     '/users',
     '/config',
+    '/base.html',
     '/css/app.css',
     '/js/common.js',
     '/js/login.js',
@@ -27,6 +31,8 @@ const ASSETS = [
     '/js/events.js',
     '/js/teams.js',
     '/js/matches.js',
+    '/js/predictor.js',
+    '/js/alliances.js',
     '/js/users.js',
     '/js/settings.js',
     '/vendor/plotly-2.32.0.min.js'
@@ -35,6 +41,16 @@ const ASSETS = [
     ,'/i18n/tr.json'
     ,'/i18n/he.json'
 ];
+
+function fetchWithTimeout(request, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Network timeout')), timeoutMs);
+        fetch(request)
+            .then((response) => resolve(response))
+            .catch((error) => reject(error))
+            .finally(() => clearTimeout(timeout));
+    });
+}
 
 // Install: Cache all the application shell assets
 self.addEventListener('install', (event) => {
@@ -76,7 +92,7 @@ self.addEventListener('fetch', (event) => {
     // Network-First strategy with Cache Fallback for HTML/navigation pages
     if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
         event.respondWith(
-            fetch(event.request)
+            fetchWithTimeout(event.request, NAVIGATION_TIMEOUT_MS)
                 .then((response) => {
                     // Update cache with the fresh page
                     const responseClone = response.clone();

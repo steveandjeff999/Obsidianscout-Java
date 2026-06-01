@@ -44,8 +44,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         syncButton.addEventListener("click", async () => {
             syncButton.disabled = true;
             try {
-                await Obsidianscout.request("/api/integrations/sync/events", { method: "POST" });
-                Obsidianscout.showToast(t("events.synced", "Events synced"), "success");
+                const response = await Obsidianscout.request("/api/integrations/sync/events", { method: "POST" });
+                Obsidianscout.showToast(response.message || t("events.synced", "Events synced"), "success");
                 await loadEvents(year, true);
             } catch (error) {
                 Obsidianscout.showToast(error.message || t("events.sync_failed", "Sync failed"), "error");

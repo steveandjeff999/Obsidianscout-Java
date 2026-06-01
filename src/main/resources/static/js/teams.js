@@ -146,8 +146,8 @@ async function loadTeams(eventKey) {
 async function runSync(button, path) {
     button.disabled = true;
     try {
-        await Obsidianscout.request(path, { method: "POST" });
-        Obsidianscout.showToast("Sync complete", "success");
+        const response = await Obsidianscout.request(path, { method: "POST" });
+        Obsidianscout.showToast(response.message || "Sync complete", "success");
     } catch (error) {
         Obsidianscout.showToast(error.message || "Sync failed", "error");
     } finally {

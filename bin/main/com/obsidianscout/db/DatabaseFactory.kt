@@ -1,6 +1,19 @@
 package com.obsidianscout.db
 
 import com.obsidianscout.config.DatabaseConfig
+import com.obsidianscout.db.AllianceMemberships
+import com.obsidianscout.db.ApiEvents
+import com.obsidianscout.db.ApiMatches
+import com.obsidianscout.db.ApiTeams
+import com.obsidianscout.db.AppSettings
+import com.obsidianscout.db.PitScoutingConfigs
+import com.obsidianscout.db.PitScoutingEntries
+import com.obsidianscout.db.QualitativeScoutingConfigs
+import com.obsidianscout.db.QualitativeScoutingEntries
+import com.obsidianscout.db.ScoutingAlliances
+import com.obsidianscout.db.ScoutingConfigs
+import com.obsidianscout.db.ScoutingEntries
+import com.obsidianscout.db.Users
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import org.jetbrains.exposed.sql.Database
@@ -45,7 +58,9 @@ object DatabaseFactory {
                 AppSettings,
                 ApiEvents,
                 ApiTeams,
-                ApiMatches
+                ApiMatches,
+                ScoutingAlliances,
+                AllianceMemberships
             )
         }
     }

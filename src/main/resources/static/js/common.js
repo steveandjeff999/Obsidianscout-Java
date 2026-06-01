@@ -1,15 +1,20 @@
 (function () {
     const toastRootId = "toast-root";
     const sidebarCollapseKey = "obsidian-sidebar-collapsed";
+    const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
 
     // Role hierarchy (lower index = higher privilege)
     const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "SCOUT"];
 
     async function request(path, options = {}) {
+        const controller = new AbortController();
+        const timeoutMs = options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS;
+        const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
         const opts = {
             method: options.method || "GET",
             headers: options.headers || {},
-            credentials: "same-origin"
+            credentials: "same-origin",
+            signal: controller.signal
         };
         if (options.json !== undefined) {
             opts.headers["Content-Type"] = "application/json";
@@ -39,6 +44,9 @@
 
             return data;
         } catch (error) {
+            if (error && error.name === "AbortError") {
+                throw new Error("Request timed out. Try refreshing this page.");
+            }
             if (opts.method === "GET" && path !== "/api/auth/me") {
                 const cachedText = localStorage.getItem("cache:" + path);
                 if (cachedText !== null) {
@@ -47,6 +55,8 @@
                 }
             }
             throw error;
+        } finally {
+            window.clearTimeout(timeout);
         }
     }
 

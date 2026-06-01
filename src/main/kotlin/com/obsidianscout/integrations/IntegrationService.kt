@@ -910,8 +910,11 @@ object IntegrationService {
         }
 
         val normalizedEventKey = eventKey.lowercase()
-        // FIRST API supports tournamentLevel=qual|playoff; practice may be omitted so we fall back below.
-        val tournamentLevels = listOf(
+        val matchLevels = listOf(
+            "qual" to "Qualification",
+            "playoff" to "Playoff"
+        )
+        val scheduleLevels = listOf(
             "practice" to "Practice",
             "qual" to "Qualification",
             "playoff" to "Playoff"
@@ -927,24 +930,22 @@ object IntegrationService {
             }
         }
 
-        for ((apiLevel, defaultLevel) in tournamentLevels) {
-            val query = "tournamentLevel=$apiLevel"
-            val matchesRoot = fetchFirstJson(settings, "matches/$eventCode?$query")
+        for ((apiLevel, defaultLevel) in matchLevels) {
+            val matchesRoot = fetchFirstJson(settings, "matches/$eventCode?tournamentLevel=$apiLevel")
             parseFirstMatchItems(matchesRoot, normalizedEventKey, defaultLevel).forEach { upsert(it) }
+        }
 
-            val scheduleRoot = fetchFirstJson(settings, "schedule/$eventCode?$query")
+        for ((apiLevel, defaultLevel) in scheduleLevels) {
+            val scheduleRoot = fetchFirstJson(settings, "schedule/$eventCode?tournamentLevel=$apiLevel")
             parseFirstMatchItems(scheduleRoot, normalizedEventKey, defaultLevel).forEach { upsert(it) }
         }
 
         if (results.isEmpty()) {
             parseFirstMatchItems(fetchFirstJson(settings, "matches/$eventCode"), normalizedEventKey, "")
                 .forEach { upsert(it) }
-            parseFirstMatchItems(fetchFirstJson(settings, "schedule/$eventCode"), normalizedEventKey, "")
-                .forEach { upsert(it) }
         } else {
             val fallbackMatches = parseFirstMatchItems(fetchFirstJson(settings, "matches/$eventCode"), normalizedEventKey, "")
-            val fallbackSchedule = parseFirstMatchItems(fetchFirstJson(settings, "schedule/$eventCode"), normalizedEventKey, "")
-            (fallbackMatches + fallbackSchedule)
+            fallbackMatches
                 .filter { MatchCanonical.normalizeCompLevel(it.compLevel) == "practice" }
                 .forEach { upsert(it) }
         }

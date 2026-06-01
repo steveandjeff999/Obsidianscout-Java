@@ -137,3 +137,25 @@ object ApiMatches : IntIdTable("api_matches") {
         uniqueIndex("ux_api_matches_key", matchKey)
     }
 }
+
+object ScoutingAlliances : IntIdTable("scouting_alliances") {
+    val name = varchar("name", 128)
+    val ownerTeamNumber = integer("owner_team_number")
+    val eventKey = varchar("event_key", 64).nullable()
+    val notes = text("notes").nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+}
+
+object AllianceMemberships : IntIdTable("alliance_memberships") {
+    val allianceId = reference("alliance_id", ScoutingAlliances)
+    val teamNumber = integer("team_number")
+    /** OWNER | INVITED | ACCEPTED | DECLINED */
+    val status = varchar("status", 16)
+    val invitedAt = timestamp("invited_at")
+    val respondedAt = timestamp("responded_at").nullable()
+
+    init {
+        uniqueIndex("ux_alliance_memberships_alliance_team", allianceId, teamNumber)
+    }
+}

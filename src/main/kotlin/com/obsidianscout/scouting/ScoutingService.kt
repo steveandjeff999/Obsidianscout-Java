@@ -37,13 +37,15 @@ object ScoutingService {
     /**
      * Lists scouting entries visible to the caller.
      * SUPERADMIN sees all entries across all teams.
-     * Everyone else sees only their own team's entries.
+     * Everyone else sees their own team's entries PLUS entries from accepted alliance partner teams.
      */
     fun listEntries(session: UserSession): List<ScoutingEntryRecord> {
         return transaction {
             val query = ScoutingEntries.selectAll()
             if (session.role != UserRole.SUPERADMIN) {
-                query.andWhere { ScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val visibleTeams = partnerTeams + session.teamNumber
+                query.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
             query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject

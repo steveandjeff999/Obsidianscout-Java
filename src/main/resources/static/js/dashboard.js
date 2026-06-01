@@ -107,6 +107,9 @@ async function refreshSyncStatus(element) {
     try {
         const status = await Obsidianscout.request("/api/integrations/sync/status");
         const parts = [t("dashboard.auto_sync_every", "Auto-sync every 7.5 min.")];
+        if (status.syncInProgress) {
+            parts.push(`${status.currentSyncLabel || "Sync"} running.`);
+        }
         if (status.lastSyncAt) {
             const when = new Date(status.lastSyncAt);
             if (status.lastSyncTeams !== null && status.lastSyncMatches !== null && status.lastSyncTeamCount !== null) {
@@ -138,8 +141,8 @@ async function refreshSyncStatus(element) {
 async function runSync(button, path, refreshAfter) {
     button.disabled = true;
     try {
-        await Obsidianscout.request(path, { method: "POST" });
-        Obsidianscout.showToast(t("dashboard.sync_complete", "Sync complete"), "success");
+        const response = await Obsidianscout.request(path, { method: "POST" });
+        Obsidianscout.showToast(response.message || t("dashboard.sync_complete", "Sync complete"), "success");
         if (refreshAfter) {
             await refreshSummary();
             await refreshSyncStatus(document.getElementById("sync-status"));

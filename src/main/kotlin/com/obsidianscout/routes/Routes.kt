@@ -1,5 +1,6 @@
 package com.obsidianscout.routes
 
+import com.obsidianscout.scouting.AllianceService
 import com.obsidianscout.analytics.AnalyticsService
 import com.obsidianscout.analytics.PredictorService
 import com.obsidianscout.auth.AuthService
@@ -417,35 +418,35 @@ fun Application.configureRoutes() {
                             lastSyncTeams = SyncScheduler.lastSyncTeams,
                             lastSyncMatches = SyncScheduler.lastSyncMatches,
                             lastSyncTeamCount = SyncScheduler.lastSyncTeamCount,
-                            lastSyncFailedTeams = SyncScheduler.lastSyncFailedTeams
+                            lastSyncFailedTeams = SyncScheduler.lastSyncFailedTeams,
+                            syncInProgress = SyncScheduler.syncInProgress,
+                            currentSyncLabel = SyncScheduler.currentSyncLabel
                         )
                     )
                 }
                 post("/sync/events") {
                     val session = call.requireAdmin()
                     val settings = SettingsService.getSettings(session.teamNumber)
-                    val count = IntegrationService.syncEvents(settings)
-                    call.respond(SyncResponse(count, settings.preferredSource, settings.resolvedEventKey()))
+                    val queued = SyncScheduler.enqueueEventSync(settings)
+                    val status = if (queued) HttpStatusCode.Accepted else HttpStatusCode.Conflict
+                    val message = if (queued) "Event sync started" else "Another sync is already running"
+                    call.respond(status, SyncResponse(0, settings.preferredSource, settings.resolvedEventKey(), queued, message))
                 }
                 post("/sync/event") {
                     val session = call.requireAdmin()
                     val settings = SettingsService.getSettings(session.teamNumber)
-                    val counts = IntegrationService.syncEventData(settings)
-                    SyncScheduler.lastSyncAt = java.time.Instant.now()
-                    SyncScheduler.lastSyncSummary =
-                        "Manual sync: ${counts.teams} teams, ${counts.matches} matches"
-                    SyncScheduler.lastSyncTeams = counts.teams
-                    SyncScheduler.lastSyncMatches = counts.matches
-                    SyncScheduler.lastSyncTeamCount = 1
-                    SyncScheduler.lastSyncFailedTeams = null
-                    SyncScheduler.lastSyncError = null
-                    call.respond(SyncResponse(counts.teams + counts.matches, settings.preferredSource, settings.resolvedEventKey()))
+                    val queued = SyncScheduler.enqueueEventDataSync(settings)
+                    val status = if (queued) HttpStatusCode.Accepted else HttpStatusCode.Conflict
+                    val message = if (queued) "Teams and matches sync started" else "Another sync is already running"
+                    call.respond(status, SyncResponse(0, settings.preferredSource, settings.resolvedEventKey(), queued, message))
                 }
                 post("/sync/stats") {
                     val session = call.requireAdmin()
                     val settings = SettingsService.getSettings(session.teamNumber)
-                    val count = IntegrationService.syncStats(settings)
-                    call.respond(SyncResponse(count, "stats", settings.resolvedEventKey()))
+                    val queued = SyncScheduler.enqueueStatsSync(settings)
+                    val status = if (queued) HttpStatusCode.Accepted else HttpStatusCode.Conflict
+                    val message = if (queued) "Stats sync started" else "Another sync is already running"
+                    call.respond(status, SyncResponse(0, "stats", settings.resolvedEventKey(), queued, message))
                 }
             }
 
@@ -467,6 +468,94 @@ fun Application.configureRoutes() {
                     call.respond(user)
                 }
             }
+
+            route("/alliances") {
+                get {
+                    val session = call.requireSession()
+                    call.respond(AllianceService.listAlliances(session))
+                }
+                post {
+                    val session = call.requireAdmin()
+                    val req = call.receive<CreateAllianceRequest>()
+                    call.respond(AllianceService.createAlliance(session, req.name, req.eventKey, req.notes))
+                }
+                get("/invites") {
+                    val session = call.requireSession()
+                    call.respond(AllianceService.listInvites(session))
+                }
+                get("/invites/count") {
+                    val session = call.requireSession()
+                    call.respond(InviteCountResponse(AllianceService.getInviteCount(session.teamNumber)))
+                }
+                get("/import-sources") {
+                    val session = call.requireAdmin()
+                    call.respond(AllianceService.listImportSources(session))
+                }
+                put("/{id}") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    val req = call.receive<UpdateAllianceRequest>()
+                    call.respond(AllianceService.updateAlliance(session, id, req.name, req.eventKey, req.notes))
+                }
+                delete("/{id}") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    AllianceService.deleteAlliance(session, id)
+                    call.respond(HttpStatusCode.NoContent)
+                }
+                post("/{id}/invite") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    val req = call.receive<InviteTeamRequest>()
+                    AllianceService.inviteTeam(session, id, req.partnerTeamNumber)
+                    call.respond(HttpStatusCode.NoContent)
+                }
+                post("/{id}/import") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    val req = call.receive<AllianceImportDataRequest>()
+                    val result = AllianceService.importAllianceData(
+                        session = session,
+                        allianceId = id,
+                        sourceTeamNumber = req.sourceTeamNumber,
+                        eventKey = req.eventKey,
+                        includeMatchScouting = req.includeMatchScouting,
+                        includePitScouting = req.includePitScouting,
+                        includeQualitativeScouting = req.includeQualitativeScouting
+                    )
+                    call.respond(
+                        AllianceImportDataResponse(
+                            importedMatchScouting = result.importedMatchScouting,
+                            importedPitScouting = result.importedPitScouting,
+                            importedQualitativeScouting = result.importedQualitativeScouting,
+                            sourceTeamNumber = result.sourceTeamNumber,
+                            eventKey = result.eventKey,
+                            skippedDuplicates = result.skippedDuplicates
+                        )
+                    )
+                }
+                post("/{id}/respond") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    val req = call.receive<RespondInviteRequest>()
+                    AllianceService.respondToInvite(session, id, req.accept)
+                    call.respond(HttpStatusCode.NoContent)
+                }
+                delete("/{id}/members/{teamNumber}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    val targetTeam = call.parameters["teamNumber"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid team number")
+                    AllianceService.removeMember(session, id, targetTeam)
+                    call.respond(HttpStatusCode.NoContent)
+                }
+            }
         }
 
         val pages = mapOf(
@@ -483,6 +572,7 @@ fun Application.configureRoutes() {
             "teams" to "teams.html",
             "matches" to "matches.html",
             "predictor" to "predictor.html",
+            "alliances" to "alliances.html",
             "users" to "users.html",
             "config" to "config.html"
         )
@@ -509,7 +599,20 @@ private suspend fun ApplicationCall.respondStaticHtml(fileName: String) {
         respond(HttpStatusCode.NotFound)
         return
     }
-    respondText(resource.readText(), ContentType.Text.Html)
+    val html = resource.readText()
+    val sidebar = Thread.currentThread().contextClassLoader
+        .getResource("static/base.html")
+        ?.readText()
+        ?.trim()
+    val rendered = if (sidebar.isNullOrBlank()) {
+        html
+    } else {
+        html.replace(
+            Regex("""<aside class="sidebar">.*?</aside>""", setOf(RegexOption.DOT_MATCHES_ALL)),
+            sidebar
+        )
+    }
+    respondText(rendered, ContentType.Text.Html)
 }
 
 private fun ApiSettings.toPayload(): ApiSettingsPayload {

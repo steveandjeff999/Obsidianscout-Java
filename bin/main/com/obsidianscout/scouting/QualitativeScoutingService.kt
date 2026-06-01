@@ -39,7 +39,9 @@ object QualitativeScoutingService {
         return transaction {
             val query = QualitativeScoutingEntries.selectAll()
             if (session.role != UserRole.SUPERADMIN) {
-                query.andWhere { QualitativeScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val visibleTeams = partnerTeams + session.teamNumber
+                query.andWhere { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
             query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject

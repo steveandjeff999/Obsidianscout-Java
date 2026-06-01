@@ -93,7 +93,9 @@ data class SettingsResponse(
 data class SyncResponse(
     val synced: Int,
     val source: String,
-    val eventKey: String = ""
+    val eventKey: String = "",
+    val queued: Boolean = false,
+    val message: String? = null
 )
 
 @Serializable
@@ -105,7 +107,9 @@ data class SyncStatusResponse(
     val lastSyncTeams: Int? = null,
     val lastSyncMatches: Int? = null,
     val lastSyncTeamCount: Int? = null,
-    val lastSyncFailedTeams: Int? = null
+    val lastSyncFailedTeams: Int? = null,
+    val syncInProgress: Boolean = false,
+    val currentSyncLabel: String? = null
 )
 
 @Serializable
@@ -183,3 +187,63 @@ data class MatchPredictionResponse(
     val useTbaOpr: Boolean
 )
 
+// ─────────────────────────────────────
+// Alliance models
+// ─────────────────────────────────────
+
+@Serializable
+data class CreateAllianceRequest(
+    val name: String,
+    val eventKey: String? = null,
+    val notes: String? = null
+)
+
+@Serializable
+data class UpdateAllianceRequest(
+    val name: String,
+    val eventKey: String? = null,
+    val notes: String? = null
+)
+
+@Serializable
+data class InviteTeamRequest(
+    val partnerTeamNumber: Int
+)
+
+@Serializable
+data class RespondInviteRequest(
+    val accept: Boolean
+)
+
+@Serializable
+data class InviteCountResponse(
+    val count: Int
+)
+
+@Serializable
+data class AllianceImportDataRequest(
+    val sourceTeamNumber: Int,
+    val eventKey: String? = null,
+    val includeMatchScouting: Boolean = true,
+    val includePitScouting: Boolean = true,
+    val includeQualitativeScouting: Boolean = true
+)
+
+@Serializable
+data class AllianceImportDataResponse(
+    val importedMatchScouting: Int,
+    val importedPitScouting: Int,
+    val importedQualitativeScouting: Int,
+    val sourceTeamNumber: Int,
+    val eventKey: String?,
+    val skippedDuplicates: Int = 0
+)
+
+@Serializable
+data class AllianceImportSourceRecord(
+    val teamNumber: Int,
+    val eventKey: String?,
+    val matchScoutingCount: Int,
+    val pitScoutingCount: Int,
+    val qualitativeScoutingCount: Int
+)

@@ -36,7 +36,14 @@ object SyncScheduler {
     @Volatile
     var lastSyncFailedTeams: Int? = null
 
+    @Volatile
+    var syncInProgress: Boolean = false
+
+    @Volatile
+    var currentSyncLabel: String? = null
+
     private var scope: CoroutineScope? = null
+    private val syncLock = Any()
 
     fun start() {
         if (scope != null) {
@@ -59,7 +66,93 @@ object SyncScheduler {
         scope = null
     }
 
+    fun enqueueEventSync(settings: ApiSettings): Boolean {
+        val activeScope = scope ?: return false
+        if (!beginSync("Manual event list sync")) {
+            return false
+        }
+        activeScope.launch {
+            try {
+                val count = IntegrationService.syncEvents(settings)
+                lastSyncAt = Instant.now()
+                lastSyncSummary = "Manual event list sync complete: $count events"
+                lastSyncError = null
+                lastSyncTeams = null
+                lastSyncMatches = null
+                lastSyncTeamCount = null
+                lastSyncFailedTeams = null
+                log.info(lastSyncSummary)
+            } catch (error: Exception) {
+                recordFailure("Manual event list sync failed", error)
+            } finally {
+                finishSync()
+            }
+        }
+        return true
+    }
+
+    fun enqueueEventDataSync(settings: ApiSettings): Boolean {
+        val activeScope = scope ?: return false
+        if (!beginSync("Manual teams and matches sync")) {
+            return false
+        }
+        activeScope.launch {
+            try {
+                val counts = IntegrationService.syncEventData(settings)
+                lastSyncAt = Instant.now()
+                lastSyncSummary = "Manual sync: ${counts.teams} teams, ${counts.matches} matches"
+                lastSyncTeams = counts.teams
+                lastSyncMatches = counts.matches
+                lastSyncTeamCount = 1
+                lastSyncFailedTeams = null
+                lastSyncError = null
+                log.info(lastSyncSummary)
+            } catch (error: Exception) {
+                recordFailure("Manual teams and matches sync failed", error)
+            } finally {
+                finishSync()
+            }
+        }
+        return true
+    }
+
+    fun enqueueStatsSync(settings: ApiSettings): Boolean {
+        val activeScope = scope ?: return false
+        if (!beginSync("Manual stats sync")) {
+            return false
+        }
+        activeScope.launch {
+            try {
+                val count = IntegrationService.syncStats(settings)
+                lastSyncAt = Instant.now()
+                lastSyncSummary = "Manual stats sync complete: $count team stat record(s)"
+                lastSyncError = null
+                lastSyncTeams = count
+                lastSyncMatches = null
+                lastSyncTeamCount = 1
+                lastSyncFailedTeams = null
+                log.info(lastSyncSummary)
+            } catch (error: Exception) {
+                recordFailure("Manual stats sync failed", error)
+            } finally {
+                finishSync()
+            }
+        }
+        return true
+    }
+
     suspend fun runScheduledSync() {
+        if (!beginSync("Auto-sync")) {
+            return
+        }
+        try {
+            runScheduledSyncUnchecked()
+        } finally {
+            finishSync()
+        }
+    }
+
+    private suspend fun runScheduledSyncUnchecked() {
         val teams = SettingsService.teamNumbersEligibleForAutoSync()
         if (teams.isEmpty()) {
             lastSyncSummary = "No teams with event code and API keys configured"
@@ -96,5 +189,37 @@ object SyncScheduler {
         lastSyncFailedTeams = if (failures > 0) failures else null
         lastSyncSummary = "Synced $totalTeams teams and $totalMatches matches for ${teams.size} team(s)"
         log.info("Auto-sync complete: $lastSyncSummary")
+    }
+
+    private fun beginSync(label: String): Boolean {
+        synchronized(syncLock) {
+            if (syncInProgress) {
+                lastSyncError = "Sync already running"
+                return false
+            }
+            syncInProgress = true
+            currentSyncLabel = label
+            lastSyncError = null
+            lastSyncSummary = "$label started"
+            return true
+        }
+    }
+
+    private fun finishSync() {
+        synchronized(syncLock) {
+            syncInProgress = false
+            currentSyncLabel = null
+        }
+    }
+
+    private fun recordFailure(label: String, error: Exception) {
+        lastSyncAt = Instant.now()
+        lastSyncError = error.message ?: label
+        lastSyncSummary = label
+        lastSyncTeams = null
+        lastSyncMatches = null
+        lastSyncTeamCount = null
+        lastSyncFailedTeams = 1
+        log.warn("$label: ${error.message}")
     }
 }

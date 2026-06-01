@@ -66,8 +66,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         syncButton.addEventListener("click", async () => {
             syncButton.disabled = true;
             try {
-                await Obsidianscout.request("/api/integrations/sync/event", { method: "POST" });
-                Obsidianscout.showToast(t("matches.synced", "Matches synced"), "success");
+                const response = await Obsidianscout.request("/api/integrations/sync/event", { method: "POST" });
+                Obsidianscout.showToast(response.message || t("matches.synced", "Matches synced"), "success");
                 const refreshed = await Obsidianscout.request("/api/settings");
                 currentEventKey = Obsidianscout.resolveEventKey(refreshed.settings);
                 if (eventFilter) eventFilter.value = currentEventKey;
