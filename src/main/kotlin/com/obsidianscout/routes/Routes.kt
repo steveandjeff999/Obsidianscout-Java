@@ -566,6 +566,7 @@ fun Application.configureRoutes() {
             "qual-scout" to "qual-scout.html",
             "qual-data" to "qual-data.html",
             "pit-data" to "pit-data.html",
+            "all-data" to "all-data.html",
             "analytics" to "analytics.html",
             "graphs" to "graphs.html",
             "events" to "events.html",

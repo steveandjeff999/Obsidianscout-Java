@@ -2,6 +2,7 @@
   "nav.dashboard": "Dashboard",
   "nav.scout": "Scout",
   "nav.qual-data": "Qual Data",
+  "nav.all-data": "All Data",
   "nav.analytics": "Analytics",
   "nav.graphs": "Graphs",
   "nav.events": "Events",

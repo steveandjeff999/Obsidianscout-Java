@@ -1,80 +1,159 @@
 <!doctype html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8" />
+
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
     <title>ObsidianScout | Qualitative Scout</title>
+
     <link rel="stylesheet" href="/css/app.css" />
+
 </head>
+
 <body data-page="qual-scout">
+
     <div class="orb orb-1"></div>
+
     <div class="orb orb-3"></div>
 
+
+
     <div class="app-shell">
+
         <aside class="sidebar">
+
             <div class="sidebar-brand">ObsidianScout</div>
+
             <nav class="sidebar-nav">
+
                 <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
+
                 <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
+
                 <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
+
                 <a class="sidebar-link" data-page="qual-scout" href="/qual-scout">Qual Scout</a>
+
                 <a class="sidebar-link" data-page="qual-data" href="/qual-data">Qual Data</a>
+
                 <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
+
                 <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
+
                 <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
+
                 <a class="sidebar-link" data-page="events" href="/events">Events</a>
+
                 <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
+
                 <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
+
                 <a class="sidebar-link" data-page="predictor" href="/predictor">Predictor</a>
+
                 <a class="sidebar-link" data-page="users" href="/users">Users</a>
+
                 <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
+
             </nav>
+
             <div class="sidebar-footer">
+
                 <span id="nav-user" class="badge"></span>
+
                 <button class="btn ghost" data-action="toggle-theme" type="button">Toggle theme</button>
+
                 <button class="btn ghost" data-action="logout" type="button">Sign out</button>
+
             </div>
+
         </aside>
 
+
+
         <main class="main-content">
+
             <div class="card">
+
                 <h1 data-i18n="qual_scout.title">Qualitative scouting form</h1>
+
                 <p class="notice">Pick event, team, and match, then capture observations, ratings, and notes from the qualitative config.</p>
+
                 <div class="split mb-18">
+
                     <div class="field">
+
                         <label>Event</label>
+
                         <div id="event-badge" class="badge"></div>
+
                     </div>
+
                     <div class="field">
+
                         <label for="team-select">Team</label>
+
                         <select id="team-select"></select>
+
                     </div>
+
                     <div class="field">
+
                         <label for="match-select">Match</label>
+
                         <select id="match-select" class="select-wide"></select>
+
                     </div>
+
                     <div class="field">
+
                         <label>Timezone</label>
+
                         <div id="timezone-badge" class="badge"></div>
+
                     </div>
+
                 </div>
+
                 <form id="scouting-form" class="form-grid">
+
                     <div id="form-blocked" class="notice">Select a team and match to start qualitative scouting.</div>
+
                     <div id="form-fields" class="form-grid"></div>
+
                     <div class="row gap-12 wrap">
+
                         <button id="scout-submit" class="btn" type="submit" data-i18n="qual_scout.save_entry">Save entry</button>
+
                         <button id="scout-clear" class="btn ghost" type="button" data-i18n="qual_scout.clear_form">Clear form</button>
+
                     </div>
+
                 </form>
+
             </div>
 
+
+
                 <div class="row gap-12 wrap mt-18">
+
                     <a class="btn ghost" href="/qual-data">Open qualitative rankings</a>
+
                 </div>
+
         </main>
+
     </div>
 
+
+
     <script src="/js/common.js"></script>
+
     <script src="/js/qual-scout.js"></script>
+
 </body>
+
 </html>

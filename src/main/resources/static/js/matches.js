@@ -101,8 +101,8 @@ async function loadMatches(eventKey, timezone) {
 
         matches.forEach((match) => {
             const row = document.createElement("tr");
-            const red = match.redTeams.join(", ");
-            const blue = match.blueTeams.join(", ");
+            const red = match.redTeams.map(k => Obsidianscout.formatTeam(k)).join(", ");
+            const blue = match.blueTeams.map(k => Obsidianscout.formatTeam(k)).join(", ");
             const timeLabel = Obsidianscout.formatTimestamp(match.scheduledTime, timezone);
             const matchCell = document.createElement("td");
             matchCell.textContent = localize(match.label) || (match.compLevel.toUpperCase() + " " + (match.matchNumber || ""));

@@ -1,190 +1,380 @@
 <!doctype html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8" />
+
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
     <title>ObsidianScout | Qualitative Data</title>
+
     <link rel="stylesheet" href="/css/app.css" />
+
 </head>
+
 <body data-page="qual-data">
+
     <div class="orb orb-2"></div>
+
     <div class="orb orb-3"></div>
 
+
+
     <div class="app-shell">
+
         <aside class="sidebar">
+
             <div class="sidebar-brand">ObsidianScout</div>
+
             <nav class="sidebar-nav">
+
                 <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
+
                 <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
+
                 <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
+
                 <a class="sidebar-link" data-page="qual-scout" href="/qual-scout">Qual Scout</a>
+
                 <a class="sidebar-link" data-page="qual-data" href="/qual-data">Qual Data</a>
+
                 <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
+
                 <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
+
                 <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
+
                 <a class="sidebar-link" data-page="events" href="/events">Events</a>
+
                 <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
+
                 <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
+
                 <a class="sidebar-link" data-page="predictor" href="/predictor">Predictor</a>
+
                 <a class="sidebar-link" data-page="users" href="/users">Users</a>
+
                 <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
+
             </nav>
+
             <div class="sidebar-footer">
+
                 <span id="nav-user" class="badge"></span>
+
                 <button class="btn ghost" data-action="toggle-theme" type="button">Toggle theme</button>
+
                 <button class="btn ghost" data-action="logout" type="button">Sign out</button>
+
             </div>
+
         </aside>
 
+
+
         <main class="main-content">
+
             <div class="card">
+
                 <h1>Qualitative performance center</h1>
+
                 <p class="notice">Analyze qualitative scouting across matches with configurable team rankings, metric-specific trends, and full entry drill-down.</p>
 
+
+
                 <div class="metrics mt-20">
+
                     <div>
+
                         <h4>Entries</h4>
+
                         <div id="qual-total-entries" class="metric-value">0</div>
+
                     </div>
+
                     <div>
+
                         <h4>Teams Ranked</h4>
+
                         <div id="qual-total-teams" class="metric-value">0</div>
+
                     </div>
+
                     <div>
+
                         <h4>Ranking Metric</h4>
+
                         <div id="qual-metric-summary" class="metric-value">--</div>
+
                     </div>
+
                     <div>
+
                         <h4>Last Update</h4>
+
                         <div id="qual-last-updated" class="metric-value text-compact">--</div>
+
                     </div>
+
                 </div>
+
             </div>
+
+
 
             <div class="card mt-20">
+
                 <div class="split">
+
                     <div class="field">
+
                         <label for="qual-event-filter">Event</label>
+
                         <select id="qual-event-filter" class="select-wide"></select>
+
                     </div>
+
                     <div class="field">
+
                         <label for="qual-team-search">Team search</label>
+
                         <input id="qual-team-search" type="search" placeholder="Team number or nickname" />
+
                     </div>
+
                     <div class="field">
+
                         <label for="qual-rank-metric">Rank by metric</label>
+
                         <select id="qual-rank-metric" class="select-wide"></select>
+
                     </div>
+
                     <div class="field">
+
                         <label for="qual-rank-aggregate">Aggregation</label>
+
                         <select id="qual-rank-aggregate" class="select-wide">
+
                             <option value="avg">Average</option>
+
                             <option value="median">Median</option>
+
                             <option value="latest">Latest</option>
+
                             <option value="max">Max</option>
+
                             <option value="min">Min</option>
+
                         </select>
+
                     </div>
+
                     <div class="field">
+
                         <label for="qual-min-entries">Min entries per team</label>
+
                         <input id="qual-min-entries" type="number" min="1" value="1" />
+
                     </div>
+
                     <div class="field">
+
                         <label for="qual-entry-sort">Entry sort</label>
+
                         <select id="qual-entry-sort" class="select-wide">
+
                             <option value="createdAt-desc">Newest first</option>
+
                             <option value="createdAt-asc">Oldest first</option>
+
                             <option value="metric-desc">Metric high to low</option>
+
                             <option value="metric-asc">Metric low to high</option>
+
                             <option value="team-asc">Team number</option>
+
                             <option value="match-asc">Match number</option>
+
                         </select>
+
                     </div>
+
                     <div class="field">
+
                         <label>Pending entries</label>
+
                         <label class="inline-control">
+
                             <input id="qual-include-pending" type="checkbox" checked />
+
                             Include offline unsynced entries
+
                         </label>
+
                     </div>
+
                 </div>
+
                 <div class="row gap-12 wrap mt-18">
+
                     <button id="qual-reset-filters" class="btn ghost" type="button">Reset filters</button>
+
                     <span id="qual-filter-status" class="badge">Showing all teams</span>
+
                 </div>
+
             </div>
 
+
+
             <div class="split mt-20">
+
                 <div class="card">
+
                     <div class="row justify-between align-center wrap gap-12">
+
                         <h2 class="section-title">Team ranking</h2>
+
                         <span id="qual-rank-count" class="badge">0 teams</span>
+
                     </div>
+
                     <div class="table-scroll mt-12">
+
                         <table class="table" id="qual-rank-table">
+
                             <thead>
+
                                 <tr>
+
                                     <th>Rank</th>
+
                                     <th>Team</th>
+
                                     <th>Score</th>
+
                                     <th>Entries</th>
+
                                     <th>Matches</th>
+
                                     <th>Trend</th>
+
                                     <th>Updated</th>
+
                                 </tr>
+
                             </thead>
+
                             <tbody></tbody>
+
                         </table>
+
                     </div>
+
                 </div>
 
+
+
                 <div class="card">
+
                     <div class="row justify-between align-center wrap gap-12">
+
                         <h2 id="qual-team-title" class="section-title">Select a team</h2>
+
                         <span id="qual-team-status" class="badge">No team selected</span>
+
                     </div>
+
                     <div id="qual-team-detail" class="pit-detail mt-12">
+
                         <p class="notice">Choose a ranked team to inspect match-by-match qualitative performance.</p>
+
                     </div>
+
                 </div>
+
             </div>
+
+
 
             <div class="split mt-20">
-                <div class="card">
-                    <div class="row justify-between align-center wrap gap-12">
-                        <h2 class="section-title">Entry list</h2>
-                        <span id="qual-entry-count" class="badge">0 entries</span>
-                    </div>
-                    <div class="table-scroll mt-12">
-                        <table class="table" id="qual-entry-table">
-                            <thead>
-                                <tr>
-                                    <th>Team</th>
-                                    <th>Match</th>
-                                    <th>Metric</th>
-                                    <th>Updated</th>
-                                    <th>State</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
 
                 <div class="card">
+
                     <div class="row justify-between align-center wrap gap-12">
-                        <h2 id="qual-entry-title" class="section-title">Select an entry</h2>
-                        <span id="qual-entry-status" class="badge">No entry selected</span>
+
+                        <h2 class="section-title">Entry list</h2>
+
+                        <span id="qual-entry-count" class="badge">0 entries</span>
+
                     </div>
-                    <div id="qual-entry-detail" class="pit-detail mt-12">
-                        <p class="notice">Select an entry row to inspect complete qualitative values and notes.</p>
+
+                    <div class="table-scroll mt-12">
+
+                        <table class="table" id="qual-entry-table">
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>Team</th>
+
+                                    <th>Match</th>
+
+                                    <th>Metric</th>
+
+                                    <th>Updated</th>
+
+                                    <th>State</th>
+
+                                </tr>
+
+                            </thead>
+
+                            <tbody></tbody>
+
+                        </table>
+
                     </div>
+
                 </div>
+
+
+
+                <div class="card">
+
+                    <div class="row justify-between align-center wrap gap-12">
+
+                        <h2 id="qual-entry-title" class="section-title">Select an entry</h2>
+
+                        <span id="qual-entry-status" class="badge">No entry selected</span>
+
+                    </div>
+
+                    <div id="qual-entry-detail" class="pit-detail mt-12">
+
+                        <p class="notice">Select an entry row to inspect complete qualitative values and notes.</p>
+
+                    </div>
+
+                </div>
+
             </div>
+
         </main>
+
     </div>
 
+
+
     <script src="/js/common.js"></script>
+
     <script src="/js/qual-data.js"></script>
+
 </body>
+
 </html>
+

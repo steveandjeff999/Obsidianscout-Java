@@ -11,6 +11,7 @@ import com.obsidianscout.routes.ScoutingEntryRequest
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -102,8 +103,9 @@ object PitScoutingService {
     }
 
     private fun readString(data: JsonObject, fieldId: String): String? {
-        val value = data[fieldId] as? JsonPrimitive ?: return null
-        return value.content
+        val value = data[fieldId] ?: return null
+        if (value is JsonNull) return null
+        return (value as? JsonPrimitive)?.content
     }
 
     private fun readInt(data: JsonObject, fieldId: String): Int? {

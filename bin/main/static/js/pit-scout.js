@@ -119,7 +119,8 @@ async function loadTeams(eventKey, teamSelect) {
     teams.forEach((team) => {
         const option = document.createElement("option");
         option.value = team.teamNumber;
-        option.textContent = `${team.teamNumber} ${team.nickname || team.name || ""}`.trim();
+        const displayNum = Obsidianscout.formatTeam(team.teamKey, team.teamNumber);
+        option.textContent = `${displayNum} ${team.nickname || team.name || ""}`.trim();
         teamSelect.appendChild(option);
     });
 }

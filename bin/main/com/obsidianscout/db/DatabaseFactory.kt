@@ -68,7 +68,7 @@ object DatabaseFactory {
     private fun buildSqliteUrl(config: DatabaseConfig): String {
         val filePath = Paths.get(config.sqlite.file)
         filePath.parent?.let { Files.createDirectories(it) }
-        return "jdbc:sqlite:${filePath.toString()}"
+        return "jdbc:sqlite:${filePath.toString()}?journal_mode=WAL&busy_timeout=5000&synchronous=NORMAL"
     }
 
     private fun buildPostgresUrl(config: DatabaseConfig): String {

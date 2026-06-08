@@ -174,7 +174,8 @@ async function loadTeamsAndMatches(eventKey, teamSelect, matchSelect, timezone) 
     teams.forEach((team) => {
         const option = document.createElement("option");
         option.value = team.teamNumber;
-        option.textContent = `${team.teamNumber} ${team.nickname || team.name || ""}`.trim();
+        const displayNum = Obsidianscout.formatTeam(team.teamKey, team.teamNumber);
+        option.textContent = `${displayNum} ${team.nickname || team.name || ""}`.trim();
         teamSelect.appendChild(option);
     });
 
@@ -195,7 +196,7 @@ function updateMatchOptions(matchSelect, matches, timezone, selectedTeam) {
     let filtered = matches;
     if (teamKey) {
         const byTeam = matches.filter((match) =>
-            (match.redTeams || []).includes(teamKey) || (match.blueTeams || []).includes(teamKey)
+            matchHasTeam(match.redTeams, teamKey) || matchHasTeam(match.blueTeams, teamKey)
         );
         if (byTeam.length) {
             filtered = byTeam;
@@ -230,8 +231,20 @@ function formatTeamList(teamKeys) {
         return "";
     }
     return teamKeys
-        .map((key) => key.replace("frc", ""))
+        .map((key) => Obsidianscout.formatTeam(key))
         .join(", ");
+}
+
+function matchHasTeam(teams, teamKey) {
+    if (!teams || !teamKey) return false;
+    return teams.some(key => {
+        if (key === teamKey) return true;
+        const parts = key.split('/');
+        return parts.some(part => {
+            const norm = part.startsWith('frc') ? part : `frc${part}`;
+            return norm === teamKey;
+        });
+    });
 }
 
 function buildField(field) {

@@ -341,8 +341,9 @@ function normalizeEvents(events, activeKey, settings) {
 }
 
 function teamLabel(row) {
+    const displayNum = row.team ? Obsidianscout.formatTeam(row.team.teamKey, row.teamNumber) : row.teamNumber;
     const name = row.team?.nickname || row.team?.name || "";
-    return `${row.teamNumber}${name ? ` ${name}` : ""}`;
+    return `${displayNum}${name ? ` ${name}` : ""}`;
 }
 
 function appendCell(row, text) {

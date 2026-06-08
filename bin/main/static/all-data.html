@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | All Scouting Data</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body data-page="all-data">
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand">ObsidianScout</div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
+                <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
+                <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
+                <a class="sidebar-link" data-page="qual-scout" href="/qual-scout">Qual Scout</a>
+                <a class="sidebar-link" data-page="qual-data" href="/qual-data">Qual Data</a>
+                <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
+                <a class="sidebar-link" data-page="all-data" href="/all-data">All Data</a>
+                <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
+                <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
+                <a class="sidebar-link" data-page="events" href="/events">Events</a>
+                <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
+                <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
+                <a class="sidebar-link" data-page="predictor" href="/predictor">Predictor</a>
+                <a class="sidebar-link" data-page="users" href="/users">Users</a>
+                <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
+            </nav>
+            <div class="sidebar-footer">
+                <span id="nav-user" class="badge"></span>
+                <button class="btn ghost" data-action="toggle-theme" type="button">Toggle theme</button>
+                <button class="btn ghost" data-action="logout" type="button">Sign out</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="card">
+                <h1>All Scouting Data</h1>
+                <p class="notice">Browse, search, and inspect pit, match, and qualitative scouting entries in one unified place.</p>
+
+                <div class="metrics mt-20">
+                    <div>
+                        <h4>Total Entries</h4>
+                        <div id="all-entry-count" class="metric-value">0</div>
+                    </div>
+                    <div>
+                        <h4>Pit Entries</h4>
+                        <div id="pit-entry-count" class="metric-value">0</div>
+                    </div>
+                    <div>
+                        <h4>Match Entries</h4>
+                        <div id="match-entry-count" class="metric-value">0</div>
+                    </div>
+                    <div>
+                        <h4>Qualitative Entries</h4>
+                        <div id="qual-entry-count" class="metric-value">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-20">
+                <div class="split">
+                    <div class="field">
+                        <label for="event-filter">Event</label>
+                        <select id="event-filter" class="select-wide"></select>
+                    </div>
+                    <div class="field">
+                        <label for="team-search">Search teams</label>
+                        <input id="team-search" type="search" placeholder="Team number or name" />
+                    </div>
+                    <div class="field">
+                        <label for="type-filter">Entry Type</label>
+                        <select id="type-filter" class="select-wide">
+                            <option value="all">All Types</option>
+                            <option value="pit">Pit Scouting</option>
+                            <option value="match">Match Scouting</option>
+                            <option value="qualitative">Qualitative Scouting</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="match-filter">Match Number</label>
+                        <input id="match-filter" type="number" min="1" placeholder="e.g. 12" />
+                    </div>
+                    <div class="field">
+                        <label for="sort-select">Sort By</label>
+                        <select id="sort-select" class="select-wide">
+                            <option value="match-type">Match & Type</option>
+                            <option value="newest">Newest First</option>
+                            <option value="oldest">Oldest First</option>
+                            <option value="team">Team Number</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row gap-12 wrap mt-18">
+                    <button id="reset-filters" class="btn ghost" type="button">Reset Filters</button>
+                    <button id="export-csv" class="btn ghost" type="button">Export CSV</button>
+                    <span id="filter-status" class="badge">Showing all entries</span>
+                </div>
+            </div>
+
+            <div class="split mt-20">
+                <div class="card">
+                    <div class="row justify-between align-center wrap gap-12">
+                        <h2 class="section-title">Unified Entries</h2>
+                        <span id="table-count" class="badge">0 entries</span>
+                    </div>
+                    <div class="table-scroll mt-12">
+                        <table class="table" id="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Team</th>
+                                    <th>Match</th>
+                                    <th>Type</th>
+                                    <th>Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="row justify-between align-center wrap gap-12">
+                        <h2 id="detail-title" class="section-title">Select an entry</h2>
+                        <span id="detail-status" class="badge">No entry selected</span>
+                    </div>
+                    <div id="entry-detail" class="pit-detail mt-12">
+                        <p class="notice">Choose an entry from the list to inspect its configuration-driven answers and notes.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/all-data.js"></script>
+</body>
+</html>

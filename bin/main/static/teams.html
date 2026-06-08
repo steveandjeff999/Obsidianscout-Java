@@ -1,131 +1,262 @@
 <!doctype html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8" />
+
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
     <title>ObsidianScout | Teams</title>
+
     <link rel="stylesheet" href="/css/app.css" />
+
 </head>
+
 <body data-page="teams">
+
     <div class="orb orb-2"></div>
 
+
+
     <div class="app-shell">
+
         <aside class="sidebar">
+
             <div class="sidebar-brand">ObsidianScout</div>
+
             <nav class="sidebar-nav">
+
                 <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
+
                 <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
+
                 <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
+
                 <a class="sidebar-link" data-page="qual-scout" href="/qual-scout">Qual Scout</a>
+
                 <a class="sidebar-link" data-page="qual-data" href="/qual-data">Qual Data</a>
+
                 <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
+
                 <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
+
                 <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
+
                 <a class="sidebar-link" data-page="events" href="/events">Events</a>
+
                 <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
+
                 <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
+
                 <a class="sidebar-link" data-page="predictor" href="/predictor">Predictor</a>
+
                 <a class="sidebar-link" data-page="users" href="/users">Users</a>
+
                 <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
+
             </nav>
+
             <div class="sidebar-footer">
+
                 <span id="nav-user" class="badge"></span>
+
                 <button class="btn ghost" data-action="toggle-theme" type="button">Toggle theme</button>
+
                 <button class="btn ghost" data-action="logout" type="button">Sign out</button>
+
             </div>
+
         </aside>
 
+
+
         <main class="main-content">
+
             <div class="card">
+
                 <h1 data-i18n="teams.title">Teams</h1>
+
                 <p class="notice" data-i18n="teams.notice">Sync teams for the selected event and review EPA/OPR stats.</p>
+
                 <div class="row gap-12 wrap align-center" style="width: 100%;">
+
                     <button class="btn" id="sync-event" type="button" data-i18n="teams.sync_teams">Sync teams</button>
+
                     <button class="btn ghost" id="sync-stats" type="button" data-i18n="teams.sync_stats">Sync stats</button>
+
                     <button class="btn secondary hidden" id="add-team-btn" type="button" data-i18n="teams.add_manual">Add Team Manually</button>
+
                     <div style="flex-grow: 1;"></div>
+
                     <div class="field" style="min-width: 240px; margin-top: 0;">
+
                         <label for="event-filter" style="margin-bottom: 4px;">View Event</label>
+
                         <select id="event-filter" class="select-wide"></select>
+
                     </div>
+
                 </div>
+
             </div>
+
+
 
             <div class="card mt-20">
+
                 <table class="table" id="teams-table">
+
                     <thead>
+
                         <tr>
+
                             <th>Team</th>
+
                             <th>Name</th>
+
                             <th>Location</th>
+
                             <th>OPR</th>
+
                             <th>EPA</th>
+
                             <th class="admin-only hidden">Action</th>
+
                         </tr>
+
                     </thead>
+
                     <tbody></tbody>
+
                 </table>
+
             </div>
+
         </main>
+
     </div>
+
+
 
     <!-- Modal for Manual Team Create / Edit -->
+
     <div class="modal-backdrop" id="team-modal">
+
         <div class="modal-container">
+
             <div class="modal-header">
+
                 <h2 class="modal-title" id="team-modal-title">Add Team Manually</h2>
+
                 <button class="modal-close" id="team-modal-close" type="button">&times;</button>
+
             </div>
+
             <form id="team-form" class="form-grid">
+
                 <div class="field">
+
                     <label for="team-event-key">Event</label>
+
                     <select id="team-event-key" required></select>
+
                 </div>
+
                 <div class="field">
+
                     <label for="team-number">Team Number</label>
+
                     <input type="number" id="team-number" required placeholder="e.g. 9999" />
+
                 </div>
+
                 <div class="field">
+
                     <label for="team-name">Team Name</label>
+
                     <input type="text" id="team-name" required placeholder="e.g. Obsidian Bots" />
+
                 </div>
+
                 <div class="form-grid form-grid-wide">
+
                     <div class="field">
+
                         <label for="team-city">City</label>
+
                         <input type="text" id="team-city" placeholder="e.g. Dallas" />
+
                     </div>
+
                     <div class="field">
+
                         <label for="team-state">State/Province</label>
+
                         <input type="text" id="team-state" placeholder="e.g. TX" />
+
                     </div>
+
                 </div>
+
                 <div class="form-grid form-grid-wide">
+
                     <div class="field">
+
                         <label for="team-country">Country</label>
+
                         <input type="text" id="team-country" placeholder="e.g. USA" value="USA" />
+
                     </div>
+
                     <div class="field">
+
                     </div>
+
                 </div>
+
                 <div class="form-grid form-grid-wide">
+
                     <div class="field">
+
                         <label for="team-opr">OPR</label>
+
                         <input type="number" step="0.01" id="team-opr" placeholder="0.0" />
+
                     </div>
+
                     <div class="field">
+
                         <label for="team-epa">EPA</label>
+
                         <input type="number" step="0.01" id="team-epa" placeholder="0.0" />
+
                     </div>
+
                 </div>
+
                 <div class="modal-footer">
+
                     <button class="btn ghost" id="team-modal-cancel" type="button" data-i18n="teams.cancel">Cancel</button>
+
                     <button class="btn" type="submit" data-i18n="teams.save_team">Save Team</button>
+
                 </div>
+
             </form>
+
         </div>
+
     </div>
 
+
+
     <script src="/js/common.js"></script>
+
     <script src="/js/teams.js"></script>
+
 </body>
+
 </html>
+

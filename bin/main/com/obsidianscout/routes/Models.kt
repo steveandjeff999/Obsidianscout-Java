@@ -162,6 +162,7 @@ data class SummaryResponse(
 @Serializable
 data class MatchTeamPrediction(
     val teamNumber: Int,
+    val teamKey: String? = null,
     val nickname: String?,
     val averageScoutedScore: Double?,
     val scoutedMatchesCount: Int,

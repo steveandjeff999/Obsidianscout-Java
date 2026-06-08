@@ -366,6 +366,11 @@ object MatchCanonical {
             val trimmed = key.trim().lowercase()
             when {
                 trimmed.isBlank() -> null
+                trimmed.contains('/') -> {
+                    val parts = trimmed.split('/')
+                    val num = parts.last().trim().removePrefix("frc")
+                    "frc$num"
+                }
                 trimmed.startsWith("frc") -> trimmed
                 trimmed.all { it.isDigit() } -> "frc$trimmed"
                 else -> trimmed

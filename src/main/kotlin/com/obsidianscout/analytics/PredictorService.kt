@@ -49,15 +49,75 @@ object PredictorService {
             val useStatboticsEpa = settings.useStatboticsEpa
             val useTbaOpr = settings.useTbaOpr
 
-            val allTeamKeys = redTeamKeys + blueTeamKeys
-            val teamRows = ApiTeams.select {
-                (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamKey inList allTeamKeys)
-            }.toList()
-            val teamInfoMap = teamRows.associateBy { it[ApiTeams.teamKey] }
+            val allTeamsInEvent = ApiTeams.select { ApiTeams.eventKey eq eventKey }.toList()
+            val bbotMappings = com.obsidianscout.integrations.IntegrationService.getBBotMappings(eventKey)
+            
+            val teamKeyByNumber = mutableMapOf<Int, String>()
+            val teamNumberByKey = mutableMapOf<String, Int>()
+            val canonicalKeyByKey = mutableMapOf<String, String>()
+            
+            bbotMappings.forEach { m ->
+                val bKey = if (m.bbotKey.startsWith("frc")) m.bbotKey else "frc${m.bbotKey}"
+                val pKey = if (m.placeholderKey.startsWith("frc")) m.placeholderKey else "frc${m.placeholderKey}"
+                val num = m.placeholderNumber
 
-            val teamNumbers = allTeamKeys.mapNotNull { key ->
-                key.removePrefix("frc").toIntOrNull()
+                teamKeyByNumber[num] = bKey
+                
+                teamNumberByKey[bKey] = num
+                teamNumberByKey[bKey.removePrefix("frc")] = num
+                teamNumberByKey[pKey] = num
+                teamNumberByKey[pKey.removePrefix("frc")] = num
+                
+                canonicalKeyByKey[bKey] = bKey
+                canonicalKeyByKey[bKey.removePrefix("frc")] = bKey
+                canonicalKeyByKey[pKey] = bKey
+                canonicalKeyByKey[pKey.removePrefix("frc")] = bKey
             }
+
+            allTeamsInEvent.forEach { row ->
+                val origKey = row[ApiTeams.teamKey].lowercase().trim()
+                val num = row[ApiTeams.teamNumber]
+                val oKey = if (origKey.startsWith("frc")) origKey else "frc$origKey"
+                
+                if (!teamNumberByKey.containsKey(oKey)) {
+                    teamKeyByNumber[num] = oKey
+                    
+                    teamNumberByKey[oKey] = num
+                    teamNumberByKey[oKey.removePrefix("frc")] = num
+                    
+                    canonicalKeyByKey[oKey] = oKey
+                    canonicalKeyByKey[oKey.removePrefix("frc")] = oKey
+                }
+            }
+
+            val allTeamKeys = redTeamKeys + blueTeamKeys
+            val teamNumbers = allTeamKeys.mapNotNull { key ->
+                val parts = key.split("/")
+                if (parts.size > 1) {
+                    parts[1].toIntOrNull()
+                } else {
+                    val primaryKey = parts[0].trim().lowercase()
+                    val numFromKey = primaryKey.removePrefix("frc").toIntOrNull()
+                    if (numFromKey != null) {
+                        numFromKey
+                    } else {
+                        teamNumberByKey[primaryKey]
+                    }
+                }
+            }
+
+            val teamRows = ApiTeams.select {
+                (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamNumber inList teamNumbers)
+            }.toList()
+            
+            val teamInfoMap = mutableMapOf<String, org.jetbrains.exposed.sql.ResultRow>()
+            teamRows.forEach { row ->
+                val rowKey = row[ApiTeams.teamKey].lowercase().trim()
+                val rowCanonical = canonicalKeyByKey[rowKey] ?: rowKey
+                teamInfoMap[rowKey] = row
+                teamInfoMap[rowCanonical] = row
+            }
+
             val config = ConfigService.getConfig(session.teamNumber)
 
             val entriesQuery = ScoutingEntries.select {
@@ -83,8 +143,16 @@ object PredictorService {
             val entriesByTeam = entries.groupBy { it.targetTeamNumber }
 
             fun predictTeam(teamKey: String): MatchTeamPrediction {
-                val teamNumber = teamKey.removePrefix("frc").toIntOrNull() ?: 0
-                val teamRow = teamInfoMap[teamKey]
+                val parts = teamKey.split("/")
+                val primaryKey = parts[0].trim().lowercase()
+                val teamNumber = if (parts.size > 1) {
+                    parts[1].toIntOrNull() ?: 0
+                } else {
+                    primaryKey.removePrefix("frc").toIntOrNull() ?: teamNumberByKey[primaryKey] ?: 0
+                }
+                
+                val resolvedKey = teamKeyByNumber[teamNumber] ?: primaryKey
+                val teamRow = teamInfoMap[resolvedKey] ?: teamInfoMap[primaryKey]
                 val nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name) ?: "Team $teamNumber"
                 val epa = teamRow?.get(ApiTeams.epa)
                 val opr = teamRow?.get(ApiTeams.opr)
@@ -100,6 +168,7 @@ object PredictorService {
 
                 return MatchTeamPrediction(
                     teamNumber = teamNumber,
+                    teamKey = resolvedKey,
                     nickname = nickname,
                     averageScoutedScore = avgScore,
                     scoutedMatchesCount = teamEntries.size,

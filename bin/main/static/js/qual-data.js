@@ -992,11 +992,12 @@ function teamLabel(state, teamNumber) {
     }
     const numeric = Number(teamNumber);
     const team = state.teamsByNumber.get(numeric);
+    const displayNum = team ? Obsidianscout.formatTeam(team.teamKey, numeric) : String(numeric);
     if (!team) {
-        return String(numeric);
+        return displayNum;
     }
     const name = team.nickname || team.name || "";
-    return name ? `${numeric} ${name}` : String(numeric);
+    return name ? `${displayNum} ${name}` : displayNum;
 }
 
 function matchLabel(entry) {

@@ -191,9 +191,10 @@ function renderTeamList(listId, teams) {
             metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
         }
 
+        const displayNum = Obsidianscout.formatTeam(t.teamKey, t.teamNumber);
         row.innerHTML = `
             <div class="team-info-main">
-                <div><span class="team-number-badge">${t.teamNumber}</span></div>
+                <div><span class="team-number-badge">${displayNum}</span></div>
                 <span class="team-nickname" style="margin-top: 4px;">${t.nickname || ''}</span>
             </div>
             <div style="text-align: right;">

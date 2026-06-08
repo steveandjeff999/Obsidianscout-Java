@@ -31,10 +31,12 @@
             const data = text ? safeParse(text) : null;
             if (!response.ok) {
                 const message = data && data.error ? data.error : "Request failed";
-                throw new Error(message);
+                const err = new Error(message);
+                err.status = response.status;
+                throw err;
             }
 
-            if (opts.method === "GET" && path !== "/api/auth/me") {
+            if (opts.method === "GET") {
                 try {
                     localStorage.setItem("cache:" + path, text);
                 } catch (e) {
@@ -44,15 +46,39 @@
 
             return data;
         } catch (error) {
-            if (error && error.name === "AbortError") {
-                throw new Error("Request timed out. Try refreshing this page.");
-            }
-            if (opts.method === "GET" && path !== "/api/auth/me") {
-                const cachedText = localStorage.getItem("cache:" + path);
-                if (cachedText !== null) {
-                    console.log("[Offline Cache] Serving cached response for:", path);
-                    return safeParse(cachedText);
+            const isTimeout = error && error.name === "AbortError";
+            
+            if (opts.method === "GET") {
+                if (path === "/api/auth/me") {
+                    // For auth state check:
+                    // If the server explicitly returned 401 (Unauthorized), we are logged out.
+                    // Clear the cache and propagate the error.
+                    if (error.status === 401) {
+                        localStorage.removeItem("cache:/api/auth/me");
+                        throw error;
+                    }
+                    
+                    // If it is a network error, timeout, or server-side 5xx error,
+                    // we want to fall back to the cached auth state.
+                    if (isTimeout || error.status === undefined || error.status === null || error.status >= 500) {
+                        const cachedText = localStorage.getItem("cache:/api/auth/me");
+                        if (cachedText !== null) {
+                            console.log("[Offline Cache] Serving cached response for auth state");
+                            return safeParse(cachedText);
+                        }
+                    }
+                } else {
+                    // For other GET requests, fall back to cache on any error (original behavior)
+                    const cachedText = localStorage.getItem("cache:" + path);
+                    if (cachedText !== null) {
+                        console.log("[Offline Cache] Serving cached response for:", path);
+                        return safeParse(cachedText);
+                    }
                 }
+            }
+
+            if (isTimeout) {
+                throw new Error("Request timed out. Try refreshing this page.");
             }
             throw error;
         } finally {
@@ -310,9 +336,9 @@
         if (!user) return;
         const role = user.role;
 
-        // Hide Users and Settings links for SCOUT and ANALYTICS
+        // Hide Users link for SCOUT and ANALYTICS
         if (!isAdmin(role)) {
-            document.querySelectorAll('.sidebar-link[data-page="users"], .sidebar-link[data-page="settings"]').forEach((link) => {
+            document.querySelectorAll('.sidebar-link[data-page="users"]').forEach((link) => {
                 link.style.display = "none";
             });
         }
@@ -652,6 +678,34 @@
         }
     });
 
+    function formatTeam(teamKey, teamNumber) {
+        if (!teamKey) {
+            return teamNumber !== undefined && teamNumber !== null ? String(teamNumber) : "";
+        }
+        
+        // Remove 'frc' prefix
+        const cleanKey = teamKey.replace(/^frc/, "");
+        
+        // Split if it's already a slash-merged format (e.g. 254b/9999 or frc254b/9999)
+        const parts = cleanKey.split("/");
+        const keyPart = parts[0];
+        const numPart = parts.length > 1 ? parts[1] : (teamNumber !== undefined && teamNumber !== null ? String(teamNumber).replace(/^frc/, "") : "");
+        
+        if (!numPart || keyPart === numPart) {
+            return keyPart;
+        }
+        
+        const displayPref = localStorage.getItem("obsidianscout:team_display") || "merged";
+        if (displayPref === "number") {
+            return numPart;
+        } else if (displayPref === "key") {
+            return keyPart;
+        } else {
+            // "merged" or fallback
+            return `${keyPart}/${numPart}`;
+        }
+    }
+
     window.Obsidianscout = {
         request,
         getMe,
@@ -675,5 +729,6 @@
         ,t
         ,setLanguage
         ,localize
+        ,formatTeam
     };
 })();

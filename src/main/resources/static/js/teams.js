@@ -100,8 +100,9 @@ async function loadTeams(eventKey) {
                     <button class="btn-icon-edit delete" data-action="delete" data-number="${team.teamNumber}" data-key="${team.teamKey}" style="color: #c84b31; border-color: rgba(200, 75, 49, 0.25);">Delete</button>
                 </td>`;
             }
+            const displayNum = Obsidianscout.formatTeam(team.teamKey, team.teamNumber);
             row.innerHTML = `
-                <td>${team.teamNumber}</td>
+                <td>${displayNum}</td>
                 <td>${team.nickname || team.name || ""}</td>
                 <td>${location}</td>
                 <td>${team.opr !== null ? team.opr.toFixed(2) : ""}</td>

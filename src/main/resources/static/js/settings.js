@@ -16,9 +16,49 @@ document.addEventListener("DOMContentLoaded", async () => {
     const exportButton = document.getElementById("config-export");
     const importInput = document.getElementById("config-import");
 
-    if (!Obsidianscout.isAdmin(me.role)) {
-        document.getElementById("admin-locked").classList.remove("hidden");
-        document.getElementById("admin-panel").classList.add("hidden");
+    const isUserAdmin = Obsidianscout.isAdmin(me.role);
+    if (!isUserAdmin) {
+        // Hide admin tabs
+        const tabConfig = document.getElementById("tab-config");
+        const tabApi = document.getElementById("tab-api");
+        if (tabConfig) tabConfig.classList.add("hidden");
+        if (tabApi) tabApi.classList.add("hidden");
+
+        // Activate personal tab
+        const tabPersonal = document.getElementById("tab-personal");
+        if (tabPersonal) {
+            tabPersonal.classList.add("active");
+        }
+        
+        const tabConfigBtn = document.querySelector(".tab[data-tab='config']");
+        if (tabConfigBtn) {
+            tabConfigBtn.classList.remove("active");
+        }
+
+        // Show personal panel, hide others
+        const panels = document.querySelectorAll("[data-panel]");
+        panels.forEach((p) => {
+            if (p.dataset.panel === "personal") {
+                p.classList.remove("hidden");
+            } else {
+                p.classList.add("hidden");
+            }
+        });
+    }
+
+    // Initialize personal setting dropdown
+    const personalDisplaySelect = document.getElementById("personal-team-display");
+    if (personalDisplaySelect) {
+        personalDisplaySelect.value = localStorage.getItem("obsidianscout:team_display") || "merged";
+        personalDisplaySelect.addEventListener("change", (e) => {
+            localStorage.setItem("obsidianscout:team_display", e.target.value);
+            Obsidianscout.showToast("Personal settings saved", "success");
+            window.dispatchEvent(new CustomEvent("obsidianscout:teamdisplaychange", { detail: { format: e.target.value } }));
+        });
+    }
+
+    if (!isUserAdmin) {
+        wireTabs();
         return;
     }
 

@@ -14,6 +14,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -26,6 +27,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -51,6 +53,11 @@ object IntegrationService {
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) {
             json(JsonSupport.json)
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15000L
+            connectTimeoutMillis = 10000L
+            socketTimeoutMillis = 10000L
         }
     }
 
@@ -290,12 +297,18 @@ object IntegrationService {
 
     fun listTeams(eventKey: String): List<TeamRecord> {
         return transaction {
-            ApiTeams.select { ApiTeams.eventKey eq eventKey }
+            val bbotMappings = getBBotMappings(eventKey)
+            val placeholderToBBot = bbotMappings.associate { it.placeholderKey.lowercase().trim() to it.bbotKey }
+
+            val rows = ApiTeams.select { ApiTeams.eventKey eq eventKey }
                 .orderBy(ApiTeams.teamNumber, SortOrder.ASC)
                 .map { row ->
+                    val originalKey = row[ApiTeams.teamKey].lowercase().trim()
+                    val resolvedKey = placeholderToBBot[originalKey] ?: row[ApiTeams.teamKey]
+
                     TeamRecord(
                         eventKey = row[ApiTeams.eventKey],
-                        teamKey = row[ApiTeams.teamKey],
+                        teamKey = resolvedKey,
                         teamNumber = row[ApiTeams.teamNumber],
                         name = row[ApiTeams.name],
                         nickname = row[ApiTeams.nickname],
@@ -306,12 +319,76 @@ object IntegrationService {
                         epa = row[ApiTeams.epa]
                     )
                 }
+
+            rows.groupBy { it.teamNumber }
+                .map { (teamNumber, group) ->
+                    if (group.size == 1) {
+                        group.first()
+                    } else {
+                        val preferred = group.find { it.teamKey.removePrefix("frc").any { c -> !c.isDigit() } }
+                            ?: group.first()
+                        preferred.copy(
+                            name = group.mapNotNull { it.name }.firstOrNull { it.isNotBlank() } ?: preferred.name,
+                            nickname = group.mapNotNull { it.nickname }.firstOrNull { it.isNotBlank() } ?: preferred.nickname,
+                            city = group.mapNotNull { it.city }.firstOrNull { it.isNotBlank() } ?: preferred.city,
+                            state = group.mapNotNull { it.state }.firstOrNull { it.isNotBlank() } ?: preferred.state,
+                            country = group.mapNotNull { it.country }.firstOrNull { it.isNotBlank() } ?: preferred.country,
+                            opr = group.mapNotNull { it.opr }.firstOrNull() ?: preferred.opr,
+                            epa = group.mapNotNull { it.epa }.firstOrNull() ?: preferred.epa
+                        )
+                    }
+                }
+                .sortedBy { it.teamNumber }
         }
     }
 
     fun listMatches(eventKey: String): List<MatchRecord> {
         return transaction {
             MatchCanonical.deduplicateDatabaseForEvent(eventKey)
+            val allTeams = ApiTeams.select { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
+            val bbotMappings = getBBotMappings(eventKey)
+            
+            // Build bidirectional resolution maps for B-bots and normal teams
+            val teamKeyByNumber = mutableMapOf<Int, String>()
+            val teamNumberByKey = mutableMapOf<String, Int>()
+            val canonicalKeyByKey = mutableMapOf<String, String>()
+
+            // First populate from B-bot mappings
+            bbotMappings.forEach { m ->
+                val bKey = if (m.bbotKey.startsWith("frc")) m.bbotKey else "frc${m.bbotKey}"
+                val pKey = if (m.placeholderKey.startsWith("frc")) m.placeholderKey else "frc${m.placeholderKey}"
+                val num = m.placeholderNumber
+
+                teamKeyByNumber[num] = bKey
+                
+                teamNumberByKey[bKey] = num
+                teamNumberByKey[bKey.removePrefix("frc")] = num
+                teamNumberByKey[pKey] = num
+                teamNumberByKey[pKey.removePrefix("frc")] = num
+                
+                canonicalKeyByKey[bKey] = bKey
+                canonicalKeyByKey[bKey.removePrefix("frc")] = bKey
+                canonicalKeyByKey[pKey] = bKey
+                canonicalKeyByKey[pKey.removePrefix("frc")] = bKey
+            }
+
+            // Then populate other teams
+            allTeams.forEach { row ->
+                val origKey = row[ApiTeams.teamKey].lowercase().trim()
+                val num = row[ApiTeams.teamNumber]
+                val oKey = if (origKey.startsWith("frc")) origKey else "frc$origKey"
+                
+                if (!teamNumberByKey.containsKey(oKey)) {
+                    teamKeyByNumber[num] = oKey
+                    
+                    teamNumberByKey[oKey] = num
+                    teamNumberByKey[oKey.removePrefix("frc")] = num
+                    
+                    canonicalKeyByKey[oKey] = oKey
+                    canonicalKeyByKey[oKey.removePrefix("frc")] = oKey
+                }
+            }
+
             val rows = ApiMatches.select { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
             rows.sortedWith(
                 compareBy(
@@ -325,6 +402,29 @@ object IntegrationService {
                 val compLevel = row[ApiMatches.compLevel]
                 val setNumber = row[ApiMatches.setNumber]
                 val matchNumber = row[ApiMatches.matchNumber]
+                val resolveTeams = { teamKeysJson: String ->
+                    val rawKeys = decodeTeams(teamKeysJson)
+                    rawKeys.map { key ->
+                        val trimmedKey = key.trim().lowercase()
+                        val canonicalKey = canonicalKeyByKey[trimmedKey] 
+                            ?: (if (trimmedKey.startsWith("frc")) trimmedKey else "frc$trimmedKey")
+                        
+                        val num = teamNumberByKey[trimmedKey]
+                            ?: trimmedKey.removePrefix("frc").toIntOrNull()
+                        
+                        if (num != null && canonicalKey.removePrefix("frc").lowercase() != num.toString()) {
+                            val cleanCanonical = if (canonicalKey.startsWith("frc")) canonicalKey else "frc$canonicalKey"
+                            "$cleanCanonical/$num"
+                        } else {
+                            if (num != null && canonicalKey != trimmedKey) {
+                                val cleanCanonical = if (canonicalKey.startsWith("frc")) canonicalKey else "frc$canonicalKey"
+                                "$cleanCanonical/$num"
+                            } else {
+                                key
+                            }
+                        }
+                    }
+                }
                 MatchRecord(
                     matchKey = row[ApiMatches.matchKey],
                     eventKey = row[ApiMatches.eventKey],
@@ -332,11 +432,79 @@ object IntegrationService {
                     setNumber = setNumber,
                     matchNumber = matchNumber,
                     scheduledTime = row[ApiMatches.scheduledTime],
-                    redTeams = decodeTeams(row[ApiMatches.redTeams]),
-                    blueTeams = decodeTeams(row[ApiMatches.blueTeams]),
+                    redTeams = resolveTeams(row[ApiMatches.redTeams]),
+                    blueTeams = resolveTeams(row[ApiMatches.blueTeams]),
                     label = MatchCanonical.displayLabel(compLevel, setNumber, matchNumber)
                 )
             }
+        }
+    }
+
+    data class BBotMapping(
+        val bbotKey: String,
+        val placeholderKey: String,
+        val placeholderNumber: Int
+    )
+
+    fun getBBotMappings(eventKey: String): List<BBotMapping> {
+        return transaction {
+            val allTeams = ApiTeams.select { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
+            val allMatches = ApiMatches.select { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
+
+            val bbotKeysInMatches = mutableSetOf<String>()
+            allMatches.forEach { row ->
+                val red = decodeTeams(row[ApiMatches.redTeams])
+                val blue = decodeTeams(row[ApiMatches.blueTeams])
+                (red + blue).forEach { key ->
+                    val trimmed = key.trim().lowercase()
+                    if (trimmed.removePrefix("frc").any { it.isLetter() }) {
+                        bbotKeysInMatches.add(trimmed)
+                    }
+                }
+            }
+
+            val mappings = mutableListOf<BBotMapping>()
+            val mappedPlaceholders = mutableSetOf<String>()
+            val mappedBBots = mutableSetOf<String>()
+
+            // 1. Map by nickname if nickname matches B-bot pattern (e.g., "254B")
+            allTeams.forEach { row ->
+                val origKey = row[ApiTeams.teamKey].lowercase().trim()
+                val num = row[ApiTeams.teamNumber]
+                val nick = (row[ApiTeams.nickname] ?: "").trim()
+                if (origKey.removePrefix("frc").all { it.isDigit() } &&
+                    nick.matches(Regex("^[0-9]+[a-zA-Z]$"))) {
+                    val bbotKey = "frc" + nick.lowercase()
+                    mappings.add(BBotMapping(bbotKey, origKey, num))
+                    mappedPlaceholders.add(origKey)
+                    mappedBBots.add(bbotKey)
+                }
+            }
+
+            // 2. Map remaining by sorted order
+            val unmappedPlaceholders = allTeams
+                .filter { (it[ApiTeams.teamNumber] >= 9900 || it[ApiTeams.teamKey].removePrefix("frc").startsWith("99")) &&
+                    !mappedPlaceholders.contains(it[ApiTeams.teamKey].lowercase().trim()) }
+                .sortedBy { it[ApiTeams.teamKey] }
+
+            val unmappedBBots = bbotKeysInMatches
+                .filter { !mappedBBots.contains(it) }
+                .sorted()
+
+            val count = minOf(unmappedPlaceholders.size, unmappedBBots.size)
+            for (i in 0 until count) {
+                val placeholder = unmappedPlaceholders[i]
+                val bbotKey = unmappedBBots[i]
+                mappings.add(
+                    BBotMapping(
+                        bbotKey = bbotKey,
+                        placeholderKey = placeholder[ApiTeams.teamKey].lowercase().trim(),
+                        placeholderNumber = placeholder[ApiTeams.teamNumber]
+                    )
+                )
+            }
+
+            mappings
         }
     }
 
@@ -461,6 +629,11 @@ object IntegrationService {
             val normalizedRed = match.redTeams.map { key ->
                 val trimmed = key.trim().lowercase()
                 when {
+                    trimmed.contains('/') -> {
+                        val parts = trimmed.split('/')
+                        val num = parts.last().trim().removePrefix("frc")
+                        "frc$num"
+                    }
                     trimmed.startsWith("frc") -> trimmed
                     trimmed.all { it.isDigit() } -> "frc$trimmed"
                     else -> trimmed
@@ -469,6 +642,11 @@ object IntegrationService {
             val normalizedBlue = match.blueTeams.map { key ->
                 val trimmed = key.trim().lowercase()
                 when {
+                    trimmed.contains('/') -> {
+                        val parts = trimmed.split('/')
+                        val num = parts.last().trim().removePrefix("frc")
+                        "frc$num"
+                    }
                     trimmed.startsWith("frc") -> trimmed
                     trimmed.all { it.isDigit() } -> "frc$trimmed"
                     else -> trimmed
@@ -891,8 +1069,8 @@ object IntegrationService {
                 eventKey = eventKey,
                 teamKey = "frc${teamNumber}",
                 teamNumber = teamNumber,
-                name = obj.readString("name"),
-                nickname = obj.readString("nickname"),
+                name = obj.readString("name") ?: obj.readString("nameFull"),
+                nickname = obj.readString("nickname") ?: obj.readString("nameShort"),
                 city = obj.readString("city"),
                 state = obj.readString("stateProv") ?: obj.readString("state"),
                 country = obj.readString("country"),
@@ -1027,8 +1205,11 @@ private data class TeamSyncRecord(
     val dataJson: String
 )
 
-private fun JsonObject.readString(key: String): String? =
-    (this[key] as? JsonPrimitive)?.content
+private fun JsonObject.readString(key: String): String? {
+    val element = this[key] ?: return null
+    if (element is JsonNull) return null
+    return (element as? JsonPrimitive)?.content
+}
 
 private fun JsonObject.readInt(key: String): Int? =
     (this[key] as? JsonPrimitive)?.content?.toIntOrNull()
