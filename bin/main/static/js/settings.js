@@ -51,9 +51,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Initialize personal setting dropdown
         const personalDisplaySelect = document.getElementById("personal-team-display");
         if (personalDisplaySelect) {
-            personalDisplaySelect.value = localStorage.getItem("obsidianscout:team_display") || "merged";
+            personalDisplaySelect.value = Obsidianscout.safeGetItem("obsidianscout:team_display") || "merged";
             personalDisplaySelect.addEventListener("change", (e) => {
-                localStorage.setItem("obsidianscout:team_display", e.target.value);
+                Obsidianscout.safeSetItem("obsidianscout:team_display", e.target.value);
                 Obsidianscout.showToast("Personal settings saved", "success");
                 window.dispatchEvent(new CustomEvent("obsidianscout:teamdisplaychange", { detail: { format: e.target.value } }));
             });
@@ -132,9 +132,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Initialize personal setting dropdown
             const personalDisplaySelect = document.getElementById("personal-team-display");
             if (personalDisplaySelect) {
-                personalDisplaySelect.value = localStorage.getItem("obsidianscout:team_display") || "merged";
+                personalDisplaySelect.value = Obsidianscout.safeGetItem("obsidianscout:team_display") || "merged";
                 personalDisplaySelect.addEventListener("change", (e) => {
-                    localStorage.setItem("obsidianscout:team_display", e.target.value);
+                    Obsidianscout.safeSetItem("obsidianscout:team_display", e.target.value);
                     Obsidianscout.showToast("Personal settings saved", "success");
                     window.dispatchEvent(new CustomEvent("obsidianscout:teamdisplaychange", { detail: { format: e.target.value } }));
                 });
@@ -511,7 +511,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         inputLabel.value = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
         inputLabel.placeholder = "e.g. Teleop Cycles";
         inputLabel.addEventListener("input", (e) => {
-            const lang = localStorage.getItem('obsidianscout:lang') || 'en';
+            const lang = Obsidianscout.safeGetItem('obsidianscout:lang') || 'en';
             const val = e.target.value;
             if (field && typeof field.label === 'object' && field.label !== null) {
                 field.label[lang] = val;
@@ -792,7 +792,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 inLabel.value = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(option.label) : (option.label || "");
                 inLabel.placeholder = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.option_label_placeholder','Label (e.g. High)') : 'Label (e.g. High)';
                 inLabel.addEventListener("input", (e) => {
-                    const lang = localStorage.getItem('obsidianscout:lang') || 'en';
+                    const lang = Obsidianscout.safeGetItem('obsidianscout:lang') || 'en';
                     const val = e.target.value;
                     if (option && typeof option.label === 'object' && option.label !== null) {
                         option.label[lang] = val;

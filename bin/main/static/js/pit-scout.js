@@ -1,3 +1,7 @@
+let originalMainContentHTML = "";
+let mainContentWrapper = null;
+let mainContent = null;
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -11,101 +15,121 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    const form = document.getElementById("pit-scouting-form");
-    const fieldContainer = document.getElementById("form-fields");
-    const submitButton = document.getElementById("pit-submit");
-    const clearButton = document.getElementById("pit-clear");
-    const teamSelect = document.getElementById("team-select");
-    const timezoneBadge = document.getElementById("timezone-badge");
-    const eventBadge = document.getElementById("event-badge");
-    const formBlocked = document.getElementById("form-blocked");
-
-    const settingsResponse = await Obsidianscout.request("/api/settings");
-    const settings = settingsResponse.settings;
-    const eventKey = Obsidianscout.resolveEventKey(settings);
-    timezoneBadge.textContent = settings.timezone;
-    eventBadge.textContent = eventKey || "Not set";
-
-    await loadTeams(eventKey, teamSelect);
-    let entryCache = await loadEntryCache();
-
-    let config;
-    try {
-        config = await Obsidianscout.request("/api/pit-config");
-    } catch (error) {
-        Obsidianscout.showToast("Unable to load pit config", "error");
-        return;
-    }
-
-    const reserved = new Set(["eventKey", "targetTeamNumber"]);
-    const fields = config.fields || [];
-    fields
-        .filter((field) => !reserved.has(field.id))
-        .forEach((field) => {
-            fieldContainer.appendChild(buildField(field));
-        });
-
-    teamSelect.addEventListener("change", handleSelectionChange);
-
-    if (clearButton) {
-        clearButton.addEventListener("click", () => {
-            clearFormFields(fields, form);
-        });
-    }
-
-    await handleSelectionChange();
-
-    form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        submitButton.disabled = true;
-
-        if (!teamSelect.value) {
-            Obsidianscout.showToast("Select a team", "error");
-            submitButton.disabled = false;
-            return;
-        }
-
-        const payload = buildPayload(config.fields, form);
-        if (!payload) {
-            submitButton.disabled = false;
-            return;
-        }
-
-        payload.eventKey = eventKey;
-        payload.targetTeamNumber = Number(teamSelect.value);
-
-        try {
-            await Obsidianscout.request("/api/pit-scouting", {
-                method: "POST",
-                json: {
-                    data: payload
-                }
-            });
-            Obsidianscout.showToast("Pit entry saved", "success");
-            entryCache = await loadEntryCache();
-        } catch (error) {
-            Obsidianscout.showToast(error.message || "Failed to save", "error");
-        } finally {
-            submitButton.disabled = false;
-        }
-    });
-
-    async function handleSelectionChange() {
-        const teamValue = teamSelect.value;
-        const ready = Boolean(teamValue);
-        setFormEnabled(form, formBlocked, ready);
-        clearFormFields(fields, form);
-
-        if (!ready) {
-            return;
-        }
-
-        const entry = findEntry(entryCache, eventKey, Number(teamValue));
-        if (entry) {
-            applyEntryToForm(entry, fields, form);
-        }
+    mainContent = document.querySelector(".main-content");
+    if (mainContent) {
+        const siblings = Array.from(mainContent.children);
+        mainContentWrapper = document.createElement("div");
+        mainContentWrapper.id = "pit-scout-wrapper";
+        siblings.forEach(child => mainContentWrapper.appendChild(child));
+        mainContent.appendChild(mainContentWrapper);
+        originalMainContentHTML = mainContentWrapper.innerHTML;
+        await loadPitScoutPageData(me);
     }
 });
+
+async function loadPitScoutPageData(me) {
+    if (!mainContentWrapper) return;
+    Obsidianscout.showLoadingSpinner(mainContentWrapper, "Loading pit scouting form...");
+
+    try {
+        const settingsResponse = await Obsidianscout.request("/api/settings");
+        const settings = settingsResponse.settings;
+        const eventKey = Obsidianscout.resolveEventKey(settings);
+        
+        const config = await Obsidianscout.request("/api/pit-config");
+
+        // Restore original HTML
+        mainContentWrapper.innerHTML = originalMainContentHTML;
+
+        // Re-query elements
+        const form = document.getElementById("pit-scouting-form");
+        const fieldContainer = document.getElementById("form-fields");
+        const submitButton = document.getElementById("pit-submit");
+        const clearButton = document.getElementById("pit-clear");
+        const teamSelect = document.getElementById("team-select");
+        const timezoneBadge = document.getElementById("timezone-badge");
+        const eventBadge = document.getElementById("event-badge");
+        const formBlocked = document.getElementById("form-blocked");
+
+        timezoneBadge.textContent = settings.timezone;
+        eventBadge.textContent = eventKey || "Not set";
+
+        await loadTeams(eventKey, teamSelect);
+        let entryCache = await loadEntryCache();
+
+        const reserved = new Set(["eventKey", "targetTeamNumber"]);
+        const fields = config.fields || [];
+        fields
+            .filter((field) => !reserved.has(field.id))
+            .forEach((field) => {
+                fieldContainer.appendChild(buildField(field));
+            });
+
+        teamSelect.addEventListener("change", handleSelectionChange);
+
+        if (clearButton) {
+            clearButton.addEventListener("click", () => {
+                clearFormFields(fields, form);
+            });
+        }
+
+        await handleSelectionChange();
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            submitButton.disabled = true;
+
+            if (!teamSelect.value) {
+                Obsidianscout.showToast("Select a team", "error");
+                submitButton.disabled = false;
+                return;
+            }
+
+            const payload = buildPayload(config.fields, form);
+            if (!payload) {
+                submitButton.disabled = false;
+                return;
+            }
+
+            payload.eventKey = eventKey;
+            payload.targetTeamNumber = Number(teamSelect.value);
+
+            try {
+                await Obsidianscout.request("/api/pit-scouting", {
+                    method: "POST",
+                    json: {
+                        data: payload
+                    }
+                });
+                Obsidianscout.showToast("Pit entry saved", "success");
+                entryCache = await loadEntryCache();
+            } catch (error) {
+                Obsidianscout.showToast(error.message || "Failed to save", "error");
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+
+        async function handleSelectionChange() {
+            const teamValue = teamSelect.value;
+            const ready = Boolean(teamValue);
+            setFormEnabled(form, formBlocked, ready);
+            clearFormFields(fields, form);
+
+            if (!ready) {
+                return;
+            }
+
+            const entry = findEntry(entryCache, eventKey, Number(teamValue));
+            if (entry) {
+                applyEntryToForm(entry, fields, form);
+            }
+        }
+    } catch (error) {
+        console.error("Failed to load pit scout page:", error);
+        Obsidianscout.showRetryButton(mainContentWrapper, "Failed to load pit scouting config: " + error.message, () => loadPitScoutPageData(me));
+    }
+}
 
 async function loadTeams(eventKey, teamSelect) {
     const teams = eventKey ? await Obsidianscout.request(`/api/teams?eventKey=${eventKey}`) : [];

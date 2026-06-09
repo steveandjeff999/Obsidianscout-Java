@@ -15,6 +15,18 @@
 </head>
 
 <body data-page="settings">
+        <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
 
     <div class="orb orb-2"></div>
 

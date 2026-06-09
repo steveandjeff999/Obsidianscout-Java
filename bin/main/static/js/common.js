@@ -9,6 +9,31 @@
     const servedFromCache = new Set();
     const activeFetches = new Set();
 
+    function safeGetItem(key) {
+        try {
+            return localStorage.getItem(key);
+        } catch (e) {
+            console.warn("[Storage] Failed to read from localStorage:", e);
+            return null;
+        }
+    }
+
+    function safeSetItem(key, value) {
+        try {
+            localStorage.setItem(key, value);
+        } catch (e) {
+            console.warn("[Storage] Failed to write to localStorage:", e);
+        }
+    }
+
+    function safeRemoveItem(key) {
+        try {
+            localStorage.removeItem(key);
+        } catch (e) {
+            console.warn("[Storage] Failed to remove from localStorage:", e);
+        }
+    }
+
     function triggerBackgroundRevalidate(path, cachedText) {
         if (!navigator.onLine) return;
         if (activeFetches.has(path)) return;
@@ -31,7 +56,7 @@
                     const text = await response.text();
                     if (text !== cachedText) {
                         console.log(`[Offline Cache] Background revalidation succeeded for ${path}. Data changed, updating cache and refreshing.`);
-                        localStorage.setItem("cache:" + path, text);
+                        safeSetItem("cache:" + path, text);
                         
                         const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config'].includes(document.body.dataset.page);
                         const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
@@ -55,7 +80,7 @@
         const controller = new AbortController();
         const defaultTimeout = options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS;
         const method = options.method || "GET";
-        const hasCache = method === "GET" && localStorage.getItem("cache:" + path) !== null;
+        const hasCache = method === "GET" && safeGetItem("cache:" + path) !== null;
         const timeoutMs = (method === "GET" && hasCache) ? Math.min(3000, defaultTimeout) : defaultTimeout;
         const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
         const opts = {
@@ -89,7 +114,7 @@
 
             if (opts.method === "GET") {
                 try {
-                    localStorage.setItem("cache:" + path, text);
+                    safeSetItem("cache:" + path, text);
                 } catch (e) {
                     console.warn("[Offline Cache] Storage quota exceeded or unavailable:", e);
                 }
@@ -105,14 +130,14 @@
                     // If the server explicitly returned 401 (Unauthorized), we are logged out.
                     // Clear the cache and propagate the error.
                     if (error.status === 401) {
-                        localStorage.removeItem("cache:/api/auth/me");
+                        safeRemoveItem("cache:/api/auth/me");
                         throw error;
                     }
                     
                     // If it is a network error, timeout, or server-side 5xx error,
                     // we want to fall back to the cached auth state.
                     if (isTimeout || error.status === undefined || error.status === null || error.status >= 500) {
-                        const cachedText = localStorage.getItem("cache:/api/auth/me");
+                        const cachedText = safeGetItem("cache:/api/auth/me");
                         if (cachedText !== null) {
                             console.log("[Offline Cache] Serving cached response for auth state");
                             servedFromCache.add(path);
@@ -122,7 +147,7 @@
                     }
                 } else {
                     // For other GET requests, fall back to cache on any error (original behavior)
-                    const cachedText = localStorage.getItem("cache:" + path);
+                    const cachedText = safeGetItem("cache:" + path);
                     if (cachedText !== null) {
                         console.log("[Offline Cache] Serving cached response for:", path);
                         servedFromCache.add(path);
@@ -159,7 +184,7 @@
     }
 
     // i18n support
-    const DEFAULT_LANG = localStorage.getItem("obsidianscout:lang") || "en";
+    const DEFAULT_LANG = safeGetItem("obsidianscout:lang") || "en";
     let currentLang = DEFAULT_LANG;
     const i18nCache = {};
 
@@ -168,7 +193,7 @@
         if (i18nCache[lang]) return i18nCache[lang];
         // Try localStorage first
         try {
-            const cached = localStorage.getItem(`i18n:${lang}`);
+            const cached = safeGetItem(`i18n:${lang}`);
             if (cached) {
                 const parsed = JSON.parse(cached);
                 i18nCache[lang] = parsed;
@@ -183,7 +208,7 @@
             if (!res.ok) throw new Error("Locale fetch failed");
             const json = await res.json();
             i18nCache[lang] = json;
-            try { localStorage.setItem(`i18n:${lang}`, JSON.stringify(json)); } catch (e) {}
+            safeSetItem(`i18n:${lang}`, JSON.stringify(json));
             return json;
         } catch (error) {
             if (lang !== "en") return loadLocale("en");
@@ -224,7 +249,7 @@
 
     async function setLanguage(lang) {
         currentLang = lang || 'en';
-        localStorage.setItem('obsidianscout:lang', currentLang);
+        safeSetItem('obsidianscout:lang', currentLang);
         await loadLocale(currentLang);
         applyTranslations();
         window.dispatchEvent(new CustomEvent('obsidianscout:languagechange', { detail: { lang: currentLang } }));
@@ -301,7 +326,7 @@
                 opt.textContent = o.l;
                 sel.appendChild(opt);
             });
-            sel.value = localStorage.getItem('obsidianscout:lang') || 'en';
+            sel.value = safeGetItem('obsidianscout:lang') || 'en';
             sel.addEventListener('change', async (e) => {
                 await setLanguage(e.target.value);
                 updateConnectionStatus();
@@ -414,7 +439,7 @@
         button.addEventListener("click", async () => {
             try {
                 await request("/api/auth/logout", { method: "POST" });
-                localStorage.removeItem("cache:/api/auth/me");
+                safeRemoveItem("cache:/api/auth/me");
                 window.location.href = "/";
             } catch (error) {
                 showToast(error.message || "Failed to sign out", "error");
@@ -423,7 +448,7 @@
     }
 
     function initTheme() {
-        const saved = localStorage.getItem("obsidian-theme") || "light";
+        const saved = safeGetItem("obsidian-theme") || "light";
         document.body.classList.toggle("theme-dark", saved === "dark");
     }
 
@@ -434,7 +459,7 @@
         }
         toggle.addEventListener("click", () => {
             const isDark = document.body.classList.toggle("theme-dark");
-            localStorage.setItem("obsidian-theme", isDark ? "dark" : "light");
+            safeSetItem("obsidian-theme", isDark ? "dark" : "light");
         });
     }
 
@@ -548,11 +573,11 @@
             toggle.textContent = collapsed ? ">>" : "<<";
             toggle.setAttribute("aria-expanded", (!collapsed).toString());
             if (persist) {
-                localStorage.setItem(sidebarCollapseKey, collapsed ? "1" : "0");
+                safeSetItem(sidebarCollapseKey, collapsed ? "1" : "0");
             }
         };
 
-        const stored = localStorage.getItem(sidebarCollapseKey);
+        const stored = safeGetItem(sidebarCollapseKey);
         // If user has previously chosen a state, respect it. Otherwise default to
         // collapsed on narrow viewports for better mobile UX.
         const initial = (stored !== null) ? (stored === "1") : (window.innerWidth < 900);
@@ -630,7 +655,7 @@
         const text = widget.querySelector(".status-text");
         const syncBtn = widget.querySelector("#btn-sync-offline");
 
-        const pending = JSON.parse(localStorage.getItem("pending_scouting_entries") || "[]");
+        const pending = JSON.parse(safeGetItem("pending_scouting_entries") || "[]");
         const count = pending.length;
 
         const isOnline = navigator.onLine;
@@ -660,7 +685,7 @@
 
     async function syncOfflineEntries() {
         if (!navigator.onLine) return;
-        const pending = JSON.parse(localStorage.getItem("pending_scouting_entries") || "[]");
+        const pending = JSON.parse(safeGetItem("pending_scouting_entries") || "[]");
         if (!pending.length) return;
 
         const syncBtn = document.querySelector("#btn-sync-offline");
@@ -685,7 +710,7 @@
             }
         }
 
-        localStorage.setItem("pending_scouting_entries", JSON.stringify(remaining));
+        safeSetItem("pending_scouting_entries", JSON.stringify(remaining));
 
         if (successCount > 0) {
             showToast(`Successfully synced ${successCount} offline entries!`, "success");
@@ -726,11 +751,11 @@
             syncOfflineEntries();
         }
         // Load selected language bundle and apply translations
-        loadLocale(localStorage.getItem('obsidianscout:lang') || 'en').then(() => applyTranslations());
+        loadLocale(safeGetItem('obsidianscout:lang') || 'en').then(() => applyTranslations());
     });
 
     window.addEventListener("beforeunload", (event) => {
-        const pending = JSON.parse(localStorage.getItem("pending_scouting_entries") || "[]");
+        const pending = JSON.parse(safeGetItem("pending_scouting_entries") || "[]");
         if (pending.length > 0) {
             const message = (typeof t === 'function') ? t('unsynced_entries','You have unsynced offline scouting entries! If you leave, they might not be synced to the server.') : "You have unsynced offline scouting entries! If you leave, they might not be synced to the server.";
             event.returnValue = message;
@@ -755,7 +780,7 @@
             return keyPart;
         }
         
-        const displayPref = localStorage.getItem("obsidianscout:team_display") || "merged";
+        const displayPref = safeGetItem("obsidianscout:team_display") || "merged";
         if (displayPref === "number") {
             return numPart;
         } else if (displayPref === "key") {
@@ -819,5 +844,8 @@
         ,setLanguage
         ,localize
         ,formatTeam
+        ,safeGetItem
+        ,safeSetItem
+        ,safeRemoveItem
     };
 })();

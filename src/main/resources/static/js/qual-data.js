@@ -802,7 +802,7 @@ function groupFields(fields) {
 
 function loadPendingEntries() {
     try {
-        const raw = JSON.parse(localStorage.getItem("pending_qualitative_entries") || "[]");
+        const raw = JSON.parse(Obsidianscout.safeGetItem("pending_qualitative_entries") || "[]");
         return Array.isArray(raw) ? raw : [];
     } catch (error) {
         return [];

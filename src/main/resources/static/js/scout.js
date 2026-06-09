@@ -1,3 +1,7 @@
+let originalMainContentHTML = "";
+let mainContentWrapper = null;
+let mainContent = null;
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -11,155 +15,175 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    const form = document.getElementById("scouting-form");
-    const fieldContainer = document.getElementById("form-fields");
-    const submitButton = document.getElementById("scout-submit");
-    const teamSelect = document.getElementById("team-select");
-    const matchSelect = document.getElementById("match-select");
-    const timezoneBadge = document.getElementById("timezone-badge");
-    const eventBadge = document.getElementById("event-badge");
-    const clearButton = document.getElementById("scout-clear");
-    const formBlocked = document.getElementById("form-blocked");
-    const pointsPreviewCard = document.getElementById("points-preview");
-
-    const settingsResponse = await Obsidianscout.request("/api/settings");
-    const settings = settingsResponse.settings;
-    const eventKey = Obsidianscout.resolveEventKey(settings);
-    timezoneBadge.textContent = settings.timezone;
-    if (eventBadge) {
-        eventBadge.textContent = eventKey || "Not set";
-    }
-
-    let entryCache = [];
-    let matches = [];
-
-    const dataBundle = await loadTeamsAndMatches(eventKey, teamSelect, matchSelect, settings.timezone);
-    matches = dataBundle.matches;
-
-    entryCache = await loadEntryCache();
-
-    teamSelect.addEventListener("change", async () => {
-        updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value);
-        matchSelect.value = "";
-        await handleSelectionChange();
-    });
-
-    matchSelect.addEventListener("change", async () => {
-        await handleSelectionChange();
-    });
-
-    let config;
-    try {
-        config = await Obsidianscout.request("/api/config");
-    } catch (error) {
-        Obsidianscout.showToast("Unable to load config", "error");
-        return;
-    }
-
-    const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
-    const fields = injectSections(config.fields || []);
-    fields
-        .filter((field) => !reserved.has(field.id))
-        .forEach((field) => {
-            const node = buildField(field);
-            fieldContainer.appendChild(node);
-        });
-
-    const pointsPreview = {
-        auto: document.getElementById("points-auto"),
-        teleop: document.getElementById("points-teleop"),
-        endgame: document.getElementById("points-endgame"),
-        total: document.getElementById("points-total")
-    };
-
-    fieldContainer.addEventListener("input", () => updatePointsPreview(fields, form, pointsPreview));
-    fieldContainer.addEventListener("change", () => updatePointsPreview(fields, form, pointsPreview));
-    updatePointsPreview(fields, form, pointsPreview);
-
-    if (clearButton) {
-        clearButton.addEventListener("click", () => {
-            clearFormFields(fields, form);
-            updatePointsPreview(fields, form, pointsPreview);
-        });
-    }
-
-    await handleSelectionChange();
-
-    form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        submitButton.disabled = true;
-
-        if (!teamSelect.value || !matchSelect.value) {
-            Obsidianscout.showToast("Select both a team and a match", "error");
-            submitButton.disabled = false;
-            return;
-        }
-
-        const payload = buildPayload(config.fields, form);
-        if (!payload) {
-            submitButton.disabled = false;
-            return;
-        }
-
-        payload.eventKey = eventKey;
-        payload.targetTeamNumber = teamSelect.value ? Number(teamSelect.value) : null;
-        payload.matchKey = matchSelect.value || null;
-        const selectedMatch = matchSelect.value ? matchSelect.selectedOptions[0] : null;
-        const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
-        payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
-
-        try {
-            await Obsidianscout.request("/api/scouting", {
-                method: "POST",
-                json: {
-                    data: payload
-                }
-            });
-            Obsidianscout.showToast("Entry saved", "success");
-            entryCache = await loadEntryCache();
-        } catch (error) {
-            if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
-                const pending = JSON.parse(localStorage.getItem("pending_scouting_entries") || "[]");
-                pending.push({
-                    data: payload
-                });
-                localStorage.setItem("pending_scouting_entries", JSON.stringify(pending));
-                
-                Obsidianscout.showToast("Saved locally (Offline mode)", "success");
-                Obsidianscout.updateConnectionStatus();
-                
-                clearFormFields(fields, form);
-                updatePointsPreview(fields, form, pointsPreview);
-                handleSelectionChange();
-            } else {
-                Obsidianscout.showToast(error.message || "Failed to save", "error");
-            }
-        } finally {
-            submitButton.disabled = false;
-        }
-    });
-
-    async function handleSelectionChange() {
-        const teamValue = teamSelect.value;
-        const matchValue = matchSelect.value;
-        const ready = Boolean(teamValue && matchValue);
-        setFormEnabled(form, formBlocked, pointsPreviewCard, ready);
-
-        clearFormFields(fields, form);
-        updatePointsPreview(fields, form, pointsPreview);
-
-        if (!ready) {
-            return;
-        }
-
-        const teamNumber = Number(teamValue);
-        const entry = findEntry(entryCache, eventKey, teamNumber, matchValue);
-        if (entry) {
-            applyEntryToForm(entry, fields, form);
-            updatePointsPreview(fields, form, pointsPreview);
-        }
+    mainContent = document.querySelector(".main-content");
+    if (mainContent) {
+        const siblings = Array.from(mainContent.children);
+        mainContentWrapper = document.createElement("div");
+        mainContentWrapper.id = "scout-wrapper";
+        siblings.forEach(child => mainContentWrapper.appendChild(child));
+        mainContent.appendChild(mainContentWrapper);
+        originalMainContentHTML = mainContentWrapper.innerHTML;
+        await loadScoutPageData(me);
     }
 });
+
+async function loadScoutPageData(me) {
+    if (!mainContentWrapper) return;
+    Obsidianscout.showLoadingSpinner(mainContentWrapper, "Loading scouting form...");
+
+    try {
+        const settingsResponse = await Obsidianscout.request("/api/settings");
+        const settings = settingsResponse.settings;
+        const eventKey = Obsidianscout.resolveEventKey(settings);
+        
+        const config = await Obsidianscout.request("/api/config");
+
+        // Restore original HTML
+        mainContentWrapper.innerHTML = originalMainContentHTML;
+
+        // Re-query elements
+        const form = document.getElementById("scouting-form");
+        const fieldContainer = document.getElementById("form-fields");
+        const submitButton = document.getElementById("scout-submit");
+        const teamSelect = document.getElementById("team-select");
+        const matchSelect = document.getElementById("match-select");
+        const timezoneBadge = document.getElementById("timezone-badge");
+        const eventBadge = document.getElementById("event-badge");
+        const clearButton = document.getElementById("scout-clear");
+        const formBlocked = document.getElementById("form-blocked");
+        const pointsPreviewCard = document.getElementById("points-preview");
+
+        timezoneBadge.textContent = settings.timezone;
+        if (eventBadge) {
+            eventBadge.textContent = eventKey || "Not set";
+        }
+
+        let entryCache = [];
+        let matches = [];
+
+        const dataBundle = await loadTeamsAndMatches(eventKey, teamSelect, matchSelect, settings.timezone);
+        matches = dataBundle.matches;
+
+        entryCache = await loadEntryCache();
+
+        teamSelect.addEventListener("change", async () => {
+            updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value);
+            matchSelect.value = "";
+            await handleSelectionChange();
+        });
+
+        matchSelect.addEventListener("change", async () => {
+            await handleSelectionChange();
+        });
+
+        const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
+        const fields = injectSections(config.fields || []);
+        fields
+            .filter((field) => !reserved.has(field.id))
+            .forEach((field) => {
+                const node = buildField(field);
+                fieldContainer.appendChild(node);
+            });
+
+        const pointsPreview = {
+            auto: document.getElementById("points-auto"),
+            teleop: document.getElementById("points-teleop"),
+            endgame: document.getElementById("points-endgame"),
+            total: document.getElementById("points-total")
+        };
+
+        fieldContainer.addEventListener("input", () => updatePointsPreview(fields, form, pointsPreview));
+        fieldContainer.addEventListener("change", () => updatePointsPreview(fields, form, pointsPreview));
+        updatePointsPreview(fields, form, pointsPreview);
+
+        if (clearButton) {
+            clearButton.addEventListener("click", () => {
+                clearFormFields(fields, form);
+                updatePointsPreview(fields, form, pointsPreview);
+            });
+        }
+
+        await handleSelectionChange();
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            submitButton.disabled = true;
+
+            if (!teamSelect.value || !matchSelect.value) {
+                Obsidianscout.showToast("Select both a team and a match", "error");
+                submitButton.disabled = false;
+                return;
+            }
+
+            const payload = buildPayload(config.fields, form);
+            if (!payload) {
+                submitButton.disabled = false;
+                return;
+            }
+
+            payload.eventKey = eventKey;
+            payload.targetTeamNumber = teamSelect.value ? Number(teamSelect.value) : null;
+            payload.matchKey = matchSelect.value || null;
+            const selectedMatch = matchSelect.value ? matchSelect.selectedOptions[0] : null;
+            const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+            payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+
+            try {
+                await Obsidianscout.request("/api/scouting", {
+                    method: "POST",
+                    json: {
+                        data: payload
+                    }
+                });
+                Obsidianscout.showToast("Entry saved", "success");
+                entryCache = await loadEntryCache();
+            } catch (error) {
+                if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                    const pending = JSON.parse(Obsidianscout.safeGetItem("pending_scouting_entries") || "[]");
+                    pending.push({
+                        data: payload
+                    });
+                    Obsidianscout.safeSetItem("pending_scouting_entries", JSON.stringify(pending));
+                    
+                    Obsidianscout.showToast("Saved locally (Offline mode)", "success");
+                    Obsidianscout.updateConnectionStatus();
+                    
+                    clearFormFields(fields, form);
+                    updatePointsPreview(fields, form, pointsPreview);
+                    handleSelectionChange();
+                } else {
+                    Obsidianscout.showToast(error.message || "Failed to save", "error");
+                }
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+
+        async function handleSelectionChange() {
+            const teamValue = teamSelect.value;
+            const matchValue = matchSelect.value;
+            const ready = Boolean(teamValue && matchValue);
+            setFormEnabled(form, formBlocked, pointsPreviewCard, ready);
+
+            clearFormFields(fields, form);
+            updatePointsPreview(fields, form, pointsPreview);
+
+            if (!ready) {
+                return;
+            }
+
+            const teamNumber = Number(teamValue);
+            const entry = findEntry(entryCache, eventKey, teamNumber, matchValue);
+            if (entry) {
+                applyEntryToForm(entry, fields, form);
+                updatePointsPreview(fields, form, pointsPreview);
+            }
+        }
+    } catch (error) {
+        console.error("Failed to load scout page config:", error);
+        Obsidianscout.showRetryButton(mainContentWrapper, "Failed to load scouting form config: " + error.message, () => loadScoutPageData(me));
+    }
+}
 
 async function loadTeamsAndMatches(eventKey, teamSelect, matchSelect, timezone) {
     const teams = eventKey ? await Obsidianscout.request(`/api/teams?eventKey=${eventKey}`) : [];
