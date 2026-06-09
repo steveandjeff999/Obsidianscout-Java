@@ -91,15 +91,55 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
     // Generate run scripts in the destination directory
     doLast {
         val bundleDir = rootProject.layout.buildDirectory.dir("bundle").get().asFile
-        
+
         // Windows run script
         val runBat = File(bundleDir, "run.bat")
         runBat.writeText("@echo off\r\njava -jar obsidianscout-server.jar\r\npause\r\n")
-        
+
         // Unix run script
         val runSh = File(bundleDir, "run.sh")
         runSh.writeText("#!/bin/sh\njava -jar obsidianscout-server.jar\n")
         runSh.setExecutable(true, false)
+
+        // Windows reset-superadmin script
+        val resetBat = File(bundleDir, "reset-superadmin.bat")
+        resetBat.writeText(
+            "@echo off\r\n" +
+            "java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt %*\r\n" +
+            "pause\r\n"
+        )
+
+        // Unix reset-superadmin script
+        val resetSh = File(bundleDir, "reset-superadmin.sh")
+        resetSh.writeText("#!/bin/sh\njava -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n")
+        resetSh.setExecutable(true, false)
+
+
+        // Sanitize secrets in the copied config — reset every known secret field
+        // to "changeme" so the bundle ships with clear, consistent placeholders.
+        // The server auto-generates real random secrets on first startup (except
+        // adminPassword and postgres password, which must be set manually).
+        val configFile = File(bundleDir, "config/app-config.json")
+        if (configFile.exists()) {
+            var text = configFile.readText()
+            // Each replacement targets a specific JSON key so unrelated values are
+            // never accidentally clobbered.
+            val secretFields = listOf(
+                "sessionSecret",
+                "keystorePassword",
+                "adminPassword",
+                "password"   // covers database.postgres.password
+            )
+            for (field in secretFields) {
+                // Matches: "fieldName": "<any value>" and replaces the value with "changeme"
+                text = text.replace(
+                    Regex("(\"$field\"\\s*:\\s*)\"[^\"]*\""),
+                    "\$1\"changeme\""
+                )
+            }
+            configFile.writeText(text)
+            println("Sanitized secrets in bundle config: ${configFile.absolutePath}")
+        }
     }
 }
 

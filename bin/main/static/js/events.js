@@ -9,6 +9,9 @@ function localize(value) {
     return (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(value) : value;
 }
 
+let originalTableCardHTML = "";
+let tableCard = null;
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -23,45 +26,73 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    const settingsResponse = await Obsidianscout.request("/api/settings");
-    const settings = settingsResponse.settings;
-    const year = settings.year;
-
-    // Show/hide admin specific UI parts
-    const isAdmin = Obsidianscout.isAdmin(me.role);
-    if (isAdmin) {
-        document.getElementById("add-event-btn").classList.remove("hidden");
-        const actionHeaders = document.querySelectorAll(".admin-only");
-        actionHeaders.forEach(h => h.classList.remove("hidden"));
+    const table = document.getElementById("events-table");
+    if (table) {
+        tableCard = table.closest(".card");
+        if (tableCard) {
+            originalTableCardHTML = tableCard.innerHTML;
+        }
     }
 
-    await loadEvents(year, true);
-
-    const syncButton = document.getElementById("sync-events");
-    if (!isAdmin) {
-        syncButton.disabled = true;
-    } else {
-        syncButton.addEventListener("click", async () => {
-            syncButton.disabled = true;
-            try {
-                const response = await Obsidianscout.request("/api/integrations/sync/events", { method: "POST" });
-                Obsidianscout.showToast(response.message || t("events.synced", "Events synced"), "success");
-                await loadEvents(year, true);
-            } catch (error) {
-                Obsidianscout.showToast(error.message || t("events.sync_failed", "Sync failed"), "error");
-            } finally {
-                syncButton.disabled = false;
-            }
-        });
-
-        setupModal(year);
-    }
+    await initEventsPage();
 });
+
+async function initEventsPage() {
+    if (!tableCard) return;
+    Obsidianscout.showLoadingSpinner(tableCard, "Loading settings and events...");
+
+    try {
+        const settingsResponse = await Obsidianscout.request("/api/settings");
+        const settings = settingsResponse.settings;
+        const year = settings.year;
+
+        // Restore HTML
+        tableCard.innerHTML = originalTableCardHTML;
+
+        // Show/hide admin specific UI parts
+        const isAdmin = Obsidianscout.isAdmin(currentUser.role);
+        if (isAdmin) {
+            document.getElementById("add-event-btn").classList.remove("hidden");
+            const actionHeaders = document.querySelectorAll(".admin-only");
+            actionHeaders.forEach(h => h.classList.remove("hidden"));
+        }
+
+        const syncButton = document.getElementById("sync-events");
+        if (!isAdmin) {
+            if (syncButton) syncButton.disabled = true;
+        } else {
+            if (syncButton) {
+                syncButton.addEventListener("click", async () => {
+                    syncButton.disabled = true;
+                    try {
+                        const response = await Obsidianscout.request("/api/integrations/sync/events", { method: "POST" });
+                        Obsidianscout.showToast(response.message || t("events.synced", "Events synced"), "success");
+                        await loadEvents(year, true);
+                    } catch (error) {
+                        Obsidianscout.showToast(error.message || t("events.sync_failed", "Sync failed"), "error");
+                    } finally {
+                        syncButton.disabled = false;
+                    }
+                });
+            }
+
+            setupModal(year);
+        }
+
+        await loadEvents(year, true);
+
+    } catch (error) {
+        console.error("Failed to initialize events page:", error);
+        Obsidianscout.showRetryButton(tableCard, "Failed to initialize: " + error.message, initEventsPage);
+    }
+}
 
 async function loadEvents(year, cachedOnly) {
     const table = document.getElementById("events-table");
+    if (!table) return;
     const body = table.querySelector("tbody");
-    body.innerHTML = "";
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading events...</div></td></tr>';
 
     try {
         const cachedParam = cachedOnly ? "&cached=1" : "";
@@ -146,7 +177,15 @@ async function loadEvents(year, cachedOnly) {
             });
         }
     } catch (error) {
-        Obsidianscout.showToast(t("events.load_failed", "Unable to load events"), "error");
+        console.error("Failed to load events:", error);
+        body.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 24px;">
+            <div class="retry-error-text" style="margin-bottom: 12px;">${t("events.load_failed", "Unable to load events")}: ${error.message}</div>
+            <button class="retry-btn" type="button" id="retry-events-btn">${t("btn.retry", "Retry")}</button>
+        </td></tr>`;
+        const retryBtn = document.getElementById("retry-events-btn");
+        if (retryBtn) {
+            retryBtn.addEventListener("click", () => loadEvents(year, cachedOnly));
+        }
     }
 }
 
@@ -242,4 +281,3 @@ function openEditModal(event) {
 
     modal.classList.add("show");
 }
-

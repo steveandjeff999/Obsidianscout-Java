@@ -89,52 +89,31 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Network-First strategy with Cache Fallback for HTML/navigation pages
-    if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
-        event.respondWith(
-            fetchWithTimeout(event.request, NAVIGATION_TIMEOUT_MS)
-                .then((response) => {
-                    // Update cache with the fresh page
-                    const responseClone = response.clone();
+    // Stale-While-Revalidate strategy for HTML/navigation pages and static assets
+    event.respondWith(
+        caches.match(event.request).then((cachedResponse) => {
+            const fetchPromise = fetch(event.request).then((networkResponse) => {
+                if (networkResponse.status === 200) {
+                    const responseClone = networkResponse.clone();
                     caches.open(CACHE_NAME).then((cache) => {
                         cache.put(event.request, responseClone);
                     });
-                    return response;
-                })
-                .catch(() => {
-                    // Fall back to cache
-                    return caches.match(event.request).then((cachedResponse) => {
-                        if (cachedResponse) {
-                            return cachedResponse;
-                        }
-                        // Fallback to index.html if we are completely offline and page is not cached
-                        return caches.match('/');
-                    });
-                })
-        );
-        return;
-    }
-
-    // Cache-First strategy with Network Fallback for static assets (CSS, JS)
-    event.respondWith(
-        caches.match(event.request)
-            .then((cachedResponse) => {
-                if (cachedResponse) {
-                    return cachedResponse;
                 }
-                return fetch(event.request).then((response) => {
-                    // Cache the newly fetched asset
-                    if (response.status === 200) {
-                        const responseClone = response.clone();
-                        caches.open(CACHE_NAME).then((cache) => {
-                            cache.put(event.request, responseClone);
-                        });
-                    }
-                    return response;
-                });
-            })
-            .catch(() => {
-                // If both fail, let it error naturally
-            })
+                return networkResponse;
+            }).catch(() => {
+                // Ignore fetch errors in background revalidation
+            });
+
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+
+            // If it's a navigation request and not in cache, fallback to '/' (index.html) if offline
+            if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
+                return fetchPromise.catch(() => caches.match('/'));
+            }
+
+            return fetchPromise;
+        })
     );
 });

@@ -21,9 +21,14 @@ import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.sql.DriverManager
 
 object DatabaseFactory {
     fun init(config: DatabaseConfig) {
+        if (config.type.lowercase() == "postgres") {
+            ensurePostgresDatabaseExists(config)
+        }
+
         val hikariConfig = HikariConfig().apply {
             val type = config.type.lowercase()
             val jdbcUrl = when (type) {
@@ -37,8 +42,12 @@ object DatabaseFactory {
                 "org.sqlite.JDBC"
             }
             maximumPoolSize = 10
+            minimumIdle = 2
+            connectionTimeout = 10_000  // fail fast after 10s instead of the 30s default
             isAutoCommit = false
             if (type == "postgres") {
+                username = config.postgres.user
+                password = config.postgres.password
                 transactionIsolation = "TRANSACTION_READ_COMMITTED"
             }
         }
@@ -77,6 +86,39 @@ object DatabaseFactory {
             "$base?sslmode=require"
         } else {
             base
+        }
+    }
+
+    /**
+     * Connects to the default "postgres" maintenance database and creates the
+     * target database if it does not already exist.  PostgreSQL does not support
+     * CREATE DATABASE inside a transaction, so we use autoCommit = true on a
+     * plain JDBC connection rather than going through Exposed/HikariCP.
+     */
+    private fun ensurePostgresDatabaseExists(config: DatabaseConfig) {
+        val pg = config.postgres
+        val sslSuffix = if (pg.ssl) "?sslmode=require" else ""
+        val maintenanceUrl = "jdbc:postgresql://${pg.host}:${pg.port}/postgres$sslSuffix"
+        DriverManager.getConnection(maintenanceUrl, pg.user, pg.password).use { conn ->
+            conn.autoCommit = true
+            // Identifiers in PostgreSQL are case-folded to lower-case unless quoted.
+            val dbName = pg.database.lowercase()
+            conn.createStatement().use { stmt ->
+                val exists = conn
+                    .prepareStatement("SELECT 1 FROM pg_database WHERE datname = ?")
+                    .also { it.setString(1, dbName) }
+                    .executeQuery()
+                    .next()
+                if (!exists) {
+                    // Database name is validated to be lowercase alphanumeric+underscore
+                    // to prevent SQL injection via the config file.
+                    require(dbName.matches(Regex("[a-z0-9_]+"))) {
+                        "Postgres database name must contain only lowercase letters, digits, and underscores."
+                    }
+                    stmt.execute("CREATE DATABASE \"$dbName\"")
+                    println("Created PostgreSQL database: $dbName")
+                }
+            }
         }
     }
 }

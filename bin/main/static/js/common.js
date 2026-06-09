@@ -6,16 +6,67 @@
     // Role hierarchy (lower index = higher privilege)
     const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "SCOUT"];
 
+    const servedFromCache = new Set();
+    const activeFetches = new Set();
+
+    function triggerBackgroundRevalidate(path, cachedText) {
+        if (!navigator.onLine) return;
+        if (activeFetches.has(path)) return;
+        activeFetches.add(path);
+
+        setTimeout(async () => {
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 10000);
+                const response = await fetch(path, {
+                    method: "GET",
+                    headers: {},
+                    credentials: "same-origin",
+                    signal: controller.signal,
+                    cache: "no-cache"
+                });
+                clearTimeout(timeout);
+
+                if (response.ok) {
+                    const text = await response.text();
+                    if (text !== cachedText) {
+                        console.log(`[Offline Cache] Background revalidation succeeded for ${path}. Data changed, updating cache and refreshing.`);
+                        localStorage.setItem("cache:" + path, text);
+                        
+                        const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config'].includes(document.body.dataset.page);
+                        const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
+                        
+                        if (isDataPage && !isUserEditing) {
+                            window.location.reload();
+                        }
+                    } else {
+                        console.log(`[Offline Cache] Background revalidation succeeded for ${path}. Data matches cache.`);
+                    }
+                }
+            } catch (err) {
+                console.warn(`[Offline Cache] Background revalidation failed for ${path}:`, err);
+            } finally {
+                activeFetches.delete(path);
+            }
+        }, 1000);
+    }
+
     async function request(path, options = {}) {
         const controller = new AbortController();
-        const timeoutMs = options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS;
+        const defaultTimeout = options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS;
+        const method = options.method || "GET";
+        const hasCache = method === "GET" && localStorage.getItem("cache:" + path) !== null;
+        const timeoutMs = (method === "GET" && hasCache) ? Math.min(3000, defaultTimeout) : defaultTimeout;
         const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
         const opts = {
-            method: options.method || "GET",
+            method: method,
             headers: options.headers || {},
             credentials: "same-origin",
             signal: controller.signal
         };
+        if (method === "GET") {
+            opts.cache = "no-cache";
+        }
         if (options.json !== undefined) {
             opts.headers["Content-Type"] = "application/json";
             opts.body = JSON.stringify(options.json);
@@ -64,6 +115,8 @@
                         const cachedText = localStorage.getItem("cache:/api/auth/me");
                         if (cachedText !== null) {
                             console.log("[Offline Cache] Serving cached response for auth state");
+                            servedFromCache.add(path);
+                            triggerBackgroundRevalidate(path, cachedText);
                             return safeParse(cachedText);
                         }
                     }
@@ -72,6 +125,8 @@
                     const cachedText = localStorage.getItem("cache:" + path);
                     if (cachedText !== null) {
                         console.log("[Offline Cache] Serving cached response for:", path);
+                        servedFromCache.add(path);
+                        triggerBackgroundRevalidate(path, cachedText);
                         return safeParse(cachedText);
                     }
                 }
@@ -659,6 +714,11 @@
         window.addEventListener("online", () => {
             updateConnectionStatus();
             syncOfflineEntries();
+            const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config'].includes(document.body.dataset.page);
+            const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
+            if (isDataPage && !isUserEditing) {
+                window.location.reload();
+            }
         });
         window.addEventListener("offline", updateConnectionStatus);
 
@@ -706,6 +766,33 @@
         }
     }
 
+    function showLoadingSpinner(container, text) {
+        if (!container) return;
+        const spinnerText = text || (typeof t === 'function' ? t('status.loading', 'Loading data...') : 'Loading data...');
+        container.innerHTML = `
+            <div class="spinner-container">
+                <div class="spinner"></div>
+                <div class="spinner-text">${spinnerText}</div>
+            </div>
+        `;
+    }
+
+    function showRetryButton(container, message, onRetry) {
+        if (!container) return;
+        const errMessage = message || (typeof t === 'function' ? t('status.load_failed', 'Failed to load data.') : 'Failed to load data.');
+        const btnText = typeof t === 'function' ? t('btn.retry', 'Retry') : 'Retry';
+        container.innerHTML = `
+            <div class="retry-container">
+                <div class="retry-error-text">${errMessage}</div>
+                <button class="retry-btn" type="button">${btnText}</button>
+            </div>
+        `;
+        const btn = container.querySelector(".retry-btn");
+        if (btn && typeof onRetry === "function") {
+            btn.addEventListener("click", onRetry);
+        }
+    }
+
     window.Obsidianscout = {
         request,
         getMe,
@@ -725,7 +812,9 @@
         canAccessAnalytics,
         ROLE_HIERARCHY,
         updateConnectionStatus,
-        syncOfflineEntries
+        syncOfflineEntries,
+        showLoadingSpinner,
+        showRetryButton
         ,t
         ,setLanguage
         ,localize

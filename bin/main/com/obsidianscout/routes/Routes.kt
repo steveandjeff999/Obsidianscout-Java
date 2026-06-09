@@ -5,6 +5,7 @@ import com.obsidianscout.analytics.AnalyticsService
 import com.obsidianscout.analytics.PredictorService
 import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserSession
+import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.requireAdmin
 import com.obsidianscout.auth.requireAnalyticsOrAbove
 import com.obsidianscout.auth.requireSession
@@ -19,6 +20,8 @@ import com.obsidianscout.scouting.QualitativeScoutingService
 import com.obsidianscout.scouting.ScoutingService
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.HttpHeaders
+import io.ktor.server.application.ApplicationCallPipeline
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -47,6 +50,11 @@ import io.ktor.server.sessions.set
 fun Application.configureRoutes() {
     routing {
         route("/api") {
+            intercept(ApplicationCallPipeline.Plugins) {
+                call.response.headers.append(HttpHeaders.CacheControl, "no-cache, no-store, must-revalidate")
+                call.response.headers.append(HttpHeaders.Pragma, "no-cache")
+                call.response.headers.append(HttpHeaders.Expires, "0")
+            }
             route("/auth") {
                 post("/login") {
                     val request = call.receive<LoginRequest>()
@@ -453,7 +461,25 @@ fun Application.configureRoutes() {
             route("/admin") {
                 get("/users") {
                     val session = call.requireAdmin()
-                    call.respond(AuthService.listUsers(session))
+                    val q = call.request.queryParameters["q"]
+                    val teamNumber = call.request.queryParameters["teamNumber"]?.toIntOrNull()
+                    val roleStr = call.request.queryParameters["role"]
+                    val role = roleStr?.takeIf { it.isNotBlank() }?.let {
+                        runCatching { UserRole.valueOf(it) }.getOrNull()
+                    }
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                    val offset = call.request.queryParameters["offset"]?.toLongOrNull() ?: 0L
+
+                    call.respond(
+                        AuthService.listUsers(
+                            callerSession = session,
+                            search = q,
+                            teamFilter = teamNumber,
+                            roleFilter = role,
+                            limit = limit,
+                            offset = offset
+                        )
+                    )
                 }
                 post("/users") {
                     val session = call.requireAdmin()
@@ -466,6 +492,20 @@ fun Application.configureRoutes() {
                         role = request.role
                     )
                     call.respond(user)
+                }
+                put("/users/{id}") {
+                    val session = call.requireAdmin()
+                    val userId = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid user id")
+                    val request = call.receive<UpdateUserRequest>()
+                    val updated = AuthService.updateUser(
+                        callerSession = session,
+                        targetUserId = userId,
+                        newUsername = request.username,
+                        newPassword = request.password,
+                        newRole = request.role
+                    )
+                    call.respond(updated)
                 }
             }
 

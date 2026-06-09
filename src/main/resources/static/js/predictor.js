@@ -1,3 +1,7 @@
+let originalMainContentHTML = "";
+let mainContentWrapper = null;
+let mainContent = null;
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -11,20 +15,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    const settingsResponse = await Obsidianscout.request("/api/settings");
-    const settings = settingsResponse.settings;
-    const currentEventKey = Obsidianscout.resolveEventKey(settings);
-
-    const matchSelect = document.getElementById("match-select");
-    const workspace = document.getElementById("predictor-workspace");
-    const emptyState = document.getElementById("predictor-empty-state");
-
-    if (!currentEventKey) {
-        matchSelect.innerHTML = '<option value="">No event configured in settings</option>';
-        return;
+    mainContent = document.querySelector(".main-content");
+    if (mainContent) {
+        const siblings = Array.from(mainContent.children);
+        mainContentWrapper = document.createElement("div");
+        mainContentWrapper.id = "predictor-wrapper";
+        siblings.forEach(child => mainContentWrapper.appendChild(child));
+        mainContent.appendChild(mainContentWrapper);
+        originalMainContentHTML = mainContentWrapper.innerHTML;
+        await loadPredictorData();
     }
+});
+
+async function loadPredictorData() {
+    if (!mainContentWrapper) return;
+    Obsidianscout.showLoadingSpinner(mainContentWrapper, "Loading predictor data...");
 
     try {
+        const settingsResponse = await Obsidianscout.request("/api/settings");
+        const settings = settingsResponse.settings;
+        const currentEventKey = Obsidianscout.resolveEventKey(settings);
+
+        mainContentWrapper.innerHTML = originalMainContentHTML;
+
+        const matchSelect = document.getElementById("match-select");
+        const workspace = document.getElementById("predictor-workspace");
+        const emptyState = document.getElementById("predictor-empty-state");
+
+        if (!currentEventKey) {
+            matchSelect.innerHTML = '<option value="">No event configured in settings</option>';
+            return;
+        }
+
         const matches = await Obsidianscout.request(`/api/matches?eventKey=${currentEventKey}`);
         matchSelect.innerHTML = '<option value="">-- Choose a Match --</option>';
         if (matches.length === 0) {
@@ -58,11 +80,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 Obsidianscout.showToast(err.message || "Failed to load prediction details", "error");
             }
         });
-    } catch (err) {
-        console.error("Matches load failed", err);
-        matchSelect.innerHTML = '<option value="">Failed to load matches</option>';
+    } catch (error) {
+        console.error("Failed to load predictor data:", error);
+        Obsidianscout.showRetryButton(mainContentWrapper, "Failed to load predictor data: " + error.message, loadPredictorData);
     }
-});
+}
 
 function renderPrediction(data) {
     const red = data.redAlliance;

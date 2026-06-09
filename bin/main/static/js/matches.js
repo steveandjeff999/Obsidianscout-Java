@@ -1,4 +1,7 @@
 let currentEventKey = "";
+let currentUser = null;
+let originalTableCardHTML = "";
+let tableCard = null;
 
 function t(key, fallback) {
     return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
@@ -22,20 +25,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    const settingsResponse = await Obsidianscout.request("/api/settings");
-    const settings = settingsResponse.settings;
-    currentEventKey = Obsidianscout.resolveEventKey(settings);
-    const timezone = settings.timezone;
+    const table = document.getElementById("matches-table");
+    tableCard = table.closest(".card");
+    originalTableCardHTML = tableCard.innerHTML;
 
-    const isAdmin = Obsidianscout.isAdmin(me.role);
-    if (isAdmin) {
-        document.getElementById("add-match-btn").classList.remove("hidden");
-        document.querySelectorAll(".admin-only").forEach(h => h.classList.remove("hidden"));
-    }
+    await initMatchesPage();
+});
 
-    // Populate event filter select dropdown
-    const eventFilter = document.getElementById("event-filter");
+async function initMatchesPage() {
+    Obsidianscout.showLoadingSpinner(tableCard, t("status.loading", "Loading events and matches..."));
+
     try {
+        const settingsResponse = await Obsidianscout.request("/api/settings");
+        const settings = settingsResponse.settings;
+        currentEventKey = Obsidianscout.resolveEventKey(settings);
+        const timezone = settings.timezone;
+
+        const isAdmin = Obsidianscout.isAdmin(currentUser.role);
+
+        // Restore HTML
+        tableCard.innerHTML = originalTableCardHTML;
+
+        // Populate event filter select dropdown
+        const eventFilter = document.getElementById("event-filter");
         const events = await Obsidianscout.request(`/api/events?year=${settings.year}&cached=1`);
         eventFilter.innerHTML = "";
         events.forEach(e => {
@@ -52,44 +64,50 @@ document.addEventListener("DOMContentLoaded", async () => {
             currentEventKey = eventFilter.value;
             await loadMatches(currentEventKey, timezone);
         });
-    } catch (err) {
-        console.error("Failed to load events filter", err);
-    }
 
-    await loadMatches(currentEventKey, timezone);
+        const syncButton = document.getElementById("sync-event");
 
-    const syncButton = document.getElementById("sync-event");
-
-    if (!isAdmin) {
-        syncButton.disabled = true;
-    } else {
-        syncButton.addEventListener("click", async () => {
+        if (!isAdmin) {
             syncButton.disabled = true;
-            try {
-                const response = await Obsidianscout.request("/api/integrations/sync/event", { method: "POST" });
-                Obsidianscout.showToast(response.message || t("matches.synced", "Matches synced"), "success");
-                const refreshed = await Obsidianscout.request("/api/settings");
-                currentEventKey = Obsidianscout.resolveEventKey(refreshed.settings);
-                if (eventFilter) eventFilter.value = currentEventKey;
-                await loadMatches(currentEventKey, timezone);
-            } catch (error) {
-                Obsidianscout.showToast(error.message || t("matches.sync_failed", "Sync failed"), "error");
-            } finally {
-                syncButton.disabled = false;
-            }
-        });
+        } else {
+            document.getElementById("add-match-btn").classList.remove("hidden");
+            document.querySelectorAll(".admin-only").forEach(h => h.classList.remove("hidden"));
 
-        await setupModal(() => currentEventKey, timezone);
+            syncButton.addEventListener("click", async () => {
+                syncButton.disabled = true;
+                try {
+                    const response = await Obsidianscout.request("/api/integrations/sync/event", { method: "POST" });
+                    Obsidianscout.showToast(response.message || t("matches.synced", "Matches synced"), "success");
+                    const refreshed = await Obsidianscout.request("/api/settings");
+                    currentEventKey = Obsidianscout.resolveEventKey(refreshed.settings);
+                    if (eventFilter) eventFilter.value = currentEventKey;
+                    await loadMatches(currentEventKey, timezone);
+                } catch (error) {
+                    Obsidianscout.showToast(error.message || t("matches.sync_failed", "Sync failed"), "error");
+                } finally {
+                    syncButton.disabled = false;
+                }
+            });
+
+            await setupModal(() => currentEventKey, timezone);
+        }
+
+        await loadMatches(currentEventKey, timezone);
+
+    } catch (error) {
+        console.error("Failed to initialize matches page:", error);
+        Obsidianscout.showRetryButton(tableCard, t("status.load_failed", "Failed to load page data: ") + error.message, initMatchesPage);
     }
-});
+}
 
 async function loadMatches(eventKey, timezone) {
     const table = document.getElementById("matches-table");
     const body = table.querySelector("tbody");
-    body.innerHTML = "";
+    body.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>' + t("status.loading", "Loading matches...") + '</div></td></tr>';
 
     if (!eventKey) {
         Obsidianscout.showToast(t("matches.set_event_key", "Set an event key in settings"), "error");
+        body.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted);">' + t("matches.no_event", "No event selected") + '</td></tr>';
         return;
     }
 
@@ -98,6 +116,13 @@ async function loadMatches(eventKey, timezone) {
         currentMatches = matches;
         const isAdmin = currentUser && Obsidianscout.isAdmin(currentUser.role);
         const fragment = document.createDocumentFragment();
+
+        body.innerHTML = "";
+
+        if (matches.length === 0) {
+            body.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">' + t("matches.no_matches", "No matches found for this event.") + '</td></tr>';
+            return;
+        }
 
         matches.forEach((match) => {
             const row = document.createElement("tr");
@@ -145,7 +170,7 @@ async function loadMatches(eventKey, timezone) {
             fragment.appendChild(row);
         });
 
-        body.replaceChildren(fragment);
+        body.appendChild(fragment);
 
         // Wire edit & delete buttons
         if (isAdmin) {
@@ -174,7 +199,11 @@ async function loadMatches(eventKey, timezone) {
             });
         }
     } catch (error) {
-        Obsidianscout.showToast(t("matches.load_failed", "Unable to load matches"), "error");
+        body.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 24px;">
+            <div class="retry-error-text" style="margin-bottom: 12px;">${t("matches.load_failed", "Unable to load matches")}: ${error.message}</div>
+            <button class="retry-btn" type="button" id="retry-matches-btn">${t("btn.retry", "Retry")}</button>
+        </td></tr>`;
+        document.getElementById("retry-matches-btn").addEventListener("click", () => loadMatches(eventKey, timezone));
     }
 }
 

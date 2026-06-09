@@ -28,11 +28,11 @@
         attachFormListeners();
         injectSidebarBadge();
 
-        await Promise.all([loadAlliances(), loadInvites()]);
+        await Promise.all([loadAlliances(false), loadInvites(false)]);
         await loadInviteBadge();
 
         setInterval(async () => {
-            await Promise.all([loadAlliances(), loadInvites(), loadInviteBadge()]);
+            await Promise.all([loadAlliances(true), loadInvites(true), loadInviteBadge()]);
         }, LIVE_REFRESH_MS);
 
         // Show/hide Create button for non-admins
@@ -46,16 +46,25 @@
     // Data loading
     // ─────────────────────────────────────────────────────────────────
 
-    async function loadAlliances() {
+    async function loadAlliances(isPeriodic = false) {
+        const grid = document.getElementById('alliances-grid');
+        if (grid && !isPeriodic) {
+            window.Obsidianscout.showLoadingSpinner(grid, 'Loading alliances...');
+        }
         try {
             alliances = await request('/api/alliances') || [];
             renderAlliances();
         } catch (err) {
-            showToast('Failed to load alliances: ' + err.message, 'error');
+            console.error('Failed to load alliances:', err);
+            if (grid && !isPeriodic) {
+                window.Obsidianscout.showRetryButton(grid, 'Failed to load alliances: ' + err.message, () => loadAlliances(false));
+            } else if (!isPeriodic) {
+                showToast('Failed to load alliances: ' + err.message, 'error');
+            }
         }
     }
 
-    async function loadInvites() {
+    async function loadInvites(isPeriodic = false) {
         try {
             pendingInvites = await request('/api/alliances/invites') || [];
             renderInvites();

@@ -27,12 +27,17 @@ function localizeTimezone(timezone) {
     return key ? t(key, timezone) : timezone;
 }
 
+let originalDashboardHTML = "";
+let dashboardContainer = null;
+let currentUser = null;
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
     if (!me) {
         return;
     }
+    currentUser = me;
 
     Obsidianscout.setUserBadge(me);
     Obsidianscout.setActiveNav();
@@ -40,48 +45,102 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    await refreshSummary();
-
-    const syncTeamsMatches = document.getElementById("sync-teams-matches");
-    const syncEvents = document.getElementById("sync-events");
-    const syncStats = document.getElementById("sync-stats");
-    const syncStatus = document.getElementById("sync-status");
-
-    if (!Obsidianscout.isAdmin(me.role)) {
-        syncTeamsMatches.disabled = true;
-        syncEvents.disabled = true;
-        syncStats.disabled = true;
-        if (syncStatus) {
-            syncStatus.textContent = t("dashboard.admin_sync_required", "Admin access required to sync.");
+    // Create wrapper for the dynamic dashboard panels
+    const metrics = document.querySelector(".metrics");
+    if (metrics) {
+        dashboardContainer = document.createElement("div");
+        dashboardContainer.id = "dashboard-dynamic-container";
+        metrics.parentNode.insertBefore(dashboardContainer, metrics);
+        
+        const split = document.querySelector(".split");
+        dashboardContainer.appendChild(metrics);
+        if (split) {
+            dashboardContainer.appendChild(split);
         }
-        return;
+        originalDashboardHTML = dashboardContainer.innerHTML;
     }
 
-    await refreshSyncStatus(syncStatus);
-
-    window.addEventListener("obsidianscout:languagechange", async () => {
-        await refreshSummary();
-        await refreshSyncStatus(syncStatus);
-    });
-
-    syncTeamsMatches.addEventListener("click", () =>
-        runSync(syncTeamsMatches, "/api/integrations/sync/event", true)
-    );
-    syncEvents.addEventListener("click", () =>
-        runSync(syncEvents, "/api/integrations/sync/events", true)
-    );
-    syncStats.addEventListener("click", () =>
-        runSync(syncStats, "/api/integrations/sync/stats", true)
-    );
+    await loadDashboardData();
 
     setInterval(async () => {
-        if (document.hidden) {
+        if (document.hidden || !currentUser) {
             return;
         }
-        await refreshSummary();
-        await refreshSyncStatus(syncStatus);
+        const syncStatus = document.getElementById("sync-status");
+        if (!syncStatus) return; // if currently showing error or loading spinner
+        try {
+            await refreshSummary();
+            await refreshSyncStatus(syncStatus);
+        } catch (e) {
+            console.warn("Background auto-sync update failed", e);
+        }
     }, AUTO_SYNC_MS);
 });
+
+async function loadDashboardData() {
+    if (!dashboardContainer) return;
+    Obsidianscout.showLoadingSpinner(dashboardContainer, t("status.loading", "Loading dashboard data..."));
+
+    try {
+        const [summary, settingsResponse, status] = await Promise.all([
+            Obsidianscout.request("/api/summary"),
+            Obsidianscout.request("/api/settings"),
+            Obsidianscout.request("/api/integrations/sync/status").catch(() => null)
+        ]);
+
+        dashboardContainer.innerHTML = originalDashboardHTML;
+
+        // Populate elements
+        const settings = settingsResponse.settings;
+        document.getElementById("summary-entries").textContent = summary.entries;
+        document.getElementById("summary-events").textContent = summary.events;
+        document.getElementById("summary-teams").textContent = summary.teams;
+        document.getElementById("summary-matches").textContent = summary.matches;
+        document.getElementById("summary-year").textContent = settings.year;
+        document.getElementById("summary-event").textContent =
+            Obsidianscout.resolveEventKey(settings) || t("dashboard.not_set", "Not set");
+        document.getElementById("summary-timezone").textContent = localizeTimezone(settings.timezone);
+
+        const syncTeamsMatches = document.getElementById("sync-teams-matches");
+        const syncEvents = document.getElementById("sync-events");
+        const syncStats = document.getElementById("sync-stats");
+        const syncStatus = document.getElementById("sync-status");
+
+        window.addEventListener("obsidianscout:languagechange", async () => {
+            const syncStatusEl = document.getElementById("sync-status");
+            if (syncStatusEl) {
+                await refreshSummary();
+                await refreshSyncStatus(syncStatusEl);
+            }
+        });
+
+        if (!Obsidianscout.isAdmin(currentUser.role)) {
+            syncTeamsMatches.disabled = true;
+            syncEvents.disabled = true;
+            syncStats.disabled = true;
+            if (syncStatus) {
+                syncStatus.textContent = t("dashboard.admin_sync_required", "Admin access required to sync.");
+            }
+        } else {
+            if (syncStatus && status) {
+                await refreshSyncStatus(syncStatus);
+            }
+            syncTeamsMatches.addEventListener("click", () =>
+                runSync(syncTeamsMatches, "/api/integrations/sync/event", true)
+            );
+            syncEvents.addEventListener("click", () =>
+                runSync(syncEvents, "/api/integrations/sync/events", true)
+            );
+            syncStats.addEventListener("click", () =>
+                runSync(syncStats, "/api/integrations/sync/stats", true)
+            );
+        }
+
+    } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+        Obsidianscout.showRetryButton(dashboardContainer, t("status.load_failed", "Failed to load dashboard data: ") + error.message, loadDashboardData);
+    }
+}
 
 async function refreshSummary() {
     const [summary, settingsResponse] = await Promise.all([

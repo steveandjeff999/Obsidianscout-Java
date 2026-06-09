@@ -1,34 +1,34 @@
 {
-  "server": {
-    "host": "0.0.0.0",
-    "port": 8080,
-    "sessionSecret": "change-me",
-    "cookieSecure": false,
-    "https": {
-      "enabled": true,
-      "port": 8443,
-      "keystorePath": "config/obsidianscout.jks",
-      "keystorePassword": "change-me",
-      "keyAlias": "obsidianscout"
-    }
-  },
-  "database": {
-    "type": "sqlite",
-    "sqlite": {
-      "file": "data/obsidianscout.db"
+    "server": {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "sessionSecret": "992b01485773542f6c870e001b0aa4f2346cb2a0c0df52e11e17d80bb4a989a5",
+        "cookieSecure": false,
+        "https": {
+            "enabled": true,
+            "port": 8443,
+            "keystorePath": "config/obsidianscout.jks",
+            "keystorePassword": "1a93a013ad4e60ba42f5461069fa90234d2024645613ed647d6d6526c66503f5",
+            "keyAlias": "obsidianscout"
+        }
     },
-    "postgres": {
-      "host": "localhost",
-      "port": 5432,
-      "database": "obsidianscout",
-      "user": "postgres",
-      "password": "postgres",
-      "ssl": false
+    "database": {
+        "type": "postgres",
+        "sqlite": {
+            "file": "data/obsidianscout.db"
+        },
+        "postgres": {
+            "host": "localhost",
+            "port": 5432,
+            "database": "obsidianscoutjava",
+            "user": "postgres",
+            "password": "test",
+            "ssl": false
+        }
+    },
+    "seed": {
+        "adminUsername": "admin",
+        "adminTeamNumber": 0,
+        "adminPassword": "changeme"
     }
-  },
-  "seed": {
-    "adminUsername": "admin",
-    "adminTeamNumber": 0,
-    "adminPassword": "changeme"
-  }
 }

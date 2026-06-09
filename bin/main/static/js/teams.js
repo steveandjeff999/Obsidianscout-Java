@@ -2,6 +2,9 @@ let currentTeams = [];
 let currentUser = null;
 let currentEventKey = "";
 
+let originalTableCardHTML = "";
+let tableCard = null;
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -16,19 +19,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    const settingsResponse = await Obsidianscout.request("/api/settings");
-    const settings = settingsResponse.settings;
-    currentEventKey = Obsidianscout.resolveEventKey(settings);
+    const table = document.getElementById("teams-table");
+    tableCard = table.closest(".card");
+    originalTableCardHTML = tableCard.innerHTML;
 
-    const isAdmin = Obsidianscout.isAdmin(me.role);
-    if (isAdmin) {
-        document.getElementById("add-team-btn").classList.remove("hidden");
-        document.querySelectorAll(".admin-only").forEach(h => h.classList.remove("hidden"));
-    }
+    await initTeamsPage();
+});
 
-    // Populate event filter select dropdown
-    const eventFilter = document.getElementById("event-filter");
+async function initTeamsPage() {
+    Obsidianscout.showLoadingSpinner(tableCard, "Loading events and teams...");
+
     try {
+        const settingsResponse = await Obsidianscout.request("/api/settings");
+        const settings = settingsResponse.settings;
+        currentEventKey = Obsidianscout.resolveEventKey(settings);
+
+        const isAdmin = Obsidianscout.isAdmin(currentUser.role);
+
+        // Restore HTML
+        tableCard.innerHTML = originalTableCardHTML;
+
+        // Populate event filter select dropdown
+        const eventFilter = document.getElementById("event-filter");
         const events = await Obsidianscout.request(`/api/events?year=${settings.year}&cached=1`);
         eventFilter.innerHTML = "";
         events.forEach(e => {
@@ -45,43 +57,49 @@ document.addEventListener("DOMContentLoaded", async () => {
             currentEventKey = eventFilter.value;
             await loadTeams(currentEventKey);
         });
-    } catch (err) {
-        console.error("Failed to load events filter", err);
+
+        const syncButton = document.getElementById("sync-event");
+        const statsButton = document.getElementById("sync-stats");
+
+        if (!isAdmin) {
+            syncButton.disabled = true;
+            statsButton.disabled = true;
+        } else {
+            document.getElementById("add-team-btn").classList.remove("hidden");
+            document.querySelectorAll(".admin-only").forEach(h => h.classList.remove("hidden"));
+
+            syncButton.addEventListener("click", async () => {
+                await runSync(syncButton, "/api/integrations/sync/event");
+                const refreshed = await Obsidianscout.request("/api/settings");
+                currentEventKey = Obsidianscout.resolveEventKey(refreshed.settings);
+                if (eventFilter) eventFilter.value = currentEventKey;
+                await loadTeams(currentEventKey);
+            });
+
+            statsButton.addEventListener("click", async () => {
+                await runSync(statsButton, "/api/integrations/sync/stats");
+                await loadTeams(currentEventKey);
+            });
+
+            await setupModal(() => currentEventKey);
+        }
+
+        await loadTeams(currentEventKey);
+
+    } catch (error) {
+        console.error("Failed to load page data:", error);
+        Obsidianscout.showRetryButton(tableCard, "Failed to load page data: " + error.message, initTeamsPage);
     }
-
-    await loadTeams(currentEventKey);
-
-    const syncButton = document.getElementById("sync-event");
-    const statsButton = document.getElementById("sync-stats");
-
-    if (!isAdmin) {
-        syncButton.disabled = true;
-        statsButton.disabled = true;
-    } else {
-        syncButton.addEventListener("click", async () => {
-            await runSync(syncButton, "/api/integrations/sync/event");
-            const refreshed = await Obsidianscout.request("/api/settings");
-            currentEventKey = Obsidianscout.resolveEventKey(refreshed.settings);
-            if (eventFilter) eventFilter.value = currentEventKey;
-            await loadTeams(currentEventKey);
-        });
-
-        statsButton.addEventListener("click", async () => {
-            await runSync(statsButton, "/api/integrations/sync/stats");
-            await loadTeams(currentEventKey);
-        });
-
-        await setupModal(() => currentEventKey);
-    }
-});
+}
 
 async function loadTeams(eventKey) {
     const table = document.getElementById("teams-table");
     const body = table.querySelector("tbody");
-    body.innerHTML = "";
+    body.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading teams...</div></td></tr>';
 
     if (!eventKey) {
         Obsidianscout.showToast("Set year and event code in settings", "error");
+        body.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted);">No event selected</td></tr>';
         return;
     }
 
@@ -89,6 +107,13 @@ async function loadTeams(eventKey) {
         const teams = await Obsidianscout.request(`/api/teams?eventKey=${eventKey}`);
         currentTeams = teams;
         const isAdmin = currentUser && Obsidianscout.isAdmin(currentUser.role);
+
+        body.innerHTML = "";
+
+        if (teams.length === 0) {
+            body.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 24px;">No teams found for this event.</td></tr>';
+            return;
+        }
 
         teams.forEach((team) => {
             const row = document.createElement("tr");
@@ -140,7 +165,11 @@ async function loadTeams(eventKey) {
             });
         }
     } catch (error) {
-        Obsidianscout.showToast("Unable to load teams", "error");
+        body.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 24px;">
+            <div class="retry-error-text" style="margin-bottom: 12px;">Failed to load teams: ${error.message}</div>
+            <button class="retry-btn" type="button" id="retry-teams-btn">Retry</button>
+        </td></tr>`;
+        document.getElementById("retry-teams-btn").addEventListener("click", () => loadTeams(eventKey));
     }
 }
 

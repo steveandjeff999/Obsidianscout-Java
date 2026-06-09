@@ -11,32 +11,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    const ui = {
-        totalEntries: document.getElementById("qual-total-entries"),
-        totalTeams: document.getElementById("qual-total-teams"),
-        metricSummary: document.getElementById("qual-metric-summary"),
-        lastUpdated: document.getElementById("qual-last-updated"),
-        eventFilter: document.getElementById("qual-event-filter"),
-        teamSearch: document.getElementById("qual-team-search"),
-        metricField: document.getElementById("qual-rank-metric"),
-        aggregateMode: document.getElementById("qual-rank-aggregate"),
-        minEntries: document.getElementById("qual-min-entries"),
-        entrySort: document.getElementById("qual-entry-sort"),
-        includePending: document.getElementById("qual-include-pending"),
-        resetFilters: document.getElementById("qual-reset-filters"),
-        filterStatus: document.getElementById("qual-filter-status"),
-        rankCount: document.getElementById("qual-rank-count"),
-        rankBody: document.querySelector("#qual-rank-table tbody"),
-        teamTitle: document.getElementById("qual-team-title"),
-        teamStatus: document.getElementById("qual-team-status"),
-        teamDetail: document.getElementById("qual-team-detail"),
-        entryCount: document.getElementById("qual-entry-count"),
-        entryBody: document.querySelector("#qual-entry-table tbody"),
-        entryTitle: document.getElementById("qual-entry-title"),
-        entryStatus: document.getElementById("qual-entry-status"),
-        entryDetail: document.getElementById("qual-entry-detail")
-    };
-
+    let ui = {};
     const state = {
         settings: null,
         config: null,
@@ -59,32 +34,84 @@ document.addEventListener("DOMContentLoaded", async () => {
         selectedEntryId: null
     };
 
-    try {
-        const settingsResponse = await Obsidianscout.request("/api/settings");
-        state.settings = settingsResponse.settings;
-
-        const [config, entries, events] = await Promise.all([
-            Obsidianscout.request("/api/qual-config"),
-            Obsidianscout.request("/api/qual-scouting"),
-            Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
-        ]);
-
-        state.config = config;
-        state.fields = normalizeFields(config.fields || []);
-        state.groups = groupFields(config.fields || []);
-        state.rankingMetrics = buildRankingMetrics(state.fields);
-        state.entriesRaw = Array.isArray(entries) ? entries : [];
-        state.events = buildEventList(events, state.entriesRaw, state.settings);
-
-        initControls(state, ui);
-        await refreshData(state, ui, { keepSelection: false });
-
-        window.addEventListener("obsidianscout:qualitative-entries-changed", async () => {
-            await refreshData(state, ui, { keepSelection: true });
-        });
-    } catch (error) {
-        Obsidianscout.showToast("Unable to load qualitative performance data", "error");
+    // Setup wrapper for dynamic content
+    const mainContent = document.querySelector(".main-content");
+    const titleCard = mainContent.querySelector(".card");
+    const dynamicContainer = document.createElement("div");
+    dynamicContainer.id = "qual-dynamic-container";
+    
+    let nextSib = titleCard.nextElementSibling;
+    while (nextSib) {
+        const temp = nextSib.nextElementSibling;
+        dynamicContainer.appendChild(nextSib);
+        nextSib = temp;
     }
+    mainContent.appendChild(dynamicContainer);
+    const originalHTML = dynamicContainer.innerHTML;
+
+    function getUIElements() {
+        return {
+            totalEntries: document.getElementById("qual-total-entries"),
+            totalTeams: document.getElementById("qual-total-teams"),
+            metricSummary: document.getElementById("qual-metric-summary"),
+            lastUpdated: document.getElementById("qual-last-updated"),
+            eventFilter: document.getElementById("qual-event-filter"),
+            teamSearch: document.getElementById("qual-team-search"),
+            metricField: document.getElementById("qual-rank-metric"),
+            aggregateMode: document.getElementById("qual-rank-aggregate"),
+            minEntries: document.getElementById("qual-min-entries"),
+            entrySort: document.getElementById("qual-entry-sort"),
+            includePending: document.getElementById("qual-include-pending"),
+            resetFilters: document.getElementById("qual-reset-filters"),
+            filterStatus: document.getElementById("qual-filter-status"),
+            rankCount: document.getElementById("qual-rank-count"),
+            rankBody: document.querySelector("#qual-rank-table tbody"),
+            teamTitle: document.getElementById("qual-team-title"),
+            teamStatus: document.getElementById("qual-team-status"),
+            teamDetail: document.getElementById("qual-team-detail"),
+            entryCount: document.getElementById("qual-entry-count"),
+            entryBody: document.querySelector("#qual-entry-table tbody"),
+            entryTitle: document.getElementById("qual-entry-title"),
+            entryStatus: document.getElementById("qual-entry-status"),
+            entryDetail: document.getElementById("qual-entry-detail")
+        };
+    }
+
+    async function loadAllQualData() {
+        Obsidianscout.showLoadingSpinner(dynamicContainer, "Loading qualitative data...");
+        try {
+            const settingsResponse = await Obsidianscout.request("/api/settings");
+            state.settings = settingsResponse.settings;
+
+            const [config, entries, events] = await Promise.all([
+                Obsidianscout.request("/api/qual-config"),
+                Obsidianscout.request("/api/qual-scouting"),
+                Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
+            ]);
+
+            dynamicContainer.innerHTML = originalHTML;
+            ui = getUIElements();
+
+            state.config = config;
+            state.fields = normalizeFields(config.fields || []);
+            state.groups = groupFields(config.fields || []);
+            state.rankingMetrics = buildRankingMetrics(state.fields);
+            state.entriesRaw = Array.isArray(entries) ? entries : [];
+            state.events = buildEventList(events, state.entriesRaw, state.settings);
+
+            initControls(state, ui);
+            await refreshData(state, ui, { keepSelection: false });
+
+            window.addEventListener("obsidianscout:qualitative-entries-changed", async () => {
+                await refreshData(state, ui, { keepSelection: true });
+            });
+        } catch (error) {
+            console.error("Failed to load qual data:", error);
+            Obsidianscout.showRetryButton(dynamicContainer, "Failed to load qualitative performance data: " + error.message, loadAllQualData);
+        }
+    }
+
+    await loadAllQualData();
 });
 
 async function refreshData(state, ui, options) {

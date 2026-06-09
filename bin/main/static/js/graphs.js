@@ -1,3 +1,7 @@
+let originalMainContentHTML = "";
+let mainContentWrapper = null;
+let mainContent = null;
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -11,6 +15,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
+    mainContent = document.querySelector(".main-content");
+    if (mainContent) {
+        const siblings = Array.from(mainContent.children).filter(child => !child.classList.contains("graphs-hero"));
+        mainContentWrapper = document.createElement("div");
+        mainContentWrapper.id = "graphs-wrapper";
+        siblings.forEach(child => mainContentWrapper.appendChild(child));
+        mainContent.appendChild(mainContentWrapper);
+        originalMainContentHTML = mainContentWrapper.innerHTML;
+        await loadGraphsPageData();
+    }
+});
+
+async function loadGraphsPageData() {
+    if (!mainContentWrapper) return;
+    Obsidianscout.showLoadingSpinner(mainContentWrapper, "Loading graphs data...");
+
     try {
         const settingsResponse = await Obsidianscout.request("/api/settings");
         const settings = settingsResponse.settings;
@@ -20,11 +40,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             Obsidianscout.request(`/api/events?year=${settings.year}&cached=1`)
         ]);
 
+        mainContentWrapper.innerHTML = originalMainContentHTML;
         initGraphsPage({ config, entries, events });
     } catch (error) {
-        Obsidianscout.showToast("Unable to load graph data", "error");
+        console.error("Failed to load graphs data:", error);
+        Obsidianscout.showRetryButton(mainContentWrapper, "Failed to load graphs data: " + error.message, loadGraphsPageData);
     }
-});
+}
 
 const RESERVED_FIELDS = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
 const PLOTLY_CONFIG = {

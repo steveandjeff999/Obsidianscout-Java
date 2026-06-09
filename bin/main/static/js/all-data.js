@@ -32,38 +32,60 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     };
 
-    try {
-        const settingsResponse = await Obsidianscout.request("/api/settings");
-        state.settings = settingsResponse.settings;
-        state.eventKey = Obsidianscout.resolveEventKey(state.settings);
-        state.filters.eventKey = state.eventKey;
-
-        const [matchConfig, pitConfig, qualConfig, matchEntries, pitEntries, qualEntries, events] = await Promise.all([
-            Obsidianscout.request("/api/config"),
-            Obsidianscout.request("/api/pit-config"),
-            Obsidianscout.request("/api/qual-config"),
-            Obsidianscout.request("/api/scouting"),
-            Obsidianscout.request("/api/pit-scouting"),
-            Obsidianscout.request("/api/qual-scouting"),
-            Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
-        ]);
-
-        state.configs.match = matchConfig;
-        state.configs.pit = pitConfig;
-        state.configs.qualitative = qualConfig;
-
-        state.events = normalizeEvents(events, state.eventKey, state.settings);
-        
-        // Normalize and merge entries
-        state.entries = mergeEntries(matchEntries || [], pitEntries || [], qualEntries || []);
-
-        initControls(state);
-        await loadTeamsForEvent(state);
-        renderAll(state);
-    } catch (error) {
-        console.error("Initialization error:", error);
-        Obsidianscout.showToast("Unable to load scouting data", "error");
+    // Setup wrapper for dynamic content
+    const mainContent = document.querySelector(".main-content");
+    const titleCard = mainContent.querySelector(".card");
+    const dynamicContainer = document.createElement("div");
+    dynamicContainer.id = "all-dynamic-container";
+    
+    let nextSib = titleCard.nextElementSibling;
+    while (nextSib) {
+        const temp = nextSib.nextElementSibling;
+        dynamicContainer.appendChild(nextSib);
+        nextSib = temp;
     }
+    mainContent.appendChild(dynamicContainer);
+    const originalHTML = dynamicContainer.innerHTML;
+
+    async function loadAllScoutingData() {
+        Obsidianscout.showLoadingSpinner(dynamicContainer, "Loading all scouting data...");
+        try {
+            const settingsResponse = await Obsidianscout.request("/api/settings");
+            state.settings = settingsResponse.settings;
+            state.eventKey = Obsidianscout.resolveEventKey(state.settings);
+            state.filters.eventKey = state.eventKey;
+
+            const [matchConfig, pitConfig, qualConfig, matchEntries, pitEntries, qualEntries, events] = await Promise.all([
+                Obsidianscout.request("/api/config"),
+                Obsidianscout.request("/api/pit-config"),
+                Obsidianscout.request("/api/qual-config"),
+                Obsidianscout.request("/api/scouting"),
+                Obsidianscout.request("/api/pit-scouting"),
+                Obsidianscout.request("/api/qual-scouting"),
+                Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
+            ]);
+
+            dynamicContainer.innerHTML = originalHTML;
+
+            state.configs.match = matchConfig;
+            state.configs.pit = pitConfig;
+            state.configs.qualitative = qualConfig;
+
+            state.events = normalizeEvents(events, state.eventKey, state.settings);
+            
+            // Normalize and merge entries
+            state.entries = mergeEntries(matchEntries || [], pitEntries || [], qualEntries || []);
+
+            initControls(state);
+            await loadTeamsForEvent(state);
+            renderAll(state);
+        } catch (error) {
+            console.error("Initialization error:", error);
+            Obsidianscout.showRetryButton(dynamicContainer, "Failed to load scouting data: " + error.message, loadAllScoutingData);
+        }
+    }
+
+    await loadAllScoutingData();
 });
 
 const RESERVED_FIELDS = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);

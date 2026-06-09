@@ -23,29 +23,52 @@ document.addEventListener("DOMContentLoaded", async () => {
         quickFieldId: ""
     };
 
-    try {
-        const settingsResponse = await Obsidianscout.request("/api/settings");
-        state.settings = settingsResponse.settings;
-        state.eventKey = Obsidianscout.resolveEventKey(state.settings);
-
-        const [config, entries, events] = await Promise.all([
-            Obsidianscout.request("/api/pit-config"),
-            Obsidianscout.request("/api/pit-scouting"),
-            Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
-        ]);
-
-        state.config = config;
-        state.fields = buildDisplayFields(config.fields || []);
-        state.entries = Array.isArray(entries) ? entries : [];
-        state.events = normalizeEvents(events, state.eventKey, state.settings);
-        state.quickFieldId = pickDefaultQuickField(state.fields);
-
-        initControls(state);
-        await loadTeamsForEvent(state);
-        renderAll(state);
-    } catch (error) {
-        Obsidianscout.showToast("Unable to load pit data", "error");
+    // Setup wrapper for dynamic content
+    const mainContent = document.querySelector(".main-content");
+    const titleCard = mainContent.querySelector(".card");
+    const dynamicContainer = document.createElement("div");
+    dynamicContainer.id = "pit-dynamic-container";
+    
+    let nextSib = titleCard.nextElementSibling;
+    while (nextSib) {
+        const temp = nextSib.nextElementSibling;
+        dynamicContainer.appendChild(nextSib);
+        nextSib = temp;
     }
+    mainContent.appendChild(dynamicContainer);
+    const originalHTML = dynamicContainer.innerHTML;
+
+    async function loadAllPitData() {
+        Obsidianscout.showLoadingSpinner(dynamicContainer, "Loading pit scouting data...");
+        try {
+            const settingsResponse = await Obsidianscout.request("/api/settings");
+            state.settings = settingsResponse.settings;
+            state.eventKey = Obsidianscout.resolveEventKey(state.settings);
+
+            const [config, entries, events] = await Promise.all([
+                Obsidianscout.request("/api/pit-config"),
+                Obsidianscout.request("/api/pit-scouting"),
+                Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
+            ]);
+
+            dynamicContainer.innerHTML = originalHTML;
+
+            state.config = config;
+            state.fields = buildDisplayFields(config.fields || []);
+            state.entries = Array.isArray(entries) ? entries : [];
+            state.events = normalizeEvents(events, state.eventKey, state.settings);
+            state.quickFieldId = pickDefaultQuickField(state.fields);
+
+            initControls(state);
+            await loadTeamsForEvent(state);
+            renderAll(state);
+        } catch (error) {
+            console.error("Failed to load pit data:", error);
+            Obsidianscout.showRetryButton(dynamicContainer, "Failed to load pit scouting data: " + error.message, loadAllPitData);
+        }
+    }
+
+    await loadAllPitData();
 });
 
 const RESERVED_FIELDS = new Set(["eventKey", "targetTeamNumber"]);

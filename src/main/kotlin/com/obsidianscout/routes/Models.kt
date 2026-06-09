@@ -60,6 +60,13 @@ data class CreateUserRequest(
 )
 
 @Serializable
+data class UpdateUserRequest(
+    val username: String? = null,
+    val password: String? = null,
+    val role: UserRole? = null
+)
+
+@Serializable
 data class ScoutingEntryRequest(
     val data: JsonObject
 )

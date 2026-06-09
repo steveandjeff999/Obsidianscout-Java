@@ -12,13 +12,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireThemeToggle();
 
     const grid = document.getElementById("analytics-grid");
+    await loadAnalyticsData(grid);
+});
+
+async function loadAnalyticsData(grid) {
+    if (!grid) return;
+    Obsidianscout.showLoadingSpinner(grid, "Loading analytics...");
     try {
         const response = await Obsidianscout.request("/api/analytics");
         renderWidgets(grid, response.widgets || []);
     } catch (error) {
-        Obsidianscout.showToast("Unable to load analytics", "error");
+        console.error("Failed to load analytics:", error);
+        Obsidianscout.showRetryButton(grid, "Failed to load analytics data: " + error.message, () => loadAnalyticsData(grid));
     }
-});
+}
 
 function renderWidgets(container, widgets) {
     container.innerHTML = "";

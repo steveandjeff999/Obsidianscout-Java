@@ -5,6 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ObsidianScout | Users</title>
     <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .edit-btn {
+            cursor: pointer;
+            background: transparent;
+            border: 1px solid rgba(0,0,0,0.1);
+            color: var(--muted);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .edit-btn:hover {
+            background: var(--surface-2);
+            color: var(--ink);
+            border-color: var(--accent);
+        }
+        body.theme-dark .edit-btn {
+            border-color: rgba(255,255,255,0.1);
+        }
+        .form-note {
+            font-size: .78rem;
+            color: var(--muted);
+            margin-top: .2rem;
+        }
+    </style>
 </head>
 <body data-page="users">
     <div class="orb orb-2"></div>
@@ -62,7 +88,7 @@
                             <option value="SCOUT">Scout</option>
                             <option value="ANALYTICS">Analytics</option>
                             <option value="ADMIN">Admin</option>
-                            <option value="SUPERADMIN" class="superadmin-option">Super Admin</option>
+                            <option value="SUPERADMIN" class="superadmin-option" style="display:none">Super Admin</option>
                         </select>
                     </div>
                     <button class="btn dark" type="submit" data-i18n="users.create_user">Create user</button>
@@ -70,6 +96,32 @@
 
                 <div class="mt-20">
                     <h3>Current users</h3>
+
+                    <!-- Search and filter bar -->
+                    <div class="row gap-12 wrap align-center mb-16" style="width: 100%; margin-bottom: 16px;">
+                        <div class="field" style="min-width: 200px; margin-top: 0; flex-grow: 1;">
+                            <label for="search-username" style="margin-bottom: 4px;">Search Username</label>
+                            <input id="search-username" type="text" placeholder="e.g. scout" />
+                        </div>
+                        <div class="field" id="team-filter-field" style="min-width: 120px; margin-top: 0;">
+                            <label for="search-team" style="margin-bottom: 4px;">Filter Team</label>
+                            <input id="search-team" type="number" placeholder="e.g. 254" />
+                        </div>
+                        <div class="field" style="min-width: 150px; margin-top: 0;">
+                            <label for="search-role" style="margin-bottom: 4px;">Filter Role</label>
+                            <select id="search-role">
+                                <option value="">All Roles</option>
+                                <option value="SCOUT">Scout</option>
+                                <option value="ANALYTICS">Analytics</option>
+                                <option value="ADMIN">Admin</option>
+                                <option value="SUPERADMIN" class="filter-superadmin-option" style="display:none">Super Admin</option>
+                            </select>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <button class="btn secondary" id="reset-filters" type="button">Reset</button>
+                        </div>
+                    </div>
+
                     <table id="user-table" class="table">
                         <thead>
                             <tr>
@@ -77,13 +129,54 @@
                                 <th>Team</th>
                                 <th>Role</th>
                                 <th>Created</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody></tbody>
                     </table>
+
+                    <!-- Load More Button -->
+                    <div id="load-more-container" class="row hidden" style="justify-content: center; margin-top: 20px;">
+                        <button class="btn ghost" id="load-more-btn" type="button">Load More</button>
+                    </div>
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Edit user modal — uses the existing app.css modal system (.modal-backdrop + .show) -->
+    <div id="edit-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 class="modal-title" id="edit-modal-title">Edit User</h2>
+                <button type="button" class="modal-close" id="edit-cancel" aria-label="Close">&#x2715;</button>
+            </div>
+            <form id="edit-form" class="form-grid">
+                <input type="hidden" id="edit-user-id" />
+                <div class="field">
+                    <label for="edit-username">Username</label>
+                    <input id="edit-username" type="text" autocomplete="off" />
+                </div>
+                <div class="field">
+                    <label for="edit-password">New Password</label>
+                    <input id="edit-password" type="password" autocomplete="new-password" />
+                    <p class="form-note">Leave blank to keep the current password.</p>
+                </div>
+                <div class="field" id="edit-role-field">
+                    <label for="edit-role">Role</label>
+                    <select id="edit-role">
+                        <option value="SCOUT">Scout</option>
+                        <option value="ANALYTICS">Analytics</option>
+                        <option value="ADMIN">Admin</option>
+                        <option value="SUPERADMIN" class="edit-superadmin-option" style="display:none">Super Admin</option>
+                    </select>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button type="button" id="edit-cancel-btn" class="btn ghost">Cancel</button>
+                <button type="button" id="edit-save-btn" class="btn dark">Save changes</button>
+            </div>
+        </div>
     </div>
 
     <script src="/js/common.js"></script>

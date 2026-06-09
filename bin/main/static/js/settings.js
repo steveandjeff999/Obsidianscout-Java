@@ -11,10 +11,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    const editor = document.getElementById("config-editor");
-    const saveButton = document.getElementById("config-save");
-    const exportButton = document.getElementById("config-export");
-    const importInput = document.getElementById("config-import");
+    // DOM references declared in outer scope so they can be re-bound and accessed by helper functions
+    let editor, saveButton, exportButton, importInput;
+    let btnVisual, btnRaw, containerVisual, containerRaw;
+    let configTitleInput, configVersionInput, btnAddField, visualFieldsList, configModeButtons;
+    let adminPanelWrapper = null;
+    let adminPanel = null;
+    let originalAdminPanelHTML = "";
 
     const isUserAdmin = Obsidianscout.isAdmin(me.role);
     if (!isUserAdmin) {
@@ -44,34 +47,22 @@ document.addEventListener("DOMContentLoaded", async () => {
                 p.classList.add("hidden");
             }
         });
-    }
 
-    // Initialize personal setting dropdown
-    const personalDisplaySelect = document.getElementById("personal-team-display");
-    if (personalDisplaySelect) {
-        personalDisplaySelect.value = localStorage.getItem("obsidianscout:team_display") || "merged";
-        personalDisplaySelect.addEventListener("change", (e) => {
-            localStorage.setItem("obsidianscout:team_display", e.target.value);
-            Obsidianscout.showToast("Personal settings saved", "success");
-            window.dispatchEvent(new CustomEvent("obsidianscout:teamdisplaychange", { detail: { format: e.target.value } }));
-        });
-    }
+        // Initialize personal setting dropdown
+        const personalDisplaySelect = document.getElementById("personal-team-display");
+        if (personalDisplaySelect) {
+            personalDisplaySelect.value = localStorage.getItem("obsidianscout:team_display") || "merged";
+            personalDisplaySelect.addEventListener("change", (e) => {
+                localStorage.setItem("obsidianscout:team_display", e.target.value);
+                Obsidianscout.showToast("Personal settings saved", "success");
+                window.dispatchEvent(new CustomEvent("obsidianscout:teamdisplaychange", { detail: { format: e.target.value } }));
+            });
+        }
 
-    if (!isUserAdmin) {
         wireTabs();
         return;
     }
 
-    // Visual Editor elements
-    const btnVisual = document.getElementById("btn-visual-editor");
-    const btnRaw = document.getElementById("btn-raw-editor");
-    const containerVisual = document.getElementById("visual-editor-container");
-    const containerRaw = document.getElementById("raw-editor-container");
-    const configTitleInput = document.getElementById("config-title");
-    const configVersionInput = document.getElementById("config-version");
-    const btnAddField = document.getElementById("btn-add-field");
-    const visualFieldsList = document.getElementById("visual-fields-list");
-    const configModeButtons = document.querySelectorAll("[data-config-kind]");
     const configModes = {
         game: {
             apiPath: "/api/config",
@@ -98,131 +89,152 @@ document.addEventListener("DOMContentLoaded", async () => {
         return activeConfigKind !== "qual";
     }
 
-    // Sub-tab switching logic
-    if (btnVisual && btnRaw && containerVisual && containerRaw) {
-        btnVisual.addEventListener("click", () => {
-            const text = editor.value.trim();
-            if (!isValidJson(text)) {
-                Obsidianscout.showToast("Raw JSON is invalid. Fix syntax errors before switching to Visual Editor.", "error");
-                return;
-            }
-            
-            try {
-                currentConfig = JSON.parse(text);
-                if (!currentConfig.fields) currentConfig.fields = [];
-                if (!currentConfig.analytics) currentConfig.analytics = [];
-                
-                configTitleInput.value = currentConfig.title || "";
-                configVersionInput.value = currentConfig.version || 1;
-                
-                renderVisualFields();
-                
-                btnRaw.classList.remove("active");
-                btnVisual.classList.add("active");
-                containerRaw.classList.add("hidden");
-                containerVisual.classList.remove("hidden");
-            } catch (err) {
-                Obsidianscout.showToast("Failed to parse config properties", "error");
-            }
-        });
-        
-        btnRaw.addEventListener("click", () => {
-            // Keep synced
-            updateRawFromVisual();
-            btnVisual.classList.remove("active");
-            btnRaw.classList.add("active");
-            containerVisual.classList.add("hidden");
-            containerRaw.classList.remove("hidden");
-        });
+    adminPanel = document.getElementById("admin-panel");
+    if (adminPanel) {
+        const siblings = Array.from(adminPanel.children).filter(child => child.tagName !== "H1");
+        adminPanelWrapper = document.createElement("div");
+        adminPanelWrapper.id = "settings-wrapper";
+        siblings.forEach(child => adminPanelWrapper.appendChild(child));
+        adminPanel.appendChild(adminPanelWrapper);
+        originalAdminPanelHTML = adminPanelWrapper.innerHTML;
+        await loadSettingsPageData();
     }
 
-    // Global metadata change listeners
-    if (configTitleInput) {
-        configTitleInput.addEventListener("input", updateRawFromVisual);
-    }
-    if (configVersionInput) {
-        configVersionInput.addEventListener("input", updateRawFromVisual);
-    }
-
-    // Add field listener
-    if (btnAddField) {
-        btnAddField.addEventListener("click", addField);
-    }
-
-    configModeButtons.forEach((button) => {
-        button.addEventListener("click", async () => {
-            const nextKind = button.dataset.configKind;
-            if (!nextKind || nextKind === activeConfigKind || !configModes[nextKind]) {
-                return;
-            }
-            activeConfigKind = nextKind;
-            updateConfigModeButtons();
-            await loadActiveConfig();
-        });
-    });
-
-    wireTabs();
-    await loadActiveConfig();
-    await loadSettings();
-
-    // Save configuration
-    saveButton.addEventListener("click", async () => {
-        let text = editor.value.trim();
-        if (!isValidJson(text)) {
-            Obsidianscout.showToast("Config JSON is invalid", "error");
-            return;
-        }
+    async function loadSettingsPageData() {
+        if (!adminPanelWrapper) return;
+        Obsidianscout.showLoadingSpinner(adminPanelWrapper, "Loading settings...");
 
         try {
-            // Parse & sync state in case raw was edited
-            currentConfig = JSON.parse(text);
-            if (!currentConfig.fields) currentConfig.fields = [];
-            if (!currentConfig.analytics) currentConfig.analytics = [];
-            
-            if (configTitleInput) configTitleInput.value = currentConfig.title || "";
-            if (configVersionInput) configVersionInput.value = currentConfig.version || 1;
-            
-            renderVisualFields();
-        } catch (err) {
-            // Safe fallback
-        }
+            const mode = configModes[activeConfigKind];
+            const [configResponse, settingsResponse] = await Promise.all([
+                Obsidianscout.request(mode.apiPath),
+                Obsidianscout.request("/api/settings")
+            ]);
 
-        try {
-            await Obsidianscout.request(configModes[activeConfigKind].apiPath, {
-                method: "PUT",
-                json: {
-                    configJson: text
-                }
+            adminPanelWrapper.innerHTML = originalAdminPanelHTML;
+
+            // Re-query elements
+            editor = document.getElementById("config-editor");
+            saveButton = document.getElementById("config-save");
+            exportButton = document.getElementById("config-export");
+            importInput = document.getElementById("config-import");
+
+            btnVisual = document.getElementById("btn-visual-editor");
+            btnRaw = document.getElementById("btn-raw-editor");
+            containerVisual = document.getElementById("visual-editor-container");
+            containerRaw = document.getElementById("raw-editor-container");
+            configTitleInput = document.getElementById("config-title");
+            configVersionInput = document.getElementById("config-version");
+            btnAddField = document.getElementById("btn-add-field");
+            visualFieldsList = document.getElementById("visual-fields-list");
+            configModeButtons = document.querySelectorAll("[data-config-kind]");
+
+            // Initialize personal setting dropdown
+            const personalDisplaySelect = document.getElementById("personal-team-display");
+            if (personalDisplaySelect) {
+                personalDisplaySelect.value = localStorage.getItem("obsidianscout:team_display") || "merged";
+                personalDisplaySelect.addEventListener("change", (e) => {
+                    localStorage.setItem("obsidianscout:team_display", e.target.value);
+                    Obsidianscout.showToast("Personal settings saved", "success");
+                    window.dispatchEvent(new CustomEvent("obsidianscout:teamdisplaychange", { detail: { format: e.target.value } }));
+                });
+            }
+
+            // Sub-tab switching logic
+            if (btnVisual && btnRaw && containerVisual && containerRaw) {
+                btnVisual.addEventListener("click", () => {
+                    const text = editor.value.trim();
+                    if (!isValidJson(text)) {
+                        Obsidianscout.showToast("Raw JSON is invalid. Fix syntax errors before switching to Visual Editor.", "error");
+                        return;
+                    }
+                    
+                    try {
+                        currentConfig = JSON.parse(text);
+                        if (!currentConfig.fields) currentConfig.fields = [];
+                        if (!currentConfig.analytics) currentConfig.analytics = [];
+                        
+                        configTitleInput.value = currentConfig.title || "";
+                        configVersionInput.value = currentConfig.version || 1;
+                        
+                        renderVisualFields();
+                        
+                        btnRaw.classList.remove("active");
+                        btnVisual.classList.add("active");
+                        containerRaw.classList.add("hidden");
+                        containerVisual.classList.remove("hidden");
+                    } catch (err) {
+                        Obsidianscout.showToast("Failed to parse config properties", "error");
+                    }
+                });
+                
+                btnRaw.addEventListener("click", () => {
+                    updateRawFromVisual();
+                    btnVisual.classList.remove("active");
+                    btnRaw.classList.add("active");
+                    containerVisual.classList.add("hidden");
+                    containerRaw.classList.remove("hidden");
+                });
+            }
+
+            if (configTitleInput) {
+                configTitleInput.addEventListener("input", updateRawFromVisual);
+            }
+            if (configVersionInput) {
+                configVersionInput.addEventListener("input", updateRawFromVisual);
+            }
+
+            if (btnAddField) {
+                btnAddField.addEventListener("click", addField);
+            }
+
+            configModeButtons.forEach((button) => {
+                button.addEventListener("click", async () => {
+                    const nextKind = button.dataset.configKind;
+                    if (!nextKind || nextKind === activeConfigKind || !configModes[nextKind]) {
+                        return;
+                    }
+                    activeConfigKind = nextKind;
+                    updateConfigModeButtons();
+                    await loadActiveConfig();
+                });
             });
-            Obsidianscout.showToast("Config saved", "success");
-        } catch (error) {
-            Obsidianscout.showToast(error.message || "Save failed", "error");
-        }
-    });
 
-    // Export configuration
-    exportButton.addEventListener("click", () => {
-        updateRawFromVisual();
-        const blob = new Blob([editor.value], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = configModes[activeConfigKind].exportName;
-        link.click();
-        URL.revokeObjectURL(url);
-    });
+            wireTabs();
 
-    // Import configuration
-    importInput.addEventListener("change", () => {
-        const file = importInput.files[0];
-        if (!file) {
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-            const text = reader.result;
-            if (isValidJson(text)) {
-                editor.value = text;
+            // Populate configs
+            currentConfig = normalizeConfig(configResponse, mode.defaultTitle);
+            editor.value = JSON.stringify(currentConfig, null, 2);
+            if (configTitleInput) {
+                configTitleInput.value = currentConfig.title || "";
+            }
+            if (configVersionInput) {
+                configVersionInput.value = currentConfig.version || 1;
+            }
+            renderVisualFields();
+            showVisualEditor();
+
+            // Populate settings
+            const settings = settingsResponse.settings;
+            document.getElementById("settings-year").value = settings.year;
+            document.getElementById("settings-event-code").value = settings.eventCode || "";
+            document.getElementById("settings-timezone").value = settings.timezone || "America/New_York";
+            document.getElementById("settings-source").value = settings.preferredSource || "tba";
+            document.getElementById("settings-epa").checked = settings.useStatboticsEpa;
+            document.getElementById("settings-opr").checked = settings.useTbaOpr;
+            document.getElementById("settings-tba-key").value = settings.apiKeys.tbaKey || "";
+            document.getElementById("settings-first-user").value = settings.apiKeys.firstUsername || "";
+            document.getElementById("settings-first-key").value = settings.apiKeys.firstKey || "";
+            document.getElementById("settings-statbotics-key").value = settings.apiKeys.statboticsKey || "";
+
+            // Save configuration
+            saveButton.addEventListener("click", async () => {
+                let text = editor.value.trim();
+                if (!isValidJson(text)) {
+                    Obsidianscout.showToast("Config JSON is invalid", "error");
+                    return;
+                }
+
                 try {
                     currentConfig = JSON.parse(text);
                     if (!currentConfig.fields) currentConfig.fields = [];
@@ -232,44 +244,97 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (configVersionInput) configVersionInput.value = currentConfig.version || 1;
                     
                     renderVisualFields();
-                    Obsidianscout.showToast("Config imported successfully", "success");
-                } catch (err) {
-                    Obsidianscout.showToast("Imported JSON structure has errors", "error");
+                } catch (err) {}
+
+                try {
+                    await Obsidianscout.request(configModes[activeConfigKind].apiPath, {
+                        method: "PUT",
+                        json: {
+                            configJson: text
+                        }
+                    });
+                    Obsidianscout.showToast("Config saved", "success");
+                } catch (error) {
+                    Obsidianscout.showToast(error.message || "Save failed", "error");
                 }
-            } else {
-                Obsidianscout.showToast("Invalid JSON file", "error");
-            }
-        };
-        reader.readAsText(file);
-    });
-
-    // API settings save
-    document.getElementById("settings-save").addEventListener("click", async () => {
-        const payload = {
-            year: Number(document.getElementById("settings-year").value || new Date().getFullYear()),
-            eventCode: document.getElementById("settings-event-code").value.trim(),
-            timezone: document.getElementById("settings-timezone").value.trim(),
-            preferredSource: document.getElementById("settings-source").value,
-            useStatboticsEpa: document.getElementById("settings-epa").checked,
-            useTbaOpr: document.getElementById("settings-opr").checked,
-            apiKeys: {
-                tbaKey: document.getElementById("settings-tba-key").value.trim(),
-                firstUsername: document.getElementById("settings-first-user").value.trim(),
-                firstKey: document.getElementById("settings-first-key").value.trim(),
-                statboticsKey: document.getElementById("settings-statbotics-key").value.trim()
-            }
-        };
-
-        try {
-            await Obsidianscout.request("/api/settings", {
-                method: "PUT",
-                json: payload
             });
-            Obsidianscout.showToast("API settings saved", "success");
+
+            // Export configuration
+            exportButton.addEventListener("click", () => {
+                updateRawFromVisual();
+                const blob = new Blob([editor.value], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = configModes[activeConfigKind].exportName;
+                link.click();
+                URL.revokeObjectURL(url);
+            });
+
+            // Import configuration
+            importInput.addEventListener("change", () => {
+                const file = importInput.files[0];
+                if (!file) {
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const text = reader.result;
+                    if (isValidJson(text)) {
+                        editor.value = text;
+                        try {
+                            currentConfig = JSON.parse(text);
+                            if (!currentConfig.fields) currentConfig.fields = [];
+                            if (!currentConfig.analytics) currentConfig.analytics = [];
+                            
+                            if (configTitleInput) configTitleInput.value = currentConfig.title || "";
+                            if (configVersionInput) configVersionInput.value = currentConfig.version || 1;
+                            
+                            renderVisualFields();
+                            Obsidianscout.showToast("Config imported successfully", "success");
+                        } catch (err) {
+                            Obsidianscout.showToast("Imported JSON structure has errors", "error");
+                        }
+                    } else {
+                        Obsidianscout.showToast("Invalid JSON file", "error");
+                    }
+                };
+                reader.readAsText(file);
+            });
+
+            // API settings save
+            document.getElementById("settings-save").addEventListener("click", async () => {
+                const payload = {
+                    year: Number(document.getElementById("settings-year").value || new Date().getFullYear()),
+                    eventCode: document.getElementById("settings-event-code").value.trim(),
+                    timezone: document.getElementById("settings-timezone").value.trim(),
+                    preferredSource: document.getElementById("settings-source").value,
+                    useStatboticsEpa: document.getElementById("settings-epa").checked,
+                    useTbaOpr: document.getElementById("settings-opr").checked,
+                    apiKeys: {
+                        tbaKey: document.getElementById("settings-tba-key").value.trim(),
+                        firstUsername: document.getElementById("settings-first-user").value.trim(),
+                        firstKey: document.getElementById("settings-first-key").value.trim(),
+                        statboticsKey: document.getElementById("settings-statbotics-key").value.trim()
+                    }
+                };
+
+                try {
+                    await Obsidianscout.request("/api/settings", {
+                        method: "PUT",
+                        json: payload
+                    });
+                    Obsidianscout.showToast("API settings saved", "success");
+                } catch (error) {
+                    Obsidianscout.showToast(error.message || "Save failed", "error");
+                }
+            });
+
         } catch (error) {
-            Obsidianscout.showToast(error.message || "Save failed", "error");
+            console.error("Failed to load settings data:", error);
+            Obsidianscout.showRetryButton(adminPanelWrapper, "Failed to load settings: " + error.message, loadSettingsPageData);
         }
-    });
+    }
 
     async function loadActiveConfig() {
         const mode = configModes[activeConfigKind];
