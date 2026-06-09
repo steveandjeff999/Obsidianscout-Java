@@ -16,11 +16,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import org.jetbrains.exposed.dao.id.EntityID
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import java.time.Instant
 
 @Serializable
@@ -32,29 +34,81 @@ data class QualitativeScoutingEntryRecord(
     val matchKey: String?,
     val matchNumber: Int?,
     val data: JsonObject,
-    val createdAt: String
+    val createdAt: String,
+    val isPrescout: Boolean = false,
+    val matchPlayedTime: Long? = null
 )
 
 object QualitativeScoutingService {
-    fun listEntries(session: UserSession): List<QualitativeScoutingEntryRecord> {
+    fun listEntries(session: UserSession, includePrescout: Boolean = false): List<QualitativeScoutingEntryRecord> {
         return transaction {
             val query = QualitativeScoutingEntries.selectAll()
+            if (!includePrescout) {
+                query.andWhere { QualitativeScoutingEntries.isPrescout eq false }
+            }
             if (session.role != UserRole.SUPERADMIN) {
                 val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).map { row ->
+            val rows = query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList()
+            val matchKeys = rows.mapNotNull { it[QualitativeScoutingEntries.matchKey] }.distinct()
+            val matchTimes = if (matchKeys.isNotEmpty()) {
+                com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
+                    .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
+            } else {
+                emptyMap()
+            }
+            rows.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
+                val mKey = row[QualitativeScoutingEntries.matchKey]
                 QualitativeScoutingEntryRecord(
                     id = row[QualitativeScoutingEntries.id].value,
                     ownerTeamNumber = row[QualitativeScoutingEntries.ownerTeamNumber],
                     targetTeamNumber = row[QualitativeScoutingEntries.targetTeamNumber],
                     eventKey = row[QualitativeScoutingEntries.eventKey],
-                    matchKey = row[QualitativeScoutingEntries.matchKey],
+                    matchKey = mKey,
                     matchNumber = row[QualitativeScoutingEntries.matchNumber],
                     data = data,
-                    createdAt = row[QualitativeScoutingEntries.createdAt].toString()
+                    createdAt = row[QualitativeScoutingEntries.createdAt].toString(),
+                    isPrescout = row[QualitativeScoutingEntries.isPrescout],
+                    matchPlayedTime = matchTimes[mKey]
+                )
+            }
+        }
+    }
+
+    fun listPrescoutEntries(session: UserSession): List<QualitativeScoutingEntryRecord> {
+        return transaction {
+            val query = QualitativeScoutingEntries.selectAll()
+            query.andWhere { QualitativeScoutingEntries.isPrescout eq true }
+            if (session.role != UserRole.SUPERADMIN) {
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val visibleTeams = partnerTeams + session.teamNumber
+                query.andWhere { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
+            }
+            val rows = query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList()
+            val matchKeys = rows.mapNotNull { it[QualitativeScoutingEntries.matchKey] }.distinct()
+            val matchTimes = if (matchKeys.isNotEmpty()) {
+                com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
+                    .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
+            } else {
+                emptyMap()
+            }
+            rows.map { row ->
+                val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
+                val mKey = row[QualitativeScoutingEntries.matchKey]
+                QualitativeScoutingEntryRecord(
+                    id = row[QualitativeScoutingEntries.id].value,
+                    ownerTeamNumber = row[QualitativeScoutingEntries.ownerTeamNumber],
+                    targetTeamNumber = row[QualitativeScoutingEntries.targetTeamNumber],
+                    eventKey = row[QualitativeScoutingEntries.eventKey],
+                    matchKey = mKey,
+                    matchNumber = row[QualitativeScoutingEntries.matchNumber],
+                    data = data,
+                    createdAt = row[QualitativeScoutingEntries.createdAt].toString(),
+                    isPrescout = row[QualitativeScoutingEntries.isPrescout],
+                    matchPlayedTime = matchTimes[mKey]
                 )
             }
         }
@@ -63,7 +117,8 @@ object QualitativeScoutingService {
     fun createEntry(
         session: UserSession,
         request: ScoutingEntryRequest,
-        config: ScoutingConfig
+        config: ScoutingConfig,
+        isPrescout: Boolean = false
     ): QualitativeScoutingEntryRecord {
         val missing = config.fields.filter { it.required && !request.data.containsKey(it.id) }
         if (missing.isNotEmpty()) {
@@ -89,6 +144,16 @@ object QualitativeScoutingService {
                 it[QualitativeScoutingEntries.dataJson] = dataJson
                 it[submittedByUserId] = EntityID(session.userId, Users)
                 it[createdAt] = now
+                it[QualitativeScoutingEntries.isPrescout] = isPrescout
+            }
+        }
+
+        val matchPlayedTime = transaction {
+            meta.matchKey?.let { mKey ->
+                com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey eq mKey }
+                    .limit(1)
+                    .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
+                    .firstOrNull()
             }
         }
 
@@ -100,7 +165,9 @@ object QualitativeScoutingService {
             matchKey = meta.matchKey,
             matchNumber = meta.matchNumber,
             data = request.data,
-            createdAt = now.toString()
+            createdAt = now.toString(),
+            isPrescout = isPrescout,
+            matchPlayedTime = matchPlayedTime
         )
     }
 

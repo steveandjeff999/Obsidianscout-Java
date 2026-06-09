@@ -71,7 +71,7 @@ fun main() {
         channelPipelineConfig = {
             addLast("ssl-connection-closer", object : ChannelInboundHandlerAdapter() {
                 override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-                    if (cause.isSslFailure()) {
+                    if (cause.isIgnorableException()) {
                         ctx.close()
                         return
                     }
@@ -138,11 +138,21 @@ private fun loadOrCreateKeyStore(appConfig: AppConfig): KeyStore {
     return keyStore
 }
 
-private fun Throwable.isSslFailure(): Boolean {
+private fun Throwable.isIgnorableException(): Boolean {
     var current: Throwable? = this
     while (current != null) {
         if (current is SSLHandshakeException || current is SSLException) {
             return true
+        }
+        if (current is java.io.IOException) {
+            val msg = current.message?.lowercase() ?: ""
+            if (msg.contains("connection reset") ||
+                msg.contains("broken pipe") ||
+                msg.contains("aborted") ||
+                msg.contains("connection aborted")
+            ) {
+                return true
+            }
         }
         current = current.cause
     }

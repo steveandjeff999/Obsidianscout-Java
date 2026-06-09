@@ -276,7 +276,8 @@ fun Application.configureRoutes() {
             route("/scouting") {
                 get {
                     val session = call.requireSession()
-                    call.respond(ScoutingService.listEntries(session))
+                    val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: false
+                    call.respond(ScoutingService.listEntries(session, includePrescout))
                 }
                 post {
                     val session = call.requireSession()
@@ -290,7 +291,8 @@ fun Application.configureRoutes() {
             route("/pit-scouting") {
                 get {
                     val session = call.requireSession()
-                    call.respond(PitScoutingService.listEntries(session))
+                    val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: false
+                    call.respond(PitScoutingService.listEntries(session, includePrescout))
                 }
                 post {
                     val session = call.requireSession()
@@ -304,7 +306,8 @@ fun Application.configureRoutes() {
             route("/qual-scouting") {
                 get {
                     val session = call.requireSession()
-                    call.respond(QualitativeScoutingService.listEntries(session))
+                    val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: false
+                    call.respond(QualitativeScoutingService.listEntries(session, includePrescout))
                 }
                 post {
                     val session = call.requireSession()
@@ -315,12 +318,76 @@ fun Application.configureRoutes() {
                 }
             }
 
+            route("/prescout") {
+                route("/scouting") {
+                    get {
+                        val session = call.requireSession()
+                        call.respond(ScoutingService.listPrescoutEntries(session))
+                    }
+                    post {
+                        val session = call.requireSession()
+                        val request = call.receive<ScoutingEntryRequest>()
+                        val config = ConfigService.getConfig(session.teamNumber)
+                        val entry = ScoutingService.createEntry(session, request, config, isPrescout = true)
+                        call.respond(entry)
+                    }
+                }
+                route("/pit-scouting") {
+                    get {
+                        val session = call.requireSession()
+                        call.respond(PitScoutingService.listPrescoutEntries(session))
+                    }
+                    post {
+                        val session = call.requireSession()
+                        val request = call.receive<ScoutingEntryRequest>()
+                        val config = ConfigService.getPitConfig(session.teamNumber)
+                        val entry = PitScoutingService.createEntry(session, request, config, isPrescout = true)
+                        call.respond(entry)
+                    }
+                }
+                route("/qual-scouting") {
+                    get {
+                        val session = call.requireSession()
+                        call.respond(QualitativeScoutingService.listPrescoutEntries(session))
+                    }
+                    post {
+                        val session = call.requireSession()
+                        val request = call.receive<ScoutingEntryRequest>()
+                        val config = ConfigService.getQualitativeConfig(session.teamNumber)
+                        val entry = QualitativeScoutingService.createEntry(session, request, config, isPrescout = true)
+                        call.respond(entry)
+                    }
+                }
+                post("/sync-event") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
+                    val settings = SettingsService.getSettings(session.teamNumber)
+                    val counts = IntegrationService.syncCustomEventData(settings, eventKey)
+                    call.respond(counts)
+                }
+            }
+
             route("/analytics") {
                 get {
                     val session = call.requireAnalyticsOrAbove()
                     val config = ConfigService.getConfig(session.teamNumber)
-                    val entries = ScoutingService.listEntries(session)
-                    val response = AnalyticsService.generate(config, entries)
+                    val forcePrescout = call.request.queryParameters["usePrescout"]?.toBoolean() ?: false
+                    
+                    val regularEntries = ScoutingService.listEntries(session, includePrescout = false)
+                    val prescoutEntries = ScoutingService.listEntries(session, includePrescout = true).filter { it.isPrescout }
+                    
+                    val settings = SettingsService.getSettings(session.teamNumber)
+                    val currentEventKey = settings.resolvedEventKey()
+                    
+                    val mergedEntries = AnalyticsService.mergePrescoutEntries(
+                        regularEntries,
+                        prescoutEntries,
+                        currentEventKey,
+                        forcePrescout
+                    )
+                    
+                    val response = AnalyticsService.generate(config, mergedEntries)
                     call.respond(response)
                 }
             }
@@ -389,7 +456,8 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val matchKey = call.request.queryParameters["matchKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing matchKey parameter")
-                    val prediction = PredictorService.predict(session, matchKey)
+                    val forcePrescout = call.request.queryParameters["usePrescout"]?.toBoolean() ?: false
+                    val prediction = PredictorService.predict(session, matchKey, forcePrescout)
                     call.respond(prediction)
                 }
                 post {
@@ -604,6 +672,10 @@ fun Application.configureRoutes() {
             "scout" to "scout.html",
             "pit-scout" to "pit-scout.html",
             "qual-scout" to "qual-scout.html",
+            "prescout-scout" to "prescout-scout.html",
+            "prescout-pit" to "prescout-pit.html",
+            "prescout-qual" to "prescout-qual.html",
+            "prescout" to "prescout.html",
             "qual-data" to "qual-data.html",
             "pit-data" to "pit-data.html",
             "all-data" to "all-data.html",

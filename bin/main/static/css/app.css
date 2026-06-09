@@ -1036,22 +1036,35 @@ body.theme-dark .code-input {
 }
 
 .tab {
-    padding: 10px 16px;
+    padding: 12px 24px;
+    font-size: 15px;
     border-radius: 999px;
-    border: 1px solid rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(0, 0, 0, 0.18);
     background: var(--surface-2);
-    font-weight: 600;
+    color: var(--ink);
+    font-weight: 700;
     cursor: pointer;
+    transition: all 0.2s ease;
 }
 
 body.theme-dark .tab {
-    border-color: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+.tab:hover {
+    background: var(--surface-3);
+    border-color: var(--accent);
 }
 
 .tab.active {
     background: var(--accent);
     color: white;
     border-color: transparent;
+    box-shadow: 0 4px 12px rgba(11, 143, 136, 0.25);
+}
+
+body.theme-dark .tab.active {
+    box-shadow: 0 4px 12px rgba(60, 207, 192, 0.25);
 }
 
 .counter {
@@ -1061,12 +1074,32 @@ body.theme-dark .tab {
 }
 
 .counter button {
-    width: 34px;
-    height: 34px;
+    width: 38px;
+    height: 38px;
     border-radius: 10px;
-    border: 1px solid rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(0, 0, 0, 0.18);
     background: var(--surface-2);
+    color: var(--ink);
     font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.theme-dark .counter button {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.counter button:hover {
+    background: var(--surface-3);
+    border-color: var(--accent);
+}
+
+.counter button:active {
+    transform: scale(0.95);
 }
 
 .counter input {

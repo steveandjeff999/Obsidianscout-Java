@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Qualitative Prescout</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body data-page="prescout-qual">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <!-- Will be replaced dynamically by base.html -->
+        </aside>
+
+        <main class="main-content">
+            <div class="card">
+                <h1>Qualitative Prescouting</h1>
+                <p class="notice">Enter an event code, load the teams/matches, then fill in the form driven by config JSON.</p>
+
+                <div class="split mb-18">
+                    <div class="field">
+                        <label for="event-code-input">Event Code</label>
+                        <div class="row gap-8">
+                            <input id="event-code-input" type="text" placeholder="e.g. 2024micmp" style="min-width: 140px;" />
+                            <button id="load-event-btn" class="btn" type="button">Load</button>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="team-select">Team</label>
+                        <select id="team-select" disabled></select>
+                    </div>
+                    <div class="field">
+                        <label for="match-select">Match</label>
+                        <select id="match-select" class="select-wide" disabled></select>
+                    </div>
+                    <div class="field">
+                        <label>Timezone</label>
+                        <div id="timezone-badge" class="badge">--</div>
+                    </div>
+                </div>
+
+                <form id="qual-scouting-form" class="form-grid">
+                    <div id="form-blocked" class="notice">Enter an event code and click Load, then select a team and match to start scouting.</div>
+                    <div id="form-fields" class="form-grid"></div>
+
+                    <div class="row gap-12 wrap">
+                        <button id="qual-submit" class="btn" type="submit" disabled>Save entry</button>
+                        <button id="qual-clear" class="btn ghost" type="button" disabled>Clear form</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/prescout-qual.js"></script>
+</body>
+</html>

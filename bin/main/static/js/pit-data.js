@@ -47,7 +47,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const [config, entries, events] = await Promise.all([
                 Obsidianscout.request("/api/pit-config"),
-                Obsidianscout.request("/api/pit-scouting"),
+                Obsidianscout.request("/api/pit-scouting?includePrescout=true"),
                 Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
             ]);
 
@@ -55,7 +55,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             state.config = config;
             state.fields = buildDisplayFields(config.fields || []);
-            state.entries = Array.isArray(entries) ? entries : [];
+            state.entries = (Array.isArray(entries) ? entries : []).map(e => {
+                if (e.isPrescout) {
+                    return { ...e, eventKey: "prescout" };
+                }
+                return e;
+            });
             state.events = normalizeEvents(events, state.eventKey, state.settings);
             state.quickFieldId = pickDefaultQuickField(state.fields);
 
@@ -116,6 +121,11 @@ function initControls(state) {
 async function loadTeamsForEvent(state) {
     if (!state.eventKey) {
         state.teams = [];
+        return;
+    }
+    if (state.eventKey === "prescout") {
+        const uniqueTeams = Array.from(new Set(state.entries.filter(e => e.isPrescout).map(e => e.targetTeamNumber).filter(Boolean)));
+        state.teams = uniqueTeams.map(teamNumber => ({ teamNumber, teamKey: `frc${teamNumber}`, nickname: `Team ${teamNumber}` }));
         return;
     }
     try {
@@ -351,7 +361,7 @@ function fieldById(state, id) {
 }
 
 function normalizeEvents(events, activeKey, settings) {
-    const list = [{ eventKey: "", name: "All events", year: settings.year }]
+    const list = [{ eventKey: "", name: "All events", year: settings.year }, { eventKey: "prescout", name: "Prescouting Data", year: settings.year }]
         .concat(Array.isArray(events) ? events.slice() : []);
     if (activeKey && !list.some((event) => event.eventKey === activeKey)) {
         list.splice(1, 0, {

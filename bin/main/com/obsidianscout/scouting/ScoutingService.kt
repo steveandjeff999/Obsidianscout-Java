@@ -15,11 +15,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import org.jetbrains.exposed.dao.id.EntityID
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import java.time.Instant
 
 @Serializable
@@ -31,7 +33,9 @@ data class ScoutingEntryRecord(
     val matchKey: String?,
     val matchNumber: Int?,
     val data: JsonObject,
-    val createdAt: String
+    val createdAt: String,
+    val isPrescout: Boolean = false,
+    val matchPlayedTime: Long? = null
 )
 
 object ScoutingService {
@@ -40,25 +44,75 @@ object ScoutingService {
      * SUPERADMIN sees all entries across all teams.
      * Everyone else sees their own team's entries PLUS entries from accepted alliance partner teams.
      */
-    fun listEntries(session: UserSession): List<ScoutingEntryRecord> {
+    fun listEntries(session: UserSession, includePrescout: Boolean = false): List<ScoutingEntryRecord> {
         return transaction {
             val query = ScoutingEntries.selectAll()
+            if (!includePrescout) {
+                query.andWhere { ScoutingEntries.isPrescout eq false }
+            }
             if (session.role != UserRole.SUPERADMIN) {
                 val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).map { row ->
+            val rows = query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).toList()
+            val matchKeys = rows.mapNotNull { it[ScoutingEntries.matchKey] }.distinct()
+            val matchTimes = if (matchKeys.isNotEmpty()) {
+                com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
+                    .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
+            } else {
+                emptyMap()
+            }
+            rows.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
+                val mKey = row[ScoutingEntries.matchKey]
                 ScoutingEntryRecord(
                     id = row[ScoutingEntries.id].value,
                     ownerTeamNumber = row[ScoutingEntries.ownerTeamNumber],
                     targetTeamNumber = row[ScoutingEntries.targetTeamNumber],
                     eventKey = row[ScoutingEntries.eventKey],
-                    matchKey = row[ScoutingEntries.matchKey],
+                    matchKey = mKey,
                     matchNumber = row[ScoutingEntries.matchNumber],
                     data = data,
-                    createdAt = row[ScoutingEntries.createdAt].toString()
+                    createdAt = row[ScoutingEntries.createdAt].toString(),
+                    isPrescout = row[ScoutingEntries.isPrescout],
+                    matchPlayedTime = matchTimes[mKey]
+                )
+            }
+        }
+    }
+
+    fun listPrescoutEntries(session: UserSession): List<ScoutingEntryRecord> {
+        return transaction {
+            val query = ScoutingEntries.selectAll()
+            query.andWhere { ScoutingEntries.isPrescout eq true }
+            if (session.role != UserRole.SUPERADMIN) {
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val visibleTeams = partnerTeams + session.teamNumber
+                query.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
+            }
+            val rows = query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).toList()
+            val matchKeys = rows.mapNotNull { it[ScoutingEntries.matchKey] }.distinct()
+            val matchTimes = if (matchKeys.isNotEmpty()) {
+                com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
+                    .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
+            } else {
+                emptyMap()
+            }
+            rows.map { row ->
+                val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
+                val mKey = row[ScoutingEntries.matchKey]
+                ScoutingEntryRecord(
+                    id = row[ScoutingEntries.id].value,
+                    ownerTeamNumber = row[ScoutingEntries.ownerTeamNumber],
+                    targetTeamNumber = row[ScoutingEntries.targetTeamNumber],
+                    eventKey = row[ScoutingEntries.eventKey],
+                    matchKey = mKey,
+                    matchNumber = row[ScoutingEntries.matchNumber],
+                    data = data,
+                    createdAt = row[ScoutingEntries.createdAt].toString(),
+                    isPrescout = row[ScoutingEntries.isPrescout],
+                    matchPlayedTime = matchTimes[mKey]
                 )
             }
         }
@@ -67,7 +121,8 @@ object ScoutingService {
     fun createEntry(
         session: UserSession,
         request: ScoutingEntryRequest,
-        config: ScoutingConfig
+        config: ScoutingConfig,
+        isPrescout: Boolean = false
     ): ScoutingEntryRecord {
         val missing = config.fields.filter { it.required && !request.data.containsKey(it.id) }
         if (missing.isNotEmpty()) {
@@ -92,6 +147,16 @@ object ScoutingService {
                 it[ScoutingEntries.dataJson] = dataJson
                 it[submittedByUserId] = EntityID(session.userId, com.obsidianscout.db.Users)
                 it[createdAt] = now
+                it[ScoutingEntries.isPrescout] = isPrescout
+            }
+        }
+
+        val matchPlayedTime = transaction {
+            meta.matchKey?.let { mKey ->
+                com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey eq mKey }
+                    .limit(1)
+                    .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
+                    .firstOrNull()
             }
         }
 
@@ -103,7 +168,9 @@ object ScoutingService {
             matchKey = meta.matchKey,
             matchNumber = meta.matchNumber,
             data = request.data,
-            createdAt = now.toString()
+            createdAt = now.toString(),
+            isPrescout = isPrescout,
+            matchPlayedTime = matchPlayedTime
         )
     }
 

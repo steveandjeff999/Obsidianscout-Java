@@ -36,7 +36,7 @@ async function loadGraphsPageData() {
         const settings = settingsResponse.settings;
         const [config, entries, events] = await Promise.all([
             Obsidianscout.request("/api/config"),
-            Obsidianscout.request("/api/scouting"),
+            Obsidianscout.request("/api/scouting?includePrescout=true"),
             Obsidianscout.request(`/api/events?year=${settings.year}&cached=1`)
         ]);
 
@@ -75,7 +75,9 @@ function initGraphsPage({ config, entries, events }) {
         metricId: "",
         dataView: "averages",
         sort: "value_desc",
-        selectedGraphTypes: new Set(["bar"])
+        selectedGraphTypes: new Set(["bar"]),
+        forcePrescout: false,
+        eventTeams: new Set()
     };
 
     renderSummary(entries);
@@ -125,8 +127,9 @@ function initEventFilter(state) {
         option.textContent = `${event.name} (${event.year})`;
         eventFilter.appendChild(option);
     });
-    eventFilter.addEventListener("change", () => {
+    eventFilter.addEventListener("change", async () => {
         state.eventKey = eventFilter.value;
+        await loadTeamsForEvent(state);
         updateTeamList(state);
         updateSelectionSummary(state);
         if (status) {
@@ -178,7 +181,7 @@ function initTeamSelection(state) {
     if (topTeams) {
         topTeams.addEventListener("click", () => {
             const metric = state.metricMap.get(state.metricId);
-            const filteredEntries = filterEntries(state.entries, state.eventKey);
+            const filteredEntries = getFilteredEntriesForEvent(state);
             const teamStats = buildTeamStats(filteredEntries, metric, state);
             const top = teamStats.sort((a, b) => b.value - a.value).slice(0, 8).map((item) => item.teamNumber);
             state.selectedTeams.clear();
@@ -190,7 +193,7 @@ function initTeamSelection(state) {
 
     if (addEvent) {
         addEvent.addEventListener("click", () => {
-            const filteredEntries = filterEntries(state.entries, state.eventKey);
+            const filteredEntries = getFilteredEntriesForEvent(state);
             const teams = Array.from(new Set(filteredEntries.map((entry) => entry.targetTeamNumber).filter(Boolean)));
             teams.forEach((team) => state.selectedTeams.add(team));
             updateTeamList(state);
@@ -238,6 +241,7 @@ function wireGraphOptions(state) {
     const dataView = document.getElementById("graph-view");
     const sortSelect = document.getElementById("graph-sort");
     const generateButton = document.getElementById("graph-generate");
+    const includePrescoutCheckbox = document.getElementById("include-prescout-checkbox");
 
     if (dataView) {
         dataView.addEventListener("change", () => {
@@ -247,6 +251,12 @@ function wireGraphOptions(state) {
     if (sortSelect) {
         sortSelect.addEventListener("change", () => {
             state.sort = sortSelect.value;
+        });
+    }
+    if (includePrescoutCheckbox) {
+        includePrescoutCheckbox.addEventListener("change", () => {
+            state.forcePrescout = includePrescoutCheckbox.checked;
+            updateTeamList(state);
         });
     }
     if (generateButton) {
@@ -259,9 +269,19 @@ function updateTeamList(state) {
     if (!list) {
         return;
     }
-    const filteredEntries = filterEntries(state.entries, state.eventKey);
-    const teams = Array.from(new Set(filteredEntries.map((entry) => entry.targetTeamNumber).filter(Boolean)))
-        .sort((a, b) => a - b);
+    const filteredEntries = getFilteredEntriesForEvent(state);
+    let teams = Array.from(new Set(filteredEntries.map((entry) => entry.targetTeamNumber).filter(Boolean)));
+
+    if (state.eventKey && state.eventTeams && state.eventTeams.size > 0) {
+        teams = teams.filter(teamNumber => state.eventTeams.has(teamNumber));
+        state.selectedTeams.forEach(teamNumber => {
+            if (!state.eventTeams.has(teamNumber)) {
+                state.selectedTeams.delete(teamNumber);
+            }
+        });
+    }
+
+    teams.sort((a, b) => a - b);
     list.innerHTML = "";
 
     if (!teams.length) {
@@ -306,6 +326,25 @@ function updateTeamList(state) {
 
     updateSelectionSummary(state);
     filterTeamList(document.getElementById("team-search-input")?.value || "");
+}
+
+async function loadTeamsForEvent(state) {
+    state.eventTeams = new Set();
+    if (!state.eventKey) {
+        return;
+    }
+    try {
+        const teams = await Obsidianscout.request(`/api/teams?eventKey=${state.eventKey}`);
+        if (Array.isArray(teams)) {
+            teams.forEach(team => {
+                if (team.teamNumber) {
+                    state.eventTeams.add(team.teamNumber);
+                }
+            });
+        }
+    } catch (error) {
+        console.error("Failed to load teams for event:", error);
+    }
 }
 
 function updateSelectionSummary(state) {
@@ -429,8 +468,7 @@ function generateGraphs(state) {
     }
 
     const metric = state.metricMap.get(state.metricId);
-    const filteredEntries = filterEntries(state.entries, state.eventKey)
-        .filter((entry) => selectedTeams.includes(entry.targetTeamNumber));
+    const filteredEntries = getFilteredEntriesForTeams(state);
 
     if (!filteredEntries.length) {
         output.appendChild(buildNotice("No entries found for the selected teams."));
@@ -808,7 +846,7 @@ function buildTeamSeries(entries, metric, state) {
         const stats = sortTeamStats(buildTeamStats(entries, metric, state), state.sort);
         return [{
             name: (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label,
-            x: stats.map((item) => item.teamNumber),
+            x: stats.map((item) => `Team ${item.teamNumber}`),
             y: stats.map((item) => item.value)
         }];
     }
@@ -829,10 +867,32 @@ function buildTeamSeries(entries, metric, state) {
     groups.forEach((teamEntries, teamNumber) => {
         const sorted = teamEntries
             .filter((entry) => metricValue(entry, metric, state) !== null)
-            .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0));
+            .sort((a, b) => {
+                if (a.matchPlayedTime !== null && b.matchPlayedTime !== null && a.matchPlayedTime !== undefined && b.matchPlayedTime !== undefined) {
+                    return a.matchPlayedTime - b.matchPlayedTime;
+                }
+                const aEvent = a.eventKey || "";
+                const bEvent = b.eventKey || "";
+                if (aEvent !== bEvent) {
+                    return aEvent.localeCompare(bEvent);
+                }
+                return (a.matchNumber || 0) - (b.matchNumber || 0);
+            });
         series.push({
             name: `Team ${teamNumber}`,
-            x: sorted.map((entry, index) => entry.matchNumber || index + 1),
+            x: sorted.map((entry, index) => {
+                let levelAbbrev = "QM";
+                if (entry.matchKey) {
+                    const parts = entry.matchKey.split('_');
+                    if (parts.length > 1) {
+                        const rawLevel = parts[1].replace(/[0-9]/g, "");
+                        levelAbbrev = rawLevel.toUpperCase();
+                    }
+                }
+                const num = entry.matchNumber || (index + 1);
+                const eventLabel = entry.isPrescout ? (entry.eventKey || "Prescout") : "";
+                return eventLabel ? `${levelAbbrev} ${num} (${eventLabel})` : `${levelAbbrev} ${num}`;
+            }),
             y: sorted.map((entry) => metricValue(entry, metric, state))
         });
     });
@@ -998,6 +1058,55 @@ function entryScore(config, entry) {
         }
         return total + fieldPoints(field, entry.data && entry.data[field.id]);
     }, 0);
+}
+
+function getFilteredEntriesForTeams(state) {
+    const selectedTeams = Array.from(state.selectedTeams);
+    const result = [];
+    selectedTeams.forEach(teamNumber => {
+        const currentEventEntries = state.entries.filter(entry => 
+            entry.targetTeamNumber === teamNumber && 
+            (!state.eventKey || entry.eventKey === state.eventKey) && 
+            !entry.isPrescout
+        );
+        const prescoutEntries = state.entries.filter(entry => 
+            entry.targetTeamNumber === teamNumber && 
+            entry.isPrescout
+        );
+        if (state.forcePrescout || currentEventEntries.length < 3) {
+            result.push(...currentEventEntries);
+            result.push(...prescoutEntries);
+        } else {
+            result.push(...currentEventEntries);
+        }
+    });
+    return result;
+}
+
+function getFilteredEntriesForEvent(state) {
+    if (!state.eventKey) {
+        return state.entries;
+    }
+    const teams = Array.from(new Set(state.entries.map(e => e.targetTeamNumber).filter(Boolean)));
+    const result = [];
+    teams.forEach(teamNumber => {
+        const currentEventEntries = state.entries.filter(entry => 
+            entry.targetTeamNumber === teamNumber && 
+            entry.eventKey === state.eventKey && 
+            !entry.isPrescout
+        );
+        const prescoutEntries = state.entries.filter(entry => 
+            entry.targetTeamNumber === teamNumber && 
+            entry.isPrescout
+        );
+        if (state.forcePrescout || currentEventEntries.length < 3) {
+            result.push(...currentEventEntries);
+            result.push(...prescoutEntries);
+        } else {
+            result.push(...currentEventEntries);
+        }
+    });
+    return result;
 }
 
 function formatNumber(value) {

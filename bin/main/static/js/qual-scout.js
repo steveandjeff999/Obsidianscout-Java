@@ -43,6 +43,9 @@ async function loadQualScoutPageData(me) {
 
         // Re-query elements
         const form = document.getElementById("scouting-form");
+        if (form) {
+            form.noValidate = true;
+        }
         const fieldContainer = document.getElementById("form-fields");
         const submitButton = document.getElementById("scout-submit");
         const teamSelect = document.getElementById("team-select");
@@ -453,13 +456,37 @@ function buildPayload(fields, form) {
             continue;
         }
         const value = readFieldValue(field, input);
+        const label = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
 
         if (field.required && (value === null || value === "")) {
-            Obsidianscout.showToast(`Missing ${(window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label}`, "error");
+            Obsidianscout.showToast(`Missing ${label}`, "error");
+            if (typeof switchTab === "function" && typeof getFieldPhase === "function") {
+                const phase = getFieldPhase(field);
+                if (phase) switchTab(phase);
+            }
             return null;
         }
 
         if (value !== null && value !== "") {
+            if (field.type === "number" || field.type === "counter" || field.type === "rating") {
+                const numVal = Number(value);
+                if (field.min !== null && field.min !== undefined && numVal < field.min) {
+                    Obsidianscout.showToast(`${label} must be at least ${field.min}`, "error");
+                    if (typeof switchTab === "function" && typeof getFieldPhase === "function") {
+                        const phase = getFieldPhase(field);
+                        if (phase) switchTab(phase);
+                    }
+                    return null;
+                }
+                if (field.max !== null && field.max !== undefined && numVal > field.max) {
+                    Obsidianscout.showToast(`${label} must be at most ${field.max}`, "error");
+                    if (typeof switchTab === "function" && typeof getFieldPhase === "function") {
+                        const phase = getFieldPhase(field);
+                        if (phase) switchTab(phase);
+                    }
+                    return null;
+                }
+            }
             payload[field.id] = value;
         }
     }

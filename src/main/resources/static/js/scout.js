@@ -43,6 +43,9 @@ async function loadScoutPageData(me) {
 
         // Re-query elements
         const form = document.getElementById("scouting-form");
+        if (form) {
+            form.noValidate = true;
+        }
         const fieldContainer = document.getElementById("form-fields");
         const submitButton = document.getElementById("scout-submit");
         const teamSelect = document.getElementById("team-select");
@@ -78,12 +81,28 @@ async function loadScoutPageData(me) {
 
         const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
         const fields = injectSections(config.fields || []);
+        
         fields
             .filter((field) => !reserved.has(field.id))
             .forEach((field) => {
+                if (field.type === "section") {
+                    return;
+                }
                 const node = buildField(field);
+                node.dataset.phase = getFieldPhase(field);
                 fieldContainer.appendChild(node);
             });
+
+        const tabsRow = document.getElementById("scouting-tabs");
+        if (tabsRow) {
+            const tabs = tabsRow.querySelectorAll(".tab");
+            tabs.forEach(tab => {
+                tab.addEventListener("click", () => {
+                    switchTab(tab.dataset.tab);
+                });
+            });
+        }
+        switchTab("auto");
 
         const pointsPreview = {
             auto: document.getElementById("points-auto"),
@@ -378,13 +397,15 @@ function getFieldPhase(field) {
         return "";
     }
     if (field.phase) {
-        return String(field.phase).toLowerCase();
+        const p = String(field.phase).toLowerCase();
+        if (p === "postmatch" || p === "post-match" || p === "post match" || p === "post") return "postmatch";
+        return p;
     }
     const id = String(field.id || "").toLowerCase();
     if (id.startsWith("auto")) return "auto";
     if (id.startsWith("teleop")) return "teleop";
     if (id.startsWith("endgame")) return "endgame";
-    return "";
+    return "postmatch";
 }
 
 function buildCounter(field) {
@@ -464,13 +485,37 @@ function buildPayload(fields, form) {
             continue;
         }
         const value = readFieldValue(field, input);
+        const label = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
 
         if (field.required && (value === null || value === "")) {
-            Obsidianscout.showToast(`Missing ${(window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label}`, "error");
+            Obsidianscout.showToast(`Missing ${label}`, "error");
+            if (typeof switchTab === "function" && typeof getFieldPhase === "function") {
+                const phase = getFieldPhase(field);
+                if (phase) switchTab(phase);
+            }
             return null;
         }
 
         if (value !== null && value !== "") {
+            if (field.type === "number" || field.type === "counter" || field.type === "rating") {
+                const numVal = Number(value);
+                if (field.min !== null && field.min !== undefined && numVal < field.min) {
+                    Obsidianscout.showToast(`${label} must be at least ${field.min}`, "error");
+                    if (typeof switchTab === "function" && typeof getFieldPhase === "function") {
+                        const phase = getFieldPhase(field);
+                        if (phase) switchTab(phase);
+                    }
+                    return null;
+                }
+                if (field.max !== null && field.max !== undefined && numVal > field.max) {
+                    Obsidianscout.showToast(`${label} must be at most ${field.max}`, "error");
+                    if (typeof switchTab === "function" && typeof getFieldPhase === "function") {
+                        const phase = getFieldPhase(field);
+                        if (phase) switchTab(phase);
+                    }
+                    return null;
+                }
+            }
             payload[field.id] = value;
         }
     }
@@ -594,11 +639,22 @@ function setFormEnabled(form, notice, pointsCard, enabled) {
     if (notice) {
         notice.classList.toggle("hidden", enabled);
     }
+    const tabsRow = document.getElementById("scouting-tabs");
+    if (tabsRow) {
+        tabsRow.classList.toggle("hidden", !enabled);
+        if (enabled) {
+            switchTab("auto");
+        }
+    }
     if (pointsCard) {
         pointsCard.classList.toggle("hidden", !enabled);
     }
     const inputs = form.querySelectorAll("input, select, textarea, button");
     inputs.forEach((input) => {
+        if (input.classList.contains("tab")) {
+            input.disabled = !enabled;
+            return;
+        }
         if (input.id === "scout-submit" || input.id === "scout-clear") {
             input.disabled = !enabled;
             return;
@@ -606,6 +662,27 @@ function setFormEnabled(form, notice, pointsCard, enabled) {
         input.disabled = !enabled;
     });
 }
+
+function switchTab(activeTab) {
+    const tabs = document.querySelectorAll("#scouting-tabs .tab");
+    tabs.forEach(tab => {
+        if (tab.dataset.tab === activeTab) {
+            tab.classList.add("active");
+        } else {
+            tab.classList.remove("active");
+        }
+    });
+
+    const fields = document.querySelectorAll("#form-fields .field");
+    fields.forEach(field => {
+        if (field.dataset.phase === activeTab) {
+            field.classList.remove("hidden");
+        } else {
+            field.classList.add("hidden");
+        }
+    });
+}
+
 
 function fieldPoints(field, value) {
     if (!field) {

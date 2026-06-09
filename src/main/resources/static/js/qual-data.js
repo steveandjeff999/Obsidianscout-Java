@@ -85,7 +85,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const [config, entries, events] = await Promise.all([
                 Obsidianscout.request("/api/qual-config"),
-                Obsidianscout.request("/api/qual-scouting"),
+                Obsidianscout.request("/api/qual-scouting?includePrescout=true"),
                 Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
             ]);
 
@@ -96,7 +96,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             state.fields = normalizeFields(config.fields || []);
             state.groups = groupFields(config.fields || []);
             state.rankingMetrics = buildRankingMetrics(state.fields);
-            state.entriesRaw = Array.isArray(entries) ? entries : [];
+            state.entriesRaw = (Array.isArray(entries) ? entries : []).map(e => {
+                if (e.isPrescout) {
+                    return { ...e, eventKey: "prescout", rawEventKey: e.eventKey };
+                }
+                return { ...e, rawEventKey: e.eventKey };
+            });
             state.events = buildEventList(events, state.entriesRaw, state.settings);
 
             initControls(state, ui);
@@ -119,8 +124,13 @@ async function refreshData(state, ui, options) {
     const currentTeam = keepSelection ? state.selectedTeam : null;
     const currentEntry = keepSelection ? state.selectedEntryId : null;
 
-    const latestServerEntries = await Obsidianscout.request("/api/qual-scouting");
-    state.entriesRaw = Array.isArray(latestServerEntries) ? latestServerEntries : [];
+    const latestServerEntries = await Obsidianscout.request("/api/qual-scouting?includePrescout=true");
+    state.entriesRaw = (Array.isArray(latestServerEntries) ? latestServerEntries : []).map(e => {
+        if (e.isPrescout) {
+            return { ...e, eventKey: "prescout", rawEventKey: e.eventKey };
+        }
+        return { ...e, rawEventKey: e.eventKey };
+    });
 
     const pendingEntries = state.includePending ? loadPendingEntries() : [];
     state.entries = mergeEntries(state.entriesRaw, pendingEntries);
@@ -625,6 +635,17 @@ function sortEntries(entries, state) {
             return compareNumbers(left.targetTeamNumber, right.targetTeamNumber);
         }
         if (sortValue === "match-asc") {
+            if (left.matchPlayedTime !== null && right.matchPlayedTime !== null && left.matchPlayedTime !== undefined && right.matchPlayedTime !== undefined) {
+                if (left.matchPlayedTime !== right.matchPlayedTime) {
+                    return left.matchPlayedTime - right.matchPlayedTime;
+                }
+            } else {
+                const aEvent = left.rawEventKey || left.eventKey || "";
+                const bEvent = right.rawEventKey || right.eventKey || "";
+                if (aEvent !== bEvent) {
+                    return aEvent.localeCompare(bEvent);
+                }
+            }
             return compareNumbers(left.matchNumber, right.matchNumber);
         }
         return parseTime(right.createdAt) - parseTime(left.createdAt);
@@ -646,7 +667,12 @@ function buildByMatchRows(state, teamNumber) {
     const metric = metricById(state, state.selectedMetric);
     return entriesForTeam(state, teamNumber)
         .slice()
-        .sort((a, b) => parseTime(b.createdAt) - parseTime(a.createdAt))
+        .sort((a, b) => {
+            if (a.matchPlayedTime !== null && b.matchPlayedTime !== null && a.matchPlayedTime !== undefined && b.matchPlayedTime !== undefined) {
+                return b.matchPlayedTime - a.matchPlayedTime;
+            }
+            return parseTime(b.createdAt) - parseTime(a.createdAt);
+        })
         .map((entry) => ({
             matchLabel: matchLabel(entry),
             metricValue: metricValue(metric, entry),
@@ -817,11 +843,14 @@ function mergeEntries(serverEntries, pendingEntries) {
 
     pendingEntries.forEach((entry, index) => {
         const data = entry && entry.data ? entry.data : {};
+        const isPrescout = entry.isPrescout || data.isPrescout || false;
         normalized.push({
             id: entry && entry.id ? entry.id : `pending-qual-${index}-${entry.createdAt || Date.now()}`,
             ownerTeamNumber: entry && entry.ownerTeamNumber !== undefined ? entry.ownerTeamNumber : null,
             targetTeamNumber: data.targetTeamNumber ?? null,
-            eventKey: data.eventKey ?? null,
+            eventKey: isPrescout ? "prescout" : (data.eventKey ?? null),
+            rawEventKey: data.eventKey ?? null,
+            isPrescout: isPrescout,
             matchKey: data.matchKey ?? null,
             matchNumber: data.matchNumber ?? null,
             data,
@@ -861,6 +890,9 @@ function populateMetricFilter(state, select) {
 
 function buildEventList(events, entries, settings) {
     const map = new Map();
+    
+    map.set("prescout", { eventKey: "prescout", label: "Prescouting Data" });
+
     const addEvent = (eventKey, label) => {
         if (!eventKey || map.has(eventKey)) {
             return;
@@ -895,19 +927,22 @@ async function loadTeamMapForEvent(state) {
     if (state.selectedEvent === "all") {
         return;
     }
-
+    if (state.selectedEvent === "prescout") {
+        const uniqueTeams = Array.from(new Set(state.entries.filter(e => e.isPrescout).map(e => e.targetTeamNumber).filter(Boolean)));
+        uniqueTeams.forEach(teamNumber => {
+            state.teamsByNumber.set(teamNumber, { teamNumber, nickname: `Team ${teamNumber}` });
+        });
+        return;
+    }
     try {
         const teams = await Obsidianscout.request(`/api/teams?eventKey=${state.selectedEvent}`);
-        if (!Array.isArray(teams)) {
-            return;
+        if (Array.isArray(teams)) {
+            teams.forEach((team) => {
+                state.teamsByNumber.set(team.teamNumber, team);
+            });
         }
-        teams.forEach((team) => {
-            if (team && team.teamNumber !== undefined && team.teamNumber !== null) {
-                state.teamsByNumber.set(Number(team.teamNumber), team);
-            }
-        });
     } catch (error) {
-        // ignore and continue with numeric labels
+        // ignore
     }
 }
 

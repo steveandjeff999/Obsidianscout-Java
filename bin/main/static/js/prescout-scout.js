@@ -1,6 +1,7 @@
 let originalMainContentHTML = "";
 let mainContentWrapper = null;
 let mainContent = null;
+let currentEventKey = "";
 
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
@@ -19,29 +20,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (mainContent) {
         const siblings = Array.from(mainContent.children);
         mainContentWrapper = document.createElement("div");
-        mainContentWrapper.id = "scout-wrapper";
+        mainContentWrapper.id = "prescout-scout-wrapper";
         siblings.forEach(child => mainContentWrapper.appendChild(child));
         mainContent.appendChild(mainContentWrapper);
         originalMainContentHTML = mainContentWrapper.innerHTML;
-        await loadScoutPageData(me);
+        await initPrescoutScout(me);
     }
 });
 
-async function loadScoutPageData(me) {
+async function initPrescoutScout(me) {
     if (!mainContentWrapper) return;
-    Obsidianscout.showLoadingSpinner(mainContentWrapper, "Loading scouting form...");
+    Obsidianscout.showLoadingSpinner(mainContentWrapper, "Loading prescout config...");
 
     try {
         const settingsResponse = await Obsidianscout.request("/api/settings");
         const settings = settingsResponse.settings;
-        const eventKey = Obsidianscout.resolveEventKey(settings);
-        
         const config = await Obsidianscout.request("/api/config");
 
-        // Restore original HTML
         mainContentWrapper.innerHTML = originalMainContentHTML;
 
-        // Re-query elements
         const form = document.getElementById("scouting-form");
         if (form) {
             form.noValidate = true;
@@ -51,34 +48,18 @@ async function loadScoutPageData(me) {
         const teamSelect = document.getElementById("team-select");
         const matchSelect = document.getElementById("match-select");
         const timezoneBadge = document.getElementById("timezone-badge");
-        const eventBadge = document.getElementById("event-badge");
+        const eventCodeInput = document.getElementById("event-code-input");
+        const loadEventBtn = document.getElementById("load-event-btn");
         const clearButton = document.getElementById("scout-clear");
         const formBlocked = document.getElementById("form-blocked");
         const pointsPreviewCard = document.getElementById("points-preview");
 
         timezoneBadge.textContent = settings.timezone;
-        if (eventBadge) {
-            eventBadge.textContent = eventKey || "Not set";
-        }
 
         let entryCache = [];
         let matches = [];
 
-        const dataBundle = await loadTeamsAndMatches(eventKey, teamSelect, matchSelect, settings.timezone);
-        matches = dataBundle.matches;
-
-        entryCache = await loadEntryCache();
-
-        teamSelect.addEventListener("change", async () => {
-            updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value);
-            matchSelect.value = "";
-            await handleSelectionChange();
-        });
-
-        matchSelect.addEventListener("change", async () => {
-            await handleSelectionChange();
-        });
-
+        // Build dynamic form fields
         const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
         const fields = injectSections(config.fields || []);
         
@@ -122,13 +103,87 @@ async function loadScoutPageData(me) {
             });
         }
 
-        await handleSelectionChange();
+        // Event loading logic
+        loadEventBtn.addEventListener("click", async () => {
+            const rawCode = eventCodeInput.value.trim().toLowerCase();
+            if (!rawCode) {
+                Obsidianscout.showToast("Enter a valid event code", "error");
+                return;
+            }
+
+            loadEventBtn.disabled = true;
+            eventCodeInput.disabled = true;
+            teamSelect.disabled = true;
+            matchSelect.disabled = true;
+            Obsidianscout.showToast("Syncing event data from API...", "info");
+
+            try {
+                // Determine eventKey (usually year + eventCode)
+                let key = rawCode;
+                if (!/^\d{4}/.test(rawCode)) {
+                    key = `${settings.year}${rawCode}`;
+                }
+                currentEventKey = key;
+
+                await Obsidianscout.request(`/api/prescout/sync-event?eventKey=${key}`, {
+                    method: "POST"
+                });
+
+                Obsidianscout.showToast("Event schedules synced successfully!", "success");
+
+                const dataBundle = await loadTeamsAndMatches(key, teamSelect, matchSelect, settings.timezone);
+                matches = dataBundle.matches;
+
+                teamSelect.disabled = false;
+                matchSelect.disabled = false;
+
+                entryCache = await loadEntryCache();
+                await handleSelectionChange();
+            } catch (err) {
+                console.error(err);
+                Obsidianscout.showToast("Failed to load event: " + err.message, "error");
+            } finally {
+                loadEventBtn.disabled = false;
+                eventCodeInput.disabled = false;
+            }
+        });
+
+        teamSelect.addEventListener("change", async () => {
+            updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value);
+            matchSelect.value = "";
+            await handleSelectionChange();
+        });
+
+        matchSelect.addEventListener("change", async () => {
+            await handleSelectionChange();
+        });
+
+        async function handleSelectionChange() {
+            const teamValue = teamSelect.value;
+            const matchValue = matchSelect.value;
+            const ready = Boolean(teamValue && matchValue && currentEventKey);
+            setFormEnabled(form, formBlocked, pointsPreviewCard, ready);
+
+            clearFormFields(fields, form);
+            updatePointsPreview(fields, form, pointsPreview);
+
+            if (!ready) {
+                return;
+            }
+
+            const teamNumber = Number(teamValue);
+            const entry = findEntry(entryCache, currentEventKey, teamNumber, matchValue);
+            if (entry) {
+                applyEntryToForm(entry, fields, form);
+                updatePointsPreview(fields, form, pointsPreview);
+            }
+        }
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
             submitButton.disabled = true;
 
-            if (!teamSelect.value || !matchSelect.value) {
+            if (!teamSelect.value || !matchSelect.value || !currentEventKey) {
                 Obsidianscout.showToast("Select both a team and a match", "error");
                 submitButton.disabled = false;
                 return;
@@ -140,78 +195,43 @@ async function loadScoutPageData(me) {
                 return;
             }
 
-            payload.eventKey = eventKey;
-            payload.targetTeamNumber = teamSelect.value ? Number(teamSelect.value) : null;
-            payload.matchKey = matchSelect.value || null;
-            const selectedMatch = matchSelect.value ? matchSelect.selectedOptions[0] : null;
+            payload.eventKey = currentEventKey;
+            payload.targetTeamNumber = Number(teamSelect.value);
+            payload.matchKey = matchSelect.value;
+            const selectedMatch = matchSelect.selectedOptions[0];
             const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
             payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
 
             try {
-                await Obsidianscout.request("/api/scouting", {
+                await Obsidianscout.request("/api/prescout/scouting", {
                     method: "POST",
                     json: {
                         data: payload
                     }
                 });
-                Obsidianscout.showToast("Entry saved", "success");
+                Obsidianscout.showToast("Prescout entry saved", "success");
                 entryCache = await loadEntryCache();
             } catch (error) {
-                if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
-                    const pending = JSON.parse(Obsidianscout.safeGetItem("pending_scouting_entries") || "[]");
-                    pending.push({
-                        data: payload
-                    });
-                    Obsidianscout.safeSetItem("pending_scouting_entries", JSON.stringify(pending));
-                    
-                    Obsidianscout.showToast("Saved locally (Offline mode)", "success");
-                    Obsidianscout.updateConnectionStatus();
-                    
-                    clearFormFields(fields, form);
-                    updatePointsPreview(fields, form, pointsPreview);
-                    handleSelectionChange();
-                } else {
-                    Obsidianscout.showToast(error.message || "Failed to save", "error");
-                }
+                Obsidianscout.showToast(error.message || "Failed to save entry", "error");
             } finally {
                 submitButton.disabled = false;
             }
         });
 
-        async function handleSelectionChange() {
-            const teamValue = teamSelect.value;
-            const matchValue = matchSelect.value;
-            const ready = Boolean(teamValue && matchValue);
-            setFormEnabled(form, formBlocked, pointsPreviewCard, ready);
-
-            clearFormFields(fields, form);
-            updatePointsPreview(fields, form, pointsPreview);
-
-            if (!ready) {
-                return;
-            }
-
-            const teamNumber = Number(teamValue);
-            const entry = findEntry(entryCache, eventKey, teamNumber, matchValue);
-            if (entry) {
-                applyEntryToForm(entry, fields, form);
-                updatePointsPreview(fields, form, pointsPreview);
-            }
-        }
-    } catch (error) {
-        console.error("Failed to load scout page config:", error);
-        Obsidianscout.showRetryButton(mainContentWrapper, "Failed to load scouting form config: " + error.message, () => loadScoutPageData(me));
+    } catch (err) {
+        console.error(err);
+        Obsidianscout.showRetryButton(mainContentWrapper, "Failed to load config: " + err.message, () => initPrescoutScout(me));
     }
 }
 
 async function loadTeamsAndMatches(eventKey, teamSelect, matchSelect, timezone) {
-    const teams = eventKey ? await Obsidianscout.request(`/api/teams?eventKey=${eventKey}`) : [];
-    const matches = eventKey ? await Obsidianscout.request(`/api/matches?eventKey=${eventKey}`) : [];
+    const teams = await Obsidianscout.request(`/api/teams?eventKey=${eventKey}`);
+    const matches = await Obsidianscout.request(`/api/matches?eventKey=${eventKey}`);
 
     teamSelect.innerHTML = "";
     const teamPlaceholder = document.createElement("option");
     teamPlaceholder.value = "";
-    teamPlaceholder.textContent = (window.Obsidianscout && Obsidianscout.t) ? Obsidianscout.t('scout.select_team', 'Select team') : 'Select team';
+    teamPlaceholder.textContent = "Select team";
     teamSelect.appendChild(teamPlaceholder);
 
     teams.forEach((team) => {
@@ -231,19 +251,16 @@ function updateMatchOptions(matchSelect, matches, timezone, selectedTeam) {
     matchSelect.innerHTML = "";
     const matchPlaceholder = document.createElement("option");
     matchPlaceholder.value = "";
-    matchPlaceholder.textContent = (window.Obsidianscout && Obsidianscout.t) ? Obsidianscout.t('scout.select_match', 'Select match') : 'Select match';
+    matchPlaceholder.textContent = "Select match";
     matchSelect.appendChild(matchPlaceholder);
 
     const teamNumber = selectedTeam ? Number(selectedTeam) : null;
     const teamKey = teamNumber ? `frc${teamNumber}` : null;
     let filtered = matches;
     if (teamKey) {
-        const byTeam = matches.filter((match) =>
+        filtered = matches.filter((match) =>
             matchHasTeam(match.redTeams, teamKey) || matchHasTeam(match.blueTeams, teamKey)
         );
-        if (byTeam.length) {
-            filtered = byTeam;
-        }
     }
 
     filtered.forEach((match) => {
@@ -569,7 +586,7 @@ function updatePointsPreview(fields, form, preview) {
 
 async function loadEntryCache() {
     try {
-        const entries = await Obsidianscout.request("/api/scouting");
+        const entries = await Obsidianscout.request("/api/prescout/scouting");
         return Array.isArray(entries) ? entries : [];
     } catch (error) {
         return [];

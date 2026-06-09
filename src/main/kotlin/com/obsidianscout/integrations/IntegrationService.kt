@@ -130,6 +130,7 @@ object IntegrationService {
                         it[ApiMatches.setNumber] = canonical.setNumber
                         it[ApiMatches.matchNumber] = canonical.matchNumber
                         it[ApiMatches.scheduledTime] = canonical.scheduledTime
+                        it[ApiMatches.actualTime] = canonical.actualTime
                         it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
                         it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
                         it[ApiMatches.dataJson] = canonical.dataJson
@@ -142,6 +143,7 @@ object IntegrationService {
                         it[ApiMatches.setNumber] = canonical.setNumber
                         it[ApiMatches.matchNumber] = canonical.matchNumber
                         it[ApiMatches.scheduledTime] = canonical.scheduledTime
+                        it[ApiMatches.actualTime] = canonical.actualTime
                         it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
                         it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
                         it[ApiMatches.dataJson] = canonical.dataJson
@@ -150,6 +152,92 @@ object IntegrationService {
                 }
             }
             MatchCanonical.deduplicateDatabaseForEvent(eventKey)
+        }
+        return SyncCounts(teams.size, matches.size)
+    }
+
+    suspend fun syncCustomEventData(settings: ApiSettings, eventKey: String): SyncCounts {
+        val key = eventKey.lowercase().trim()
+        if (key.isBlank()) {
+            return SyncCounts(0, 0)
+        }
+        upsertEventRecord(settings, key)
+        val teams = fetchMergedTeams(settings, key)
+        val matches = fetchMergedMatches(settings, key)
+        val now = Instant.now()
+        transaction {
+            val removed = MatchCanonical.deduplicateDatabaseForEvent(key)
+            if (removed > 0) {
+                log.info("Cleaned $removed duplicate match row(s) before sync for $key")
+            }
+            teams.forEach { team ->
+                val existing = ApiTeams.select {
+                    (ApiTeams.eventKey eq team.eventKey) and (ApiTeams.teamKey eq team.teamKey)
+                }.limit(1).firstOrNull()
+                if (existing == null) {
+                    ApiTeams.insert {
+                        it[ApiTeams.eventKey] = team.eventKey
+                        it[ApiTeams.teamKey] = team.teamKey
+                        it[ApiTeams.teamNumber] = team.teamNumber
+                        it[ApiTeams.name] = team.name.clipTeamText()
+                        it[ApiTeams.nickname] = team.nickname.clipTeamText()
+                        it[ApiTeams.city] = team.city.clipTeamLocation()
+                        it[ApiTeams.state] = team.state.clipTeamLocation()
+                        it[ApiTeams.country] = team.country.clipTeamLocation()
+                        it[ApiTeams.opr] = team.opr
+                        it[ApiTeams.epa] = team.epa
+                        it[ApiTeams.dataJson] = team.dataJson
+                        it[ApiTeams.updatedAt] = now
+                    }
+                } else {
+                    ApiTeams.update({ ApiTeams.id eq existing[ApiTeams.id] }) {
+                        it[ApiTeams.teamNumber] = team.teamNumber
+                        it[ApiTeams.name] = team.name.clipTeamText()
+                        it[ApiTeams.nickname] = team.nickname.clipTeamText()
+                        it[ApiTeams.city] = team.city.clipTeamLocation()
+                        it[ApiTeams.state] = team.state.clipTeamLocation()
+                        it[ApiTeams.country] = team.country.clipTeamLocation()
+                        it[ApiTeams.opr] = team.opr
+                        it[ApiTeams.epa] = team.epa
+                        it[ApiTeams.dataJson] = team.dataJson
+                        it[ApiTeams.updatedAt] = now
+                    }
+                }
+            }
+
+            matches.forEach { match ->
+                val canonical = MatchCanonical.canonicalize(match)
+                val existing = ApiMatches.select { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
+                if (existing == null) {
+                    ApiMatches.insert {
+                        it[ApiMatches.matchKey] = canonical.matchKey
+                        it[ApiMatches.eventKey] = canonical.eventKey
+                        it[ApiMatches.compLevel] = canonical.compLevel
+                        it[ApiMatches.setNumber] = canonical.setNumber
+                        it[ApiMatches.matchNumber] = canonical.matchNumber
+                        it[ApiMatches.scheduledTime] = canonical.scheduledTime
+                        it[ApiMatches.actualTime] = canonical.actualTime
+                        it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
+                        it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
+                        it[ApiMatches.dataJson] = canonical.dataJson
+                        it[ApiMatches.updatedAt] = now
+                    }
+                } else {
+                    ApiMatches.update({ ApiMatches.id eq existing[ApiMatches.id] }) {
+                        it[ApiMatches.eventKey] = canonical.eventKey
+                        it[ApiMatches.compLevel] = canonical.compLevel
+                        it[ApiMatches.setNumber] = canonical.setNumber
+                        it[ApiMatches.matchNumber] = canonical.matchNumber
+                        it[ApiMatches.scheduledTime] = canonical.scheduledTime
+                        it[ApiMatches.actualTime] = canonical.actualTime
+                        it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
+                        it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
+                        it[ApiMatches.dataJson] = canonical.dataJson
+                        it[ApiMatches.updatedAt] = now
+                    }
+                }
+            }
+            MatchCanonical.deduplicateDatabaseForEvent(key)
         }
         return SyncCounts(teams.size, matches.size)
     }
@@ -432,6 +520,7 @@ object IntegrationService {
                     setNumber = setNumber,
                     matchNumber = matchNumber,
                     scheduledTime = row[ApiMatches.scheduledTime],
+                    actualTime = row[ApiMatches.actualTime],
                     redTeams = resolveTeams(row[ApiMatches.redTeams]),
                     blueTeams = resolveTeams(row[ApiMatches.blueTeams]),
                     label = MatchCanonical.displayLabel(compLevel, setNumber, matchNumber)
@@ -665,6 +754,7 @@ object IntegrationService {
                     it[ApiMatches.setNumber] = setNumber
                     it[ApiMatches.matchNumber] = matchNumber
                     it[scheduledTime] = match.scheduledTime
+                    it[ApiMatches.actualTime] = match.actualTime
                     it[redTeams] = redTeamsJson
                     it[blueTeams] = blueTeamsJson
                     it[dataJson] = "{}"
@@ -677,6 +767,7 @@ object IntegrationService {
                     it[ApiMatches.setNumber] = setNumber
                     it[ApiMatches.matchNumber] = matchNumber
                     it[scheduledTime] = match.scheduledTime
+                    it[ApiMatches.actualTime] = match.actualTime
                     it[redTeams] = redTeamsJson
                     it[blueTeams] = blueTeamsJson
                     it[updatedAt] = now
@@ -688,6 +779,8 @@ object IntegrationService {
                 compLevel = compLevel,
                 setNumber = setNumber,
                 matchNumber = matchNumber,
+                scheduledTime = match.scheduledTime,
+                actualTime = match.actualTime,
                 redTeams = normalizedRed,
                 blueTeams = normalizedBlue
             )
@@ -952,7 +1045,7 @@ object IntegrationService {
             return emptyList()
         }
         val normalizedKey = eventKey.lowercase()
-        val url = "https://www.thebluealliance.com/api/v3/event/${normalizedKey}/matches/simple"
+        val url = "https://www.thebluealliance.com/api/v3/event/${normalizedKey}/matches"
         val element = client.get(url) {
             header("X-TBA-Auth-Key", key)
             header(HttpHeaders.Accept, "application/json")
@@ -963,13 +1056,17 @@ object IntegrationService {
             val alliances = obj["alliances"]?.jsonObject
             val redTeams = alliances?.get("red").teamKeys()
             val blueTeams = alliances?.get("blue").teamKeys()
+            val scheduledTime = obj.readLong("time")
+            val tbaActual = obj.readLong("actual_time")
+            val actualTime = if (tbaActual != null && tbaActual > 0) tbaActual else scheduledTime
             MatchSyncRecord(
                 matchKey = matchKey,
                 eventKey = normalizedKey,
                 compLevel = obj.readString("comp_level") ?: "",
                 setNumber = obj.readInt("set_number"),
                 matchNumber = obj.readInt("match_number"),
-                scheduledTime = obj.readLong("time"),
+                scheduledTime = scheduledTime,
+                actualTime = actualTime,
                 redTeams = redTeams,
                 blueTeams = blueTeams,
                 dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), item),
@@ -1317,9 +1414,10 @@ private fun parseFirstMatchItems(
         val matchKey = obj.readString("matchKey")
             ?: obj.readString("matchKeyShort")
             ?: "${eventKey}_${compLevel}_s${setNum}_m$matchNum"
-        val time = obj.readEpochSeconds("startTime")
+        val scheduledTime = obj.readEpochSeconds("startTime")
             ?: obj.readEpochSeconds("time")
-            ?: obj.readEpochSeconds("actualStartTime")
+        val firstActual = obj.readEpochSeconds("actualStartTime")
+        val actualTime = if (firstActual != null && firstActual > 0) firstActual else scheduledTime
         var redTeams = obj.readTeamList("redTeams")
         var blueTeams = obj.readTeamList("blueTeams")
         if (redTeams.isEmpty() && blueTeams.isEmpty()) {
@@ -1338,7 +1436,8 @@ private fun parseFirstMatchItems(
             compLevel = compLevel,
             setNumber = setNum,
             matchNumber = matchNum,
-            scheduledTime = time,
+            scheduledTime = scheduledTime,
+            actualTime = actualTime,
             redTeams = redTeams,
             blueTeams = blueTeams,
             dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), item),

@@ -32,6 +32,25 @@ data class AnalyticsResponse(
 )
 
 object AnalyticsService {
+    fun mergePrescoutEntries(
+        currentEventEntries: List<ScoutingEntryRecord>,
+        prescoutEntries: List<ScoutingEntryRecord>,
+        currentEventKey: String,
+        forceUsePrescout: Boolean = false
+    ): List<ScoutingEntryRecord> {
+        val groupedCurrent = currentEventEntries.filter { it.eventKey == currentEventKey && !it.isPrescout }.groupBy { it.targetTeamNumber }
+        val groupedPrescout = prescoutEntries.filter { it.isPrescout }.groupBy { it.targetTeamNumber }
+        
+        val result = currentEventEntries.toMutableList()
+        groupedPrescout.forEach { (teamNumber, pEntries) ->
+            val currentCount = groupedCurrent[teamNumber]?.size ?: 0
+            if (forceUsePrescout || currentCount < 3) {
+                result.addAll(pEntries)
+            }
+        }
+        return result
+    }
+
     fun generate(config: ScoutingConfig, entries: List<ScoutingEntryRecord>): AnalyticsResponse {
         val widgets = config.analytics.map { widget ->
             when (widget.type.lowercase()) {

@@ -21,6 +21,7 @@ import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import java.time.Instant
 
 @Serializable
@@ -30,13 +31,17 @@ data class PitScoutingEntryRecord(
     val targetTeamNumber: Int?,
     val eventKey: String?,
     val data: JsonObject,
-    val createdAt: String
+    val createdAt: String,
+    val isPrescout: Boolean = false
 )
 
 object PitScoutingService {
-    fun listEntries(session: UserSession): List<PitScoutingEntryRecord> {
+    fun listEntries(session: UserSession, includePrescout: Boolean = false): List<PitScoutingEntryRecord> {
         return transaction {
             val query = PitScoutingEntries.selectAll()
+            if (!includePrescout) {
+                query.andWhere { PitScoutingEntries.isPrescout eq false }
+            }
             if (session.role != UserRole.SUPERADMIN) {
                 val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
                 val visibleTeams = partnerTeams + session.teamNumber
@@ -50,7 +55,32 @@ object PitScoutingService {
                     targetTeamNumber = row[PitScoutingEntries.targetTeamNumber],
                     eventKey = row[PitScoutingEntries.eventKey],
                     data = data,
-                    createdAt = row[PitScoutingEntries.createdAt].toString()
+                    createdAt = row[PitScoutingEntries.createdAt].toString(),
+                    isPrescout = row[PitScoutingEntries.isPrescout]
+                )
+            }
+        }
+    }
+
+    fun listPrescoutEntries(session: UserSession): List<PitScoutingEntryRecord> {
+        return transaction {
+            val query = PitScoutingEntries.selectAll()
+            query.andWhere { PitScoutingEntries.isPrescout eq true }
+            if (session.role != UserRole.SUPERADMIN) {
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val visibleTeams = partnerTeams + session.teamNumber
+                query.andWhere { PitScoutingEntries.ownerTeamNumber inList visibleTeams }
+            }
+            query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).map { row ->
+                val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
+                PitScoutingEntryRecord(
+                    id = row[PitScoutingEntries.id].value,
+                    ownerTeamNumber = row[PitScoutingEntries.ownerTeamNumber],
+                    targetTeamNumber = row[PitScoutingEntries.targetTeamNumber],
+                    eventKey = row[PitScoutingEntries.eventKey],
+                    data = data,
+                    createdAt = row[PitScoutingEntries.createdAt].toString(),
+                    isPrescout = row[PitScoutingEntries.isPrescout]
                 )
             }
         }
@@ -59,7 +89,8 @@ object PitScoutingService {
     fun createEntry(
         session: UserSession,
         request: ScoutingEntryRequest,
-        config: ScoutingConfig
+        config: ScoutingConfig,
+        isPrescout: Boolean = false
     ): PitScoutingEntryRecord {
         val missing = config.fields.filter { it.required && !request.data.containsKey(it.id) }
         if (missing.isNotEmpty()) {
@@ -83,6 +114,7 @@ object PitScoutingService {
                 it[PitScoutingEntries.dataJson] = dataJson
                 it[submittedByUserId] = EntityID(session.userId, Users)
                 it[createdAt] = now
+                it[PitScoutingEntries.isPrescout] = isPrescout
             }
         }
 
@@ -92,7 +124,8 @@ object PitScoutingService {
             targetTeamNumber = meta.targetTeamNumber,
             eventKey = meta.eventKey,
             data = request.data,
-            createdAt = now.toString()
+            createdAt = now.toString(),
+            isPrescout = isPrescout
         )
     }
 

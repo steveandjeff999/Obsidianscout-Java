@@ -24,7 +24,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import com.obsidianscout.auth.ApiException
 
 object PredictorService {
-    fun predict(session: UserSession, matchKey: String): MatchPredictionResponse {
+    fun predict(session: UserSession, matchKey: String, forcePrescout: Boolean = false): MatchPredictionResponse {
         return transaction {
             val matchRow = ApiMatches.select { ApiMatches.matchKey eq matchKey.lowercase() }
                 .limit(1)
@@ -121,7 +121,7 @@ object PredictorService {
             val config = ConfigService.getConfig(session.teamNumber)
 
             val entriesQuery = ScoutingEntries.select {
-                (ScoutingEntries.eventKey eq eventKey) and (ScoutingEntries.targetTeamNumber inList teamNumbers)
+                ScoutingEntries.targetTeamNumber inList teamNumbers
             }
             if (session.role != UserRole.SUPERADMIN) {
                 entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber eq session.teamNumber }
@@ -137,10 +137,22 @@ object PredictorService {
                     matchKey = row[ScoutingEntries.matchKey],
                     matchNumber = row[ScoutingEntries.matchNumber],
                     data = data,
-                    createdAt = row[ScoutingEntries.createdAt].toString()
+                    createdAt = row[ScoutingEntries.createdAt].toString(),
+                    isPrescout = row[ScoutingEntries.isPrescout]
                 )
             }
-            val entriesByTeam = entries.groupBy { it.targetTeamNumber }
+            val groupedEntries = entries.groupBy { it.targetTeamNumber }
+            val entriesByTeam = teamNumbers.associateWith { teamNumber ->
+                val teamEntries = groupedEntries[teamNumber] ?: emptyList()
+                val currentEventEntries = teamEntries.filter { it.eventKey == eventKey && !it.isPrescout }
+                val prescoutEntries = teamEntries.filter { it.isPrescout }
+                
+                if (forcePrescout || currentEventEntries.size < 3) {
+                    currentEventEntries + prescoutEntries
+                } else {
+                    currentEventEntries
+                }
+            }
 
             fun predictTeam(teamKey: String): MatchTeamPrediction {
                 val parts = teamKey.split("/")

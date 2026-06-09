@@ -20,6 +20,7 @@ data class MatchSyncRecord(
     val setNumber: Int? = null,
     val matchNumber: Int? = null,
     val scheduledTime: Long? = null,
+    val actualTime: Long? = null,
     val redTeams: List<String> = emptyList(),
     val blueTeams: List<String> = emptyList(),
     val dataJson: String = "{}",
@@ -166,6 +167,7 @@ object MatchCanonical {
         val other = if (preferred === incoming) existing else incoming
         return preferred.copy(
             scheduledTime = preferred.scheduledTime ?: other.scheduledTime,
+            actualTime = preferred.actualTime ?: other.actualTime,
             redTeams = preferred.redTeams.ifEmpty { other.redTeams },
             blueTeams = preferred.blueTeams.ifEmpty { other.blueTeams },
             dataJson = if (preferred.dataJson.length >= other.dataJson.length) preferred.dataJson else other.dataJson
@@ -262,6 +264,7 @@ object MatchCanonical {
                     it[ApiMatches.setNumber] = merged.setNumber
                     it[ApiMatches.matchNumber] = merged.matchNumber
                     it[ApiMatches.scheduledTime] = merged.scheduledTime
+                    it[ApiMatches.actualTime] = merged.actualTime
                     it[ApiMatches.redTeams] = encodeTeams(merged.redTeams)
                     it[ApiMatches.blueTeams] = encodeTeams(merged.blueTeams)
                 }
@@ -305,6 +308,7 @@ object MatchCanonical {
                     it[ApiMatches.setNumber] = merged.setNumber
                     it[ApiMatches.matchNumber] = merged.matchNumber
                     it[ApiMatches.scheduledTime] = merged.scheduledTime
+                    it[ApiMatches.actualTime] = merged.actualTime
                     it[ApiMatches.redTeams] = encodeTeams(merged.redTeams)
                     it[ApiMatches.blueTeams] = encodeTeams(merged.blueTeams)
                     it[ApiMatches.dataJson] = merged.dataJson
@@ -348,6 +352,7 @@ object MatchCanonical {
             setNumber = this[ApiMatches.setNumber],
             matchNumber = this[ApiMatches.matchNumber],
             scheduledTime = this[ApiMatches.scheduledTime],
+            actualTime = this[ApiMatches.actualTime],
             redTeams = decodeTeams(this[ApiMatches.redTeams]),
             blueTeams = decodeTeams(this[ApiMatches.blueTeams]),
             dataJson = this[ApiMatches.dataJson],

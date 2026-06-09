@@ -54,6 +54,7 @@ object ScoutingEntries : IntIdTable("scouting_entries") {
     val dataJson = text("data_json")
     val submittedByUserId = reference("submitted_by_user_id", Users)
     val createdAt = timestamp("created_at")
+    val isPrescout = bool("is_prescout").default(false)
 }
 
 object PitScoutingEntries : IntIdTable("pit_scouting_entries") {
@@ -63,6 +64,7 @@ object PitScoutingEntries : IntIdTable("pit_scouting_entries") {
     val dataJson = text("data_json")
     val submittedByUserId = reference("submitted_by_user_id", Users)
     val createdAt = timestamp("created_at")
+    val isPrescout = bool("is_prescout").default(false)
 }
 
 object QualitativeScoutingEntries : IntIdTable("qualitative_scouting_entries") {
@@ -74,6 +76,7 @@ object QualitativeScoutingEntries : IntIdTable("qualitative_scouting_entries") {
     val dataJson = text("data_json")
     val submittedByUserId = reference("submitted_by_user_id", Users)
     val createdAt = timestamp("created_at")
+    val isPrescout = bool("is_prescout").default(false)
 }
 
 object AppSettings : IntIdTable("app_settings") {
@@ -128,6 +131,7 @@ object ApiMatches : IntIdTable("api_matches") {
     val setNumber = integer("set_number").nullable()
     val matchNumber = integer("match_number").nullable()
     val scheduledTime = long("scheduled_time").nullable()
+    val actualTime = long("actual_time").nullable()
     val redTeams = text("red_teams")
     val blueTeams = text("blue_teams")
     val dataJson = text("data_json")

@@ -1,6 +1,7 @@
 {
   "nav.dashboard": "Kontrol Paneli",
   "nav.scout": "İzleme",
+  "nav.prescout": "Ön Gözlem",
   "nav.all-data": "Tüm Veriler",
   "nav.analytics": "Analiz",
   "nav.graphs": "Grafikler",

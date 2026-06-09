@@ -34,6 +34,78 @@
         }
     }
 
+    function clearAllCaches() {
+        try {
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith("cache:")) {
+                    keys.push(key);
+                }
+            }
+            keys.forEach(key => safeRemoveItem(key));
+            console.log("[Offline Cache] Cleared all caches after write operation");
+        } catch (e) {
+            console.warn("[Offline Cache] Failed to clear caches:", e);
+        }
+    }
+
+    function saveScrollPositions() {
+        try {
+            const scrolls = {
+                windowX: window.scrollX || window.pageXOffset,
+                windowY: window.scrollY || window.pageYOffset,
+                elements: []
+            };
+            document.querySelectorAll('.table-scroll, .main-content, .sidebar').forEach((el, index) => {
+                if (el.scrollTop > 0 || el.scrollLeft > 0) {
+                    scrolls.elements.push({
+                        index: index,
+                        class: el.className,
+                        id: el.id,
+                        top: el.scrollTop,
+                        left: el.scrollLeft
+                    });
+                }
+            });
+            safeSetItem("obsidianscout:scroll_positions", JSON.stringify(scrolls));
+        } catch (e) {
+            console.warn("Failed to save scroll positions:", e);
+        }
+    }
+
+    function restoreScrollPositions() {
+        try {
+            const saved = safeGetItem("obsidianscout:scroll_positions");
+            if (!saved) return;
+            safeRemoveItem("obsidianscout:scroll_positions");
+            const scrolls = JSON.parse(saved);
+            if (!scrolls) return;
+
+            setTimeout(() => {
+                window.scrollTo(scrolls.windowX || 0, scrolls.windowY || 0);
+                
+                scrolls.elements.forEach(item => {
+                    let el = null;
+                    if (item.id) {
+                        el = document.getElementById(item.id);
+                    } else {
+                        const candidates = document.querySelectorAll('.table-scroll, .main-content, .sidebar');
+                        if (candidates[item.index]) {
+                            el = candidates[item.index];
+                        }
+                    }
+                    if (el) {
+                        el.scrollTop = item.top;
+                        el.scrollLeft = item.left;
+                    }
+                });
+            }, 100);
+        } catch (e) {
+            console.warn("Failed to restore scroll positions:", e);
+        }
+    }
+
     function triggerBackgroundRevalidate(path, cachedText) {
         if (!navigator.onLine) return;
         if (activeFetches.has(path)) return;
@@ -58,10 +130,13 @@
                         console.log(`[Offline Cache] Background revalidation succeeded for ${path}. Data changed, updating cache and refreshing.`);
                         safeSetItem("cache:" + path, text);
                         
-                        const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config'].includes(document.body.dataset.page);
+                        const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
                         const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
                         
                         if (isDataPage && !isUserEditing) {
+                            if (typeof saveScrollPositions === "function") {
+                                saveScrollPositions();
+                            }
                             window.location.reload();
                         }
                     } else {
@@ -77,11 +152,21 @@
     }
 
     async function request(path, options = {}) {
+        const method = options.method || "GET";
+
+        if (method === "GET") {
+            const cachedText = safeGetItem("cache:" + path);
+            if (cachedText !== null) {
+                console.log("[Offline Cache] Serving cached response instantly for:", path);
+                servedFromCache.add(path);
+                triggerBackgroundRevalidate(path, cachedText);
+                return safeParse(cachedText);
+            }
+        }
+
         const controller = new AbortController();
         const defaultTimeout = options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS;
-        const method = options.method || "GET";
-        const hasCache = method === "GET" && safeGetItem("cache:" + path) !== null;
-        const timeoutMs = (method === "GET" && hasCache) ? Math.min(3000, defaultTimeout) : defaultTimeout;
+        const timeoutMs = defaultTimeout;
         const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
         const opts = {
             method: method,
@@ -113,50 +198,14 @@
             }
 
             if (opts.method === "GET") {
-                try {
-                    safeSetItem("cache:" + path, text);
-                } catch (e) {
-                    console.warn("[Offline Cache] Storage quota exceeded or unavailable:", e);
-                }
+                safeSetItem("cache:" + path, text);
+            } else {
+                clearAllCaches();
             }
 
             return data;
         } catch (error) {
             const isTimeout = error && error.name === "AbortError";
-            
-            if (opts.method === "GET") {
-                if (path === "/api/auth/me") {
-                    // For auth state check:
-                    // If the server explicitly returned 401 (Unauthorized), we are logged out.
-                    // Clear the cache and propagate the error.
-                    if (error.status === 401) {
-                        safeRemoveItem("cache:/api/auth/me");
-                        throw error;
-                    }
-                    
-                    // If it is a network error, timeout, or server-side 5xx error,
-                    // we want to fall back to the cached auth state.
-                    if (isTimeout || error.status === undefined || error.status === null || error.status >= 500) {
-                        const cachedText = safeGetItem("cache:/api/auth/me");
-                        if (cachedText !== null) {
-                            console.log("[Offline Cache] Serving cached response for auth state");
-                            servedFromCache.add(path);
-                            triggerBackgroundRevalidate(path, cachedText);
-                            return safeParse(cachedText);
-                        }
-                    }
-                } else {
-                    // For other GET requests, fall back to cache on any error (original behavior)
-                    const cachedText = safeGetItem("cache:" + path);
-                    if (cachedText !== null) {
-                        console.log("[Offline Cache] Serving cached response for:", path);
-                        servedFromCache.add(path);
-                        triggerBackgroundRevalidate(path, cachedText);
-                        return safeParse(cachedText);
-                    }
-                }
-            }
-
             if (isTimeout) {
                 throw new Error("Request timed out. Try refreshing this page.");
             }
@@ -739,9 +788,10 @@
         window.addEventListener("online", () => {
             updateConnectionStatus();
             syncOfflineEntries();
-            const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config'].includes(document.body.dataset.page);
+            const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
             const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
             if (isDataPage && !isUserEditing) {
+                saveScrollPositions();
                 window.location.reload();
             }
         });
@@ -752,6 +802,7 @@
         }
         // Load selected language bundle and apply translations
         loadLocale(safeGetItem('obsidianscout:lang') || 'en').then(() => applyTranslations());
+        restoreScrollPositions();
     });
 
     window.addEventListener("beforeunload", (event) => {

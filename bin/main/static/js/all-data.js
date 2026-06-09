@@ -59,9 +59,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 Obsidianscout.request("/api/config"),
                 Obsidianscout.request("/api/pit-config"),
                 Obsidianscout.request("/api/qual-config"),
-                Obsidianscout.request("/api/scouting"),
-                Obsidianscout.request("/api/pit-scouting"),
-                Obsidianscout.request("/api/qual-scouting"),
+                Obsidianscout.request("/api/scouting?includePrescout=true"),
+                Obsidianscout.request("/api/pit-scouting?includePrescout=true"),
+                Obsidianscout.request("/api/qual-scouting?includePrescout=true"),
                 Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
             ]);
 
@@ -100,10 +100,13 @@ function mergeEntries(match, pit, qual) {
             type: "Match",
             ownerTeamNumber: e.ownerTeamNumber,
             targetTeamNumber: e.targetTeamNumber,
-            eventKey: e.eventKey,
+            eventKey: e.isPrescout ? "prescout" : e.eventKey,
+            rawEventKey: e.eventKey,
+            isPrescout: e.isPrescout || false,
             matchNumber: e.matchNumber,
             matchKey: e.matchKey,
             createdAt: e.createdAt,
+            matchPlayedTime: e.matchPlayedTime || null,
             data: e.data
         });
     });
@@ -115,10 +118,13 @@ function mergeEntries(match, pit, qual) {
             type: "Pit",
             ownerTeamNumber: e.ownerTeamNumber,
             targetTeamNumber: e.targetTeamNumber,
-            eventKey: e.eventKey,
+            eventKey: e.isPrescout ? "prescout" : e.eventKey,
+            rawEventKey: e.eventKey,
+            isPrescout: e.isPrescout || false,
             matchNumber: null,
             matchKey: null,
             createdAt: e.createdAt,
+            matchPlayedTime: null,
             data: e.data
         });
     });
@@ -130,10 +136,13 @@ function mergeEntries(match, pit, qual) {
             type: "Qualitative",
             ownerTeamNumber: e.ownerTeamNumber,
             targetTeamNumber: e.targetTeamNumber,
-            eventKey: e.eventKey,
+            eventKey: e.isPrescout ? "prescout" : e.eventKey,
+            rawEventKey: e.eventKey,
+            isPrescout: e.isPrescout || false,
             matchNumber: e.matchNumber,
             matchKey: e.matchKey,
             createdAt: e.createdAt,
+            matchPlayedTime: e.matchPlayedTime || null,
             data: e.data
         });
     });
@@ -142,7 +151,7 @@ function mergeEntries(match, pit, qual) {
 }
 
 function normalizeEvents(events, activeKey, settings) {
-    const list = [{ eventKey: "", name: "All Events", year: settings.year }]
+    const list = [{ eventKey: "", name: "All Events", year: settings.year }, { eventKey: "prescout", name: "Prescouting Data", year: settings.year }]
         .concat(Array.isArray(events) ? events.slice() : []);
     if (activeKey && !list.some((event) => event.eventKey === activeKey)) {
         list.splice(1, 0, {
@@ -157,6 +166,14 @@ function normalizeEvents(events, activeKey, settings) {
 async function loadTeamsForEvent(state) {
     if (!state.filters.eventKey) {
         state.teamsByNumber.clear();
+        return;
+    }
+    if (state.filters.eventKey === "prescout") {
+        state.teamsByNumber.clear();
+        const uniqueTeams = Array.from(new Set(state.entries.filter(e => e.isPrescout).map(e => e.targetTeamNumber).filter(Boolean)));
+        uniqueTeams.forEach(teamNumber => {
+            state.teamsByNumber.set(teamNumber, { teamNumber, nickname: `Team ${teamNumber}` });
+        });
         return;
     }
     try {
@@ -294,14 +311,33 @@ function getFilteredAndSortedRows(state) {
             if (a.targetTeamNumber !== b.targetTeamNumber) {
                 return a.targetTeamNumber - b.targetTeamNumber;
             }
+            if (a.matchPlayedTime !== null && b.matchPlayedTime !== null && a.matchPlayedTime !== undefined && b.matchPlayedTime !== undefined) {
+                return a.matchPlayedTime - b.matchPlayedTime;
+            }
+            const aEvent = a.rawEventKey || a.eventKey || "";
+            const bEvent = b.rawEventKey || b.eventKey || "";
+            if (aEvent !== bEvent) {
+                return aEvent.localeCompare(bEvent);
+            }
             return (a.matchNumber || 0) - (b.matchNumber || 0);
         }
         
         // Default: match-type
-        const aMatch = a.matchNumber !== null ? a.matchNumber : 0;
-        const bMatch = b.matchNumber !== null ? b.matchNumber : 0;
-        if (aMatch !== bMatch) {
-            return aMatch - bMatch;
+        if (a.matchPlayedTime !== null && b.matchPlayedTime !== null && a.matchPlayedTime !== undefined && b.matchPlayedTime !== undefined) {
+            if (a.matchPlayedTime !== b.matchPlayedTime) {
+                return a.matchPlayedTime - b.matchPlayedTime;
+            }
+        } else {
+            const aEvent = a.rawEventKey || a.eventKey || "";
+            const bEvent = b.rawEventKey || b.eventKey || "";
+            if (aEvent !== bEvent) {
+                return aEvent.localeCompare(bEvent);
+            }
+            const aMatch = a.matchNumber !== null ? a.matchNumber : 0;
+            const bMatch = b.matchNumber !== null ? b.matchNumber : 0;
+            if (aMatch !== bMatch) {
+                return aMatch - bMatch;
+            }
         }
         if (a.type !== b.type) {
             return a.type.localeCompare(b.type);

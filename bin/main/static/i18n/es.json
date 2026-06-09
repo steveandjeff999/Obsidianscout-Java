@@ -1,6 +1,7 @@
 {
   "nav.dashboard": "Tablero",
   "nav.scout": "Scout",
+  "nav.prescout": "Pre-scouting",
   "nav.all-data": "Todos los datos",
   "nav.analytics": "Analíticas",
   "nav.graphs": "Gráficas",

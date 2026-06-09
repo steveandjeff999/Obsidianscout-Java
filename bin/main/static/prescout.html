@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Prescouting</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body data-page="prescout">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <!-- Will be replaced dynamically by base.html -->
+        </aside>
+
+        <main class="main-content">
+            <div class="card">
+                <h1>Prescouting Dashboard</h1>
+                <p class="notice">Select a scouting category to enter prescouting data for other FRC events. This data will be used in analytics and match prediction fallbacks.</p>
+            </div>
+
+            <div class="split mt-24">
+                <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 16px;">
+                    <div>
+                        <h2>Match Prescout</h2>
+                        <p class="notice" style="margin-top: 8px;">Scout match play for teams at other events. Manually load match schedules and enter scoring details.</p>
+                    </div>
+                    <a class="btn" href="/prescout-scout" style="width: 100%; text-align: center;">Start Match Prescout</a>
+                </div>
+                
+                <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 16px;">
+                    <div>
+                        <h2>Pit Prescout</h2>
+                        <p class="notice" style="margin-top: 8px;">Record robot dimensions, subsystems, intake/shooter details, and drive types for teams at other events.</p>
+                    </div>
+                    <a class="btn secondary" href="/prescout-pit" style="width: 100%; text-align: center;">Start Pit Prescout</a>
+                </div>
+                
+                <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 16px;">
+                    <div>
+                        <h2>Qual Prescout</h2>
+                        <p class="notice" style="margin-top: 8px;">Add notes on driver skill, robot reliability, defense capabilities, and overall gameplay quality.</p>
+                    </div>
+                    <a class="btn dark" href="/prescout-qual" style="width: 100%; text-align: center;">Start Qual Prescout</a>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/prescout.js"></script>
+</body>
+</html>

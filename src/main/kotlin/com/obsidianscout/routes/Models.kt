@@ -152,6 +152,7 @@ data class MatchRecord(
     val setNumber: Int? = null,
     val matchNumber: Int? = null,
     val scheduledTime: Long? = null,
+    val actualTime: Long? = null,
     val redTeams: List<String> = emptyList(),
     val blueTeams: List<String> = emptyList(),
     /** Human-readable label, e.g. "QM 4" (same match from TBA and FIRST). */

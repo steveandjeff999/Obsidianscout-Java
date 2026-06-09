@@ -1,21 +1,13 @@
 <!doctype html>
-
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8" />
-
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <title>ObsidianScout | Scout</title>
-
+    <title>ObsidianScout | Match Prescout</title>
     <link rel="stylesheet" href="/css/app.css" />
-
 </head>
-
-<body data-page="scout">
-        <script>
+<body data-page="prescout-scout">
+    <script>
         (function() {
             try {
                 const saved = localStorage.getItem("obsidian-theme") || "light";
@@ -27,112 +19,43 @@
             }
         })();
     </script>
-
     <div class="orb orb-1"></div>
-
     <div class="orb orb-2"></div>
 
-
-
     <div class="app-shell">
-
         <aside class="sidebar">
-
-            <div class="sidebar-brand">ObsidianScout</div>
-
-            <nav class="sidebar-nav">
-
-                <a class="sidebar-link" data-page="dashboard" href="/dashboard">Dashboard</a>
-
-                <a class="sidebar-link" data-page="scout" href="/scout">Scout</a>
-
-                <a class="sidebar-link" data-page="pit-scout" href="/pit-scout">Pit Scout</a>
-
-                <a class="sidebar-link" data-page="qual-scout" href="/qual-scout">Qual Scout</a>
-
-                <a class="sidebar-link" data-page="qual-data" href="/qual-data">Qual Data</a>
-
-                <a class="sidebar-link" data-page="pit-data" href="/pit-data">Pit Data</a>
-
-                <a class="sidebar-link" data-page="analytics" href="/analytics">Analytics</a>
-
-                <a class="sidebar-link" data-page="graphs" href="/graphs">Graphs</a>
-
-                <a class="sidebar-link" data-page="events" href="/events">Events</a>
-
-                <a class="sidebar-link" data-page="teams" href="/teams">Teams</a>
-
-                <a class="sidebar-link" data-page="matches" href="/matches">Matches</a>
-
-                <a class="sidebar-link" data-page="predictor" href="/predictor">Predictor</a>
-
-                <a class="sidebar-link" data-page="users" href="/users">Users</a>
-
-                <a class="sidebar-link" data-page="settings" href="/config">Settings</a>
-
-            </nav>
-
-            <div class="sidebar-footer">
-
-                <span id="nav-user" class="badge"></span>
-
-                <button class="btn ghost" data-action="toggle-theme" type="button">Toggle theme</button>
-
-                <button class="btn ghost" data-action="logout" type="button">Sign out</button>
-
-            </div>
-
+            <!-- Will be replaced dynamically by base.html -->
         </aside>
 
-
-
         <main class="main-content">
-
             <div class="card">
-
-                <h1 data-i18n="scout.title">Dynamic scouting form</h1>
-
-                <p class="notice">Pick event, team, and match, then fill in the form driven by config JSON.</p>
+                <h1>Match Prescouting</h1>
+                <p class="notice">Enter an event code, load the teams/matches, then fill in the form driven by config JSON.</p>
 
                 <div class="split mb-18">
-
                     <div class="field">
-
-                        <label>Event</label>
-
-                        <div id="event-badge" class="badge"></div>
-
+                        <label for="event-code-input">Event Code</label>
+                        <div class="row gap-8">
+                            <input id="event-code-input" type="text" placeholder="e.g. 2024micmp" style="min-width: 140px;" />
+                            <button id="load-event-btn" class="btn" type="button">Load</button>
+                        </div>
                     </div>
-
                     <div class="field">
-
                         <label for="team-select">Team</label>
-
-                        <select id="team-select"></select>
-
+                        <select id="team-select" disabled></select>
                     </div>
-
                     <div class="field">
-
                         <label for="match-select">Match</label>
-
-                        <select id="match-select" class="select-wide"></select>
-
+                        <select id="match-select" class="select-wide" disabled></select>
                     </div>
-
                     <div class="field">
-
                         <label>Timezone</label>
-
-                        <div id="timezone-badge" class="badge"></div>
-
+                        <div id="timezone-badge" class="badge">--</div>
                     </div>
-
                 </div>
 
                 <form id="scouting-form" class="form-grid">
-
-                    <div id="form-blocked" class="notice">Select a team and match to start scouting.</div>
+                    <div id="form-blocked" class="notice">Enter an event code and click Load, then select a team and match to start scouting.</div>
 
                     <div id="scouting-tabs" class="tab-row hidden">
                         <button type="button" class="tab active" data-tab="auto">Auto</button>
@@ -143,73 +66,39 @@
 
                     <div id="form-fields" class="form-grid"></div>
 
-                    <div id="points-preview" class="card soft">
-
+                    <div id="points-preview" class="card soft hidden">
                         <h3>Points preview</h3>
-
                         <p class="notice">Auto, teleop, endgame, and total update as you fill out the form.</p>
-
                         <div class="metrics">
-
                             <div>
-
                                 <h4>Auto</h4>
-
                                 <div id="points-auto" class="metric-value">0</div>
-
                             </div>
-
                             <div>
-
                                 <h4>Teleop</h4>
-
                                 <div id="points-teleop" class="metric-value">0</div>
-
                             </div>
-
                             <div>
-
                                 <h4>Endgame</h4>
-
                                 <div id="points-endgame" class="metric-value">0</div>
-
                             </div>
-
                             <div>
-
                                 <h4>Total</h4>
-
                                 <div id="points-total" class="metric-value">0</div>
-
                             </div>
-
                         </div>
-
                     </div>
 
                     <div class="row gap-12 wrap">
-
-                        <button id="scout-submit" class="btn" type="submit" data-i18n="scout.save_entry">Save entry</button>
-
-                        <button id="scout-clear" class="btn ghost" type="button" data-i18n="scout.clear_form">Clear form</button>
-
+                        <button id="scout-submit" class="btn" type="submit" disabled>Save entry</button>
+                        <button id="scout-clear" class="btn ghost" type="button" disabled>Clear form</button>
                     </div>
-
                 </form>
-
             </div>
-
         </main>
-
     </div>
 
-
-
     <script src="/js/common.js"></script>
-
-    <script src="/js/scout.js"></script>
-
+    <script src="/js/prescout-scout.js"></script>
 </body>
-
 </html>
-
