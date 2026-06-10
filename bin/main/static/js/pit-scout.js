@@ -76,6 +76,41 @@ async function loadPitScoutPageData(me) {
             });
         }
 
+        const exportJsonBtn = document.getElementById("pit-export-json");
+        if (exportJsonBtn) {
+            exportJsonBtn.addEventListener("click", () => {
+                if (!teamSelect.value) {
+                    Obsidianscout.showToast("Select a team", "error");
+                    return;
+                }
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+                payload.eventKey = eventKey;
+                payload.targetTeamNumber = Number(teamSelect.value);
+                payload.type = "pit-scout";
+
+                const filename = `pit_${eventKey || 'event'}_team${payload.targetTeamNumber}.json`;
+                Obsidianscout.downloadJson(payload, filename);
+            });
+        }
+
+        const genQrBtn = document.getElementById("pit-gen-qr");
+        if (genQrBtn) {
+            genQrBtn.addEventListener("click", () => {
+                if (!teamSelect.value) {
+                    Obsidianscout.showToast("Select a team", "error");
+                    return;
+                }
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+                payload.eventKey = eventKey;
+                payload.targetTeamNumber = Number(teamSelect.value);
+                payload.type = "pit-scout";
+
+                Obsidianscout.showQrModal(payload, "Pit Scouting", payload.targetTeamNumber, null);
+            });
+        }
+
         await handleSelectionChange();
 
         form.addEventListener("submit", async (event) => {

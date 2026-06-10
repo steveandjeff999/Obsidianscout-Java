@@ -73,6 +73,49 @@ async function initPrescoutQual(me) {
             });
         }
 
+        const exportJsonBtn = document.getElementById("qual-export-json");
+        if (exportJsonBtn) {
+            exportJsonBtn.addEventListener("click", () => {
+                if (!teamSelect.value || !matchSelect.value || !currentEventKey) {
+                    Obsidianscout.showToast("Select a team, match, and load an event first", "error");
+                    return;
+                }
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+                payload.eventKey = currentEventKey;
+                payload.targetTeamNumber = Number(teamSelect.value);
+                payload.matchKey = matchSelect.value;
+                const selectedMatch = matchSelect.selectedOptions[0];
+                const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+                payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+                payload.type = "prescout-qual";
+
+                const filename = `prescout_qual_${currentEventKey}_team${payload.targetTeamNumber}_match${payload.matchNumber || 'unknown'}.json`;
+                Obsidianscout.downloadJson(payload, filename);
+            });
+        }
+
+        const genQrBtn = document.getElementById("qual-gen-qr");
+        if (genQrBtn) {
+            genQrBtn.addEventListener("click", () => {
+                if (!teamSelect.value || !matchSelect.value || !currentEventKey) {
+                    Obsidianscout.showToast("Select a team, match, and load an event first", "error");
+                    return;
+                }
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+                payload.eventKey = currentEventKey;
+                payload.targetTeamNumber = Number(teamSelect.value);
+                payload.matchKey = matchSelect.value;
+                const selectedMatch = matchSelect.selectedOptions[0];
+                const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+                payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+                payload.type = "prescout-qual";
+
+                Obsidianscout.showQrModal(payload, "Qualitative Prescouting", payload.targetTeamNumber, payload.matchKey);
+            });
+        }
+
         // Event loading logic
         loadEventBtn.addEventListener("click", async () => {
             const rawCode = eventCodeInput.value.trim().toLowerCase();

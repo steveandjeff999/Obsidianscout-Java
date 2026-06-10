@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obsidianscout-shell-v7';
+const CACHE_NAME = 'obsidianscout-shell-v9';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 const ASSETS = [
@@ -7,6 +7,11 @@ const ASSETS = [
     '/scout',
     '/pit-scout',
     '/qual-scout',
+    '/prescout',
+    '/prescout-scout',
+    '/prescout-pit',
+    '/prescout-qual',
+    '/qr-scanner',
     '/pit-data',
     '/analytics',
     '/graphs',
@@ -25,6 +30,10 @@ const ASSETS = [
     '/js/scout.js',
     '/js/pit-scout.js',
     '/js/qual-scout.js',
+    '/js/prescout-scout.js',
+    '/js/prescout-pit.js',
+    '/js/prescout-qual.js',
+    '/js/qr-scanner.js',
     '/js/pit-data.js',
     '/js/analytics.js',
     '/js/graphs.js',
@@ -35,7 +44,9 @@ const ASSETS = [
     '/js/alliances.js',
     '/js/users.js',
     '/js/settings.js',
-    '/vendor/plotly-2.32.0.min.js'
+    '/vendor/plotly-2.32.0.min.js',
+    '/vendor/qrcode.min.js',
+    '/vendor/html5-qrcode.min.js'
     ,'/i18n/en.json'
     ,'/i18n/es.json'
     ,'/i18n/tr.json'
@@ -57,8 +68,20 @@ self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then((cache) => {
-                console.log('[ServiceWorker] Pre-caching offline shell assets');
-                return cache.addAll(ASSETS);
+                console.log('[ServiceWorker] Resiliently pre-caching offline shell assets');
+                const promises = ASSETS.map(url => {
+                    return fetch(url)
+                        .then(response => {
+                            if (response.status === 200) {
+                                return cache.put(url, response);
+                            }
+                            console.warn(`[ServiceWorker] Skip caching ${url} (status: ${response.status})`);
+                        })
+                        .catch(err => {
+                            console.warn(`[ServiceWorker] Failed to fetch ${url}:`, err);
+                        });
+                });
+                return Promise.all(promises);
             })
             .then(() => self.skipWaiting())
     );

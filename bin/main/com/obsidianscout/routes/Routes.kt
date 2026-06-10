@@ -687,7 +687,8 @@ fun Application.configureRoutes() {
             "predictor" to "predictor.html",
             "alliances" to "alliances.html",
             "users" to "users.html",
-            "config" to "config.html"
+            "config" to "config.html",
+            "qr-scanner" to "qr-scanner.html"
         )
 
         pages.forEach { (path, fileName) ->

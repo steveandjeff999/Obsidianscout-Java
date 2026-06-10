@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | QR Scanner</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body data-page="qr-scanner">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <!-- Will be replaced dynamically by base.html -->
+        </aside>
+
+        <main class="main-content">
+            <div class="scanner-container-grid">
+                <!-- Camera and Controls Card -->
+                <div class="card scanner-video-card">
+                    <h1>QR Code Scanner</h1>
+                    <p class="notice">Select your camera, click "Start Scanning", and hold the QR code in front of the lens.</p>
+                    
+                    <div class="scanner-video-wrapper">
+                        <div id="reader"></div>
+                    </div>
+
+                    <div class="scanner-controls">
+                        <div class="field">
+                            <label for="camera-select">Camera Source</label>
+                            <select id="camera-select">
+                                <option value="">Detecting cameras...</option>
+                            </select>
+                        </div>
+                        <div class="row gap-12 wrap">
+                            <button id="btn-toggle-scan" class="btn" type="button">Start Scanning</button>
+                        </div>
+                    </div>
+
+                    <div class="scanner-import-section mt-18" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 16px;">
+                        <label>Import JSON Exports</label>
+                        <p class="notice" style="margin-bottom: 8px;">Upload downloaded scout JSON files directly into the scanned queue.</p>
+                        <div class="import-dropzone" id="import-dropzone">
+                            <span class="import-icon">📥</span>
+                            <span class="import-text">Select JSON files or drag them here</span>
+                            <span class="import-subtext">Supports single or multiple scout JSON file imports</span>
+                            <input type="file" id="import-file-input" accept=".json" multiple class="sr-only" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Queue / Sync Card -->
+                <div class="card scanner-queue-card">
+                    <div class="scanner-queue-header">
+                        <h2>Scanned Queue</h2>
+                        <span id="queue-count-badge" class="badge">0 items</span>
+                    </div>
+                    <p class="notice">Decoded scouting entries will stack here. Upload them once you have connection.</p>
+                    
+                    <div class="scanner-queue-list" id="queue-list-container">
+                        <div class="notice" id="empty-queue-notice" style="text-align: center; padding: 24px;">No items scanned yet. Ready to receive data.</div>
+                    </div>
+
+                    <div class="row gap-12 wrap" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 16px;">
+                        <button id="btn-upload-queue" class="btn" type="button" disabled>Upload Queue</button>
+                        <button id="btn-clear-queue" class="btn ghost" type="button">Clear Queue</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/vendor/html5-qrcode.min.js"></script>
+    <script src="/js/qr-scanner.js"></script>
+</body>
+</html>

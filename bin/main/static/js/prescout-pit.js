@@ -71,6 +71,41 @@ async function initPrescoutPit(me) {
             });
         }
 
+        const exportJsonBtn = document.getElementById("pit-export-json");
+        if (exportJsonBtn) {
+            exportJsonBtn.addEventListener("click", () => {
+                if (!teamSelect.value || !currentEventKey) {
+                    Obsidianscout.showToast("Select a team and load an event first", "error");
+                    return;
+                }
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+                payload.eventKey = currentEventKey;
+                payload.targetTeamNumber = Number(teamSelect.value);
+                payload.type = "prescout-pit";
+
+                const filename = `prescout_pit_${currentEventKey}_team${payload.targetTeamNumber}.json`;
+                Obsidianscout.downloadJson(payload, filename);
+            });
+        }
+
+        const genQrBtn = document.getElementById("pit-gen-qr");
+        if (genQrBtn) {
+            genQrBtn.addEventListener("click", () => {
+                if (!teamSelect.value || !currentEventKey) {
+                    Obsidianscout.showToast("Select a team and load an event first", "error");
+                    return;
+                }
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+                payload.eventKey = currentEventKey;
+                payload.targetTeamNumber = Number(teamSelect.value);
+                payload.type = "prescout-pit";
+
+                Obsidianscout.showQrModal(payload, "Pit Prescouting", payload.targetTeamNumber, null);
+            });
+        }
+
         // Event loading logic
         loadEventBtn.addEventListener("click", async () => {
             const rawCode = eventCodeInput.value.trim().toLowerCase();

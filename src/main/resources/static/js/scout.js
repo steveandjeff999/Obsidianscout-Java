@@ -122,6 +122,49 @@ async function loadScoutPageData(me) {
             });
         }
 
+        const exportJsonBtn = document.getElementById("scout-export-json");
+        if (exportJsonBtn) {
+            exportJsonBtn.addEventListener("click", () => {
+                if (!teamSelect.value || !matchSelect.value) {
+                    Obsidianscout.showToast("Select both a team and a match", "error");
+                    return;
+                }
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+                payload.eventKey = eventKey;
+                payload.targetTeamNumber = Number(teamSelect.value);
+                payload.matchKey = matchSelect.value;
+                const selectedMatch = matchSelect.selectedOptions[0];
+                const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+                payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+                payload.type = "scout";
+
+                const filename = `scout_${eventKey || 'event'}_team${payload.targetTeamNumber}_match${payload.matchNumber || 'unknown'}.json`;
+                Obsidianscout.downloadJson(payload, filename);
+            });
+        }
+
+        const genQrBtn = document.getElementById("scout-gen-qr");
+        if (genQrBtn) {
+            genQrBtn.addEventListener("click", () => {
+                if (!teamSelect.value || !matchSelect.value) {
+                    Obsidianscout.showToast("Select both a team and a match", "error");
+                    return;
+                }
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+                payload.eventKey = eventKey;
+                payload.targetTeamNumber = Number(teamSelect.value);
+                payload.matchKey = matchSelect.value;
+                const selectedMatch = matchSelect.selectedOptions[0];
+                const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+                payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+                payload.type = "scout";
+
+                Obsidianscout.showQrModal(payload, "Match Scouting", payload.targetTeamNumber, payload.matchKey);
+            });
+        }
+
         await handleSelectionChange();
 
         form.addEventListener("submit", async (event) => {

@@ -517,6 +517,11 @@ function renderGraphType(graphType, container, entries, metric, state) {
             renderPlotlyBar(container, series, { orientation: "h" });
             return;
         }
+        if (state.dataView === "matches") {
+            const series = buildTeamSeries(entries, metric, state);
+            renderPlotlyMultiBar(container, series);
+            return;
+        }
         const teamStats = buildTeamStats(entries, metric, state);
         const sorted = sortTeamStats(teamStats, state.sort);
         renderPlotlyBar(container, sorted.map((item) => ({ label: `Team ${item.teamNumber}`, value: item.value })), { orientation: "h" });
@@ -704,6 +709,37 @@ function renderPlotlyMultiLine(container, series, options = {}) {
         xaxis: { gridcolor: theme.grid, automargin: true },
         yaxis: { gridcolor: theme.grid, zerolinecolor: theme.grid, automargin: true },
         legend: { orientation: "h", y: -0.2 }
+    };
+
+    window.Plotly.react(container, traces, layout, PLOTLY_CONFIG);
+}
+
+function renderPlotlyMultiBar(container, series, options = {}) {
+    if (!window.Plotly) {
+        container.appendChild(buildNotice("Plotly failed to load."));
+        return;
+    }
+    const theme = resolveThemeTokens();
+    const height = Number(container.dataset.height) || 320;
+    const traces = series.map((item) => {
+        return {
+            type: "bar",
+            name: item.name,
+            x: item.x,
+            y: item.y
+        };
+    });
+
+    const layout = {
+        height,
+        margin: { l: 50, r: 20, t: 10, b: 50 },
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: theme.text },
+        xaxis: { gridcolor: theme.grid, automargin: true },
+        yaxis: { gridcolor: theme.grid, zerolinecolor: theme.grid, automargin: true },
+        legend: { orientation: "h", y: -0.2 },
+        barmode: "group"
     };
 
     window.Plotly.react(container, traces, layout, PLOTLY_CONFIG);

@@ -768,6 +768,112 @@
         updateConnectionStatus();
     }
 
+    function downloadJson(payload, filename) {
+        try {
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("JSON exported successfully", "success");
+        } catch (e) {
+            console.error("JSON export failed:", e);
+            showToast("Failed to export JSON", "error");
+        }
+    }
+
+    function showQrModal(payload, typeLabel, teamNum, matchKey) {
+        if (typeof QRCode === 'undefined') {
+            showToast("QR Library not loaded", "error");
+            return;
+        }
+
+        let backdrop = document.getElementById("qr-modal-backdrop");
+        if (!backdrop) {
+            backdrop = document.createElement("div");
+            backdrop.id = "qr-modal-backdrop";
+            backdrop.className = "modal-backdrop";
+            document.body.appendChild(backdrop);
+        }
+
+        const matchHtml = matchKey ? `<p><strong>Match:</strong> <span>${matchKey}</span></p>` : '';
+        
+        backdrop.innerHTML = `
+            <div class="modal-container">
+                <div class="modal-header">
+                    <h3 class="modal-title">Scouting Entry QR Code</h3>
+                    <button class="modal-close" id="qr-modal-close-btn">&times;</button>
+                </div>
+                <div class="modal-body qr-modal-body">
+                    <div class="qr-code-wrapper" id="qr-code-canvas-container"></div>
+                    <div class="qr-details">
+                        <p><strong>Type:</strong> <span>${typeLabel}</span></p>
+                        <p><strong>Team:</strong> <span>${teamNum}</span></p>
+                        ${matchHtml}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn secondary" id="qr-modal-download-btn">Download QR Code</button>
+                    <button class="btn ghost" id="qr-modal-close-footer-btn">Close</button>
+                </div>
+            </div>
+        `;
+
+        const container = document.getElementById("qr-code-canvas-container");
+        const qrPayload = {
+            type: payload.type || typeLabel.toLowerCase().replace(/\s+/g, '-'),
+            data: payload
+        };
+        const qrString = JSON.stringify(qrPayload);
+
+        const qrcode = new QRCode(container, {
+            text: qrString,
+            width: 384,
+            height: 384,
+            colorDark : "#000000",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.M
+        });
+
+        backdrop.classList.add("show");
+
+        const closeBtn = document.getElementById("qr-modal-close-btn");
+        const closeFooterBtn = document.getElementById("qr-modal-close-footer-btn");
+        const downloadBtn = document.getElementById("qr-modal-download-btn");
+
+        const closeModal = () => {
+            backdrop.classList.remove("show");
+        };
+
+        closeBtn.addEventListener("click", closeModal);
+        closeFooterBtn.addEventListener("click", closeModal);
+
+        downloadBtn.addEventListener("click", () => {
+            const img = container.querySelector("img");
+            const canvas = container.querySelector("canvas");
+            let src = "";
+            if (img && img.src) {
+                src = img.src;
+            } else if (canvas) {
+                src = canvas.toDataURL("image/png");
+            }
+            if (src) {
+                const a = document.createElement("a");
+                a.href = src;
+                a.download = `qr_${qrPayload.type}_${teamNum}${matchKey ? '_' + matchKey : ''}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                showToast("Could not download QR image yet", "error");
+            }
+        });
+    }
+
     // Set up Service Worker and Global Connection Listeners
     document.addEventListener("DOMContentLoaded", () => {
         if ('serviceWorker' in navigator) {
@@ -898,5 +1004,7 @@
         ,safeGetItem
         ,safeSetItem
         ,safeRemoveItem
+        ,downloadJson
+        ,showQrModal
     };
 })();

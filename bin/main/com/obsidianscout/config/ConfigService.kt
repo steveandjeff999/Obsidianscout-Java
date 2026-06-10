@@ -543,18 +543,43 @@ object ConfigService {
         )
     }
 
+    private fun extractStringLabel(labelElement: JsonElement?): String {
+        if (labelElement == null) return ""
+        if (labelElement is JsonPrimitive) {
+            return labelElement.content
+        }
+        if (labelElement is JsonObject) {
+            val enLabel = labelElement["en"]
+            if (enLabel is JsonPrimitive) {
+                return enLabel.content
+            }
+            for (value in labelElement.values) {
+                if (value is JsonPrimitive) {
+                    return value.content
+                }
+            }
+        }
+        return ""
+    }
+
     private fun normalizeConfigJson(text: String): String {
         val element = JsonSupport.json.parseToJsonElement(text)
         val obj = element as? JsonObject ?: return text
         val fields = obj["fields"] as? JsonArray ?: return text
+        var anyFieldChanged = false
         val normalizedFields = fields.map { fieldElement ->
             val fieldObj = fieldElement as? JsonObject ?: return@map fieldElement
-            val options = fieldObj["options"] as? JsonArray ?: return@map fieldElement
-            var changed = false
-            val transformed = options.map { option ->
+
+            val originalLabel = fieldObj["label"]
+            val normalizedLabelStr = extractStringLabel(originalLabel)
+            val labelChanged = originalLabel !is JsonPrimitive || originalLabel.content != normalizedLabelStr
+
+            val options = fieldObj["options"] as? JsonArray
+            var optionsChanged = false
+            val transformedOptions = options?.map { option ->
                 when (option) {
                     is JsonPrimitive -> {
-                        changed = true
+                        optionsChanged = true
                         val value = option.content
                         JsonObject(
                             mapOf(
@@ -565,15 +590,20 @@ object ConfigService {
                         )
                     }
                     is JsonObject -> {
-                        val label = (option["label"] as? JsonPrimitive)?.content
+                        val originalOptLabel = option["label"]
+                        val normalizedOptLabelStr = extractStringLabel(originalOptLabel)
+                        val optLabelChanged = originalOptLabel !is JsonPrimitive || originalOptLabel.content != normalizedOptLabelStr
+
                         val value = (option["value"] as? JsonPrimitive)?.content
                         val pointsRaw = (option["points"] as? JsonPrimitive)?.content
                         val points = pointsRaw?.toDoubleOrNull() ?: 0.0
-                        val finalLabel = label ?: value ?: ""
-                        val finalValue = value ?: label ?: ""
-                        val needsUpdate = label == null || value == null || option["points"] == null
+
+                        val finalLabel = if (normalizedOptLabelStr.isNotEmpty()) normalizedOptLabelStr else (value ?: "")
+                        val finalValue = value ?: normalizedOptLabelStr
+
+                        val needsUpdate = optLabelChanged || value == null || option["points"] == null
                         if (needsUpdate) {
-                            changed = true
+                            optionsChanged = true
                         }
                         JsonObject(
                             option + mapOf(
@@ -586,11 +616,25 @@ object ConfigService {
                     else -> option
                 }
             }
-            if (!changed) {
-                return@map fieldElement
+
+            val fieldChanged = labelChanged || optionsChanged
+            if (fieldChanged) {
+                anyFieldChanged = true
+                val updatedFieldMap = fieldObj.toMutableMap()
+                updatedFieldMap["label"] = JsonPrimitive(normalizedLabelStr)
+                if (transformedOptions != null) {
+                    updatedFieldMap["options"] = JsonArray(transformedOptions)
+                }
+                JsonObject(updatedFieldMap)
+            } else {
+                fieldElement
             }
-            JsonObject(fieldObj + ("options" to JsonArray(transformed)))
         }
+
+        if (!anyFieldChanged) {
+            return text
+        }
+
         val normalized = JsonObject(obj + ("fields" to JsonArray(normalizedFields)))
         return JsonSupport.json.encodeToString(JsonElement.serializer(), normalized)
     }
