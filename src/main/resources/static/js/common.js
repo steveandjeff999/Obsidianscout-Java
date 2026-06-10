@@ -786,7 +786,55 @@
         }
     }
 
-    function showQrModal(payload, typeLabel, teamNum, matchKey) {
+    async function compressData(dataStr) {
+        if (typeof CompressionStream === 'undefined') {
+            console.warn("CompressionStream is not supported in this browser. Falling back to raw JSON.");
+            return dataStr;
+        }
+        try {
+            const stream = new Blob([dataStr]).stream();
+            const compressedStream = stream.pipeThrough(new CompressionStream("deflate"));
+            const buffer = await new Response(compressedStream).arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            
+            // Safe base64 encoding from Uint8Array
+            let binary = "";
+            const len = bytes.byteLength;
+            const chunk = 8192;
+            for (let i = 0; i < len; i += chunk) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+            }
+            return "OSC:" + btoa(binary);
+        } catch (e) {
+            console.error("Compression failed, using raw data:", e);
+            return dataStr;
+        }
+    }
+
+    async function decompressData(compressedStr) {
+        if (!compressedStr || !compressedStr.startsWith("OSC:")) {
+            return compressedStr; // Not compressed, return raw
+        }
+        const base64 = compressedStr.substring(4);
+        if (typeof DecompressionStream === 'undefined') {
+            throw new Error("DecompressionStream is not supported by this browser.");
+        }
+        try {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            const stream = new Blob([bytes]).stream();
+            const decompressedStream = stream.pipeThrough(new DecompressionStream("deflate"));
+            return await new Response(decompressedStream).text();
+        } catch (e) {
+            console.error("Decompression failed:", e);
+            throw e;
+        }
+    }
+
+    async function showQrModal(payload, typeLabel, teamNum, matchKey) {
         if (typeof QRCode === 'undefined') {
             showToast("QR Library not loaded", "error");
             return;
@@ -829,9 +877,10 @@
             data: payload
         };
         const qrString = JSON.stringify(qrPayload);
+        const compressedString = await compressData(qrString);
 
         const qrcode = new QRCode(container, {
-            text: qrString,
+            text: compressedString,
             width: 384,
             height: 384,
             colorDark : "#000000",
@@ -1006,5 +1055,7 @@
         ,safeRemoveItem
         ,downloadJson
         ,showQrModal
+        ,compressData
+        ,decompressData
     };
 })();

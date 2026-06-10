@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obsidianscout-shell-v9';
+const CACHE_NAME = 'obsidianscout-shell-v12';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 const ASSETS = [
@@ -46,7 +46,8 @@ const ASSETS = [
     '/js/settings.js',
     '/vendor/plotly-2.32.0.min.js',
     '/vendor/qrcode.min.js',
-    '/vendor/html5-qrcode.min.js'
+    '/vendor/qr-scanner.min.js',
+    '/vendor/qr-scanner-worker.min.js'
     ,'/i18n/en.json'
     ,'/i18n/es.json'
     ,'/i18n/tr.json'
