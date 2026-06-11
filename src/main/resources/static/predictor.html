@@ -282,6 +282,15 @@
                             <option value="">Loading matches...</option>
                         </select>
                     </div>
+                    <div class="field hidden" id="datasource-field" style="min-width: 240px; margin-top: 0;">
+                        <label for="datasource-select" style="margin-bottom: 4px;">Data Source</label>
+                        <select id="datasource-select" class="select-wide">
+                            <option value="all">All 3</option>
+                            <option value="scouted">Scouted Data</option>
+                            <option value="epa">Statbotics EPA</option>
+                            <option value="opr">TBA OPR</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -362,7 +371,7 @@
 
                 <!-- Prediction Spotlight -->
                 <div class="column gap-20">
-                    <div class="winner-spotlight">
+                    <div class="winner-spotlight" id="spotlight-scouted-card">
                         <div class="winner-spotlight-title">Scouted Prediction</div>
                         <div class="winner-name" id="spotlight-scouted-winner">-</div>
                         <div class="winner-subtext" id="spotlight-scouted-subtext">No data yet</div>
