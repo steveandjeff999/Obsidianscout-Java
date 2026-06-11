@@ -1,7 +1,10 @@
-const CACHE_NAME = 'obsidianscout-shell-v11';
+const CACHE_NAME = 'obsidianscout-shell-v12';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 const ASSETS = [
+    '/favicon.ico',
+    '/assets/images/obsidian/obsidian-192.png',
+    '/assets/images/obsidian/obsidian-512.png',
     '/',
     '/dashboard',
     '/scout',

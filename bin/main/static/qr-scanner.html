@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="en">
 <head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ObsidianScout | QR Scanner</title>
@@ -34,6 +37,14 @@
                     <h1>QR Code Scanner</h1>
                     <p class="notice">Select your camera, click "Start Scanning", and hold the QR code in front of the lens.</p>
                     
+                    <!-- Camera Warning Banner -->
+                    <div class="alert alert-warning" style="display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: var(--radius-sm); background: rgba(243, 156, 18, 0.1); border: 1px solid rgba(243, 156, 18, 0.3); color: #d35400; font-size: 13px; line-height: 1.4; margin-bottom: 16px;">
+                        <span style="font-size: 16px;">⚠️</span>
+                        <div>
+                            <strong>Camera Quality Notice:</strong> This scanner processes highly dense data. It requires a clear, well-focused camera feed to scan successfully. If you have webcam quality issues, please use the **Paste QR Data** section below.
+                        </div>
+                    </div>
+
                     <div class="scanner-video-wrapper">
                         <div id="reader"></div>
                     </div>
@@ -51,13 +62,19 @@
                     </div>
 
                     <div class="scanner-import-section mt-18" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 16px;">
-                        <label>Import JSON Exports</label>
-                        <p class="notice" style="margin-bottom: 8px;">Upload downloaded scout JSON files directly into the scanned queue.</p>
-                        <div class="import-dropzone" id="import-dropzone">
+                        <label>Import JSON or Paste QR Data</label>
+                        <p class="notice" style="margin-bottom: 8px;">Upload scout JSON files or paste QR/JSON data directly below.</p>
+                        
+                        <div class="import-dropzone" id="import-dropzone" style="margin-bottom: 12px;">
                             <span class="import-icon">📥</span>
                             <span class="import-text">Select JSON files or drag them here</span>
                             <span class="import-subtext">Supports single or multiple scout JSON file imports</span>
                             <input type="file" id="import-file-input" accept=".json" multiple class="sr-only" />
+                        </div>
+
+                        <div class="field">
+                            <textarea id="paste-input" placeholder="Paste QR Code data (e.g. OSC:...) or raw JSON scout export here..." style="width: 100%; height: 80px; resize: vertical; font-family: monospace; font-size: 12px; margin-bottom: 8px; border-radius: var(--radius-sm); border: 1px solid rgba(0,0,0,0.15); padding: 8px; background: var(--bg-card); color: var(--text);"></textarea>
+                            <button id="btn-submit-paste" class="btn secondary" style="width: 100%;" type="button">Import Pasted Data</button>
                         </div>
                     </div>
                 </div>

@@ -202,6 +202,7 @@ body.theme-dark .sidebar-toggle {
 
 .main-content {
     flex: 1;
+    min-width: 0;
     padding: 32px 32px 80px;
 }
 
@@ -322,7 +323,7 @@ body.theme-dark .sidebar-toggle {
 
 .hero {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
     gap: 32px;
     align-items: center;
 }
@@ -746,6 +747,12 @@ input, select, textarea {
     max-width: 100%;
 }
 
+select {
+    width: 100%;
+    min-width: 0;
+    text-overflow: ellipsis;
+}
+
 .select-wide {
     width: 100%;
     overflow: hidden;
@@ -803,13 +810,13 @@ button {
 .split {
     display: grid;
     gap: 26px;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
 }
 
 .metrics {
     display: grid;
     gap: 16px;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 }
 
 .metric-value {
@@ -1369,7 +1376,7 @@ body.theme-dark .btn-control-icon {
 .field-card-body {
     display: grid;
     gap: 14px;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
 }
 
 .field-card-body-full {

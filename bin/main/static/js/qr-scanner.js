@@ -752,6 +752,10 @@ function initScanner() {
             fileInput.click();
         });
 
+        fileInput.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+
         fileInput.addEventListener("change", (e) => {
             handleImportedFiles(e.target.files);
             fileInput.value = "";
@@ -775,47 +779,77 @@ function initScanner() {
         });
     }
 
+    // Paste Import Logic
+    const pasteInput = document.getElementById("paste-input");
+    const submitPasteBtn = document.getElementById("btn-submit-paste");
+
+    if (pasteInput && submitPasteBtn) {
+        submitPasteBtn.addEventListener("click", async () => {
+            const rawText = pasteInput.value.trim();
+            if (!rawText) {
+                Obsidianscout.showToast("Please paste some data first", "error");
+                return;
+            }
+
+            try {
+                // Try decompressing first if it starts with the compressed prefix
+                let decompressedText = rawText;
+                if (rawText.startsWith("OSC:")) {
+                    decompressedText = await Obsidianscout.decompressData(rawText);
+                }
+
+                // Parse as JSON
+                let parsed = JSON.parse(decompressedText);
+                
+                // Process either a list or single entry
+                const items = Array.isArray(parsed) ? parsed : [parsed];
+                const entriesToProcess = [];
+
+                items.forEach(item => {
+                    const normalized = normalizeImportedItem(item, "pasted_data.json");
+                    if (normalized) {
+                        entriesToProcess.push(normalized);
+                    }
+                });
+
+                if (entriesToProcess.length > 0) {
+                    processEntriesList(entriesToProcess);
+                    pasteInput.value = ""; // Clear input on success
+                } else {
+                    Obsidianscout.showToast("No valid scout entries found in pasted data", "error");
+                }
+            } catch (err) {
+                console.error("Paste import failed:", err);
+                Obsidianscout.showToast("Invalid QR data or JSON format", "error");
+            }
+        });
+    }
+
     function handleImportedFiles(files) {
         if (!files || files.length === 0) return;
         
-        let filesRead = 0;
-        const allEntriesToProcess = [];
-        
+        const pasteInput = document.getElementById("paste-input");
+        const submitPasteBtn = document.getElementById("btn-submit-paste");
+        if (!pasteInput || !submitPasteBtn) return;
+
         Array.from(files).forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
-                try {
-                    const parsed = JSON.parse(e.target.result);
-                    const items = Array.isArray(parsed) ? parsed : [parsed];
-                    items.forEach(item => {
-                        const normalized = normalizeImportedItem(item, file.name);
-                        if (normalized) {
-                            allEntriesToProcess.push(normalized);
-                        }
-                    });
-                } catch (err) {
-                    console.error("Failed to parse file:", file.name, err);
-                    Obsidianscout.showToast(`Error parsing ${file.name}`, "error");
-                }
-                
-                filesRead++;
-                if (filesRead === files.length) {
-                    processEntriesList(allEntriesToProcess);
-                }
+                pasteInput.value = e.target.result;
+                submitPasteBtn.click();
             };
             reader.onerror = () => {
                 Obsidianscout.showToast(`Error reading ${file.name}`, "error");
-                filesRead++;
-                if (filesRead === files.length) {
-                    processEntriesList(allEntriesToProcess);
-                }
             };
             reader.readAsText(file);
         });
     }
 
     function normalizeImportedItem(item, filename) {
-        if (!item || typeof item !== 'object') return null;
+        if (!item || typeof item !== 'object') {
+            console.warn("Import warning: Item is not an object", item);
+            return null;
+        }
 
         let type = item.type;
         if (!type && item.data && item.data.type) {
@@ -836,9 +870,13 @@ function initScanner() {
 
         const payload = {};
 
-        // Case 1: Standard QR format { type: "...", data: { ... } }
+        // Case 1: Standard QR format { type: "...", data: { ... } } (might also have top-level metadata)
         if (item.type && item.data && typeof item.data === 'object') {
             Object.assign(payload, item.data);
+            if (!payload.eventKey && item.eventKey) payload.eventKey = item.eventKey;
+            if (!payload.targetTeamNumber && item.targetTeamNumber) payload.targetTeamNumber = Number(item.targetTeamNumber);
+            if (!payload.matchKey && item.matchKey) payload.matchKey = item.matchKey;
+            if (!payload.matchNumber && item.matchNumber !== undefined) payload.matchNumber = Number(item.matchNumber);
         } 
         // Case 2: Ktor ScoutingEntryRecord { id: 123, data: { ... }, eventKey: "...", targetTeamNumber: 123 }
         else if (item.data && typeof item.data === 'object') {
@@ -853,15 +891,46 @@ function initScanner() {
             Object.assign(payload, item);
         }
 
+        // Helper to normalize different naming conventions for metadata keys
+        const getOptionalString = (obj, keys) => {
+            for (const key of keys) {
+                if (obj[key] !== undefined && obj[key] !== null) {
+                    return String(obj[key]).trim();
+                }
+            }
+            return null;
+        };
+
+        const getOptionalNumber = (obj, keys) => {
+            for (const key of keys) {
+                if (obj[key] !== undefined && obj[key] !== null) {
+                    const num = Number(obj[key]);
+                    if (!isNaN(num)) return num;
+                }
+            }
+            return null;
+        };
+
+        // Extract and normalize metadata keys
+        const eventKey = getOptionalString(payload, ["eventKey", "event_key", "event", "event_code", "eventCode"]) || getOptionalString(item, ["eventKey", "event_key", "event", "event_code", "eventCode"]);
+        const targetTeamNumber = getOptionalNumber(payload, ["targetTeamNumber", "target_team_number", "teamNumber", "team_number", "team", "targetTeam", "target_team"]) || getOptionalNumber(item, ["targetTeamNumber", "target_team_number", "teamNumber", "team_number", "team", "targetTeam", "target_team"]);
+        const matchKey = getOptionalString(payload, ["matchKey", "match_key", "match", "match_code", "matchCode"]) || getOptionalString(item, ["matchKey", "match_key", "match", "match_code", "matchCode"]);
+        const matchNumber = getOptionalNumber(payload, ["matchNumber", "match_number"]) || getOptionalNumber(item, ["matchNumber", "match_number"]);
+
+        if (eventKey) payload.eventKey = eventKey;
+        if (targetTeamNumber) payload.targetTeamNumber = targetTeamNumber;
+        if (matchKey) payload.matchKey = matchKey;
+        if (matchNumber !== null) payload.matchNumber = matchNumber;
+
         // Sanity check metadata
         if (!payload.eventKey || !payload.targetTeamNumber) {
+            console.warn("Import warning: Missing eventKey or targetTeamNumber in item", {
+                hasEventKey: !!payload.eventKey,
+                hasTargetTeamNumber: !!payload.targetTeamNumber,
+                item: item,
+                extractedPayload: payload
+            });
             return null;
-        }
-
-        // Convert targetTeamNumber and matchNumber to numbers
-        payload.targetTeamNumber = Number(payload.targetTeamNumber);
-        if (payload.matchNumber !== undefined && payload.matchNumber !== null) {
-            payload.matchNumber = Number(payload.matchNumber);
         }
 
         // Ensure type is clean (remove any other wrappers or type properties inside data)
@@ -882,10 +951,12 @@ function initScanner() {
         entriesList.forEach(entry => {
             const payload = entry.data;
             const isDuplicate = queue.some(item => {
-                return item.type === entry.type &&
-                       item.data.eventKey === payload.eventKey &&
-                       item.data.targetTeamNumber === payload.targetTeamNumber &&
-                       item.data.matchKey === payload.matchKey;
+                return item &&
+                       item.data &&
+                       item.type === entry.type &&
+                       (item.data.eventKey || "") === (payload.eventKey || "") &&
+                       Number(item.data.targetTeamNumber) === Number(payload.targetTeamNumber) &&
+                       (item.data.matchKey || "") === (payload.matchKey || "");
             });
 
             if (isDuplicate) {
