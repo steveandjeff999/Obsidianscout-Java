@@ -14,7 +14,8 @@ data class ErrorResponse(
 data class LoginRequest(
     val username: String,
     val teamNumber: Int,
-    val password: String
+    val password: String,
+    val keepMeLoggedIn: Boolean = false
 )
 
 @Serializable
@@ -22,7 +23,9 @@ data class RegisterRequest(
     val username: String,
     val teamNumber: Int,
     val password: String,
-    val role: UserRole = UserRole.SCOUT
+    val role: UserRole = UserRole.SCOUT,
+    val email: String? = null,
+    val keepMeLoggedIn: Boolean = false
 )
 
 @Serializable
@@ -56,14 +59,16 @@ data class CreateUserRequest(
     val username: String,
     val teamNumber: Int,
     val password: String,
-    val role: UserRole = UserRole.SCOUT
+    val role: UserRole = UserRole.SCOUT,
+    val email: String? = null
 )
 
 @Serializable
 data class UpdateUserRequest(
     val username: String? = null,
     val password: String? = null,
-    val role: UserRole? = null
+    val role: UserRole? = null,
+    val email: String? = null
 )
 
 @Serializable

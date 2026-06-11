@@ -50,6 +50,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function openModal(user) {
         document.getElementById("edit-user-id").value  = user.id;
         document.getElementById("edit-username").value = user.username;
+        document.getElementById("edit-email").value    = user.email || "";
         document.getElementById("edit-password").value = "";
         document.getElementById("edit-role").value     = user.role;
 
@@ -86,6 +87,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("edit-save-btn").addEventListener("click", async () => {
         const userId   = document.getElementById("edit-user-id").value;
         const username = document.getElementById("edit-username").value.trim();
+        const email    = document.getElementById("edit-email").value.trim();
         const password = document.getElementById("edit-password").value;
         const role     = document.getElementById("edit-role").value;
 
@@ -93,6 +95,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (username) payload.username = username;
         if (password) payload.password = password;
         if (role)     payload.role     = role;
+        payload.email = email;
 
         if (Object.keys(payload).length === 0) {
             Obsidianscout.showToast("Nothing to update", "info");
@@ -116,6 +119,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("user-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         const username   = document.getElementById("user-username").value.trim();
+        const email      = document.getElementById("user-email").value.trim();
         const teamNumber = parseInt(document.getElementById("user-team").value, 10);
         const password   = document.getElementById("user-password").value;
         const role       = document.getElementById("user-role").value;
@@ -123,7 +127,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             await Obsidianscout.request("/api/admin/users", {
                 method: "POST",
-                json: { username, teamNumber, password, role }
+                json: { username, email, teamNumber, password, role }
             });
             Obsidianscout.showToast("User created", "success");
             event.target.reset();
@@ -179,7 +183,7 @@ async function loadUsers(me, openModal, append = false) {
     if (!tbody) return;
 
     if (!append) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading users...</div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading users...</div></td></tr>';
         offset = 0;
     }
 
@@ -198,7 +202,7 @@ async function loadUsers(me, openModal, append = false) {
         }
 
         if (users.length === 0 && !append) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">No users found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 24px;">No users found.</td></tr>';
             return;
         }
 
@@ -210,9 +214,12 @@ async function loadUsers(me, openModal, append = false) {
             const canEdit = Obsidianscout.isSuperAdmin(me.role)
                 || (user.role !== "SUPERADMIN" && user.teamNumber === me.teamNumber);
 
+            const emailDisplay = user.email || `<span style="color: var(--muted); font-style: italic;">None</span>`;
+
             const row = document.createElement("tr");
             row.innerHTML = `
                 <td>${user.username}</td>
+                <td>${emailDisplay}</td>
                 <td>${user.teamNumber}</td>
                 <td>${roleLabel}</td>
                 <td>${new Date(user.createdAt).toLocaleDateString()}</td>
@@ -237,7 +244,7 @@ async function loadUsers(me, openModal, append = false) {
     } catch (error) {
         console.error("Failed to load users:", error);
         if (!append) {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 24px;">
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 24px;">
                 <div class="retry-error-text" style="margin-bottom: 12px;">Failed to load users: ${error.message}</div>
                 <button class="retry-btn" type="button" id="retry-users-btn">Retry</button>
             </td></tr>`;

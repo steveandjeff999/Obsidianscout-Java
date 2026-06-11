@@ -161,6 +161,7 @@
   "index.create_account_tab": "Create account",
   "index.login_submit": "Sign in",
   "index.register_submit": "Create account",
+  "index.keep_me_logged_in": "Keep me signed in",
   "pitdata.title": "Pit data",
   "pitdata.notice": "Review pit scouting coverage, find missing teams, and inspect each team's latest pit entry.",
   "pitdata.export_csv": "Export CSV",

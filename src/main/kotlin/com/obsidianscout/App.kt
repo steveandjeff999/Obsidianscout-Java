@@ -32,6 +32,8 @@ import io.ktor.server.response.respond
 import io.ktor.server.sessions.Sessions
 import io.ktor.server.sessions.cookie
 import io.ktor.server.sessions.SessionTransportTransformerMessageAuthentication
+import io.ktor.server.sessions.SessionProvider
+import com.obsidianscout.auth.KeepMeLoggedInSessionTransport
 import io.ktor.serialization.kotlinx.json.json
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
@@ -99,6 +101,36 @@ fun Application.module(appConfig: AppConfig) {
             cookie.extensions["SameSite"] = "Strict"
             cookie.secure = appConfig.server.cookieSecure || appConfig.server.https.enabled
             transform(SessionTransportTransformerMessageAuthentication(appConfig.server.sessionSecret.toByteArray()))
+        }
+
+        // Wrap the registered provider's transport to dynamically support Keep Me Logged In
+        @Suppress("UNCHECKED_CAST")
+        val originalProvider = providers.firstOrNull { it.name == "obsidian_session" } as? SessionProvider<UserSession>
+        if (originalProvider != null) {
+            val originalTransport = originalProvider.transport as io.ktor.server.sessions.SessionTransportCookie
+            val wrappedTransport = KeepMeLoggedInSessionTransport(originalTransport)
+            val newProvider = SessionProvider(
+                name = originalProvider.name,
+                type = originalProvider.type,
+                transport = wrappedTransport,
+                tracker = originalProvider.tracker
+            )
+
+            val clazz = io.ktor.server.sessions.SessionsConfig::class.java
+            val listField = runCatching { clazz.getDeclaredField("_providers") }
+                .recoverCatching { clazz.getDeclaredField("providers") }
+                .getOrNull()
+            if (listField != null) {
+                listField.isAccessible = true
+                @Suppress("UNCHECKED_CAST")
+                val list = listField.get(this) as? MutableList<SessionProvider<UserSession>>
+                if (list != null) {
+                    val index = list.indexOfFirst { it.name == "obsidian_session" }
+                    if (index != -1) {
+                        list[index] = newProvider
+                    }
+                }
+            }
         }
     }
     install(StatusPages) {

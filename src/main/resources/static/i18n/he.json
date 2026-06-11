@@ -199,6 +199,7 @@
   "index.create_account_tab": "צור חשבון",
   "index.login_submit": "התחבר",
   "index.register_submit": "צור חשבון",
+  "index.keep_me_logged_in": "השאר אותי מחובר",
   "pitdata.title": "נתוני פיט",
   "pitdata.notice": "סקור כיסוי pit scouting, מצא צוותים חסרים ובדוק את כניסת הפיט האחרונה לכל צוות.",
   "pitdata.export_csv": "ייצא CSV",

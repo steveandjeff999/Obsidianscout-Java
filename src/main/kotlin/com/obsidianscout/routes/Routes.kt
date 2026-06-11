@@ -76,8 +76,10 @@ fun Application.configureRoutes() {
                         userId = user.id,
                         username = user.username,
                         teamNumber = user.teamNumber,
-                        role = user.role
+                        role = user.role,
+                        email = user.email
                     )
+                    call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
                     call.respond(LoginResponse(session))
                 }
@@ -87,14 +89,17 @@ fun Application.configureRoutes() {
                         username = request.username,
                         teamNumber = request.teamNumber,
                         password = request.password,
-                        role = request.role
+                        role = request.role,
+                        email = request.email
                     )
                     val session = UserSession(
                         userId = user.id,
                         username = user.username,
                         teamNumber = user.teamNumber,
-                        role = user.role
+                        role = user.role,
+                        email = user.email
                     )
+                    call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
                     call.respond(LoginResponse(session))
                 }
@@ -562,7 +567,8 @@ fun Application.configureRoutes() {
                         username = request.username,
                         teamNumber = request.teamNumber,
                         password = request.password,
-                        role = request.role
+                        role = request.role,
+                        email = request.email
                     )
                     call.respond(user)
                 }
@@ -576,7 +582,8 @@ fun Application.configureRoutes() {
                         targetUserId = userId,
                         newUsername = request.username,
                         newPassword = request.password,
-                        newRole = request.role
+                        newRole = request.role,
+                        newEmail = request.email
                     )
                     call.respond(updated)
                 }

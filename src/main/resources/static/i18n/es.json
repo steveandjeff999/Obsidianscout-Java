@@ -160,6 +160,7 @@
   "index.create_account_tab": "Crear cuenta",
   "index.login_submit": "Iniciar sesión",
   "index.register_submit": "Crear cuenta",
+  "index.keep_me_logged_in": "Mantener sesión iniciada",
   "pitdata.title": "Datos de pit",
   "pitdata.notice": "Revisa la cobertura de pit scouting, encuentra equipos faltantes e inspecciona la última entrada de pit de cada equipo.",
   "pitdata.export_csv": "Exportar CSV",

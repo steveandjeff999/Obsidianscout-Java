@@ -1,15 +1,9 @@
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
     Obsidianscout.initTheme();
     const loginForm = document.getElementById("login-form");
     const loginButton = document.getElementById("login-submit");
     const registerForm = document.getElementById("register-form");
     const registerButton = document.getElementById("register-submit");
-
-    const existing = await Obsidianscout.getMe();
-    if (existing) {
-        window.location.href = "/dashboard";
-        return;
-    }
 
     // Tab switching
     const tabs = document.querySelectorAll("#auth-tabs .tab");
@@ -42,6 +36,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const username = document.getElementById("username").value.trim();
         const teamNumber = parseInt(document.getElementById("teamNumber").value, 10);
         const password = document.getElementById("password").value;
+        const keepMeLoggedIn = document.getElementById("keepMeLoggedIn").checked;
 
         try {
             await Obsidianscout.request("/api/auth/login", {
@@ -49,7 +44,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 json: {
                     username,
                     teamNumber,
-                    password
+                    password,
+                    keepMeLoggedIn
                 }
             });
             window.location.href = "/dashboard";
@@ -66,10 +62,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         registerButton.disabled = true;
 
         const username = document.getElementById("reg-username").value.trim();
+        const email = document.getElementById("reg-email").value.trim();
         const teamNumber = parseInt(document.getElementById("reg-team").value, 10);
         const password = document.getElementById("reg-password").value;
         const confirm = document.getElementById("reg-confirm").value;
         const role = document.getElementById("reg-role").value;
+        const keepMeLoggedIn = document.getElementById("reg-keepMeLoggedIn").checked;
 
         if (password !== confirm) {
             Obsidianscout.showToast("Passwords do not match", "error");
@@ -88,9 +86,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 method: "POST",
                 json: {
                     username,
+                    email,
                     teamNumber,
                     password,
-                    role
+                    role,
+                    keepMeLoggedIn
                 }
             });
             Obsidianscout.showToast("Account created!", "success");
@@ -99,6 +99,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             Obsidianscout.showToast(error.message || "Registration failed", "error");
         } finally {
             registerButton.disabled = false;
+        }
+    });
+
+    // Check for existing session in background
+    Obsidianscout.getMe().then((existing) => {
+        if (existing) {
+            window.location.href = "/dashboard";
         }
     });
 });

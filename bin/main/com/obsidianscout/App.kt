@@ -32,6 +32,10 @@ import io.ktor.server.response.respond
 import io.ktor.server.sessions.Sessions
 import io.ktor.server.sessions.cookie
 import io.ktor.server.sessions.SessionTransportTransformerMessageAuthentication
+import io.ktor.server.sessions.CookieSessionBuilder
+import io.ktor.server.sessions.SessionProvider
+import io.ktor.server.sessions.SessionTrackerByValue
+import com.obsidianscout.auth.KeepMeLoggedInSessionTransport
 import io.ktor.serialization.kotlinx.json.json
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
@@ -92,7 +96,7 @@ fun Application.module(appConfig: AppConfig) {
         json(JsonSupport.json)
     }
     install(Sessions) {
-        cookie<UserSession>("obsidian_session") {
+        keepMeLoggedInCookie<UserSession>("obsidian_session") {
             cookie.httpOnly = true
             cookie.path = "/"
             cookie.maxAgeInSeconds = 60 * 60 * 12
@@ -168,4 +172,17 @@ private fun Throwable.isIgnorableException(): Boolean {
         current = current.cause
     }
     return false
+}
+
+@Suppress("DEPRECATION_ERROR")
+inline fun <reified S : Any> io.ktor.server.sessions.SessionsConfig.keepMeLoggedInCookie(
+    name: String,
+    noinline block: CookieSessionBuilder<S>.() -> Unit
+) {
+    val builder = CookieSessionBuilder(S::class)
+    builder.block()
+    val transport = KeepMeLoggedInSessionTransport(name, builder.cookie, builder.transformers)
+    val tracker = SessionTrackerByValue(S::class, builder.serializer)
+    val provider = SessionProvider(name, S::class, transport, tracker)
+    register(provider)
 }

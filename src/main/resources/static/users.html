@@ -90,6 +90,10 @@
                         <input id="user-username" type="text" required />
                     </div>
                     <div class="field">
+                        <label for="user-email">Email</label>
+                        <input id="user-email" type="email" placeholder="scout@example.com" />
+                    </div>
+                    <div class="field">
                         <label for="user-team">Team Number</label>
                         <input id="user-team" type="number" required />
                     </div>
@@ -141,6 +145,7 @@
                         <thead>
                             <tr>
                                 <th>Username</th>
+                                <th>Email</th>
                                 <th>Team</th>
                                 <th>Role</th>
                                 <th>Created</th>
@@ -171,6 +176,10 @@
                 <div class="field">
                     <label for="edit-username">Username</label>
                     <input id="edit-username" type="text" autocomplete="off" />
+                </div>
+                <div class="field">
+                    <label for="edit-email">Email</label>
+                    <input id="edit-email" type="email" autocomplete="email" />
                 </div>
                 <div class="field">
                     <label for="edit-password">New Password</label>

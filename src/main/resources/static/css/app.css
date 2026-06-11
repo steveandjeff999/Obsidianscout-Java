@@ -213,6 +213,7 @@ body.theme-dark .sidebar-toggle {
     opacity: 0.22;
     z-index: 0;
     animation: float 14s ease-in-out infinite;
+    pointer-events: none;
 }
 
 .orb.orb-1 {
@@ -384,6 +385,29 @@ body.theme-dark .sidebar-toggle {
 .field {
     display: grid;
     gap: 6px;
+}
+
+.field.checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-direction: row;
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.field.checkbox-field input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--primary);
+}
+
+.field.checkbox-field label {
+    cursor: pointer;
+    font-size: 14px;
+    user-select: none;
+    color: var(--ink-muted);
 }
 
 .row {

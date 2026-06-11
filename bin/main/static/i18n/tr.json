@@ -160,6 +160,7 @@
   "index.create_account_tab": "Hesap oluştur",
   "index.login_submit": "Giriş yap",
   "index.register_submit": "Hesap oluştur",
+  "index.keep_me_logged_in": "Oturumumu açık tut",
   "pitdata.title": "Pit verileri",
   "pitdata.notice": "Pit scouting kapsamını gözden geçirin, eksik takımları bulun ve her takımın son pit girişini inceleyin.",
   "pitdata.export_csv": "CSV olarak dışa aktar",

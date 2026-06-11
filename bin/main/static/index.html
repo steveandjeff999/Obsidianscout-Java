@@ -43,7 +43,7 @@
                 </div>
 
                 <div id="login-panel">
-                    <form id="login-form" class="form-grid">
+                    <form id="login-form" class="form-grid" method="POST">
                         <div class="field">
                             <label for="username">Username</label>
                             <input id="username" name="username" type="text" required />
@@ -56,15 +56,23 @@
                             <label for="password">Password</label>
                             <input id="password" name="password" type="password" required />
                         </div>
+                        <div class="field checkbox-field">
+                            <input id="keepMeLoggedIn" name="keepMeLoggedIn" type="checkbox" />
+                            <label for="keepMeLoggedIn" data-i18n="index.keep_me_logged_in">Keep me signed in</label>
+                        </div>
                         <button id="login-submit" class="btn" type="submit" data-i18n="index.login_submit">Sign in</button>
                     </form>
                 </div>
 
                 <div id="register-panel" class="hidden" hidden>
-                    <form id="register-form" class="form-grid">
+                    <form id="register-form" class="form-grid" method="POST">
                         <div class="field">
                             <label for="reg-username">Username</label>
                             <input id="reg-username" type="text" required />
+                        </div>
+                        <div class="field">
+                            <label for="reg-email">Email</label>
+                            <input id="reg-email" type="email" placeholder="scout@example.com" />
                         </div>
                         <div class="field">
                             <label for="reg-team">Team Number</label>
@@ -85,6 +93,10 @@
                                 <option value="ANALYTICS">Analytics</option>
                                 <option value="ADMIN">Admin</option>
                             </select>
+                        </div>
+                        <div class="field checkbox-field">
+                            <input id="reg-keepMeLoggedIn" type="checkbox" />
+                            <label for="reg-keepMeLoggedIn" data-i18n="index.keep_me_logged_in">Keep me signed in</label>
                         </div>
                         <button id="register-submit" class="btn dark" type="submit" data-i18n="index.register_submit">Create account</button>
                     </form>

@@ -179,9 +179,10 @@
                         safeSetItem("cache:" + path, text);
                         
                         const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
-                        const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
+                        const isUserEditing = document.querySelector('input:focus, textarea:focus, select:focus') !== null;
+                        const isModalOpen = document.querySelector('.modal-backdrop.show, .modal.show, [role="dialog"].show') !== null;
                         
-                        if (isDataPage && !isUserEditing) {
+                        if (isDataPage && !isUserEditing && !isModalOpen) {
                             if (typeof saveScrollPositions === "function") {
                                 saveScrollPositions();
                             }
@@ -216,6 +217,17 @@
         const defaultTimeout = options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS;
         const timeoutMs = defaultTimeout;
         const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+        // Listen to option signal to cancel request
+        if (options.signal) {
+            options.signal.addEventListener("abort", () => {
+                controller.abort();
+            });
+            if (options.signal.aborted) {
+                controller.abort();
+            }
+        }
+
         const opts = {
             method: method,
             headers: options.headers || {},
@@ -264,8 +276,12 @@
 
             return data;
         } catch (error) {
-            const isTimeout = error && error.name === "AbortError";
-            if (isTimeout) {
+            const isAbort = error && error.name === "AbortError";
+            if (isAbort) {
+                if (options.signal && options.signal.aborted) {
+                    // Manual abort from caller signal
+                    throw error;
+                }
                 throw new Error("Request timed out. Try refreshing this page.");
             }
             throw error;

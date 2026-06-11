@@ -9,6 +9,7 @@ object Users : IntIdTable("users") {
     val passwordHash = varchar("password_hash", 255)
     val role = varchar("role", 16)
     val createdAt = timestamp("created_at")
+    val email = varchar("email", 255).nullable()
 
     init {
         uniqueIndex("ux_users_username_team", username, teamNumber)

@@ -38,7 +38,8 @@ data class UserRecord(
     val username: String,
     val teamNumber: Int,
     val role: UserRole,
-    val createdAt: String
+    val createdAt: String,
+    val email: String? = null
 )
 
 object AuthService {
@@ -87,7 +88,7 @@ object AuthService {
     /**
      * Self-registration with a team role (admin, analytics, or scout).
      */
-    fun register(username: String, teamNumber: Int, password: String, role: UserRole = UserRole.SCOUT): UserRecord {
+    fun register(username: String, teamNumber: Int, password: String, role: UserRole = UserRole.SCOUT, email: String? = null): UserRecord {
         if (username.isBlank() || password.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Username and password are required")
         }
@@ -114,6 +115,7 @@ object AuthService {
                 it[Users.passwordHash] = hash
                 it[Users.role] = role.name
                 it[Users.createdAt] = Instant.now()
+                it[Users.email] = email?.takeIf { it.isNotBlank() }
             }
             val row = Users.select { Users.id eq id }.first()
             rowToUser(row)
@@ -182,7 +184,8 @@ object AuthService {
         username: String,
         teamNumber: Int,
         password: String,
-        role: UserRole
+        role: UserRole,
+        email: String? = null
     ): UserRecord {
         if (username.isBlank() || password.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Username and password are required")
@@ -215,6 +218,7 @@ object AuthService {
                 it[Users.passwordHash] = hash
                 it[Users.role] = role.name
                 it[Users.createdAt] = Instant.now()
+                it[Users.email] = email?.takeIf { it.isNotBlank() }
             }
             val row = Users.select { Users.id eq id }.first()
             rowToUser(row)
@@ -232,7 +236,8 @@ object AuthService {
         targetUserId: Int,
         newUsername: String?,
         newPassword: String?,
-        newRole: UserRole?
+        newRole: UserRole?,
+        newEmail: String? = null
     ): UserRecord {
         // Hash outside the transaction if needed
         val newHash = newPassword?.takeIf { it.isNotBlank() }
@@ -263,6 +268,7 @@ object AuthService {
                 if (!newUsername.isNullOrBlank()) stmt[username] = newUsername
                 if (newHash != null)             stmt[passwordHash] = newHash
                 if (newRole != null)             stmt[role] = newRole.name
+                if (newEmail != null)            stmt[email] = newEmail.takeIf { it.isNotBlank() }
             }
 
             val updated = Users.select { Users.id eq targetUserId }.first()
@@ -280,7 +286,8 @@ object AuthService {
             } catch (_: IllegalArgumentException) {
                 UserRole.SCOUT
             },
-            createdAt = row[Users.createdAt].toString()
+            createdAt = row[Users.createdAt].toString(),
+            email = row[Users.email]
         )
     }
 
