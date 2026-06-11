@@ -127,8 +127,8 @@ async function loadTeams(eventKey) {
             }
             const displayNum = Obsidianscout.formatTeam(team.teamKey, team.teamNumber);
             row.innerHTML = `
-                <td>${displayNum}</td>
-                <td>${team.nickname || team.name || ""}</td>
+                <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${displayNum}</a></td>
+                <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${team.nickname || team.name || ""}</a></td>
                 <td>${location}</td>
                 <td>${team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : ""}</td>
                 <td>${team.opr !== null ? team.opr.toFixed(2) : ""}</td>
