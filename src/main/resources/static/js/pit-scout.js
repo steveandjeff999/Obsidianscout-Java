@@ -113,6 +113,34 @@ async function loadPitScoutPageData(me) {
 
         await handleSelectionChange();
 
+        const saveOfflineButton = document.getElementById("pit-save-offline");
+        if (saveOfflineButton) {
+            saveOfflineButton.addEventListener("click", () => {
+                if (!teamSelect.value) {
+                    Obsidianscout.showToast("Select a team", "error");
+                    return;
+                }
+
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+
+                payload.eventKey = eventKey;
+                payload.targetTeamNumber = Number(teamSelect.value);
+
+                const pending = JSON.parse(Obsidianscout.safeGetItem("pending_pit_scouting_entries") || "[]");
+                pending.push({
+                    data: payload
+                });
+                Obsidianscout.safeSetItem("pending_pit_scouting_entries", JSON.stringify(pending));
+
+                Obsidianscout.showToast("Saved locally (Offline mode)", "success");
+                Obsidianscout.updateConnectionStatus();
+
+                clearFormFields(fields, form);
+                handleSelectionChange();
+            });
+        }
+
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
             submitButton.disabled = true;
@@ -142,7 +170,21 @@ async function loadPitScoutPageData(me) {
                 Obsidianscout.showToast("Pit entry saved", "success");
                 entryCache = await loadEntryCache();
             } catch (error) {
-                Obsidianscout.showToast(error.message || "Failed to save", "error");
+                if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                    const pending = JSON.parse(Obsidianscout.safeGetItem("pending_pit_scouting_entries") || "[]");
+                    pending.push({
+                        data: payload
+                    });
+                    Obsidianscout.safeSetItem("pending_pit_scouting_entries", JSON.stringify(pending));
+
+                    Obsidianscout.showToast("Saved locally (Offline mode)", "success");
+                    Obsidianscout.updateConnectionStatus();
+
+                    clearFormFields(fields, form);
+                    handleSelectionChange();
+                } else {
+                    Obsidianscout.showToast(error.message || "Failed to save", "error");
+                }
             } finally {
                 submitButton.disabled = false;
             }

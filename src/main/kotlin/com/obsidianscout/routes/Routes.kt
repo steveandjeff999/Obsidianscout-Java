@@ -693,7 +693,8 @@ fun Application.configureRoutes() {
             "alliances" to "alliances.html",
             "users" to "users.html",
             "config" to "config.html",
-            "qr-scanner" to "qr-scanner.html"
+            "qr-scanner" to "qr-scanner.html",
+            "cache-manager" to "cache-manager.html"
         )
 
         pages.forEach { (path, fileName) ->

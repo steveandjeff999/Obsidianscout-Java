@@ -6,6 +6,45 @@
     // Role hierarchy (lower index = higher privilege)
     const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "SCOUT"];
 
+    const CACHE_CONFIGS = {
+        "match-scouting": {
+            key: "pending_scouting_entries",
+            endpoint: "/api/scouting",
+            label: "Match Scouting",
+            hasMatch: true
+        },
+        "pit-scouting": {
+            key: "pending_pit_scouting_entries",
+            endpoint: "/api/pit-scouting",
+            label: "Pit Scouting",
+            hasMatch: false
+        },
+        "qual-scouting": {
+            key: "pending_qualitative_entries",
+            endpoint: "/api/qual-scouting",
+            label: "Qualitative Scouting",
+            hasMatch: true
+        },
+        "prescout-scouting": {
+            key: "pending_prescout_scouting_entries",
+            endpoint: "/api/prescout/scouting",
+            label: "Prescout Match",
+            hasMatch: true
+        },
+        "prescout-pit-scouting": {
+            key: "pending_prescout_pit_scouting_entries",
+            endpoint: "/api/prescout/pit-scouting",
+            label: "Prescout Pit",
+            hasMatch: false
+        },
+        "prescout-qual-scouting": {
+            key: "pending_prescout_qualitative_entries",
+            endpoint: "/api/prescout/qual-scouting",
+            label: "Prescout Qualitative",
+            hasMatch: true
+        }
+    };
+
     const servedFromCache = new Set();
     const activeFetches = new Set();
 
@@ -124,6 +163,15 @@
                 });
                 clearTimeout(timeout);
 
+                if (response.status === 401) {
+                    const isLoginPage = document.body && document.body.dataset.page === "login";
+                    if (!isLoginPage) {
+                        safeRemoveItem("cache:/api/auth/me");
+                        window.location.href = "/";
+                        return;
+                    }
+                }
+
                 if (response.ok) {
                     const text = await response.text();
                     if (text !== cachedText) {
@@ -191,6 +239,17 @@
             const text = await response.text();
             const data = text ? safeParse(text) : null;
             if (!response.ok) {
+                if (response.status === 401) {
+                    const isLoginPage = document.body && document.body.dataset.page === "login";
+                    const isAuthRequest = path.includes("/api/auth/login") || path.includes("/api/auth/register");
+                    if (!isLoginPage && !isAuthRequest) {
+                        safeRemoveItem("cache:/api/auth/me");
+                        window.location.href = "/";
+                        const err = new Error("Session expired. Redirecting...");
+                        err.status = 401;
+                        throw err;
+                    }
+                }
                 const message = data && data.error ? data.error : "Request failed";
                 const err = new Error(message);
                 err.status = response.status;
@@ -704,8 +763,12 @@
         const text = widget.querySelector(".status-text");
         const syncBtn = widget.querySelector("#btn-sync-offline");
 
-        const pending = JSON.parse(safeGetItem("pending_scouting_entries") || "[]");
-        const count = pending.length;
+        let count = 0;
+        for (const type in CACHE_CONFIGS) {
+            const config = CACHE_CONFIGS[type];
+            const pending = JSON.parse(safeGetItem(config.key) || "[]");
+            count += pending.length;
+        }
 
         const isOnline = navigator.onLine;
 
@@ -734,8 +797,14 @@
 
     async function syncOfflineEntries() {
         if (!navigator.onLine) return;
-        const pending = JSON.parse(safeGetItem("pending_scouting_entries") || "[]");
-        if (!pending.length) return;
+
+        let totalPending = 0;
+        for (const type in CACHE_CONFIGS) {
+            const config = CACHE_CONFIGS[type];
+            const pending = JSON.parse(safeGetItem(config.key) || "[]");
+            totalPending += pending.length;
+        }
+        if (totalPending === 0) return;
 
         const syncBtn = document.querySelector("#btn-sync-offline");
         if (syncBtn) {
@@ -744,25 +813,32 @@
         }
 
         let successCount = 0;
-        const remaining = [];
 
-        for (const item of pending) {
-            try {
-                await request("/api/scouting", {
-                    method: "POST",
-                    json: item
-                });
-                successCount++;
-            } catch (error) {
-                console.error("[Offline Sync] Failed to sync entry:", error);
-                remaining.push(item);
+        for (const type in CACHE_CONFIGS) {
+            const config = CACHE_CONFIGS[type];
+            const pending = JSON.parse(safeGetItem(config.key) || "[]");
+            if (!pending.length) continue;
+
+            const remaining = [];
+            for (const item of pending) {
+                try {
+                    await request(config.endpoint, {
+                        method: "POST",
+                        json: item
+                    });
+                    successCount++;
+                } catch (error) {
+                    console.error(`[Offline Sync] Failed to sync ${config.label}:`, error);
+                    remaining.push(item);
+                }
             }
+            safeSetItem(config.key, JSON.stringify(remaining));
         }
-
-        safeSetItem("pending_scouting_entries", JSON.stringify(remaining));
 
         if (successCount > 0) {
             showToast(`Successfully synced ${successCount} offline entries!`, "success");
+            window.dispatchEvent(new CustomEvent("obsidianscout:offline-entries-synced"));
+            window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
         }
 
         updateConnectionStatus();
@@ -942,7 +1018,10 @@
 
         window.addEventListener("online", () => {
             updateConnectionStatus();
-            syncOfflineEntries();
+            const isCacheManager = document.body && document.body.dataset.page === "cache-manager";
+            if (!isCacheManager) {
+                syncOfflineEntries();
+            }
             const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
             const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
             if (isDataPage && !isUserEditing) {
@@ -953,7 +1032,10 @@
         window.addEventListener("offline", updateConnectionStatus);
 
         if (navigator.onLine) {
-            syncOfflineEntries();
+            const isCacheManager = document.body && document.body.dataset.page === "cache-manager";
+            if (!isCacheManager) {
+                syncOfflineEntries();
+            }
         }
         // Load selected language bundle and apply translations
         loadLocale(safeGetItem('obsidianscout:lang') || 'en').then(() => applyTranslations());
@@ -961,8 +1043,13 @@
     });
 
     window.addEventListener("beforeunload", (event) => {
-        const pending = JSON.parse(safeGetItem("pending_scouting_entries") || "[]");
-        if (pending.length > 0) {
+        let count = 0;
+        for (const type in CACHE_CONFIGS) {
+            const config = CACHE_CONFIGS[type];
+            const pending = JSON.parse(safeGetItem(config.key) || "[]");
+            count += pending.length;
+        }
+        if (count > 0) {
             const message = (typeof t === 'function') ? t('unsynced_entries','You have unsynced offline scouting entries! If you leave, they might not be synced to the server.') : "You have unsynced offline scouting entries! If you leave, they might not be synced to the server.";
             event.returnValue = message;
             return message;
@@ -1057,5 +1144,6 @@
         ,showQrModal
         ,compressData
         ,decompressData
+        ,CACHE_CONFIGS
     };
 })();

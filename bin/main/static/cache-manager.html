@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ObsidianScout | Cache Manager</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        /* Custom Cache Manager specific styling */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--surface-2);
+            padding: 16px;
+            border-radius: var(--radius-sm);
+            text-align: center;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        body.theme-dark .stat-card {
+            background: var(--surface-3);
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .cache-table-wrapper {
+            margin-top: 24px;
+            overflow-x: auto;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        body.theme-dark .cache-table-wrapper {
+            border-color: rgba(255, 255, 255, 0.06);
+        }
+
+        .cache-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--surface);
+            text-align: left;
+        }
+
+        .cache-table th, .cache-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        body.theme-dark .cache-table th, body.theme-dark .cache-table td {
+            border-bottom-color: rgba(255, 255, 255, 0.06);
+        }
+
+        .cache-table th {
+            background: var(--surface-2);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        body.theme-dark .cache-table th {
+            background: var(--surface-3);
+        }
+
+        .cache-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .cache-table tr:hover td {
+            background: rgba(0, 0, 0, 0.01);
+        }
+
+        body.theme-dark .cache-table tr:hover td {
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .badge-type {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-match { background-color: rgba(11, 143, 136, 0.15); color: var(--accent); }
+        .badge-pit { background-color: rgba(37, 90, 156, 0.15); color: var(--accent-3); }
+        .badge-qual { background-color: rgba(242, 139, 53, 0.15); color: var(--accent-2); }
+        .badge-prescout-match { background-color: rgba(76, 175, 80, 0.15); color: #4CAF50; }
+        .badge-prescout-pit { background-color: rgba(156, 39, 176, 0.15); color: #9C27B0; }
+        .badge-prescout-qual { background-color: rgba(233, 30, 99, 0.15); color: #E91E63; }
+
+        .action-cell {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-mini {
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-mini.view {
+            background: var(--surface-3);
+            color: var(--ink);
+        }
+
+        .btn-mini.sync {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-mini.delete {
+            background: rgba(244, 67, 54, 0.1);
+            color: #f44336;
+        }
+
+        .btn-mini.delete:hover {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-mini:hover {
+            transform: translateY(-1px);
+        }
+
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .filter-row input, .filter-row select {
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+
+        /* Modal styling */
+        .payload-modal-content {
+            font-family: monospace;
+            white-space: pre-wrap;
+            background: var(--surface-2);
+            padding: 16px;
+            border-radius: var(--radius-sm);
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            font-size: 13px;
+        }
+
+        body.theme-dark .payload-modal-content {
+            background: var(--surface-3);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body data-page="cache-manager">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <!-- Dynamic Sidebar -->
+        </aside>
+
+        <main class="main-content">
+            <div class="card">
+                <h1>Data Cache Manager</h1>
+                <p class="notice">View, upload, export/import, or delete locally cached scouting entries before uploading them to the server.</p>
+
+                <!-- Statistics Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card" data-type="match">
+                        <div class="stat-number" id="count-match">0</div>
+                        <div class="stat-label">Match Scout</div>
+                    </div>
+                    <div class="stat-card" data-type="pit">
+                        <div class="stat-number" id="count-pit">0</div>
+                        <div class="stat-label">Pit Scout</div>
+                    </div>
+                    <div class="stat-card" data-type="qual">
+                        <div class="stat-number" id="count-qual">0</div>
+                        <div class="stat-label">Qualitative</div>
+                    </div>
+                    <div class="stat-card" data-type="prescout-match">
+                        <div class="stat-number" id="count-prescout-match">0</div>
+                        <div class="stat-label">Pre Match</div>
+                    </div>
+                    <div class="stat-card" data-type="prescout-pit">
+                        <div class="stat-number" id="count-prescout-pit">0</div>
+                        <div class="stat-label">Pre Pit</div>
+                    </div>
+                    <div class="stat-card" data-type="prescout-qual">
+                        <div class="stat-number" id="count-prescout-qual">0</div>
+                        <div class="stat-label">Pre Qual</div>
+                    </div>
+                </div>
+
+                <!-- Global Cache Actions -->
+                <div class="row gap-12 wrap mb-18">
+                    <button id="btn-sync-all" class="btn" type="button">Upload All Caches</button>
+                    <button id="btn-export-cache" class="btn secondary" type="button">Export Cache JSON</button>
+                    <button id="btn-import-cache" class="btn secondary" type="button">Import Cache JSON</button>
+                    <button id="btn-clear-cache" class="btn ghost" type="button" style="color: #f44336; border-color: rgba(244, 67, 54, 0.3);">Clear All Caches</button>
+                    
+                    <input type="file" id="cache-import-file" class="input-hidden" accept=".json" />
+                </div>
+
+                <hr style="border: none; border-top: 1px solid rgba(0, 0, 0, 0.08); margin: 24px 0;" />
+
+                <!-- Filters -->
+                <div class="filter-row">
+                    <div class="field">
+                        <label for="filter-type">Form Type</label>
+                        <select id="filter-type">
+                            <option value="">All Forms</option>
+                            <option value="match-scouting">Match Scouting</option>
+                            <option value="pit-scouting">Pit Scouting</option>
+                            <option value="qual-scouting">Qualitative Scouting</option>
+                            <option value="prescout-scouting">Prescout Match</option>
+                            <option value="prescout-pit-scouting">Prescout Pit</option>
+                            <option value="prescout-qual-scouting">Prescout Qualitative</option>
+                        </select>
+                    </div>
+                    <div class="field" style="flex: 1; min-width: 140px;">
+                        <label for="filter-team">Search Team</label>
+                        <input id="filter-team" type="number" placeholder="e.g. 254" />
+                    </div>
+                    <div class="field" style="flex: 1; min-width: 140px;">
+                        <label for="filter-event">Search Event</label>
+                        <input id="filter-event" type="text" placeholder="e.g. 2026micmp" />
+                    </div>
+                </div>
+
+                <!-- Cached Entries List -->
+                <div id="cache-empty-notice" class="notice">No pending cached entries found. You are fully synced!</div>
+                
+                <div id="cache-table-container" class="cache-table-wrapper hidden">
+                    <table class="cache-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Event</th>
+                                <th>Team</th>
+                                <th>Match</th>
+                                <th>Timestamp</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cache-entries-body">
+                            <!-- Dynamic Entries -->
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for inspecting JSON payload -->
+    <div id="payload-modal-backdrop" class="modal-backdrop">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title" id="payload-modal-title">Scouting Entry Payload</h3>
+                <button class="modal-close" id="payload-modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre class="payload-modal-content" id="payload-modal-body-content"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn ghost" id="payload-modal-close-footer-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/cache-manager.js"></script>
+</body>
+</html>

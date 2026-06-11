@@ -136,7 +136,41 @@ async function loadQualScoutPageData(me) {
             });
         }
 
-        await handleSelectionChange();
+        const saveOfflineButton = document.getElementById("scout-save-offline-btn");
+        if (saveOfflineButton) {
+            saveOfflineButton.addEventListener("click", () => {
+                if (!teamSelect.value || !matchSelect.value) {
+                    Obsidianscout.showToast("Select both a team and a match", "error");
+                    return;
+                }
+
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+
+                payload.eventKey = eventKey;
+                payload.targetTeamNumber = teamSelect.value ? Number(teamSelect.value) : null;
+                payload.matchKey = matchSelect.value || null;
+                const selectedMatch = matchSelect.value ? matchSelect.selectedOptions[0] : null;
+                const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+                payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+
+                const pending = JSON.parse(Obsidianscout.safeGetItem("pending_qualitative_entries") || "[]");
+                pending.push({
+                    data: payload,
+                    createdAt: new Date().toISOString(),
+                    ownerTeamNumber: me.teamNumber,
+                    pending: true
+                });
+                Obsidianscout.safeSetItem("pending_qualitative_entries", JSON.stringify(pending));
+
+                Obsidianscout.showToast("Saved locally (Offline mode)", "success");
+                Obsidianscout.updateConnectionStatus();
+                window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
+
+                clearFormFields(fields, form);
+                handleSelectionChange();
+            });
+        }
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();

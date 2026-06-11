@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obsidianscout-shell-v12';
+const CACHE_NAME = 'obsidianscout-shell-v13';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 const ASSETS = [
@@ -71,21 +71,20 @@ function fetchWithTimeout(request, timeoutMs) {
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then((cache) => {
-                console.log('[ServiceWorker] Resiliently pre-caching offline shell assets');
-                const promises = ASSETS.map(url => {
-                    return fetch(url)
-                        .then(response => {
-                            if (response.status === 200) {
-                                return cache.put(url, response);
-                            }
+            .then(async (cache) => {
+                console.log('[ServiceWorker] Resiliently pre-caching offline shell assets sequentially');
+                for (const url of ASSETS) {
+                    try {
+                        const response = await fetch(url);
+                        if (response.status === 200) {
+                            await cache.put(url, response);
+                        } else {
                             console.warn(`[ServiceWorker] Skip caching ${url} (status: ${response.status})`);
-                        })
-                        .catch(err => {
-                            console.warn(`[ServiceWorker] Failed to fetch ${url}:`, err);
-                        });
-                });
-                return Promise.all(promises);
+                        }
+                    } catch (err) {
+                        console.warn(`[ServiceWorker] Failed to fetch ${url}:`, err);
+                    }
+                }
             })
             .then(() => self.skipWaiting())
     );

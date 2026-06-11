@@ -213,5 +213,9 @@
   ,"pitdata.csv.team_name": "Team Name"
   ,"pitdata.csv.status": "Status"
   ,"pitdata.csv.updated": "Updated"
-  ,"unsynced_entries": "You have unsynced offline scouting entries! If you leave, they might not be synced to the server."
+  ,"unsynced_entries": "You have unsynced offline scouting entries! If you leave, they might not be synced to the server.",
+  "nav.cache-manager": "Cache Manager",
+  "scout.save_offline": "Save Offline",
+  "pit_scout.save_offline": "Save Offline",
+  "qual_scout.save_offline": "Save Offline"
 }

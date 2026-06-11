@@ -106,8 +106,19 @@ fun Application.module(appConfig: AppConfig) {
             call.respond(cause.status, ErrorResponse(cause.message))
         }
         exception<Throwable> { call, cause ->
+            if (cause is io.ktor.util.cio.ChannelWriteException ||
+                cause is java.nio.channels.ClosedChannelException ||
+                cause is kotlinx.coroutines.CancellationException ||
+                cause.isIgnorableException()
+            ) {
+                return@exception
+            }
             call.application.environment.log.error("Unhandled error", cause)
-            call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Server error"))
+            try {
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Server error"))
+            } catch (_: Throwable) {
+                // Ignore subsequent writes if channel is closed
+            }
         }
     }
 

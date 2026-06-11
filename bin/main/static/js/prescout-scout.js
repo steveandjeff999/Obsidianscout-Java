@@ -222,6 +222,39 @@ async function initPrescoutScout(me) {
             }
         }
 
+        const saveOfflineButton = document.getElementById("scout-save-offline");
+        if (saveOfflineButton) {
+            saveOfflineButton.addEventListener("click", () => {
+                if (!teamSelect.value || !matchSelect.value || !currentEventKey) {
+                    Obsidianscout.showToast("Select both a team and a match", "error");
+                    return;
+                }
+
+                const payload = buildPayload(config.fields, form);
+                if (!payload) return;
+
+                payload.eventKey = currentEventKey;
+                payload.targetTeamNumber = Number(teamSelect.value);
+                payload.matchKey = matchSelect.value;
+                const selectedMatch = matchSelect.selectedOptions[0];
+                const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+                payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+
+                const pending = JSON.parse(Obsidianscout.safeGetItem("pending_prescout_scouting_entries") || "[]");
+                pending.push({
+                    data: payload
+                });
+                Obsidianscout.safeSetItem("pending_prescout_scouting_entries", JSON.stringify(pending));
+
+                Obsidianscout.showToast("Saved locally (Offline mode)", "success");
+                Obsidianscout.updateConnectionStatus();
+
+                clearFormFields(fields, form);
+                updatePointsPreview(fields, form, pointsPreview);
+                handleSelectionChange();
+            });
+        }
+
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
             submitButton.disabled = true;
@@ -255,7 +288,22 @@ async function initPrescoutScout(me) {
                 Obsidianscout.showToast("Prescout entry saved", "success");
                 entryCache = await loadEntryCache();
             } catch (error) {
-                Obsidianscout.showToast(error.message || "Failed to save entry", "error");
+                if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                    const pending = JSON.parse(Obsidianscout.safeGetItem("pending_prescout_scouting_entries") || "[]");
+                    pending.push({
+                        data: payload
+                    });
+                    Obsidianscout.safeSetItem("pending_prescout_scouting_entries", JSON.stringify(pending));
+
+                    Obsidianscout.showToast("Saved locally (Offline mode)", "success");
+                    Obsidianscout.updateConnectionStatus();
+
+                    clearFormFields(fields, form);
+                    updatePointsPreview(fields, form, pointsPreview);
+                    handleSelectionChange();
+                } else {
+                    Obsidianscout.showToast(error.message || "Failed to save entry", "error");
+                }
             } finally {
                 submitButton.disabled = false;
             }

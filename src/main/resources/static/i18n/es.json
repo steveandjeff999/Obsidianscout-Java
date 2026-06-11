@@ -191,5 +191,10 @@
   "settings.points_per": "Puntos por acción",
   "settings.options_title": "Opciones (Etiqueta | Valor | Puntos)",
   "settings.add_option": "+ Agregar opción",
-  "settings.option_label_placeholder": "Etiqueta (p.ej. Alta)"
+  "settings.option_label_placeholder": "Etiqueta (p.ej. Alta)",
+  "unsynced_entries": "¡Tienes entradas de scouting sin sincronizar en caché! Si te vas, es posible que no se sincronicen al servidor.",
+  "nav.cache-manager": "Gestor de Caché",
+  "scout.save_offline": "Guardar en caché",
+  "pit_scout.save_offline": "Guardar en caché",
+  "qual_scout.save_offline": "Guardar en caché"
 }

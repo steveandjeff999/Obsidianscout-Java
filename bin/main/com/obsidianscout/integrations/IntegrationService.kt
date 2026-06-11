@@ -117,8 +117,12 @@ object IntegrationService {
                         it[ApiTeams.city] = team.city.clipTeamLocation()
                         it[ApiTeams.state] = team.state.clipTeamLocation()
                         it[ApiTeams.country] = team.country.clipTeamLocation()
-                        it[ApiTeams.opr] = team.opr
-                        it[ApiTeams.epa] = team.epa
+                        if (team.opr != null) {
+                            it[ApiTeams.opr] = team.opr
+                        }
+                        if (team.epa != null) {
+                            it[ApiTeams.epa] = team.epa
+                        }
                         it[ApiTeams.dataJson] = team.dataJson
                         it[ApiTeams.updatedAt] = now
                     }
@@ -158,6 +162,11 @@ object IntegrationService {
                 }
             }
             MatchCanonical.deduplicateDatabaseForEvent(eventKey)
+        }
+        try {
+            syncStats(settings)
+        } catch (e: Exception) {
+            log.warn("Failed to automatically sync stats after event data sync: ${e.message}")
         }
         return SyncCounts(teams.size, matches.size)
     }
@@ -203,8 +212,12 @@ object IntegrationService {
                         it[ApiTeams.city] = team.city.clipTeamLocation()
                         it[ApiTeams.state] = team.state.clipTeamLocation()
                         it[ApiTeams.country] = team.country.clipTeamLocation()
-                        it[ApiTeams.opr] = team.opr
-                        it[ApiTeams.epa] = team.epa
+                        if (team.opr != null) {
+                            it[ApiTeams.opr] = team.opr
+                        }
+                        if (team.epa != null) {
+                            it[ApiTeams.epa] = team.epa
+                        }
                         it[ApiTeams.dataJson] = team.dataJson
                         it[ApiTeams.updatedAt] = now
                     }
@@ -245,11 +258,16 @@ object IntegrationService {
             }
             MatchCanonical.deduplicateDatabaseForEvent(key)
         }
+        try {
+            syncStats(settings, key)
+        } catch (e: Exception) {
+            log.warn("Failed to automatically sync stats after custom event data sync: ${e.message}")
+        }
         return SyncCounts(teams.size, matches.size)
     }
 
-    suspend fun syncStats(settings: ApiSettings): Int {
-        val eventKey = settings.resolvedEventKey()
+    suspend fun syncStats(settings: ApiSettings, customEventKey: String? = null): Int {
+        val eventKey = (customEventKey ?: settings.resolvedEventKey()).lowercase().trim()
         if (eventKey.isBlank()) {
             return 0
         }
@@ -270,7 +288,8 @@ object IntegrationService {
         }
         val now = Instant.now()
         transaction {
-            ApiTeams.select { ApiTeams.eventKey eq eventKey }.forEach { row ->
+            val teamsList = ApiTeams.select { ApiTeams.eventKey eq eventKey }.toList()
+            teamsList.forEach { row ->
                 val teamKey = row[ApiTeams.teamKey]
                 val opr = oprs?.get(teamKey)
                 val epa = epas?.get(teamKey)
@@ -504,7 +523,6 @@ object IntegrationService {
 
     fun listMatches(eventKey: String): List<MatchRecord> {
         return transaction {
-            MatchCanonical.deduplicateDatabaseForEvent(eventKey)
             val allTeams = ApiTeams.select { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
             val bbotMappings = getBBotMappings(eventKey)
             
