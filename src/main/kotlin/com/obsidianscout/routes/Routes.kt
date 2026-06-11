@@ -50,6 +50,11 @@ import io.ktor.server.sessions.set
 fun Application.configureRoutes() {
     routing {
         route("/api") {
+            intercept(ApplicationCallPipeline.Call) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    proceed()
+                }
+            }
             intercept(ApplicationCallPipeline.Plugins) {
                 call.response.headers.append(HttpHeaders.CacheControl, "no-cache, no-store, must-revalidate")
                 call.response.headers.append(HttpHeaders.Pragma, "no-cache")
@@ -426,7 +431,7 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: SettingsService.getSettings(session.teamNumber).resolvedEventKey()
-                    call.respond(IntegrationService.listTeams(eventKey))
+                    call.respond(IntegrationService.listTeams(eventKey, session))
                 }
                 post {
                     call.requireAdmin()
@@ -708,16 +713,19 @@ fun Application.configureRoutes() {
 }
 
 private suspend fun ApplicationCall.respondStaticHtml(fileName: String) {
-    val resource = Thread.currentThread().contextClassLoader.getResource("static/$fileName")
-    if (resource == null) {
+    val (html, sidebar) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val resource = Thread.currentThread().contextClassLoader.getResource("static/$fileName")
+        val htmlContent = resource?.readText()
+        val sidebarContent = Thread.currentThread().contextClassLoader
+            .getResource("static/base.html")
+            ?.readText()
+            ?.trim()
+        htmlContent to sidebarContent
+    }
+    if (html == null) {
         respond(HttpStatusCode.NotFound)
         return
     }
-    val html = resource.readText()
-    val sidebar = Thread.currentThread().contextClassLoader
-        .getResource("static/base.html")
-        ?.readText()
-        ?.trim()
     val rendered = if (sidebar.isNullOrBlank()) {
         html
     } else {
@@ -741,8 +749,7 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         apiKeys = ApiKeysPayload(
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
-            firstKey = apiKeys.firstKey,
-            statboticsKey = apiKeys.statboticsKey
+            firstKey = apiKeys.firstKey
         )
     )
 }
@@ -758,8 +765,7 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         apiKeys = com.obsidianscout.integrations.ApiKeys(
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
-            firstKey = apiKeys.firstKey,
-            statboticsKey = apiKeys.statboticsKey
+            firstKey = apiKeys.firstKey
         )
     )
 }

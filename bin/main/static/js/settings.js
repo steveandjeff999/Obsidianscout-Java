@@ -225,7 +225,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("settings-tba-key").value = settings.apiKeys.tbaKey || "";
             document.getElementById("settings-first-user").value = settings.apiKeys.firstUsername || "";
             document.getElementById("settings-first-key").value = settings.apiKeys.firstKey || "";
-            document.getElementById("settings-statbotics-key").value = settings.apiKeys.statboticsKey || "";
 
             // Save configuration
             saveButton.addEventListener("click", async () => {
@@ -314,8 +313,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     apiKeys: {
                         tbaKey: document.getElementById("settings-tba-key").value.trim(),
                         firstUsername: document.getElementById("settings-first-user").value.trim(),
-                        firstKey: document.getElementById("settings-first-key").value.trim(),
-                        statboticsKey: document.getElementById("settings-statbotics-key").value.trim()
+                        firstKey: document.getElementById("settings-first-key").value.trim()
                     }
                 };
 
@@ -1148,7 +1146,6 @@ async function loadSettings() {
         document.getElementById("settings-tba-key").value = settings.apiKeys.tbaKey || "";
         document.getElementById("settings-first-user").value = settings.apiKeys.firstUsername || "";
         document.getElementById("settings-first-key").value = settings.apiKeys.firstKey || "";
-        document.getElementById("settings-statbotics-key").value = settings.apiKeys.statboticsKey || "";
     } catch (error) {
         Obsidianscout.showToast("Unable to load API settings", "error");
     }

@@ -426,7 +426,7 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: SettingsService.getSettings(session.teamNumber).resolvedEventKey()
-                    call.respond(IntegrationService.listTeams(eventKey))
+                    call.respond(IntegrationService.listTeams(eventKey, session))
                 }
                 post {
                     call.requireAdmin()
@@ -741,8 +741,7 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         apiKeys = ApiKeysPayload(
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
-            firstKey = apiKeys.firstKey,
-            statboticsKey = apiKeys.statboticsKey
+            firstKey = apiKeys.firstKey
         )
     )
 }
@@ -758,8 +757,7 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         apiKeys = com.obsidianscout.integrations.ApiKeys(
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
-            firstKey = apiKeys.firstKey,
-            statboticsKey = apiKeys.statboticsKey
+            firstKey = apiKeys.firstKey
         )
     )
 }

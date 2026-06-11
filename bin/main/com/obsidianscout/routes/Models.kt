@@ -75,8 +75,7 @@ data class ScoutingEntryRequest(
 data class ApiKeysPayload(
     val tbaKey: String = "",
     val firstUsername: String = "",
-    val firstKey: String = "",
-    val statboticsKey: String = ""
+    val firstKey: String = ""
 )
 
 @Serializable
@@ -141,7 +140,8 @@ data class TeamRecord(
     val state: String? = null,
     val country: String? = null,
     val opr: Double? = null,
-    val epa: Double? = null
+    val epa: Double? = null,
+    val averagePoints: Double? = null
 )
 
 @Serializable

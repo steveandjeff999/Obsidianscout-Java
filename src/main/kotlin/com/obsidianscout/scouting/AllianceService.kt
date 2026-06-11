@@ -338,7 +338,7 @@ object AllianceService {
             var skippedDuplicates = 0
 
             val importedMatch = if (includeMatchScouting) {
-                val sourceRows = when {
+                val sourceRows = (when {
                     importOnlyNullEvent -> ScoutingEntries
                         .select {
                             (ScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
@@ -355,7 +355,7 @@ object AllianceService {
                             (ScoutingEntries.eventKey eq selectedEventKey)
                         }
                     }
-                }
+                }).toList()
                 val existing = ScoutingEntries
                     .select { ScoutingEntries.ownerTeamNumber eq session.teamNumber }
                     .map { row ->
@@ -401,7 +401,7 @@ object AllianceService {
             }
 
             val importedPit = if (includePitScouting) {
-                val sourceRows = when {
+                val sourceRows = (when {
                     importOnlyNullEvent -> PitScoutingEntries
                         .select {
                             (PitScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
@@ -418,7 +418,7 @@ object AllianceService {
                             (PitScoutingEntries.eventKey eq selectedEventKey)
                         }
                     }
-                }
+                }).toList()
                 val existing = PitScoutingEntries
                     .select { PitScoutingEntries.ownerTeamNumber eq session.teamNumber }
                     .map { row ->
@@ -458,7 +458,7 @@ object AllianceService {
             }
 
             val importedQualitative = if (includeQualitativeScouting) {
-                val sourceRows = when {
+                val sourceRows = (when {
                     importOnlyNullEvent -> QualitativeScoutingEntries
                         .select {
                             (QualitativeScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
@@ -475,7 +475,7 @@ object AllianceService {
                             (QualitativeScoutingEntries.eventKey eq selectedEventKey)
                         }
                     }
-                }
+                }).toList()
                 val existing = QualitativeScoutingEntries
                     .select { QualitativeScoutingEntries.ownerTeamNumber eq session.teamNumber }
                     .map { row ->

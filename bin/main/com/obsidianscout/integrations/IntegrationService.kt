@@ -10,6 +10,12 @@ import com.obsidianscout.routes.EventRecord
 import com.obsidianscout.routes.MatchRecord
 import com.obsidianscout.routes.TeamRecord
 import com.obsidianscout.routes.SummaryResponse
+import com.obsidianscout.auth.UserSession
+import com.obsidianscout.auth.UserRole
+import com.obsidianscout.config.ConfigService
+import com.obsidianscout.scouting.AllianceService
+import com.obsidianscout.scouting.ScoutingEntryRecord
+import com.obsidianscout.analytics.AnalyticsService
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
@@ -247,32 +253,43 @@ object IntegrationService {
         if (eventKey.isBlank()) {
             return 0
         }
-        val oprs = if (settings.useTbaOpr && settings.apiKeys.tbaKey.isNotBlank()) {
+        val tbaEnabled = settings.useTbaOpr && settings.apiKeys.tbaKey.isNotBlank()
+        val statboticsEnabled = settings.useStatboticsEpa
+        val oprs = if (tbaEnabled) {
             fetchTbaOprs(settings, eventKey)
         } else {
-            emptyMap()
+            null
         }
-        val epas = if (settings.useStatboticsEpa) {
+        val epas = if (statboticsEnabled) {
             fetchStatboticsEpas(settings, eventKey)
         } else {
-            emptyMap()
+            null
+        }
+        if (oprs == null && epas == null) {
+            return 0
         }
         val now = Instant.now()
         transaction {
             ApiTeams.select { ApiTeams.eventKey eq eventKey }.forEach { row ->
                 val teamKey = row[ApiTeams.teamKey]
-                val opr = oprs[teamKey]
-                val epa = epas[teamKey]
-                if (opr != null || epa != null) {
+                val opr = oprs?.get(teamKey)
+                val epa = epas?.get(teamKey)
+                val hasOpr = oprs != null && oprs.containsKey(teamKey)
+                val hasEpa = epas != null && epas.containsKey(teamKey)
+                if (hasOpr || hasEpa) {
                     ApiTeams.update({ ApiTeams.id eq row[ApiTeams.id] }) {
-                        it[ApiTeams.opr] = opr
-                        it[ApiTeams.epa] = epa
+                        if (hasOpr) {
+                            it[ApiTeams.opr] = opr
+                        }
+                        if (hasEpa) {
+                            it[ApiTeams.epa] = epa
+                        }
                         it[ApiTeams.updatedAt] = now
                     }
                 }
             }
         }
-        return maxOf(oprs.size, epas.size)
+        return maxOf(oprs?.size ?: 0, epas?.size ?: 0)
     }
 
     fun listEvents(
@@ -383,30 +400,84 @@ object IntegrationService {
         }
     }
 
-    fun listTeams(eventKey: String): List<TeamRecord> {
+    fun listTeams(eventKey: String, session: UserSession): List<TeamRecord> {
         return transaction {
             val bbotMappings = getBBotMappings(eventKey)
             val placeholderToBBot = bbotMappings.associate { it.placeholderKey.lowercase().trim() to it.bbotKey }
 
-            val rows = ApiTeams.select { ApiTeams.eventKey eq eventKey }
+            val teamRows = ApiTeams.select { ApiTeams.eventKey eq eventKey }
                 .orderBy(ApiTeams.teamNumber, SortOrder.ASC)
-                .map { row ->
-                    val originalKey = row[ApiTeams.teamKey].lowercase().trim()
-                    val resolvedKey = placeholderToBBot[originalKey] ?: row[ApiTeams.teamKey]
+                .toList()
 
-                    TeamRecord(
-                        eventKey = row[ApiTeams.eventKey],
-                        teamKey = resolvedKey,
-                        teamNumber = row[ApiTeams.teamNumber],
-                        name = row[ApiTeams.name],
-                        nickname = row[ApiTeams.nickname],
-                        city = row[ApiTeams.city],
-                        state = row[ApiTeams.state],
-                        country = row[ApiTeams.country],
-                        opr = row[ApiTeams.opr],
-                        epa = row[ApiTeams.epa]
+            val teamNumbers = teamRows.map { it[ApiTeams.teamNumber] }
+
+            val config = ConfigService.getConfig(session.teamNumber)
+            val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+            val visibleTeams = partnerTeams + session.teamNumber
+
+            val groupedEntries = if (teamNumbers.isNotEmpty()) {
+                val entriesQuery = ScoutingEntries.select { ScoutingEntries.targetTeamNumber inList teamNumbers }
+                if (session.role != UserRole.SUPERADMIN) {
+                    entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
+                }
+                entriesQuery.andWhere { (ScoutingEntries.eventKey eq eventKey) or (ScoutingEntries.isPrescout eq true) }
+
+                val entries = entriesQuery.map { row ->
+                    val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
+                    ScoutingEntryRecord(
+                        id = row[ScoutingEntries.id].value,
+                        ownerTeamNumber = row[ScoutingEntries.ownerTeamNumber],
+                        targetTeamNumber = row[ScoutingEntries.targetTeamNumber],
+                        eventKey = row[ScoutingEntries.eventKey],
+                        matchKey = row[ScoutingEntries.matchKey],
+                        matchNumber = row[ScoutingEntries.matchNumber],
+                        data = data,
+                        createdAt = row[ScoutingEntries.createdAt].toString(),
+                        isPrescout = row[ScoutingEntries.isPrescout]
                     )
                 }
+                entries.filter { it.targetTeamNumber != null }.groupBy { it.targetTeamNumber!! }
+            } else {
+                emptyMap()
+            }
+
+            val rows = teamRows.map { row ->
+                val originalKey = row[ApiTeams.teamKey].lowercase().trim()
+                val resolvedKey = placeholderToBBot[originalKey] ?: row[ApiTeams.teamKey]
+                val teamNumber = row[ApiTeams.teamNumber]
+
+                val teamEntries = groupedEntries[teamNumber] ?: emptyList()
+                val currentEventEntries = teamEntries.filter { it.eventKey == eventKey && !it.isPrescout }
+                val prescoutEntries = teamEntries.filter { it.isPrescout }
+
+                val mergedEntries = if (currentEventEntries.size < 3) {
+                    currentEventEntries + prescoutEntries
+                } else {
+                    currentEventEntries
+                }
+
+                val avgScore = if (mergedEntries.isNotEmpty()) {
+                    mergedEntries.map { entry ->
+                        AnalyticsService.scoreEntry(config, entry)
+                    }.average()
+                } else {
+                    null
+                }
+
+                TeamRecord(
+                    eventKey = row[ApiTeams.eventKey],
+                    teamKey = resolvedKey,
+                    teamNumber = teamNumber,
+                    name = row[ApiTeams.name],
+                    nickname = row[ApiTeams.nickname],
+                    city = row[ApiTeams.city],
+                    state = row[ApiTeams.state],
+                    country = row[ApiTeams.country],
+                    opr = row[ApiTeams.opr],
+                    epa = row[ApiTeams.epa],
+                    averagePoints = avgScore
+                )
+            }
 
             rows.groupBy { it.teamNumber }
                 .map { (teamNumber, group) ->
@@ -422,7 +493,8 @@ object IntegrationService {
                             state = group.mapNotNull { it.state }.firstOrNull { it.isNotBlank() } ?: preferred.state,
                             country = group.mapNotNull { it.country }.firstOrNull { it.isNotBlank() } ?: preferred.country,
                             opr = group.mapNotNull { it.opr }.firstOrNull() ?: preferred.opr,
-                            epa = group.mapNotNull { it.epa }.firstOrNull() ?: preferred.epa
+                            epa = group.mapNotNull { it.epa }.firstOrNull() ?: preferred.epa,
+                            averagePoints = group.mapNotNull { it.averagePoints }.firstOrNull() ?: preferred.averagePoints
                         )
                     }
                 }
@@ -1081,37 +1153,28 @@ object IntegrationService {
             return emptyMap()
         }
         val url = "https://www.thebluealliance.com/api/v3/event/${eventKey}/oprs"
-        val element = client.get(url) {
-            header("X-TBA-Auth-Key", key)
-        }.body<JsonElement>()
-        val oprs = element.jsonObject["oprs"] as? JsonObject ?: return emptyMap()
-        return oprs.entries.associate { entry ->
-            val primitive = entry.value as? JsonPrimitive
-            entry.key to primitive?.content?.toDoubleOrNull().orZero()
+        return try {
+            val element = client.get(url) {
+                header("X-TBA-Auth-Key", key)
+            }.body<JsonElement>()
+            val oprs = element.jsonObject["oprs"] as? JsonObject ?: return emptyMap()
+            oprs.entries.associate { entry ->
+                val primitive = entry.value as? JsonPrimitive
+                entry.key to primitive?.content?.toDoubleOrNull().orZero()
+            }
+        } catch (error: Exception) {
+            log.warn("TBA OPR fetch failed for $eventKey: ${error.message}")
+            emptyMap()
         }
     }
 
     private suspend fun fetchStatboticsEpas(settings: ApiSettings, eventKey: String): Map<String, Double> {
-        val url = "https://api.statbotics.io/v3/event/${eventKey}/teams"
-        val key = settings.apiKeys.statboticsKey
+        val url = "https://api.statbotics.io/v3/team_events?event=${eventKey}&limit=1000"
         val responseText = try {
-            client.get(url) {
-                if (key.isNotBlank()) {
-                    header(HttpHeaders.Authorization, "Bearer $key")
-                }
-            }.bodyAsText()
+            client.get(url).bodyAsText()
         } catch (error: Exception) {
             log.warn("Statbotics fetch failed: ${error.message}")
-            if (key.isNotBlank()) {
-                try {
-                    client.get(url).bodyAsText()
-                } catch (inner: Exception) {
-                    log.warn("Statbotics fallback fetch failed: ${inner.message}")
-                    return emptyMap()
-                }
-            } else {
-                return emptyMap()
-            }
+            return emptyMap()
         }
         if (responseText.isBlank()) {
             return emptyMap()
@@ -1122,7 +1185,9 @@ object IntegrationService {
             array.mapNotNull { item ->
                 val obj = item.jsonObject
                 val team = obj.readInt("team") ?: return@mapNotNull null
-                val epa = obj.readDouble("epa") ?: return@mapNotNull null
+                val epaObj = obj["epa"]?.jsonObject
+                val totalPointsObj = epaObj?.get("total_points")?.jsonObject
+                val epa = totalPointsObj?.readDouble("mean") ?: return@mapNotNull null
                 "frc${team}" to epa
             }.toMap()
         } catch (e: Exception) {

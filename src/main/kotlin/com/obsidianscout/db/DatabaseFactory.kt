@@ -41,10 +41,11 @@ object DatabaseFactory {
             } else {
                 "org.sqlite.JDBC"
             }
-            maximumPoolSize = 10
+            maximumPoolSize = 20
             minimumIdle = 2
             connectionTimeout = 10_000  // fail fast after 10s instead of the 30s default
             isAutoCommit = false
+            leakDetectionThreshold = 5000L
             if (type == "postgres") {
                 username = config.postgres.user
                 password = config.postgres.password

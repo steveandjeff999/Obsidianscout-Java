@@ -95,7 +95,7 @@ async function initTeamsPage() {
 async function loadTeams(eventKey) {
     const table = document.getElementById("teams-table");
     const body = table.querySelector("tbody");
-    body.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading teams...</div></td></tr>';
+    body.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading teams...</div></td></tr>';
 
     if (!eventKey) {
         Obsidianscout.showToast("Set year and event code in settings", "error");
@@ -111,7 +111,7 @@ async function loadTeams(eventKey) {
         body.innerHTML = "";
 
         if (teams.length === 0) {
-            body.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 24px;">No teams found for this event.</td></tr>';
+            body.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 24px;">No teams found for this event.</td></tr>';
             return;
         }
 
@@ -130,6 +130,7 @@ async function loadTeams(eventKey) {
                 <td>${displayNum}</td>
                 <td>${team.nickname || team.name || ""}</td>
                 <td>${location}</td>
+                <td>${team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : ""}</td>
                 <td>${team.opr !== null ? team.opr.toFixed(2) : ""}</td>
                 <td>${team.epa !== null ? team.epa.toFixed(2) : ""}</td>
                 ${actionHtml}
@@ -165,7 +166,7 @@ async function loadTeams(eventKey) {
             });
         }
     } catch (error) {
-        body.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 24px;">
+        body.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px;">
             <div class="retry-error-text" style="margin-bottom: 12px;">Failed to load teams: ${error.message}</div>
             <button class="retry-btn" type="button" id="retry-teams-btn">Retry</button>
         </td></tr>`;

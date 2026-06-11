@@ -18,8 +18,7 @@ import java.time.Year
 data class ApiKeys(
     val tbaKey: String = "",
     val firstUsername: String = "",
-    val firstKey: String = "",
-    val statboticsKey: String = ""
+    val firstKey: String = ""
 )
 
 @Serializable
