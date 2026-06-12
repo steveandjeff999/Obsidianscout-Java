@@ -3,34 +3,6 @@
   "title": "ObsidianScout Qualitative Scouting",
   "fields": [
     {
-      "id": "eventKey",
-      "label": "Event Key",
-      "type": "text",
-      "required": true
-    },
-    {
-      "id": "matchKey",
-      "label": "Match Key",
-      "type": "text",
-      "required": true
-    },
-    {
-      "id": "matchNumber",
-      "label": "Match Number",
-      "type": "number",
-      "required": true,
-      "min": 1,
-      "max": 200
-    },
-    {
-      "id": "targetTeamNumber",
-      "label": "Scouted Team Number",
-      "type": "number",
-      "required": true,
-      "min": 1,
-      "max": 9999
-    },
-    {
       "id": "sectionObservations",
       "label": "Observations",
       "type": "section"

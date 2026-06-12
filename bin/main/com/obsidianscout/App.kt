@@ -12,6 +12,9 @@ import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.SyncScheduler
 import com.obsidianscout.routes.ErrorResponse
 import com.obsidianscout.routes.configureRoutes
+import com.obsidianscout.routes.configureMobileRoutes
+import com.obsidianscout.routes.MobileApiException
+import com.obsidianscout.routes.MobileErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.network.tls.certificates.generateCertificate
 import io.ktor.server.application.Application
@@ -32,9 +35,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.sessions.Sessions
 import io.ktor.server.sessions.cookie
 import io.ktor.server.sessions.SessionTransportTransformerMessageAuthentication
-import io.ktor.server.sessions.CookieSessionBuilder
 import io.ktor.server.sessions.SessionProvider
-import io.ktor.server.sessions.SessionTrackerByValue
 import com.obsidianscout.auth.KeepMeLoggedInSessionTransport
 import io.ktor.serialization.kotlinx.json.json
 import io.netty.channel.ChannelHandlerContext
@@ -96,16 +97,50 @@ fun Application.module(appConfig: AppConfig) {
         json(JsonSupport.json)
     }
     install(Sessions) {
-        keepMeLoggedInCookie<UserSession>("obsidian_session") {
+        cookie<UserSession>("obsidian_session") {
             cookie.httpOnly = true
             cookie.path = "/"
             cookie.maxAgeInSeconds = 60 * 60 * 12
-            cookie.extensions["SameSite"] = "Strict"
-            cookie.secure = appConfig.server.cookieSecure || appConfig.server.https.enabled
+            cookie.extensions["SameSite"] = "Lax"
+            cookie.secure = appConfig.server.cookieSecure
             transform(SessionTransportTransformerMessageAuthentication(appConfig.server.sessionSecret.toByteArray()))
+        }
+
+        // Wrap the registered provider's transport to dynamically support Keep Me Logged In
+        @Suppress("UNCHECKED_CAST")
+        val originalProvider = providers.firstOrNull { it.name == "obsidian_session" } as? SessionProvider<UserSession>
+        if (originalProvider != null) {
+            val originalTransport = originalProvider.transport as io.ktor.server.sessions.SessionTransportCookie
+            val wrappedTransport = KeepMeLoggedInSessionTransport(originalTransport)
+            val newProvider = SessionProvider(
+                name = originalProvider.name,
+                type = originalProvider.type,
+                transport = wrappedTransport,
+                tracker = originalProvider.tracker
+            )
+
+            val clazz = io.ktor.server.sessions.SessionsConfig::class.java
+            val listField = runCatching { clazz.getDeclaredField("registered") }
+                .recoverCatching { clazz.getDeclaredField("_providers") }
+                .recoverCatching { clazz.getDeclaredField("providers") }
+                .getOrNull()
+            if (listField != null) {
+                listField.isAccessible = true
+                @Suppress("UNCHECKED_CAST")
+                val list = listField.get(this) as? MutableList<SessionProvider<UserSession>>
+                if (list != null) {
+                    val index = list.indexOfFirst { it.name == "obsidian_session" }
+                    if (index != -1) {
+                        list[index] = newProvider
+                    }
+                }
+            }
         }
     }
     install(StatusPages) {
+        exception<MobileApiException> { call, cause ->
+            call.respond(cause.status, MobileErrorResponse(success = false, error = cause.message, errorCode = cause.errorCode))
+        }
         exception<ApiException> { call, cause ->
             call.respond(cause.status, ErrorResponse(cause.message))
         }
@@ -127,6 +162,7 @@ fun Application.module(appConfig: AppConfig) {
     }
 
     configureRoutes()
+    configureMobileRoutes(appConfig)
 
     SyncScheduler.start()
     environment.monitor.subscribe(ApplicationStopped) {
@@ -172,17 +208,4 @@ private fun Throwable.isIgnorableException(): Boolean {
         current = current.cause
     }
     return false
-}
-
-@Suppress("DEPRECATION_ERROR")
-inline fun <reified S : Any> io.ktor.server.sessions.SessionsConfig.keepMeLoggedInCookie(
-    name: String,
-    noinline block: CookieSessionBuilder<S>.() -> Unit
-) {
-    val builder = CookieSessionBuilder(S::class)
-    builder.block()
-    val transport = KeepMeLoggedInSessionTransport(name, builder.cookie, builder.transformers)
-    val tracker = SessionTrackerByValue(S::class, builder.serializer)
-    val provider = SessionProvider(name, S::class, transport, tracker)
-    register(provider)
 }

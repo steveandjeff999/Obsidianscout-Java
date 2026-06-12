@@ -19,7 +19,8 @@ data class UserSession(
     val username: String,
     val teamNumber: Int,
     val role: UserRole,
-    val email: String? = null
+    val email: String? = null,
+    val profilePicture: String? = null
 )
 
 class ApiException(val status: HttpStatusCode, override val message: String) : RuntimeException(message)

@@ -39,6 +39,11 @@ data class MeResponse(
 )
 
 @Serializable
+data class LoginStatusResponse(
+    val loggedIn: Boolean
+)
+
+@Serializable
 data class AuthProviderInfo(
     val type: String,
     val enabled: Boolean
@@ -68,7 +73,9 @@ data class UpdateUserRequest(
     val username: String? = null,
     val password: String? = null,
     val role: UserRole? = null,
-    val email: String? = null
+    val email: String? = null,
+    val profilePicture: String? = null,
+    val clearProfilePicture: Boolean = false
 )
 
 @Serializable

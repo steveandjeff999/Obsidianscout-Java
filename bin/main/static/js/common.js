@@ -179,9 +179,10 @@
                         safeSetItem("cache:" + path, text);
                         
                         const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
-                        const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
+                        const isUserEditing = document.querySelector('input:focus, textarea:focus, select:focus') !== null;
+                        const isModalOpen = document.querySelector('.modal-backdrop.show, .modal.show, [role="dialog"].show') !== null;
                         
-                        if (isDataPage && !isUserEditing) {
+                        if (isDataPage && !isUserEditing && !isModalOpen) {
                             if (typeof saveScrollPositions === "function") {
                                 saveScrollPositions();
                             }
@@ -216,6 +217,17 @@
         const defaultTimeout = options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS;
         const timeoutMs = defaultTimeout;
         const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+        // Listen to option signal to cancel request
+        if (options.signal) {
+            options.signal.addEventListener("abort", () => {
+                controller.abort();
+            });
+            if (options.signal.aborted) {
+                controller.abort();
+            }
+        }
+
         const opts = {
             method: method,
             headers: options.headers || {},
@@ -264,8 +276,12 @@
 
             return data;
         } catch (error) {
-            const isTimeout = error && error.name === "AbortError";
-            if (isTimeout) {
+            const isAbort = error && error.name === "AbortError";
+            if (isAbort) {
+                if (options.signal && options.signal.aborted) {
+                    // Manual abort from caller signal
+                    throw error;
+                }
                 throw new Error("Request timed out. Try refreshing this page.");
             }
             throw error;
@@ -502,7 +518,63 @@
             return;
         }
         const roleLabel = user.role === "SUPERADMIN" ? "Super Admin" : user.role.charAt(0) + user.role.slice(1).toLowerCase();
-        badge.textContent = `${user.username} | Team ${user.teamNumber} | ${roleLabel}`;
+
+        // Build avatar element
+        const initials = (user.username || "?").slice(0, 2).toUpperCase();
+        // Pick a deterministic hue from the username
+        let hue = 0;
+        for (let i = 0; i < (user.username || "").length; i++) {
+            hue = (hue + (user.username || "").charCodeAt(i) * 37) % 360;
+        }
+
+        let avatarHtml;
+        if (user.profilePicture) {
+            avatarHtml = `<img class="nav-avatar" src="${user.profilePicture}" alt="${initials}" title="${user.username}">`;
+        } else {
+            avatarHtml = `<div class="nav-avatar nav-avatar-initials" style="--avatar-hue:${hue}deg" title="${user.username}">${initials}</div>`;
+        }
+
+        badge.innerHTML = `
+            <a class="nav-avatar-link" href="/config" aria-label="Edit profile picture">${avatarHtml}</a>
+            <span class="nav-user-text">${user.username} | Team ${user.teamNumber} | ${roleLabel}</span>
+        `;
+    }
+
+    /**
+     * Updates the sidebar avatar after a profile picture change without a full page reload.
+     * @param {string|null} profilePicture - New picture data-URL, or null to revert to initials.
+     */
+    function refreshNavAvatar(profilePicture) {
+        const badge = document.getElementById("nav-user");
+        if (!badge) return;
+        const link = badge.querySelector(".nav-avatar-link");
+        if (!link) return;
+        const existing = link.querySelector(".nav-avatar, .nav-avatar-initials");
+        if (!existing) return;
+
+        if (profilePicture) {
+            const img = document.createElement("img");
+            img.className = "nav-avatar";
+            img.src = profilePicture;
+            img.alt = "avatar";
+            existing.replaceWith(img);
+        } else {
+            // Revert to initials bubble — read initials from current text
+            const textEl = badge.querySelector(".nav-user-text");
+            const text = textEl ? textEl.textContent : "";
+            const username = text.split("|")[0].trim();
+            const initials = (username || "?").slice(0, 2).toUpperCase();
+            let hue = 0;
+            for (let i = 0; i < username.length; i++) {
+                hue = (hue + username.charCodeAt(i) * 37) % 360;
+            }
+            const div = document.createElement("div");
+            div.className = "nav-avatar nav-avatar-initials";
+            div.style.setProperty("--avatar-hue", hue + "deg");
+            div.title = username;
+            div.textContent = initials;
+            existing.replaceWith(div);
+        }
     }
 
     function setActiveNav() {
@@ -1117,6 +1189,7 @@
         requireAuth,
         showToast,
         setUserBadge,
+        refreshNavAvatar,
         setActiveNav,
         adjustNavForRole,
         wireLogout,

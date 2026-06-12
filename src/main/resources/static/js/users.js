@@ -6,6 +6,35 @@ let currentRoleFilter = "";
 let loadUsersController = null;
 let currentUsers = [];
 
+// Track pending avatar change for the edit modal
+let pendingAvatarBase64 = undefined;  // undefined = no change, null = remove, string = new picture
+
+/** Resize an image File to a square JPEG data-URL (max `size` px). */
+async function resizeImageToBase64(file, size = 384) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext("2d");
+                // Centre-crop to square
+                const srcSize = Math.min(img.width, img.height);
+                const sx = (img.width - srcSize) / 2;
+                const sy = (img.height - srcSize) / 2;
+                ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, size, size);
+                resolve(canvas.toDataURL("image/png"));
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -56,6 +85,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("edit-password").value = "";
         document.getElementById("edit-role").value     = user.role;
 
+        // Reset pending avatar state
+        pendingAvatarBase64 = undefined;
+
+        // Render avatar preview
+        const avatarImg = document.getElementById("edit-avatar-img");
+        const avatarPlaceholder = document.getElementById("edit-avatar-placeholder");
+        if (user.profilePicture) {
+            avatarImg.src = user.profilePicture;
+            avatarImg.style.display = "block";
+            avatarPlaceholder.style.display = "none";
+        } else {
+            const initials = (user.username || "?").slice(0, 2).toUpperCase();
+            let hue = 0;
+            for (let i = 0; i < (user.username || "").length; i++) {
+                hue = (hue + user.username.charCodeAt(i) * 37) % 360;
+            }
+            avatarPlaceholder.textContent = initials;
+            avatarPlaceholder.style.setProperty("--avatar-hue", hue + "deg");
+            avatarPlaceholder.style.display = "flex";
+            avatarImg.style.display = "none";
+            avatarImg.src = "";
+        }
+
         // Admins cannot change the role of a superadmin
         const roleField = document.getElementById("edit-role-field");
         if (!Obsidianscout.isSuperAdmin(me.role) && user.role === "SUPERADMIN") {
@@ -70,6 +122,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function closeModal() {
         modal.classList.remove("show");
+        pendingAvatarBase64 = undefined;
     }
 
     document.getElementById("edit-cancel").addEventListener("click", closeModal);
@@ -91,7 +144,53 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("edit-save-btn").click();
     });
 
-    // Save button
+    // ── Avatar upload wiring ──────────────────────────────────────────────
+    const avatarInput = document.getElementById("edit-avatar-input");
+    const avatarImg = document.getElementById("edit-avatar-img");
+    const avatarPlaceholder = document.getElementById("edit-avatar-placeholder");
+    const avatarRemoveBtn = document.getElementById("edit-avatar-remove");
+
+    // Also trigger file picker when clicking the img/placeholder
+    [avatarImg, avatarPlaceholder].forEach((el) => {
+        el.addEventListener("click", () => avatarInput.click());
+    });
+
+    avatarInput.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const base64 = await resizeImageToBase64(file, 384);
+            pendingAvatarBase64 = base64;
+            avatarImg.src = base64;
+            avatarImg.style.display = "block";
+            avatarPlaceholder.style.display = "none";
+        } catch (err) {
+            Obsidianscout.showToast("Failed to process image", "error");
+        }
+        // Reset so the same file can be re-selected
+        avatarInput.value = "";
+    });
+
+    avatarRemoveBtn.addEventListener("click", () => {
+        pendingAvatarBase64 = null; // signal removal
+        avatarImg.src = "";
+        avatarImg.style.display = "none";
+        // Show initials placeholder
+        const userId = document.getElementById("edit-user-id").value;
+        const user = currentUsers.find(u => u.id === parseInt(userId, 10));
+        if (user) {
+            const initials = (user.username || "?").slice(0, 2).toUpperCase();
+            let hue = 0;
+            for (let i = 0; i < (user.username || "").length; i++) {
+                hue = (hue + user.username.charCodeAt(i) * 37) % 360;
+            }
+            avatarPlaceholder.textContent = initials;
+            avatarPlaceholder.style.setProperty("--avatar-hue", hue + "deg");
+        }
+        avatarPlaceholder.style.display = "flex";
+    });
+
+    // ── Save button ───────────────────────────────────────────────────────
     document.getElementById("edit-save-btn").addEventListener("click", async () => {
         const userId   = document.getElementById("edit-user-id").value;
         const username = document.getElementById("edit-username").value.trim();
@@ -104,6 +203,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (password) payload.password = password;
         if (role)     payload.role     = role;
         payload.email = email;
+
+        // Profile picture: undefined = no change, null = remove, string = new pic
+        if (pendingAvatarBase64 === null) {
+            payload.clearProfilePicture = true;
+        } else if (pendingAvatarBase64) {
+            payload.profilePicture = pendingAvatarBase64;
+        }
 
         if (Object.keys(payload).length === 0) {
             Obsidianscout.showToast("Nothing to update", "info");

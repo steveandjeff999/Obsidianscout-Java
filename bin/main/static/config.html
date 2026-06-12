@@ -351,6 +351,25 @@
 
                     <p class="notice">Configure personal settings for this device.</p>
 
+                    <!-- Profile picture -->
+                    <div class="form-grid" style="margin-bottom: 20px;">
+                        <div class="field">
+                            <label>Profile Picture</label>
+                            <div class="profile-pic-wrapper">
+                                <div class="profile-pic-preview">
+                                    <div id="personal-avatar-placeholder" class="profile-pic-initials" style="display:none" title="Click to upload"></div>
+                                    <img id="personal-avatar-img" class="profile-pic-img" src="" alt="Avatar" style="display:none" title="Click to upload" />
+                                    <input type="file" id="personal-avatar-input" accept="image/*" style="display:none" aria-label="Upload profile picture" />
+                                </div>
+                                <div class="profile-pic-actions">
+                                    <label for="personal-avatar-input" class="profile-pic-label">📷 Upload photo</label>
+                                    <button type="button" id="personal-avatar-remove" class="profile-pic-remove">Remove</button>
+                                    <p class="profile-pic-hint">Auto-resized to 96×96 px</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-grid">
 
                         <div class="field">
@@ -381,9 +400,9 @@
 
 
 
-    <script src="/js/common.js"></script>
+    <script defer src="/js/common.js"></script>
 
-    <script src="/js/settings.js"></script>
+    <script defer src="/js/settings.js"></script>
 
 </body>
 

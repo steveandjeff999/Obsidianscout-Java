@@ -166,8 +166,12 @@
                 if (response.status === 401) {
                     const isLoginPage = document.body && document.body.dataset.page === "login";
                     if (!isLoginPage) {
-                        safeRemoveItem("cache:/api/auth/me");
-                        window.location.href = "/";
+                        checkLoginStatus().then(loggedIn => {
+                            if (!loggedIn) {
+                                safeRemoveItem("cache:/api/auth/me");
+                                window.location.href = "/";
+                            }
+                        });
                         return;
                     }
                 }
@@ -253,10 +257,14 @@
             if (!response.ok) {
                 if (response.status === 401) {
                     const isLoginPage = document.body && document.body.dataset.page === "login";
-                    const isAuthRequest = path.includes("/api/auth/login") || path.includes("/api/auth/register");
+                    const isAuthRequest = path.includes("/api/auth/login") || path.includes("/api/auth/register") || path.includes("/api/auth/status");
                     if (!isLoginPage && !isAuthRequest) {
-                        safeRemoveItem("cache:/api/auth/me");
-                        window.location.href = "/";
+                        checkLoginStatus().then(loggedIn => {
+                            if (!loggedIn) {
+                                safeRemoveItem("cache:/api/auth/me");
+                                window.location.href = "/";
+                            }
+                        });
                         const err = new Error("Session expired. Redirecting...");
                         err.status = 401;
                         throw err;
@@ -295,6 +303,26 @@
             return JSON.parse(text);
         } catch (error) {
             return text;
+        }
+    }
+
+    async function checkLoginStatus() {
+        try {
+            const response = await fetch("/api/auth/status", {
+                method: "GET",
+                credentials: "same-origin",
+                headers: { "Accept": "application/json" }
+            });
+            if (response.status === 401) {
+                return false;
+            }
+            if (!response.ok) {
+                return false;
+            }
+            const data = await response.json();
+            return !!(data && data.loggedIn);
+        } catch (error) {
+            return false;
         }
     }
 
@@ -463,12 +491,12 @@
     }
 
     async function requireAuth() {
-        const me = await getMe();
-        if (!me) {
+        const loggedIn = await checkLoginStatus();
+        if (!loggedIn) {
             window.location.href = "/";
             return null;
         }
-        return me;
+        return await getMe();
     }
 
     /**
@@ -518,7 +546,71 @@
             return;
         }
         const roleLabel = user.role === "SUPERADMIN" ? "Super Admin" : user.role.charAt(0) + user.role.slice(1).toLowerCase();
-        badge.textContent = `${user.username} | Team ${user.teamNumber} | ${roleLabel}`;
+
+        // Build avatar element
+        const initials = (user.username || "?").slice(0, 2).toUpperCase();
+        // Pick a deterministic hue from the username
+        let hue = 0;
+        for (let i = 0; i < (user.username || "").length; i++) {
+            hue = (hue + (user.username || "").charCodeAt(i) * 37) % 360;
+        }
+
+        let avatarHtml;
+        if (user.profilePicture) {
+            avatarHtml = `<img class="nav-avatar" src="${user.profilePicture}" alt="${initials}" title="${user.username}">`;
+        } else {
+            avatarHtml = `<div class="nav-avatar nav-avatar-initials" style="--avatar-hue:${hue}deg" title="${user.username}">${initials}</div>`;
+        }
+
+        badge.innerHTML = `
+            <a class="nav-avatar-link" href="/config" aria-label="Edit profile picture">${avatarHtml}</a>
+            <div class="nav-user-text">
+                <span class="nav-user-name" title="${user.username}">${user.username}</span>
+                <span class="nav-user-meta">Team ${user.teamNumber} • ${roleLabel}</span>
+            </div>
+        `;
+    }
+
+    /**
+     * Updates the sidebar avatar after a profile picture change without a full page reload.
+     * @param {string|null} profilePicture - New picture data-URL, or null to revert to initials.
+     */
+    function refreshNavAvatar(profilePicture) {
+        const badge = document.getElementById("nav-user");
+        if (!badge) return;
+        const link = badge.querySelector(".nav-avatar-link");
+        if (!link) return;
+        const existing = link.querySelector(".nav-avatar, .nav-avatar-initials");
+        if (!existing) return;
+
+        if (profilePicture) {
+            const img = document.createElement("img");
+            img.className = "nav-avatar";
+            img.src = profilePicture;
+            img.alt = "avatar";
+            existing.replaceWith(img);
+        } else {
+            // Revert to initials bubble — read initials from current text
+            const nameEl = badge.querySelector(".nav-user-name");
+            const textEl = badge.querySelector(".nav-user-text");
+            let username = "?";
+            if (nameEl) {
+                username = nameEl.textContent.trim();
+            } else if (textEl) {
+                username = textEl.textContent.split("|")[0].trim();
+            }
+            const initials = (username || "?").slice(0, 2).toUpperCase();
+            let hue = 0;
+            for (let i = 0; i < username.length; i++) {
+                hue = (hue + username.charCodeAt(i) * 37) % 360;
+            }
+            const div = document.createElement("div");
+            div.className = "nav-avatar nav-avatar-initials";
+            div.style.setProperty("--avatar-hue", hue + "deg");
+            div.title = username;
+            div.textContent = initials;
+            existing.replaceWith(div);
+        }
     }
 
     function setActiveNav() {
@@ -1130,9 +1222,11 @@
     window.Obsidianscout = {
         request,
         getMe,
+        checkLoginStatus,
         requireAuth,
         showToast,
         setUserBadge,
+        refreshNavAvatar,
         setActiveNav,
         adjustNavForRole,
         wireLogout,

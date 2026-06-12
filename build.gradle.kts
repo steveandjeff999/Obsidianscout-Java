@@ -44,13 +44,14 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("at.favre.lib:bcrypt:0.10.2")
+    implementation("com.auth0:java-jwt:4.4.0")
 
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
     testImplementation(kotlin("test"))
 }
 
 application {
-    mainClass.set("com.obsidianscout.AppKt")
+    mainClass.set(project.findProperty("mainClass")?.toString() ?: "com.obsidianscout.AppKt")
 }
 
 java {
@@ -160,6 +161,20 @@ tasks.register("publish") {
     group = "publishing"
     description = "Assembles the server fat jar and configuration bundle for publishing/shipping."
     dependsOn("buildjar")
+}
+
+tasks.register<JavaExec>("verifyMobile") {
+    group = "verification"
+    description = "Runs the mobile API verification script."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.obsidianscout.utils.VerifyMobileApiKt")
+}
+
+tasks.register<JavaExec>("dumpSettings") {
+    group = "verification"
+    description = "Dumps app settings from database."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.obsidianscout.utils.DumpSettingsKt")
 }
 
 

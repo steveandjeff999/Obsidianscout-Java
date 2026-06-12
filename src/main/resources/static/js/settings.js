@@ -19,6 +19,104 @@ document.addEventListener("DOMContentLoaded", async () => {
     let adminPanel = null;
     let originalAdminPanelHTML = "";
 
+    /** Resize an image File to a square JPEG data-URL (max `size` px). */
+    async function resizeImageToBase64(file, size = 384) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = size;
+                    canvas.height = size;
+                    const ctx = canvas.getContext("2d");
+                    const srcSize = Math.min(img.width, img.height);
+                    const sx = (img.width - srcSize) / 2;
+                    const sy = (img.height - srcSize) / 2;
+                    ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, size, size);
+                    resolve(canvas.toDataURL("image/png"));
+                };
+                img.onerror = reject;
+                img.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    /**
+     * Wire the personal avatar upload widget in the Personal Settings panel.
+     * Uses the current `me` object to populate the initial preview.
+     * currentMe is a reference so it can be updated after a successful save.
+     */
+    function wirePersonalAvatarWidget(currentMe) {
+        const avatarImg = document.getElementById("personal-avatar-img");
+        const avatarPlaceholder = document.getElementById("personal-avatar-placeholder");
+        const avatarInput = document.getElementById("personal-avatar-input");
+        const avatarRemove = document.getElementById("personal-avatar-remove");
+        if (!avatarImg || !avatarPlaceholder || !avatarInput || !avatarRemove) return;
+
+        // Populate initial preview
+        function renderAvatar(profilePicture) {
+            if (profilePicture) {
+                avatarImg.src = profilePicture;
+                avatarImg.style.display = "block";
+                avatarPlaceholder.style.display = "none";
+            } else {
+                const initials = (currentMe.username || "?").slice(0, 2).toUpperCase();
+                let hue = 0;
+                for (let i = 0; i < (currentMe.username || "").length; i++) {
+                    hue = (hue + currentMe.username.charCodeAt(i) * 37) % 360;
+                }
+                avatarPlaceholder.textContent = initials;
+                avatarPlaceholder.style.setProperty("--avatar-hue", hue + "deg");
+                avatarPlaceholder.style.display = "flex";
+                avatarImg.style.display = "none";
+                avatarImg.src = "";
+            }
+        }
+        renderAvatar(currentMe.profilePicture);
+
+        // Click on preview opens file picker
+        [avatarImg, avatarPlaceholder].forEach((el) => {
+            // Remove old listeners by cloning; simpler here is to just add once
+            el.addEventListener("click", () => avatarInput.click());
+        });
+
+        avatarInput.addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const base64 = await resizeImageToBase64(file, 384);
+                // Upload immediately
+                const updated = await Obsidianscout.request("/api/user/profile-picture", {
+                    method: "PUT",
+                    json: { profilePicture: base64 }
+                });
+                renderAvatar(updated.profilePicture);
+                Obsidianscout.refreshNavAvatar(updated.profilePicture);
+                Obsidianscout.showToast("Profile picture updated", "success");
+            } catch (err) {
+                Obsidianscout.showToast(err.message || "Failed to upload picture", "error");
+            }
+            avatarInput.value = "";
+        });
+
+        avatarRemove.addEventListener("click", async () => {
+            try {
+                await Obsidianscout.request("/api/user/profile-picture", {
+                    method: "PUT",
+                    json: { clearProfilePicture: true }
+                });
+                renderAvatar(null);
+                Obsidianscout.refreshNavAvatar(null);
+                Obsidianscout.showToast("Profile picture removed", "success");
+            } catch (err) {
+                Obsidianscout.showToast(err.message || "Failed to remove picture", "error");
+            }
+        });
+    }
+
     const isUserAdmin = Obsidianscout.isAdmin(me.role);
     if (!isUserAdmin) {
         // Hide admin tabs
@@ -58,6 +156,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 window.dispatchEvent(new CustomEvent("obsidianscout:teamdisplaychange", { detail: { format: e.target.value } }));
             });
         }
+
+        wirePersonalAvatarWidget(me);
 
         wireTabs();
         return;
@@ -139,6 +239,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     window.dispatchEvent(new CustomEvent("obsidianscout:teamdisplaychange", { detail: { format: e.target.value } }));
                 });
             }
+
+            wirePersonalAvatarWidget(me);
 
             // Sub-tab switching logic
             if (btnVisual && btnRaw && containerVisual && containerRaw) {
@@ -355,10 +457,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function normalizeConfig(config, defaultTitle) {
         const parsed = typeof config === "string" ? JSON.parse(config) : (config || {});
+        const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
+        const fields = (Array.isArray(parsed.fields) ? parsed.fields : [])
+            .filter((field) => field && !reserved.has(field.id));
         return {
             title: parsed.title || defaultTitle,
             version: Number(parsed.version) || 1,
-            fields: Array.isArray(parsed.fields) ? parsed.fields : [],
+            fields: fields,
             analytics: Array.isArray(parsed.analytics) ? parsed.analytics : []
         };
     }

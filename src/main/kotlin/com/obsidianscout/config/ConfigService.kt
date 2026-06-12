@@ -4,6 +4,7 @@ import com.obsidianscout.db.PitScoutingConfigs
 import com.obsidianscout.db.ScoutingConfigs
 import com.obsidianscout.db.QualitativeScoutingConfigs
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonArray
@@ -25,7 +26,11 @@ data class ScoutingConfig(
     val version: Int = 1,
     val title: String = "ObsidianScout",
     val fields: List<ScoutingField> = emptyList(),
-    val analytics: List<AnalyticsWidget> = emptyList()
+    val analytics: List<AnalyticsWidget> = emptyList(),
+    @SerialName("tba_key") val tbaKey: String? = null,
+    @SerialName("first_username") val firstUsername: String? = null,
+    @SerialName("first_key") val firstKey: String? = null,
+    @SerialName("event_code") val eventCode: String? = null
 )
 
 @Serializable
@@ -284,22 +289,6 @@ object ConfigService {
             title = "ObsidianScout",
             fields = listOf(
                 ScoutingField(
-                    id = "matchNumber",
-                    label = "Match Number",
-                    type = "number",
-                    required = true,
-                    min = 1,
-                    max = 200
-                ),
-                ScoutingField(
-                    id = "targetTeamNumber",
-                    label = "Scouted Team Number",
-                    type = "number",
-                    required = true,
-                    min = 1,
-                    max = 9999
-                ),
-                ScoutingField(
                     id = "sectionAuto",
                     label = "Auto",
                     type = "section"
@@ -394,20 +383,6 @@ object ConfigService {
             title = "ObsidianScout Pit Scouting",
             fields = listOf(
                 ScoutingField(
-                    id = "eventKey",
-                    label = "Event Key",
-                    type = "text",
-                    required = true
-                ),
-                ScoutingField(
-                    id = "targetTeamNumber",
-                    label = "Scouted Team Number",
-                    type = "number",
-                    required = true,
-                    min = 1,
-                    max = 9999
-                ),
-                ScoutingField(
                     id = "sectionRobot",
                     label = "Robot",
                     type = "section"
@@ -473,34 +448,6 @@ object ConfigService {
             version = 1,
             title = "ObsidianScout Qualitative Scouting",
             fields = listOf(
-                ScoutingField(
-                    id = "eventKey",
-                    label = "Event Key",
-                    type = "text",
-                    required = true
-                ),
-                ScoutingField(
-                    id = "matchKey",
-                    label = "Match Key",
-                    type = "text",
-                    required = true
-                ),
-                ScoutingField(
-                    id = "matchNumber",
-                    label = "Match Number",
-                    type = "number",
-                    required = true,
-                    min = 1,
-                    max = 200
-                ),
-                ScoutingField(
-                    id = "targetTeamNumber",
-                    label = "Scouted Team Number",
-                    type = "number",
-                    required = true,
-                    min = 1,
-                    max = 9999
-                ),
                 ScoutingField(
                     id = "sectionObservations",
                     label = "Observations",

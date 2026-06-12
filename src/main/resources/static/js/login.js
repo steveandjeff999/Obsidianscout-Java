@@ -103,8 +103,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Check for existing session in background
-    Obsidianscout.getMe().then((existing) => {
-        if (existing) {
+    Obsidianscout.checkLoginStatus().then((loggedIn) => {
+        if (loggedIn) {
             window.location.href = "/dashboard";
         }
     });

@@ -10,6 +10,7 @@ object Users : IntIdTable("users") {
     val role = varchar("role", 16)
     val createdAt = timestamp("created_at")
     val email = varchar("email", 255).nullable()
+    val profilePicture = text("profile_picture").nullable()
 
     init {
         uniqueIndex("ux_users_username_team", username, teamNumber)

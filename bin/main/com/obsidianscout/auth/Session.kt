@@ -19,7 +19,8 @@ data class UserSession(
     val username: String,
     val teamNumber: Int,
     val role: UserRole,
-    val email: String? = null
+    val email: String? = null,
+    val profilePicture: String? = null
 )
 
 class ApiException(val status: HttpStatusCode, override val message: String) : RuntimeException(message)
@@ -63,9 +64,7 @@ suspend fun ApplicationCall.requireAnalyticsOrAbove(): UserSession {
 }
 
 class KeepMeLoggedInSessionTransport(
-    val name: String,
-    val configuration: CookieConfiguration,
-    val transformers: List<SessionTransportTransformer>
+    private val delegate: io.ktor.server.sessions.SessionTransportCookie
 ) : SessionTransport {
 
     companion object {
@@ -73,48 +72,35 @@ class KeepMeLoggedInSessionTransport(
     }
 
     override fun receive(call: ApplicationCall): String? {
-        val rawValue = call.request.cookies[name, configuration.encoding] ?: return null
-        return transformers.transformRead(rawValue)
+        return delegate.receive(call)
     }
 
     override fun send(call: ApplicationCall, value: String) {
-        val transformed = transformers.transformWrite(value)
+        val transformed = delegate.transformers.transformWrite(value)
         val keepMeLoggedIn = call.attributes.getOrNull(KEEP_ME_LOGGED_IN_KEY) ?: false
         
         val maxAgeSeconds = if (keepMeLoggedIn) {
             60 * 60 * 24 * 30L // 30 days
         } else {
-            configuration.maxAgeInSeconds
+            delegate.configuration.maxAgeInSeconds
         }
 
         call.response.cookies.append(
             Cookie(
-                name = name,
+                name = delegate.name,
                 value = transformed,
-                encoding = configuration.encoding,
+                encoding = delegate.configuration.encoding,
                 maxAge = maxAgeSeconds.toInt(),
-                path = configuration.path,
-                domain = configuration.domain,
-                secure = configuration.secure,
-                httpOnly = configuration.httpOnly,
-                extensions = configuration.extensions
+                path = delegate.configuration.path,
+                domain = delegate.configuration.domain,
+                secure = delegate.configuration.secure,
+                httpOnly = delegate.configuration.httpOnly,
+                extensions = delegate.configuration.extensions
             )
         )
     }
 
     override fun clear(call: ApplicationCall) {
-        call.response.cookies.append(
-            Cookie(
-                name = name,
-                value = "",
-                encoding = configuration.encoding,
-                maxAge = 0,
-                path = configuration.path,
-                domain = configuration.domain,
-                secure = configuration.secure,
-                httpOnly = configuration.httpOnly,
-                extensions = configuration.extensions
-            )
-        )
+        delegate.clear(call)
     }
 }

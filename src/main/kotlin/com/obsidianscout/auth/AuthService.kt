@@ -39,7 +39,8 @@ data class UserRecord(
     val teamNumber: Int,
     val role: UserRole,
     val createdAt: String,
-    val email: String? = null
+    val email: String? = null,
+    val profilePicture: String? = null
 )
 
 object AuthService {
@@ -237,7 +238,10 @@ object AuthService {
         newUsername: String?,
         newPassword: String?,
         newRole: UserRole?,
-        newEmail: String? = null
+        newEmail: String? = null,
+        newTeamNumber: Int? = null,
+        newProfilePicture: String? = null,
+        clearProfilePicture: Boolean = false
     ): UserRecord {
         // Hash outside the transaction if needed
         val newHash = newPassword?.takeIf { it.isNotBlank() }
@@ -262,6 +266,12 @@ object AuthService {
                 if (newRole == UserRole.SUPERADMIN) {
                     throw ApiException(HttpStatusCode.Forbidden, "Admins cannot grant the superadmin role")
                 }
+                if (newTeamNumber != null) {
+                    throw ApiException(HttpStatusCode.Forbidden, "Only superadmins can change team numbers")
+                }
+                if (!newUsername.isNullOrBlank() && newUsername != targetRow[Users.username]) {
+                    throw ApiException(HttpStatusCode.Forbidden, "Only superadmins can change usernames")
+                }
             }
 
             Users.update({ Users.id eq targetUserId }) { stmt ->
@@ -269,10 +279,27 @@ object AuthService {
                 if (newHash != null)             stmt[passwordHash] = newHash
                 if (newRole != null)             stmt[role] = newRole.name
                 if (newEmail != null)            stmt[email] = newEmail.takeIf { it.isNotBlank() }
+                if (newTeamNumber != null && callerSession.role == UserRole.SUPERADMIN) {
+                    stmt[teamNumber] = newTeamNumber
+                }
+                if (clearProfilePicture) {
+                    stmt[profilePicture] = null
+                } else if (newProfilePicture != null) {
+                    stmt[profilePicture] = newProfilePicture
+                }
             }
 
             val updated = Users.select { Users.id eq targetUserId }.first()
             rowToUser(updated)
+        }
+    }
+
+    fun getUserById(userId: Int): UserRecord? {
+        return transaction {
+            Users.select { Users.id eq userId }
+                .limit(1)
+                .map { rowToUser(it) }
+                .firstOrNull()
         }
     }
 
@@ -287,7 +314,8 @@ object AuthService {
                 UserRole.SCOUT
             },
             createdAt = row[Users.createdAt].toString(),
-            email = row[Users.email]
+            email = row[Users.email],
+            profilePicture = row[Users.profilePicture]
         )
     }
 

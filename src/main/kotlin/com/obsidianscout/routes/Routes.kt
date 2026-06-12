@@ -46,6 +46,7 @@ import io.ktor.server.http.content.staticResources
 import io.ktor.server.sessions.clear
 import io.ktor.server.sessions.sessions
 import io.ktor.server.sessions.set
+import io.ktor.server.sessions.get
 
 fun Application.configureRoutes() {
     routing {
@@ -77,11 +78,21 @@ fun Application.configureRoutes() {
                         username = user.username,
                         teamNumber = user.teamNumber,
                         role = user.role,
-                        email = user.email
+                        email = user.email,
+                        profilePicture = null
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
-                    call.respond(LoginResponse(session))
+
+                    val responseSession = UserSession(
+                        userId = user.id,
+                        username = user.username,
+                        teamNumber = user.teamNumber,
+                        role = user.role,
+                        email = user.email,
+                        profilePicture = user.profilePicture
+                    )
+                    call.respond(LoginResponse(responseSession))
                 }
                 post("/register") {
                     val request = call.receive<RegisterRequest>()
@@ -97,11 +108,21 @@ fun Application.configureRoutes() {
                         username = user.username,
                         teamNumber = user.teamNumber,
                         role = user.role,
-                        email = user.email
+                        email = user.email,
+                        profilePicture = null
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
-                    call.respond(LoginResponse(session))
+
+                    val responseSession = UserSession(
+                        userId = user.id,
+                        username = user.username,
+                        teamNumber = user.teamNumber,
+                        role = user.role,
+                        email = user.email,
+                        profilePicture = user.profilePicture
+                    )
+                    call.respond(LoginResponse(responseSession))
                 }
                 post("/logout") {
                     call.sessions.clear<UserSession>()
@@ -109,7 +130,21 @@ fun Application.configureRoutes() {
                 }
                 get("/me") {
                     val session = call.requireSession()
-                    call.respond(MeResponse(session))
+                    val user = AuthService.getUserById(session.userId)
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "User not found")
+                    val responseSession = UserSession(
+                        userId = user.id,
+                        username = user.username,
+                        teamNumber = user.teamNumber,
+                        role = user.role,
+                        email = user.email,
+                        profilePicture = user.profilePicture
+                    )
+                    call.respond(MeResponse(responseSession))
+                }
+                get("/status") {
+                    val session = call.sessions.get<UserSession>()
+                    call.respond(LoginStatusResponse(session != null))
                 }
                 get("/providers") {
                     val providers = listOf(
@@ -583,13 +618,36 @@ fun Application.configureRoutes() {
                         newUsername = request.username,
                         newPassword = request.password,
                         newRole = request.role,
-                        newEmail = request.email
+                        newEmail = request.email,
+                        newProfilePicture = request.profilePicture,
+                        clearProfilePicture = request.clearProfilePicture
                     )
                     call.respond(updated)
                 }
+            } // end /admin route
+
+            // Self-service profile picture endpoint (any authenticated user)
+            put("/user/profile-picture") {
+                val session = call.requireSession()
+                val request = call.receive<UpdateUserRequest>()
+                val updated = AuthService.updateUser(
+                    callerSession = session,
+                    targetUserId = session.userId,
+                    newUsername = null,
+                    newPassword = null,
+                    newRole = null,
+                    newEmail = null,
+                    newProfilePicture = request.profilePicture,
+                    clearProfilePicture = request.clearProfilePicture
+                )
+                // Refresh the session so /api/auth/me returns the updated picture
+                val updatedSession = session.copy(profilePicture = null)
+                call.sessions.set(updatedSession)
+                call.respond(updated)
             }
 
             route("/alliances") {
+
                 get {
                     val session = call.requireSession()
                     call.respond(AllianceService.listAlliances(session))

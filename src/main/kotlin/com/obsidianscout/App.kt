@@ -12,6 +12,9 @@ import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.SyncScheduler
 import com.obsidianscout.routes.ErrorResponse
 import com.obsidianscout.routes.configureRoutes
+import com.obsidianscout.routes.configureMobileRoutes
+import com.obsidianscout.routes.MobileApiException
+import com.obsidianscout.routes.MobileErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.network.tls.certificates.generateCertificate
 import io.ktor.server.application.Application
@@ -98,8 +101,8 @@ fun Application.module(appConfig: AppConfig) {
             cookie.httpOnly = true
             cookie.path = "/"
             cookie.maxAgeInSeconds = 60 * 60 * 12
-            cookie.extensions["SameSite"] = "Strict"
-            cookie.secure = appConfig.server.cookieSecure || appConfig.server.https.enabled
+            cookie.extensions["SameSite"] = "Lax"
+            cookie.secure = appConfig.server.cookieSecure
             transform(SessionTransportTransformerMessageAuthentication(appConfig.server.sessionSecret.toByteArray()))
         }
 
@@ -117,7 +120,8 @@ fun Application.module(appConfig: AppConfig) {
             )
 
             val clazz = io.ktor.server.sessions.SessionsConfig::class.java
-            val listField = runCatching { clazz.getDeclaredField("_providers") }
+            val listField = runCatching { clazz.getDeclaredField("registered") }
+                .recoverCatching { clazz.getDeclaredField("_providers") }
                 .recoverCatching { clazz.getDeclaredField("providers") }
                 .getOrNull()
             if (listField != null) {
@@ -134,6 +138,9 @@ fun Application.module(appConfig: AppConfig) {
         }
     }
     install(StatusPages) {
+        exception<MobileApiException> { call, cause ->
+            call.respond(cause.status, MobileErrorResponse(success = false, error = cause.message, errorCode = cause.errorCode))
+        }
         exception<ApiException> { call, cause ->
             call.respond(cause.status, ErrorResponse(cause.message))
         }
@@ -155,6 +162,7 @@ fun Application.module(appConfig: AppConfig) {
     }
 
     configureRoutes()
+    configureMobileRoutes(appConfig)
 
     SyncScheduler.start()
     environment.monitor.subscribe(ApplicationStopped) {

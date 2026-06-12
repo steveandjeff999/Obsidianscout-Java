@@ -3,20 +3,6 @@
   "title": "ObsidianScout Pit Scouting",
   "fields": [
     {
-      "id": "eventKey",
-      "label": "Event Key",
-      "type": "text",
-      "required": true
-    },
-    {
-      "id": "targetTeamNumber",
-      "label": "Scouted Team Number",
-      "type": "number",
-      "required": true,
-      "min": 1,
-      "max": 9999
-    },
-    {
       "id": "sectionRobot",
       "label": "Robot",
       "type": "section"

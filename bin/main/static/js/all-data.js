@@ -388,7 +388,7 @@ function renderTableSection(state) {
         const formattedNum = teamObj ? Obsidianscout.formatTeam(teamObj.teamKey, teamObj.teamNumber) : row.targetTeamNumber;
         const teamLabel = name ? `${formattedNum} ${name}` : `${formattedNum}`;
 
-        const matchLabel = row.matchNumber !== null ? `Match ${row.matchNumber}` : "N/A";
+        const matchLabel = getMatchLabel(row.matchKey, row.matchNumber);
         
         // Add cells
         appendCell(tr, teamLabel);
@@ -444,7 +444,7 @@ function renderDetail(state, entry) {
 
     metaGroup.appendChild(buildDetailItem("Event", entry.eventKey || "N/A"));
     metaGroup.appendChild(buildDetailItem("Scouter Team", String(entry.ownerTeamNumber)));
-    metaGroup.appendChild(buildDetailItem("Match Number", entry.matchNumber !== null ? String(entry.matchNumber) : "N/A"));
+    metaGroup.appendChild(buildDetailItem("Match", entry.matchNumber !== null ? getMatchLabel(entry.matchKey, entry.matchNumber) : "N/A"));
     metaGroup.appendChild(buildDetailItem("Created At", formatDateTime(entry.createdAt)));
     container.appendChild(metaGroup);
 
@@ -626,4 +626,32 @@ function exportCsv(state) {
 function csvCell(value) {
     const text = value === null || value === undefined ? "" : String(value);
     return `"${text.replace(/"/g, '""')}"`;
+}
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
+function getMatchLabel(matchKey, matchNumber) {
+    if (matchNumber === null || matchNumber === undefined) {
+        return "N/A";
+    }
+    if (!matchKey) {
+        return `${t("matches.match", "Match")} ${matchNumber}`;
+    }
+    const parts = matchKey.split('_');
+    if (parts.length < 2) {
+        return `${t("matches.match", "Match")} ${matchNumber}`;
+    }
+    const suffix = parts[parts.length - 1].toLowerCase();
+    
+    if (suffix.startsWith('practice')) {
+        return `${t("matches.comp.practice", "Practice")} ${t("matches.match", "Match")} ${matchNumber}`;
+    } else if (suffix.startsWith('qm') || suffix.startsWith('qual')) {
+        return `${t("matches.comp.qm", "Qualification")} ${t("matches.match", "Match")} ${matchNumber}`;
+    } else if (suffix.startsWith('sf') || suffix.startsWith('qf') || suffix.startsWith('f') || suffix.startsWith('ef') || suffix.startsWith('playoff')) {
+        return `${t("matches.comp.playoff", "Playoff")} ${t("matches.match", "Match")} ${matchNumber}`;
+    }
+    
+    return `${t("matches.match", "Match")} ${matchNumber}`;
 }

@@ -173,6 +173,24 @@
             </div>
             <form id="edit-form" class="form-grid">
                 <input type="hidden" id="edit-user-id" />
+
+                <!-- Profile picture upload -->
+                <div class="field">
+                    <label>Profile Picture</label>
+                    <div class="profile-pic-wrapper">
+                        <div class="profile-pic-preview">
+                            <div id="edit-avatar-placeholder" class="profile-pic-initials" style="display:none" title="Click to upload"></div>
+                            <img id="edit-avatar-img" class="profile-pic-img" src="" alt="Avatar" style="display:none" title="Click to upload" />
+                            <input type="file" id="edit-avatar-input" accept="image/*" style="display:none" aria-label="Upload profile picture" />
+                        </div>
+                        <div class="profile-pic-actions">
+                            <label for="edit-avatar-input" class="profile-pic-label">📷 Upload photo</label>
+                            <button type="button" id="edit-avatar-remove" class="profile-pic-remove">Remove</button>
+                            <p class="profile-pic-hint">Max display size: 96×96 px</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="field">
                     <label for="edit-username">Username</label>
                     <input id="edit-username" type="text" autocomplete="off" />
@@ -203,7 +221,7 @@
         </div>
     </div>
 
-    <script src="/js/common.js"></script>
-    <script src="/js/users.js"></script>
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/users.js"></script>
 </body>
 </html>
