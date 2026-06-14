@@ -19,6 +19,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let adminPanel = null;
     let originalAdminPanelHTML = "";
 
+
+
     /** Resize an image File to a square JPEG data-URL (max `size` px). */
     async function resizeImageToBase64(file, size = 384) {
         return new Promise((resolve, reject) => {
@@ -207,8 +209,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             const mode = configModes[activeConfigKind];
             const [configResponse, settingsResponse] = await Promise.all([
-                Obsidianscout.request(mode.apiPath),
-                Obsidianscout.request("/api/settings")
+                Obsidianscout.request(mode.apiPath + "?local=true"),
+                Obsidianscout.request("/api/settings?local=true")
             ]);
 
             adminPanelWrapper.innerHTML = originalAdminPanelHTML;
@@ -439,7 +441,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function loadActiveConfig() {
         const mode = configModes[activeConfigKind];
         try {
-            const config = await Obsidianscout.request(mode.apiPath);
+            const config = await Obsidianscout.request(mode.apiPath + "?local=true");
             currentConfig = normalizeConfig(config, mode.defaultTitle);
             editor.value = JSON.stringify(currentConfig, null, 2);
             if (configTitleInput) {
@@ -489,6 +491,7 @@ document.addEventListener("DOMContentLoaded", async () => {
      */
     function renderVisualFields() {
         if (!visualFieldsList) return;
+        visualFieldsList.classList.remove("view-only-editor");
         visualFieldsList.innerHTML = "";
 
         const fields = currentConfig.fields || [];
@@ -1240,7 +1243,7 @@ function wireTabs() {
 
 async function loadSettings() {
     try {
-        const response = await Obsidianscout.request("/api/settings");
+        const response = await Obsidianscout.request("/api/settings?local=true");
         const settings = response.settings;
         document.getElementById("settings-year").value = settings.year;
         document.getElementById("settings-event-code").value = settings.eventCode || "";

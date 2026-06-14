@@ -45,7 +45,7 @@ object PredictorService {
             val matchNumber = matchRow[ApiMatches.matchNumber]
             val label = MatchCanonical.displayLabel(compLevel, setNumber, matchNumber)
 
-            val settings = SettingsService.getSettings(session.teamNumber)
+            val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
             val useStatboticsEpa = settings.useStatboticsEpa
             val useTbaOpr = settings.useTbaOpr
 
@@ -124,10 +124,12 @@ object PredictorService {
                 ScoutingEntries.targetTeamNumber inList teamNumbers
             }
             if (session.role != UserRole.SUPERADMIN) {
-                entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                val partnerTeams = com.obsidianscout.scouting.AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val visibleTeams = partnerTeams + session.teamNumber
+                entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
             
-            val entries = entriesQuery.map { row ->
+            val rawEntries = entriesQuery.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
                 ScoutingEntryRecord(
                     id = row[ScoutingEntries.id].value,
@@ -141,6 +143,7 @@ object PredictorService {
                     isPrescout = row[ScoutingEntries.isPrescout]
                 )
             }
+            val entries = com.obsidianscout.scouting.ScoutingService.resolveEntriesList(rawEntries, session.teamNumber, all = false)
             val groupedEntries = entries.groupBy { it.targetTeamNumber }
             val entriesByTeam = teamNumbers.associateWith { teamNumber ->
                 val teamEntries = groupedEntries[teamNumber] ?: emptyList()
@@ -178,6 +181,8 @@ object PredictorService {
                     null
                 }
 
+                val hasDiscrepancy = teamEntries.any { it.hasDiscrepancy }
+
                 return MatchTeamPrediction(
                     teamNumber = teamNumber,
                     teamKey = resolvedKey,
@@ -185,7 +190,8 @@ object PredictorService {
                     averageScoutedScore = avgScore,
                     scoutedMatchesCount = teamEntries.size,
                     epa = epa,
-                    opr = opr
+                    opr = opr,
+                    hasDiscrepancy = hasDiscrepancy
                 )
             }
 

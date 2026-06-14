@@ -57,6 +57,8 @@ object ScoutingEntries : IntIdTable("scouting_entries") {
     val submittedByUserId = reference("submitted_by_user_id", Users)
     val createdAt = timestamp("created_at")
     val isPrescout = bool("is_prescout").default(false)
+    val hasDiscrepancy = bool("has_discrepancy").default(false)
+    val conflictingTeams = varchar("conflicting_teams", 255).default("")
 }
 
 object PitScoutingEntries : IntIdTable("pit_scouting_entries") {
@@ -67,6 +69,8 @@ object PitScoutingEntries : IntIdTable("pit_scouting_entries") {
     val submittedByUserId = reference("submitted_by_user_id", Users)
     val createdAt = timestamp("created_at")
     val isPrescout = bool("is_prescout").default(false)
+    val hasDiscrepancy = bool("has_discrepancy").default(false)
+    val conflictingTeams = varchar("conflicting_teams", 255).default("")
 }
 
 object QualitativeScoutingEntries : IntIdTable("qualitative_scouting_entries") {
@@ -79,6 +83,8 @@ object QualitativeScoutingEntries : IntIdTable("qualitative_scouting_entries") {
     val submittedByUserId = reference("submitted_by_user_id", Users)
     val createdAt = timestamp("created_at")
     val isPrescout = bool("is_prescout").default(false)
+    val hasDiscrepancy = bool("has_discrepancy").default(false)
+    val conflictingTeams = varchar("conflicting_teams", 255).default("")
 }
 
 object AppSettings : IntIdTable("app_settings") {
@@ -151,17 +157,35 @@ object ScoutingAlliances : IntIdTable("scouting_alliances") {
     val notes = text("notes").nullable()
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
+    val matchConfigJson = text("match_config_json").nullable()
+    val pitConfigJson = text("pit_config_json").nullable()
+    val qualitativeConfigJson = text("qualitative_config_json").nullable()
+    val year = integer("year").nullable()
+    val eventCode = varchar("event_code", 32).nullable()
 }
 
 object AllianceMemberships : IntIdTable("alliance_memberships") {
     val allianceId = reference("alliance_id", ScoutingAlliances)
     val teamNumber = integer("team_number")
-    /** OWNER | INVITED | ACCEPTED | DECLINED */
+    /** ADMIN | INVITED | ACCEPTED | DECLINED */
     val status = varchar("status", 16)
     val invitedAt = timestamp("invited_at")
     val respondedAt = timestamp("responded_at").nullable()
+    val disabled = bool("disabled").default(false)
+    val active = bool("active").default(false)
 
     init {
         uniqueIndex("ux_alliance_memberships_alliance_team", allianceId, teamNumber)
+    }
+}
+
+object EpaOprHistoryCache : IntIdTable("epa_opr_history_cache") {
+    val eventKey = varchar("event_key", 64)
+    val oprsJson = text("oprs_json")
+    val epaHistoryJson = text("epa_history_json")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_epa_opr_history_cache_event", eventKey)
     }
 }

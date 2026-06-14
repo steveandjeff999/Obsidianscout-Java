@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obsidianscout-shell-v14';
+const CACHE_NAME = 'obsidianscout-shell-v15';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 const ASSETS = [
@@ -23,6 +23,11 @@ const ASSETS = [
     '/matches',
     '/predictor',
     '/alliances',
+    '/alliance-edit',
+    '/all-data',
+    '/cache-manager',
+    '/qual-data',
+    '/team',
     '/users',
     '/config',
     '/base.html',
@@ -45,6 +50,11 @@ const ASSETS = [
     '/js/matches.js',
     '/js/predictor.js',
     '/js/alliances.js',
+    '/js/alliance-edit.js',
+    '/js/all-data.js',
+    '/js/cache-manager.js',
+    '/js/qual-data.js',
+    '/js/team.js',
     '/js/users.js',
     '/js/settings.js',
     '/vendor/plotly-2.32.0.min.js',
@@ -115,10 +125,36 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Stale-While-Revalidate strategy for HTML/navigation pages and static assets
+    // 1. Navigation / HTML pages: Network-First with Cache Fallback
+    if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/' || !url.pathname.includes('.')) {
+        event.respondWith(
+            fetch(event.request)
+                .then((networkResponse) => {
+                    if (networkResponse.status === 200) {
+                        const responseClone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(event.request, responseClone);
+                        });
+                    }
+                    return networkResponse;
+                })
+                .catch(() => {
+                    // Fallback to cache if offline
+                    return caches.match(event.request).then((cachedResponse) => {
+                        return cachedResponse || caches.match('/');
+                    });
+                })
+        );
+        return;
+    }
+
+    // 2. Static assets (JS, CSS, images, vendor libraries): Cache-First, fallback to Network
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
-            const fetchPromise = fetch(event.request).then((networkResponse) => {
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+            return fetch(event.request).then((networkResponse) => {
                 if (networkResponse.status === 200) {
                     const responseClone = networkResponse.clone();
                     caches.open(CACHE_NAME).then((cache) => {
@@ -127,19 +163,9 @@ self.addEventListener('fetch', (event) => {
                 }
                 return networkResponse;
             }).catch(() => {
-                // Ignore fetch errors in background revalidation
+                // Return a fallback or just let it fail
+                return new Response('Offline resource not cached', { status: 503, statusText: 'Offline' });
             });
-
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-
-            // If it's a navigation request and not in cache, fallback to '/' (index.html) if offline
-            if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
-                return fetchPromise.catch(() => caches.match('/'));
-            }
-
-            return fetchPromise;
         })
     );
 });

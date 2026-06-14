@@ -38,6 +38,7 @@ import io.ktor.server.sessions.SessionTransportTransformerMessageAuthentication
 import io.ktor.server.sessions.SessionProvider
 import com.obsidianscout.auth.KeepMeLoggedInSessionTransport
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.websocket.*
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import javax.net.ssl.SSLException
@@ -89,6 +90,12 @@ fun main() {
 
 fun Application.module(appConfig: AppConfig) {
     install(DefaultHeaders)
+    install(WebSockets) {
+        pingPeriod = java.time.Duration.ofSeconds(15)
+        timeout = java.time.Duration.ofSeconds(15)
+        maxFrameSize = Long.MAX_VALUE
+        masking = false
+    }
     install(Compression)
     install(CallLogging) {
         filter { call -> call.request.path().startsWith("/api") }
@@ -165,8 +172,10 @@ fun Application.module(appConfig: AppConfig) {
     configureMobileRoutes(appConfig)
 
     SyncScheduler.start()
+    com.obsidianscout.scouting.DeduplicationScheduler.start()
     environment.monitor.subscribe(ApplicationStopped) {
         SyncScheduler.stop()
+        com.obsidianscout.scouting.DeduplicationScheduler.stop()
     }
 }
 

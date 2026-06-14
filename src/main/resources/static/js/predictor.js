@@ -316,9 +316,14 @@ function renderTeamList(listId, teams, selectedSource) {
         }
 
         const displayNum = Obsidianscout.formatTeam(t.teamKey, t.teamNumber);
+        let warnIcon = "";
+        if (t.hasDiscrepancy) {
+            warnIcon = `<span style="color: #eab308; margin-left: 6px; font-weight: bold; cursor: help;" title="Discrepancy warning: Partner teams disagree on scouting values for this team.">⚠️</span>`;
+        }
+
         row.innerHTML = `
             <div class="team-info-main">
-                <div><span class="team-number-badge">${displayNum}</span></div>
+                <div style="display: flex; align-items: center;"><span class="team-number-badge">${displayNum}</span>${warnIcon}</div>
                 <span class="team-nickname" style="margin-top: 4px;">${t.nickname || ''}</span>
             </div>
             <div style="text-align: right;">

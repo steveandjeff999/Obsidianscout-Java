@@ -141,20 +141,29 @@
     }
 
     function renderAllianceCard(alliance) {
-        const isOwner = alliance.ownerTeamNumber === currentUser?.teamNumber;
-        const canManage = isAdmin(currentUser?.role) && isOwner;
-
         const members = (alliance.members || []);
+        const myMembership = members.find(m => m.teamNumber === currentUser?.teamNumber);
+        const isAdminInAlliance = myMembership && myMembership.status === 'ADMIN';
+        const canManage = isAdmin(currentUser?.role) && isAdminInAlliance;
 
         const chips = members.map(m => {
             const cls = m.status.toLowerCase();
             const label = m.status.charAt(0) + m.status.slice(1).toLowerCase();
-            const canRemove = canManage && m.status !== 'OWNER';
-            const isSelf = m.teamNumber === currentUser?.teamNumber && m.status !== 'OWNER';
+            const canRemove = canManage && m.teamNumber !== currentUser?.teamNumber;
+            
+            // Can leave if not the last admin
+            const isSelf = m.teamNumber === currentUser?.teamNumber && 
+                (m.status !== 'ADMIN' || members.filter(x => x.status === 'ADMIN').length > 1);
+
+            const canPromote = canManage && m.status === 'ACCEPTED';
+            const promoteBtn = canPromote ? `<button class="promote-member btn-xs ghost" style="padding:1px 6px; font-size:10px; margin-left:6px; border-radius:4px;" type="button" data-alliance="${alliance.id}" data-team="${m.teamNumber}" title="Promote to Admin">Make Admin</button>` : '';
+            const disabledLabel = m.disabled ? ' <span style="color:#e05252; font-weight:normal;">(Disabled)</span>' : '';
 
             return `<span class="member-chip ${cls}" title="Team ${m.teamNumber} — ${label}">
                 Team ${m.teamNumber}
                 <span style="opacity:0.55;font-weight:400;margin-left:2px;">(${label})</span>
+                ${disabledLabel}
+                ${promoteBtn}
                 ${(canRemove || isSelf) ? `<button class="remove-member" type="button" data-alliance="${alliance.id}" data-team="${m.teamNumber}" title="Remove team" aria-label="Remove Team ${m.teamNumber}">×</button>` : ''}
             </span>`;
         }).join('');
@@ -170,21 +179,49 @@
             actions.push(`<button class="btn-xs ghost" data-action="import-data" data-id="${alliance.id}">Import Data</button>`);
             actions.push(`<button class="btn-xs danger" data-action="delete-alliance" data-id="${alliance.id}">Delete</button>`);
         } else {
-            // Non-owner can leave if they're an accepted member
-            const myMembership = members.find(m => m.teamNumber === currentUser?.teamNumber);
+            // Non-admin can leave if they're an accepted member
             if (myMembership && myMembership.status === 'ACCEPTED') {
                 actions.push(`<button class="btn-xs danger" data-action="leave-alliance" data-id="${alliance.id}" data-team="${currentUser.teamNumber}">Leave</button>`);
             }
         }
 
+        const admins = members.filter(m => m.status === 'ADMIN').map(m => m.teamNumber);
+        const adminsText = admins.length > 1 ? `Admins: Teams ${admins.join(', ')}` : `Admin: Team ${admins[0] || alliance.ownerTeamNumber}`;
+
+        const isMember = myMembership && (myMembership.status === 'ADMIN' || myMembership.status === 'ACCEPTED');
+        const isActive = myMembership && myMembership.active;
+        let activeSection = '';
+        if (isMember) {
+            activeSection = `
+                <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(0,0,0,0.06); padding-top: 10px;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--muted);">Active Alliance (use config and share data)</span>
+                    <label class="switch">
+                        <input type="checkbox" id="active-alliance-${alliance.id}" data-alliance-id="${alliance.id}" data-action="toggle-active" ${isActive ? 'checked' : ''} />
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            `;
+        }
+
+        const activeBadge = isActive
+            ? `<span style="background:#2ecc71;color:white;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">Active</span>`
+            : '';
+
+        const cardStyle = isActive
+            ? `border: 2px solid var(--accent); box-shadow: 0 0 16px rgba(99, 102, 241, 0.2), var(--shadow);`
+            : '';
+
         return `
-            <div class="alliance-card" data-alliance-id="${alliance.id}">
+            <div class="alliance-card" data-alliance-id="${alliance.id}" style="${cardStyle}">
                 <div class="alliance-card-header">
                     <div>
-                        <h3 class="alliance-card-title">${escHtml(alliance.name)}</h3>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <h3 class="alliance-card-title">${escHtml(alliance.name)}</h3>
+                            ${activeBadge}
+                        </div>
                         <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             ${eventTag}
-                            <span style="font-size:11px;color:var(--muted);">Owner: Team ${alliance.ownerTeamNumber}</span>
+                            <span style="font-size:11px;color:var(--muted);">${adminsText}</span>
                         </div>
                     </div>
                 </div>
@@ -193,7 +230,8 @@
                     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;">Members</div>
                     <div class="member-list">${chips || '<span style="font-size:13px;color:var(--muted);">No members yet</span>'}</div>
                 </div>
-                ${actions.length ? `<div class="alliance-actions">${actions.join('')}</div>` : ''}
+                ${activeSection}
+                ${actions.length ? `<div class="alliance-actions" style="margin-top:10px;">${actions.join('')}</div>` : ''}
             </div>`;
     }
 
@@ -218,7 +256,7 @@
                 <div class="invite-card-info">
                     <div class="invite-card-name">${escHtml(inv.name)}</div>
                     <div class="invite-card-meta">
-                        Owned by Team ${inv.ownerTeamNumber}
+                        Created by Team ${inv.ownerTeamNumber}
                         ${inv.eventKey ? ` · ${inv.eventKey}` : ''}
                         · ${inv.members?.length || 0} member(s)
                     </div>
@@ -241,7 +279,7 @@
 
         switch (action) {
             case 'edit-alliance':
-                openEditModal(parseInt(el.dataset.id));
+                window.location.href = `/alliance-edit?id=${el.dataset.id}`;
                 break;
             case 'invite-team':
                 openInviteModal(parseInt(el.dataset.id));
@@ -271,6 +309,41 @@
         const allianceId = parseInt(el.dataset.alliance);
         const teamNumber = parseInt(el.dataset.team);
         await handleRemoveMember(allianceId, teamNumber);
+    });
+
+    // Promote member to Admin
+    document.addEventListener('click', async (e) => {
+        const el = e.target.closest('.promote-member');
+        if (!el) return;
+        const allianceId = parseInt(el.dataset.alliance);
+        const teamNumber = parseInt(el.dataset.team);
+        if (!confirm(`Promote Team ${teamNumber} to alliance admin?`)) return;
+        try {
+            await request(`/api/alliances/${allianceId}/members/${teamNumber}/promote`, { method: 'POST' });
+            showToast(`Team ${teamNumber} promoted to admin.`, 'success');
+            await loadAlliances();
+        } catch (err) {
+            showToast('Failed to promote: ' + err.message, 'error');
+        }
+    });
+
+    // Toggle alliance active status
+    document.addEventListener('change', async (e) => {
+        const el = e.target.closest('[data-action="toggle-active"]');
+        if (!el) return;
+        const allianceId = parseInt(el.dataset.allianceId);
+        const active = el.checked;
+        try {
+            await request(`/api/alliances/${allianceId}/toggle-active`, {
+                method: 'POST',
+                json: { active }
+            });
+            showToast(active ? 'Alliance activated.' : 'Alliance deactivated.', 'success');
+            await loadAlliances();
+        } catch (err) {
+            showToast('Failed to toggle active status: ' + err.message, 'error');
+            el.checked = !active; // revert
+        }
     });
 
     // ─────────────────────────────────────────────────────────────────
@@ -349,7 +422,8 @@
         document.getElementById('btn-alliance-save').textContent = 'Create Alliance';
         document.getElementById('alliance-edit-id').value = '';
         document.getElementById('alliance-name').value = '';
-        document.getElementById('alliance-event-key').value = '';
+        document.getElementById('alliance-year').value = '';
+        document.getElementById('alliance-event-code').value = '';
         document.getElementById('alliance-notes').value = '';
         openModal('modal-alliance');
         setTimeout(() => document.getElementById('alliance-name')?.focus(), 60);
@@ -362,7 +436,8 @@
         document.getElementById('btn-alliance-save').textContent = 'Save Changes';
         document.getElementById('alliance-edit-id').value = id;
         document.getElementById('alliance-name').value = alliance.name || '';
-        document.getElementById('alliance-event-key').value = alliance.eventKey || '';
+        document.getElementById('alliance-year').value = alliance.year || '';
+        document.getElementById('alliance-event-code').value = alliance.eventCode || '';
         document.getElementById('alliance-notes').value = alliance.notes || '';
         openModal('modal-alliance');
         setTimeout(() => document.getElementById('alliance-name')?.focus(), 60);
@@ -489,7 +564,9 @@
         const saveBtn = document.getElementById('btn-alliance-save');
         const editId = document.getElementById('alliance-edit-id').value;
         const name = document.getElementById('alliance-name').value.trim();
-        const eventKey = document.getElementById('alliance-event-key').value.trim() || null;
+        const yearVal = document.getElementById('alliance-year').value.trim();
+        const year = yearVal ? parseInt(yearVal) : null;
+        const eventCode = document.getElementById('alliance-event-code').value.trim() || null;
         const notes = document.getElementById('alliance-notes').value.trim() || null;
 
         if (!name) { showToast('Alliance name is required.', 'error'); return; }
@@ -502,15 +579,20 @@
             if (editId) {
                 await request(`/api/alliances/${editId}`, {
                     method: 'PUT',
-                    json: { name, eventKey, notes }
+                    json: { name, year, eventCode, notes }
                 });
                 showToast('Alliance updated!', 'success');
             } else {
-                await request('/api/alliances', {
+                const newAlliance = await request('/api/alliances', {
                     method: 'POST',
-                    json: { name, eventKey, notes }
+                    json: { name, year, eventCode, notes }
                 });
                 showToast('Alliance created!', 'success');
+                closeModal('modal-alliance');
+                if (newAlliance && newAlliance.id) {
+                    window.location.href = `/alliance-edit?id=${newAlliance.id}`;
+                    return;
+                }
             }
             closeModal('modal-alliance');
             await loadAlliances();

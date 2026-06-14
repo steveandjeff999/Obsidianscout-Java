@@ -9,6 +9,7 @@ import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.Users
+import com.obsidianscout.config.ConfigService
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.dao.id.EntityID
@@ -32,7 +33,9 @@ data class AllianceMemberRecord(
     val teamNumber: Int,
     val status: String,
     val invitedAt: String,
-    val respondedAt: String?
+    val respondedAt: String?,
+    val disabled: Boolean = false,
+    val active: Boolean = false
 )
 
 @Serializable
@@ -44,7 +47,9 @@ data class AllianceRecord(
     val notes: String?,
     val members: List<AllianceMemberRecord>,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    val year: Int? = null,
+    val eventCode: String? = null
 )
 
 @Serializable
@@ -70,7 +75,7 @@ data class AllianceImportSourceRecord(
 // Membership status constants
 // ────────────────────────────────────────
 
-private const val STATUS_OWNER    = "OWNER"
+private const val STATUS_ADMIN    = "ADMIN"
 private const val STATUS_INVITED  = "INVITED"
 private const val STATUS_ACCEPTED = "ACCEPTED"
 private const val STATUS_DECLINED = "DECLINED"
@@ -82,25 +87,27 @@ private const val STATUS_DECLINED = "DECLINED"
 object AllianceService {
 
     /**
-     * Returns all alliances where the calling team is OWNER or ACCEPTED member,
+     * Returns all alliances where the calling team is ADMIN or ACCEPTED member,
      * along with every membership row for each alliance.
      * SUPERADMIN sees all alliances.
      */
     fun listAlliances(session: UserSession): List<AllianceRecord> = transaction {
         if (session.role == UserRole.SUPERADMIN) {
-            ScoutingAlliances.selectAll().map { row ->
-                buildRecord(row[ScoutingAlliances.id].value)
-            }.filterNotNull()
+            val ids = ScoutingAlliances
+                .slice(ScoutingAlliances.id)
+                .selectAll()
+                .map { it[ScoutingAlliances.id].value }
+            buildRecords(ids)
         } else {
-            // find all alliance IDs this team belongs to (owner or accepted)
+            // find all alliance IDs this team belongs to (admin or accepted)
             val allianceIds = AllianceMemberships
                 .select {
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
-                    (AllianceMemberships.status inList listOf(STATUS_OWNER, STATUS_ACCEPTED))
+                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED))
                 }
                 .map { it[AllianceMemberships.allianceId].value }
 
-            allianceIds.mapNotNull { buildRecord(it) }
+            buildRecords(allianceIds)
         }
     }
 
@@ -115,7 +122,7 @@ object AllianceService {
             }
             .map { it[AllianceMemberships.allianceId].value }
 
-        allianceIds.mapNotNull { buildRecord(it) }
+        buildRecords(allianceIds)
     }
 
     /**
@@ -131,14 +138,16 @@ object AllianceService {
     }
 
     /**
-     * Creates a new alliance. The calling team becomes the OWNER.
+     * Creates a new alliance. The calling team becomes the ADMIN.
      * Requires ADMIN or above.
      */
     fun createAlliance(
         session: UserSession,
         name: String,
         eventKey: String?,
-        notes: String?
+        notes: String?,
+        year: Int? = null,
+        eventCode: String? = null
     ): AllianceRecord {
         if (!session.role.isAtLeast(UserRole.ADMIN)) {
             throw ApiException(HttpStatusCode.Forbidden, "Admin access required to create an alliance")
@@ -147,20 +156,50 @@ object AllianceService {
 
         return transaction {
             val now = Instant.now()
+            
+            // Get current configurations to initialize the alliance configs
+            val creatorMatch = ConfigService.getConfigJson(session.teamNumber)
+            val creatorPit = ConfigService.getPitConfigJson(session.teamNumber)
+            val creatorQual = ConfigService.getQualitativeConfigJson(session.teamNumber)
+
+            // Deactivate all other memberships for this team first
+            AllianceMemberships.update({
+                (AllianceMemberships.teamNumber eq session.teamNumber)
+            }) {
+                it[AllianceMemberships.active] = false
+            }
+
+            var finalYear = year
+            var finalCode = eventCode?.trim()?.takeIf { it.isNotBlank() }
+            var computedKey = eventKey?.trim()?.takeIf { it.isNotBlank() }
+
+            if (finalYear != null && finalCode != null) {
+                computedKey = "${finalYear}${finalCode.lowercase()}"
+            } else if (computedKey != null && computedKey.length > 4 && computedKey.take(4).all { it.isDigit() }) {
+                finalYear = computedKey.take(4).toIntOrNull()
+                finalCode = computedKey.drop(4)
+            }
+
             val allianceId = ScoutingAlliances.insertAndGetId {
                 it[ScoutingAlliances.name] = name.trim()
                 it[ownerTeamNumber] = session.teamNumber
-                it[ScoutingAlliances.eventKey] = eventKey?.trim()?.takeIf { v -> v.isNotBlank() }
+                it[ScoutingAlliances.eventKey] = computedKey
                 it[ScoutingAlliances.notes] = notes?.trim()?.takeIf { v -> v.isNotBlank() }
+                it[ScoutingAlliances.year] = finalYear
+                it[ScoutingAlliances.eventCode] = finalCode
+                it[matchConfigJson] = creatorMatch
+                it[pitConfigJson] = creatorPit
+                it[qualitativeConfigJson] = creatorQual
                 it[createdAt] = now
                 it[updatedAt] = now
             }
             AllianceMemberships.insertAndGetId {
                 it[AllianceMemberships.allianceId] = allianceId
                 it[teamNumber] = session.teamNumber
-                it[status] = STATUS_OWNER
+                it[status] = STATUS_ADMIN
                 it[invitedAt] = now
                 it[respondedAt] = now
+                it[active] = true
             }
             buildRecord(allianceId.value)!!
         }
@@ -168,24 +207,39 @@ object AllianceService {
 
     /**
      * Updates an alliance's name, eventKey, and notes.
-     * Only the OWNER (ADMIN+) may call this.
+     * Only an alliance admin may call this.
      */
     fun updateAlliance(
         session: UserSession,
         allianceId: Int,
         name: String,
         eventKey: String?,
-        notes: String?
+        notes: String?,
+        year: Int? = null,
+        eventCode: String? = null
     ): AllianceRecord {
-        requireOwner(session, allianceId)
+        requireAdmin(session, allianceId)
         if (name.isBlank()) throw ApiException(HttpStatusCode.BadRequest, "Alliance name is required")
 
         return transaction {
             val now = Instant.now()
+            var finalYear = year
+            var finalCode = eventCode?.trim()?.takeIf { it.isNotBlank() }
+            var computedKey = eventKey?.trim()?.takeIf { it.isNotBlank() }
+
+            if (finalYear != null && finalCode != null) {
+                computedKey = "${finalYear}${finalCode.lowercase()}"
+            } else if (computedKey != null && computedKey.length > 4 && computedKey.take(4).all { it.isDigit() }) {
+                finalYear = computedKey.take(4).toIntOrNull()
+                finalCode = computedKey.drop(4)
+            }
+
             ScoutingAlliances.update({ ScoutingAlliances.id eq allianceId }) {
                 it[ScoutingAlliances.name] = name.trim()
-                it[ScoutingAlliances.eventKey] = eventKey?.trim()?.takeIf { v -> v.isNotBlank() }
+                it[ScoutingAlliances.eventKey] = computedKey
                 it[ScoutingAlliances.notes] = notes?.trim()?.takeIf { v -> v.isNotBlank() }
+                it[ScoutingAlliances.year] = finalYear
+                it[ScoutingAlliances.eventCode] = finalCode
                 it[updatedAt] = now
             }
             buildRecord(allianceId)!!
@@ -194,10 +248,10 @@ object AllianceService {
 
     /**
      * Deletes an alliance and all its membership rows.
-     * Only the OWNER (ADMIN+) may call this.
+     * Only an alliance admin may call this.
      */
     fun deleteAlliance(session: UserSession, allianceId: Int) {
-        requireOwner(session, allianceId)
+        requireAdmin(session, allianceId)
         transaction {
             AllianceMemberships.deleteWhere { AllianceMemberships.allianceId eq allianceId }
             ScoutingAlliances.deleteWhere { ScoutingAlliances.id eq allianceId }
@@ -206,10 +260,10 @@ object AllianceService {
 
     /**
      * Sends an invitation to a partner team to join the alliance.
-     * Only the OWNER (ADMIN+) may invite.
+     * Only an alliance admin may invite.
      */
     fun inviteTeam(session: UserSession, allianceId: Int, partnerTeamNumber: Int) {
-        requireOwner(session, allianceId)
+        requireAdmin(session, allianceId)
         if (partnerTeamNumber <= 0) throw ApiException(HttpStatusCode.BadRequest, "Invalid team number")
         if (partnerTeamNumber == session.teamNumber) {
             throw ApiException(HttpStatusCode.BadRequest, "You cannot invite your own team")
@@ -226,7 +280,7 @@ object AllianceService {
 
             if (existing != null) {
                 val currentStatus = existing[AllianceMemberships.status]
-                if (currentStatus == STATUS_OWNER || currentStatus == STATUS_ACCEPTED) {
+                if (currentStatus == STATUS_ADMIN || currentStatus == STATUS_ACCEPTED) {
                     throw ApiException(HttpStatusCode.Conflict, "Team $partnerTeamNumber is already a member")
                 }
                 if (currentStatus == STATUS_INVITED) {
@@ -269,19 +323,36 @@ object AllianceService {
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "No pending invite found for your team in this alliance")
 
-            AllianceMemberships.update({
-                (AllianceMemberships.allianceId eq allianceId) and
-                (AllianceMemberships.teamNumber eq session.teamNumber)
-            }) {
-                it[status] = if (accept) STATUS_ACCEPTED else STATUS_DECLINED
-                it[respondedAt] = Instant.now()
+            if (accept) {
+                val hasAnyActive = AllianceMemberships.select {
+                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                    (AllianceMemberships.active eq true)
+                }.any()
+
+                AllianceMemberships.update({
+                    (AllianceMemberships.allianceId eq allianceId) and
+                    (AllianceMemberships.teamNumber eq session.teamNumber)
+                }) {
+                    it[status] = STATUS_ACCEPTED
+                    it[respondedAt] = Instant.now()
+                    it[active] = !hasAnyActive
+                }
+            } else {
+                AllianceMemberships.update({
+                    (AllianceMemberships.allianceId eq allianceId) and
+                    (AllianceMemberships.teamNumber eq session.teamNumber)
+                }) {
+                    it[status] = STATUS_DECLINED
+                    it[respondedAt] = Instant.now()
+                }
             }
         }
     }
 
     /**
      * Removes a member from an alliance.
-     * The owner can remove any non-owner member.
+     * An admin can remove any member.
      * A member can remove themselves (leave alliance).
      */
     fun removeMember(session: UserSession, allianceId: Int, targetTeamNumber: Int) {
@@ -289,14 +360,39 @@ object AllianceService {
             val alliance = ScoutingAlliances.select { ScoutingAlliances.id eq allianceId }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Alliance not found")
 
-            val isOwner = alliance[ScoutingAlliances.ownerTeamNumber] == session.teamNumber
+            // Check if caller is admin in the alliance
+            val isCallerAdmin = AllianceMemberships
+                .select {
+                    (AllianceMemberships.allianceId eq allianceId) and
+                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.status eq STATUS_ADMIN)
+                }
+                .any()
             val isSelf = targetTeamNumber == session.teamNumber
 
-            if (!isOwner && !isSelf) {
-                throw ApiException(HttpStatusCode.Forbidden, "Only the alliance owner can remove other members")
+            if (!isCallerAdmin && !isSelf) {
+                throw ApiException(HttpStatusCode.Forbidden, "Only alliance admins can remove other members")
             }
-            if (isOwner && targetTeamNumber == session.teamNumber) {
-                throw ApiException(HttpStatusCode.BadRequest, "The owner cannot leave. Delete the alliance instead.")
+
+            // Check target status
+            val targetMembership = AllianceMemberships
+                .select {
+                    (AllianceMemberships.allianceId eq allianceId) and
+                    (AllianceMemberships.teamNumber eq targetTeamNumber)
+                }
+                .firstOrNull() ?: throw ApiException(HttpStatusCode.NotFound, "Member not found")
+
+            val isTargetAdmin = targetMembership[AllianceMemberships.status] == STATUS_ADMIN
+            if (isTargetAdmin) {
+                val adminCount = AllianceMemberships
+                    .select {
+                        (AllianceMemberships.allianceId eq allianceId) and
+                        (AllianceMemberships.status eq STATUS_ADMIN)
+                    }
+                    .count().toInt()
+                if (adminCount <= 1) {
+                    throw ApiException(HttpStatusCode.BadRequest, "The last admin cannot leave or be removed. Delete the alliance instead.")
+                }
             }
 
             AllianceMemberships.deleteWhere {
@@ -310,7 +406,7 @@ object AllianceService {
      * Imports existing scouting data from a source team already stored on this server
      * into the caller's team dataset so the data is immediately shared with accepted
      * alliance partners.
-     * Only the alliance owner may import.
+     * Only an alliance admin may import.
      */
     fun importAllianceData(
         session: UserSession,
@@ -321,7 +417,7 @@ object AllianceService {
         includePitScouting: Boolean,
         includeQualitativeScouting: Boolean
     ): AllianceImportResult {
-        requireOwner(session, allianceId)
+        requireAdmin(session, allianceId)
         if (sourceTeamNumber <= 0) {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid source team number")
         }
@@ -568,49 +664,217 @@ object AllianceService {
     }
 
     /**
-     * Returns all team numbers that are ACCEPTED alliance partners of the given team.
+     * Returns all team numbers that are ACCEPTED/ADMIN alliance partners of the given team.
      * Used by ScoutingService / PitScoutingService / QualitativeScoutingService
      * to transparently include partner data in list queries.
      */
     fun getAlliancePartnerTeams(teamNumber: Int): Set<Int> = transaction {
-        // Find all alliance IDs where this team is OWNER or ACCEPTED
+        // Find all alliance IDs where this team is ADMIN or ACCEPTED and active
         val myAllianceIds = AllianceMemberships
             .select {
                 (AllianceMemberships.teamNumber eq teamNumber) and
-                (AllianceMemberships.status inList listOf(STATUS_OWNER, STATUS_ACCEPTED))
+                (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                (AllianceMemberships.active eq true)
             }
             .map { it[AllianceMemberships.allianceId].value }
 
         if (myAllianceIds.isEmpty()) return@transaction emptySet()
 
-        // Find all other ACCEPTED/OWNER members in those alliances
+        // Find all other ACCEPTED/ADMIN members in those alliances who are also active
         AllianceMemberships
             .select {
                 (AllianceMemberships.allianceId inList myAllianceIds) and
                 (AllianceMemberships.teamNumber neq teamNumber) and
-                (AllianceMemberships.status inList listOf(STATUS_OWNER, STATUS_ACCEPTED))
+                (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                (AllianceMemberships.active eq true)
             }
             .map { it[AllianceMemberships.teamNumber] }
             .toSet()
+    }
+
+    /**
+     * Checks if a team has an active (ACCEPTED or ADMIN) alliance membership
+     * and returns the alliance ID.
+     */
+    fun getActiveAllianceId(teamNumber: Int): Int? = transaction {
+        AllianceMemberships
+            .select {
+                (AllianceMemberships.teamNumber eq teamNumber) and
+                (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                (AllianceMemberships.active eq true)
+            }
+            .firstOrNull()
+            ?.get(AllianceMemberships.allianceId)
+            ?.value
+    }
+
+    /**
+     * Checks if the team is an ADMIN in the alliance.
+     */
+    fun isAllianceAdmin(teamNumber: Int, allianceId: Int): Boolean = transaction {
+        AllianceMemberships
+            .select {
+                (AllianceMemberships.allianceId eq allianceId) and
+                (AllianceMemberships.teamNumber eq teamNumber) and
+                (AllianceMemberships.status eq STATUS_ADMIN)
+            }
+            .any()
+    }
+
+    /**
+     * Promotes an ACCEPTED member to ADMIN.
+     */
+    fun promoteMember(session: UserSession, allianceId: Int, targetTeamNumber: Int) {
+        requireAdmin(session, allianceId)
+        transaction {
+            val membership = AllianceMemberships
+                .select {
+                    (AllianceMemberships.allianceId eq allianceId) and
+                    (AllianceMemberships.teamNumber eq targetTeamNumber)
+                }
+                .firstOrNull()
+                ?: throw ApiException(HttpStatusCode.NotFound, "Member not found")
+            
+            val currentStatus = membership[AllianceMemberships.status]
+            if (currentStatus != STATUS_ACCEPTED) {
+                throw ApiException(HttpStatusCode.BadRequest, "Only accepted members can be promoted to admin")
+            }
+            
+            AllianceMemberships.update({
+                (AllianceMemberships.allianceId eq allianceId) and
+                (AllianceMemberships.teamNumber eq targetTeamNumber)
+            }) {
+                it[status] = STATUS_ADMIN
+            }
+        }
+    }
+
+    /**
+     * Gets a single alliance by ID, checking membership.
+     */
+    fun getAlliance(session: UserSession, allianceId: Int): AllianceRecord {
+        return transaction {
+            val isMember = AllianceMemberships
+                .select {
+                    (AllianceMemberships.allianceId eq allianceId) and
+                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED))
+                }
+                .any()
+            if (!isMember && session.role != UserRole.SUPERADMIN) {
+                throw ApiException(HttpStatusCode.Forbidden, "You are not a member of this alliance")
+            }
+
+            buildRecord(allianceId) ?: throw ApiException(HttpStatusCode.NotFound, "Alliance not found")
+        }
+    }
+
+    /**
+     * Toggles the active status for a team's membership in an alliance, deactivating others.
+     */
+    fun toggleActiveMembership(session: UserSession, allianceId: Int, active: Boolean) {
+        transaction {
+            val membership = AllianceMemberships
+                .select {
+                    (AllianceMemberships.allianceId eq allianceId) and
+                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED))
+                }
+                .firstOrNull()
+                ?: throw ApiException(HttpStatusCode.NotFound, "No accepted membership found for your team in this alliance")
+
+            if (active) {
+                // Deactivate all other memberships for this team first
+                AllianceMemberships.update({
+                    (AllianceMemberships.teamNumber eq session.teamNumber)
+                }) {
+                    it[AllianceMemberships.active] = false
+                }
+            }
+
+            AllianceMemberships.update({
+                (AllianceMemberships.allianceId eq allianceId) and
+                (AllianceMemberships.teamNumber eq session.teamNumber)
+            }) {
+                it[AllianceMemberships.active] = active
+            }
+        }
     }
 
     // ────────────────────────────────────
     // Internal helpers
     // ────────────────────────────────────
 
-    private fun requireOwner(session: UserSession, allianceId: Int) {
+    private fun requireAdmin(session: UserSession, allianceId: Int) {
         if (!session.role.isAtLeast(UserRole.ADMIN)) {
             throw ApiException(HttpStatusCode.Forbidden, "Admin access required")
         }
         if (session.role == UserRole.SUPERADMIN) return
         transaction {
-            val alliance = ScoutingAlliances
-                .select { ScoutingAlliances.id eq allianceId }
-                .firstOrNull()
-                ?: throw ApiException(HttpStatusCode.NotFound, "Alliance not found")
-            if (alliance[ScoutingAlliances.ownerTeamNumber] != session.teamNumber) {
-                throw ApiException(HttpStatusCode.Forbidden, "Only the alliance owner can perform this action")
+            val isAdmin = AllianceMemberships
+                .select {
+                    (AllianceMemberships.allianceId eq allianceId) and
+                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.status eq STATUS_ADMIN)
+                }
+                .any()
+            if (!isAdmin) {
+                throw ApiException(HttpStatusCode.Forbidden, "Only alliance admins can perform this action")
             }
+        }
+    }
+
+    /**
+     * Builds a list of AllianceRecord including all membership rows in exactly 2 queries.
+     * Slices out the large config JSON columns to avoid performance slowdown.
+     * Must be called inside a transaction.
+     */
+    private fun buildRecords(allianceIds: List<Int>): List<AllianceRecord> {
+        if (allianceIds.isEmpty()) return emptyList()
+
+        val alliancesMap = ScoutingAlliances
+            .slice(
+                ScoutingAlliances.id,
+                ScoutingAlliances.name,
+                ScoutingAlliances.ownerTeamNumber,
+                ScoutingAlliances.eventKey,
+                ScoutingAlliances.notes,
+                ScoutingAlliances.createdAt,
+                ScoutingAlliances.updatedAt,
+                ScoutingAlliances.year,
+                ScoutingAlliances.eventCode
+            )
+            .select { ScoutingAlliances.id inList allianceIds }
+            .associateBy { it[ScoutingAlliances.id].value }
+
+        val membershipsMap = AllianceMemberships
+            .select { AllianceMemberships.allianceId inList allianceIds }
+            .groupBy { it[AllianceMemberships.allianceId].value }
+
+        return allianceIds.mapNotNull { id ->
+            val alliance = alliancesMap[id] ?: return@mapNotNull null
+            val members = (membershipsMap[id] ?: emptyList()).map { m ->
+                AllianceMemberRecord(
+                    teamNumber = m[AllianceMemberships.teamNumber],
+                    status = m[AllianceMemberships.status],
+                    invitedAt = m[AllianceMemberships.invitedAt].toString(),
+                    respondedAt = m[AllianceMemberships.respondedAt]?.toString(),
+                    disabled = m[AllianceMemberships.disabled],
+                    active = m[AllianceMemberships.active]
+                )
+            }
+            AllianceRecord(
+                id = id,
+                name = alliance[ScoutingAlliances.name],
+                ownerTeamNumber = alliance[ScoutingAlliances.ownerTeamNumber],
+                eventKey = alliance[ScoutingAlliances.eventKey],
+                notes = alliance[ScoutingAlliances.notes],
+                members = members,
+                createdAt = alliance[ScoutingAlliances.createdAt].toString(),
+                updatedAt = alliance[ScoutingAlliances.updatedAt].toString(),
+                year = alliance[ScoutingAlliances.year],
+                eventCode = alliance[ScoutingAlliances.eventCode]
+            )
         }
     }
 
@@ -619,30 +883,74 @@ object AllianceService {
      * Must be called inside a transaction.
      */
     private fun buildRecord(allianceId: Int): AllianceRecord? {
-        val alliance = ScoutingAlliances
-            .select { ScoutingAlliances.id eq allianceId }
-            .firstOrNull() ?: return null
+        return buildRecords(listOf(allianceId)).firstOrNull()
+    }
 
-        val members = AllianceMemberships
-            .select { AllianceMemberships.allianceId eq allianceId }
-            .map { m ->
-                AllianceMemberRecord(
-                    teamNumber = m[AllianceMemberships.teamNumber],
-                    status = m[AllianceMemberships.status],
-                    invitedAt = m[AllianceMemberships.invitedAt].toString(),
-                    respondedAt = m[AllianceMemberships.respondedAt]?.toString()
-                )
+    fun getEffectiveSettings(teamNumber: Int): com.obsidianscout.integrations.ApiSettings = transaction {
+        val localSettings = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber)
+        val activeAllianceId = getActiveAllianceId(teamNumber) ?: return@transaction localSettings
+
+        val allianceRow = ScoutingAlliances
+            .slice(ScoutingAlliances.year, ScoutingAlliances.eventCode, ScoutingAlliances.eventKey)
+            .select { ScoutingAlliances.id eq activeAllianceId }
+            .firstOrNull() ?: return@transaction localSettings
+
+        val allianceYear = allianceRow[ScoutingAlliances.year]
+        val allianceEventCode = allianceRow[ScoutingAlliances.eventCode]
+        val allianceEventKey = allianceRow[ScoutingAlliances.eventKey]
+
+        val (effYear, effCode, effKey) = when {
+            allianceYear != null && !allianceEventCode.isNullOrBlank() -> {
+                Triple(allianceYear, allianceEventCode, "${allianceYear}${allianceEventCode.trim().lowercase()}")
             }
+            !allianceEventKey.isNullOrBlank() -> {
+                val parsedYear = allianceEventKey.take(4).toIntOrNull() ?: localSettings.year
+                val parsedCode = if (allianceEventKey.length > 4) allianceEventKey.drop(4) else ""
+                Triple(parsedYear, parsedCode, allianceEventKey.trim().lowercase())
+            }
+            else -> {
+                Triple(localSettings.year, localSettings.eventCode, localSettings.eventKey)
+            }
+        }
 
-        return AllianceRecord(
-            id = allianceId,
-            name = alliance[ScoutingAlliances.name],
-            ownerTeamNumber = alliance[ScoutingAlliances.ownerTeamNumber],
-            eventKey = alliance[ScoutingAlliances.eventKey],
-            notes = alliance[ScoutingAlliances.notes],
-            members = members,
-            createdAt = alliance[ScoutingAlliances.createdAt].toString(),
-            updatedAt = alliance[ScoutingAlliances.updatedAt].toString()
+        // Active member team numbers (including ourselves)
+        val memberTeamNumbers = AllianceMemberships
+            .select {
+                (AllianceMemberships.allianceId eq activeAllianceId) and
+                (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                (AllianceMemberships.active eq true)
+            }
+            .map { it[AllianceMemberships.teamNumber] }
+
+        var tbaKey = localSettings.apiKeys.tbaKey
+        var firstUsername = localSettings.apiKeys.firstUsername
+        var firstKey = localSettings.apiKeys.firstKey
+
+        if (tbaKey.isBlank() || firstUsername.isBlank() || firstKey.isBlank()) {
+            for (memberTeam in memberTeamNumbers) {
+                if (memberTeam == teamNumber) continue
+                val memberSettings = com.obsidianscout.integrations.SettingsService.getSettings(memberTeam)
+                if (tbaKey.isBlank() && memberSettings.apiKeys.tbaKey.isNotBlank()) {
+                    tbaKey = memberSettings.apiKeys.tbaKey
+                }
+                if ((firstUsername.isBlank() || firstKey.isBlank()) &&
+                    memberSettings.apiKeys.firstUsername.isNotBlank() &&
+                    memberSettings.apiKeys.firstKey.isNotBlank()) {
+                    firstUsername = memberSettings.apiKeys.firstUsername
+                    firstKey = memberSettings.apiKeys.firstKey
+                }
+            }
+        }
+
+        localSettings.copy(
+            year = effYear,
+            eventCode = effCode,
+            eventKey = effKey,
+            apiKeys = localSettings.apiKeys.copy(
+                tbaKey = tbaKey,
+                firstUsername = firstUsername,
+                firstKey = firstKey
+            )
         )
     }
 

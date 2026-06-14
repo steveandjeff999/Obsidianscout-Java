@@ -99,6 +99,14 @@ object SyncScheduler {
         activeScope.launch {
             try {
                 val counts = IntegrationService.syncEventData(settings)
+                val eventKey = settings.resolvedEventKey()
+                if (eventKey.isNotBlank()) {
+                    try {
+                        IntegrationService.syncEpaOprHistory(settings, eventKey)
+                    } catch (e: Exception) {
+                        log.warn("EPA/OPR history sync failed: ${e.message}")
+                    }
+                }
                 lastSyncAt = Instant.now()
                 lastSyncSummary = "Manual sync: ${counts.teams} teams, ${counts.matches} matches"
                 lastSyncTeams = counts.teams
@@ -124,6 +132,14 @@ object SyncScheduler {
         activeScope.launch {
             try {
                 val count = IntegrationService.syncStats(settings)
+                val eventKey = settings.resolvedEventKey()
+                if (eventKey.isNotBlank()) {
+                    try {
+                        IntegrationService.syncEpaOprHistory(settings, eventKey)
+                    } catch (e: Exception) {
+                        log.warn("EPA/OPR history sync failed: ${e.message}")
+                    }
+                }
                 lastSyncAt = Instant.now()
                 lastSyncSummary = "Manual stats sync complete: $count team stat record(s)"
                 lastSyncError = null
@@ -171,10 +187,18 @@ object SyncScheduler {
 
         teams.forEach { teamNumber ->
             try {
-                val settings = SettingsService.getSettings(teamNumber)
+                val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber)
                 val counts = IntegrationService.syncEventData(settings)
                 totalTeams += counts.teams
                 totalMatches += counts.matches
+                val eventKey = settings.resolvedEventKey()
+                if (eventKey.isNotBlank()) {
+                    try {
+                        IntegrationService.syncEpaOprHistory(settings, eventKey)
+                    } catch (e: Exception) {
+                        log.warn("Auto-sync EPA/OPR history sync failed for team $teamNumber: ${e.message}")
+                    }
+                }
             } catch (error: Exception) {
                 failures++
                 log.warn("Auto-sync failed for team $teamNumber: ${error.message}")
@@ -221,5 +245,80 @@ object SyncScheduler {
         lastSyncTeamCount = null
         lastSyncFailedTeams = 1
         log.warn("$label: ${error.message}")
+    }
+
+    fun enqueueCustomEventDataSync(settings: ApiSettings, eventKey: String): Boolean {
+        val activeScope = scope ?: return false
+        if (!beginSync("Manual custom event sync: $eventKey")) {
+            return false
+        }
+        activeScope.launch {
+            try {
+                val counts = IntegrationService.syncCustomEventData(settings, eventKey)
+                try {
+                    IntegrationService.syncEpaOprHistory(settings, eventKey)
+                } catch (e: Exception) {
+                    log.warn("Custom event EPA/OPR history sync failed: ${e.message}")
+                }
+                lastSyncAt = Instant.now()
+                lastSyncSummary = "Custom event sync complete: $eventKey - ${counts.teams} teams, ${counts.matches} matches"
+                lastSyncTeams = counts.teams
+                lastSyncMatches = counts.matches
+                lastSyncTeamCount = 1
+                lastSyncFailedTeams = null
+                lastSyncError = null
+                log.info(lastSyncSummary)
+            } catch (error: Exception) {
+                recordFailure("Custom event sync failed for $eventKey", error)
+            } finally {
+                finishSync()
+            }
+        }
+        return true
+    }
+
+    fun enqueueFullSync(settings: ApiSettings): Boolean {
+        val activeScope = scope ?: return false
+        if (!beginSync("Manual full sync")) {
+            return false
+        }
+        activeScope.launch {
+            try {
+                val eventsCount = IntegrationService.syncEvents(settings)
+                val counts = IntegrationService.syncEventData(settings)
+                val eventKey = settings.resolvedEventKey()
+                if (eventKey.isNotBlank()) {
+                    try {
+                        IntegrationService.syncEpaOprHistory(settings, eventKey)
+                    } catch (e: Exception) {
+                        log.warn("Full sync EPA/OPR history sync failed: ${e.message}")
+                    }
+                }
+                lastSyncAt = Instant.now()
+                lastSyncSummary = "Manual full sync complete: $eventsCount events, ${counts.teams} teams, ${counts.matches} matches"
+                lastSyncTeams = counts.teams
+                lastSyncMatches = counts.matches
+                lastSyncTeamCount = 1
+                lastSyncFailedTeams = null
+                lastSyncError = null
+                log.info(lastSyncSummary)
+            } catch (error: Exception) {
+                recordFailure("Manual full sync failed", error)
+            } finally {
+                finishSync()
+            }
+        }
+        return true
+    }
+
+    fun triggerBackgroundHistorySync(settings: ApiSettings, eventKey: String) {
+        val activeScope = scope ?: return
+        activeScope.launch {
+            try {
+                IntegrationService.syncEpaOprHistory(settings, eventKey)
+            } catch (e: Exception) {
+                log.warn("Background OPR/EPA history sync failed for $eventKey: ${e.message}")
+            }
+        }
     }
 }

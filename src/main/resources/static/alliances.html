@@ -116,12 +116,12 @@
             border: 1px solid rgba(0,0,0,0.07);
         }
 
-        .member-chip.owner { background: #fff3cd; color: #7a4f00; border-color: #f6cc6a; }
+        .member-chip.owner, .member-chip.admin { background: #fff3cd; color: #7a4f00; border-color: #f6cc6a; }
         .member-chip.accepted { background: #d4edda; color: #155724; border-color: #8bc69a; }
         .member-chip.invited { background: #cce5ff; color: #004085; border-color: #7ab6f0; }
         .member-chip.declined { background: #f8d7da; color: #721c24; border-color: #f0a8ad; }
 
-        body.theme-dark .member-chip.owner { background: rgba(246,204,106,0.15); color: #f6cc6a; border-color: rgba(246,204,106,0.3); }
+        body.theme-dark .member-chip.owner, body.theme-dark .member-chip.admin { background: rgba(246,204,106,0.15); color: #f6cc6a; border-color: rgba(246,204,106,0.3); }
         body.theme-dark .member-chip.accepted { background: rgba(46,204,113,0.15); color: #2ecc71; border-color: rgba(46,204,113,0.3); }
         body.theme-dark .member-chip.invited { background: rgba(52,152,219,0.15); color: #5dade2; border-color: rgba(52,152,219,0.3); }
         body.theme-dark .member-chip.declined { background: rgba(231,76,60,0.15); color: #e74c3c; border-color: rgba(231,76,60,0.3); }
@@ -386,8 +386,12 @@
                     <input type="text" id="alliance-name" placeholder="e.g. Thunder Alliance" required maxlength="128" />
                 </div>
                 <div class="field">
-                    <label for="alliance-event-key">Event Key (optional)</label>
-                    <input type="text" id="alliance-event-key" placeholder="e.g. 2025mil" maxlength="64" />
+                    <label for="alliance-year">Event Year (optional)</label>
+                    <input type="number" id="alliance-year" placeholder="e.g. 2026" />
+                </div>
+                <div class="field">
+                    <label for="alliance-event-code">Event Code (optional)</label>
+                    <input type="text" id="alliance-event-code" placeholder="e.g. okok" />
                 </div>
                 <div class="field">
                     <label for="alliance-notes">Notes (optional)</label>

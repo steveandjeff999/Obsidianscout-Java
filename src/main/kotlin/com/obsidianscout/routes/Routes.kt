@@ -47,6 +47,15 @@ import io.ktor.server.sessions.clear
 import io.ktor.server.sessions.sessions
 import io.ktor.server.sessions.set
 import io.ktor.server.sessions.get
+import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.CloseReason
+import io.ktor.websocket.close
+import com.obsidianscout.scouting.AllianceCollaborationManager
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.and
+import com.obsidianscout.db.AllianceMemberships
+import com.obsidianscout.db.ScoutingAlliances
 
 fun Application.configureRoutes() {
     routing {
@@ -158,8 +167,9 @@ fun Application.configureRoutes() {
             route("/config") {
                 get {
                     val session = call.requireSession()
+                    val local = call.request.queryParameters["local"]?.toBoolean() ?: false
                     // Return JSON where any string `label` values are wrapped into { "en": "..." }
-                    val raw = ConfigService.getConfigJson(session.teamNumber)
+                    val raw = ConfigService.getConfigJson(session.teamNumber, local)
                     val elem = JsonSupport.json.parseToJsonElement(raw)
                     val obj = elem as? JsonObject
                     if (obj != null) {
@@ -209,7 +219,8 @@ fun Application.configureRoutes() {
             route("/pit-config") {
                 get {
                     val session = call.requireSession()
-                    val raw = ConfigService.getPitConfigJson(session.teamNumber)
+                    val local = call.request.queryParameters["local"]?.toBoolean() ?: false
+                    val raw = ConfigService.getPitConfigJson(session.teamNumber, local)
                     val elem = JsonSupport.json.parseToJsonElement(raw)
                     val obj = elem as? JsonObject
                     if (obj != null) {
@@ -258,7 +269,8 @@ fun Application.configureRoutes() {
             route("/qual-config") {
                 get {
                     val session = call.requireSession()
-                    val raw = ConfigService.getQualitativeConfigJson(session.teamNumber)
+                    val local = call.request.queryParameters["local"]?.toBoolean() ?: false
+                    val raw = ConfigService.getQualitativeConfigJson(session.teamNumber, local)
                     val elem = JsonSupport.json.parseToJsonElement(raw)
                     val obj = elem as? JsonObject
                     if (obj != null) {
@@ -307,7 +319,12 @@ fun Application.configureRoutes() {
             route("/settings") {
                 get {
                     val session = call.requireSession()
-                    val settings = SettingsService.getSettings(session.teamNumber)
+                    val local = call.request.queryParameters["local"]?.toBoolean() ?: false
+                    val settings = if (local) {
+                        SettingsService.getSettings(session.teamNumber)
+                    } else {
+                        AllianceService.getEffectiveSettings(session.teamNumber)
+                    }
                     call.respond(SettingsResponse(settings.toPayload()))
                 }
                 put {
@@ -322,7 +339,8 @@ fun Application.configureRoutes() {
                 get {
                     val session = call.requireSession()
                     val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: false
-                    call.respond(ScoutingService.listEntries(session, includePrescout))
+                    val all = call.request.queryParameters["all"]?.toBoolean() ?: false
+                    call.respond(ScoutingService.listEntries(session, includePrescout, all))
                 }
                 post {
                     val session = call.requireSession()
@@ -331,13 +349,30 @@ fun Application.configureRoutes() {
                     val entry = ScoutingService.createEntry(session, request, config)
                     call.respond(entry)
                 }
+                put("/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
+                    val request = call.receive<ScoutingEntryRequest>()
+                    val config = ConfigService.getConfig(session.teamNumber)
+                    val entry = ScoutingService.updateEntry(session, id, request, config)
+                    call.respond(entry)
+                }
+                delete("/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
+                    ScoutingService.deleteEntry(session, id)
+                    call.respond(HttpStatusCode.NoContent)
+                }
             }
 
             route("/pit-scouting") {
                 get {
                     val session = call.requireSession()
                     val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: false
-                    call.respond(PitScoutingService.listEntries(session, includePrescout))
+                    val all = call.request.queryParameters["all"]?.toBoolean() ?: false
+                    call.respond(PitScoutingService.listEntries(session, includePrescout, all))
                 }
                 post {
                     val session = call.requireSession()
@@ -346,13 +381,30 @@ fun Application.configureRoutes() {
                     val entry = PitScoutingService.createEntry(session, request, config)
                     call.respond(entry)
                 }
+                put("/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
+                    val request = call.receive<ScoutingEntryRequest>()
+                    val config = ConfigService.getPitConfig(session.teamNumber)
+                    val entry = PitScoutingService.updateEntry(session, id, request, config)
+                    call.respond(entry)
+                }
+                delete("/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
+                    PitScoutingService.deleteEntry(session, id)
+                    call.respond(HttpStatusCode.NoContent)
+                }
             }
 
             route("/qual-scouting") {
                 get {
                     val session = call.requireSession()
                     val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: false
-                    call.respond(QualitativeScoutingService.listEntries(session, includePrescout))
+                    val all = call.request.queryParameters["all"]?.toBoolean() ?: false
+                    call.respond(QualitativeScoutingService.listEntries(session, includePrescout, all))
                 }
                 post {
                     val session = call.requireSession()
@@ -361,13 +413,30 @@ fun Application.configureRoutes() {
                     val entry = QualitativeScoutingService.createEntry(session, request, config)
                     call.respond(entry)
                 }
+                put("/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
+                    val request = call.receive<ScoutingEntryRequest>()
+                    val config = ConfigService.getQualitativeConfig(session.teamNumber)
+                    val entry = QualitativeScoutingService.updateEntry(session, id, request, config)
+                    call.respond(entry)
+                }
+                delete("/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
+                    QualitativeScoutingService.deleteEntry(session, id)
+                    call.respond(HttpStatusCode.NoContent)
+                }
             }
 
             route("/prescout") {
                 route("/scouting") {
                     get {
                         val session = call.requireSession()
-                        call.respond(ScoutingService.listPrescoutEntries(session))
+                        val all = call.request.queryParameters["all"]?.toBoolean() ?: false
+                        call.respond(ScoutingService.listPrescoutEntries(session, all))
                     }
                     post {
                         val session = call.requireSession()
@@ -380,7 +449,8 @@ fun Application.configureRoutes() {
                 route("/pit-scouting") {
                     get {
                         val session = call.requireSession()
-                        call.respond(PitScoutingService.listPrescoutEntries(session))
+                        val all = call.request.queryParameters["all"]?.toBoolean() ?: false
+                        call.respond(PitScoutingService.listPrescoutEntries(session, all))
                     }
                     post {
                         val session = call.requireSession()
@@ -393,7 +463,8 @@ fun Application.configureRoutes() {
                 route("/qual-scouting") {
                     get {
                         val session = call.requireSession()
-                        call.respond(QualitativeScoutingService.listPrescoutEntries(session))
+                        val all = call.request.queryParameters["all"]?.toBoolean() ?: false
+                        call.respond(QualitativeScoutingService.listPrescoutEntries(session, all))
                     }
                     post {
                         val session = call.requireSession()
@@ -407,9 +478,14 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
-                    val settings = SettingsService.getSettings(session.teamNumber)
-                    val counts = IntegrationService.syncCustomEventData(settings, eventKey)
-                    call.respond(counts)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
+                    val (cachedTeams, cachedMatches) = transaction {
+                        val teamCount = com.obsidianscout.db.ApiTeams.select { com.obsidianscout.db.ApiTeams.eventKey eq eventKey }.count().toInt()
+                        val matchCount = com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.eventKey eq eventKey }.count().toInt()
+                        Pair(teamCount, matchCount)
+                    }
+                    com.obsidianscout.integrations.SyncScheduler.enqueueCustomEventDataSync(settings, eventKey)
+                    call.respond(com.obsidianscout.integrations.SyncCounts(cachedTeams, cachedMatches))
                 }
             }
 
@@ -422,7 +498,7 @@ fun Application.configureRoutes() {
                     val regularEntries = ScoutingService.listEntries(session, includePrescout = false)
                     val prescoutEntries = ScoutingService.listEntries(session, includePrescout = true).filter { it.isPrescout }
                     
-                    val settings = SettingsService.getSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
                     val currentEventKey = settings.resolvedEventKey()
                     
                     val mergedEntries = AnalyticsService.mergePrescoutEntries(
@@ -445,7 +521,7 @@ fun Application.configureRoutes() {
                         value == "1" || value.equals("true", ignoreCase = true)
                     } ?: false
 
-                    val settings = SettingsService.getSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
                     val activeKey = settings.resolvedEventKey()
 
                     val events = IntegrationService.listEvents(year, cachedOnly, activeKey, settings)
@@ -470,7 +546,7 @@ fun Application.configureRoutes() {
                 get {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
-                        ?: SettingsService.getSettings(session.teamNumber).resolvedEventKey()
+                        ?: AllianceService.getEffectiveSettings(session.teamNumber).resolvedEventKey()
                     call.respond(IntegrationService.listTeams(eventKey, session))
                 }
                 post {
@@ -494,7 +570,7 @@ fun Application.configureRoutes() {
                 get {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
-                        ?: SettingsService.getSettings(session.teamNumber).resolvedEventKey()
+                        ?: AllianceService.getEffectiveSettings(session.teamNumber).resolvedEventKey()
                     call.respond(IntegrationService.listMatches(eventKey))
                 }
                 get("/predict") {
@@ -547,7 +623,7 @@ fun Application.configureRoutes() {
                 }
                 post("/sync/events") {
                     val session = call.requireAdmin()
-                    val settings = SettingsService.getSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
                     val queued = SyncScheduler.enqueueEventSync(settings)
                     val status = if (queued) HttpStatusCode.Accepted else HttpStatusCode.Conflict
                     val message = if (queued) "Event sync started" else "Another sync is already running"
@@ -555,7 +631,7 @@ fun Application.configureRoutes() {
                 }
                 post("/sync/event") {
                     val session = call.requireAdmin()
-                    val settings = SettingsService.getSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
                     val queued = SyncScheduler.enqueueEventDataSync(settings)
                     val status = if (queued) HttpStatusCode.Accepted else HttpStatusCode.Conflict
                     val message = if (queued) "Teams and matches sync started" else "Another sync is already running"
@@ -563,7 +639,7 @@ fun Application.configureRoutes() {
                 }
                 post("/sync/stats") {
                     val session = call.requireAdmin()
-                    val settings = SettingsService.getSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
                     val queued = SyncScheduler.enqueueStatsSync(settings)
                     val status = if (queued) HttpStatusCode.Accepted else HttpStatusCode.Conflict
                     val message = if (queued) "Stats sync started" else "Another sync is already running"
@@ -655,7 +731,7 @@ fun Application.configureRoutes() {
                 post {
                     val session = call.requireAdmin()
                     val req = call.receive<CreateAllianceRequest>()
-                    call.respond(AllianceService.createAlliance(session, req.name, req.eventKey, req.notes))
+                    call.respond(AllianceService.createAlliance(session, req.name, req.eventKey, req.notes, req.year, req.eventCode))
                 }
                 get("/invites") {
                     val session = call.requireSession()
@@ -674,7 +750,7 @@ fun Application.configureRoutes() {
                     val id = call.parameters["id"]?.toIntOrNull()
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val req = call.receive<UpdateAllianceRequest>()
-                    call.respond(AllianceService.updateAlliance(session, id, req.name, req.eventKey, req.notes))
+                    call.respond(AllianceService.updateAlliance(session, id, req.name, req.eventKey, req.notes, req.year, req.eventCode))
                 }
                 delete("/{id}") {
                     val session = call.requireAdmin()
@@ -733,6 +809,87 @@ fun Application.configureRoutes() {
                     AllianceService.removeMember(session, id, targetTeam)
                     call.respond(HttpStatusCode.NoContent)
                 }
+                get("/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    call.respond(AllianceService.getAlliance(session, id))
+                }
+                get("/{id}/config/{kind}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    val kind = call.parameters["kind"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid kind")
+                    
+                    // Verify membership (throws if not member)
+                    AllianceService.getAlliance(session, id)
+                    
+                    val configJson = transaction {
+                        val row = ScoutingAlliances.select { ScoutingAlliances.id eq id }.firstOrNull()
+                        if (row != null) {
+                            when (kind) {
+                                "game", "match" -> row[ScoutingAlliances.matchConfigJson]
+                                "pit" -> row[ScoutingAlliances.pitConfigJson]
+                                "qual" -> row[ScoutingAlliances.qualitativeConfigJson]
+                                else -> null
+                            }
+                        } else null
+                    } ?: "{}"
+                    call.respondText(configJson, ContentType.Application.Json)
+                }
+                post("/{id}/toggle-active") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    val req = call.receive<ToggleAllianceActiveRequest>()
+                    AllianceService.toggleActiveMembership(session, id, req.active)
+                    call.respond(HttpStatusCode.NoContent)
+                }
+                post("/{id}/toggle-disable") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    val req = call.receive<ToggleAllianceDisableRequest>()
+                    AllianceService.toggleActiveMembership(session, id, !req.disabled)
+                    call.respond(HttpStatusCode.NoContent)
+                }
+                post("/{id}/members/{teamNumber}/promote") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
+                    val targetTeam = call.parameters["teamNumber"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid team number")
+                    AllianceService.promoteMember(session, id, targetTeam)
+                    call.respond(HttpStatusCode.NoContent)
+                }
+                webSocket("/{id}/collaborate/{kind}") {
+                    val session = call.sessions.get<UserSession>() ?: return@webSocket close(
+                        CloseReason(CloseReason.Codes.VIOLATED_POLICY, "No session")
+                    )
+                    val id = call.parameters["id"]?.toIntOrNull() ?: return@webSocket close(
+                        CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid alliance ID")
+                    )
+                    val kind = call.parameters["kind"] ?: return@webSocket close(
+                        CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid config kind")
+                    )
+                    
+                    // Verify user is a member of this alliance
+                    val isMember = transaction {
+                        AllianceMemberships
+                            .select {
+                                (AllianceMemberships.allianceId eq id) and
+                                (AllianceMemberships.teamNumber eq session.teamNumber) and
+                                (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED"))
+                            }
+                            .any()
+                    }
+                    if (!isMember) {
+                        return@webSocket close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Not a member"))
+                    }
+                    
+                    AllianceCollaborationManager.handleConnection(this, id, kind, session)
+                }
             }
         }
 
@@ -757,6 +914,7 @@ fun Application.configureRoutes() {
             "matches" to "matches.html",
             "predictor" to "predictor.html",
             "alliances" to "alliances.html",
+            "alliance-edit" to "alliance-edit.html",
             "users" to "users.html",
             "config" to "config.html",
             "qr-scanner" to "qr-scanner.html",
@@ -769,7 +927,9 @@ fun Application.configureRoutes() {
             }
             get("/$fileName") {
                 val target = if (path == "index") "/" else "/$path"
-                call.respondRedirect(target, permanent = true)
+                val query = call.request.queryParameters
+                val queryStr = if (query.isEmpty()) "" else "?" + query.entries().flatMap { (k, v) -> v.map { "$k=$it" } }.joinToString("&")
+                call.respondRedirect(target + queryStr, permanent = true)
             }
         }
 

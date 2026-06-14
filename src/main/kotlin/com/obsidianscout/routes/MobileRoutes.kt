@@ -931,7 +931,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
     fun getGameConfigWithSettings(teamNumber: Int): ScoutingConfig {
         val config = ConfigService.getConfig(teamNumber)
-        val settings = SettingsService.getSettings(teamNumber)
+        val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber)
         return config.copy(
             tbaKey = settings.apiKeys.tbaKey,
             firstUsername = settings.apiKeys.firstUsername,
@@ -942,7 +942,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
     fun getPitConfigWithSettings(teamNumber: Int): ScoutingConfig {
         val config = ConfigService.getPitConfig(teamNumber)
-        val settings = SettingsService.getSettings(teamNumber)
+        val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber)
         return config.copy(
             tbaKey = settings.apiKeys.tbaKey,
             firstUsername = settings.apiKeys.firstUsername,
@@ -953,7 +953,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
     fun getQualitativeConfigWithSettings(teamNumber: Int): ScoutingConfig {
         val config = ConfigService.getQualitativeConfig(teamNumber)
-        val settings = SettingsService.getSettings(teamNumber)
+        val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber)
         return config.copy(
             tbaKey = settings.apiKeys.tbaKey,
             firstUsername = settings.apiKeys.firstUsername,
@@ -1154,7 +1154,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             // Events
             get("/events") {
                 val session = call.requireMobileSession(secret)
-                val settings = SettingsService.getSettings(session.teamNumber)
+                val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
                 val events = IntegrationService.listEvents(year = null, cachedOnly = true, activeKey = settings.resolvedEventKey(), activeSettings = settings)
                 
                 val mapped = transaction {
@@ -1671,7 +1671,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             get("/config/game/data-mode") {
                 val session = call.requireMobileSession(secret)
-                val settings = SettingsService.getSettings(session.teamNumber)
+                val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
                 val epaSource = if (settings.useStatboticsEpa) "scouted_with_statbotics" else if (settings.useTbaOpr) "scouted_with_tba_opr" else "scouted_only"
                 val dataMode = if (settings.useStatboticsEpa) "Scouted Data + Statbotics EPA Gap-Fill" else if (settings.useTbaOpr) "Scouted Data + TBA OPR Gap-Fill" else "Scouted Data Only"
                 call.respond(MobileDataModeResponse(epaSource = epaSource, dataMode = dataMode))
@@ -1682,7 +1682,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val session = call.requireMobileSession(secret)
                 val body = try { call.receive<MobileCurrentDataModeRequest>() } catch (_: Exception) { MobileCurrentDataModeRequest() }
                 
-                val settings = SettingsService.getSettings(session.teamNumber)
+                val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
                 val epaSource = if (settings.useStatboticsEpa) "scouted_with_statbotics" else if (settings.useTbaOpr) "scouted_with_tba_opr" else "scouted_only"
                 val dataMode = if (settings.useStatboticsEpa) "Scouted Data + Statbotics EPA Gap-Fill" else if (settings.useTbaOpr) "Scouted Data + TBA OPR Gap-Fill" else "Scouted Data Only"
 
@@ -1800,9 +1800,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val eventCode = eventRow[ApiEvents.eventCode] ?: eventKey.removePrefix(session.teamNumber.toString())
                 val tbaEventKey = eventKey
 
-                val settings = SettingsService.getSettings(session.teamNumber)
-                val oprsMap = fetchTbaOprs(settings, eventKey)
-                val epaHistoryList = fetchStatboticsMatchEpaHistory(eventKey)
+                val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
+                val (oprsMap, epaHistoryList) = IntegrationService.getEpaOprHistory(settings, eventKey)
 
                 val teamsList = IntegrationService.listTeams(eventKey, session)
                 
@@ -1991,7 +1990,10 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 val details = allianceList.map { item ->
                     val memberCount = transaction {
-                        AllianceMemberships.select { (AllianceMemberships.allianceId eq item.id) and (AllianceMemberships.status eq "ACCEPTED") }.count().toInt()
+                        AllianceMemberships.select { 
+                            (AllianceMemberships.allianceId eq item.id) and 
+                            (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED")) 
+                        }.count().toInt()
                     }
                     val isActive = false
                     MobileAllianceDetail(
@@ -2020,10 +2022,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     }
                 }
 
-                val activeAllianceId = transaction {
-                    AllianceMemberships.select { (AllianceMemberships.teamNumber eq session.teamNumber) and (AllianceMemberships.status eq "ACCEPTED") }
-                        .firstOrNull()?.get(AllianceMemberships.allianceId)?.value
-                }
+                val activeAllianceId = AllianceService.getActiveAllianceId(session.teamNumber)
 
                 call.respond(
                     MobileAlliancesResponse(
@@ -2039,7 +2038,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val session = call.requireMobileAdmin(secret)
                 val req = call.receive<MobileCreateAllianceRequest>()
                 
-                val settings = SettingsService.getSettings(session.teamNumber)
+                val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
                 val activeKey = settings.resolvedEventKey()
 
                 val saved = AllianceService.createAlliance(session, req.name, activeKey, req.description)
@@ -2120,10 +2119,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                             .flatMap { loadMessages(it) }
                     }
                 } else {
-                    val activeAllianceId = transaction {
-                        AllianceMemberships.select { (AllianceMemberships.teamNumber eq teamNumber) and (AllianceMemberships.status eq "ACCEPTED") }
-                            .firstOrNull()?.get(AllianceMemberships.allianceId)?.value
-                    } ?: throw MobileApiException(HttpStatusCode.Forbidden, "Not in an active alliance", "USER_NOT_IN_SCOPE")
+                    val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                        ?: throw MobileApiException(HttpStatusCode.Forbidden, "Not in an active alliance", "USER_NOT_IN_SCOPE")
 
                     val groupFile = File("instance/chat/groups/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
                     loadMessages(groupFile)
@@ -2187,10 +2184,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 } else if (req.conversationType == "alliance" || req.group != null) {
                     val file = if (req.conversationType == "alliance") {
-                        val activeAllianceId = transaction {
-                            AllianceMemberships.select { (AllianceMemberships.teamNumber eq teamNumber) and (AllianceMemberships.status eq "ACCEPTED") }
-                                .firstOrNull()?.get(AllianceMemberships.allianceId)?.value
-                        } ?: throw MobileApiException(HttpStatusCode.Forbidden, "Not in an active alliance", "USER_NOT_IN_SCOPE")
+                        val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                            ?: throw MobileApiException(HttpStatusCode.Forbidden, "Not in an active alliance", "USER_NOT_IN_SCOPE")
                         
                         File("instance/chat/groups/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
                     } else {
@@ -2256,10 +2251,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         }
                     }
 
-                val activeAllianceId = transaction {
-                    AllianceMemberships.select { (AllianceMemberships.teamNumber eq teamNumber) and (AllianceMemberships.status eq "ACCEPTED") }
-                        .firstOrNull()?.get(AllianceMemberships.allianceId)?.value
-                }
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
                 if (activeAllianceId != null) {
                     val groupFile = File("instance/chat/groups/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
                     val messages = loadMessages(groupFile)
@@ -2325,10 +2317,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
 
                 val teamNumber = session.teamNumber
-                val activeAllianceId = transaction {
-                    AllianceMemberships.select { (AllianceMemberships.teamNumber eq teamNumber) and (AllianceMemberships.status eq "ACCEPTED") }
-                        .firstOrNull()?.get(AllianceMemberships.allianceId)?.value
-                }
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
 
                 val messages = if (activeAllianceId != null && activeAllianceId == conversationId) {
                     val file = File("instance/chat/groups/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
@@ -2565,32 +2554,17 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             post("/sync/trigger") {
                 val session = call.requireMobileAdmin(secret)
-                val settings = SettingsService.getSettings(session.teamNumber)
+                val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
 
-                var teamsSuccess = true
-                var teamsMessage = "Teams sync attempted."
-                try {
-                    IntegrationService.syncEvents(settings)
-                } catch (e: Exception) {
-                    teamsSuccess = false
-                    teamsMessage = "Teams sync failed: ${e.message}"
-                }
-
-                var matchesSuccess = true
-                var matchesMessage = "Matches sync attempted."
-                try {
-                    IntegrationService.syncEventData(settings)
-                } catch (e: Exception) {
-                    matchesSuccess = false
-                    matchesMessage = "Matches sync failed: ${e.message}"
-                }
+                val queued = com.obsidianscout.integrations.SyncScheduler.enqueueFullSync(settings)
+                val message = if (queued) "Sync enqueued in background" else "Another sync is already running"
 
                 call.respond(
                     MobileSyncTriggerResponse(
                         results = MobileSyncResults(
-                            teamsSync = SyncSubStatus(teamsSuccess, teamsMessage),
-                            matchesSync = SyncSubStatus(matchesSuccess, matchesMessage),
-                            allianceSync = SyncAllianceSubStatus(false)
+                            teamsSync = SyncSubStatus(queued, message),
+                            matchesSync = SyncSubStatus(queued, message),
+                            allianceSync = SyncAllianceSubStatus(queued)
                         )
                     )
                 )
@@ -2719,7 +2693,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val session = call.requireMobileSession(secret)
                 val body = try { call.receive<MobileGraphRequest>() } catch (_: Exception) { MobileGraphRequest() }
 
-                val eventId = body.eventId ?: SettingsService.getSettings(session.teamNumber).resolvedEventKey()
+                val eventId = body.eventId ?: com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber).resolvedEventKey()
                 val eventKey = resolveEventKey(eventId, session.teamNumber)
 
                 val targetTeamNumbers = if (body.teamNumber != null) {
@@ -2781,7 +2755,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 fun resolveEventKey(eventId: String?, teamNumber: Int): String {
-    val settings = SettingsService.getSettings(teamNumber)
+    val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber)
     if (eventId.isNullOrBlank()) {
         return settings.resolvedEventKey()
     }
@@ -3132,33 +3106,4 @@ private fun String?.clipTeamLocation(): String? {
     return if (this.length > 80) this.take(80) else this
 }
 
-suspend fun fetchTbaOprs(settings: ApiSettings, eventKey: String): Map<String, Double> {
-    val key = settings.apiKeys.tbaKey
-    if (key.isBlank()) return emptyMap()
-    val url = "https://www.thebluealliance.com/api/v3/event/${eventKey}/oprs"
-    return try {
-        val response = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO).get(url) {
-            header("X-TBA-Auth-Key", key)
-        }
-        val text = response.bodyAsText()
-        val element = JsonSupport.json.parseToJsonElement(text)
-        val oprs = element.jsonObject["oprs"] as? JsonObject ?: return emptyMap()
-        oprs.entries.associate { entry ->
-            val primitive = entry.value as? JsonPrimitive
-            entry.key to primitive?.content?.toDoubleOrNull().orZero()
-        }
-    } catch (_: Exception) {
-        emptyMap()
-    }
-}
 
-suspend fun fetchStatboticsMatchEpaHistory(eventKey: String): List<JsonElement> {
-    val url = "https://api.statbotics.io/v3/team_matches?event=${eventKey}&limit=1000"
-    return try {
-        val response = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO).get(url)
-        val text = response.bodyAsText()
-        JsonSupport.json.parseToJsonElement(text).jsonArray
-    } catch (_: Exception) {
-        emptyList()
-    }
-}

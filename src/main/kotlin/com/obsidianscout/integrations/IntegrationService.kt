@@ -4,6 +4,7 @@ import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.ApiEvents
 import com.obsidianscout.db.ApiMatches
 import com.obsidianscout.db.ApiTeams
+import com.obsidianscout.db.EpaOprHistoryCache
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.routes.EventRecord
@@ -1211,6 +1212,79 @@ object IntegrationService {
         } catch (e: Exception) {
             log.warn("Failed to parse Statbotics response: ${e.message}")
             emptyMap()
+        }
+    }
+
+    suspend fun syncEpaOprHistory(settings: ApiSettings, eventKey: String) {
+        val normalizedKey = eventKey.lowercase().trim()
+        if (normalizedKey.isBlank()) return
+        
+        val oprs = fetchTbaOprs(settings, normalizedKey)
+        val epaHistory = fetchStatboticsMatchEpaHistory(normalizedKey)
+        
+        val oprsJson = JsonSupport.json.encodeToString(oprs)
+        val epaHistoryJson = JsonSupport.json.encodeToString(epaHistory)
+        val now = java.time.Instant.now()
+        
+        transaction {
+            val existing = EpaOprHistoryCache.select { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
+            if (existing == null) {
+                EpaOprHistoryCache.insert {
+                    it[EpaOprHistoryCache.eventKey] = normalizedKey
+                    it[EpaOprHistoryCache.oprsJson] = oprsJson
+                    it[EpaOprHistoryCache.epaHistoryJson] = epaHistoryJson
+                    it[EpaOprHistoryCache.updatedAt] = now
+                }
+            } else {
+                EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq normalizedKey }) {
+                    it[EpaOprHistoryCache.oprsJson] = oprsJson
+                    it[EpaOprHistoryCache.epaHistoryJson] = epaHistoryJson
+                    it[EpaOprHistoryCache.updatedAt] = now
+                }
+            }
+        }
+    }
+
+    fun getEpaOprHistory(settings: ApiSettings, eventKey: String): Pair<Map<String, Double>, List<JsonElement>> {
+        val normalizedKey = eventKey.lowercase().trim()
+        val cached = transaction {
+            EpaOprHistoryCache.select { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
+        }
+        
+        if (cached != null) {
+            val oprsMap = try {
+                JsonSupport.json.decodeFromString<Map<String, Double>>(cached[EpaOprHistoryCache.oprsJson])
+            } catch (_: Exception) {
+                emptyMap()
+            }
+            val epaHistoryList = try {
+                JsonSupport.json.decodeFromString<List<JsonElement>>(cached[EpaOprHistoryCache.epaHistoryJson])
+            } catch (_: Exception) {
+                emptyList()
+            }
+            
+            // If the cache is older than 15 minutes, trigger background refresh
+            val updatedAt = cached[EpaOprHistoryCache.updatedAt]
+            if (updatedAt.isBefore(java.time.Instant.now().minusSeconds(900))) {
+                SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
+            }
+            
+            return Pair(oprsMap, epaHistoryList)
+        } else {
+            // No cache at all. Trigger background refresh and return empty/defaults
+            SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
+            return Pair(emptyMap(), emptyList())
+        }
+    }
+
+    private suspend fun fetchStatboticsMatchEpaHistory(eventKey: String): List<JsonElement> {
+        val url = "https://api.statbotics.io/v3/team_matches?event=${eventKey}&limit=1000"
+        return try {
+            val text = client.get(url).bodyAsText()
+            JsonSupport.json.parseToJsonElement(text).jsonArray
+        } catch (error: Exception) {
+            log.warn("Statbotics match EPA history fetch failed for $eventKey: ${error.message}")
+            emptyList()
         }
     }
 

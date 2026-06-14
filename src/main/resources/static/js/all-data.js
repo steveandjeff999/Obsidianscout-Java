@@ -107,7 +107,9 @@ function mergeEntries(match, pit, qual) {
             matchKey: e.matchKey,
             createdAt: e.createdAt,
             matchPlayedTime: e.matchPlayedTime || null,
-            data: e.data
+            data: e.data,
+            hasDiscrepancy: e.hasDiscrepancy || false,
+            conflictingTeams: e.conflictingTeams || []
         });
     });
 
@@ -125,7 +127,9 @@ function mergeEntries(match, pit, qual) {
             matchKey: null,
             createdAt: e.createdAt,
             matchPlayedTime: null,
-            data: e.data
+            data: e.data,
+            hasDiscrepancy: e.hasDiscrepancy || false,
+            conflictingTeams: e.conflictingTeams || []
         });
     });
 
@@ -143,7 +147,9 @@ function mergeEntries(match, pit, qual) {
             matchKey: e.matchKey,
             createdAt: e.createdAt,
             matchPlayedTime: e.matchPlayedTime || null,
-            data: e.data
+            data: e.data,
+            hasDiscrepancy: e.hasDiscrepancy || false,
+            conflictingTeams: e.conflictingTeams || []
         });
     });
 
@@ -391,7 +397,18 @@ function renderTableSection(state) {
         const matchLabel = getMatchLabel(row.matchKey, row.matchNumber);
         
         // Add cells
-        appendCell(tr, teamLabel);
+        const tdTeam = document.createElement("td");
+        tdTeam.textContent = teamLabel;
+        if (row.hasDiscrepancy) {
+            const warnSpan = document.createElement("span");
+            warnSpan.textContent = " ⚠️";
+            warnSpan.style.color = "#eab308";
+            warnSpan.style.fontWeight = "bold";
+            warnSpan.title = "Discrepancy detected between partner teams: " + (row.conflictingTeams || []).join(", ");
+            tdTeam.appendChild(warnSpan);
+        }
+        tr.appendChild(tdTeam);
+
         appendCell(tr, matchLabel);
         appendTypeCell(tr, row.type);
         appendCell(tr, formatDateTime(row.createdAt));
@@ -434,6 +451,24 @@ function renderDetail(state, entry) {
 
     title.textContent = `${entry.type} Entry: ${teamLabel}`;
     status.textContent = `Scouter Team: ${entry.ownerTeamNumber}`;
+
+    if (entry.hasDiscrepancy) {
+        const warnBanner = document.createElement("div");
+        warnBanner.className = "sharing-notice mb-12";
+        warnBanner.style.borderColor = "#eab308";
+        warnBanner.style.background = "rgba(234, 179, 8, 0.08)";
+        warnBanner.style.color = "#854d0e";
+        warnBanner.style.padding = "10px 16px";
+        warnBanner.style.borderRadius = "6px";
+        warnBanner.style.border = "1px solid";
+        warnBanner.innerHTML = `
+            <span class="icon">⚠️</span>
+            <div style="flex:1;">
+                <strong>Discrepancy Warning:</strong> Different scouting data exists for this entry from: <strong>${(entry.conflictingTeams || []).join(", ")}</strong>. You can view or resolve this discrepancy in the Alliance Scouting Data page.
+            </div>
+        `;
+        container.appendChild(warnBanner);
+    }
 
     // Meta Group
     const metaGroup = document.createElement("div");

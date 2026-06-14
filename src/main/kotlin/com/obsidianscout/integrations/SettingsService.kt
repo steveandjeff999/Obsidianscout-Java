@@ -131,19 +131,14 @@ object SettingsService {
     fun teamNumbersEligibleForAutoSync(): List<Int> {
         return transaction {
             AppSettings.selectAll()
-                .mapNotNull { row ->
-                    val teamNumber = row[AppSettings.teamNumber]
-                    val jsonText = row[AppSettings.settingsJson]
-                    val settings = if (jsonText.isBlank()) {
-                        ApiSettings()
-                    } else {
-                        JsonSupport.json.decodeFromString(ApiSettings.serializer(), jsonText)
-                    }
-                    val normalized = normalize(settings)
-                    if (normalized.resolvedEventKey().isBlank()) {
+                .map { it[AppSettings.teamNumber] }
+                .distinct()
+                .mapNotNull { teamNumber ->
+                    val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber)
+                    if (settings.resolvedEventKey().isBlank()) {
                         return@mapNotNull null
                     }
-                    val keys = normalized.apiKeys
+                    val keys = settings.apiKeys
                     val hasApi = keys.tbaKey.isNotBlank() ||
                         (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
                     if (!hasApi) {
@@ -151,7 +146,6 @@ object SettingsService {
                     }
                     teamNumber
                 }
-                .distinct()
         }
     }
 

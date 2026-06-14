@@ -187,7 +187,8 @@ data class MatchTeamPrediction(
     val averageScoutedScore: Double?,
     val scoutedMatchesCount: Int,
     val epa: Double?,
-    val opr: Double?
+    val opr: Double?,
+    val hasDiscrepancy: Boolean = false
 )
 
 @Serializable
@@ -216,14 +217,18 @@ data class MatchPredictionResponse(
 data class CreateAllianceRequest(
     val name: String,
     val eventKey: String? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val year: Int? = null,
+    val eventCode: String? = null
 )
 
 @Serializable
 data class UpdateAllianceRequest(
     val name: String,
     val eventKey: String? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val year: Int? = null,
+    val eventCode: String? = null
 )
 
 @Serializable
@@ -267,4 +272,14 @@ data class AllianceImportSourceRecord(
     val matchScoutingCount: Int,
     val pitScoutingCount: Int,
     val qualitativeScoutingCount: Int
+)
+
+@Serializable
+data class ToggleAllianceDisableRequest(
+    val disabled: Boolean
+)
+
+@Serializable
+data class ToggleAllianceActiveRequest(
+    val active: Boolean
 )

@@ -6,6 +6,7 @@ import com.obsidianscout.db.ApiEvents
 import com.obsidianscout.db.ApiMatches
 import com.obsidianscout.db.ApiTeams
 import com.obsidianscout.db.AppSettings
+import com.obsidianscout.db.EpaOprHistoryCache
 import com.obsidianscout.db.PitScoutingConfigs
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingConfigs
@@ -70,7 +71,8 @@ object DatabaseFactory {
                 ApiTeams,
                 ApiMatches,
                 ScoutingAlliances,
-                AllianceMemberships
+                AllianceMemberships,
+                EpaOprHistoryCache
             )
         }
     }
