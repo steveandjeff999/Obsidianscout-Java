@@ -89,6 +89,7 @@ fun main() {
 }
 
 fun Application.module(appConfig: AppConfig) {
+    install(com.obsidianscout.utils.ServerTimingPlugin)
     install(DefaultHeaders)
     install(WebSockets) {
         pingPeriod = java.time.Duration.ofSeconds(15)

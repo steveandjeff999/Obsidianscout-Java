@@ -45,9 +45,6 @@
         }
     };
 
-    const servedFromCache = new Set();
-    const activeFetches = new Set();
-
     function safeGetItem(key) {
         try {
             return localStorage.getItem(key);
@@ -145,74 +142,13 @@
         }
     }
 
-    function triggerBackgroundRevalidate(path, cachedText) {
-        if (!navigator.onLine) return;
-        if (activeFetches.has(path)) return;
-        activeFetches.add(path);
-
-        setTimeout(async () => {
-            try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 10000);
-                const response = await fetch(path, {
-                    method: "GET",
-                    headers: {},
-                    credentials: "same-origin",
-                    signal: controller.signal,
-                    cache: "no-cache"
-                });
-                clearTimeout(timeout);
-
-                if (response.status === 401) {
-                    const isLoginPage = document.body && document.body.dataset.page === "login";
-                    if (!isLoginPage) {
-                        checkLoginStatus().then(loggedIn => {
-                            if (!loggedIn) {
-                                safeRemoveItem("cache:/api/auth/me");
-                                window.location.href = "/";
-                            }
-                        });
-                        return;
-                    }
-                }
-
-                if (response.ok) {
-                    const text = await response.text();
-                    if (text !== cachedText) {
-                        console.log(`[Offline Cache] Background revalidation succeeded for ${path}. Data changed, updating cache and refreshing.`);
-                        safeSetItem("cache:" + path, text);
-                        
-                        const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
-                        const isUserEditing = document.querySelector('input:focus, textarea:focus, select:focus') !== null;
-                        const isModalOpen = document.querySelector('.modal-backdrop.show, .modal.show, [role="dialog"].show') !== null;
-                        
-                        if (isDataPage && !isUserEditing && !isModalOpen) {
-                            if (typeof saveScrollPositions === "function") {
-                                saveScrollPositions();
-                            }
-                            window.location.reload();
-                        }
-                    } else {
-                        console.log(`[Offline Cache] Background revalidation succeeded for ${path}. Data matches cache.`);
-                    }
-                }
-            } catch (err) {
-                console.warn(`[Offline Cache] Background revalidation failed for ${path}:`, err);
-            } finally {
-                activeFetches.delete(path);
-            }
-        }, 1000);
-    }
-
     async function request(path, options = {}) {
         const method = options.method || "GET";
 
-        if (method === "GET") {
+        if (method === "GET" && !navigator.onLine) {
             const cachedText = safeGetItem("cache:" + path);
             if (cachedText !== null) {
-                console.log("[Offline Cache] Serving cached response instantly for:", path);
-                servedFromCache.add(path);
-                triggerBackgroundRevalidate(path, cachedText);
+                console.log("[Offline Cache] Offline mode: Serving cached response for:", path);
                 return safeParse(cachedText);
             }
         }
@@ -284,10 +220,17 @@
 
             return data;
         } catch (error) {
+            if (method === "GET") {
+                const cachedText = safeGetItem("cache:" + path);
+                if (cachedText !== null) {
+                    console.warn("[Offline Cache] Network fetch failed, falling back to cache for:", path, error);
+                    return safeParse(cachedText);
+                }
+            }
+
             const isAbort = error && error.name === "AbortError";
             if (isAbort) {
                 if (options.signal && options.signal.aborted) {
-                    // Manual abort from caller signal
                     throw error;
                 }
                 throw new Error("Request timed out. Try refreshing this page.");

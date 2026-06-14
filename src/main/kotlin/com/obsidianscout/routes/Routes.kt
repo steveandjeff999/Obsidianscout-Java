@@ -52,6 +52,7 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.close
 import com.obsidianscout.scouting.AllianceCollaborationManager
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.utils.*
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.and
 import com.obsidianscout.db.AllianceMemberships
@@ -139,7 +140,9 @@ fun Application.configureRoutes() {
                 }
                 get("/me") {
                     val session = call.requireSession()
-                    val user = AuthService.getUserById(session.userId)
+                    val user = call.measure("user-db", "Get User DB Query") {
+                        AuthService.getUserById(session.userId)
+                    }
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "User not found")
                     val responseSession = UserSession(
                         userId = user.id,
@@ -320,10 +323,12 @@ fun Application.configureRoutes() {
                 get {
                     val session = call.requireSession()
                     val local = call.request.queryParameters["local"]?.toBoolean() ?: false
-                    val settings = if (local) {
-                        SettingsService.getSettings(session.teamNumber)
-                    } else {
-                        AllianceService.getEffectiveSettings(session.teamNumber)
+                    val settings = call.measure("settings-db", "Settings DB Query") {
+                        if (local) {
+                            SettingsService.getSettings(session.teamNumber)
+                        } else {
+                            AllianceService.getEffectiveSettings(session.teamNumber)
+                        }
                     }
                     call.respond(SettingsResponse(settings.toPayload()))
                 }
@@ -599,7 +604,10 @@ fun Application.configureRoutes() {
             route("/summary") {
                 get {
                     call.requireSession()
-                    call.respond(IntegrationService.summary())
+                    val summary = call.measure("summary-db", "Summary DB Query") {
+                        IntegrationService.summary()
+                    }
+                    call.respond(summary)
                 }
             }
 
@@ -726,7 +734,10 @@ fun Application.configureRoutes() {
 
                 get {
                     val session = call.requireSession()
-                    call.respond(AllianceService.listAlliances(session))
+                    val list = call.measure("alliances-db", "List Alliances Query") {
+                        AllianceService.listAlliances(session)
+                    }
+                    call.respond(list)
                 }
                 post {
                     val session = call.requireAdmin()
@@ -813,7 +824,10 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val id = call.parameters["id"]?.toIntOrNull()
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
-                    call.respond(AllianceService.getAlliance(session, id))
+                    val alliance = call.measure("alliance-db", "Get Alliance Query") {
+                        AllianceService.getAlliance(session, id)
+                    }
+                    call.respond(alliance)
                 }
                 get("/{id}/config/{kind}") {
                     val session = call.requireSession()
@@ -940,26 +954,30 @@ fun Application.configureRoutes() {
 }
 
 private suspend fun ApplicationCall.respondStaticHtml(fileName: String) {
-    val (html, sidebar) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        val resource = Thread.currentThread().contextClassLoader.getResource("static/$fileName")
-        val htmlContent = resource?.readText()
-        val sidebarContent = Thread.currentThread().contextClassLoader
-            .getResource("static/base.html")
-            ?.readText()
-            ?.trim()
-        htmlContent to sidebarContent
+    val (html, sidebar) = measureSuspend("load-html", "Load HTML from Resource") {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val resource = Thread.currentThread().contextClassLoader.getResource("static/$fileName")
+            val htmlContent = resource?.readText()
+            val sidebarContent = Thread.currentThread().contextClassLoader
+                .getResource("static/base.html")
+                ?.readText()
+                ?.trim()
+            htmlContent to sidebarContent
+        }
     }
     if (html == null) {
         respond(HttpStatusCode.NotFound)
         return
     }
-    val rendered = if (sidebar.isNullOrBlank()) {
-        html
-    } else {
-        html.replace(
-            Regex("""<aside class="sidebar">.*?</aside>""", setOf(RegexOption.DOT_MATCHES_ALL)),
-            sidebar
-        )
+    val rendered = measure("render-sidebar", "Render HTML Sidebar") {
+        if (sidebar.isNullOrBlank()) {
+            html
+        } else {
+            html.replace(
+                Regex("""<aside class="sidebar">.*?</aside>""", setOf(RegexOption.DOT_MATCHES_ALL)),
+                sidebar
+            )
+        }
     }
     respondText(rendered, ContentType.Text.Html)
 }

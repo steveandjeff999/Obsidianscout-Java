@@ -1351,14 +1351,17 @@
         });
 
         // Bind Cancel button
-        btnCancelSharedEntry?.addEventListener('click', () => {
+        btnCancelSharedEntry?.addEventListener('click', (e) => {
+            e.preventDefault();
             selectedSharedEntry = null;
             showEmptyState();
             renderSharedEntriesList();
         });
 
         // Bind Delete button
-        btnDeleteSharedEntry?.addEventListener('click', async () => {
+        btnDeleteSharedEntry?.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             if (!selectedSharedEntry) return;
             const targetType = activeDataTab === 'match' ? 'Match' : (activeDataTab === 'pit' ? 'Pit' : 'Qualitative');
             const targetLabel = selectedSharedEntry.targetTeamNumber ? `for Team ${selectedSharedEntry.targetTeamNumber}` : '';
@@ -1428,13 +1431,13 @@
 
         // Helper: show empty state
         function showEmptyState() {
-            sharedEntryEmptyState.classList.remove('hidden');
+            sharedEntryEmptyState.style.display = 'flex';
             sharedEntryEditorFormContainer.classList.add('hidden');
         }
 
         // Helper: inspect entry
         async function inspectEntry(entry) {
-            sharedEntryEmptyState.classList.add('hidden');
+            sharedEntryEmptyState.style.display = 'none';
             sharedEntryEditorFormContainer.classList.remove('hidden');
 
             document.getElementById('shared-inspector-title').textContent = `Team ${entry.targetTeamNumber}`;
