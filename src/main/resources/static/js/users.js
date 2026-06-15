@@ -289,16 +289,42 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadUsers(me, openModal, true);
     });
 
-    // Wire edit buttons click using event delegation on tbody
+    // Wire edit/delete buttons click using event delegation on tbody
     const tbody = document.querySelector("#user-table tbody");
     if (tbody) {
-        tbody.addEventListener("click", (e) => {
-            const btn = e.target.closest('[data-action="edit"]');
-            if (!btn) return;
-            const userId = parseInt(btn.getAttribute("data-id"), 10);
-            const user = currentUsers.find(u => u.id === userId);
-            if (user) {
-                openModal(user);
+        tbody.addEventListener("click", async (e) => {
+            const editBtn = e.target.closest('[data-action="edit"]');
+            if (editBtn) {
+                const userId = parseInt(editBtn.getAttribute("data-id"), 10);
+                const user = currentUsers.find(u => u.id === userId);
+                if (user) {
+                    openModal(user);
+                }
+                return;
+            }
+
+            const deleteBtn = e.target.closest('[data-action="delete"]');
+            if (deleteBtn) {
+                const userId = parseInt(deleteBtn.getAttribute("data-id"), 10);
+                const user = currentUsers.find(u => u.id === userId);
+                if (!user) return;
+
+                const confirmed = confirm(`Are you sure you want to delete the user "${user.username}"? Their submitted scouting data will be preserved under 'Deleted User' on their team.`);
+                if (!confirmed) return;
+
+                try {
+                    await Obsidianscout.request(`/api/admin/users/${userId}`, {
+                        method: "DELETE"
+                    });
+                    Obsidianscout.showToast("User deleted successfully", "success");
+                    if (userId === me.id) {
+                        window.location.href = "/";
+                    } else {
+                        await loadUsers(me, openModal);
+                    }
+                } catch (error) {
+                    Obsidianscout.showToast(error.message || "Failed to delete user", "error");
+                }
             }
         });
     }
@@ -361,7 +387,10 @@ async function loadUsers(me, openModal, append = false) {
                 <td>${user.teamNumber}</td>
                 <td>${roleLabel}</td>
                 <td>${new Date(user.createdAt).toLocaleDateString()}</td>
-                <td>${canEdit ? `<button class="edit-btn" data-action="edit" data-id="${user.id}">Edit</button>` : ""}</td>
+                <td>
+                    ${canEdit ? `<button class="edit-btn" data-action="edit" data-id="${user.id}">Edit</button>` : ""}
+                    ${canEdit ? `<button class="delete-btn" data-action="delete" data-id="${user.id}" style="margin-left: 8px;">Delete</button>` : ""}
+                </td>
             `;
 
             tbody.appendChild(row);

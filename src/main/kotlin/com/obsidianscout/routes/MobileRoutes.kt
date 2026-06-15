@@ -18,6 +18,7 @@ import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.AllianceMemberships
+import com.obsidianscout.db.Users
 import com.obsidianscout.integrations.IntegrationService
 import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.ApiSettings
@@ -134,8 +135,15 @@ suspend fun ApplicationCall.requireMobileSession(secret: String): UserSession {
         throw MobileApiException(HttpStatusCode.Unauthorized, "Invalid token format", "INVALID_TOKEN")
     }
     val token = authHeader.removePrefix("Bearer ").trim()
-    return JwtHelper.verifyToken(token, secret)
+    val session = JwtHelper.verifyToken(token, secret)
         ?: throw MobileApiException(HttpStatusCode.Unauthorized, "Invalid or expired token", "INVALID_TOKEN")
+    val exists = transaction {
+        Users.selectAll().where { Users.id eq session.userId }.any()
+    }
+    if (!exists) {
+        throw MobileApiException(HttpStatusCode.Unauthorized, "Account has been deleted", "AUTH_REQUIRED")
+    }
+    return session
 }
 
 suspend fun ApplicationCall.requireMobileAdmin(secret: String): UserSession {
@@ -2676,12 +2684,14 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             }
 
             delete("/admin/users/{user_id}") {
-                call.requireMobileAdmin(secret)
+                val session = call.requireMobileAdmin(secret)
                 val userId = call.parameters["user_id"]?.toIntOrNull()
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing user_id", "MISSING_DATA")
 
-                transaction {
-                    com.obsidianscout.db.Users.deleteWhere { com.obsidianscout.db.Users.id eq userId }
+                try {
+                    AuthService.deleteUser(session, userId)
+                } catch (e: com.obsidianscout.auth.ApiException) {
+                    throw MobileApiException(e.status, e.message, "DELETE_FAILED")
                 }
 
                 call.respond(mapOf("success" to true))

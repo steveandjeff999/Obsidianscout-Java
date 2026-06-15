@@ -286,6 +286,14 @@ data class ToggleAllianceActiveRequest(
 
 @Serializable
 data class ForgotPasswordRequest(
+    val username: String? = null,
+    val teamNumber: Int? = null,
+    val email: String? = null
+)
+
+@Serializable
+data class AccountInfo(
+    val userId: Int,
     val username: String,
     val teamNumber: Int
 )
@@ -293,13 +301,14 @@ data class ForgotPasswordRequest(
 @Serializable
 data class VerifyResetTokenResponse(
     val valid: Boolean,
-    val username: String? = null,
-    val teamNumber: Int? = null
+    val accounts: List<AccountInfo> = emptyList()
 )
 
 @Serializable
 data class ResetPasswordRequest(
     val token: String,
+    val userId: Int? = null,
+    val newUsername: String? = null,
     val newPassword: String
 )
 

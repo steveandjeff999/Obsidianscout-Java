@@ -15,6 +15,7 @@ import com.obsidianscout.db.PasswordResetTokens
 import com.obsidianscout.integrations.SmtpSettings
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.lowerCase
 import com.obsidianscout.config.ConfigService
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.integrations.ApiSettings
@@ -182,59 +183,125 @@ fun Application.configureRoutes() {
                         )
                     }
 
-                    val user = transaction {
-                        com.obsidianscout.db.Users
-                            .selectAll().where { 
-                                (com.obsidianscout.db.Users.username eq request.username) and 
-                                (com.obsidianscout.db.Users.teamNumber eq request.teamNumber) 
-                            }
-                            .limit(1)
-                            .firstOrNull()
-                    }
-
-                    if (user == null) {
-                        throw com.obsidianscout.auth.ApiException(
-                            HttpStatusCode.NotFound,
-                            "User not found on team."
-                        )
-                    }
-
-                    val userEmail = user[com.obsidianscout.db.Users.email]
-                    if (userEmail.isNullOrBlank()) {
-                        throw com.obsidianscout.auth.ApiException(
-                            HttpStatusCode.BadRequest,
-                            "This account does not have a registered email address. Please contact your team admin."
-                        )
-                    }
-
                     val token = java.util.UUID.randomUUID().toString()
                     val expires = java.time.Instant.now().plus(1, java.time.temporal.ChronoUnit.HOURS)
-                    val userIdVal = user[com.obsidianscout.db.Users.id]
-                    
-                    transaction {
-                        com.obsidianscout.db.PasswordResetTokens.update({ 
-                            (com.obsidianscout.db.PasswordResetTokens.userId eq userIdVal) and 
-                            (com.obsidianscout.db.PasswordResetTokens.used eq false) 
-                        }) {
-                            it[used] = true
+
+                    val userEmail: String
+                    val isEmailRecovery = !request.email.isNullOrBlank()
+
+                    if (isEmailRecovery) {
+                        val recoverEmail = request.email!!.trim()
+                        val matchedUsers = transaction {
+                            com.obsidianscout.db.Users
+                                .selectAll().where { com.obsidianscout.db.Users.email.lowerCase() eq recoverEmail.lowercase() }
+                                .toList()
+                        }
+                        if (matchedUsers.isEmpty()) {
+                            throw com.obsidianscout.auth.ApiException(
+                                HttpStatusCode.NotFound,
+                                "No accounts found with that email address."
+                            )
+                        }
+                        userEmail = recoverEmail
+
+                        transaction {
+                            // Invalidate older tokens for this email
+                            com.obsidianscout.db.PasswordResetTokens.update({ 
+                                (com.obsidianscout.db.PasswordResetTokens.email.lowerCase() eq recoverEmail.lowercase()) and 
+                                (com.obsidianscout.db.PasswordResetTokens.used eq false) 
+                            }) {
+                                it[used] = true
+                            }
+
+                            // Insert new token associated with email
+                            com.obsidianscout.db.PasswordResetTokens.insert {
+                                it[userId] = null
+                                it[com.obsidianscout.db.PasswordResetTokens.email] = recoverEmail
+                                it[com.obsidianscout.db.PasswordResetTokens.token] = token
+                                it[expiresAt] = expires
+                            }
+                        }
+                    } else {
+                        // Recover by username + teamNumber
+                        val username = request.username?.trim()
+                        val teamNumber = request.teamNumber
+                        if (username.isNullOrBlank() || teamNumber == null) {
+                            throw com.obsidianscout.auth.ApiException(
+                                HttpStatusCode.BadRequest,
+                                "Username and team number or email is required."
+                            )
                         }
 
-                        com.obsidianscout.db.PasswordResetTokens.insert {
-                            it[userId] = userIdVal
-                            it[com.obsidianscout.db.PasswordResetTokens.token] = token
-                            it[expiresAt] = expires
+                        val user = transaction {
+                            com.obsidianscout.db.Users
+                                .selectAll().where { 
+                                    (com.obsidianscout.db.Users.username eq username) and 
+                                    (com.obsidianscout.db.Users.teamNumber eq teamNumber) 
+                                }
+                                .limit(1)
+                                .firstOrNull()
+                        }
+
+                        if (user == null) {
+                            throw com.obsidianscout.auth.ApiException(
+                                HttpStatusCode.NotFound,
+                                "User not found on team."
+                            )
+                        }
+
+                        val foundEmail = user[com.obsidianscout.db.Users.email]
+                        if (foundEmail.isNullOrBlank()) {
+                            throw com.obsidianscout.auth.ApiException(
+                                HttpStatusCode.BadRequest,
+                                "This account does not have a registered email address. Please contact your team admin."
+                            )
+                        }
+                        userEmail = foundEmail
+                        val userIdVal = user[com.obsidianscout.db.Users.id]
+
+                        transaction {
+                            // Invalidate older tokens for this user
+                            com.obsidianscout.db.PasswordResetTokens.update({ 
+                                (com.obsidianscout.db.PasswordResetTokens.userId eq userIdVal) and 
+                                (com.obsidianscout.db.PasswordResetTokens.used eq false) 
+                            }) {
+                                it[used] = true
+                            }
+
+                            // Insert new token associated with user ID
+                            com.obsidianscout.db.PasswordResetTokens.insert {
+                                it[userId] = userIdVal
+                                it[com.obsidianscout.db.PasswordResetTokens.email] = null
+                                it[com.obsidianscout.db.PasswordResetTokens.token] = token
+                                it[expiresAt] = expires
+                            }
                         }
                     }
 
-                    val hostHeader = call.request.headers["Host"] ?: "localhost:8080"
-                    val scheme = call.request.headers["X-Forwarded-Proto"] ?: "http"
-                    val baseUrl = "$scheme://$hostHeader"
+                    val referer = call.request.headers["Referer"]
+                    val origin = call.request.headers["Origin"]
+                    val baseUrl = when {
+                        !origin.isNullOrBlank() -> origin.trimEnd('/')
+                        !referer.isNullOrBlank() -> {
+                            runCatching {
+                                val uri = java.net.URI(referer)
+                                "${uri.scheme}://${uri.authority}"
+                            }.getOrNull()
+                        }
+                        else -> null
+                    } ?: run {
+                        val hostHeader = call.request.headers["X-Forwarded-Host"]
+                            ?: call.request.headers["Host"]
+                            ?: "localhost:8080"
+                        val scheme = call.request.headers["X-Forwarded-Proto"] ?: "http"
+                        "$scheme://$hostHeader"
+                    }
                     
                     try {
                         EmailService.sendForgotPasswordEmail(
                             to = userEmail,
-                            username = request.username,
-                            teamNumber = request.teamNumber,
+                            username = if (isEmailRecovery) userEmail else request.username!!,
+                            teamNumber = if (isEmailRecovery) -1 else request.teamNumber!!,
                             token = token,
                             baseUrl = baseUrl
                         )
@@ -274,25 +341,28 @@ fun Application.configureRoutes() {
                     }
 
                     val userIdVal = tokenRow[com.obsidianscout.db.PasswordResetTokens.userId]
-                    val userRow = transaction {
-                        com.obsidianscout.db.Users
-                            .selectAll().where { com.obsidianscout.db.Users.id eq userIdVal }
-                            .limit(1)
-                            .firstOrNull()
+                    val emailVal = tokenRow[com.obsidianscout.db.PasswordResetTokens.email]
+
+                    val accounts = transaction {
+                        if (userIdVal != null) {
+                            com.obsidianscout.db.Users
+                                .selectAll().where { com.obsidianscout.db.Users.id eq userIdVal }
+                                .map { AccountInfo(it[com.obsidianscout.db.Users.id].value, it[com.obsidianscout.db.Users.username], it[com.obsidianscout.db.Users.teamNumber]) }
+                        } else if (!emailVal.isNullOrBlank()) {
+                            com.obsidianscout.db.Users
+                                .selectAll().where { com.obsidianscout.db.Users.email.lowerCase() eq emailVal.lowercase() }
+                                .map { AccountInfo(it[com.obsidianscout.db.Users.id].value, it[com.obsidianscout.db.Users.username], it[com.obsidianscout.db.Users.teamNumber]) }
+                        } else {
+                            emptyList()
+                        }
                     }
 
-                    if (userRow == null) {
+                    if (accounts.isEmpty()) {
                         call.respond(VerifyResetTokenResponse(valid = false))
                         return@get
                     }
 
-                    call.respond(
-                        VerifyResetTokenResponse(
-                            valid = true,
-                            username = userRow[com.obsidianscout.db.Users.username],
-                            teamNumber = userRow[com.obsidianscout.db.Users.teamNumber]
-                        )
-                    )
+                    call.respond(VerifyResetTokenResponse(valid = true, accounts = accounts))
                 }
 
                 post("/reset-password") {
@@ -317,18 +387,42 @@ fun Application.configureRoutes() {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid or expired reset token.")
                     }
 
-                    val userIdVal = tokenRow[com.obsidianscout.db.PasswordResetTokens.userId]
+                    val tokenUserId = tokenRow[com.obsidianscout.db.PasswordResetTokens.userId]
+                    val tokenEmail = tokenRow[com.obsidianscout.db.PasswordResetTokens.email]
+
+                    val finalUserId = if (tokenUserId != null) {
+                        tokenUserId.value
+                    } else if (!tokenEmail.isNullOrBlank()) {
+                        val reqUserId = request.userId
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Account selection is required.")
+                        
+                        // Verify that the requested userId has the matching email address
+                        val isValidAccount = transaction {
+                            com.obsidianscout.db.Users
+                                .selectAll().where { 
+                                    (com.obsidianscout.db.Users.id eq reqUserId) and 
+                                    (com.obsidianscout.db.Users.email.lowerCase() eq tokenEmail.lowercase()) 
+                                }
+                                .any()
+                        }
+                        if (!isValidAccount) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid account selected.")
+                        }
+                        reqUserId
+                    } else {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid reset token.")
+                    }
                     
                     transaction {
                         com.obsidianscout.auth.AuthService.updateUser(
                             callerSession = com.obsidianscout.auth.UserSession(
-                                userId = userIdVal.value,
+                                userId = finalUserId,
                                 username = "SYSTEM",
                                 teamNumber = 0,
                                 role = com.obsidianscout.auth.UserRole.SUPERADMIN
                             ),
-                            targetUserId = userIdVal.value,
-                            newUsername = null,
+                            targetUserId = finalUserId,
+                            newUsername = request.newUsername?.takeIf { it.isNotBlank() },
                             newPassword = request.newPassword,
                             newRole = null
                         )
@@ -340,7 +434,7 @@ fun Application.configureRoutes() {
                         }
                     }
 
-                    call.respond(mapOf("message" to "Password has been reset successfully."))
+                    call.respond(mapOf("message" to "Credentials have been reset successfully."))
                 }
             }
 
@@ -885,6 +979,16 @@ fun Application.configureRoutes() {
                     )
                     call.respond(updated)
                 }
+                delete("/users/{id}") {
+                    val session = call.requireAdmin()
+                    val userId = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid user id")
+                    AuthService.deleteUser(session, userId)
+                    if (userId == session.userId) {
+                        call.sessions.clear<UserSession>()
+                    }
+                    call.respond(HttpStatusCode.NoContent)
+                }
 
                 get("/email-settings") {
                     call.requireSuperAdmin()
@@ -944,6 +1048,13 @@ fun Application.configureRoutes() {
                 val updatedSession = session.copy(profilePicture = null, email = updated.email)
                 call.sessions.set(updatedSession)
                 call.respond(updated)
+            }
+
+            delete("/user") {
+                val session = call.requireSession()
+                AuthService.deleteUser(session, session.userId)
+                call.sessions.clear<UserSession>()
+                call.respond(HttpStatusCode.NoContent)
             }
 
             route("/alliances") {

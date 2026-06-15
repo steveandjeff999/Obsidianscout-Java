@@ -16,12 +16,17 @@ object EmailService {
     fun sendForgotPasswordEmail(to: String, username: String, teamNumber: Int, token: String, baseUrl: String) {
         val resetUrl = "${baseUrl}/reset-password?token=${java.net.URLEncoder.encode(token, "UTF-8")}"
         val subject = "Reset your ObsidianScout Password"
+        val greeting = if (teamNumber == -1) {
+            "Hello <strong>$username</strong>,"
+        } else {
+            "Hello <strong>$username</strong> (Team $teamNumber),"
+        }
         val body = """
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
                     <h2 style="color: #4a5568; border-bottom: 2px solid #edf2f7; padding-bottom: 10px;">ObsidianScout Password Reset</h2>
-                    <p>Hello <strong>$username</strong> (Team $teamNumber),</p>
+                    <p>$greeting</p>
                     <p>We received a request to reset the password for your account. You can reset your password by clicking the link below:</p>
                     <p style="text-align: center; margin: 30px 0;">
                         <a href="$resetUrl" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>

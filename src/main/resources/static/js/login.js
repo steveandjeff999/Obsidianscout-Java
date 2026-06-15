@@ -110,6 +110,50 @@ document.addEventListener("DOMContentLoaded", () => {
     const forgotBack = document.getElementById("forgot-back-to-login");
     const authTabs = document.getElementById("auth-tabs");
 
+    // Forgot password tab switching elements
+    const forgotTabs = document.querySelectorAll("#forgot-tabs .tab");
+    const forgotEmailField = document.getElementById("forgot-email-field");
+    const forgotCredentialsFields = document.getElementById("forgot-credentials-fields");
+    const forgotNotice = document.getElementById("forgot-notice");
+    const forgotEmailInput = document.getElementById("forgot-email");
+    const forgotUsernameInput = document.getElementById("forgot-username");
+    const forgotTeamInput = document.getElementById("forgot-team");
+    let activeForgotTab = "email"; // default
+
+    if (forgotTabs.length > 0) {
+        forgotTabs.forEach((tab) => {
+            tab.addEventListener("click", () => {
+                forgotTabs.forEach((t) => t.classList.remove("active"));
+                tab.classList.add("active");
+                activeForgotTab = tab.dataset.tab;
+
+                if (activeForgotTab === "email") {
+                    forgotEmailField.classList.remove("hidden");
+                    forgotEmailField.hidden = false;
+                    forgotEmailInput.required = true;
+
+                    forgotCredentialsFields.classList.add("hidden");
+                    forgotCredentialsFields.hidden = true;
+                    forgotUsernameInput.required = false;
+                    forgotTeamInput.required = false;
+
+                    forgotNotice.textContent = "Enter your registered email address. We will send you a link to reset your password.";
+                } else {
+                    forgotEmailField.classList.add("hidden");
+                    forgotEmailField.hidden = true;
+                    forgotEmailInput.required = false;
+
+                    forgotCredentialsFields.classList.remove("hidden");
+                    forgotCredentialsFields.hidden = false;
+                    forgotUsernameInput.required = true;
+                    forgotTeamInput.required = true;
+
+                    forgotNotice.textContent = "Enter your username and team number. If your account has a registered email, we will send you a password reset link.";
+                }
+            });
+        });
+    }
+
     if (forgotLink && forgotPanel && forgotBack && authTabs) {
         forgotLink.addEventListener("click", (e) => {
             e.preventDefault();
@@ -122,6 +166,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             forgotPanel.classList.remove("hidden");
             forgotPanel.hidden = false;
+
+            // Reset forgot password tab to email tab
+            if (forgotTabs.length > 0) {
+                forgotTabs[0].click();
+            }
         });
 
         forgotBack.addEventListener("click", () => {
@@ -143,16 +192,31 @@ document.addEventListener("DOMContentLoaded", () => {
             e.preventDefault();
             forgotSubmit.disabled = true;
 
-            const username = document.getElementById("forgot-username").value.trim();
-            const teamNumber = parseInt(document.getElementById("forgot-team").value, 10);
+            const payload = {};
+            if (activeForgotTab === "email") {
+                const email = forgotEmailInput.value.trim();
+                if (!email) {
+                    Obsidianscout.showToast("Email address is required", "error");
+                    forgotSubmit.disabled = false;
+                    return;
+                }
+                payload.email = email;
+            } else {
+                const username = forgotUsernameInput.value.trim();
+                const teamNumber = parseInt(forgotTeamInput.value, 10);
+                if (!username || isNaN(teamNumber)) {
+                    Obsidianscout.showToast("Username and team number are required", "error");
+                    forgotSubmit.disabled = false;
+                    return;
+                }
+                payload.username = username;
+                payload.teamNumber = teamNumber;
+            }
 
             try {
                 const response = await Obsidianscout.request("/api/auth/forgot-password", {
                     method: "POST",
-                    json: {
-                        username,
-                        teamNumber
-                    }
+                    json: payload
                 });
                 Obsidianscout.showToast(response.message || "Reset link sent successfully", "success");
                 

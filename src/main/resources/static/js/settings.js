@@ -142,6 +142,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalDeleteAccountWidget(currentMe) {
+        const deleteBtn = document.getElementById("personal-delete-account");
+        if (!deleteBtn) return;
+
+        deleteBtn.addEventListener("click", async () => {
+            const confirmed = confirm("Are you absolutely sure you want to delete your account? This action cannot be undone and you will be immediately signed out.");
+            if (!confirmed) return;
+
+            try {
+                await Obsidianscout.request("/api/user", {
+                    method: "DELETE"
+                });
+                Obsidianscout.showToast("Account deleted successfully", "success");
+                window.location.href = "/";
+            } catch (err) {
+                Obsidianscout.showToast(err.message || "Failed to delete account", "error");
+            }
+        });
+    }
+
     const isUserAdmin = Obsidianscout.isAdmin(me.role);
     const isUserSuperAdmin = Obsidianscout.isSuperAdmin(me.role);
     if (!isUserAdmin) {
@@ -185,6 +205,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         wirePersonalAvatarWidget(me);
         wirePersonalEmailWidget(me);
+        wirePersonalDeleteAccountWidget(me);
 
         wireTabs();
         return;
@@ -270,6 +291,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             wirePersonalAvatarWidget(me);
             wirePersonalEmailWidget(me);
+            wirePersonalDeleteAccountWidget(me);
 
             // Sub-tab switching logic
             if (btnVisual && btnRaw && containerVisual && containerRaw) {

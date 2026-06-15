@@ -191,7 +191,8 @@ object EpaOprHistoryCache : IntIdTable("epa_opr_history_cache") {
 }
 
 object PasswordResetTokens : IntIdTable("password_reset_tokens") {
-    val userId = reference("user_id", Users)
+    val userId = reference("user_id", Users).nullable()
+    val email = varchar("email", 255).nullable()
     val token = varchar("token", 128)
     val expiresAt = timestamp("expires_at")
     val used = bool("used").default(false)

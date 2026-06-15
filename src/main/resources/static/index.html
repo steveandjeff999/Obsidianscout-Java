@@ -56,7 +56,7 @@
                             <label for="password">Password</label>
                             <input id="password" name="password" type="password" required />
                             <div class="mt-6" style="text-align: right;">
-                                <a href="#" id="forgot-password-link" style="font-size: 13px; color: var(--primary);">Forgot password?</a>
+                                <a href="#" id="forgot-password-link" style="font-size: 13px; color: var(--primary);">Forgot username/password?</a>
                             </div>
                         </div>
                         <div class="field checkbox-field">
@@ -107,15 +107,28 @@
 
                 <div id="forgot-password-panel" class="hidden" hidden>
                     <h2 class="mb-12">Recover Password</h2>
-                    <p class="notice mb-18">Enter your username and team number. If your account has a registered email, we will send you a password reset link.</p>
+                    <div class="tab-row mb-12" id="forgot-tabs">
+                        <button class="tab active" data-tab="email" type="button">Email Address</button>
+                        <button class="tab" data-tab="credentials" type="button">Username & Team</button>
+                    </div>
+                    <p class="notice mb-18" id="forgot-notice">Enter your registered email address. We will send you a link to reset your password.</p>
+                    <div class="card soft mb-12" style="font-size: 13px; border-left: 4px solid var(--primary); padding: 12px; margin-bottom: 16px;">
+                        <strong>Disclaimer:</strong> Your account must have a registered email address set in order to recover or reset credentials.
+                    </div>
                     <form id="forgot-password-form" class="form-grid" method="POST">
-                        <div class="field">
-                            <label for="forgot-username">Username</label>
-                            <input id="forgot-username" type="text" required />
+                        <div id="forgot-email-field" class="field">
+                            <label for="forgot-email">Email Address</label>
+                            <input id="forgot-email" type="email" placeholder="scout@example.com" required />
                         </div>
-                        <div class="field">
-                            <label for="forgot-team">Team Number</label>
-                            <input id="forgot-team" type="number" required />
+                        <div id="forgot-credentials-fields" class="hidden" hidden>
+                            <div class="field">
+                                <label for="forgot-username">Username</label>
+                                <input id="forgot-username" type="text" />
+                            </div>
+                            <div class="field">
+                                <label for="forgot-team">Team Number</label>
+                                <input id="forgot-team" type="number" />
+                            </div>
                         </div>
                         <button id="forgot-submit" class="btn" type="submit">Send reset link</button>
                         <button id="forgot-back-to-login" class="btn ghost mt-12" type="button">Back to sign in</button>
