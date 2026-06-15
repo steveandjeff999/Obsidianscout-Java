@@ -189,3 +189,15 @@ object EpaOprHistoryCache : IntIdTable("epa_opr_history_cache") {
         uniqueIndex("ux_epa_opr_history_cache_event", eventKey)
     }
 }
+
+object PasswordResetTokens : IntIdTable("password_reset_tokens") {
+    val userId = reference("user_id", Users)
+    val token = varchar("token", 128)
+    val expiresAt = timestamp("expires_at")
+    val used = bool("used").default(false)
+
+    init {
+        uniqueIndex("ux_password_reset_tokens_token", token)
+    }
+}
+

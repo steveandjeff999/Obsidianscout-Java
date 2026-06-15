@@ -102,6 +102,77 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // Forgot password panel switching
+    const forgotLink = document.getElementById("forgot-password-link");
+    const forgotPanel = document.getElementById("forgot-password-panel");
+    const forgotForm = document.getElementById("forgot-password-form");
+    const forgotSubmit = document.getElementById("forgot-submit");
+    const forgotBack = document.getElementById("forgot-back-to-login");
+    const authTabs = document.getElementById("auth-tabs");
+
+    if (forgotLink && forgotPanel && forgotBack && authTabs) {
+        forgotLink.addEventListener("click", (e) => {
+            e.preventDefault();
+            loginPanel.classList.add("hidden");
+            loginPanel.hidden = true;
+            registerPanel.classList.add("hidden");
+            registerPanel.hidden = true;
+            authTabs.classList.add("hidden");
+            authTabs.hidden = true;
+
+            forgotPanel.classList.remove("hidden");
+            forgotPanel.hidden = false;
+        });
+
+        forgotBack.addEventListener("click", () => {
+            forgotPanel.classList.add("hidden");
+            forgotPanel.hidden = true;
+            authTabs.classList.remove("hidden");
+            authTabs.hidden = false;
+
+            // default back to login tab
+            tabs.forEach((t) => t.classList.remove("active"));
+            tabs[0].classList.add("active");
+            loginPanel.classList.remove("hidden");
+            loginPanel.hidden = false;
+        });
+    }
+
+    if (forgotForm && forgotSubmit) {
+        forgotForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            forgotSubmit.disabled = true;
+
+            const username = document.getElementById("forgot-username").value.trim();
+            const teamNumber = parseInt(document.getElementById("forgot-team").value, 10);
+
+            try {
+                const response = await Obsidianscout.request("/api/auth/forgot-password", {
+                    method: "POST",
+                    json: {
+                        username,
+                        teamNumber
+                    }
+                });
+                Obsidianscout.showToast(response.message || "Reset link sent successfully", "success");
+                
+                // Switch back to login
+                forgotPanel.classList.add("hidden");
+                forgotPanel.hidden = true;
+                authTabs.classList.remove("hidden");
+                authTabs.hidden = false;
+                tabs.forEach((t) => t.classList.remove("active"));
+                tabs[0].classList.add("active");
+                loginPanel.classList.remove("hidden");
+                loginPanel.hidden = false;
+            } catch (error) {
+                Obsidianscout.showToast(error.message || "Failed to send reset link", "error");
+            } finally {
+                forgotSubmit.disabled = false;
+            }
+        });
+    }
+
     // Check for existing session in background
     Obsidianscout.checkLoginStatus().then((loggedIn) => {
         if (loggedIn) {

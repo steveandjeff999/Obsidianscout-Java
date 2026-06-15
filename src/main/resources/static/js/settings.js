@@ -119,7 +119,31 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalEmailWidget(currentMe) {
+        const personalEmail = document.getElementById("personal-email");
+        const personalSaveEmail = document.getElementById("personal-save-email");
+        if (!personalEmail || !personalSaveEmail) return;
+
+        personalEmail.value = currentMe.email || "";
+
+        personalSaveEmail.addEventListener("click", async () => {
+            const emailVal = personalEmail.value.trim();
+            try {
+                const updated = await Obsidianscout.request("/api/user/profile-picture", {
+                    method: "PUT",
+                    json: { email: emailVal }
+                });
+                currentMe.email = updated.email;
+                personalEmail.value = updated.email || "";
+                Obsidianscout.showToast("Email address updated", "success");
+            } catch (err) {
+                Obsidianscout.showToast(err.message || "Failed to update email", "error");
+            }
+        });
+    }
+
     const isUserAdmin = Obsidianscout.isAdmin(me.role);
+    const isUserSuperAdmin = Obsidianscout.isSuperAdmin(me.role);
     if (!isUserAdmin) {
         // Hide admin tabs
         const tabConfig = document.getElementById("tab-config");
@@ -160,6 +184,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         wirePersonalAvatarWidget(me);
+        wirePersonalEmailWidget(me);
 
         wireTabs();
         return;
@@ -208,9 +233,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         try {
             const mode = configModes[activeConfigKind];
-            const [configResponse, settingsResponse] = await Promise.all([
+            const [configResponse, settingsResponse, emailResponse] = await Promise.all([
                 Obsidianscout.request(mode.apiPath + "?local=true"),
-                Obsidianscout.request("/api/settings?local=true")
+                Obsidianscout.request("/api/settings?local=true"),
+                isUserSuperAdmin ? Obsidianscout.request("/api/admin/email-settings") : Promise.resolve(null)
             ]);
 
             adminPanelWrapper.innerHTML = originalAdminPanelHTML;
@@ -243,6 +269,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             wirePersonalAvatarWidget(me);
+            wirePersonalEmailWidget(me);
 
             // Sub-tab switching logic
             if (btnVisual && btnRaw && containerVisual && containerRaw) {
@@ -431,6 +458,67 @@ document.addEventListener("DOMContentLoaded", async () => {
                     Obsidianscout.showToast(error.message || "Save failed", "error");
                 }
             });
+
+            // Populate email settings if superadmin
+            if (isUserSuperAdmin && emailResponse) {
+                const tabEmail = document.getElementById("tab-email");
+                if (tabEmail) tabEmail.classList.remove("hidden");
+
+                document.getElementById("settings-email-host").value = emailResponse.host || "";
+                document.getElementById("settings-email-port").value = emailResponse.port || 587;
+                document.getElementById("settings-email-username").value = emailResponse.username || "";
+                document.getElementById("settings-email-password").value = emailResponse.passwordPlain || "";
+                document.getElementById("settings-email-from").value = emailResponse.fromAddress || "";
+                document.getElementById("settings-email-encryption").value = emailResponse.encryption || "STARTTLS";
+
+                // Save SMTP settings listener
+                document.getElementById("settings-email-save").addEventListener("click", async () => {
+                    const payload = {
+                        host: document.getElementById("settings-email-host").value.trim(),
+                        port: parseInt(document.getElementById("settings-email-port").value, 10) || 587,
+                        username: document.getElementById("settings-email-username").value.trim(),
+                        passwordPlain: document.getElementById("settings-email-password").value.trim(),
+                        fromAddress: document.getElementById("settings-email-from").value.trim(),
+                        encryption: document.getElementById("settings-email-encryption").value
+                    };
+                    try {
+                        await Obsidianscout.request("/api/admin/email-settings", {
+                            method: "PUT",
+                            json: payload
+                        });
+                        Obsidianscout.showToast("Email settings saved", "success");
+                    } catch (err) {
+                        Obsidianscout.showToast(err.message || "Failed to save email settings", "error");
+                    }
+                });
+
+                // Test SMTP settings listener
+                document.getElementById("settings-email-test").addEventListener("click", async () => {
+                    const testEmail = document.getElementById("settings-email-test-address").value.trim();
+                    if (!testEmail) {
+                        Obsidianscout.showToast("Please enter a recipient email address", "error");
+                        return;
+                    }
+                    Obsidianscout.showToast("Sending test email...", "info");
+                    try {
+                        await Obsidianscout.request("/api/admin/email-settings/test", {
+                            method: "POST",
+                            json: {
+                                host: document.getElementById("settings-email-host").value.trim(),
+                                port: parseInt(document.getElementById("settings-email-port").value, 10) || 587,
+                                username: document.getElementById("settings-email-username").value.trim(),
+                                passwordPlain: document.getElementById("settings-email-password").value.trim(),
+                                fromAddress: document.getElementById("settings-email-from").value.trim(),
+                                encryption: document.getElementById("settings-email-encryption").value,
+                                testEmail: testEmail
+                            }
+                        });
+                        Obsidianscout.showToast("Test email sent successfully", "success");
+                    } catch (err) {
+                        Obsidianscout.showToast(err.message || "Failed to send test email", "error");
+                    }
+                });
+            }
 
         } catch (error) {
             console.error("Failed to load settings data:", error);

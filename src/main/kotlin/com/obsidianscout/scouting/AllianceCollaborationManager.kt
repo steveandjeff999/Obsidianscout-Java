@@ -9,7 +9,7 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.concurrent.ConcurrentHashMap
@@ -53,8 +53,8 @@ object AllianceCollaborationManager {
         
         // Send initial state to the newly connected client
         val initialConfig = transaction {
-            val alliance = ScoutingAlliances
-                .select { ScoutingAlliances.id eq allianceId }
+             val alliance = ScoutingAlliances
+                .selectAll().where { ScoutingAlliances.id eq allianceId }
                 .firstOrNull()
             if (alliance != null) {
                 when (kind) {

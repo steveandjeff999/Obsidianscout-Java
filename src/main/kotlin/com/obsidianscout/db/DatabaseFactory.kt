@@ -72,7 +72,8 @@ object DatabaseFactory {
                 ApiMatches,
                 ScoutingAlliances,
                 AllianceMemberships,
-                EpaOprHistoryCache
+                EpaOprHistoryCache,
+                PasswordResetTokens
             )
         }
     }

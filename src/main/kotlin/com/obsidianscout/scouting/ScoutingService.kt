@@ -16,7 +16,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.insertAndGetId
@@ -63,7 +62,7 @@ object ScoutingService {
             val rows = query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).toList()
             val matchKeys = rows.mapNotNull { it[ScoutingEntries.matchKey] }.distinct()
             val matchTimes = if (matchKeys.isNotEmpty()) {
-                com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
+                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
                     .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
             } else {
                 emptyMap()
@@ -104,7 +103,7 @@ object ScoutingService {
             val rows = query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).toList()
             val matchKeys = rows.mapNotNull { it[ScoutingEntries.matchKey] }.distinct()
             val matchTimes = if (matchKeys.isNotEmpty()) {
-                com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
+                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
                     .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
             } else {
                 emptyMap()
@@ -155,7 +154,7 @@ object ScoutingService {
     fun recalculateDiscrepancies(eventKey: String?, matchKey: String?, targetTeamNumber: Int?, isPrescout: Boolean) {
         if (eventKey == null || matchKey == null || targetTeamNumber == null) return
         transaction {
-            val entries = ScoutingEntries.select {
+            val entries = ScoutingEntries.selectAll().where {
                 (ScoutingEntries.eventKey eq eventKey) and
                 (ScoutingEntries.matchKey eq matchKey) and
                 (ScoutingEntries.targetTeamNumber eq targetTeamNumber) and
@@ -217,7 +216,7 @@ object ScoutingService {
         val duplicate = transaction {
             val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
             val visibleTeams = partnerTeams + session.teamNumber
-            ScoutingEntries.select {
+            ScoutingEntries.selectAll().where {
                 (ScoutingEntries.ownerTeamNumber inList visibleTeams) and
                 (ScoutingEntries.targetTeamNumber eq meta.targetTeamNumber) and
                 (ScoutingEntries.eventKey eq meta.eventKey) and
@@ -233,7 +232,7 @@ object ScoutingService {
             val mKey = duplicate[ScoutingEntries.matchKey]
             val matchPlayedTime = transaction {
                 mKey?.let { mk ->
-                    com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey eq mk }
+                    com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mk }
                         .limit(1)
                         .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
                         .firstOrNull()
@@ -278,8 +277,8 @@ object ScoutingService {
         recalculateDiscrepancies(meta.eventKey, meta.matchKey, meta.targetTeamNumber, isPrescout)
 
         val matchPlayedTime = transaction {
-            meta.matchKey?.let { mKey ->
-                com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey eq mKey }
+            meta.matchKey.let { mKey ->
+                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mKey }
                     .limit(1)
                     .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
                     .firstOrNull()
@@ -287,7 +286,7 @@ object ScoutingService {
         }
 
         return transaction {
-            val updatedRow = ScoutingEntries.select { ScoutingEntries.id eq id.value }.first()
+            val updatedRow = ScoutingEntries.selectAll().where { ScoutingEntries.id eq id.value }.first()
             val conflictStr = updatedRow[ScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
             ScoutingEntryRecord(
@@ -345,7 +344,7 @@ object ScoutingService {
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
 
         return transaction {
-            val row = ScoutingEntries.select { ScoutingEntries.id eq entryId }.firstOrNull()
+            val row = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryId }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Scouting entry not found")
 
             val ownerTeam = row[ScoutingEntries.ownerTeamNumber]
@@ -380,11 +379,11 @@ object ScoutingService {
             recalculateDiscrepancies(oldEventKey, oldMatchKey, oldTargetTeamNumber, oldIsPrescout)
             recalculateDiscrepancies(meta.eventKey, meta.matchKey, meta.targetTeamNumber, oldIsPrescout)
 
-            val updatedRow = ScoutingEntries.select { ScoutingEntries.id eq entryId }.first()
+            val updatedRow = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryId }.first()
             val data = JsonSupport.json.parseToJsonElement(updatedRow[ScoutingEntries.dataJson]).jsonObject
             val mKey = updatedRow[ScoutingEntries.matchKey]
             val matchPlayedTime = mKey?.let { mk ->
-                com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.matchKey eq mk }
+                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mk }
                     .limit(1)
                     .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
                     .firstOrNull()
@@ -410,7 +409,7 @@ object ScoutingService {
 
     fun deleteEntry(session: UserSession, entryId: Int) {
         transaction {
-            val row = ScoutingEntries.select { ScoutingEntries.id eq entryId }.firstOrNull()
+            val row = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryId }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Scouting entry not found")
 
             val ownerTeam = row[ScoutingEntries.ownerTeamNumber]

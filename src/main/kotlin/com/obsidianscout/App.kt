@@ -76,6 +76,7 @@ fun main() {
     embeddedServer(Netty, environment) {
         channelPipelineConfig = {
             addLast("ssl-connection-closer", object : ChannelInboundHandlerAdapter() {
+                @Suppress("OVERRIDE_DEPRECATION")
                 override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
                     if (cause.isIgnorableException()) {
                         ctx.close()

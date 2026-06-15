@@ -12,7 +12,6 @@ import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
 import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -51,7 +50,7 @@ object AuthService {
     fun ensureSeedSuperAdmin(seed: SeedConfig) {
         transaction {
             val superAdminExists = Users
-                .select { Users.role eq UserRole.SUPERADMIN.name }
+                .selectAll().where { Users.role eq UserRole.SUPERADMIN.name }
                 .limit(1)
                 .firstOrNull() != null
             if (!superAdminExists) {
@@ -71,7 +70,7 @@ object AuthService {
         // Fetch the stored hash first (short transaction — just a DB read).
         val (hash, record) = transaction {
             val row = Users
-                .select { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
+                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
                 .limit(1)
                 .firstOrNull()
                 ?: return@transaction null
@@ -104,7 +103,7 @@ object AuthService {
         val hash = hashPassword(password)
         return transaction {
             val existing = Users
-                .select { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
+                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
                 .limit(1)
                 .any()
             if (existing) {
@@ -118,7 +117,7 @@ object AuthService {
                 it[Users.createdAt] = Instant.now()
                 it[Users.email] = email?.takeIf { it.isNotBlank() }
             }
-            val row = Users.select { Users.id eq id }.first()
+            val row = Users.selectAll().where { Users.id eq id }.first()
             rowToUser(row)
         }
     }
@@ -149,7 +148,7 @@ object AuthService {
                     q
                 }
                 UserRole.ADMIN -> {
-                    val q = Users.select { Users.teamNumber eq callerSession.teamNumber }
+                    val q = Users.selectAll().where { Users.teamNumber eq callerSession.teamNumber }
                     if (teamFilter != null && teamFilter != callerSession.teamNumber) {
                         q.andWhere { Users.teamNumber eq -1 }
                     }
@@ -207,7 +206,7 @@ object AuthService {
         val hash = hashPassword(password)
         return transaction {
             val existing = Users
-                .select { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
+                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
                 .limit(1)
                 .any()
             if (existing) {
@@ -221,7 +220,7 @@ object AuthService {
                 it[Users.createdAt] = Instant.now()
                 it[Users.email] = email?.takeIf { it.isNotBlank() }
             }
-            val row = Users.select { Users.id eq id }.first()
+            val row = Users.selectAll().where { Users.id eq id }.first()
             rowToUser(row)
         }
     }
@@ -248,7 +247,7 @@ object AuthService {
             ?.let { hashPassword(it) }
 
         return transaction {
-            val targetRow = Users.select { Users.id eq targetUserId }
+            val targetRow = Users.selectAll().where { Users.id eq targetUserId }
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "User not found")
 
@@ -289,14 +288,14 @@ object AuthService {
                 }
             }
 
-            val updated = Users.select { Users.id eq targetUserId }.first()
+            val updated = Users.selectAll().where { Users.id eq targetUserId }.first()
             rowToUser(updated)
         }
     }
 
     fun getUserById(userId: Int): UserRecord? {
         return transaction {
-            Users.select { Users.id eq userId }
+            Users.selectAll().where { Users.id eq userId }
                 .limit(1)
                 .map { rowToUser(it) }
                 .firstOrNull()

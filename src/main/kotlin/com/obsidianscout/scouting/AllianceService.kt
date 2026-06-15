@@ -94,14 +94,13 @@ object AllianceService {
     fun listAlliances(session: UserSession): List<AllianceRecord> = transaction {
         if (session.role == UserRole.SUPERADMIN) {
             val ids = ScoutingAlliances
-                .slice(ScoutingAlliances.id)
-                .selectAll()
+                .select(ScoutingAlliances.id)
                 .map { it[ScoutingAlliances.id].value }
             buildRecords(ids)
         } else {
             // find all alliance IDs this team belongs to (admin or accepted)
             val allianceIds = AllianceMemberships
-                .select {
+                .selectAll().where {
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
                     (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED))
                 }
@@ -116,7 +115,7 @@ object AllianceService {
      */
     fun listInvites(session: UserSession): List<AllianceRecord> = transaction {
         val allianceIds = AllianceMemberships
-            .select {
+            .selectAll().where {
                 (AllianceMemberships.teamNumber eq session.teamNumber) and
                 (AllianceMemberships.status eq STATUS_INVITED)
             }
@@ -130,7 +129,7 @@ object AllianceService {
      */
     fun getInviteCount(teamNumber: Int): Int = transaction {
         AllianceMemberships
-            .select {
+            .selectAll().where {
                 (AllianceMemberships.teamNumber eq teamNumber) and
                 (AllianceMemberships.status eq STATUS_INVITED)
             }
@@ -272,7 +271,7 @@ object AllianceService {
         transaction {
             // Check if already a member
             val existing = AllianceMemberships
-                .select {
+                .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
                     (AllianceMemberships.teamNumber eq partnerTeamNumber)
                 }
@@ -314,8 +313,8 @@ object AllianceService {
      */
     fun respondToInvite(session: UserSession, allianceId: Int, accept: Boolean) {
         transaction {
-            val row = AllianceMemberships
-                .select {
+            AllianceMemberships
+                .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
                     (AllianceMemberships.status eq STATUS_INVITED)
@@ -324,7 +323,7 @@ object AllianceService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "No pending invite found for your team in this alliance")
 
             if (accept) {
-                val hasAnyActive = AllianceMemberships.select {
+                val hasAnyActive = AllianceMemberships.selectAll().where {
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
                     (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
                     (AllianceMemberships.active eq true)
@@ -357,12 +356,12 @@ object AllianceService {
      */
     fun removeMember(session: UserSession, allianceId: Int, targetTeamNumber: Int) {
         transaction {
-            val alliance = ScoutingAlliances.select { ScoutingAlliances.id eq allianceId }.firstOrNull()
+            ScoutingAlliances.selectAll().where { ScoutingAlliances.id eq allianceId }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Alliance not found")
 
             // Check if caller is admin in the alliance
             val isCallerAdmin = AllianceMemberships
-                .select {
+                .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
                     (AllianceMemberships.status eq STATUS_ADMIN)
@@ -376,7 +375,7 @@ object AllianceService {
 
             // Check target status
             val targetMembership = AllianceMemberships
-                .select {
+                .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
                     (AllianceMemberships.teamNumber eq targetTeamNumber)
                 }
@@ -385,7 +384,7 @@ object AllianceService {
             val isTargetAdmin = targetMembership[AllianceMemberships.status] == STATUS_ADMIN
             if (isTargetAdmin) {
                 val adminCount = AllianceMemberships
-                    .select {
+                    .selectAll().where {
                         (AllianceMemberships.allianceId eq allianceId) and
                         (AllianceMemberships.status eq STATUS_ADMIN)
                     }
@@ -436,24 +435,24 @@ object AllianceService {
             val importedMatch = if (includeMatchScouting) {
                 val sourceRows = (when {
                     importOnlyNullEvent -> ScoutingEntries
-                        .select {
+                        .selectAll().where {
                             (ScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
                             ScoutingEntries.eventKey.isNull()
                         }
                     selectedEventKey == null -> {
                     ScoutingEntries
-                        .select { ScoutingEntries.ownerTeamNumber eq sourceTeamNumber }
+                        .selectAll().where { ScoutingEntries.ownerTeamNumber eq sourceTeamNumber }
                     }
                     else -> {
                     ScoutingEntries
-                        .select {
+                        .selectAll().where {
                             (ScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
                             (ScoutingEntries.eventKey eq selectedEventKey)
                         }
                     }
                 }).toList()
                 val existing = ScoutingEntries
-                    .select { ScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                    .selectAll().where { ScoutingEntries.ownerTeamNumber eq session.teamNumber }
                     .map { row ->
                         scoutingFingerprint(
                             row[ScoutingEntries.targetTeamNumber],
@@ -499,24 +498,24 @@ object AllianceService {
             val importedPit = if (includePitScouting) {
                 val sourceRows = (when {
                     importOnlyNullEvent -> PitScoutingEntries
-                        .select {
+                        .selectAll().where {
                             (PitScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
                             PitScoutingEntries.eventKey.isNull()
                         }
                     selectedEventKey == null -> {
                     PitScoutingEntries
-                        .select { PitScoutingEntries.ownerTeamNumber eq sourceTeamNumber }
+                        .selectAll().where { PitScoutingEntries.ownerTeamNumber eq sourceTeamNumber }
                     }
                     else -> {
                     PitScoutingEntries
-                        .select {
+                        .selectAll().where {
                             (PitScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
                             (PitScoutingEntries.eventKey eq selectedEventKey)
                         }
                     }
                 }).toList()
                 val existing = PitScoutingEntries
-                    .select { PitScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                    .selectAll().where { PitScoutingEntries.ownerTeamNumber eq session.teamNumber }
                     .map { row ->
                         pitFingerprint(
                             row[PitScoutingEntries.targetTeamNumber],
@@ -556,24 +555,24 @@ object AllianceService {
             val importedQualitative = if (includeQualitativeScouting) {
                 val sourceRows = (when {
                     importOnlyNullEvent -> QualitativeScoutingEntries
-                        .select {
+                        .selectAll().where {
                             (QualitativeScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
                             QualitativeScoutingEntries.eventKey.isNull()
                         }
                     selectedEventKey == null -> {
                     QualitativeScoutingEntries
-                        .select { QualitativeScoutingEntries.ownerTeamNumber eq sourceTeamNumber }
+                        .selectAll().where { QualitativeScoutingEntries.ownerTeamNumber eq sourceTeamNumber }
                     }
                     else -> {
                     QualitativeScoutingEntries
-                        .select {
+                        .selectAll().where {
                             (QualitativeScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
                             (QualitativeScoutingEntries.eventKey eq selectedEventKey)
                         }
                     }
                 }).toList()
                 val existing = QualitativeScoutingEntries
-                    .select { QualitativeScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                    .selectAll().where { QualitativeScoutingEntries.ownerTeamNumber eq session.teamNumber }
                     .map { row ->
                         scoutingFingerprint(
                             row[QualitativeScoutingEntries.targetTeamNumber],
@@ -671,7 +670,7 @@ object AllianceService {
     fun getAlliancePartnerTeams(teamNumber: Int): Set<Int> = transaction {
         // Find all alliance IDs where this team is ADMIN or ACCEPTED and active
         val myAllianceIds = AllianceMemberships
-            .select {
+            .selectAll().where {
                 (AllianceMemberships.teamNumber eq teamNumber) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
                 (AllianceMemberships.active eq true)
@@ -682,7 +681,7 @@ object AllianceService {
 
         // Find all other ACCEPTED/ADMIN members in those alliances who are also active
         AllianceMemberships
-            .select {
+            .selectAll().where {
                 (AllianceMemberships.allianceId inList myAllianceIds) and
                 (AllianceMemberships.teamNumber neq teamNumber) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
@@ -698,7 +697,7 @@ object AllianceService {
      */
     fun getActiveAllianceId(teamNumber: Int): Int? = transaction {
         AllianceMemberships
-            .select {
+            .selectAll().where {
                 (AllianceMemberships.teamNumber eq teamNumber) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
                 (AllianceMemberships.active eq true)
@@ -713,7 +712,7 @@ object AllianceService {
      */
     fun isAllianceAdmin(teamNumber: Int, allianceId: Int): Boolean = transaction {
         AllianceMemberships
-            .select {
+            .selectAll().where {
                 (AllianceMemberships.allianceId eq allianceId) and
                 (AllianceMemberships.teamNumber eq teamNumber) and
                 (AllianceMemberships.status eq STATUS_ADMIN)
@@ -728,7 +727,7 @@ object AllianceService {
         requireAdmin(session, allianceId)
         transaction {
             val membership = AllianceMemberships
-                .select {
+                .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
                     (AllianceMemberships.teamNumber eq targetTeamNumber)
                 }
@@ -755,7 +754,7 @@ object AllianceService {
     fun getAlliance(session: UserSession, allianceId: Int): AllianceRecord {
         return transaction {
             val isMember = AllianceMemberships
-                .select {
+                .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
                     (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED))
@@ -774,8 +773,8 @@ object AllianceService {
      */
     fun toggleActiveMembership(session: UserSession, allianceId: Int, active: Boolean) {
         transaction {
-            val membership = AllianceMemberships
-                .select {
+            AllianceMemberships
+                .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
                     (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED))
@@ -812,7 +811,7 @@ object AllianceService {
         if (session.role == UserRole.SUPERADMIN) return
         transaction {
             val isAdmin = AllianceMemberships
-                .select {
+                .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
                     (AllianceMemberships.status eq STATUS_ADMIN)
@@ -833,7 +832,7 @@ object AllianceService {
         if (allianceIds.isEmpty()) return emptyList()
 
         val alliancesMap = ScoutingAlliances
-            .slice(
+            .select(
                 ScoutingAlliances.id,
                 ScoutingAlliances.name,
                 ScoutingAlliances.ownerTeamNumber,
@@ -844,11 +843,11 @@ object AllianceService {
                 ScoutingAlliances.year,
                 ScoutingAlliances.eventCode
             )
-            .select { ScoutingAlliances.id inList allianceIds }
+            .where { ScoutingAlliances.id inList allianceIds }
             .associateBy { it[ScoutingAlliances.id].value }
 
         val membershipsMap = AllianceMemberships
-            .select { AllianceMemberships.allianceId inList allianceIds }
+            .selectAll().where { AllianceMemberships.allianceId inList allianceIds }
             .groupBy { it[AllianceMemberships.allianceId].value }
 
         return allianceIds.mapNotNull { id ->
@@ -891,8 +890,8 @@ object AllianceService {
         val activeAllianceId = getActiveAllianceId(teamNumber) ?: return@transaction localSettings
 
         val allianceRow = ScoutingAlliances
-            .slice(ScoutingAlliances.year, ScoutingAlliances.eventCode, ScoutingAlliances.eventKey)
-            .select { ScoutingAlliances.id eq activeAllianceId }
+            .select(ScoutingAlliances.year, ScoutingAlliances.eventCode, ScoutingAlliances.eventKey)
+            .where { ScoutingAlliances.id eq activeAllianceId }
             .firstOrNull() ?: return@transaction localSettings
 
         val allianceYear = allianceRow[ScoutingAlliances.year]
@@ -915,7 +914,7 @@ object AllianceService {
 
         // Active member team numbers (including ourselves)
         val memberTeamNumbers = AllianceMemberships
-            .select {
+            .selectAll().where {
                 (AllianceMemberships.allianceId eq activeAllianceId) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
                 (AllianceMemberships.active eq true)

@@ -283,3 +283,34 @@ data class ToggleAllianceDisableRequest(
 data class ToggleAllianceActiveRequest(
     val active: Boolean
 )
+
+@Serializable
+data class ForgotPasswordRequest(
+    val username: String,
+    val teamNumber: Int
+)
+
+@Serializable
+data class VerifyResetTokenResponse(
+    val valid: Boolean,
+    val username: String? = null,
+    val teamNumber: Int? = null
+)
+
+@Serializable
+data class ResetPasswordRequest(
+    val token: String,
+    val newPassword: String
+)
+
+@Serializable
+data class SmtpTestConnectionRequest(
+    val host: String,
+    val port: Int,
+    val username: String,
+    val passwordPlain: String,
+    val fromAddress: String,
+    val encryption: String,
+    val testEmail: String
+)
+

@@ -48,6 +48,7 @@ dependencies {
     implementation("com.auth0:java-jwt:4.4.0")
 
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
+    implementation("org.eclipse.angus:jakarta.mail:2.0.3")
     testImplementation(kotlin("test"))
 }
 

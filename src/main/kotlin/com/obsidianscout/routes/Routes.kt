@@ -9,6 +9,12 @@ import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.requireAdmin
 import com.obsidianscout.auth.requireAnalyticsOrAbove
 import com.obsidianscout.auth.requireSession
+import com.obsidianscout.auth.requireSuperAdmin
+import com.obsidianscout.auth.EmailService
+import com.obsidianscout.db.PasswordResetTokens
+import com.obsidianscout.integrations.SmtpSettings
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.update
 import com.obsidianscout.config.ConfigService
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.integrations.ApiSettings
@@ -53,7 +59,7 @@ import io.ktor.websocket.close
 import com.obsidianscout.scouting.AllianceCollaborationManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import com.obsidianscout.utils.*
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.and
 import com.obsidianscout.db.AllianceMemberships
 import com.obsidianscout.db.ScoutingAlliances
@@ -164,6 +170,177 @@ fun Application.configureRoutes() {
                         AuthProviderInfo("oauth", false)
                     )
                     call.respond(AuthProvidersResponse(providers))
+                }
+
+                post("/forgot-password") {
+                    val request = call.receive<ForgotPasswordRequest>()
+                    val smtp = SettingsService.getSmtpSettings()
+                    if (smtp.host.isBlank()) {
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.ServiceUnavailable,
+                            "SMTP email settings are not configured. Please contact a superadmin."
+                        )
+                    }
+
+                    val user = transaction {
+                        com.obsidianscout.db.Users
+                            .selectAll().where { 
+                                (com.obsidianscout.db.Users.username eq request.username) and 
+                                (com.obsidianscout.db.Users.teamNumber eq request.teamNumber) 
+                            }
+                            .limit(1)
+                            .firstOrNull()
+                    }
+
+                    if (user == null) {
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.NotFound,
+                            "User not found on team."
+                        )
+                    }
+
+                    val userEmail = user[com.obsidianscout.db.Users.email]
+                    if (userEmail.isNullOrBlank()) {
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.BadRequest,
+                            "This account does not have a registered email address. Please contact your team admin."
+                        )
+                    }
+
+                    val token = java.util.UUID.randomUUID().toString()
+                    val expires = java.time.Instant.now().plus(1, java.time.temporal.ChronoUnit.HOURS)
+                    val userIdVal = user[com.obsidianscout.db.Users.id]
+                    
+                    transaction {
+                        com.obsidianscout.db.PasswordResetTokens.update({ 
+                            (com.obsidianscout.db.PasswordResetTokens.userId eq userIdVal) and 
+                            (com.obsidianscout.db.PasswordResetTokens.used eq false) 
+                        }) {
+                            it[used] = true
+                        }
+
+                        com.obsidianscout.db.PasswordResetTokens.insert {
+                            it[userId] = userIdVal
+                            it[com.obsidianscout.db.PasswordResetTokens.token] = token
+                            it[expiresAt] = expires
+                        }
+                    }
+
+                    val hostHeader = call.request.headers["Host"] ?: "localhost:8080"
+                    val scheme = call.request.headers["X-Forwarded-Proto"] ?: "http"
+                    val baseUrl = "$scheme://$hostHeader"
+                    
+                    try {
+                        EmailService.sendForgotPasswordEmail(
+                            to = userEmail,
+                            username = request.username,
+                            teamNumber = request.teamNumber,
+                            token = token,
+                            baseUrl = baseUrl
+                        )
+                    } catch (e: Exception) {
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.InternalServerError,
+                            "Failed to send email: ${e.message}"
+                        )
+                    }
+
+                    call.respond(mapOf("message" to "Password reset link sent to registered email."))
+                }
+
+                get("/verify-reset-token") {
+                    val token = call.request.queryParameters["token"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing token")
+                    
+                    val tokenRow = transaction {
+                        com.obsidianscout.db.PasswordResetTokens
+                            .selectAll().where { 
+                                (com.obsidianscout.db.PasswordResetTokens.token eq token) and 
+                                (com.obsidianscout.db.PasswordResetTokens.used eq false) 
+                            }
+                            .limit(1)
+                            .firstOrNull()
+                    }
+
+                    if (tokenRow == null) {
+                        call.respond(VerifyResetTokenResponse(valid = false))
+                        return@get
+                    }
+
+                    val expiresAt = tokenRow[com.obsidianscout.db.PasswordResetTokens.expiresAt]
+                    if (expiresAt.isBefore(java.time.Instant.now())) {
+                        call.respond(VerifyResetTokenResponse(valid = false))
+                        return@get
+                    }
+
+                    val userIdVal = tokenRow[com.obsidianscout.db.PasswordResetTokens.userId]
+                    val userRow = transaction {
+                        com.obsidianscout.db.Users
+                            .selectAll().where { com.obsidianscout.db.Users.id eq userIdVal }
+                            .limit(1)
+                            .firstOrNull()
+                    }
+
+                    if (userRow == null) {
+                        call.respond(VerifyResetTokenResponse(valid = false))
+                        return@get
+                    }
+
+                    call.respond(
+                        VerifyResetTokenResponse(
+                            valid = true,
+                            username = userRow[com.obsidianscout.db.Users.username],
+                            teamNumber = userRow[com.obsidianscout.db.Users.teamNumber]
+                        )
+                    )
+                }
+
+                post("/reset-password") {
+                    val request = call.receive<ResetPasswordRequest>()
+                    
+                    val tokenRow = transaction {
+                        com.obsidianscout.db.PasswordResetTokens
+                            .selectAll().where { 
+                                (com.obsidianscout.db.PasswordResetTokens.token eq request.token) and 
+                                (com.obsidianscout.db.PasswordResetTokens.used eq false) 
+                            }
+                            .limit(1)
+                            .firstOrNull()
+                    }
+
+                    if (tokenRow == null) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid or expired reset token.")
+                    }
+
+                    val expiresAt = tokenRow[com.obsidianscout.db.PasswordResetTokens.expiresAt]
+                    if (expiresAt.isBefore(java.time.Instant.now())) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid or expired reset token.")
+                    }
+
+                    val userIdVal = tokenRow[com.obsidianscout.db.PasswordResetTokens.userId]
+                    
+                    transaction {
+                        com.obsidianscout.auth.AuthService.updateUser(
+                            callerSession = com.obsidianscout.auth.UserSession(
+                                userId = userIdVal.value,
+                                username = "SYSTEM",
+                                teamNumber = 0,
+                                role = com.obsidianscout.auth.UserRole.SUPERADMIN
+                            ),
+                            targetUserId = userIdVal.value,
+                            newUsername = null,
+                            newPassword = request.newPassword,
+                            newRole = null
+                        )
+
+                        com.obsidianscout.db.PasswordResetTokens.update({ 
+                            com.obsidianscout.db.PasswordResetTokens.id eq tokenRow[com.obsidianscout.db.PasswordResetTokens.id] 
+                        }) {
+                            it[used] = true
+                        }
+                    }
+
+                    call.respond(mapOf("message" to "Password has been reset successfully."))
                 }
             }
 
@@ -485,8 +662,8 @@ fun Application.configureRoutes() {
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
                     val settings = AllianceService.getEffectiveSettings(session.teamNumber)
                     val (cachedTeams, cachedMatches) = transaction {
-                        val teamCount = com.obsidianscout.db.ApiTeams.select { com.obsidianscout.db.ApiTeams.eventKey eq eventKey }.count().toInt()
-                        val matchCount = com.obsidianscout.db.ApiMatches.select { com.obsidianscout.db.ApiMatches.eventKey eq eventKey }.count().toInt()
+                        val teamCount = com.obsidianscout.db.ApiTeams.selectAll().where { com.obsidianscout.db.ApiTeams.eventKey eq eventKey }.count().toInt()
+                        val matchCount = com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.eventKey eq eventKey }.count().toInt()
                         Pair(teamCount, matchCount)
                     }
                     com.obsidianscout.integrations.SyncScheduler.enqueueCustomEventDataSync(settings, eventKey)
@@ -708,6 +885,45 @@ fun Application.configureRoutes() {
                     )
                     call.respond(updated)
                 }
+
+                get("/email-settings") {
+                    call.requireSuperAdmin()
+                    call.respond(SettingsService.getSmtpSettings())
+                }
+
+                put("/email-settings") {
+                    call.requireSuperAdmin()
+                    val smtp = call.receive<SmtpSettings>()
+                    val saved = SettingsService.updateSmtpSettings(smtp)
+                    call.respond(saved)
+                }
+
+                post("/email-settings/test") {
+                    call.requireSuperAdmin()
+                    val testReq = call.receive<SmtpTestConnectionRequest>()
+                    val tempSmtp = SmtpSettings(
+                        host = testReq.host,
+                        port = testReq.port,
+                        username = testReq.username,
+                        passwordPlain = testReq.passwordPlain,
+                        fromAddress = testReq.fromAddress,
+                        encryption = testReq.encryption
+                    )
+                    try {
+                        EmailService.sendEmailWithSettings(
+                            to = testReq.testEmail,
+                            subject = "ObsidianScout SMTP Test Connection",
+                            body = "If you are reading this email, the SMTP configuration on ObsidianScout was successful!",
+                            settings = tempSmtp
+                        )
+                        call.respond(mapOf("success" to true))
+                    } catch (e: Exception) {
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.BadRequest,
+                            "SMTP connection test failed: ${e.message}"
+                        )
+                    }
+                }
             } // end /admin route
 
             // Self-service profile picture endpoint (any authenticated user)
@@ -720,12 +936,12 @@ fun Application.configureRoutes() {
                     newUsername = null,
                     newPassword = null,
                     newRole = null,
-                    newEmail = null,
+                    newEmail = request.email,
                     newProfilePicture = request.profilePicture,
                     clearProfilePicture = request.clearProfilePicture
                 )
-                // Refresh the session so /api/auth/me returns the updated picture
-                val updatedSession = session.copy(profilePicture = null)
+                // Refresh the session so /api/auth/me returns the updated picture and email
+                val updatedSession = session.copy(profilePicture = null, email = updated.email)
                 call.sessions.set(updatedSession)
                 call.respond(updated)
             }
@@ -840,7 +1056,7 @@ fun Application.configureRoutes() {
                     AllianceService.getAlliance(session, id)
                     
                     val configJson = transaction {
-                        val row = ScoutingAlliances.select { ScoutingAlliances.id eq id }.firstOrNull()
+                        val row = ScoutingAlliances.selectAll().where { ScoutingAlliances.id eq id }.firstOrNull()
                         if (row != null) {
                             when (kind) {
                                 "game", "match" -> row[ScoutingAlliances.matchConfigJson]
@@ -891,7 +1107,7 @@ fun Application.configureRoutes() {
                     // Verify user is a member of this alliance
                     val isMember = transaction {
                         AllianceMemberships
-                            .select {
+                            .selectAll().where {
                                 (AllianceMemberships.allianceId eq id) and
                                 (AllianceMemberships.teamNumber eq session.teamNumber) and
                                 (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED"))
@@ -909,6 +1125,7 @@ fun Application.configureRoutes() {
 
         val pages = mapOf(
             "index" to "index.html",
+            "reset-password" to "reset-password.html",
             "dashboard" to "dashboard.html",
             "scout" to "scout.html",
             "pit-scout" to "pit-scout.html",

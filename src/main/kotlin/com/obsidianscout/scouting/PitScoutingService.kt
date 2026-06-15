@@ -17,7 +17,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.insertAndGetId
@@ -124,7 +123,7 @@ object PitScoutingService {
     fun recalculateDiscrepancies(eventKey: String?, targetTeamNumber: Int?, isPrescout: Boolean) {
         if (eventKey == null || targetTeamNumber == null) return
         transaction {
-            val entries = PitScoutingEntries.select {
+            val entries = PitScoutingEntries.selectAll().where {
                 (PitScoutingEntries.eventKey eq eventKey) and
                 (PitScoutingEntries.targetTeamNumber eq targetTeamNumber) and
                 (PitScoutingEntries.isPrescout eq isPrescout)
@@ -184,7 +183,7 @@ object PitScoutingService {
         val duplicate = transaction {
             val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
             val visibleTeams = partnerTeams + session.teamNumber
-            PitScoutingEntries.select {
+            PitScoutingEntries.selectAll().where {
                 (PitScoutingEntries.ownerTeamNumber inList visibleTeams) and
                 (PitScoutingEntries.targetTeamNumber eq meta.targetTeamNumber) and
                 (PitScoutingEntries.eventKey eq meta.eventKey) and
@@ -229,7 +228,7 @@ object PitScoutingService {
         recalculateDiscrepancies(meta.eventKey, meta.targetTeamNumber, isPrescout)
 
         return transaction {
-            val updatedRow = PitScoutingEntries.select { PitScoutingEntries.id eq id.value }.first()
+            val updatedRow = PitScoutingEntries.selectAll().where { PitScoutingEntries.id eq id.value }.first()
             val conflictStr = updatedRow[PitScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
             PitScoutingEntryRecord(
@@ -282,7 +281,7 @@ object PitScoutingService {
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
 
         return transaction {
-            val row = PitScoutingEntries.select { PitScoutingEntries.id eq entryId }.firstOrNull()
+            val row = PitScoutingEntries.selectAll().where { PitScoutingEntries.id eq entryId }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Pit scouting entry not found")
 
             val ownerTeam = row[PitScoutingEntries.ownerTeamNumber]
@@ -313,7 +312,7 @@ object PitScoutingService {
             recalculateDiscrepancies(oldEventKey, oldTargetTeamNumber, oldIsPrescout)
             recalculateDiscrepancies(meta.eventKey, meta.targetTeamNumber, oldIsPrescout)
 
-            val updatedRow = PitScoutingEntries.select { PitScoutingEntries.id eq entryId }.first()
+            val updatedRow = PitScoutingEntries.selectAll().where { PitScoutingEntries.id eq entryId }.first()
             val data = JsonSupport.json.parseToJsonElement(updatedRow[PitScoutingEntries.dataJson]).jsonObject
             val conflictStr = updatedRow[PitScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
@@ -333,7 +332,7 @@ object PitScoutingService {
 
     fun deleteEntry(session: UserSession, entryId: Int) {
         transaction {
-            val row = PitScoutingEntries.select { PitScoutingEntries.id eq entryId }.firstOrNull()
+            val row = PitScoutingEntries.selectAll().where { PitScoutingEntries.id eq entryId }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Pit scouting entry not found")
 
             val ownerTeam = row[PitScoutingEntries.ownerTeamNumber]

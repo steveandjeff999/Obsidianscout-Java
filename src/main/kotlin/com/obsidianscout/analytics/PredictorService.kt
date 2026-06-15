@@ -19,14 +19,14 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.jsonObject
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.andWhere
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import com.obsidianscout.auth.ApiException
 
 object PredictorService {
     fun predict(session: UserSession, matchKey: String, forcePrescout: Boolean = false): MatchPredictionResponse {
         return transaction {
-            val matchRow = ApiMatches.select { ApiMatches.matchKey eq matchKey.lowercase() }
+            val matchRow = ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKey.lowercase() }
                 .limit(1)
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Match not found")
@@ -49,7 +49,7 @@ object PredictorService {
             val useStatboticsEpa = settings.useStatboticsEpa
             val useTbaOpr = settings.useTbaOpr
 
-            val allTeamsInEvent = ApiTeams.select { ApiTeams.eventKey eq eventKey }.toList()
+            val allTeamsInEvent = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
             val bbotMappings = com.obsidianscout.integrations.IntegrationService.getBBotMappings(eventKey)
             
             val teamKeyByNumber = mutableMapOf<Int, String>()
@@ -106,7 +106,7 @@ object PredictorService {
                 }
             }
 
-            val teamRows = ApiTeams.select {
+            val teamRows = ApiTeams.selectAll().where {
                 (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamNumber inList teamNumbers)
             }.toList()
             
@@ -120,7 +120,7 @@ object PredictorService {
 
             val config = ConfigService.getConfig(session.teamNumber)
 
-            val entriesQuery = ScoutingEntries.select {
+            val entriesQuery = ScoutingEntries.selectAll().where {
                 ScoutingEntries.targetTeamNumber inList teamNumbers
             }
             if (session.role != UserRole.SUPERADMIN) {

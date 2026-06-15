@@ -55,6 +55,9 @@
                         <div class="field">
                             <label for="password">Password</label>
                             <input id="password" name="password" type="password" required />
+                            <div class="mt-6" style="text-align: right;">
+                                <a href="#" id="forgot-password-link" style="font-size: 13px; color: var(--primary);">Forgot password?</a>
+                            </div>
                         </div>
                         <div class="field checkbox-field">
                             <input id="keepMeLoggedIn" name="keepMeLoggedIn" type="checkbox" />
@@ -99,6 +102,23 @@
                             <label for="reg-keepMeLoggedIn" data-i18n="index.keep_me_logged_in">Keep me signed in</label>
                         </div>
                         <button id="register-submit" class="btn dark" type="submit" data-i18n="index.register_submit">Create account</button>
+                    </form>
+                </div>
+
+                <div id="forgot-password-panel" class="hidden" hidden>
+                    <h2 class="mb-12">Recover Password</h2>
+                    <p class="notice mb-18">Enter your username and team number. If your account has a registered email, we will send you a password reset link.</p>
+                    <form id="forgot-password-form" class="form-grid" method="POST">
+                        <div class="field">
+                            <label for="forgot-username">Username</label>
+                            <input id="forgot-username" type="text" required />
+                        </div>
+                        <div class="field">
+                            <label for="forgot-team">Team Number</label>
+                            <input id="forgot-team" type="number" required />
+                        </div>
+                        <button id="forgot-submit" class="btn" type="submit">Send reset link</button>
+                        <button id="forgot-back-to-login" class="btn ghost mt-12" type="button">Back to sign in</button>
                     </form>
                 </div>
             </div>

@@ -15,7 +15,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -72,7 +71,7 @@ object ConfigService {
     fun ensureDefaultConfig() {
         transaction {
             val existing = ScoutingConfigs
-                .select { ScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { ScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull() != null
             if (!existing) {
@@ -85,7 +84,7 @@ object ConfigService {
             }
 
             val existingPit = PitScoutingConfigs
-                .select { PitScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { PitScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull() != null
             if (!existingPit) {
@@ -98,7 +97,7 @@ object ConfigService {
             }
 
             val existingQualitative = QualitativeScoutingConfigs
-                .select { QualitativeScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull() != null
             if (!existingQualitative) {
@@ -118,7 +117,7 @@ object ConfigService {
                 val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
                 if (activeAllianceId != null) {
                     val allianceConfig = ScoutingAlliances
-                        .select { ScoutingAlliances.id eq activeAllianceId }
+                        .selectAll().where { ScoutingAlliances.id eq activeAllianceId }
                         .firstOrNull()
                         ?.get(ScoutingAlliances.matchConfigJson)
                     if (!allianceConfig.isNullOrBlank()) {
@@ -129,7 +128,7 @@ object ConfigService {
 
             // Try team-specific config first
             val teamConfig = ScoutingConfigs
-                .select { ScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { ScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
                 ?.get(ScoutingConfigs.configJson)
@@ -140,7 +139,7 @@ object ConfigService {
 
             // Fall back to team 0 (global default)
             ScoutingConfigs
-                .select { ScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { ScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull()
                 ?.get(ScoutingConfigs.configJson)
@@ -158,7 +157,7 @@ object ConfigService {
         transaction {
 
             val row = ScoutingConfigs
-                .select { ScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { ScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {
@@ -183,7 +182,7 @@ object ConfigService {
                 val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
                 if (activeAllianceId != null) {
                     val allianceConfig = ScoutingAlliances
-                        .select { ScoutingAlliances.id eq activeAllianceId }
+                        .selectAll().where { ScoutingAlliances.id eq activeAllianceId }
                         .firstOrNull()
                         ?.get(ScoutingAlliances.pitConfigJson)
                     if (!allianceConfig.isNullOrBlank()) {
@@ -193,7 +192,7 @@ object ConfigService {
             }
 
             val teamConfig = PitScoutingConfigs
-                .select { PitScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { PitScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
                 ?.get(PitScoutingConfigs.configJson)
@@ -203,7 +202,7 @@ object ConfigService {
             }
 
             PitScoutingConfigs
-                .select { PitScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { PitScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull()
                 ?.get(PitScoutingConfigs.configJson)
@@ -221,7 +220,7 @@ object ConfigService {
         transaction {
 
             val row = PitScoutingConfigs
-                .select { PitScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { PitScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {
@@ -246,7 +245,7 @@ object ConfigService {
                 val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
                 if (activeAllianceId != null) {
                     val allianceConfig = ScoutingAlliances
-                        .select { ScoutingAlliances.id eq activeAllianceId }
+                        .selectAll().where { ScoutingAlliances.id eq activeAllianceId }
                         .firstOrNull()
                         ?.get(ScoutingAlliances.qualitativeConfigJson)
                     if (!allianceConfig.isNullOrBlank()) {
@@ -256,7 +255,7 @@ object ConfigService {
             }
 
             val teamConfig = QualitativeScoutingConfigs
-                .select { QualitativeScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
                 ?.get(QualitativeScoutingConfigs.configJson)
@@ -266,7 +265,7 @@ object ConfigService {
             }
 
             QualitativeScoutingConfigs
-                .select { QualitativeScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull()
                 ?.get(QualitativeScoutingConfigs.configJson)
@@ -284,7 +283,7 @@ object ConfigService {
         transaction {
 
             val row = QualitativeScoutingConfigs
-                .select { QualitativeScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {

@@ -5,7 +5,7 @@ import com.obsidianscout.config.AppConfigLoader
 import com.obsidianscout.db.DatabaseFactory
 import com.obsidianscout.db.Users
 import com.obsidianscout.auth.UserRole
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
 
@@ -54,7 +54,7 @@ fun main(args: Array<String>) {
 
     // Find all SUPERADMIN accounts
     val superAdmins = transaction {
-        Users.select { Users.role eq UserRole.SUPERADMIN.name }
+        Users.selectAll().where { Users.role eq UserRole.SUPERADMIN.name }
             .map { Triple(it[Users.id].value, it[Users.username], it[Users.teamNumber]) }
     }
 
