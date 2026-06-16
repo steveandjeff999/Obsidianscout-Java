@@ -73,7 +73,8 @@ object DatabaseFactory {
                 ScoutingAlliances,
                 AllianceMemberships,
                 EpaOprHistoryCache,
-                PasswordResetTokens
+                PasswordResetTokens,
+                AllianceSelections
             )
         }
     }

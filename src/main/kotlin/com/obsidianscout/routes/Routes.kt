@@ -789,6 +789,22 @@ fun Application.configureRoutes() {
                 }
             }
 
+            route("/alliance-selection") {
+                get {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
+                    val response = com.obsidianscout.scouting.AllianceSelectionService.getSelection(session, eventKey)
+                    call.respond(response)
+                }
+                post {
+                    val session = call.requireSession()
+                    val request = call.receive<com.obsidianscout.scouting.AllianceSelectionUpdateRequest>()
+                    val response = com.obsidianscout.scouting.AllianceSelectionService.updateSelection(session, request)
+                    call.respond(response)
+                }
+            }
+
             route("/events") {
                 get {
                     val session = call.requireSession()
@@ -1257,6 +1273,7 @@ fun Application.configureRoutes() {
             "predictor" to "predictor.html",
             "alliances" to "alliances.html",
             "alliance-edit" to "alliance-edit.html",
+            "alliance-selection" to "alliance-selection.html",
             "users" to "users.html",
             "config" to "config.html",
             "qr-scanner" to "qr-scanner.html",

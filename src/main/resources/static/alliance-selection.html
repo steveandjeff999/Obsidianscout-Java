@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Alliance Selection</title>
+    <meta name="description" content="Track and optimize the alliance selection process at FRC events. Access real-time data-driven team recommendations." />
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .page-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .page-container {
+                grid-template-columns: 2fr 1fr;
+                align-items: start;
+            }
+        }
+
+        .alliances-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        @media (min-width: 768px) {
+            .alliances-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .alliance-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            position: relative;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        body.theme-dark .alliance-card {
+            background: rgba(30, 32, 38, 0.7);
+            border-color: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(8px);
+        }
+
+        .alliance-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+        }
+
+        .alliance-card-header {
+            font-size: 1.25rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--surface-3);
+        }
+
+        body.theme-dark .alliance-card-header {
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .slot-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .slot-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: var(--surface-2);
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            transition: border-color 0.2s, background-color 0.2s;
+            cursor: pointer;
+            position: relative;
+        }
+
+        body.theme-dark .slot-row {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .slot-row:hover {
+            background: var(--surface-3);
+            border-color: var(--accent);
+        }
+
+        body.theme-dark .slot-row:hover {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .slot-label {
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+            width: 85px;
+            flex-shrink: 0;
+        }
+
+        .slot-team-display {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--ink);
+            flex-grow: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .slot-team-display.empty {
+            color: var(--muted);
+            font-weight: 500;
+            font-style: italic;
+        }
+
+        .slot-clear {
+            background: none;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 1.2rem;
+            line-height: 1;
+            padding: 4px;
+            margin-right: -4px;
+            opacity: 0.5;
+            transition: opacity 0.2s, transform 0.2s;
+            display: none;
+        }
+
+        .slot-clear:hover {
+            opacity: 1;
+            transform: scale(1.1);
+            color: #c84b31;
+        }
+
+        .slot-row.has-team .slot-clear {
+            display: block;
+        }
+
+        /* Sticky sidebar panel */
+        .sticky-panel {
+            position: sticky;
+            top: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-height: calc(100vh - 48px);
+        }
+
+        /* Recommendations List */
+        .recs-list-card {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 120px);
+            min-height: 400px;
+        }
+
+        .recs-scroll-area {
+            overflow-y: auto;
+            flex-grow: 1;
+            margin-top: 12px;
+            padding-right: 4px;
+        }
+
+        .rec-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+            background: var(--surface-2);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        body.theme-dark .rec-item {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .rec-item:hover {
+            background: var(--surface-3);
+            border-color: var(--accent);
+            transform: translateX(2px);
+        }
+
+        body.theme-dark .rec-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: var(--accent);
+        }
+
+        .rec-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .rec-rank {
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: var(--muted);
+            width: 20px;
+            text-align: center;
+        }
+
+        .rec-team-number {
+            font-size: 1.05rem;
+            font-weight: 900;
+            color: var(--accent);
+        }
+
+        .rec-nickname {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--ink);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 140px;
+        }
+
+        .rec-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .rec-score-badge {
+            font-size: 0.8rem;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: var(--surface-3);
+            color: var(--ink);
+        }
+
+        body.theme-dark .rec-score-badge {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .empty-indicator {
+            text-align: center;
+            color: var(--muted);
+            padding: 32px 16px;
+            font-weight: 600;
+        }
+
+        /* ── Popup Modals ────────────────────────────────────────── */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
+            z-index: 5000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+
+        .modal-backdrop.open {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .modal {
+            background: var(--surface);
+            border-radius: var(--radius);
+            box-shadow: 0 32px 80px rgba(0,0,0,0.3);
+            padding: 24px;
+            overflow-y: auto;
+            position: relative;
+            transform: translateY(20px);
+            transition: transform 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        body.theme-dark .modal {
+            background: #1e2024;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .modal-backdrop.open .modal {
+            transform: translateY(0);
+        }
+
+        .modal-sm {
+            width: min(460px, 100%);
+            max-height: min(600px, 90vh);
+        }
+
+        .modal-lg {
+            width: min(840px, 95vw);
+            max-height: min(780px, 90vh);
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--surface-3);
+            padding-bottom: 12px;
+        }
+
+        body.theme-dark .modal-header {
+            border-color: rgba(255,255,255,0.08);
+        }
+
+        .modal-title {
+            font-size: 1.35rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .modal-close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            line-height: 1;
+            color: var(--muted);
+            cursor: pointer;
+            padding: 4px;
+            transition: color 0.2s;
+        }
+
+        .modal-close-btn:hover {
+            color: var(--ink);
+        }
+
+        /* Selector Modal Specifics */
+        .selector-list-container {
+            overflow-y: auto;
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            max-height: 540px;
+            padding-right: 4px;
+        }
+
+        .selector-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background: var(--surface-2);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        body.theme-dark .selector-item {
+            background: rgba(255,255,255,0.03);
+        }
+
+        .selector-item:hover {
+            background: var(--surface-3);
+            border-color: var(--accent);
+        }
+
+        body.theme-dark .selector-item:hover {
+            background: rgba(255,255,255,0.06);
+        }
+
+        .selector-team {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .selector-nickname {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--ink);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 420px;
+        }
+
+        .selector-metrics {
+            font-size: 0.95rem;
+            color: var(--muted);
+            font-weight: 600;
+            display: flex;
+            gap: 16px;
+        }
+
+        /* Breakdown Modal Specifics */
+        .breakdown-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        @media (max-width: 600px) {
+            .breakdown-summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .breakdown-stat-card {
+            background: var(--surface-2);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            text-align: center;
+            border: 1px solid rgba(0,0,0,0.03);
+        }
+
+        body.theme-dark .breakdown-stat-card {
+            background: rgba(255,255,255,0.03);
+            border-color: rgba(255,255,255,0.02);
+        }
+
+        .breakdown-stat-label {
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .breakdown-stat-val {
+            font-size: 1.2rem;
+            font-weight: 900;
+            color: var(--ink);
+        }
+
+        .breakdown-stat-val.highlight-epa { color: var(--accent); }
+        .breakdown-stat-val.highlight-opr { color: var(--accent-2); }
+        .breakdown-stat-val.highlight-avg { color: var(--accent-3); }
+
+        .modal-tabs {
+            display: flex;
+            gap: 8px;
+            border-bottom: 2px solid var(--surface-3);
+            padding-bottom: 8px;
+        }
+
+        body.theme-dark .modal-tabs {
+            border-color: rgba(255,255,255,0.08);
+        }
+
+        .modal-tab-btn {
+            background: none;
+            border: none;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--muted);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: all 0.2s ease;
+        }
+
+        .modal-tab-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .modal-tab-content {
+            display: none;
+            flex-grow: 1;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        .modal-tab-content.active {
+            display: block;
+        }
+
+        /* Overview & Notes scroll card items */
+        .notes-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .note-card {
+            background: var(--surface-2);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            border-left: 4px solid var(--accent);
+            font-size: 0.9rem;
+        }
+
+        body.theme-dark .note-card {
+            background: rgba(255,255,255,0.02);
+        }
+
+        .note-header {
+            font-size: 0.75rem;
+            font-weight: 800;
+            color: var(--muted);
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .note-body {
+            font-weight: 500;
+            color: var(--ink);
+            line-height: 1.4;
+        }
+
+        .pit-specs-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 500px) {
+            .pit-specs-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .pit-spec-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: var(--surface-3);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+
+        body.theme-dark .pit-spec-item {
+            background: rgba(255,255,255,0.04);
+        }
+
+        .pit-spec-label {
+            color: var(--muted);
+        }
+
+        .pit-spec-value {
+            color: var(--ink);
+        }
+
+        .modal-footer {
+            border-top: 2px solid var(--surface-3);
+            padding-top: 14px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        body.theme-dark .modal-footer {
+            border-color: rgba(255,255,255,0.08);
+        }
+    </style>
+</head>
+<body data-page="alliance-selection">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand">ObsidianScout</div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link" href="/dashboard">Dashboard</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <!-- Header Controls Card -->
+            <div class="card">
+                <div class="row gap-12 wrap justify-between align-center">
+                    <div>
+                        <h1>Alliance Selection</h1>
+                        <p class="notice">Track selections and view data-backed recommendations during alliance selection.</p>
+                    </div>
+                    <div class="row gap-12 wrap align-center">
+                        <div class="field" style="margin-top: 0;">
+                            <select id="event-filter" class="select-wide" style="min-width: 200px;">
+                                <option value="">Loading events...</option>
+                            </select>
+                        </div>
+                        <button class="btn ghost danger" id="reset-board-btn" type="button">Reset Board</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Workspace -->
+            <div class="page-container mt-20">
+                <!-- Left: 8 Alliances Board -->
+                <div class="column gap-20">
+                    <div class="alliances-grid" id="alliances-grid-container">
+                        <div class="empty-indicator">Loading alliances...</div>
+                    </div>
+                </div>
+
+                <!-- Right: Recommendation Panel -->
+                <div class="sticky-panel">
+                    <div class="card recs-list-card">
+                        <div class="row justify-between align-center">
+                            <h2>Recommendations</h2>
+                        </div>
+                        
+                        <div class="row gap-12 mt-12">
+                            <div class="field" style="flex-grow: 1; margin-top: 0;">
+                                <input type="text" id="team-search" placeholder="Search team # or name..." style="padding: 6px 12px; width: 100%;" />
+                            </div>
+                            <div class="field" style="width: 120px; flex-shrink: 0; margin-top: 0;">
+                                <select id="metric-select" style="padding: 6px 8px; width: 100%;">
+                                    <option value="weighted">Weighted</option>
+                                    <option value="scouted">Scouted</option>
+                                    <option value="epa">EPA</option>
+                                    <option value="opr">OPR</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="recs-scroll-area" id="recommendations-list-container">
+                            <div class="empty-indicator">No available teams</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ── POPUP: Team Selector Modal ─────────────────────────── -->
+    <div class="modal-backdrop" id="selector-modal-backdrop">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title" id="selector-modal-title">Select Team</h3>
+                <button class="modal-close-btn" id="selector-modal-close">&times;</button>
+            </div>
+            <div class="field" style="margin-top: 0;">
+                <input type="text" id="selector-search" placeholder="Search team number or name..." style="width: 100%; padding: 8px 12px;" />
+            </div>
+            <div class="selector-list-container" id="selector-list-container">
+                <!-- Available teams populated dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn ghost" id="selector-modal-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── POPUP: Team Breakdown Modal ────────────────────────── -->
+    <div class="modal-backdrop" id="breakdown-modal-backdrop">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title" id="breakdown-modal-title">Team Profile</h3>
+                <button class="modal-close-btn" id="breakdown-modal-close">&times;</button>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div class="breakdown-summary-grid">
+                <div class="breakdown-stat-card">
+                    <div class="breakdown-stat-label">Scouted Avg</div>
+                    <div class="breakdown-stat-val highlight-avg" id="breakdown-stat-scouted">-</div>
+                </div>
+                <div class="breakdown-stat-card">
+                    <div class="breakdown-stat-label">Statbotics EPA</div>
+                    <div class="breakdown-stat-val highlight-epa" id="breakdown-stat-epa">-</div>
+                </div>
+                <div class="breakdown-stat-card">
+                    <div class="breakdown-stat-label">TBA OPR</div>
+                    <div class="breakdown-stat-val highlight-opr" id="breakdown-stat-opr">-</div>
+                </div>
+                <div class="breakdown-stat-card">
+                    <div class="breakdown-stat-label">Matches</div>
+                    <div class="breakdown-stat-val" id="breakdown-stat-matches">-</div>
+                </div>
+            </div>
+
+            <!-- Tab Buttons -->
+            <div class="modal-tabs">
+                <button class="modal-tab-btn active" data-tab="overview">Overview & Notes</button>
+                <button class="modal-tab-btn" data-tab="matches">Match History</button>
+                <button class="modal-tab-btn" data-tab="graph">Performance Graph</button>
+            </div>
+
+            <!-- Tab Content 1: Overview & Notes -->
+            <div class="modal-tab-content active" id="tab-overview">
+                <h4>Pit Specifications</h4>
+                <div class="pit-specs-grid" id="pit-specs-container">
+                    <!-- Pit specs parsed from config -->
+                </div>
+                <h4>Scouter Comments & Notes</h4>
+                <div class="notes-list" id="notes-list-container">
+                    <!-- Text notes/comments -->
+                </div>
+            </div>
+
+            <!-- Tab Content 2: Match History -->
+            <div class="modal-tab-content" id="tab-matches">
+                <div style="overflow-x: auto; width: 100%;">
+                    <table class="table" id="breakdown-matches-table">
+                        <thead>
+                            <tr>
+                                <th>Match</th>
+                                <th>Red Alliance</th>
+                                <th>Blue Alliance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Team matches -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab Content 3: Performance Graphs -->
+            <div class="modal-tab-content" id="tab-graph">
+                <div id="breakdown-graph-container" style="width: 100%; height: 350px;"></div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn" id="breakdown-modal-close-footer">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script defer src="/js/common.js"></script>
+    <script defer src="/vendor/plotly-2.32.0.min.js"></script>
+    <script defer src="/js/alliance-selection.js"></script>
+</body>
+</html>

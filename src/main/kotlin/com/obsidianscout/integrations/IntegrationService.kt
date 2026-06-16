@@ -1186,12 +1186,17 @@ object IntegrationService {
 
     private suspend fun fetchStatboticsEpas(eventKey: String): Map<String, Double> {
         val url = "https://api.statbotics.io/v3/team_events?event=${eventKey}&limit=1000"
-        val responseText = try {
-            client.get(url).bodyAsText()
+        val response = try {
+            client.get(url)
         } catch (error: Exception) {
             log.warn("Statbotics fetch failed: ${error.message}")
             return emptyMap()
         }
+        if (!response.status.isSuccess()) {
+            log.warn("Statbotics fetch failed with status ${response.status}")
+            return emptyMap()
+        }
+        val responseText = response.bodyAsText()
         if (responseText.isBlank()) {
             return emptyMap()
         }
@@ -1277,7 +1282,12 @@ object IntegrationService {
     private suspend fun fetchStatboticsMatchEpaHistory(eventKey: String): List<JsonElement> {
         val url = "https://api.statbotics.io/v3/team_matches?event=${eventKey}&limit=1000"
         return try {
-            val text = client.get(url).bodyAsText()
+            val response = client.get(url)
+            if (!response.status.isSuccess()) {
+                log.warn("Statbotics match EPA history fetch failed for $eventKey with status ${response.status}")
+                return emptyList()
+            }
+            val text = response.bodyAsText()
             JsonSupport.json.parseToJsonElement(text).jsonArray
         } catch (error: Exception) {
             log.warn("Statbotics match EPA history fetch failed for $eventKey: ${error.message}")

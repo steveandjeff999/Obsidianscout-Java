@@ -202,3 +202,14 @@ object PasswordResetTokens : IntIdTable("password_reset_tokens") {
     }
 }
 
+object AllianceSelections : IntIdTable("alliance_selections") {
+    val ownerKey = varchar("owner_key", 64)
+    val eventKey = varchar("event_key", 64)
+    val selectionJson = text("selection_json")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_alliance_selections_owner_event", ownerKey, eventKey)
+    }
+}
+
