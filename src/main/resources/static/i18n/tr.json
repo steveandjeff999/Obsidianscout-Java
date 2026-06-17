@@ -82,7 +82,7 @@
   "events.edit_event": "Etkinliği Düzenle",
   "events.event_key": "Etkinlik Anahtarı",
   "events.event_key_help": "Benzersiz, küçük harfli bir tanımlayıcı girin.",
-  "events.event_key_placeholder": "örn. 2026custom",
+  "events.event_key_placeholder": "örn. custom",
   "events.event_name": "Etkinlik Adı",
   "events.event_name_placeholder": "örn. Sezon Öncesi Gösteri",
   "events.year": "Yıl",

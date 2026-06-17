@@ -141,6 +141,16 @@ data class EventRecord(
     val timezone: String? = null
 )
 
+/**
+ * Used by PUT /api/events to update an event, optionally renaming its key.
+ * [oldKey] is the current event key; [event] carries the new data (including the potentially new eventKey).
+ */
+@Serializable
+data class EventRenameRequest(
+    val oldKey: String,
+    val event: EventRecord
+)
+
 @Serializable
 data class TeamRecord(
     val eventKey: String,

@@ -83,7 +83,7 @@
   "events.edit_event": "Edit Event",
   "events.event_key": "Event Key",
   "events.event_key_help": "Enter a unique lowercase identifier.",
-  "events.event_key_placeholder": "e.g. 2026custom",
+  "events.event_key_placeholder": "e.g. custom",
   "events.event_name": "Event Name",
   "events.event_name_placeholder": "e.g. Offseason Showdown",
   "events.year": "Year",

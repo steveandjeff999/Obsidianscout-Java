@@ -121,7 +121,7 @@
   "events.edit_event": "ערוך אירוע",
   "events.event_key": "מפתח אירוע",
   "events.event_key_help": "הזן מזהה ייחודי באותיות קטנות.",
-  "events.event_key_placeholder": "למשל 2026custom",
+  "events.event_key_placeholder": "למשל custom",
   "events.event_name": "שם האירוע",
   "events.event_name_placeholder": "למשל תחרות קדם עונה",
   "events.year": "שנה",

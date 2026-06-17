@@ -4,8 +4,11 @@ import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.ApiEvents
 import com.obsidianscout.db.ApiMatches
 import com.obsidianscout.db.ApiTeams
+import com.obsidianscout.db.AllianceSelections
 import com.obsidianscout.db.EpaOprHistoryCache
 import com.obsidianscout.db.PitScoutingEntries
+import com.obsidianscout.db.QualitativeScoutingEntries
+import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.routes.EventRecord
 import com.obsidianscout.routes.MatchRecord
@@ -757,6 +760,101 @@ object IntegrationService {
                 }
             }
             event.copy(eventKey = key)
+        }
+    }
+
+    /**
+     * Renames an event key and atomically propagates the change to every dependent table:
+     * ApiEvents, ApiTeams, ApiMatches, ScoutingEntries, PitScoutingEntries,
+     * QualitativeScoutingEntries, EpaOprHistoryCache, AllianceSelections, and ScoutingAlliances.
+     * Also updates metadata fields (name, year, eventCode, dates, timezone) on the event record.
+     */
+    fun renameEvent(oldKey: String, event: EventRecord): EventRecord {
+        return transaction {
+            val oldNorm = oldKey.lowercase().trim()
+            val newNorm = event.eventKey.lowercase().trim()
+            val newCode = event.eventCode ?: newNorm.removePrefix(event.year.toString())
+            val now = Instant.now()
+
+            val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq oldNorm }.limit(1).firstOrNull()
+                ?: throw com.obsidianscout.auth.ApiException(
+                    io.ktor.http.HttpStatusCode.NotFound,
+                    "Event not found: $oldNorm"
+                )
+
+            // If the key is actually changing, check for collision
+            if (oldNorm != newNorm) {
+                val collision = ApiEvents.selectAll().where { ApiEvents.eventKey eq newNorm }.limit(1).firstOrNull()
+                if (collision != null) {
+                    throw com.obsidianscout.auth.ApiException(
+                        io.ktor.http.HttpStatusCode.Conflict,
+                        "An event with key '$newNorm' already exists"
+                    )
+                }
+            }
+
+            // Update the canonical event record
+            ApiEvents.update({ ApiEvents.id eq existing[ApiEvents.id] }) {
+                it[ApiEvents.eventKey] = newNorm
+                it[ApiEvents.year] = event.year
+                it[ApiEvents.eventCode] = newCode
+                it[ApiEvents.name] = event.name
+                it[ApiEvents.startDate] = event.startDate
+                it[ApiEvents.endDate] = event.endDate
+                it[ApiEvents.timezone] = event.timezone
+                it[ApiEvents.dataJson] = "{\"manual\":true}"
+                it[ApiEvents.updatedAt] = now
+            }
+
+            // Propagate key rename to all dependent tables (only needed when the key actually changes)
+            if (oldNorm != newNorm) {
+                ApiTeams.update({ ApiTeams.eventKey eq oldNorm }) {
+                    it[ApiTeams.eventKey] = newNorm
+                }
+                ApiMatches.update({ ApiMatches.eventKey eq oldNorm }) {
+                    it[ApiMatches.eventKey] = newNorm
+                    // Also rewrite match keys that embed the event key (format: "<eventKey>_<compLevel><number>")
+                    // We do a separate per-row update below.
+                }
+                // Rewrite match keys that embed the old event key prefix
+                val affectedMatches = ApiMatches.selectAll().where { ApiMatches.eventKey eq newNorm }.toList()
+                for (mRow in affectedMatches) {
+                    val oldMatchKey = mRow[ApiMatches.matchKey]
+                    if (oldMatchKey.startsWith(oldNorm)) {
+                        val newMatchKey = newNorm + oldMatchKey.removePrefix(oldNorm)
+                        ApiMatches.update({ ApiMatches.matchKey eq oldMatchKey }) {
+                            it[ApiMatches.matchKey] = newMatchKey
+                        }
+                        // Cascade to scouting entries that reference the old match key
+                        ScoutingEntries.update({ ScoutingEntries.matchKey eq oldMatchKey }) {
+                            it[ScoutingEntries.matchKey] = newMatchKey
+                        }
+                        QualitativeScoutingEntries.update({ QualitativeScoutingEntries.matchKey eq oldMatchKey }) {
+                            it[QualitativeScoutingEntries.matchKey] = newMatchKey
+                        }
+                    }
+                }
+                ScoutingEntries.update({ ScoutingEntries.eventKey eq oldNorm }) {
+                    it[ScoutingEntries.eventKey] = newNorm
+                }
+                PitScoutingEntries.update({ PitScoutingEntries.eventKey eq oldNorm }) {
+                    it[PitScoutingEntries.eventKey] = newNorm
+                }
+                QualitativeScoutingEntries.update({ QualitativeScoutingEntries.eventKey eq oldNorm }) {
+                    it[QualitativeScoutingEntries.eventKey] = newNorm
+                }
+                EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq oldNorm }) {
+                    it[EpaOprHistoryCache.eventKey] = newNorm
+                }
+                AllianceSelections.update({ AllianceSelections.eventKey eq oldNorm }) {
+                    it[AllianceSelections.eventKey] = newNorm
+                }
+                ScoutingAlliances.update({ ScoutingAlliances.eventKey eq oldNorm }) {
+                    it[ScoutingAlliances.eventKey] = newNorm
+                }
+            }
+
+            event.copy(eventKey = newNorm, eventCode = newCode)
         }
     }
 

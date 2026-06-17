@@ -205,6 +205,9 @@ function setupModal(defaultYear) {
 
     const titleEl = document.getElementById("event-modal-title");
 
+    // Tracks the original key when editing so we can send oldKey in the PUT body
+    let editingOldKey = null;
+
     function openModal() {
         modal.classList.add("show");
     }
@@ -213,9 +216,11 @@ function setupModal(defaultYear) {
         modal.classList.remove("show");
         form.reset();
         keyInput.removeAttribute("disabled");
+        editingOldKey = null;
     }
 
     addBtn.addEventListener("click", () => {
+        editingOldKey = null;
         titleEl.textContent = t("events.create_custom", "Create Custom Event");
         keyInput.removeAttribute("disabled");
         yearInput.value = defaultYear;
@@ -234,9 +239,10 @@ function setupModal(defaultYear) {
 
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
-        
+
+        const newKey = keyInput.value.trim().toLowerCase();
         const payload = {
-            eventKey: keyInput.value.trim().toLowerCase(),
+            eventKey: newKey,
             name: nameInput.value.trim(),
             year: parseInt(yearInput.value),
             eventCode: null,
@@ -246,10 +252,20 @@ function setupModal(defaultYear) {
         };
 
         try {
-            await Obsidianscout.request("/api/events", {
-                method: "POST",
-                json: payload
-            });
+            if (editingOldKey !== null) {
+                // Editing an existing event — send PUT with the old key so the server
+                // can rename all dependent records atomically.
+                await Obsidianscout.request("/api/events", {
+                    method: "PUT",
+                    json: { oldKey: editingOldKey, event: payload }
+                });
+            } else {
+                // Creating a new event
+                await Obsidianscout.request("/api/events", {
+                    method: "POST",
+                    json: payload
+                });
+            }
             Obsidianscout.showToast(t("events.saved_success", "Event saved successfully"), "success");
             closeModal();
             await loadEvents(defaultYear, true);
@@ -257,27 +273,27 @@ function setupModal(defaultYear) {
             Obsidianscout.showToast(error.message || t("events.save_failed", "Failed to save event"), "error");
         }
     });
+
+    // Expose a function for openEditModal to call back into
+    setupModal._openEdit = function(event) {
+        editingOldKey = event.eventKey;
+        titleEl.textContent = t("events.edit_event", "Edit Event");
+
+        keyInput.value = event.eventKey;
+        keyInput.removeAttribute("disabled"); // Key is now editable on edit
+
+        nameInput.value = event.name;
+        yearInput.value = event.year;
+        startDateInput.value = event.startDate || "";
+        endDateInput.value = event.endDate || "";
+        timezoneInput.value = event.timezone || "America/Chicago";
+
+        openModal();
+    };
 }
 
 function openEditModal(event) {
-    const modal = document.getElementById("event-modal");
-    const keyInput = document.getElementById("event-key");
-    const nameInput = document.getElementById("event-name");
-    const yearInput = document.getElementById("event-year");
-    const startDateInput = document.getElementById("event-start-date");
-    const endDateInput = document.getElementById("event-end-date");
-    const timezoneInput = document.getElementById("event-timezone");
-    const titleEl = document.getElementById("event-modal-title");
-
-    titleEl.textContent = t("events.edit_event", "Edit Event");
-    keyInput.value = event.eventKey;
-    keyInput.setAttribute("disabled", "true"); // Primary Key shouldn't be edited once created
-
-    nameInput.value = event.name;
-    yearInput.value = event.year;
-    startDateInput.value = event.startDate || "";
-    endDateInput.value = event.endDate || "";
-    timezoneInput.value = event.timezone || "America/Chicago";
-
-    modal.classList.add("show");
+    if (typeof setupModal._openEdit === "function") {
+        setupModal._openEdit(event);
+    }
 }

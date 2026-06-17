@@ -825,6 +825,12 @@ fun Application.configureRoutes() {
                     val saved = IntegrationService.saveEvent(request)
                     call.respond(saved)
                 }
+                put {
+                    call.requireAdmin()
+                    val request = call.receive<EventRenameRequest>()
+                    val updated = IntegrationService.renameEvent(request.oldKey, request.event)
+                    call.respond(updated)
+                }
                 delete {
                     call.requireAdmin()
                     val eventKey = call.request.queryParameters["eventKey"]

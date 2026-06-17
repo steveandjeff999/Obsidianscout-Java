@@ -82,7 +82,7 @@
   "events.edit_event": "Editar evento",
   "events.event_key": "Clave del evento",
   "events.event_key_help": "Introduce un identificador único en minúsculas.",
-  "events.event_key_placeholder": "p.ej. 2026custom",
+  "events.event_key_placeholder": "p.ej. custom",
   "events.event_name": "Nombre del evento",
   "events.event_name_placeholder": "p.ej. Exhibición de pretemporada",
   "events.year": "Año",
