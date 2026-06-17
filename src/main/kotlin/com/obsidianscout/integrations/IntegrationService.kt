@@ -333,12 +333,20 @@ object IntegrationService {
                 val matchKeys = ApiMatches.select(ApiMatches.eventKey)
                     .withDistinct()
                     .map { it[ApiMatches.eventKey].lowercase().trim() }
-                val manualKeys = ApiEvents.select(ApiEvents.eventKey, ApiEvents.dataJson)
+                // Include manually added events. Use the same computedKey formula (year+eventCode)
+                // as the events list below so the keys match in the requiredKeys filter.
+                // Synced events from TBA/FIRST (which have a full API JSON body) are excluded here
+                // — they only appear when they have associated teams or matches.
+                val manualKeys = ApiEvents.select(ApiEvents.eventKey, ApiEvents.eventCode, ApiEvents.year, ApiEvents.dataJson)
                     .mapNotNull { row ->
-                        val k = row[ApiEvents.eventKey].lowercase().trim()
                         val json = row[ApiEvents.dataJson]
                         if (json.contains("manual") || json == "{}" || json.isBlank()) {
-                            k
+                            val storedCode = row[ApiEvents.eventCode]
+                            if (!storedCode.isNullOrBlank()) {
+                                "${row[ApiEvents.year]}${storedCode}".lowercase().trim()
+                            } else {
+                                row[ApiEvents.eventKey].lowercase().trim()
+                            }
                         } else {
                             null
                         }
