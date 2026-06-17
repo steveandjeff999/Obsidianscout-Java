@@ -336,20 +336,12 @@ object IntegrationService {
                 val matchKeys = ApiMatches.select(ApiMatches.eventKey)
                     .withDistinct()
                     .map { it[ApiMatches.eventKey].lowercase().trim() }
-                // Include manually added events. Use the same computedKey formula (year+eventCode)
-                // as the events list below so the keys match in the requiredKeys filter.
-                // Synced events from TBA/FIRST (which have a full API JSON body) are excluded here
-                // — they only appear when they have associated teams or matches.
-                val manualKeys = ApiEvents.select(ApiEvents.eventKey, ApiEvents.eventCode, ApiEvents.year, ApiEvents.dataJson)
+                // Include manually added events (bare stored key, no year+code computation).
+                val manualKeys = ApiEvents.select(ApiEvents.eventKey, ApiEvents.dataJson)
                     .mapNotNull { row ->
                         val json = row[ApiEvents.dataJson]
                         if (json.contains("manual") || json == "{}" || json.isBlank()) {
-                            val storedCode = row[ApiEvents.eventCode]
-                            if (!storedCode.isNullOrBlank()) {
-                                "${row[ApiEvents.year]}${storedCode}".lowercase().trim()
-                            } else {
-                                row[ApiEvents.eventKey].lowercase().trim()
-                            }
+                            row[ApiEvents.eventKey].lowercase().trim()
                         } else {
                             null
                         }
@@ -364,17 +356,14 @@ object IntegrationService {
                 query.andWhere { ApiEvents.year eq year }
             }
             val events = query.orderBy(ApiEvents.startDate, SortOrder.ASC).map { row ->
-                val storedCode = row[ApiEvents.eventCode]
-                val computedKey = if (!storedCode.isNullOrBlank()) {
-                    "${row[ApiEvents.year]}${storedCode}".lowercase()
-                } else {
-                    row[ApiEvents.eventKey]
-                }
+                // Use the stored eventKey as-is. TBA synced events already have the canonical
+                // year-prefixed key (e.g. "2026arc"). Manually added events keep exactly what
+                // the user typed. No year+code concatenation here.
                 EventRecord(
-                    eventKey = computedKey.lowercase().trim(),
+                    eventKey = row[ApiEvents.eventKey].lowercase().trim(),
                     name = row[ApiEvents.name],
                     year = row[ApiEvents.year],
-                    eventCode = storedCode,
+                    eventCode = row[ApiEvents.eventCode],
                     startDate = row[ApiEvents.startDate],
                     endDate = row[ApiEvents.endDate],
                     timezone = row[ApiEvents.timezone]
@@ -732,19 +721,12 @@ object IntegrationService {
 
     fun saveEvent(event: EventRecord): EventRecord {
         return transaction {
-            // Always normalize to year+code so the stored key always matches the computedKey
-            // returned by listEvents (which also builds year+code). This prevents lookup mismatches.
-            val rawKey = event.eventKey.lowercase().trim()
-            val eventCode = event.eventCode
-                ?: rawKey.removePrefix(event.year.toString()).ifBlank { rawKey }
-            val key = "${event.year}${eventCode}".lowercase().trim()
+            // Store exactly what the user typed — no year prefixing.
+            // TBA synced events already come in with the canonical year-prefixed key.
+            val key = event.eventKey.lowercase().trim()
+            val eventCode = event.eventCode ?: key.removePrefix(event.year.toString())
 
             val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq key }.limit(1).firstOrNull()
-                // Also look for an old record stored under the un-prefixed raw key
-                ?: if (rawKey != key) {
-                    ApiEvents.selectAll().where { ApiEvents.eventKey eq rawKey }.limit(1).firstOrNull()
-                } else null
-
             val now = Instant.now()
             if (existing == null) {
                 ApiEvents.insert {
@@ -771,7 +753,7 @@ object IntegrationService {
                     it[dataJson] = "{\"manual\":true}"
                     it[updatedAt] = now
                 }
-                // If the stored key changed (old records used the un-prefixed key), propagate
+                // Propagate if the stored key actually changed (e.g. legacy records)
                 if (oldStoredKey != key) {
                     ApiTeams.update({ ApiTeams.eventKey eq oldStoredKey }) { it[ApiTeams.eventKey] = key }
                     ApiMatches.update({ ApiMatches.eventKey eq oldStoredKey }) { it[ApiMatches.eventKey] = key }
@@ -789,30 +771,19 @@ object IntegrationService {
 
     /**
      * Updates an event's metadata and optionally renames its key, propagating the rename
-     * atomically across all dependent tables. [oldKey] is the computedKey (year+code) as
-     * returned by listEvents. We look up the row by that key, or fall back to scanning all
-     * rows and matching by computed key so old records with a bare (un-prefixed) stored key
-     * are still found.
+     * atomically across all dependent tables. [oldKey] is the stored eventKey as returned
+     * by listEvents (which now returns the raw stored key directly — no year+code building).
      */
     fun renameEvent(oldKey: String, event: EventRecord): EventRecord {
         return transaction {
             val oldNorm = oldKey.lowercase().trim()
-            val newCode = event.eventCode
-                ?: event.eventKey.lowercase().trim().removePrefix(event.year.toString()).ifBlank { event.eventKey.lowercase().trim() }
-            val newNorm = "${event.year}${newCode}".lowercase().trim()
+            // New key is exactly what the user typed — no year prefixing
+            val newNorm = event.eventKey.lowercase().trim()
+            val newCode = event.eventCode ?: newNorm.removePrefix(event.year.toString())
             val now = Instant.now()
 
-            // Try direct lookup first, then fall back to computed-key scan for legacy bare keys
+            // Direct lookup by stored key
             val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq oldNorm }.limit(1).firstOrNull()
-                ?: ApiEvents.selectAll().mapNotNull { row ->
-                    val sc = row[ApiEvents.eventCode]
-                    val computedKey = if (!sc.isNullOrBlank()) {
-                        "${row[ApiEvents.year]}${sc}".lowercase().trim()
-                    } else {
-                        row[ApiEvents.eventKey].lowercase().trim()
-                    }
-                    if (computedKey == oldNorm) row else null
-                }.firstOrNull()
                 ?: throw com.obsidianscout.auth.ApiException(
                     io.ktor.http.HttpStatusCode.NotFound,
                     "Event not found: $oldNorm"
