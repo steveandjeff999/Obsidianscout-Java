@@ -15,7 +15,7 @@ import java.util.Date
  *   .\gradlew.bat run -PmainClass=com.obsidianscout.utils.VerifyMobileApiKt
  *   or run the test task.
  */
-fun main(args: Array<String>) {
+fun main() {
     println("========================================================================")
     println("  ObsidianScout – Mobile API Verification Utility")
     println("========================================================================")
@@ -76,7 +76,7 @@ fun main(args: Array<String>) {
     println("\nTest 3: Checking edit user (updateUser) compilation...")
     // Reference updateUser function to ensure the compiler resolves it correctly with default/new args
     val checkRef: Any = com.obsidianscout.auth.AuthService::updateUser
-    println("  SUCCESS: AuthService.updateUser compiles and is resolvable!")
+    println("  SUCCESS: AuthService.updateUser compiles and is resolvable! Ref: $checkRef")
 
     println("\n========================================================================")
 }

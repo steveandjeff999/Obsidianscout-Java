@@ -102,9 +102,144 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // Forgot password panel switching
+    const forgotLink = document.getElementById("forgot-password-link");
+    const forgotPanel = document.getElementById("forgot-password-panel");
+    const forgotForm = document.getElementById("forgot-password-form");
+    const forgotSubmit = document.getElementById("forgot-submit");
+    const forgotBack = document.getElementById("forgot-back-to-login");
+    const authTabs = document.getElementById("auth-tabs");
+
+    // Forgot password tab switching elements
+    const forgotTabs = document.querySelectorAll("#forgot-tabs .tab");
+    const forgotEmailField = document.getElementById("forgot-email-field");
+    const forgotCredentialsFields = document.getElementById("forgot-credentials-fields");
+    const forgotNotice = document.getElementById("forgot-notice");
+    const forgotEmailInput = document.getElementById("forgot-email");
+    const forgotUsernameInput = document.getElementById("forgot-username");
+    const forgotTeamInput = document.getElementById("forgot-team");
+    let activeForgotTab = "email"; // default
+
+    if (forgotTabs.length > 0) {
+        forgotTabs.forEach((tab) => {
+            tab.addEventListener("click", () => {
+                forgotTabs.forEach((t) => t.classList.remove("active"));
+                tab.classList.add("active");
+                activeForgotTab = tab.dataset.tab;
+
+                if (activeForgotTab === "email") {
+                    forgotEmailField.classList.remove("hidden");
+                    forgotEmailField.hidden = false;
+                    forgotEmailInput.required = true;
+
+                    forgotCredentialsFields.classList.add("hidden");
+                    forgotCredentialsFields.hidden = true;
+                    forgotUsernameInput.required = false;
+                    forgotTeamInput.required = false;
+
+                    forgotNotice.textContent = "Enter your registered email address. We will send you a link to reset your password.";
+                } else {
+                    forgotEmailField.classList.add("hidden");
+                    forgotEmailField.hidden = true;
+                    forgotEmailInput.required = false;
+
+                    forgotCredentialsFields.classList.remove("hidden");
+                    forgotCredentialsFields.hidden = false;
+                    forgotUsernameInput.required = true;
+                    forgotTeamInput.required = true;
+
+                    forgotNotice.textContent = "Enter your username and team number. If your account has a registered email, we will send you a password reset link.";
+                }
+            });
+        });
+    }
+
+    if (forgotLink && forgotPanel && forgotBack && authTabs) {
+        forgotLink.addEventListener("click", (e) => {
+            e.preventDefault();
+            loginPanel.classList.add("hidden");
+            loginPanel.hidden = true;
+            registerPanel.classList.add("hidden");
+            registerPanel.hidden = true;
+            authTabs.classList.add("hidden");
+            authTabs.hidden = true;
+
+            forgotPanel.classList.remove("hidden");
+            forgotPanel.hidden = false;
+
+            // Reset forgot password tab to email tab
+            if (forgotTabs.length > 0) {
+                forgotTabs[0].click();
+            }
+        });
+
+        forgotBack.addEventListener("click", () => {
+            forgotPanel.classList.add("hidden");
+            forgotPanel.hidden = true;
+            authTabs.classList.remove("hidden");
+            authTabs.hidden = false;
+
+            // default back to login tab
+            tabs.forEach((t) => t.classList.remove("active"));
+            tabs[0].classList.add("active");
+            loginPanel.classList.remove("hidden");
+            loginPanel.hidden = false;
+        });
+    }
+
+    if (forgotForm && forgotSubmit) {
+        forgotForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            forgotSubmit.disabled = true;
+
+            const payload = {};
+            if (activeForgotTab === "email") {
+                const email = forgotEmailInput.value.trim();
+                if (!email) {
+                    Obsidianscout.showToast("Email address is required", "error");
+                    forgotSubmit.disabled = false;
+                    return;
+                }
+                payload.email = email;
+            } else {
+                const username = forgotUsernameInput.value.trim();
+                const teamNumber = parseInt(forgotTeamInput.value, 10);
+                if (!username || isNaN(teamNumber)) {
+                    Obsidianscout.showToast("Username and team number are required", "error");
+                    forgotSubmit.disabled = false;
+                    return;
+                }
+                payload.username = username;
+                payload.teamNumber = teamNumber;
+            }
+
+            try {
+                const response = await Obsidianscout.request("/api/auth/forgot-password", {
+                    method: "POST",
+                    json: payload
+                });
+                Obsidianscout.showToast(response.message || "Reset link sent successfully", "success");
+                
+                // Switch back to login
+                forgotPanel.classList.add("hidden");
+                forgotPanel.hidden = true;
+                authTabs.classList.remove("hidden");
+                authTabs.hidden = false;
+                tabs.forEach((t) => t.classList.remove("active"));
+                tabs[0].classList.add("active");
+                loginPanel.classList.remove("hidden");
+                loginPanel.hidden = false;
+            } catch (error) {
+                Obsidianscout.showToast(error.message || "Failed to send reset link", "error");
+            } finally {
+                forgotSubmit.disabled = false;
+            }
+        });
+    }
+
     // Check for existing session in background
-    Obsidianscout.getMe().then((existing) => {
-        if (existing) {
+    Obsidianscout.checkLoginStatus().then((loggedIn) => {
+        if (loggedIn) {
             window.location.href = "/dashboard";
         }
     });

@@ -19,14 +19,14 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.jsonObject
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.andWhere
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import com.obsidianscout.auth.ApiException
 
 object PredictorService {
     fun predict(session: UserSession, matchKey: String, forcePrescout: Boolean = false): MatchPredictionResponse {
         return transaction {
-            val matchRow = ApiMatches.select { ApiMatches.matchKey eq matchKey.lowercase() }
+            val matchRow = ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKey.lowercase() }
                 .limit(1)
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Match not found")
@@ -45,11 +45,11 @@ object PredictorService {
             val matchNumber = matchRow[ApiMatches.matchNumber]
             val label = MatchCanonical.displayLabel(compLevel, setNumber, matchNumber)
 
-            val settings = SettingsService.getSettings(session.teamNumber)
+            val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
             val useStatboticsEpa = settings.useStatboticsEpa
             val useTbaOpr = settings.useTbaOpr
 
-            val allTeamsInEvent = ApiTeams.select { ApiTeams.eventKey eq eventKey }.toList()
+            val allTeamsInEvent = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
             val bbotMappings = com.obsidianscout.integrations.IntegrationService.getBBotMappings(eventKey)
             
             val teamKeyByNumber = mutableMapOf<Int, String>()
@@ -106,7 +106,7 @@ object PredictorService {
                 }
             }
 
-            val teamRows = ApiTeams.select {
+            val teamRows = ApiTeams.selectAll().where {
                 (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamNumber inList teamNumbers)
             }.toList()
             
@@ -120,14 +120,16 @@ object PredictorService {
 
             val config = ConfigService.getConfig(session.teamNumber)
 
-            val entriesQuery = ScoutingEntries.select {
+            val entriesQuery = ScoutingEntries.selectAll().where {
                 ScoutingEntries.targetTeamNumber inList teamNumbers
             }
             if (session.role != UserRole.SUPERADMIN) {
-                entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                val partnerTeams = com.obsidianscout.scouting.AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val visibleTeams = partnerTeams + session.teamNumber
+                entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
             
-            val entries = entriesQuery.map { row ->
+            val rawEntries = entriesQuery.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
                 ScoutingEntryRecord(
                     id = row[ScoutingEntries.id].value,
@@ -141,6 +143,7 @@ object PredictorService {
                     isPrescout = row[ScoutingEntries.isPrescout]
                 )
             }
+            val entries = com.obsidianscout.scouting.ScoutingService.resolveEntriesList(rawEntries, session.teamNumber, all = false)
             val groupedEntries = entries.groupBy { it.targetTeamNumber }
             val entriesByTeam = teamNumbers.associateWith { teamNumber ->
                 val teamEntries = groupedEntries[teamNumber] ?: emptyList()
@@ -178,6 +181,8 @@ object PredictorService {
                     null
                 }
 
+                val hasDiscrepancy = teamEntries.any { it.hasDiscrepancy }
+
                 return MatchTeamPrediction(
                     teamNumber = teamNumber,
                     teamKey = resolvedKey,
@@ -185,7 +190,8 @@ object PredictorService {
                     averageScoutedScore = avgScore,
                     scoutedMatchesCount = teamEntries.size,
                     epa = epa,
-                    opr = opr
+                    opr = opr,
+                    hasDiscrepancy = hasDiscrepancy
                 )
             }
 

@@ -3,6 +3,8 @@ package com.obsidianscout.config
 import com.obsidianscout.db.PitScoutingConfigs
 import com.obsidianscout.db.ScoutingConfigs
 import com.obsidianscout.db.QualitativeScoutingConfigs
+import com.obsidianscout.db.ScoutingAlliances
+import com.obsidianscout.scouting.AllianceService
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.decodeFromString
@@ -13,7 +15,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -70,7 +71,7 @@ object ConfigService {
     fun ensureDefaultConfig() {
         transaction {
             val existing = ScoutingConfigs
-                .select { ScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { ScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull() != null
             if (!existing) {
@@ -83,7 +84,7 @@ object ConfigService {
             }
 
             val existingPit = PitScoutingConfigs
-                .select { PitScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { PitScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull() != null
             if (!existingPit) {
@@ -96,7 +97,7 @@ object ConfigService {
             }
 
             val existingQualitative = QualitativeScoutingConfigs
-                .select { QualitativeScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull() != null
             if (!existingQualitative) {
@@ -110,11 +111,24 @@ object ConfigService {
         }
     }
 
-    fun getConfigJson(teamNumber: Int): String {
+    fun getConfigJson(teamNumber: Int, local: Boolean = false): String {
         return transaction {
+            if (!local) {
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                if (activeAllianceId != null) {
+                    val allianceConfig = ScoutingAlliances
+                        .selectAll().where { ScoutingAlliances.id eq activeAllianceId }
+                        .firstOrNull()
+                        ?.get(ScoutingAlliances.matchConfigJson)
+                    if (!allianceConfig.isNullOrBlank()) {
+                        return@transaction allianceConfig
+                    }
+                }
+            }
+
             // Try team-specific config first
             val teamConfig = ScoutingConfigs
-                .select { ScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { ScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
                 ?.get(ScoutingConfigs.configJson)
@@ -125,15 +139,15 @@ object ConfigService {
 
             // Fall back to team 0 (global default)
             ScoutingConfigs
-                .select { ScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { ScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull()
                 ?.get(ScoutingConfigs.configJson)
         } ?: loadDefaultConfigText()
     }
 
-    fun getConfig(teamNumber: Int): ScoutingConfig {
-        val jsonText = normalizeConfigJson(getConfigJson(teamNumber))
+    fun getConfig(teamNumber: Int, local: Boolean = false): ScoutingConfig {
+        val jsonText = normalizeConfigJson(getConfigJson(teamNumber, local))
         return JsonSupport.json.decodeFromString(jsonText)
     }
 
@@ -141,8 +155,9 @@ object ConfigService {
         val normalizedJson = normalizeConfigJson(newJson)
         val parsed = JsonSupport.json.decodeFromString<ScoutingConfig>(normalizedJson)
         transaction {
+
             val row = ScoutingConfigs
-                .select { ScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { ScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {
@@ -161,10 +176,23 @@ object ConfigService {
         return parsed
     }
 
-    fun getPitConfigJson(teamNumber: Int): String {
+    fun getPitConfigJson(teamNumber: Int, local: Boolean = false): String {
         return transaction {
+            if (!local) {
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                if (activeAllianceId != null) {
+                    val allianceConfig = ScoutingAlliances
+                        .selectAll().where { ScoutingAlliances.id eq activeAllianceId }
+                        .firstOrNull()
+                        ?.get(ScoutingAlliances.pitConfigJson)
+                    if (!allianceConfig.isNullOrBlank()) {
+                        return@transaction allianceConfig
+                    }
+                }
+            }
+
             val teamConfig = PitScoutingConfigs
-                .select { PitScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { PitScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
                 ?.get(PitScoutingConfigs.configJson)
@@ -174,15 +202,15 @@ object ConfigService {
             }
 
             PitScoutingConfigs
-                .select { PitScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { PitScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull()
                 ?.get(PitScoutingConfigs.configJson)
         } ?: loadDefaultPitConfigText()
     }
 
-    fun getPitConfig(teamNumber: Int): ScoutingConfig {
-        val jsonText = normalizeConfigJson(getPitConfigJson(teamNumber))
+    fun getPitConfig(teamNumber: Int, local: Boolean = false): ScoutingConfig {
+        val jsonText = normalizeConfigJson(getPitConfigJson(teamNumber, local))
         return JsonSupport.json.decodeFromString(jsonText)
     }
 
@@ -190,8 +218,9 @@ object ConfigService {
         val normalizedJson = normalizeConfigJson(newJson)
         val parsed = JsonSupport.json.decodeFromString<ScoutingConfig>(normalizedJson)
         transaction {
+
             val row = PitScoutingConfigs
-                .select { PitScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { PitScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {
@@ -210,10 +239,23 @@ object ConfigService {
         return parsed
     }
 
-    fun getQualitativeConfigJson(teamNumber: Int): String {
+    fun getQualitativeConfigJson(teamNumber: Int, local: Boolean = false): String {
         return transaction {
+            if (!local) {
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                if (activeAllianceId != null) {
+                    val allianceConfig = ScoutingAlliances
+                        .selectAll().where { ScoutingAlliances.id eq activeAllianceId }
+                        .firstOrNull()
+                        ?.get(ScoutingAlliances.qualitativeConfigJson)
+                    if (!allianceConfig.isNullOrBlank()) {
+                        return@transaction allianceConfig
+                    }
+                }
+            }
+
             val teamConfig = QualitativeScoutingConfigs
-                .select { QualitativeScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
                 ?.get(QualitativeScoutingConfigs.configJson)
@@ -223,15 +265,15 @@ object ConfigService {
             }
 
             QualitativeScoutingConfigs
-                .select { QualitativeScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull()
                 ?.get(QualitativeScoutingConfigs.configJson)
         } ?: loadDefaultQualitativeConfigText()
     }
 
-    fun getQualitativeConfig(teamNumber: Int): ScoutingConfig {
-        val jsonText = normalizeConfigJson(getQualitativeConfigJson(teamNumber))
+    fun getQualitativeConfig(teamNumber: Int, local: Boolean = false): ScoutingConfig {
+        val jsonText = normalizeConfigJson(getQualitativeConfigJson(teamNumber, local))
         return JsonSupport.json.decodeFromString(jsonText)
     }
 
@@ -239,8 +281,9 @@ object ConfigService {
         val normalizedJson = normalizeConfigJson(newJson)
         val parsed = JsonSupport.json.decodeFromString<ScoutingConfig>(normalizedJson)
         transaction {
+
             val row = QualitativeScoutingConfigs
-                .select { QualitativeScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {
@@ -288,22 +331,6 @@ object ConfigService {
             version = 3,
             title = "ObsidianScout",
             fields = listOf(
-                ScoutingField(
-                    id = "matchNumber",
-                    label = "Match Number",
-                    type = "number",
-                    required = true,
-                    min = 1,
-                    max = 200
-                ),
-                ScoutingField(
-                    id = "targetTeamNumber",
-                    label = "Scouted Team Number",
-                    type = "number",
-                    required = true,
-                    min = 1,
-                    max = 9999
-                ),
                 ScoutingField(
                     id = "sectionAuto",
                     label = "Auto",
@@ -399,20 +426,6 @@ object ConfigService {
             title = "ObsidianScout Pit Scouting",
             fields = listOf(
                 ScoutingField(
-                    id = "eventKey",
-                    label = "Event Key",
-                    type = "text",
-                    required = true
-                ),
-                ScoutingField(
-                    id = "targetTeamNumber",
-                    label = "Scouted Team Number",
-                    type = "number",
-                    required = true,
-                    min = 1,
-                    max = 9999
-                ),
-                ScoutingField(
                     id = "sectionRobot",
                     label = "Robot",
                     type = "section"
@@ -478,34 +491,6 @@ object ConfigService {
             version = 1,
             title = "ObsidianScout Qualitative Scouting",
             fields = listOf(
-                ScoutingField(
-                    id = "eventKey",
-                    label = "Event Key",
-                    type = "text",
-                    required = true
-                ),
-                ScoutingField(
-                    id = "matchKey",
-                    label = "Match Key",
-                    type = "text",
-                    required = true
-                ),
-                ScoutingField(
-                    id = "matchNumber",
-                    label = "Match Number",
-                    type = "number",
-                    required = true,
-                    min = 1,
-                    max = 200
-                ),
-                ScoutingField(
-                    id = "targetTeamNumber",
-                    label = "Scouted Team Number",
-                    type = "number",
-                    required = true,
-                    min = 1,
-                    max = 9999
-                ),
                 ScoutingField(
                     id = "sectionObservations",
                     label = "Observations",

@@ -481,6 +481,26 @@ function generateGraphs(state) {
         return;
     }
 
+    // Check for discrepancies in selected data
+    const hasDiscrepancy = filteredEntries.some(e => e.hasDiscrepancy);
+    if (hasDiscrepancy) {
+        const warnBanner = document.createElement("div");
+        warnBanner.className = "sharing-notice mb-24";
+        warnBanner.style.borderColor = "#eab308";
+        warnBanner.style.background = "rgba(234, 179, 8, 0.08)";
+        warnBanner.style.color = "#854d0e";
+        warnBanner.style.padding = "10px 16px";
+        warnBanner.style.borderRadius = "6px";
+        warnBanner.style.border = "1px solid";
+        warnBanner.innerHTML = `
+            <span class="icon">⚠️</span>
+            <div style="flex:1;">
+                <strong>Discrepancy Warning:</strong> Some of the data used in these graphs contains conflicting inputs from partner teams. You can review or resolve this in the Alliance Scouting Data page.
+            </div>
+        `;
+        output.appendChild(warnBanner);
+    }
+
     selectedGraphTypes.forEach((graphType) => {
         const card = document.createElement("div");
         card.className = "card";

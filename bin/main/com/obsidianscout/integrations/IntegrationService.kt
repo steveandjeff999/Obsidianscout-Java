@@ -4,6 +4,7 @@ import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.ApiEvents
 import com.obsidianscout.db.ApiMatches
 import com.obsidianscout.db.ApiTeams
+import com.obsidianscout.db.EpaOprHistoryCache
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.routes.EventRecord
@@ -91,7 +92,7 @@ object IntegrationService {
                 log.info("Cleaned $removed duplicate match row(s) before sync for $eventKey")
             }
             teams.forEach { team ->
-                val existing = ApiTeams.select {
+                val existing = ApiTeams.selectAll().where {
                     (ApiTeams.eventKey eq team.eventKey) and (ApiTeams.teamKey eq team.teamKey)
                 }.limit(1).firstOrNull()
                 if (existing == null) {
@@ -131,7 +132,7 @@ object IntegrationService {
 
             matches.forEach { match ->
                 val canonical = MatchCanonical.canonicalize(match)
-                val existing = ApiMatches.select { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
+                val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
                 if (existing == null) {
                     ApiMatches.insert {
                         it[ApiMatches.matchKey] = canonical.matchKey
@@ -186,7 +187,7 @@ object IntegrationService {
                 log.info("Cleaned $removed duplicate match row(s) before sync for $key")
             }
             teams.forEach { team ->
-                val existing = ApiTeams.select {
+                val existing = ApiTeams.selectAll().where {
                     (ApiTeams.eventKey eq team.eventKey) and (ApiTeams.teamKey eq team.teamKey)
                 }.limit(1).firstOrNull()
                 if (existing == null) {
@@ -226,7 +227,7 @@ object IntegrationService {
 
             matches.forEach { match ->
                 val canonical = MatchCanonical.canonicalize(match)
-                val existing = ApiMatches.select { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
+                val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
                 if (existing == null) {
                     ApiMatches.insert {
                         it[ApiMatches.matchKey] = canonical.matchKey
@@ -279,7 +280,7 @@ object IntegrationService {
             null
         }
         val epas = if (statboticsEnabled) {
-            fetchStatboticsEpas(settings, eventKey)
+            fetchStatboticsEpas(eventKey)
         } else {
             null
         }
@@ -288,7 +289,7 @@ object IntegrationService {
         }
         val now = Instant.now()
         transaction {
-            val teamsList = ApiTeams.select { ApiTeams.eventKey eq eventKey }.toList()
+            val teamsList = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
             teamsList.forEach { row ->
                 val teamKey = row[ApiTeams.teamKey]
                 val opr = oprs?.get(teamKey)
@@ -326,16 +327,13 @@ object IntegrationService {
             }
 
             if (cachedOnly) {
-                val teamKeys = ApiTeams.slice(ApiTeams.eventKey)
-                    .selectAll()
+                val teamKeys = ApiTeams.select(ApiTeams.eventKey)
                     .withDistinct()
                     .map { it[ApiTeams.eventKey].lowercase().trim() }
-                val matchKeys = ApiMatches.slice(ApiMatches.eventKey)
-                    .selectAll()
+                val matchKeys = ApiMatches.select(ApiMatches.eventKey)
                     .withDistinct()
                     .map { it[ApiMatches.eventKey].lowercase().trim() }
-                val manualKeys = ApiEvents.slice(ApiEvents.eventKey, ApiEvents.dataJson)
-                    .selectAll()
+                val manualKeys = ApiEvents.select(ApiEvents.eventKey, ApiEvents.dataJson)
                     .mapNotNull { row ->
                         val k = row[ApiEvents.eventKey].lowercase().trim()
                         val json = row[ApiEvents.dataJson]
@@ -424,7 +422,7 @@ object IntegrationService {
             val bbotMappings = getBBotMappings(eventKey)
             val placeholderToBBot = bbotMappings.associate { it.placeholderKey.lowercase().trim() to it.bbotKey }
 
-            val teamRows = ApiTeams.select { ApiTeams.eventKey eq eventKey }
+            val teamRows = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }
                 .orderBy(ApiTeams.teamNumber, SortOrder.ASC)
                 .toList()
 
@@ -435,7 +433,7 @@ object IntegrationService {
             val visibleTeams = partnerTeams + session.teamNumber
 
             val groupedEntries = if (teamNumbers.isNotEmpty()) {
-                val entriesQuery = ScoutingEntries.select { ScoutingEntries.targetTeamNumber inList teamNumbers }
+                val entriesQuery = ScoutingEntries.selectAll().where { ScoutingEntries.targetTeamNumber inList teamNumbers }
                 if (session.role != UserRole.SUPERADMIN) {
                     entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
                 }
@@ -499,7 +497,7 @@ object IntegrationService {
             }
 
             rows.groupBy { it.teamNumber }
-                .map { (teamNumber, group) ->
+                .map { (_, group) ->
                     if (group.size == 1) {
                         group.first()
                     } else {
@@ -523,7 +521,7 @@ object IntegrationService {
 
     fun listMatches(eventKey: String): List<MatchRecord> {
         return transaction {
-            val allTeams = ApiTeams.select { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
+            val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
             val bbotMappings = getBBotMappings(eventKey)
             
             // Build bidirectional resolution maps for B-bots and normal teams
@@ -567,7 +565,7 @@ object IntegrationService {
                 }
             }
 
-            val rows = ApiMatches.select { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
+            val rows = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
             rows.sortedWith(
                 compareBy(
                     { compLevelRank(it[ApiMatches.compLevel]) },
@@ -627,8 +625,8 @@ object IntegrationService {
 
     fun getBBotMappings(eventKey: String): List<BBotMapping> {
         return transaction {
-            val allTeams = ApiTeams.select { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
-            val allMatches = ApiMatches.select { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
+            val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
+            val allMatches = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
 
             val bbotKeysInMatches = mutableSetOf<String>()
             allMatches.forEach { row ->
@@ -701,7 +699,7 @@ object IntegrationService {
     fun getEvent(eventKey: String): EventRecord? {
         return transaction {
             val key = eventKey.lowercase().trim()
-            ApiEvents.select { ApiEvents.eventKey eq key }.limit(1).map { row ->
+            ApiEvents.selectAll().where { ApiEvents.eventKey eq key }.limit(1).map { row ->
                 val storedCode = row[ApiEvents.eventCode]
                 val computedKey = if (!storedCode.isNullOrBlank()) {
                     "${row[ApiEvents.year]}${storedCode}".lowercase()
@@ -724,7 +722,7 @@ object IntegrationService {
     fun saveEvent(event: EventRecord): EventRecord {
         return transaction {
             val key = event.eventKey.lowercase().trim()
-            val existing = ApiEvents.select { ApiEvents.eventKey eq key }.limit(1).firstOrNull()
+            val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq key }.limit(1).firstOrNull()
             val now = Instant.now()
             if (existing == null) {
                 ApiEvents.insert {
@@ -758,7 +756,7 @@ object IntegrationService {
         return transaction {
             val eventKey = team.eventKey.lowercase().trim()
             val teamKey = team.teamKey.ifBlank { "frc${team.teamNumber}" }.lowercase().trim()
-            val existing = ApiTeams.select {
+            val existing = ApiTeams.selectAll().where {
                 (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamKey eq teamKey)
             }.limit(1).firstOrNull()
             val now = Instant.now()
@@ -832,7 +830,7 @@ object IntegrationService {
                 }
             }
 
-            val existing = ApiMatches.select { ApiMatches.matchKey eq generatedKey }.limit(1).firstOrNull()
+            val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq generatedKey }.limit(1).firstOrNull()
             val now = Instant.now()
             val redTeamsJson = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), normalizedRed)
             val blueTeamsJson = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), normalizedBlue)
@@ -1012,7 +1010,7 @@ object IntegrationService {
         val clippedStart = event.startDate.clipEventDate()
         val clippedEnd = event.endDate.clipEventDate()
         val clippedTimezone = event.timezone.clipTimezone()
-        val existing = ApiEvents.select { ApiEvents.eventKey eq resolvedKey }.limit(1).firstOrNull()
+        val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq resolvedKey }.limit(1).firstOrNull()
         if (existing == null) {
             ApiEvents.insert {
                 it[ApiEvents.eventKey] = resolvedKey
@@ -1186,14 +1184,19 @@ object IntegrationService {
         }
     }
 
-    private suspend fun fetchStatboticsEpas(settings: ApiSettings, eventKey: String): Map<String, Double> {
+    private suspend fun fetchStatboticsEpas(eventKey: String): Map<String, Double> {
         val url = "https://api.statbotics.io/v3/team_events?event=${eventKey}&limit=1000"
-        val responseText = try {
-            client.get(url).bodyAsText()
+        val response = try {
+            client.get(url)
         } catch (error: Exception) {
             log.warn("Statbotics fetch failed: ${error.message}")
             return emptyMap()
         }
+        if (!response.status.isSuccess()) {
+            log.warn("Statbotics fetch failed with status ${response.status}")
+            return emptyMap()
+        }
+        val responseText = response.bodyAsText()
         if (responseText.isBlank()) {
             return emptyMap()
         }
@@ -1211,6 +1214,84 @@ object IntegrationService {
         } catch (e: Exception) {
             log.warn("Failed to parse Statbotics response: ${e.message}")
             emptyMap()
+        }
+    }
+
+    suspend fun syncEpaOprHistory(settings: ApiSettings, eventKey: String) {
+        val normalizedKey = eventKey.lowercase().trim()
+        if (normalizedKey.isBlank()) return
+        
+        val oprs = fetchTbaOprs(settings, normalizedKey)
+        val epaHistory = fetchStatboticsMatchEpaHistory(normalizedKey)
+        
+        val oprsJson = JsonSupport.json.encodeToString(oprs)
+        val epaHistoryJson = JsonSupport.json.encodeToString(epaHistory)
+        val now = java.time.Instant.now()
+        
+        transaction {
+            val existing = EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
+            if (existing == null) {
+                EpaOprHistoryCache.insert {
+                    it[EpaOprHistoryCache.eventKey] = normalizedKey
+                    it[EpaOprHistoryCache.oprsJson] = oprsJson
+                    it[EpaOprHistoryCache.epaHistoryJson] = epaHistoryJson
+                    it[EpaOprHistoryCache.updatedAt] = now
+                }
+            } else {
+                EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq normalizedKey }) {
+                    it[EpaOprHistoryCache.oprsJson] = oprsJson
+                    it[EpaOprHistoryCache.epaHistoryJson] = epaHistoryJson
+                    it[EpaOprHistoryCache.updatedAt] = now
+                }
+            }
+        }
+    }
+
+    fun getEpaOprHistory(settings: ApiSettings, eventKey: String): Pair<Map<String, Double>, List<JsonElement>> {
+        val normalizedKey = eventKey.lowercase().trim()
+        val cached = transaction {
+            EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
+        }
+        
+        if (cached != null) {
+            val oprsMap = try {
+                JsonSupport.json.decodeFromString<Map<String, Double>>(cached[EpaOprHistoryCache.oprsJson])
+            } catch (_: Exception) {
+                emptyMap()
+            }
+            val epaHistoryList = try {
+                JsonSupport.json.decodeFromString<List<JsonElement>>(cached[EpaOprHistoryCache.epaHistoryJson])
+            } catch (_: Exception) {
+                emptyList()
+            }
+            
+            // If the cache is older than 15 minutes, trigger background refresh
+            val updatedAt = cached[EpaOprHistoryCache.updatedAt]
+            if (updatedAt.isBefore(java.time.Instant.now().minusSeconds(900))) {
+                SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
+            }
+            
+            return Pair(oprsMap, epaHistoryList)
+        } else {
+            // No cache at all. Trigger background refresh and return empty/defaults
+            SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
+            return Pair(emptyMap(), emptyList())
+        }
+    }
+
+    private suspend fun fetchStatboticsMatchEpaHistory(eventKey: String): List<JsonElement> {
+        val url = "https://api.statbotics.io/v3/team_matches?event=${eventKey}&limit=1000"
+        return try {
+            val response = client.get(url)
+            if (!response.status.isSuccess()) {
+                log.warn("Statbotics match EPA history fetch failed for $eventKey with status ${response.status}")
+                return emptyList()
+            }
+            val text = response.bodyAsText()
+            JsonSupport.json.parseToJsonElement(text).jsonArray
+        } catch (error: Exception) {
+            log.warn("Statbotics match EPA history fetch failed for $eventKey: ${error.message}")
+            emptyList()
         }
     }
 

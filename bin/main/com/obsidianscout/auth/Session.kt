@@ -3,6 +3,7 @@ package com.obsidianscout.auth
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.sessions.get
+import io.ktor.server.sessions.clear
 import io.ktor.server.sessions.sessions
 import kotlinx.serialization.Serializable
 import io.ktor.server.sessions.SessionTransport
@@ -12,6 +13,9 @@ import io.ktor.server.sessions.transformRead
 import io.ktor.server.sessions.transformWrite
 import io.ktor.http.Cookie
 import io.ktor.util.AttributeKey
+import com.obsidianscout.db.Users
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 
 @Serializable
 data class UserSession(
@@ -26,8 +30,16 @@ data class UserSession(
 class ApiException(val status: HttpStatusCode, override val message: String) : RuntimeException(message)
 
 suspend fun ApplicationCall.requireSession(): UserSession {
-    return sessions.get<UserSession>()
+    val session = sessions.get<UserSession>()
         ?: throw ApiException(HttpStatusCode.Unauthorized, "Not signed in")
+    val exists = transaction {
+        Users.selectAll().where { Users.id eq session.userId }.any()
+    }
+    if (!exists) {
+        sessions.clear<UserSession>()
+        throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
+    }
+    return session
 }
 
 /**

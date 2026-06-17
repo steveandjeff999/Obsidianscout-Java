@@ -10,7 +10,7 @@ let currentUsers = [];
 let pendingAvatarBase64 = undefined;  // undefined = no change, null = remove, string = new picture
 
 /** Resize an image File to a square JPEG data-URL (max `size` px). */
-async function resizeImageToBase64(file, size = 96) {
+async function resizeImageToBase64(file, size = 384) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -25,7 +25,7 @@ async function resizeImageToBase64(file, size = 96) {
                 const sx = (img.width - srcSize) / 2;
                 const sy = (img.height - srcSize) / 2;
                 ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, size, size);
-                resolve(canvas.toDataURL("image/jpeg", 0.85));
+                resolve(canvas.toDataURL("image/png"));
             };
             img.onerror = reject;
             img.src = e.target.result;
@@ -159,7 +159,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const file = e.target.files[0];
         if (!file) return;
         try {
-            const base64 = await resizeImageToBase64(file, 96);
+            const base64 = await resizeImageToBase64(file, 384);
             pendingAvatarBase64 = base64;
             avatarImg.src = base64;
             avatarImg.style.display = "block";
@@ -289,16 +289,42 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadUsers(me, openModal, true);
     });
 
-    // Wire edit buttons click using event delegation on tbody
+    // Wire edit/delete buttons click using event delegation on tbody
     const tbody = document.querySelector("#user-table tbody");
     if (tbody) {
-        tbody.addEventListener("click", (e) => {
-            const btn = e.target.closest('[data-action="edit"]');
-            if (!btn) return;
-            const userId = parseInt(btn.getAttribute("data-id"), 10);
-            const user = currentUsers.find(u => u.id === userId);
-            if (user) {
-                openModal(user);
+        tbody.addEventListener("click", async (e) => {
+            const editBtn = e.target.closest('[data-action="edit"]');
+            if (editBtn) {
+                const userId = parseInt(editBtn.getAttribute("data-id"), 10);
+                const user = currentUsers.find(u => u.id === userId);
+                if (user) {
+                    openModal(user);
+                }
+                return;
+            }
+
+            const deleteBtn = e.target.closest('[data-action="delete"]');
+            if (deleteBtn) {
+                const userId = parseInt(deleteBtn.getAttribute("data-id"), 10);
+                const user = currentUsers.find(u => u.id === userId);
+                if (!user) return;
+
+                const confirmed = confirm(`Are you sure you want to delete the user "${user.username}"? Their submitted scouting data will be preserved under 'Deleted User' on their team.`);
+                if (!confirmed) return;
+
+                try {
+                    await Obsidianscout.request(`/api/admin/users/${userId}`, {
+                        method: "DELETE"
+                    });
+                    Obsidianscout.showToast("User deleted successfully", "success");
+                    if (userId === me.id) {
+                        window.location.href = "/";
+                    } else {
+                        await loadUsers(me, openModal);
+                    }
+                } catch (error) {
+                    Obsidianscout.showToast(error.message || "Failed to delete user", "error");
+                }
             }
         });
     }
@@ -361,7 +387,10 @@ async function loadUsers(me, openModal, append = false) {
                 <td>${user.teamNumber}</td>
                 <td>${roleLabel}</td>
                 <td>${new Date(user.createdAt).toLocaleDateString()}</td>
-                <td>${canEdit ? `<button class="edit-btn" data-action="edit" data-id="${user.id}">Edit</button>` : ""}</td>
+                <td>
+                    ${canEdit ? `<button class="edit-btn" data-action="edit" data-id="${user.id}">Edit</button>` : ""}
+                    ${canEdit ? `<button class="delete-btn" data-action="delete" data-id="${user.id}" style="margin-left: 8px;">Delete</button>` : ""}
+                </td>
             `;
 
             tbody.appendChild(row);

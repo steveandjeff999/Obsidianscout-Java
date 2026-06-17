@@ -281,7 +281,20 @@ function renderRankingTable(state, ui) {
         }
 
         appendCell(row, String(index + 1));
-        appendCell(row, teamLabel(state, rowData.teamNumber));
+        
+        const tdTeam = document.createElement("td");
+        tdTeam.textContent = teamLabel(state, rowData.teamNumber);
+        const teamEntries = entriesForTeam(state, rowData.teamNumber);
+        if (teamEntries.some(e => e.hasDiscrepancy)) {
+            const warnSpan = document.createElement("span");
+            warnSpan.textContent = " ⚠️";
+            warnSpan.style.color = "#eab308";
+            warnSpan.style.fontWeight = "bold";
+            warnSpan.title = "Discrepancy detected in qualitative scouting data for this team";
+            tdTeam.appendChild(warnSpan);
+        }
+        row.appendChild(tdTeam);
+
         appendCell(row, formatNumeric(rowData.score));
         appendCell(row, String(rowData.entriesCount));
         appendCell(row, String(rowData.matchesCount));
@@ -415,7 +428,18 @@ function renderEntrySection(state, ui) {
             row.classList.add("selected");
         }
 
-        appendCell(row, teamLabel(state, entry.targetTeamNumber));
+        const tdTeam = document.createElement("td");
+        tdTeam.textContent = teamLabel(state, entry.targetTeamNumber);
+        if (entry.hasDiscrepancy) {
+            const warnSpan = document.createElement("span");
+            warnSpan.textContent = " ⚠️";
+            warnSpan.style.color = "#eab308";
+            warnSpan.style.fontWeight = "bold";
+            warnSpan.title = "Discrepancy detected between partner teams: " + (entry.conflictingTeams || []).join(", ");
+            tdTeam.appendChild(warnSpan);
+        }
+        row.appendChild(tdTeam);
+
         appendCell(row, matchLabel(entry));
         appendCell(row, formatMetricValue(metric, entry));
         appendCell(row, formatTimestamp(entry.createdAt));
@@ -447,6 +471,24 @@ function renderEntryDetail(state, ui, entry) {
 
     ui.entryTitle.textContent = `${teamLabel(state, entry.targetTeamNumber)} | ${matchLabel(entry)}`;
     ui.entryStatus.textContent = `${entry.pending ? "Pending" : "Synced"} | ${formatTimestamp(entry.createdAt)}`;
+
+    if (entry.hasDiscrepancy) {
+        const warnBanner = document.createElement("div");
+        warnBanner.className = "sharing-notice mb-12";
+        warnBanner.style.borderColor = "#eab308";
+        warnBanner.style.background = "rgba(234, 179, 8, 0.08)";
+        warnBanner.style.color = "#854d0e";
+        warnBanner.style.padding = "10px 16px";
+        warnBanner.style.borderRadius = "6px";
+        warnBanner.style.border = "1px solid";
+        warnBanner.innerHTML = `
+            <span class="icon">⚠️</span>
+            <div style="flex:1;">
+                <strong>Discrepancy Warning:</strong> Different qualitative scouting data exists for this match from: <strong>${(entry.conflictingTeams || []).join(", ")}</strong>. You can view or resolve this discrepancy in the Alliance Scouting Data page.
+            </div>
+        `;
+        ui.entryDetail.appendChild(warnBanner);
+    }
 
     const metaGroup = document.createElement("div");
     metaGroup.className = "pit-detail-group";

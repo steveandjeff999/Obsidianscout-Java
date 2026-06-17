@@ -7,7 +7,6 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -19,6 +18,16 @@ data class ApiKeys(
     val tbaKey: String = "",
     val firstUsername: String = "",
     val firstKey: String = ""
+)
+
+@Serializable
+data class SmtpSettings(
+    val host: String = "",
+    val port: Int = 587,
+    val username: String = "",
+    val passwordPlain: String = "",
+    val fromAddress: String = "",
+    val encryption: String = "STARTTLS" // SSL_TLS, STARTTLS, NONE
 )
 
 @Serializable
@@ -47,7 +56,7 @@ object SettingsService {
     fun ensureDefaultSettings() {
         transaction {
             val existing = AppSettings
-                .select { AppSettings.teamNumber eq 0 }
+                .selectAll().where { AppSettings.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull() != null
             if (!existing) {
@@ -65,7 +74,7 @@ object SettingsService {
         val jsonText = transaction {
             // Try team-specific settings first
             val teamSettings = AppSettings
-                .select { AppSettings.teamNumber eq teamNumber }
+                .selectAll().where { AppSettings.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
                 ?.get(AppSettings.settingsJson)
@@ -76,7 +85,7 @@ object SettingsService {
 
             // Fall back to team 0 (global default)
             AppSettings
-                .select { AppSettings.teamNumber eq 0 }
+                .selectAll().where { AppSettings.teamNumber eq 0 }
                 .limit(1)
                 .firstOrNull()
                 ?.get(AppSettings.settingsJson)
@@ -94,7 +103,7 @@ object SettingsService {
         val jsonText = JsonSupport.json.encodeToString(ApiSettings.serializer(), normalized)
         transaction {
             val row = AppSettings
-                .select { AppSettings.teamNumber eq teamNumber }
+                .selectAll().where { AppSettings.teamNumber eq teamNumber }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {
@@ -131,19 +140,14 @@ object SettingsService {
     fun teamNumbersEligibleForAutoSync(): List<Int> {
         return transaction {
             AppSettings.selectAll()
-                .mapNotNull { row ->
-                    val teamNumber = row[AppSettings.teamNumber]
-                    val jsonText = row[AppSettings.settingsJson]
-                    val settings = if (jsonText.isBlank()) {
-                        ApiSettings()
-                    } else {
-                        JsonSupport.json.decodeFromString(ApiSettings.serializer(), jsonText)
-                    }
-                    val normalized = normalize(settings)
-                    if (normalized.resolvedEventKey().isBlank()) {
+                .map { it[AppSettings.teamNumber] }
+                .distinct()
+                .mapNotNull { teamNumber ->
+                    val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber)
+                    if (settings.resolvedEventKey().isBlank()) {
                         return@mapNotNull null
                     }
-                    val keys = normalized.apiKeys
+                    val keys = settings.apiKeys
                     val hasApi = keys.tbaKey.isNotBlank() ||
                         (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
                     if (!hasApi) {
@@ -151,7 +155,6 @@ object SettingsService {
                     }
                     teamNumber
                 }
-                .distinct()
         }
     }
 
@@ -165,5 +168,43 @@ object SettingsService {
             return legacyKey.drop(4)
         }
         return ""
+    }
+
+    fun getSmtpSettings(): SmtpSettings {
+        val jsonText = transaction {
+            AppSettings
+                .selectAll().where { AppSettings.teamNumber eq -1 }
+                .limit(1)
+                .firstOrNull()
+                ?.get(AppSettings.settingsJson)
+        }
+        return if (jsonText.isNullOrBlank()) {
+            SmtpSettings()
+        } else {
+            JsonSupport.json.decodeFromString(SmtpSettings.serializer(), jsonText)
+        }
+    }
+
+    fun updateSmtpSettings(settings: SmtpSettings): SmtpSettings {
+        val jsonText = JsonSupport.json.encodeToString(SmtpSettings.serializer(), settings)
+        transaction {
+            val row = AppSettings
+                .selectAll().where { AppSettings.teamNumber eq -1 }
+                .limit(1)
+                .firstOrNull()
+            if (row == null) {
+                AppSettings.insert {
+                    it[AppSettings.teamNumber] = -1
+                    it[settingsJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            } else {
+                AppSettings.update({ AppSettings.id eq row[AppSettings.id] }) {
+                    it[settingsJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            }
+        }
+        return settings
     }
 }

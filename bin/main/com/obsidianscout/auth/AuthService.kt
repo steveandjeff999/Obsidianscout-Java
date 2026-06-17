@@ -12,12 +12,18 @@ import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
 import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.addLogger
 import org.jetbrains.exposed.sql.StdOutSqlLogger
+import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
+import com.obsidianscout.db.PasswordResetTokens
+import com.obsidianscout.db.ScoutingEntries
+import com.obsidianscout.db.PitScoutingEntries
+import com.obsidianscout.db.QualitativeScoutingEntries
 import java.time.Instant
 
 @Serializable
@@ -51,7 +57,7 @@ object AuthService {
     fun ensureSeedSuperAdmin(seed: SeedConfig) {
         transaction {
             val superAdminExists = Users
-                .select { Users.role eq UserRole.SUPERADMIN.name }
+                .selectAll().where { Users.role eq UserRole.SUPERADMIN.name }
                 .limit(1)
                 .firstOrNull() != null
             if (!superAdminExists) {
@@ -71,7 +77,7 @@ object AuthService {
         // Fetch the stored hash first (short transaction — just a DB read).
         val (hash, record) = transaction {
             val row = Users
-                .select { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
+                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
                 .limit(1)
                 .firstOrNull()
                 ?: return@transaction null
@@ -104,7 +110,7 @@ object AuthService {
         val hash = hashPassword(password)
         return transaction {
             val existing = Users
-                .select { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
+                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
                 .limit(1)
                 .any()
             if (existing) {
@@ -118,7 +124,7 @@ object AuthService {
                 it[Users.createdAt] = Instant.now()
                 it[Users.email] = email?.takeIf { it.isNotBlank() }
             }
-            val row = Users.select { Users.id eq id }.first()
+            val row = Users.selectAll().where { Users.id eq id }.first()
             rowToUser(row)
         }
     }
@@ -142,14 +148,14 @@ object AuthService {
             addLogger(StdOutSqlLogger)
             val query = when (callerSession.role) {
                 UserRole.SUPERADMIN -> {
-                    val q = Users.selectAll()
+                    val q = Users.selectAll().where { Users.username neq "Deleted User" }
                     if (teamFilter != null) {
                         q.andWhere { Users.teamNumber eq teamFilter }
                     }
                     q
                 }
                 UserRole.ADMIN -> {
-                    val q = Users.select { Users.teamNumber eq callerSession.teamNumber }
+                    val q = Users.selectAll().where { (Users.teamNumber eq callerSession.teamNumber) and (Users.username neq "Deleted User") }
                     if (teamFilter != null && teamFilter != callerSession.teamNumber) {
                         q.andWhere { Users.teamNumber eq -1 }
                     }
@@ -207,7 +213,7 @@ object AuthService {
         val hash = hashPassword(password)
         return transaction {
             val existing = Users
-                .select { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
+                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
                 .limit(1)
                 .any()
             if (existing) {
@@ -221,7 +227,7 @@ object AuthService {
                 it[Users.createdAt] = Instant.now()
                 it[Users.email] = email?.takeIf { it.isNotBlank() }
             }
-            val row = Users.select { Users.id eq id }.first()
+            val row = Users.selectAll().where { Users.id eq id }.first()
             rowToUser(row)
         }
     }
@@ -248,7 +254,7 @@ object AuthService {
             ?.let { hashPassword(it) }
 
         return transaction {
-            val targetRow = Users.select { Users.id eq targetUserId }
+            val targetRow = Users.selectAll().where { Users.id eq targetUserId }
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "User not found")
 
@@ -274,6 +280,19 @@ object AuthService {
                 }
             }
 
+            val targetTeamFinal = newTeamNumber ?: targetTeam
+            val checkUsername = newUsername ?: targetRow[Users.username]
+            if (newUsername != null || newTeamNumber != null) {
+                val exists = Users.selectAll().where { 
+                    (Users.username eq checkUsername) and 
+                    (Users.teamNumber eq targetTeamFinal) and 
+                    (Users.id neq targetUserId) 
+                }.any()
+                if (exists) {
+                    throw ApiException(HttpStatusCode.Conflict, "Username is already taken on this team")
+                }
+            }
+
             Users.update({ Users.id eq targetUserId }) { stmt ->
                 if (!newUsername.isNullOrBlank()) stmt[username] = newUsername
                 if (newHash != null)             stmt[passwordHash] = newHash
@@ -289,8 +308,88 @@ object AuthService {
                 }
             }
 
-            val updated = Users.select { Users.id eq targetUserId }.first()
+            val updated = Users.selectAll().where { Users.id eq targetUserId }.first()
             rowToUser(updated)
+        }
+    }
+
+    fun deleteUser(callerSession: UserSession, targetUserId: Int) {
+        val (targetRole, targetTeam) = transaction {
+            val targetRow = Users.selectAll().where { Users.id eq targetUserId }
+                .firstOrNull()
+                ?: throw ApiException(HttpStatusCode.NotFound, "User not found")
+            val role = try { UserRole.valueOf(targetRow[Users.role]) } catch (_: Exception) { UserRole.SCOUT }
+            val team = targetRow[Users.teamNumber]
+            Pair(role, team)
+        }
+
+        val isSelfDelete = callerSession.userId == targetUserId
+
+        if (!isSelfDelete) {
+            // Permissions check for deleting someone else
+            if (!callerSession.role.isAtLeast(UserRole.ADMIN)) {
+                throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to delete this account")
+            }
+            if (callerSession.role == UserRole.ADMIN) {
+                if (targetTeam != callerSession.teamNumber) {
+                    throw ApiException(HttpStatusCode.Forbidden, "Admins can only delete users on their own team")
+                }
+                if (targetRole == UserRole.SUPERADMIN) {
+                    throw ApiException(HttpStatusCode.Forbidden, "Admins cannot delete superadmin accounts")
+                }
+            }
+        }
+
+        // Prevent deleting the last superadmin
+        if (targetRole == UserRole.SUPERADMIN) {
+            val superAdminCount = transaction {
+                Users.selectAll().where { Users.role eq UserRole.SUPERADMIN.name }.count()
+            }
+            if (superAdminCount <= 1) {
+                throw ApiException(HttpStatusCode.Forbidden, "Cannot delete the last superadmin account")
+            }
+        }
+
+        // Perform updates and deletion in a transaction
+        transaction {
+            // Ensure the team-specific "Deleted User" placeholder exists
+            val deletedUserEntityId = Users.selectAll().where { (Users.username eq "Deleted User") and (Users.teamNumber eq targetTeam) }
+                .limit(1)
+                .firstOrNull()
+                ?.let { it[Users.id] }
+                ?: Users.insertAndGetId {
+                    it[username] = "Deleted User"
+                    it[teamNumber] = targetTeam
+                    it[passwordHash] = "DELETED_USER_PLACEHOLDER"
+                    it[role] = UserRole.SCOUT.name
+                    it[createdAt] = Instant.now()
+                }
+
+            // Transfer scouting entries to the placeholder user
+            ScoutingEntries.update({ ScoutingEntries.submittedByUserId eq targetUserId }) {
+                it[submittedByUserId] = deletedUserEntityId
+            }
+            PitScoutingEntries.update({ PitScoutingEntries.submittedByUserId eq targetUserId }) {
+                it[submittedByUserId] = deletedUserEntityId
+            }
+            QualitativeScoutingEntries.update({ QualitativeScoutingEntries.submittedByUserId eq targetUserId }) {
+                it[submittedByUserId] = deletedUserEntityId
+            }
+
+            // Delete password reset tokens for the target user
+            PasswordResetTokens.deleteWhere { userId eq targetUserId }
+
+            // Delete the target user
+            Users.deleteWhere { Users.id eq targetUserId }
+        }
+    }
+
+    fun getUserById(userId: Int): UserRecord? {
+        return transaction {
+            Users.selectAll().where { Users.id eq userId }
+                .limit(1)
+                .map { rowToUser(it) }
+                .firstOrNull()
         }
     }
 

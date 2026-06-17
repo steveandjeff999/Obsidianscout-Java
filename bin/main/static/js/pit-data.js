@@ -189,7 +189,18 @@ function renderTable(state) {
             row.classList.add("selected");
         }
 
-        appendCell(row, teamLabel(rowData));
+        const tdTeam = document.createElement("td");
+        tdTeam.textContent = teamLabel(rowData);
+        if (rowData.entry && rowData.entry.hasDiscrepancy) {
+            const warnSpan = document.createElement("span");
+            warnSpan.textContent = " ⚠️";
+            warnSpan.style.color = "#eab308";
+            warnSpan.style.fontWeight = "bold";
+            warnSpan.title = "Discrepancy detected between partner teams: " + (rowData.entry.conflictingTeams || []).join(", ");
+            tdTeam.appendChild(warnSpan);
+        }
+        row.appendChild(tdTeam);
+
         appendStatusCell(row, (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? (rowData.entry ? Obsidianscout.t('scouted','Scouted') : Obsidianscout.t('missing','Missing')) : (rowData.entry ? 'Scouted' : 'Missing'), Boolean(rowData.entry));
         appendCell(row, rowData.entry ? formatDateTime(rowData.entry.createdAt) : "--");
         appendCell(row, rowData.entry && quickField ? formatValue(quickField, rowData.entry.data[quickField.id]) : "--");
@@ -224,6 +235,24 @@ function renderDetail(state) {
 
     title.textContent = teamLabel(selected);
     status.textContent = selected.entry ? `${(window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('pitdata.updated','Updated') : 'Updated'} ${formatDateTime(selected.entry.createdAt)}` : ((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('pitdata.needs_pit','Needs pit scouting') : 'Needs pit scouting');
+
+    if (selected.entry && selected.entry.hasDiscrepancy) {
+        const warnBanner = document.createElement("div");
+        warnBanner.className = "sharing-notice mb-12";
+        warnBanner.style.borderColor = "#eab308";
+        warnBanner.style.background = "rgba(234, 179, 8, 0.08)";
+        warnBanner.style.color = "#854d0e";
+        warnBanner.style.padding = "10px 16px";
+        warnBanner.style.borderRadius = "6px";
+        warnBanner.style.border = "1px solid";
+        warnBanner.innerHTML = `
+            <span class="icon">⚠️</span>
+            <div style="flex:1;">
+                <strong>Discrepancy Warning:</strong> Different pit scouting data exists for this team from: <strong>${(selected.entry.conflictingTeams || []).join(", ")}</strong>. You can view or resolve this discrepancy in the Alliance Scouting Data page.
+            </div>
+        `;
+        detail.appendChild(warnBanner);
+    }
 
     if (!selected.entry) {
         const notice = document.createElement("p");

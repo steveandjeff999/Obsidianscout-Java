@@ -25,6 +25,22 @@
             color: var(--ink);
             border-color: var(--accent);
         }
+        .delete-btn {
+            cursor: pointer;
+            background: transparent;
+            border: 1px solid rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .delete-btn:hover {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border-color: #dc3545;
+        }
         body.theme-dark .edit-btn {
             border-color: rgba(255,255,255,0.1);
         }
@@ -141,19 +157,21 @@
                         </div>
                     </div>
 
-                    <table id="user-table" class="table">
-                        <thead>
-                            <tr>
-                                <th>Username</th>
-                                <th>Email</th>
-                                <th>Team</th>
-                                <th>Role</th>
-                                <th>Created</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+                    <div class="table-scroll mt-12">
+                        <table id="user-table" class="table">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Team</th>
+                                    <th>Role</th>
+                                    <th>Created</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
 
                     <!-- Load More Button -->
                     <div id="load-more-container" class="row hidden" style="justify-content: center; margin-top: 20px;">

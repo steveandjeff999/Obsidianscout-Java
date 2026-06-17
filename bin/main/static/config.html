@@ -111,6 +111,8 @@
 
                     <button class="tab" data-tab="api" id="tab-api" type="button">API keys</button>
 
+                    <button class="tab hidden" data-tab="email" id="tab-email" type="button">Email settings</button>
+
                     <button class="tab" data-tab="personal" id="tab-personal" type="button">Personal settings</button>
 
                 </div>
@@ -387,6 +389,122 @@
                             </select>
 
                         </div>
+
+                    </div>
+
+                    <div class="form-grid" style="margin-top: 20px;">
+
+                        <div class="field">
+
+                            <label for="personal-email">Email Address</label>
+
+                            <input id="personal-email" type="email" placeholder="scout@example.com" />
+
+                            <p class="notice mt-6">Used for password recovery if you forget your credentials.</p>
+
+                        </div>
+
+                    </div>
+
+                    <div class="row gap-12 wrap mt-18">
+
+                        <button id="personal-save-email" class="btn" type="button">Save email</button>
+
+                    </div>
+
+                    <div class="card soft danger-zone mt-24" style="border: 1px solid rgba(220, 53, 69, 0.2); background: rgba(220, 53, 69, 0.02); padding: 18px; border-radius: 12px; margin-top: 24px;">
+                        <h3 style="color: #dc3545; margin-top: 0;">Danger Zone</h3>
+                        <p class="notice" style="margin-bottom: 16px;">Once you delete your account, there is no going back. Please be certain.</p>
+                        <button id="personal-delete-account" class="btn delete-btn" type="button" style="background: #dc3545; color: #fff; border: none; padding: 10px 20px; font-weight: 600; border-radius: 8px; cursor: pointer;">Delete Account</button>
+                    </div>
+
+                </div>
+
+                <div data-panel="email" class="hidden">
+
+                    <p class="notice">Configure global SMTP settings to allow sending password reset emails.</p>
+
+                    <div class="form-grid">
+
+                        <div class="field">
+
+                            <label for="settings-email-host">SMTP Host</label>
+
+                            <input id="settings-email-host" type="text" placeholder="smtp.gmail.com" />
+
+                        </div>
+
+                        <div class="field">
+
+                            <label for="settings-email-port">SMTP Port</label>
+
+                            <input id="settings-email-port" type="number" placeholder="587" />
+
+                        </div>
+
+                        <div class="field">
+
+                            <label for="settings-email-username">SMTP Username / API Key</label>
+
+                            <input id="settings-email-username" type="text" placeholder="user@gmail.com" />
+
+                        </div>
+
+                        <div class="field">
+
+                            <label for="settings-email-password">SMTP Password</label>
+
+                            <input id="settings-email-password" type="password" placeholder="••••••••" />
+
+                        </div>
+
+                        <div class="field">
+
+                            <label for="settings-email-from">From Email Address</label>
+
+                            <input id="settings-email-from" type="email" placeholder="noreply@yourdomain.com" />
+
+                        </div>
+
+                        <div class="field">
+
+                            <label for="settings-email-encryption">Encryption</label>
+
+                            <select id="settings-email-encryption">
+
+                                <option value="STARTTLS">STARTTLS (Usually port 587)</option>
+
+                                <option value="SSL_TLS">SSL/TLS (Usually port 465)</option>
+
+                                <option value="NONE">None (Plain SMTP, usually port 25 or 8025)</option>
+
+                            </select>
+
+                        </div>
+
+                    </div>
+
+                    <div class="row gap-12 wrap mt-18">
+
+                        <button id="settings-email-save" class="btn" type="button">Save email settings</button>
+
+                    </div>
+
+                    <div class="card soft mt-24">
+
+                        <h3>Test Connection</h3>
+
+                        <p class="notice">Enter an email address to send a test message using the saved settings.</p>
+
+                        <div class="field">
+
+                            <label for="settings-email-test-address">Recipient Email</label>
+
+                            <input id="settings-email-test-address" type="email" placeholder="test@example.com" />
+
+                        </div>
+
+                        <button id="settings-email-test" class="btn secondary mt-12" type="button">Send test email</button>
 
                     </div>
 

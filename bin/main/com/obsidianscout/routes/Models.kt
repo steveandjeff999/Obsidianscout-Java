@@ -39,6 +39,11 @@ data class MeResponse(
 )
 
 @Serializable
+data class LoginStatusResponse(
+    val loggedIn: Boolean
+)
+
+@Serializable
 data class AuthProviderInfo(
     val type: String,
     val enabled: Boolean
@@ -182,7 +187,8 @@ data class MatchTeamPrediction(
     val averageScoutedScore: Double?,
     val scoutedMatchesCount: Int,
     val epa: Double?,
-    val opr: Double?
+    val opr: Double?,
+    val hasDiscrepancy: Boolean = false
 )
 
 @Serializable
@@ -211,14 +217,18 @@ data class MatchPredictionResponse(
 data class CreateAllianceRequest(
     val name: String,
     val eventKey: String? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val year: Int? = null,
+    val eventCode: String? = null
 )
 
 @Serializable
 data class UpdateAllianceRequest(
     val name: String,
     val eventKey: String? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val year: Int? = null,
+    val eventCode: String? = null
 )
 
 @Serializable
@@ -263,3 +273,53 @@ data class AllianceImportSourceRecord(
     val pitScoutingCount: Int,
     val qualitativeScoutingCount: Int
 )
+
+@Serializable
+data class ToggleAllianceDisableRequest(
+    val disabled: Boolean
+)
+
+@Serializable
+data class ToggleAllianceActiveRequest(
+    val active: Boolean
+)
+
+@Serializable
+data class ForgotPasswordRequest(
+    val username: String? = null,
+    val teamNumber: Int? = null,
+    val email: String? = null
+)
+
+@Serializable
+data class AccountInfo(
+    val userId: Int,
+    val username: String,
+    val teamNumber: Int
+)
+
+@Serializable
+data class VerifyResetTokenResponse(
+    val valid: Boolean,
+    val accounts: List<AccountInfo> = emptyList()
+)
+
+@Serializable
+data class ResetPasswordRequest(
+    val token: String,
+    val userId: Int? = null,
+    val newUsername: String? = null,
+    val newPassword: String
+)
+
+@Serializable
+data class SmtpTestConnectionRequest(
+    val host: String,
+    val port: Int,
+    val username: String,
+    val passwordPlain: String,
+    val fromAddress: String,
+    val encryption: String,
+    val testEmail: String
+)
+

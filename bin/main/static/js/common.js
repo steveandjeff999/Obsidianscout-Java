@@ -45,9 +45,6 @@
         }
     };
 
-    const servedFromCache = new Set();
-    const activeFetches = new Set();
-
     function safeGetItem(key) {
         try {
             return localStorage.getItem(key);
@@ -145,70 +142,13 @@
         }
     }
 
-    function triggerBackgroundRevalidate(path, cachedText) {
-        if (!navigator.onLine) return;
-        if (activeFetches.has(path)) return;
-        activeFetches.add(path);
-
-        setTimeout(async () => {
-            try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 10000);
-                const response = await fetch(path, {
-                    method: "GET",
-                    headers: {},
-                    credentials: "same-origin",
-                    signal: controller.signal,
-                    cache: "no-cache"
-                });
-                clearTimeout(timeout);
-
-                if (response.status === 401) {
-                    const isLoginPage = document.body && document.body.dataset.page === "login";
-                    if (!isLoginPage) {
-                        safeRemoveItem("cache:/api/auth/me");
-                        window.location.href = "/";
-                        return;
-                    }
-                }
-
-                if (response.ok) {
-                    const text = await response.text();
-                    if (text !== cachedText) {
-                        console.log(`[Offline Cache] Background revalidation succeeded for ${path}. Data changed, updating cache and refreshing.`);
-                        safeSetItem("cache:" + path, text);
-                        
-                        const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
-                        const isUserEditing = document.querySelector('input:focus, textarea:focus, select:focus') !== null;
-                        const isModalOpen = document.querySelector('.modal-backdrop.show, .modal.show, [role="dialog"].show') !== null;
-                        
-                        if (isDataPage && !isUserEditing && !isModalOpen) {
-                            if (typeof saveScrollPositions === "function") {
-                                saveScrollPositions();
-                            }
-                            window.location.reload();
-                        }
-                    } else {
-                        console.log(`[Offline Cache] Background revalidation succeeded for ${path}. Data matches cache.`);
-                    }
-                }
-            } catch (err) {
-                console.warn(`[Offline Cache] Background revalidation failed for ${path}:`, err);
-            } finally {
-                activeFetches.delete(path);
-            }
-        }, 1000);
-    }
-
     async function request(path, options = {}) {
         const method = options.method || "GET";
 
-        if (method === "GET") {
+        if (method === "GET" && !navigator.onLine) {
             const cachedText = safeGetItem("cache:" + path);
             if (cachedText !== null) {
-                console.log("[Offline Cache] Serving cached response instantly for:", path);
-                servedFromCache.add(path);
-                triggerBackgroundRevalidate(path, cachedText);
+                console.log("[Offline Cache] Offline mode: Serving cached response for:", path);
                 return safeParse(cachedText);
             }
         }
@@ -253,10 +193,14 @@
             if (!response.ok) {
                 if (response.status === 401) {
                     const isLoginPage = document.body && document.body.dataset.page === "login";
-                    const isAuthRequest = path.includes("/api/auth/login") || path.includes("/api/auth/register");
+                    const isAuthRequest = path.includes("/api/auth/login") || path.includes("/api/auth/register") || path.includes("/api/auth/status");
                     if (!isLoginPage && !isAuthRequest) {
-                        safeRemoveItem("cache:/api/auth/me");
-                        window.location.href = "/";
+                        checkLoginStatus().then(loggedIn => {
+                            if (!loggedIn) {
+                                safeRemoveItem("cache:/api/auth/me");
+                                window.location.href = "/";
+                            }
+                        });
                         const err = new Error("Session expired. Redirecting...");
                         err.status = 401;
                         throw err;
@@ -276,10 +220,17 @@
 
             return data;
         } catch (error) {
+            if (method === "GET") {
+                const cachedText = safeGetItem("cache:" + path);
+                if (cachedText !== null) {
+                    console.warn("[Offline Cache] Network fetch failed, falling back to cache for:", path, error);
+                    return safeParse(cachedText);
+                }
+            }
+
             const isAbort = error && error.name === "AbortError";
             if (isAbort) {
                 if (options.signal && options.signal.aborted) {
-                    // Manual abort from caller signal
                     throw error;
                 }
                 throw new Error("Request timed out. Try refreshing this page.");
@@ -295,6 +246,26 @@
             return JSON.parse(text);
         } catch (error) {
             return text;
+        }
+    }
+
+    async function checkLoginStatus() {
+        try {
+            const response = await fetch("/api/auth/status", {
+                method: "GET",
+                credentials: "same-origin",
+                headers: { "Accept": "application/json" }
+            });
+            if (response.status === 401) {
+                return false;
+            }
+            if (!response.ok) {
+                return false;
+            }
+            const data = await response.json();
+            return !!(data && data.loggedIn);
+        } catch (error) {
+            return false;
         }
     }
 
@@ -463,12 +434,12 @@
     }
 
     async function requireAuth() {
-        const me = await getMe();
-        if (!me) {
+        const loggedIn = await checkLoginStatus();
+        if (!loggedIn) {
             window.location.href = "/";
             return null;
         }
-        return me;
+        return await getMe();
     }
 
     /**
@@ -536,7 +507,10 @@
 
         badge.innerHTML = `
             <a class="nav-avatar-link" href="/config" aria-label="Edit profile picture">${avatarHtml}</a>
-            <span class="nav-user-text">${user.username} | Team ${user.teamNumber} | ${roleLabel}</span>
+            <div class="nav-user-text">
+                <span class="nav-user-name" title="${user.username}">${user.username}</span>
+                <span class="nav-user-meta">Team ${user.teamNumber} • ${roleLabel}</span>
+            </div>
         `;
     }
 
@@ -560,9 +534,14 @@
             existing.replaceWith(img);
         } else {
             // Revert to initials bubble — read initials from current text
+            const nameEl = badge.querySelector(".nav-user-name");
             const textEl = badge.querySelector(".nav-user-text");
-            const text = textEl ? textEl.textContent : "";
-            const username = text.split("|")[0].trim();
+            let username = "?";
+            if (nameEl) {
+                username = nameEl.textContent.trim();
+            } else if (textEl) {
+                username = textEl.textContent.split("|")[0].trim();
+            }
             const initials = (username || "?").slice(0, 2).toUpperCase();
             let hue = 0;
             for (let i = 0; i < username.length; i++) {
@@ -1183,9 +1162,89 @@
         }
     }
 
+    /**
+     * ─── LIQUID GLASS SVG FILTER ENGINE ────────────────────────────────────────
+     * Injects a hidden SVG containing two named filter definitions:
+     *   #liquid-glass  — full pixel displacement (refraction warp)
+     *   #glass-rim     — softer edge-only distortion for the border glow
+     *
+     * backdrop-filter: url(#liquid-glass) is supported in Firefox.
+     * Chrome/Safari fall back to the standard blur() chain via @supports in CSS.
+     */
+    function injectLiquidGlassSVG() {
+        if (document.getElementById('liquid-glass-defs')) return;
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.id = 'liquid-glass-defs';
+        svg.setAttribute('aria-hidden', 'true');
+        svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;';
+        svg.innerHTML = `
+        <defs>
+            <!--
+                LAYER 1 — PRIMARY REFRACTION FILTER
+                feTurbulence generates organic fractal noise.
+                feColorMatrix isolates the R and G channels as displacement vectors.
+                feDisplacementMap uses those to warp every pixel of the source.
+                scale=18 gives ~18px max warp — visible but not glitchy.
+            -->
+            <filter id="liquid-glass" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+                <feTurbulence
+                    type="fractalNoise"
+                    baseFrequency="0.018 0.022"
+                    numOctaves="4"
+                    seed="3"
+                    stitchTiles="stitch"
+                    result="noise"/>
+                <feColorMatrix
+                    in="noise"
+                    type="matrix"
+                    values="1 0 0 0 0
+                            0 1 0 0 0
+                            0 0 1 0 0
+                            0 0 0 1 0"
+                    result="coloredNoise"/>
+                <feDisplacementMap
+                    in="SourceGraphic"
+                    in2="coloredNoise"
+                    scale="18"
+                    xChannelSelector="R"
+                    yChannelSelector="G"
+                    result="displaced"/>
+            </filter>
+
+            <!--
+                LAYER 2 — RIM DISTORTION FILTER (subtler, for borders/edges)
+                Lower scale (8) and higher baseFrequency for a finer-grain edge warp.
+            -->
+            <filter id="glass-rim" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">
+                <feTurbulence
+                    type="fractalNoise"
+                    baseFrequency="0.035 0.04"
+                    numOctaves="2"
+                    seed="7"
+                    stitchTiles="stitch"
+                    result="rimNoise"/>
+                <feDisplacementMap
+                    in="SourceGraphic"
+                    in2="rimNoise"
+                    scale="8"
+                    xChannelSelector="R"
+                    yChannelSelector="G"/>
+            </filter>
+        </defs>`;
+        document.body.insertAdjacentElement('afterbegin', svg);
+    }
+
+    // Run at DOM ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', injectLiquidGlassSVG);
+    } else {
+        injectLiquidGlassSVG();
+    }
+
     window.Obsidianscout = {
         request,
         getMe,
+        checkLoginStatus,
         requireAuth,
         showToast,
         setUserBadge,

@@ -8,7 +8,7 @@ import kotlinx.serialization.builtins.serializer
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.slf4j.LoggerFactory
@@ -231,7 +231,7 @@ object MatchCanonical {
         val normalizedEvent = eventKey.lowercase()
         return transaction {
             val rows = ApiMatches
-                .select { ApiMatches.eventKey eq normalizedEvent }
+                .selectAll().where { ApiMatches.eventKey eq normalizedEvent }
                 .toList()
             if (rows.size <= 1) {
                 return@transaction 0
@@ -273,7 +273,7 @@ object MatchCanonical {
                 }
             }
 
-            working = ApiMatches.select { ApiMatches.eventKey eq normalizedEvent }.toList()
+            working = ApiMatches.selectAll().where { ApiMatches.eventKey eq normalizedEvent }.toList()
             val groups = working.groupBy { row -> identityFrom(row.toSyncRecord()).toMatchKey() }
 
             groups.forEach { (canonicalKey, group) ->
