@@ -1,16 +1,20 @@
 :root {
     --ink: #1d1a17;
     --muted: #5f5b55;
-    --surface: rgba(255, 255, 255, 0.38);
-    --surface-2: rgba(255, 255, 255, 0.22);
-    --surface-3: rgba(255, 255, 255, 0.12);
+    /* Clear glass: nearly transparent, refraction comes from backdrop-filter */
+    --surface: rgba(255, 255, 255, 0.10);
+    --surface-2: rgba(255, 255, 255, 0.07);
+    --surface-3: rgba(255, 255, 255, 0.05);
     --accent: #0b8f88;
     --accent-2: #f28b35;
     --accent-3: #255a9c;
-    --shadow: 0 16px 40px rgba(20, 20, 20, 0.08);
+    --shadow:
+        0 4px 16px rgba(0,0,0,0.06),
+        0 16px 40px rgba(0,0,0,0.08),
+        0 40px 80px rgba(0,0,0,0.06);
     --radius: 24px;
     --radius-sm: 12px;
-    --bg: radial-gradient(circle at top left, #fff4e1 0%, #f6f1e8 45%, #e8f2f0 100%);
+    --bg: radial-gradient(ellipse at 20% 10%, #ffecd2 0%, #f6f1e8 40%, #daeef0 100%);
     --primary: var(--accent);
     --ink-muted: var(--muted);
 }
@@ -40,14 +44,17 @@ body::before {
 body.theme-dark {
     --ink: #f4f2ed;
     --muted: #c3bfb8;
-    --surface: rgba(30, 34, 42, 0.45);
-    --surface-2: rgba(20, 22, 26, 0.35);
-    --surface-3: rgba(255, 255, 255, 0.08);
+    --surface: rgba(255, 255, 255, 0.06);
+    --surface-2: rgba(255, 255, 255, 0.04);
+    --surface-3: rgba(255, 255, 255, 0.03);
     --accent: #3ccfc0;
     --accent-2: #f2a353;
     --accent-3: #6aa2ff;
-    --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
-    --bg: radial-gradient(circle at top left, #1f2125 0%, #15171a 40%, #101214 100%);
+    --shadow:
+        0 4px 16px rgba(0,0,0,0.30),
+        0 16px 40px rgba(0,0,0,0.42),
+        0 40px 80px rgba(0,0,0,0.28);
+    --bg: radial-gradient(ellipse at 20% 10%, #1a1f2e 0%, #13161c 45%, #0d1015 100%);
 }
 
 body.theme-dark::before {
@@ -79,11 +86,15 @@ a {
 
 .sidebar {
     width: 260px;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.35) 100%);
-    -webkit-backdrop-filter: blur(28px) saturate(210%);
-    backdrop-filter: blur(28px) saturate(210%);
-    border-right: 1px solid rgba(255, 255, 255, 0.4);
-    box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.5), inset -1px 0 0 rgba(255, 255, 255, 0.2);
+    /* Clear glass — almost nothing in the fill, backdrop does the work */
+    background: rgba(255, 255, 255, 0.08);
+    -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(102%);
+    backdrop-filter: blur(40px) saturate(180%) brightness(102%);
+    /* Hairline rim — the only thing telling you glass is there */
+    border-right: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.40),
+        4px 0 24px rgba(0,0,0,0.05);
     padding: 24px 20px;
     position: sticky;
     top: 0;
@@ -91,18 +102,18 @@ a {
     z-index: 4;
     display: flex;
     flex-direction: column;
-    /* allow the sidebar to scroll independently from the page */
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    /* prevent scroll chaining to the body when reaching edges */
     overscroll-behavior: contain;
-    transition: width 0.2s ease, padding 0.2s ease, background-color 0.3s ease, border-color 0.3s ease;
+    transition: width 0.2s ease, padding 0.2s ease, background 0.3s ease, border-color 0.3s ease;
 }
 
 body.theme-dark .sidebar {
-    background: linear-gradient(135deg, rgba(28, 30, 34, 0.65) 0%, rgba(18, 20, 24, 0.45) 100%);
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.12), inset -1px 0 0 rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.05);
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.14),
+        4px 0 24px rgba(0,0,0,0.25);
 }
 
 .sidebar-brand {
@@ -434,8 +445,10 @@ body.theme-dark .profile-pic-remove:hover {
 .orb {
     position: fixed;
     border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.38;
+    /* Strong blur needed so orbs bleed softly into each other */
+    filter: blur(60px);
+    /* Higher opacity so they're clearly visible through the glass */
+    opacity: 0.72;
     z-index: 0;
     animation: float 25s ease-in-out infinite;
     pointer-events: none;
@@ -444,35 +457,36 @@ body.theme-dark .profile-pic-remove:hover {
 }
 
 body.theme-dark .orb {
-    opacity: 0.26;
-    filter: blur(100px);
+    opacity: 0.55;
+    filter: blur(80px);
 }
 
+/* Vivid, saturated orbs so the refraction distortion is clearly visible */
 .orb.orb-1 {
-    width: 320px;
-    height: 320px;
-    background: #f7c59f;
-    top: -60px;
+    width: 380px;
+    height: 380px;
+    background: radial-gradient(circle, #ff8c42 0%, #ff4d6d 100%);
+    top: -80px;
     left: -80px;
     animation-duration: 22s;
 }
 
 .orb.orb-2 {
-    width: 420px;
-    height: 420px;
-    background: #9fd9d2;
-    bottom: -150px;
+    width: 480px;
+    height: 480px;
+    background: radial-gradient(circle, #4cc9f0 0%, #4361ee 100%);
+    bottom: -160px;
     right: -100px;
     animation-delay: -4s;
     animation-duration: 28s;
 }
 
 .orb.orb-3 {
-    width: 220px;
-    height: 220px;
-    background: #f6d365;
-    top: 35%;
-    right: 5%;
+    width: 280px;
+    height: 280px;
+    background: radial-gradient(circle, #f9c74f 0%, #f3722c 100%);
+    top: 38%;
+    right: 8%;
     animation-delay: -8s;
     animation-duration: 18s;
 }
@@ -552,71 +566,122 @@ body.theme-dark .nav {
     gap: 12px;
 }
 
-.badge {
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: var(--surface-2);
-    font-size: 12px;
-    font-weight: 600;
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIQUID GLASS CARD
+   Three-layer rendering pipeline:
+
+   LAYER 1 — SVG displacement refraction
+     Firefox supports backdrop-filter: url(#svg-id), which warps the
+     actual pixels of whatever is behind the element using feTurbulence +
+     feDisplacementMap. This is the true optical refraction effect.
+     Detected via @supports and applied as the primary path.
+
+   LAYER 2 — Blur + saturate frosting (universal fallback)
+     All browsers support blur() + saturate(). This creates the frosted
+     glass look without pixel-level distortion.
+
+   LAYER 3 — Specular rim box-shadows
+     Inset box-shadows simulate the glass edge catching light:
+     - Top hairline: bright (light source hits top rim)
+     - Bottom hairline: dim (underside of glass in shadow)
+     - Outer shadows: lift/depth bloom
+══════════════════════════════════════════════════════════════════════════ */
+.card {
+    /* Nearly invisible fill — refraction does all the work */
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius);
+
+    /* LAYER 3: specular rim + lift shadow */
+    box-shadow:
+        /* Top glass rim — catches the light source */
+        inset 0 1px 0 rgba(255,255,255,0.55),
+        /* Bottom glass underside — in shadow */
+        inset 0 -1px 0 rgba(0,0,0,0.08),
+        /* Left rim faint catch */
+        inset 1px 0 0 rgba(255,255,255,0.20),
+        /* Lift: contact, mid, bloom */
+        0 2px 6px rgba(0,0,0,0.06),
+        0 10px 28px rgba(0,0,0,0.09),
+        0 32px 64px rgba(0,0,0,0.07);
+
+    padding: 28px;
+    /* Outer border: a clean hairline makes the glass edge readable */
+    border: 1px solid rgba(255,255,255,0.32);
+
+    /* LAYER 2: Standard blur frosting — universal baseline */
+    backdrop-filter: blur(40px) saturate(180%) brightness(104%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(104%);
+
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.card {
-    background: var(--surface);
-    border-radius: var(--radius);
-    box-shadow: 
-        inset 0 2px 3px rgba(255, 255, 255, 0.6), 
-        inset 0 -2px 3px rgba(0, 0, 0, 0.04), 
-        inset 0 12px 24px rgba(255, 255, 255, 0.2), 
-        var(--shadow);
-    padding: 28px;
-    border: 1px solid rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(28px) saturate(210%) brightness(102%);
-    -webkit-backdrop-filter: blur(28px) saturate(210%) brightness(102%);
-    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+/* LAYER 1: SVG displacement refraction — Firefox only
+   Adds the actual pixel-warping refraction on top of the blur layer */
+@supports (backdrop-filter: url(#x)) {
+    .card {
+        /* url(#liquid-glass) = the feTurbulence+feDisplacementMap filter
+           blur(20px) = secondary frosting after the warp
+           saturate(160%) = light passing through glass boosts colour */
+        backdrop-filter: url(#liquid-glass) blur(20px) saturate(160%) brightness(104%);
+    }
 }
 
 body.theme-dark .card {
-    background: var(--surface);
-    box-shadow: 
-        inset 0 2px 3px rgba(255, 255, 255, 0.2), 
-        inset 0 -2px 3px rgba(0, 0, 0, 0.3), 
-        inset 0 12px 24px rgba(255, 255, 255, 0.04), 
-        var(--shadow);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(28px) saturate(190%) brightness(95%);
-    -webkit-backdrop-filter: blur(28px) saturate(190%) brightness(95%);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.18),
+        inset 0 -1px 0 rgba(0,0,0,0.25),
+        inset 1px 0 0 rgba(255,255,255,0.07),
+        0 2px 6px rgba(0,0,0,0.28),
+        0 10px 28px rgba(0,0,0,0.36),
+        0 32px 64px rgba(0,0,0,0.28);
+    backdrop-filter: blur(40px) saturate(180%) brightness(90%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(90%);
+}
+
+@supports (backdrop-filter: url(#x)) {
+    body.theme-dark .card {
+        backdrop-filter: url(#liquid-glass) blur(20px) saturate(160%) brightness(90%);
+    }
 }
 
 .card:hover {
     transform: translateY(-2px);
-    box-shadow: 
-        inset 0 2px 4px rgba(255, 255, 255, 0.8), 
-        inset 0 -2px 3px rgba(0, 0, 0, 0.03), 
-        inset 0 12px 24px rgba(255, 255, 255, 0.25), 
-        0 24px 48px rgba(0, 0, 0, 0.12);
-    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.70),
+        inset 0 -1px 0 rgba(0,0,0,0.06),
+        inset 1px 0 0 rgba(255,255,255,0.28),
+        0 4px 10px rgba(0,0,0,0.07),
+        0 16px 36px rgba(0,0,0,0.11),
+        0 40px 80px rgba(0,0,0,0.09);
+    border-color: rgba(255,255,255,0.50);
 }
 
 body.theme-dark .card:hover {
-    box-shadow: 
-        inset 0 2px 4px rgba(255, 255, 255, 0.3), 
-        inset 0 -2px 3px rgba(0, 0, 0, 0.25), 
-        inset 0 12px 24px rgba(255, 255, 255, 0.08), 
-        0 24px 48px rgba(0, 0, 0, 0.45);
-    border-color: rgba(255, 255, 255, 0.25);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.25),
+        inset 0 -1px 0 rgba(0,0,0,0.22),
+        inset 1px 0 0 rgba(255,255,255,0.09),
+        0 4px 10px rgba(0,0,0,0.32),
+        0 16px 36px rgba(0,0,0,0.42),
+        0 40px 80px rgba(0,0,0,0.32);
+    border-color: rgba(255,255,255,0.22);
 }
 
 .card.soft {
     background: var(--surface-2);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid rgba(255,255,255,0.18);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
 }
 
 body.theme-dark .card.soft {
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255,255,255,0.07);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 8px rgba(0,0,0,0.20);
 }
 
 .hero {

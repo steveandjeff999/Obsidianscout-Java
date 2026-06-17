@@ -36,27 +36,77 @@
         }
 
         .alliance-card {
-            background: var(--surface);
+            background: rgba(255, 255, 255, 0.08);
             border-radius: var(--radius);
             padding: 20px;
-            box-shadow: var(--shadow);
-            border: 1px solid rgba(0, 0, 0, 0.05);
+            /* Layer 3: specular rim */
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.55),
+                inset 0 -1px 0 rgba(0,0,0,0.08),
+                inset 1px 0 0 rgba(255,255,255,0.18),
+                0 2px 6px rgba(0,0,0,0.06),
+                0 10px 28px rgba(0,0,0,0.09),
+                0 32px 64px rgba(0,0,0,0.06);
+            border: 1px solid rgba(255,255,255,0.30);
+            /* Layer 2: universal blur frosting */
+            backdrop-filter: blur(36px) saturate(180%) brightness(104%);
+            -webkit-backdrop-filter: blur(36px) saturate(180%) brightness(104%);
             display: flex;
             flex-direction: column;
             gap: 14px;
-            position: relative;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                        box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                        border-color 0.3s ease;
+        }
+
+        /* Layer 1: SVG displacement refraction — Firefox */
+        @supports (backdrop-filter: url(#x)) {
+            .alliance-card {
+                backdrop-filter: url(#liquid-glass) blur(18px) saturate(160%) brightness(104%);
+            }
         }
 
         body.theme-dark .alliance-card {
-            background: rgba(30, 32, 38, 0.7);
-            border-color: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(8px);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255,255,255,0.13);
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.18),
+                inset 0 -1px 0 rgba(0,0,0,0.25),
+                inset 1px 0 0 rgba(255,255,255,0.07),
+                0 2px 6px rgba(0,0,0,0.28),
+                0 10px 28px rgba(0,0,0,0.36),
+                0 32px 64px rgba(0,0,0,0.26);
+            backdrop-filter: blur(36px) saturate(180%) brightness(90%);
+            -webkit-backdrop-filter: blur(36px) saturate(180%) brightness(90%);
+        }
+
+        @supports (backdrop-filter: url(#x)) {
+            body.theme-dark .alliance-card {
+                backdrop-filter: url(#liquid-glass) blur(18px) saturate(160%) brightness(90%);
+            }
         }
 
         .alliance-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.70),
+                inset 0 -1px 0 rgba(0,0,0,0.06),
+                inset 1px 0 0 rgba(255,255,255,0.26),
+                0 4px 10px rgba(0,0,0,0.07),
+                0 16px 36px rgba(0,0,0,0.11),
+                0 40px 80px rgba(0,0,0,0.08);
+            border-color: rgba(255,255,255,0.48);
+        }
+
+        body.theme-dark .alliance-card:hover {
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.24),
+                inset 0 -1px 0 rgba(0,0,0,0.22),
+                inset 1px 0 0 rgba(255,255,255,0.09),
+                0 4px 10px rgba(0,0,0,0.32),
+                0 16px 36px rgba(0,0,0,0.42),
+                0 40px 80px rgba(0,0,0,0.30);
+            border-color: rgba(255,255,255,0.20);
         }
 
         .alliance-card-header {
@@ -291,22 +341,54 @@
         }
 
         .modal {
-            background: var(--surface);
+            background: rgba(255, 255, 255, 0.08);
             border-radius: var(--radius);
-            box-shadow: 0 32px 80px rgba(0,0,0,0.3);
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.58),
+                inset 0 -1px 0 rgba(0,0,0,0.08),
+                inset 1px 0 0 rgba(255,255,255,0.22),
+                0 4px 12px rgba(0,0,0,0.07),
+                0 16px 48px rgba(0,0,0,0.12),
+                0 48px 100px rgba(0,0,0,0.10);
+            border: 1px solid rgba(255,255,255,0.35);
+            /* Layer 2: universal blur */
+            backdrop-filter: blur(48px) saturate(180%) brightness(104%);
+            -webkit-backdrop-filter: blur(48px) saturate(180%) brightness(104%);
             padding: 24px;
             overflow-y: auto;
             position: relative;
             transform: translateY(20px);
-            transition: transform 0.2s ease;
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             display: flex;
             flex-direction: column;
             gap: 16px;
         }
 
+        /* Layer 1: SVG refraction — Firefox */
+        @supports (backdrop-filter: url(#x)) {
+            .modal {
+                backdrop-filter: url(#liquid-glass) blur(24px) saturate(160%) brightness(104%);
+            }
+        }
+
         body.theme-dark .modal {
-            background: #1e2024;
-            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255,255,255,0.13);
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.18),
+                inset 0 -1px 0 rgba(0,0,0,0.28),
+                inset 1px 0 0 rgba(255,255,255,0.07),
+                0 4px 12px rgba(0,0,0,0.30),
+                0 16px 48px rgba(0,0,0,0.42),
+                0 48px 100px rgba(0,0,0,0.30);
+            backdrop-filter: blur(48px) saturate(180%) brightness(90%);
+            -webkit-backdrop-filter: blur(48px) saturate(180%) brightness(90%);
+        }
+
+        @supports (backdrop-filter: url(#x)) {
+            body.theme-dark .modal {
+                backdrop-filter: url(#liquid-glass) blur(24px) saturate(160%) brightness(90%);
+            }
         }
 
         .modal-backdrop.open .modal {
