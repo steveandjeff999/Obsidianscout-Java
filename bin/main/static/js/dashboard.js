@@ -79,7 +79,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 async function loadDashboardData() {
     if (!dashboardContainer) return;
-    Obsidianscout.showLoadingSpinner(dashboardContainer, t("status.loading", "Loading dashboard data..."));
+    Obsidianscout.showLoadingSpinner(dashboardContainer, t("status.loading", t('dashboard.loading_dashboard_data', "Loading dashboard data...")));
 
     try {
         const [summary, settingsResponse, status] = await Promise.all([
@@ -138,7 +138,7 @@ async function loadDashboardData() {
 
     } catch (error) {
         console.error("Failed to load dashboard data:", error);
-        Obsidianscout.showRetryButton(dashboardContainer, t("status.load_failed", "Failed to load dashboard data: ") + error.message, loadDashboardData);
+        Obsidianscout.showRetryButton(dashboardContainer, t("status.load_failed", t('dashboard.failed_to_load_dashboard_data', "Failed to load dashboard data: ")) + error.message, loadDashboardData);
     }
 }
 

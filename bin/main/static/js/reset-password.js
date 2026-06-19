@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
 
@@ -74,7 +79,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
                 
                 if (resetWelcome) {
-                    resetWelcome.textContent = "Reset credentials for your email recovery link";
+                    resetWelcome.textContent = t('reset_password.reset_welcome', "Reset credentials for your email recovery link");
                 }
             } else {
                 // Only one account

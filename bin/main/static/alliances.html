@@ -13,7 +13,7 @@
         /* ── Alliance-specific styles ──────────────────── */
         .alliance-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
             gap: 20px;
             margin-top: 20px;
         }
@@ -116,12 +116,12 @@
             border: 1px solid rgba(0,0,0,0.07);
         }
 
-        .member-chip.owner { background: #fff3cd; color: #7a4f00; border-color: #f6cc6a; }
+        .member-chip.owner, .member-chip.admin { background: #fff3cd; color: #7a4f00; border-color: #f6cc6a; }
         .member-chip.accepted { background: #d4edda; color: #155724; border-color: #8bc69a; }
         .member-chip.invited { background: #cce5ff; color: #004085; border-color: #7ab6f0; }
         .member-chip.declined { background: #f8d7da; color: #721c24; border-color: #f0a8ad; }
 
-        body.theme-dark .member-chip.owner { background: rgba(246,204,106,0.15); color: #f6cc6a; border-color: rgba(246,204,106,0.3); }
+        body.theme-dark .member-chip.owner, body.theme-dark .member-chip.admin { background: rgba(246,204,106,0.15); color: #f6cc6a; border-color: rgba(246,204,106,0.3); }
         body.theme-dark .member-chip.accepted { background: rgba(46,204,113,0.15); color: #2ecc71; border-color: rgba(46,204,113,0.3); }
         body.theme-dark .member-chip.invited { background: rgba(52,152,219,0.15); color: #5dade2; border-color: rgba(52,152,219,0.3); }
         body.theme-dark .member-chip.declined { background: rgba(231,76,60,0.15); color: #e74c3c; border-color: rgba(231,76,60,0.3); }
@@ -282,6 +282,26 @@
         .import-summary.open {
             display: flex;
         }
+
+        @media (max-width: 600px) {
+            .modal-backdrop {
+                padding: 10px;
+            }
+            .modal {
+                padding: 20px 16px;
+                width: 100%;
+                max-height: 95vh;
+            }
+            .invite-card {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .invite-card-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
     </style>
 </head>
 <body data-page="alliances">
@@ -332,10 +352,10 @@
             <div class="card">
                 <div class="section-header">
                     <div>
-                        <h1 style="margin:0 0 6px;">Alliances</h1>
-                        <p class="notice" style="margin:0">Create alliances with partner teams to share scouting data in real time across all data types.</p>
+                        <h1 style="margin:0 0 6px;" data-i18n="alliances.alliances">Alliances</h1>
+                        <p class="notice" style="margin:0" data-i18n="alliances.create_alliances_with_partner_">Create alliances with partner teams to share scouting data in real time across all data types.</p>
                     </div>
-                    <button class="btn" id="btn-create-alliance" type="button">+ New Alliance</button>
+                    <button class="btn" id="btn-create-alliance" type="button" data-i18n="alliances.new_alliance">+ New Alliance</button>
                 </div>
             </div>
 
@@ -343,7 +363,7 @@
             <div class="sharing-notice mt-20">
                 <span class="icon">🔗</span>
                 <span>
-                    <strong>How data sharing works:</strong> Once a team accepts your invite, their match scouting, pit scouting, and qualitative scouting data will automatically appear in your Analytics, Graphs, and all data views — in real time, no exports needed.
+                    <strong data-i18n="alliances.how_data_sharing_works">How data sharing works:</strong> Once a team accepts your invite, their match scouting, pit scouting, and qualitative scouting data will automatically appear in your Analytics, Graphs, and all data views — in real time, no exports needed.
                 </span>
             </div>
 
@@ -360,14 +380,14 @@
             <!-- My Alliances -->
             <div class="mt-24">
                 <div class="section-header">
-                    <h2 style="margin:0;">My Alliances</h2>
+                    <h2 style="margin:0;" data-i18n="alliances.my_alliances">My Alliances</h2>
                     <span id="alliance-count" class="badge"></span>
                 </div>
                 <div id="alliances-grid" class="alliance-grid">
                     <div class="card" style="grid-column:1/-1;">
                         <div class="empty-state">
                             <div class="empty-icon">🤝</div>
-                            <p>Loading alliances…</p>
+                            <p data-i18n="alliances.loading_alliances">Loading alliances…</p>
                         </div>
                     </div>
                 </div>
@@ -378,24 +398,28 @@
     <!-- ── Create / Edit Alliance Modal ─────────────── -->
     <div class="modal-backdrop" id="modal-alliance">
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-alliance-title">
-            <h2 class="modal-title" id="modal-alliance-title">New Alliance</h2>
+            <h2 class="modal-title" id="modal-alliance-title" data-i18n="alliances.new_alliance_1">New Alliance</h2>
             <form id="form-alliance" class="form-grid" autocomplete="off">
                 <input type="hidden" id="alliance-edit-id" value="" />
                 <div class="field">
-                    <label for="alliance-name">Alliance Name *</label>
-                    <input type="text" id="alliance-name" placeholder="e.g. Thunder Alliance" required maxlength="128" />
+                    <label for="alliance-name" data-i18n="alliances.alliance_name">Alliance Name *</label>
+                    <input type="text" id="alliance-name" data-i18n-placeholder="alliances.placeholder_eg_thunder_alliance" placeholder="e.g. Thunder Alliance" required maxlength="128" />
                 </div>
                 <div class="field">
-                    <label for="alliance-event-key">Event Key (optional)</label>
-                    <input type="text" id="alliance-event-key" placeholder="e.g. 2025mil" maxlength="64" />
+                    <label for="alliance-year" data-i18n="alliances.event_year_optional">Event Year (optional)</label>
+                    <input type="number" id="alliance-year" data-i18n-placeholder="alliance-edit.placeholder_eg_2026" placeholder="e.g. 2026" />
                 </div>
                 <div class="field">
-                    <label for="alliance-notes">Notes (optional)</label>
-                    <textarea id="alliance-notes" placeholder="Any notes about this alliance…" style="min-height:80px;"></textarea>
+                    <label for="alliance-event-code" data-i18n="alliances.event_code_optional">Event Code (optional)</label>
+                    <input type="text" id="alliance-event-code" data-i18n-placeholder="alliance-edit.placeholder_eg_okok" placeholder="e.g. okok" />
+                </div>
+                <div class="field">
+                    <label for="alliance-notes" data-i18n="alliances.notes_optional">Notes (optional)</label>
+                    <textarea id="alliance-notes" data-i18n-placeholder="alliances.placeholder_any_notes_about_this_alliance" placeholder="Any notes about this alliance…" style="min-height:80px;"></textarea>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn ghost" id="btn-alliance-cancel">Cancel</button>
-                    <button type="submit" class="btn" id="btn-alliance-save">Create Alliance</button>
+                    <button type="button" class="btn ghost" id="btn-alliance-cancel" data-i18n="events.cancel">Cancel</button>
+                    <button type="submit" class="btn" id="btn-alliance-save" data-i18n="alliances.create_alliance">Create Alliance</button>
                 </div>
             </form>
         </div>
@@ -404,17 +428,17 @@
     <!-- ── Invite Team Modal ─────────────────────────── -->
     <div class="modal-backdrop" id="modal-invite">
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-invite-title">
-            <h2 class="modal-title" id="modal-invite-title">Invite Team</h2>
-            <p style="margin:0 0 16px; color:var(--muted); font-size:14px;">Enter the team number of the team you want to invite. They must be registered on this ObsidianScout server.</p>
+            <h2 class="modal-title" id="modal-invite-title" data-i18n="alliances.invite_team">Invite Team</h2>
+            <p style="margin:0 0 16px; color:var(--muted); font-size:14px;" data-i18n="alliances.enter_the_team_number_of_the_t">Enter the team number of the team you want to invite. They must be registered on this ObsidianScout server.</p>
             <form id="form-invite" class="form-grid" autocomplete="off">
                 <input type="hidden" id="invite-alliance-id" value="" />
                 <div class="field">
-                    <label for="invite-team-number">Team Number *</label>
-                    <input type="number" id="invite-team-number" placeholder="e.g. 4001" min="1" max="99999" required />
+                    <label for="invite-team-number" data-i18n="alliances.team_number">Team Number *</label>
+                    <input type="number" id="invite-team-number" data-i18n-placeholder="alliances.placeholder_eg_4001" placeholder="e.g. 4001" min="1" max="99999" required />
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn ghost" id="btn-invite-cancel">Cancel</button>
-                    <button type="submit" class="btn" id="btn-invite-send">Send Invite</button>
+                    <button type="button" class="btn ghost" id="btn-invite-cancel" data-i18n="events.cancel">Cancel</button>
+                    <button type="submit" class="btn" id="btn-invite-send" data-i18n="alliances.send_invite">Send Invite</button>
                 </div>
             </form>
         </div>
@@ -423,27 +447,27 @@
     <!-- ── Import Existing Data Modal ────────────────── -->
     <div class="modal-backdrop" id="modal-import">
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-import-title">
-            <h2 class="modal-title" id="modal-import-title">Import Existing Data</h2>
+            <h2 class="modal-title" id="modal-import-title" data-i18n="alliances.import_existing_data">Import Existing Data</h2>
             <p style="margin:0 0 16px; color:var(--muted); font-size:14px;">
                 Import existing scouting data already on this server from a source team into this alliance's shared data pool.
             </p>
             <form id="form-import" class="form-grid" autocomplete="off">
                 <input type="hidden" id="import-alliance-id" value="" />
                 <div class="field">
-                    <label for="import-source-team">Source Team Data *</label>
+                    <label for="import-source-team" data-i18n="alliances.source_team_data">Source Team Data *</label>
                     <select id="import-source-team" required>
-                        <option value="">Loading teams with data...</option>
+                        <option value="" data-i18n="alliances.loading_teams_with_data">Loading teams with data...</option>
                     </select>
                 </div>
                 <div class="field">
-                    <label for="import-event-key">Event Data *</label>
+                    <label for="import-event-key" data-i18n="alliances.event_data">Event Data *</label>
                     <select id="import-event-key" required>
-                        <option value="">Select a team first</option>
+                        <option value="" data-i18n="alliances.select_a_team_first">Select a team first</option>
                     </select>
                     <div id="import-source-summary" class="import-summary" aria-live="polite"></div>
                 </div>
                 <div class="field">
-                    <label>Data Types To Import</label>
+                    <label data-i18n="alliances.data_types_to_import">Data Types To Import</label>
                     <label style="display:flex;gap:8px;align-items:center;font-size:14px;">
                         <input type="checkbox" id="import-match" checked /> Match scouting
                     </label>
@@ -455,8 +479,8 @@
                     </label>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn ghost" id="btn-import-cancel">Cancel</button>
-                    <button type="submit" class="btn" id="btn-import-submit">Import Data</button>
+                    <button type="button" class="btn ghost" id="btn-import-cancel" data-i18n="events.cancel">Cancel</button>
+                    <button type="submit" class="btn" id="btn-import-submit" data-i18n="alliances.import_data">Import Data</button>
                 </div>
             </form>
         </div>

@@ -103,7 +103,7 @@ async function initMatchesPage() {
 async function loadMatches(eventKey, timezone) {
     const table = document.getElementById("matches-table");
     const body = table.querySelector("tbody");
-    body.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>' + t("status.loading", "Loading matches...") + '</div></td></tr>';
+    body.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>' + t("status.loading", t('matches.loading_matches', "Loading matches...")) + '</div></td></tr>';
 
     if (!eventKey) {
         Obsidianscout.showToast(t("matches.set_event_key", "Set an event key in settings"), "error");

@@ -67,12 +67,12 @@ import com.obsidianscout.db.ScoutingAlliances
 
 fun Application.configureRoutes() {
     routing {
-        route("/api") {
-            intercept(ApplicationCallPipeline.Call) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    proceed()
-                }
+        intercept(ApplicationCallPipeline.Call) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                proceed()
             }
+        }
+        route("/api") {
             intercept(ApplicationCallPipeline.Plugins) {
                 call.response.headers.append(HttpHeaders.CacheControl, "no-cache, no-store, must-revalidate")
                 call.response.headers.append(HttpHeaders.Pragma, "no-cache")

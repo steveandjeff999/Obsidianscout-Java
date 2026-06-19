@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 let currentTeams = [];
 let currentUser = null;
 let currentEventKey = "";
@@ -231,7 +236,7 @@ async function setupModal(defaultEventKey) {
     }
 
     addBtn.addEventListener("click", () => {
-        titleEl.textContent = "Add Team Manually";
+        titleEl.textContent = t('teams.add_team_manually', "Add Team Manually");
         numberInput.removeAttribute("disabled");
         eventSelect.removeAttribute("disabled");
         const activeKey = typeof defaultEventKey === "function" ? defaultEventKey() : defaultEventKey;
@@ -298,7 +303,7 @@ function openEditModal(team) {
     const epaInput = document.getElementById("team-epa");
     const titleEl = document.getElementById("team-modal-title");
 
-    titleEl.textContent = "Edit Team";
+    titleEl.textContent = t('teams.edit_team', "Edit Team");
     eventSelect.value = team.eventKey;
     eventSelect.setAttribute("disabled", "true");
 

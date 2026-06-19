@@ -95,13 +95,13 @@
 
                 <h1 data-i18n="qual_scout.title">Qualitative scouting form</h1>
 
-                <p class="notice">Pick event, team, and match, then capture observations, ratings, and notes from the qualitative config.</p>
+                <p class="notice" data-i18n="qual-scout.pick_event_team_and_match_then">Pick event, team, and match, then capture observations, ratings, and notes from the qualitative config.</p>
 
                 <div class="split mb-18">
 
                     <div class="field">
 
-                        <label>Event</label>
+                        <label data-i18n="events.event">Event</label>
 
                         <div id="event-badge" class="badge"></div>
 
@@ -109,7 +109,7 @@
 
                     <div class="field">
 
-                        <label for="team-select">Team</label>
+                        <label for="team-select" data-i18n="all-data.team">Team</label>
 
                         <select id="team-select"></select>
 
@@ -117,7 +117,7 @@
 
                     <div class="field">
 
-                        <label for="match-select">Match</label>
+                        <label for="match-select" data-i18n="matches.match">Match</label>
 
                         <select id="match-select" class="select-wide"></select>
 
@@ -125,7 +125,7 @@
 
                     <div class="field">
 
-                        <label>Timezone</label>
+                        <label data-i18n="dashboard.timezone">Timezone</label>
 
                         <div id="timezone-badge" class="badge"></div>
 
@@ -135,7 +135,7 @@
 
                 <form id="scouting-form" class="form-grid">
 
-                    <div id="form-blocked" class="notice">Select a team and match to start qualitative scouting.</div>
+                    <div id="form-blocked" class="notice" data-i18n="qual-scout.select_a_team_and_match_to_sta">Select a team and match to start qualitative scouting.</div>
 
                     <div id="form-fields" class="form-grid"></div>
 
@@ -145,9 +145,9 @@
 
                         <button id="scout-save-offline-btn" class="btn secondary" type="button" data-i18n="qual_scout.save_offline">Save Offline</button>
 
-                        <button id="scout-export-json" class="btn secondary" type="button">Export JSON</button>
+                        <button id="scout-export-json" class="btn secondary" type="button" data-i18n="pit-scout.export_json">Export JSON</button>
 
-                        <button id="scout-gen-qr" class="btn secondary" type="button">Generate QR</button>
+                        <button id="scout-gen-qr" class="btn secondary" type="button" data-i18n="pit-scout.generate_qr">Generate QR</button>
 
                         <button id="scout-clear" class="btn ghost" type="button" data-i18n="qual_scout.clear_form">Clear form</button>
 
@@ -161,7 +161,7 @@
 
                 <div class="row gap-12 wrap mt-18">
 
-                    <a class="btn ghost" href="/qual-data">Open qualitative rankings</a>
+                    <a class="btn ghost" href="/qual-data" data-i18n="qual-scout.open_qualitative_rankings">Open qualitative rankings</a>
 
                 </div>
 

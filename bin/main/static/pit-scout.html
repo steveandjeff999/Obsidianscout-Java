@@ -57,15 +57,15 @@
                 <p class="notice" data-i18n="pit_scout.notice">Pick event and team, then fill in the form driven by pit scouting config JSON.</p>
                 <div class="split mb-18">
                     <div class="field">
-                        <label>Event</label>
+                        <label data-i18n="events.event">Event</label>
                         <div id="event-badge" class="badge"></div>
                     </div>
                     <div class="field">
-                        <label for="team-select">Team</label>
+                        <label for="team-select" data-i18n="all-data.team">Team</label>
                         <select id="team-select"></select>
                     </div>
                     <div class="field">
-                        <label>Timezone</label>
+                        <label data-i18n="dashboard.timezone">Timezone</label>
                         <div id="timezone-badge" class="badge"></div>
                     </div>
                 </div>
@@ -75,8 +75,8 @@
                     <div class="row gap-12 wrap">
                         <button id="pit-submit" class="btn" type="submit" data-i18n="pit_scout.save_entry">Save pit entry</button>
                         <button id="pit-save-offline" class="btn secondary" type="button" data-i18n="pit_scout.save_offline">Save Offline</button>
-                        <button id="pit-export-json" class="btn secondary" type="button">Export JSON</button>
-                        <button id="pit-gen-qr" class="btn secondary" type="button">Generate QR</button>
+                        <button id="pit-export-json" class="btn secondary" type="button" data-i18n="pit-scout.export_json">Export JSON</button>
+                        <button id="pit-gen-qr" class="btn secondary" type="button" data-i18n="pit-scout.generate_qr">Generate QR</button>
                         <button id="pit-clear" class="btn ghost" type="button" data-i18n="pit_scout.clear_form">Clear form</button>
                     </div>
                 </form>

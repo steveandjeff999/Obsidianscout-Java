@@ -277,18 +277,18 @@
                 
                 <div class="row gap-12 wrap align-center mt-12" style="width: 100%;">
                     <div class="field" style="min-width: 240px; margin-top: 0;">
-                        <label for="match-select" style="margin-bottom: 4px;">Choose Match</label>
+                        <label for="match-select" style="margin-bottom: 4px;" data-i18n="predictor.choose_match">Choose Match</label>
                         <select id="match-select" class="select-wide">
-                            <option value="">Loading matches...</option>
+                            <option value="" data-i18n="predictor.loading_matches">Loading matches...</option>
                         </select>
                     </div>
                     <div class="field hidden" id="datasource-field" style="min-width: 240px; margin-top: 0;">
-                        <label for="datasource-select" style="margin-bottom: 4px;">Data Source</label>
+                        <label for="datasource-select" style="margin-bottom: 4px;" data-i18n="predictor.data_source">Data Source</label>
                         <select id="datasource-select" class="select-wide">
-                            <option value="all">All 3</option>
-                            <option value="scouted">Scouted Data</option>
-                            <option value="epa">Statbotics EPA</option>
-                            <option value="opr">TBA OPR</option>
+                            <option value="all" data-i18n="predictor.all_3">All 3</option>
+                            <option value="scouted" data-i18n="predictor.scouted_data">Scouted Data</option>
+                            <option value="epa" data-i18n="alliance-selection.statbotics_epa">Statbotics EPA</option>
+                            <option value="opr" data-i18n="alliance-selection.tba_opr">TBA OPR</option>
                         </select>
                     </div>
                 </div>
@@ -298,16 +298,16 @@
                 <div class="column gap-20">
                     <!-- Head to Head Comparison -->
                     <div class="card">
-                        <h2>Alliance Comparison</h2>
-                        <p class="notice">Visual representation of relative strengths based on different performance categories.</p>
+                        <h2 data-i18n="predictor.alliance_comparison">Alliance Comparison</h2>
+                        <p class="notice" data-i18n="predictor.visual_representation_of_relat">Visual representation of relative strengths based on different performance categories.</p>
                         
                         <div class="metric-comparison-box">
                             <!-- Scouted Score comparison -->
                             <div class="comp-bar-container" id="scouted-comparison">
                                 <div class="comp-bar-label">
-                                    <span style="color: #f87171;" id="lbl-scouted-red">Red: 0.0</span>
-                                    <span style="font-weight: 700;">Scouted Score</span>
-                                    <span style="color: #60a5fa;" id="lbl-scouted-blue">Blue: 0.0</span>
+                                    <span style="color: #f87171;" id="lbl-scouted-red" data-i18n="predictor.red_00">Red: 0.0</span>
+                                    <span style="font-weight: 700;" data-i18n="predictor.scouted_score">Scouted Score</span>
+                                    <span style="color: #60a5fa;" id="lbl-scouted-blue" data-i18n="predictor.blue_00">Blue: 0.0</span>
                                 </div>
                                 <div class="comp-bar-track">
                                     <div class="comp-bar-fill comp-bar-red" id="bar-scouted-red" style="width: 50%;"></div>
@@ -318,9 +318,9 @@
                             <!-- EPA comparison -->
                             <div class="comp-bar-container" id="epa-comparison">
                                 <div class="comp-bar-label">
-                                    <span style="color: #f87171;" id="lbl-epa-red">Red: 0.0</span>
-                                    <span style="font-weight: 700;">Statbotics EPA</span>
-                                    <span style="color: #60a5fa;" id="lbl-epa-blue">Blue: 0.0</span>
+                                    <span style="color: #f87171;" id="lbl-epa-red" data-i18n="predictor.red_00">Red: 0.0</span>
+                                    <span style="font-weight: 700;" data-i18n="alliance-selection.statbotics_epa">Statbotics EPA</span>
+                                    <span style="color: #60a5fa;" id="lbl-epa-blue" data-i18n="predictor.blue_00">Blue: 0.0</span>
                                 </div>
                                 <div class="comp-bar-track">
                                     <div class="comp-bar-fill comp-bar-red" id="bar-epa-red" style="width: 50%;"></div>
@@ -331,9 +331,9 @@
                             <!-- OPR comparison -->
                             <div class="comp-bar-container" id="opr-comparison">
                                 <div class="comp-bar-label">
-                                    <span style="color: #f87171;" id="lbl-opr-red">Red: 0.0</span>
-                                    <span style="font-weight: 700;">TBA OPR</span>
-                                    <span style="color: #60a5fa;" id="lbl-opr-blue">Blue: 0.0</span>
+                                    <span style="color: #f87171;" id="lbl-opr-red" data-i18n="predictor.red_00">Red: 0.0</span>
+                                    <span style="font-weight: 700;" data-i18n="alliance-selection.tba_opr">TBA OPR</span>
+                                    <span style="color: #60a5fa;" id="lbl-opr-blue" data-i18n="predictor.blue_00">Blue: 0.0</span>
                                 </div>
                                 <div class="comp-bar-track">
                                     <div class="comp-bar-fill comp-bar-red" id="bar-opr-red" style="width: 50%;"></div>
@@ -348,8 +348,8 @@
                         <!-- Red Alliance -->
                         <div class="alliance-card red-alliance">
                             <div class="alliance-title">
-                                <span>Red Alliance</span>
-                                <span class="pill-tag pill-red" id="red-total-scouted">0.0 pts</span>
+                                <span data-i18n="alliance-selection.red_alliance">Red Alliance</span>
+                                <span class="pill-tag pill-red" id="red-total-scouted" data-i18n="predictor.00_pts">0.0 pts</span>
                             </div>
                             <div class="team-list" id="red-team-list">
                                 <!-- Dynamic rows -->
@@ -359,8 +359,8 @@
                         <!-- Blue Alliance -->
                         <div class="alliance-card blue-alliance">
                             <div class="alliance-title">
-                                <span>Blue Alliance</span>
-                                <span class="pill-tag pill-blue" id="blue-total-scouted">0.0 pts</span>
+                                <span data-i18n="alliance-selection.blue_alliance">Blue Alliance</span>
+                                <span class="pill-tag pill-blue" id="blue-total-scouted" data-i18n="predictor.00_pts">0.0 pts</span>
                             </div>
                             <div class="team-list" id="blue-team-list">
                                 <!-- Dynamic rows -->
@@ -372,29 +372,29 @@
                 <!-- Prediction Spotlight -->
                 <div class="column gap-20">
                     <div class="winner-spotlight" id="spotlight-scouted-card">
-                        <div class="winner-spotlight-title">Scouted Prediction</div>
+                        <div class="winner-spotlight-title" data-i18n="predictor.scouted_prediction">Scouted Prediction</div>
                         <div class="winner-name" id="spotlight-scouted-winner">-</div>
-                        <div class="winner-subtext" id="spotlight-scouted-subtext">No data yet</div>
+                        <div class="winner-subtext" id="spotlight-scouted-subtext" data-i18n="predictor.no_data_yet">No data yet</div>
                     </div>
 
                     <div class="winner-spotlight" id="spotlight-epa-card">
-                        <div class="winner-spotlight-title">EPA Prediction</div>
+                        <div class="winner-spotlight-title" data-i18n="predictor.epa_prediction">EPA Prediction</div>
                         <div class="winner-name" id="spotlight-epa-winner">-</div>
-                        <div class="winner-subtext" id="spotlight-epa-subtext">No EPA data synced</div>
+                        <div class="winner-subtext" id="spotlight-epa-subtext" data-i18n="predictor.no_epa_data_synced">No EPA data synced</div>
                     </div>
 
                     <div class="winner-spotlight" id="spotlight-opr-card">
-                        <div class="winner-spotlight-title">OPR Prediction</div>
+                        <div class="winner-spotlight-title" data-i18n="predictor.opr_prediction">OPR Prediction</div>
                         <div class="winner-name" id="spotlight-opr-winner">-</div>
-                        <div class="winner-subtext" id="spotlight-opr-subtext">No OPR data synced</div>
+                        <div class="winner-subtext" id="spotlight-opr-subtext" data-i18n="predictor.no_opr_data_synced">No OPR data synced</div>
                     </div>
                 </div>
             </div>
 
             <!-- Empty State / Loading State -->
             <div id="predictor-empty-state" class="card mt-20 text-center" style="padding: 48px 24px;">
-                <h3 style="font-size: 1.25rem; font-weight: 600;">No Match Selected</h3>
-                <p class="notice mt-8">Please choose a match from the dropdown above to display predictions and comparisons.</p>
+                <h3 style="font-size: 1.25rem; font-weight: 600;" data-i18n="predictor.no_match_selected">No Match Selected</h3>
+                <p class="notice mt-8" data-i18n="predictor.please_choose_a_match_from_the">Please choose a match from the dropdown above to display predictions and comparisons.</p>
             </div>
         </main>
     </div>

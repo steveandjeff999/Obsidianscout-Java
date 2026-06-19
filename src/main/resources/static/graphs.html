@@ -111,9 +111,9 @@
 
                     <div class="graphs-panel-header">
 
-                        <h2>Team selection</h2>
+                        <h2 data-i18n="graphs.team_selection">Team selection</h2>
 
-                        <span class="badge" id="selection-summary-badge">No teams selected</span>
+                        <span class="badge" id="selection-summary-badge" data-i18n="graphs.no_teams_selected">No teams selected</span>
 
                     </div>
 
@@ -123,21 +123,21 @@
 
                         <div class="field">
 
-                            <label for="event-filter">Event filter</label>
+                            <label for="event-filter" data-i18n="graphs.event_filter">Event filter</label>
 
                             <select id="event-filter"></select>
 
-                            <p class="notice mt-6" id="event-filter-status">Showing all events</p>
+                            <p class="notice mt-6" id="event-filter-status" data-i18n="graphs.showing_all_events">Showing all events</p>
 
                         </div>
 
                         <div class="field">
 
-                            <label for="team-search-input">Search teams</label>
+                            <label for="team-search-input" data-i18n="all-data.search_teams">Search teams</label>
 
                             <div class="row gap-12 wrap">
 
-                                <input id="team-search-input" type="text" placeholder="Type team number" />
+                                <input id="team-search-input" type="text" data-i18n-placeholder="graphs.placeholder_type_team_number" placeholder="Type team number" />
 
                                 <button class="btn ghost" id="clear-search-btn" type="button" data-i18n="graphs.clear_search">Clear</button>
 
@@ -181,9 +181,9 @@
 
                     <div class="graphs-panel-header">
 
-                        <h2>Graph options</h2>
+                        <h2 data-i18n="graphs.graph_options">Graph options</h2>
 
-                        <span class="badge" id="graph-type-selected-count">0 selected</span>
+                        <span class="badge" id="graph-type-selected-count" data-i18n="graphs.0_selected">0 selected</span>
 
                     </div>
 
@@ -193,7 +193,7 @@
 
                         <div class="field">
 
-                            <label for="graph-metric">Metric</label>
+                            <label for="graph-metric" data-i18n="graphs.metric">Metric</label>
 
                             <select id="graph-metric"></select>
 
@@ -201,13 +201,13 @@
 
                         <div class="field">
 
-                            <label for="graph-view">Data view</label>
+                            <label for="graph-view" data-i18n="graphs.data_view">Data view</label>
 
                             <select id="graph-view">
 
-                                <option value="averages">Team averages</option>
+                                <option value="averages" data-i18n="graphs.team_averages">Team averages</option>
 
-                                <option value="matches">Match-by-match</option>
+                                <option value="matches" data-i18n="graphs.match_by_match">Match-by-match</option>
 
                             </select>
 
@@ -215,17 +215,17 @@
 
                         <div class="field">
 
-                            <label for="graph-sort">Sort teams</label>
+                            <label for="graph-sort" data-i18n="graphs.sort_teams">Sort teams</label>
 
                             <select id="graph-sort">
 
-                                <option value="value_desc">Value high → low</option>
+                                <option value="value_desc" data-i18n="graphs.value_high_low">Value high → low</option>
 
-                                <option value="value_asc">Value low → high</option>
+                                <option value="value_asc" data-i18n="graphs.value_low_high">Value low → high</option>
 
-                                <option value="team_asc">Team # low → high</option>
+                                <option value="team_asc" data-i18n="graphs.team_low_high">Team # low → high</option>
 
-                                <option value="team_desc">Team # high → low</option>
+                                <option value="team_desc" data-i18n="graphs.team_high_low">Team # high → low</option>
 
                             </select>
 
@@ -235,7 +235,7 @@
 
                             <input type="checkbox" id="include-prescout-checkbox" style="width: auto; margin-top: 0;" />
 
-                            <label for="include-prescout-checkbox" style="margin-bottom: 0; cursor: pointer;">Force use prescout data</label>
+                            <label for="include-prescout-checkbox" style="margin-bottom: 0; cursor: pointer;" data-i18n="graphs.force_use_prescout_data">Force use prescout data</label>
 
                         </div>
 
@@ -309,7 +309,7 @@
 
                         <button class="btn" id="graph-generate" type="button" data-i18n="graphs.generate">Generate graphs</button>
 
-                        <span class="badge hidden" id="graph-loading">Generating…</span>
+                        <span class="badge hidden" id="graph-loading" data-i18n="graphs.generating">Generating…</span>
 
                     </div>
 

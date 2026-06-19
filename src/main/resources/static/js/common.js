@@ -283,6 +283,8 @@
     let currentLang = DEFAULT_LANG;
     const i18nCache = {};
 
+    let translationObserver = null;
+
     async function loadLocale(lang) {
         if (!lang) lang = "en";
         if (i18nCache[lang]) return i18nCache[lang];
@@ -351,33 +353,95 @@
     }
 
     function applyTranslations() {
-        // data-i18n attributes
+        if (translationObserver) {
+            translationObserver.disconnect();
+        }
+
+        // 1. Translate elements with data-i18n
         document.querySelectorAll('[data-i18n]').forEach((el) => {
             const key = el.dataset.i18n;
             if (!key) return;
-            const text = t(key, el.textContent || '');
-            el.textContent = text;
+            const text = t(key);
+            if (el.textContent !== text) {
+                el.textContent = text;
+            }
         });
 
         document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
             const key = el.dataset.i18nPlaceholder;
             if (!key) return;
-            el.setAttribute('placeholder', t(key, el.getAttribute('placeholder') || ''));
+            const text = t(key);
+            if (el.getAttribute('placeholder') !== text) {
+                el.setAttribute('placeholder', text);
+            }
+        });
+
+        // 2. Scan for untagged elements containing English text matching en.json
+        const enDict = i18nCache['en'] || {};
+        const valToKey = {};
+        for (const [k, v] of Object.entries(enDict)) {
+            if (typeof v === 'string') {
+                valToKey[v.trim()] = k;
+            }
+        }
+
+        const selectors = 'h1, h2, h3, h4, h5, h6, p, span, label, button, option, td, th, div, a';
+        document.querySelectorAll(selectors).forEach((el) => {
+            if (el.hasAttribute('data-i18n')) return;
+            if (el.children.length > 0) return;
+            // Ignore sidebar links because they have dynamic page routing names
+            if (el.classList.contains('sidebar-link')) return;
+
+            const txt = (el.textContent || '').trim();
+            if (!txt) return;
+
+            if (valToKey[txt]) {
+                const key = valToKey[txt];
+                el.setAttribute('data-i18n', key);
+                const translated = t(key);
+                if (el.textContent !== translated) {
+                    el.textContent = translated;
+                }
+            }
+        });
+
+        document.querySelectorAll('input[placeholder], textarea[placeholder]').forEach((el) => {
+            if (el.hasAttribute('data-i18n-placeholder')) return;
+            const plc = (el.getAttribute('placeholder') || '').trim();
+            if (!plc) return;
+
+            if (valToKey[plc]) {
+                const key = valToKey[plc];
+                el.setAttribute('data-i18n-placeholder', key);
+                const translated = t(key);
+                if (el.getAttribute('placeholder') !== translated) {
+                    el.setAttribute('placeholder', translated);
+                }
+            }
         });
 
         // Sidebar links by data-page
         document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
             const page = link.dataset.page;
             const key = `nav.${page}`;
-            link.textContent = t(key, link.textContent);
-            link.title = link.textContent;
+            const text = t(key);
+            if (link.textContent !== text) {
+                link.textContent = text;
+                link.title = text;
+            }
         });
 
         // Theme toggle and logout
         const themeBtn = document.querySelector("[data-action='toggle-theme']");
-        if (themeBtn) themeBtn.textContent = t('btn.toggle_theme', themeBtn.textContent);
+        if (themeBtn) {
+            const text = t('btn.toggle_theme', themeBtn.textContent);
+            if (themeBtn.textContent !== text) themeBtn.textContent = text;
+        }
         const logoutBtn = document.querySelector("[data-action='logout']");
-        if (logoutBtn) logoutBtn.textContent = t('btn.logout', logoutBtn.textContent);
+        if (logoutBtn) {
+            const text = t('btn.logout', logoutBtn.textContent);
+            if (logoutBtn.textContent !== text) logoutBtn.textContent = text;
+        }
 
         // Connection widget status text
         const widget = document.getElementById('connection-status-widget');
@@ -385,7 +449,8 @@
             const textEl = widget.querySelector('.status-text');
             if (textEl) {
                 const isOnline = navigator.onLine;
-                textEl.textContent = isOnline ? t('connection.online') : t('connection.offline');
+                const text = isOnline ? t('connection.online') : t('connection.offline');
+                if (textEl.textContent !== text) textEl.textContent = text;
             }
         }
 
@@ -394,6 +459,10 @@
             document.documentElement.dir = 'rtl';
         } else {
             document.documentElement.dir = 'ltr';
+        }
+
+        if (translationObserver) {
+            translationObserver.observe(document.body, { childList: true, subtree: true });
         }
     }
 
@@ -975,25 +1044,25 @@
             document.body.appendChild(backdrop);
         }
 
-        const matchHtml = matchKey ? `<p><strong>Match:</strong> <span>${matchKey}</span></p>` : '';
+        const matchHtml = matchKey ? `<p><strong data-i18n="qr.match">Match:</strong> <span>${matchKey}</span></p>` : '';
         
         backdrop.innerHTML = `
             <div class="modal-container">
                 <div class="modal-header">
-                    <h3 class="modal-title">Scouting Entry QR Code</h3>
+                    <h3 class="modal-title" data-i18n="qr.title">Scouting Entry QR Code</h3>
                     <button class="modal-close" id="qr-modal-close-btn">&times;</button>
                 </div>
                 <div class="modal-body qr-modal-body">
                     <div class="qr-code-wrapper" id="qr-code-canvas-container"></div>
                     <div class="qr-details">
-                        <p><strong>Type:</strong> <span>${typeLabel}</span></p>
-                        <p><strong>Team:</strong> <span>${teamNum}</span></p>
+                        <p><strong data-i18n="qr.type">Type:</strong> <span>${typeLabel}</span></p>
+                        <p><strong data-i18n="qr.team">Team:</strong> <span>${teamNum}</span></p>
                         ${matchHtml}
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn secondary" id="qr-modal-download-btn">Download QR Code</button>
-                    <button class="btn ghost" id="qr-modal-close-footer-btn">Close</button>
+                    <button class="btn secondary" id="qr-modal-download-btn" data-i18n="qr.download">Download QR Code</button>
+                    <button class="btn ghost" id="qr-modal-close-footer-btn" data-i18n="qr.close">Close</button>
                 </div>
             </div>
         `;

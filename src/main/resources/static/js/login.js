@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     Obsidianscout.initTheme();
     const loginForm = document.getElementById("login-form");
@@ -137,7 +142,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     forgotUsernameInput.required = false;
                     forgotTeamInput.required = false;
 
-                    forgotNotice.textContent = "Enter your registered email address. We will send you a link to reset your password.";
+                    forgotNotice.textContent = t('login.enter_email', "Enter your registered email address. We will send you a link to reset your password.");
                 } else {
                     forgotEmailField.classList.add("hidden");
                     forgotEmailField.hidden = true;
@@ -148,7 +153,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     forgotUsernameInput.required = true;
                     forgotTeamInput.required = true;
 
-                    forgotNotice.textContent = "Enter your username and team number. If your account has a registered email, we will send you a password reset link.";
+                    forgotNotice.textContent = t('login.enter_username_team', "Enter your username and team number. If your account has a registered email, we will send you a password reset link.");
                 }
             });
         });

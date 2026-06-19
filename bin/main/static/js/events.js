@@ -95,8 +95,8 @@ async function loadEvents(year, cachedOnly) {
     body.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading events...</div></td></tr>';
 
     try {
-        const cachedParam = cachedOnly ? "&cached=1" : "";
-        const events = await Obsidianscout.request(`/api/events?year=${year}${cachedParam}`);
+        const cachedParam = cachedOnly ? "cached=1" : "";
+        const events = await Obsidianscout.request(`/api/events${cachedParam ? "?" + cachedParam : ""}`);
         currentEvents = events;
 
         const isAdmin = currentUser && Obsidianscout.isAdmin(currentUser.role);

@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 let originalMainContentHTML = "";
 let mainContentWrapper = null;
 let mainContent = null;
@@ -55,26 +60,26 @@ async function loadPredictorData() {
             if (settings.useStatboticsEpa && settings.useTbaOpr) {
                 const optAll = document.createElement("option");
                 optAll.value = "all";
-                optAll.textContent = "All 3";
+                optAll.textContent = t('predictor.all_3', "All 3");
                 datasourceSelect.appendChild(optAll);
             }
 
             const optScouted = document.createElement("option");
             optScouted.value = "scouted";
-            optScouted.textContent = "Scouted Data";
+            optScouted.textContent = t('predictor.scouted_data', "Scouted Data");
             datasourceSelect.appendChild(optScouted);
 
             if (settings.useStatboticsEpa) {
                 const optEpa = document.createElement("option");
                 optEpa.value = "epa";
-                optEpa.textContent = "Statbotics EPA";
+                optEpa.textContent = t('predictor.statbotics_epa', "Statbotics EPA");
                 datasourceSelect.appendChild(optEpa);
             }
 
             if (settings.useTbaOpr) {
                 const optOpr = document.createElement("option");
                 optOpr.value = "opr";
-                optOpr.textContent = "TBA OPR";
+                optOpr.textContent = t('predictor.tba_opr', "TBA OPR");
                 datasourceSelect.appendChild(optOpr);
             }
 
@@ -244,7 +249,7 @@ function renderSpotlight(winnerId, subtextId, redVal, blueVal, label) {
 
     nameEl.className = "winner-name"; // reset
     if (redVal === 0 && blueVal === 0) {
-        nameEl.textContent = "No Data";
+        nameEl.textContent = t('predictor.no_data', "No Data");
         nameEl.classList.add("winner-draw");
         subEl.textContent = `Insufficient ${label} entries for predictions.`;
         return;
@@ -252,15 +257,15 @@ function renderSpotlight(winnerId, subtextId, redVal, blueVal, label) {
 
     const diff = Math.abs(redVal - blueVal);
     if (redVal > blueVal) {
-        nameEl.textContent = "Red Alliance";
+        nameEl.textContent = t('predictor.red_alliance', "Red Alliance");
         nameEl.classList.add("winner-red");
         subEl.textContent = `Predicted to win by ${diff.toFixed(1)} ${label.toLowerCase() === 'scouted' ? 'pts' : 'units'}`;
     } else if (blueVal > redVal) {
-        nameEl.textContent = "Blue Alliance";
+        nameEl.textContent = t('predictor.blue_alliance', "Blue Alliance");
         nameEl.classList.add("winner-blue");
         subEl.textContent = `Predicted to win by ${diff.toFixed(1)} ${label.toLowerCase() === 'scouted' ? 'pts' : 'units'}`;
     } else {
-        nameEl.textContent = "Dead Heat / Draw";
+        nameEl.textContent = t('predictor.dead_heat', "Dead Heat / Draw");
         nameEl.classList.add("winner-draw");
         subEl.textContent = `Alliances have identical combined ${label} values.`;
     }

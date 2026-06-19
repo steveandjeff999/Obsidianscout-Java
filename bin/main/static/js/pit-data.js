@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -225,7 +230,7 @@ function renderDetail(state) {
     detail.innerHTML = "";
     if (!selected) {
         title.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('pitdata.select_team','Select a team') : 'Select a team';
-        status.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('pitdata.no_team_selected','No team selected') : 'No team selected';
+        status.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('pitdata.no_team_selected',t('pit_data.no_team_selected', 'No team selected')) : t('pit_data.no_team_selected', 'No team selected');
         const notice = document.createElement("p");
         notice.className = "notice";
         notice.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('pitdata.choose_team_notice','Choose a team from the coverage table to see its pit scouting answers.') : 'Choose a team from the coverage table to see its pit scouting answers.';

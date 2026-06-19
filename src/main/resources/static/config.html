@@ -93,9 +93,9 @@
 
             <div id="admin-locked" class="card hidden">
 
-                <h2>Admin only</h2>
+                <h2 data-i18n="config.admin_only">Admin only</h2>
 
-                <p class="notice">You need admin access to edit configuration and API settings.</p>
+                <p class="notice" data-i18n="config.you_need_admin_access_to_edit_">You need admin access to edit configuration and API settings.</p>
 
             </div>
 
@@ -107,13 +107,13 @@
 
                 <div class="tab-row">
 
-                    <button class="tab active" data-tab="config" id="tab-config" type="button">Scouting configs</button>
+                    <button class="tab active" data-tab="config" id="tab-config" type="button" data-i18n="config.scouting_configs">Scouting configs</button>
 
-                    <button class="tab" data-tab="api" id="tab-api" type="button">API keys</button>
+                    <button class="tab" data-tab="api" id="tab-api" type="button" data-i18n="settings.api">API keys</button>
 
-                    <button class="tab hidden" data-tab="email" id="tab-email" type="button">Email settings</button>
+                    <button class="tab hidden" data-tab="email" id="tab-email" type="button" data-i18n="config.email_settings">Email settings</button>
 
-                    <button class="tab" data-tab="personal" id="tab-personal" type="button">Personal settings</button>
+                    <button class="tab" data-tab="personal" id="tab-personal" type="button" data-i18n="config.personal_settings">Personal settings</button>
 
                 </div>
 
@@ -123,11 +123,11 @@
 
                     <div class="tab-row mt-6 mb-18">
 
-                        <button class="tab active" data-config-kind="game" type="button">Game form</button>
+                        <button class="tab active" data-config-kind="game" type="button" data-i18n="alliance-edit.game_form">Game form</button>
 
-                        <button class="tab" data-config-kind="pit" type="button">Pit form</button>
+                        <button class="tab" data-config-kind="pit" type="button" data-i18n="alliance-edit.pit_form">Pit form</button>
 
-                        <button class="tab" data-config-kind="qual" type="button">Qualitative form</button>
+                        <button class="tab" data-config-kind="qual" type="button" data-i18n="alliance-edit.qualitative_form">Qualitative form</button>
 
                     </div>
 
@@ -147,7 +147,7 @@
 
                     <div id="visual-editor-container" class="grid gap-16">
 
-                        <p class="notice">Build your scouting form visually. Create fields, labels, ratings, and reorder elements using simple forms.</p>
+                        <p class="notice" data-i18n="config.build_your_scouting_form_visua">Build your scouting form visually. Create fields, labels, ratings, and reorder elements using simple forms.</p>
 
                         
 
@@ -157,15 +157,15 @@
 
                             <div class="field">
 
-                                <label for="config-title">Config Title</label>
+                                <label for="config-title" data-i18n="alliance-edit.config_title">Config Title</label>
 
-                                <input id="config-title" type="text" placeholder="e.g. FRC Season 2026" />
+                                <input id="config-title" type="text" data-i18n-placeholder="alliance-edit.placeholder_eg_frc_season_2026" placeholder="e.g. FRC Season 2026" />
 
                             </div>
 
                             <div class="field">
 
-                                <label for="config-version">Config Version</label>
+                                <label for="config-version" data-i18n="alliance-edit.config_version">Config Version</label>
 
                                 <input id="config-version" type="number" min="1" step="1" />
 
@@ -179,7 +179,7 @@
 
                         <div class="row justify-between align-center mt-12">
 
-                            <h2 style="margin: 0; font-size: 20px;">Form Fields</h2>
+                            <h2 style="margin: 0; font-size: 20px;" data-i18n="alliance-edit.form_fields">Form Fields</h2>
 
                             <button id="btn-add-field" class="btn secondary" style="padding: 8px 16px; font-size: 13px;" type="button" data-i18n="settings.add_field">+ Add Field</button>
 
@@ -203,9 +203,9 @@
 
                     <div id="raw-editor-container" class="hidden">
 
-                        <p class="notice">Directly edit the scouting form JSON. Useful for backing up configurations or advanced customizations.</p>
+                        <p class="notice" data-i18n="config.directly_edit_the_scouting_for">Directly edit the scouting form JSON. Useful for backing up configurations or advanced customizations.</p>
 
-                        <label for="config-editor" class="sr-only">Scouting config JSON</label>
+                        <label for="config-editor" class="sr-only" data-i18n="alliance-edit.scouting_config_json">Scouting config JSON</label>
 
                         <textarea id="config-editor" class="code-input"></textarea>
 
@@ -235,13 +235,13 @@
 
                 <div data-panel="api" class="hidden">
 
-                    <p class="notice">Set season, event code, and API keys. When both TBA and FIRST keys are set, sync merges teams and matches (e.g. QM 4 and Qualification 4 dedupe to one row).</p>
+                    <p class="notice" data-i18n="config.set_season_event_code_and_api_">Set season, event code, and API keys. When both TBA and FIRST keys are set, sync merges teams and matches (e.g. QM 4 and Qualification 4 dedupe to one row).</p>
 
                     <div class="form-grid">
 
                         <div class="field">
 
-                            <label for="settings-year">Season year</label>
+                            <label for="settings-year" data-i18n="config.season_year">Season year</label>
 
                             <input id="settings-year" type="number" />
 
@@ -249,31 +249,31 @@
 
                         <div class="field">
 
-                            <label for="settings-event-code">Event code</label>
+                            <label for="settings-event-code" data-i18n="config.event_code">Event code</label>
 
-                            <input id="settings-event-code" type="text" placeholder="ex: okok" />
+                            <input id="settings-event-code" type="text" data-i18n-placeholder="config.placeholder_ex_okok" placeholder="ex: okok" />
 
-                            <p class="notice mt-6">Event key is year + code (e.g. 2026 + okok → 2026okok).</p>
-
-                        </div>
-
-                        <div class="field">
-
-                            <label for="settings-timezone">Timezone</label>
-
-                            <input id="settings-timezone" type="text" placeholder="America/New_York" />
+                            <p class="notice mt-6" data-i18n="config.event_key_is_year_code_eg_2026">Event key is year + code (e.g. 2026 + okok → 2026okok).</p>
 
                         </div>
 
                         <div class="field">
 
-                            <label for="settings-source">Preferred source</label>
+                            <label for="settings-timezone" data-i18n="dashboard.timezone">Timezone</label>
+
+                            <input id="settings-timezone" type="text" data-i18n-placeholder="config.placeholder_americanewyork" placeholder="America/New_York" />
+
+                        </div>
+
+                        <div class="field">
+
+                            <label for="settings-source" data-i18n="config.preferred_source">Preferred source</label>
 
                             <select id="settings-source">
 
-                                <option value="tba">The Blue Alliance</option>
+                                <option value="tba" data-i18n="config.the_blue_alliance">The Blue Alliance</option>
 
-                                <option value="first">FIRST API</option>
+                                <option value="first" data-i18n="config.first_api">FIRST API</option>
 
                             </select>
 
@@ -281,7 +281,7 @@
 
                         <div class="field">
 
-                            <label>Optional stats</label>
+                            <label data-i18n="config.optional_stats">Optional stats</label>
 
                             <div class="grid gap-8">
 
@@ -301,11 +301,11 @@
 
                         <div class="card soft">
 
-                            <h3>The Blue Alliance</h3>
+                            <h3 data-i18n="config.the_blue_alliance">The Blue Alliance</h3>
 
                             <div class="field">
 
-                                <label for="settings-tba-key">TBA key</label>
+                                <label for="settings-tba-key" data-i18n="config.tba_key">TBA key</label>
 
                                 <input id="settings-tba-key" type="password" />
 
@@ -315,11 +315,11 @@
 
                         <div class="card soft">
 
-                            <h3>FIRST API</h3>
+                            <h3 data-i18n="config.first_api">FIRST API</h3>
 
                             <div class="field">
 
-                                <label for="settings-first-user">FIRST username</label>
+                                <label for="settings-first-user" data-i18n="config.first_username">FIRST username</label>
 
                                 <input id="settings-first-user" type="text" />
 
@@ -327,7 +327,7 @@
 
                             <div class="field">
 
-                                <label for="settings-first-key">FIRST key</label>
+                                <label for="settings-first-key" data-i18n="config.first_key">FIRST key</label>
 
                                 <input id="settings-first-key" type="password" />
 
@@ -351,12 +351,12 @@
 
                 <div data-panel="personal" class="hidden">
 
-                    <p class="notice">Configure personal settings for this device.</p>
+                    <p class="notice" data-i18n="config.configure_personal_settings_fo">Configure personal settings for this device.</p>
 
                     <!-- Profile picture -->
                     <div class="form-grid" style="margin-bottom: 20px;">
                         <div class="field">
-                            <label>Profile Picture</label>
+                            <label data-i18n="config.profile_picture">Profile Picture</label>
                             <div class="profile-pic-wrapper">
                                 <div class="profile-pic-preview">
                                     <div id="personal-avatar-placeholder" class="profile-pic-initials" style="display:none" title="Click to upload"></div>
@@ -364,9 +364,9 @@
                                     <input type="file" id="personal-avatar-input" accept="image/*" style="display:none" aria-label="Upload profile picture" />
                                 </div>
                                 <div class="profile-pic-actions">
-                                    <label for="personal-avatar-input" class="profile-pic-label">📷 Upload photo</label>
-                                    <button type="button" id="personal-avatar-remove" class="profile-pic-remove">Remove</button>
-                                    <p class="profile-pic-hint">Auto-resized to 96×96 px</p>
+                                    <label for="personal-avatar-input" class="profile-pic-label" data-i18n="config.upload_photo">📷 Upload photo</label>
+                                    <button type="button" id="personal-avatar-remove" class="profile-pic-remove" data-i18n="config.remove">Remove</button>
+                                    <p class="profile-pic-hint" data-i18n="config.auto_resized_to_9696_px">Auto-resized to 96×96 px</p>
                                 </div>
                             </div>
                         </div>
@@ -376,15 +376,15 @@
 
                         <div class="field">
 
-                            <label for="personal-team-display">Team number display format</label>
+                            <label for="personal-team-display" data-i18n="config.team_number_display_format">Team number display format</label>
 
                             <select id="personal-team-display">
 
-                                <option value="merged">Key/Number (e.g. 254b/9999)</option>
+                                <option value="merged" data-i18n="config.keynumber_eg_254b9999">Key/Number (e.g. 254b/9999)</option>
 
-                                <option value="number">Number only (e.g. 9999)</option>
+                                <option value="number" data-i18n="config.number_only_eg_9999">Number only (e.g. 9999)</option>
 
-                                <option value="key">Key only (e.g. 254b)</option>
+                                <option value="key" data-i18n="config.key_only_eg_254b">Key only (e.g. 254b)</option>
 
                             </select>
 
@@ -396,11 +396,11 @@
 
                         <div class="field">
 
-                            <label for="personal-email">Email Address</label>
+                            <label for="personal-email" data-i18n="config.email_address">Email Address</label>
 
-                            <input id="personal-email" type="email" placeholder="scout@example.com" />
+                            <input id="personal-email" type="email" data-i18n-placeholder="config.placeholder_scoutexamplecom" placeholder="scout@example.com" />
 
-                            <p class="notice mt-6">Used for password recovery if you forget your credentials.</p>
+                            <p class="notice mt-6" data-i18n="config.used_for_password_recovery_if_">Used for password recovery if you forget your credentials.</p>
 
                         </div>
 
@@ -408,35 +408,35 @@
 
                     <div class="row gap-12 wrap mt-18">
 
-                        <button id="personal-save-email" class="btn" type="button">Save email</button>
+                        <button id="personal-save-email" class="btn" type="button" data-i18n="config.save_email">Save email</button>
 
                     </div>
 
                     <div class="card soft danger-zone mt-24" style="border: 1px solid rgba(220, 53, 69, 0.2); background: rgba(220, 53, 69, 0.02); padding: 18px; border-radius: 12px; margin-top: 24px;">
-                        <h3 style="color: #dc3545; margin-top: 0;">Danger Zone</h3>
-                        <p class="notice" style="margin-bottom: 16px;">Once you delete your account, there is no going back. Please be certain.</p>
-                        <button id="personal-delete-account" class="btn delete-btn" type="button" style="background: #dc3545; color: #fff; border: none; padding: 10px 20px; font-weight: 600; border-radius: 8px; cursor: pointer;">Delete Account</button>
+                        <h3 style="color: #dc3545; margin-top: 0;" data-i18n="config.danger_zone">Danger Zone</h3>
+                        <p class="notice" style="margin-bottom: 16px;" data-i18n="config.once_you_delete_your_account_t">Once you delete your account, there is no going back. Please be certain.</p>
+                        <button id="personal-delete-account" class="btn delete-btn" type="button" style="background: #dc3545; color: #fff; border: none; padding: 10px 20px; font-weight: 600; border-radius: 8px; cursor: pointer;" data-i18n="config.delete_account">Delete Account</button>
                     </div>
 
                 </div>
 
                 <div data-panel="email" class="hidden">
 
-                    <p class="notice">Configure global SMTP settings to allow sending password reset emails.</p>
+                    <p class="notice" data-i18n="config.configure_global_smtp_settings">Configure global SMTP settings to allow sending password reset emails.</p>
 
                     <div class="form-grid">
 
                         <div class="field">
 
-                            <label for="settings-email-host">SMTP Host</label>
+                            <label for="settings-email-host" data-i18n="config.smtp_host">SMTP Host</label>
 
-                            <input id="settings-email-host" type="text" placeholder="smtp.gmail.com" />
+                            <input id="settings-email-host" type="text" data-i18n-placeholder="config.placeholder_smtpgmailcom" placeholder="smtp.gmail.com" />
 
                         </div>
 
                         <div class="field">
 
-                            <label for="settings-email-port">SMTP Port</label>
+                            <label for="settings-email-port" data-i18n="config.smtp_port">SMTP Port</label>
 
                             <input id="settings-email-port" type="number" placeholder="587" />
 
@@ -444,15 +444,15 @@
 
                         <div class="field">
 
-                            <label for="settings-email-username">SMTP Username / API Key</label>
+                            <label for="settings-email-username" data-i18n="config.smtp_username_api_key">SMTP Username / API Key</label>
 
-                            <input id="settings-email-username" type="text" placeholder="user@gmail.com" />
+                            <input id="settings-email-username" type="text" data-i18n-placeholder="config.placeholder_usergmailcom" placeholder="user@gmail.com" />
 
                         </div>
 
                         <div class="field">
 
-                            <label for="settings-email-password">SMTP Password</label>
+                            <label for="settings-email-password" data-i18n="config.smtp_password">SMTP Password</label>
 
                             <input id="settings-email-password" type="password" placeholder="••••••••" />
 
@@ -460,23 +460,23 @@
 
                         <div class="field">
 
-                            <label for="settings-email-from">From Email Address</label>
+                            <label for="settings-email-from" data-i18n="config.from_email_address">From Email Address</label>
 
-                            <input id="settings-email-from" type="email" placeholder="noreply@yourdomain.com" />
+                            <input id="settings-email-from" type="email" data-i18n-placeholder="config.placeholder_noreplyyourdomaincom" placeholder="noreply@yourdomain.com" />
 
                         </div>
 
                         <div class="field">
 
-                            <label for="settings-email-encryption">Encryption</label>
+                            <label for="settings-email-encryption" data-i18n="config.encryption">Encryption</label>
 
                             <select id="settings-email-encryption">
 
-                                <option value="STARTTLS">STARTTLS (Usually port 587)</option>
+                                <option value="STARTTLS" data-i18n="config.starttls_usually_port_587">STARTTLS (Usually port 587)</option>
 
-                                <option value="SSL_TLS">SSL/TLS (Usually port 465)</option>
+                                <option value="SSL_TLS" data-i18n="config.ssltls_usually_port_465">SSL/TLS (Usually port 465)</option>
 
-                                <option value="NONE">None (Plain SMTP, usually port 25 or 8025)</option>
+                                <option value="NONE" data-i18n="config.none_plain_smtp_usually_port_2">None (Plain SMTP, usually port 25 or 8025)</option>
 
                             </select>
 
@@ -486,25 +486,25 @@
 
                     <div class="row gap-12 wrap mt-18">
 
-                        <button id="settings-email-save" class="btn" type="button">Save email settings</button>
+                        <button id="settings-email-save" class="btn" type="button" data-i18n="config.save_email_settings">Save email settings</button>
 
                     </div>
 
                     <div class="card soft mt-24">
 
-                        <h3>Test Connection</h3>
+                        <h3 data-i18n="config.test_connection">Test Connection</h3>
 
-                        <p class="notice">Enter an email address to send a test message using the saved settings.</p>
+                        <p class="notice" data-i18n="config.enter_an_email_address_to_send">Enter an email address to send a test message using the saved settings.</p>
 
                         <div class="field">
 
-                            <label for="settings-email-test-address">Recipient Email</label>
+                            <label for="settings-email-test-address" data-i18n="config.recipient_email">Recipient Email</label>
 
-                            <input id="settings-email-test-address" type="email" placeholder="test@example.com" />
+                            <input id="settings-email-test-address" type="email" data-i18n-placeholder="config.placeholder_testexamplecom" placeholder="test@example.com" />
 
                         </div>
 
-                        <button id="settings-email-test" class="btn secondary mt-12" type="button">Send test email</button>
+                        <button id="settings-email-test" class="btn secondary mt-12" type="button" data-i18n="config.send_test_email">Send test email</button>
 
                     </div>
 

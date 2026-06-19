@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -17,7 +22,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 async function loadAnalyticsData(grid) {
     if (!grid) return;
-    Obsidianscout.showLoadingSpinner(grid, "Loading analytics...");
+    Obsidianscout.showLoadingSpinner(grid, t('analytics.loading_analytics', "Loading analytics..."));
     try {
         const response = await Obsidianscout.request("/api/analytics");
         renderWidgets(grid, response.widgets || []);

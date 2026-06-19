@@ -54,24 +54,24 @@
 
         <main class="main-content">
             <div class="card">
-                <h1>All Scouting Data</h1>
-                <p class="notice">Browse, search, and inspect pit, match, and qualitative scouting entries in one unified place.</p>
+                <h1 data-i18n="all-data.all_scouting_data">All Scouting Data</h1>
+                <p class="notice" data-i18n="all-data.browse_search_and_inspect_pit_">Browse, search, and inspect pit, match, and qualitative scouting entries in one unified place.</p>
 
                 <div class="metrics mt-20">
                     <div>
-                        <h4>Total Entries</h4>
+                        <h4 data-i18n="all-data.total_entries">Total Entries</h4>
                         <div id="all-entry-count" class="metric-value">0</div>
                     </div>
                     <div>
-                        <h4>Pit Entries</h4>
+                        <h4 data-i18n="all-data.pit_entries">Pit Entries</h4>
                         <div id="pit-entry-count" class="metric-value">0</div>
                     </div>
                     <div>
-                        <h4>Match Entries</h4>
+                        <h4 data-i18n="all-data.match_entries">Match Entries</h4>
                         <div id="match-entry-count" class="metric-value">0</div>
                     </div>
                     <div>
-                        <h4>Qualitative Entries</h4>
+                        <h4 data-i18n="all-data.qualitative_entries">Qualitative Entries</h4>
                         <div id="qual-entry-count" class="metric-value">0</div>
                     </div>
                 </div>
@@ -80,57 +80,57 @@
             <div class="card mt-20">
                 <div class="split">
                     <div class="field">
-                        <label for="event-filter">Event</label>
+                        <label for="event-filter" data-i18n="events.event">Event</label>
                         <select id="event-filter" class="select-wide"></select>
                     </div>
                     <div class="field">
-                        <label for="team-search">Search teams</label>
-                        <input id="team-search" type="search" placeholder="Team number or name" />
+                        <label for="team-search" data-i18n="all-data.search_teams">Search teams</label>
+                        <input id="team-search" type="search" data-i18n-placeholder="all-data.placeholder_team_number_or_name" placeholder="Team number or name" />
                     </div>
                     <div class="field">
-                        <label for="type-filter">Entry Type</label>
+                        <label for="type-filter" data-i18n="all-data.entry_type">Entry Type</label>
                         <select id="type-filter" class="select-wide">
-                            <option value="all">All Types</option>
-                            <option value="pit">Pit Scouting</option>
-                            <option value="match">Match Scouting</option>
-                            <option value="qualitative">Qualitative Scouting</option>
+                            <option value="all" data-i18n="all-data.all_types">All Types</option>
+                            <option value="pit" data-i18n="all-data.pit_scouting">Pit Scouting</option>
+                            <option value="match" data-i18n="all-data.match_scouting">Match Scouting</option>
+                            <option value="qualitative" data-i18n="all-data.qualitative_scouting">Qualitative Scouting</option>
                         </select>
                     </div>
                     <div class="field">
-                        <label for="match-filter">Match Number</label>
-                        <input id="match-filter" type="number" min="1" placeholder="e.g. 12" />
+                        <label for="match-filter" data-i18n="matches.match_number">Match Number</label>
+                        <input id="match-filter" type="number" min="1" data-i18n-placeholder="all-data.placeholder_eg_12" placeholder="e.g. 12" />
                     </div>
                     <div class="field">
-                        <label for="sort-select">Sort By</label>
+                        <label for="sort-select" data-i18n="all-data.sort_by">Sort By</label>
                         <select id="sort-select" class="select-wide">
-                            <option value="match-type">Match & Type</option>
-                            <option value="newest">Newest First</option>
-                            <option value="oldest">Oldest First</option>
-                            <option value="team">Team Number</option>
+                            <option value="match-type" data-i18n="all-data.match_type">Match & Type</option>
+                            <option value="newest" data-i18n="all-data.newest_first">Newest First</option>
+                            <option value="oldest" data-i18n="all-data.oldest_first">Oldest First</option>
+                            <option value="team" data-i18n="pitdata.csv.team_number">Team Number</option>
                         </select>
                     </div>
                 </div>
                 <div class="row gap-12 wrap mt-18">
-                    <button id="reset-filters" class="btn ghost" type="button">Reset Filters</button>
-                    <button id="export-csv" class="btn ghost" type="button">Export CSV</button>
-                    <span id="filter-status" class="badge">Showing all entries</span>
+                    <button id="reset-filters" class="btn ghost" type="button" data-i18n="all-data.reset_filters">Reset Filters</button>
+                    <button id="export-csv" class="btn ghost" type="button" data-i18n="pitdata.export_csv">Export CSV</button>
+                    <span id="filter-status" class="badge" data-i18n="all-data.showing_all_entries">Showing all entries</span>
                 </div>
             </div>
 
             <div class="split mt-20">
                 <div class="card">
                     <div class="row justify-between align-center wrap gap-12">
-                        <h2 class="section-title">Unified Entries</h2>
-                        <span id="table-count" class="badge">0 entries</span>
+                        <h2 class="section-title" data-i18n="all-data.unified_entries">Unified Entries</h2>
+                        <span id="table-count" class="badge" data-i18n="all-data.0_entries">0 entries</span>
                     </div>
                     <div class="table-scroll mt-12">
                         <table class="table" id="data-table">
                             <thead>
                                 <tr>
-                                    <th>Team</th>
-                                    <th>Match</th>
-                                    <th>Type</th>
-                                    <th>Updated</th>
+                                    <th data-i18n="all-data.team">Team</th>
+                                    <th data-i18n="matches.match">Match</th>
+                                    <th data-i18n="settings.type">Type</th>
+                                    <th data-i18n="pitdata.updated">Updated</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -140,11 +140,11 @@
 
                 <div class="card">
                     <div class="row justify-between align-center wrap gap-12">
-                        <h2 id="detail-title" class="section-title">Select an entry</h2>
-                        <span id="detail-status" class="badge">No entry selected</span>
+                        <h2 id="detail-title" class="section-title" data-i18n="all-data.select_an_entry">Select an entry</h2>
+                        <span id="detail-status" class="badge" data-i18n="all-data.no_entry_selected">No entry selected</span>
                     </div>
                     <div id="entry-detail" class="pit-detail mt-12">
-                        <p class="notice">Choose an entry from the list to inspect its configuration-driven answers and notes.</p>
+                        <p class="notice" data-i18n="all-data.choose_an_entry_from_the_list_">Choose an entry from the list to inspect its configuration-driven answers and notes.</p>
                     </div>
                 </div>
             </div>

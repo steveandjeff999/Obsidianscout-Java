@@ -218,14 +218,14 @@
 
         <main class="main-content">
             <div class="card">
-                <h1>Data Cache Manager</h1>
-                <p class="notice">View, upload, export/import, or delete locally cached scouting entries before uploading them to the server.</p>
+                <h1 data-i18n="cache-manager.data_cache_manager">Data Cache Manager</h1>
+                <p class="notice" data-i18n="cache-manager.view_upload_exportimport_or_de">View, upload, export/import, or delete locally cached scouting entries before uploading them to the server.</p>
 
                 <!-- Statistics Grid -->
                 <div class="stats-grid">
                     <div class="stat-card" data-type="match">
                         <div class="stat-number" id="count-match">0</div>
-                        <div class="stat-label">Match Scout</div>
+                        <div class="stat-label" data-i18n="cache-manager.match_scout">Match Scout</div>
                     </div>
                     <div class="stat-card" data-type="pit">
                         <div class="stat-number" id="count-pit">0</div>
@@ -237,24 +237,24 @@
                     </div>
                     <div class="stat-card" data-type="prescout-match">
                         <div class="stat-number" id="count-prescout-match">0</div>
-                        <div class="stat-label">Pre Match</div>
+                        <div class="stat-label" data-i18n="cache-manager.pre_match">Pre Match</div>
                     </div>
                     <div class="stat-card" data-type="prescout-pit">
                         <div class="stat-number" id="count-prescout-pit">0</div>
-                        <div class="stat-label">Pre Pit</div>
+                        <div class="stat-label" data-i18n="cache-manager.pre_pit">Pre Pit</div>
                     </div>
                     <div class="stat-card" data-type="prescout-qual">
                         <div class="stat-number" id="count-prescout-qual">0</div>
-                        <div class="stat-label">Pre Qual</div>
+                        <div class="stat-label" data-i18n="cache-manager.pre_qual">Pre Qual</div>
                     </div>
                 </div>
 
                 <!-- Global Cache Actions -->
                 <div class="row gap-12 wrap mb-18">
-                    <button id="btn-sync-all" class="btn" type="button">Upload All Caches</button>
-                    <button id="btn-export-cache" class="btn secondary" type="button">Export Cache JSON</button>
-                    <button id="btn-import-cache" class="btn secondary" type="button">Import Cache JSON</button>
-                    <button id="btn-clear-cache" class="btn ghost" type="button" style="color: #f44336; border-color: rgba(244, 67, 54, 0.3);">Clear All Caches</button>
+                    <button id="btn-sync-all" class="btn" type="button" data-i18n="cache-manager.upload_all_caches">Upload All Caches</button>
+                    <button id="btn-export-cache" class="btn secondary" type="button" data-i18n="cache-manager.export_cache_json">Export Cache JSON</button>
+                    <button id="btn-import-cache" class="btn secondary" type="button" data-i18n="cache-manager.import_cache_json">Import Cache JSON</button>
+                    <button id="btn-clear-cache" class="btn ghost" type="button" style="color: #f44336; border-color: rgba(244, 67, 54, 0.3);" data-i18n="cache-manager.clear_all_caches">Clear All Caches</button>
                     
                     <input type="file" id="cache-import-file" class="input-hidden" accept=".json" />
                 </div>
@@ -264,40 +264,40 @@
                 <!-- Filters -->
                 <div class="filter-row">
                     <div class="field">
-                        <label for="filter-type">Form Type</label>
+                        <label for="filter-type" data-i18n="cache-manager.form_type">Form Type</label>
                         <select id="filter-type">
-                            <option value="">All Forms</option>
-                            <option value="match-scouting">Match Scouting</option>
-                            <option value="pit-scouting">Pit Scouting</option>
-                            <option value="qual-scouting">Qualitative Scouting</option>
-                            <option value="prescout-scouting">Prescout Match</option>
-                            <option value="prescout-pit-scouting">Prescout Pit</option>
-                            <option value="prescout-qual-scouting">Prescout Qualitative</option>
+                            <option value="" data-i18n="cache-manager.all_forms">All Forms</option>
+                            <option value="match-scouting" data-i18n="all-data.match_scouting">Match Scouting</option>
+                            <option value="pit-scouting" data-i18n="all-data.pit_scouting">Pit Scouting</option>
+                            <option value="qual-scouting" data-i18n="all-data.qualitative_scouting">Qualitative Scouting</option>
+                            <option value="prescout-scouting" data-i18n="cache-manager.prescout_match">Prescout Match</option>
+                            <option value="prescout-pit-scouting" data-i18n="cache-manager.prescout_pit">Prescout Pit</option>
+                            <option value="prescout-qual-scouting" data-i18n="cache-manager.prescout_qualitative">Prescout Qualitative</option>
                         </select>
                     </div>
                     <div class="field" style="flex: 1; min-width: 140px;">
-                        <label for="filter-team">Search Team</label>
-                        <input id="filter-team" type="number" placeholder="e.g. 254" />
+                        <label for="filter-team" data-i18n="cache-manager.search_team">Search Team</label>
+                        <input id="filter-team" type="number" data-i18n-placeholder="alliance-edit.placeholder_eg_254" placeholder="e.g. 254" />
                     </div>
                     <div class="field" style="flex: 1; min-width: 140px;">
-                        <label for="filter-event">Search Event</label>
-                        <input id="filter-event" type="text" placeholder="e.g. 2026micmp" />
+                        <label for="filter-event" data-i18n="cache-manager.search_event">Search Event</label>
+                        <input id="filter-event" type="text" data-i18n-placeholder="cache-manager.placeholder_eg_2026micmp" placeholder="e.g. 2026micmp" />
                     </div>
                 </div>
 
                 <!-- Cached Entries List -->
-                <div id="cache-empty-notice" class="notice">No pending cached entries found. You are fully synced!</div>
+                <div id="cache-empty-notice" class="notice" data-i18n="cache-manager.no_pending_cached_entries_foun">No pending cached entries found. You are fully synced!</div>
                 
                 <div id="cache-table-container" class="cache-table-wrapper hidden">
                     <table class="cache-table">
                         <thead>
                             <tr>
-                                <th>Type</th>
-                                <th>Event</th>
-                                <th>Team</th>
-                                <th>Match</th>
-                                <th>Timestamp</th>
-                                <th>Actions</th>
+                                <th data-i18n="settings.type">Type</th>
+                                <th data-i18n="events.event">Event</th>
+                                <th data-i18n="all-data.team">Team</th>
+                                <th data-i18n="matches.match">Match</th>
+                                <th data-i18n="cache-manager.timestamp">Timestamp</th>
+                                <th data-i18n="cache-manager.actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="cache-entries-body">
@@ -314,14 +314,14 @@
     <div id="payload-modal-backdrop" class="modal-backdrop">
         <div class="modal-container">
             <div class="modal-header">
-                <h3 class="modal-title" id="payload-modal-title">Scouting Entry Payload</h3>
-                <button class="modal-close" id="payload-modal-close-btn">&times;</button>
+                <h3 class="modal-title" id="payload-modal-title" data-i18n="cache-manager.scouting_entry_payload">Scouting Entry Payload</h3>
+                <button class="modal-close" id="payload-modal-close-btn" data-i18n="alliance-selection.times">&times;</button>
             </div>
             <div class="modal-body">
                 <pre class="payload-modal-content" id="payload-modal-body-content"></pre>
             </div>
             <div class="modal-footer">
-                <button class="btn ghost" id="payload-modal-close-footer-btn">Close</button>
+                <button class="btn ghost" id="payload-modal-close-footer-btn" data-i18n="alliance-selection.close">Close</button>
             </div>
         </div>
     </div>

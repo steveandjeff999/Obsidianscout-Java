@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 let originalMainContentHTML = "";
 let mainContentWrapper = null;
 let mainContent = null;
@@ -322,7 +327,7 @@ async function loadTeamsAndMatches(eventKey, teamSelect, matchSelect, timezone) 
     teamSelect.innerHTML = "";
     const teamPlaceholder = document.createElement("option");
     teamPlaceholder.value = "";
-    teamPlaceholder.textContent = "Select team";
+    teamPlaceholder.textContent = t('prescout_scout.select_team', "Select team");
     teamSelect.appendChild(teamPlaceholder);
 
     teams.forEach((team) => {
@@ -342,7 +347,7 @@ function updateMatchOptions(matchSelect, matches, timezone, selectedTeam) {
     matchSelect.innerHTML = "";
     const matchPlaceholder = document.createElement("option");
     matchPlaceholder.value = "";
-    matchPlaceholder.textContent = "Select match";
+    matchPlaceholder.textContent = t('prescout_scout.select_match', "Select match");
     matchSelect.appendChild(matchPlaceholder);
 
     const teamNumber = selectedTeam ? Number(selectedTeam) : null;

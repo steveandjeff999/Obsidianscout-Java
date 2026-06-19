@@ -58,19 +58,19 @@
 
                 <div class="metrics mt-20">
                     <div>
-                        <h4>Entries</h4>
+                        <h4 data-i18n="dashboard.entries">Entries</h4>
                         <div id="pit-entry-count" class="metric-value">0</div>
                     </div>
                     <div>
-                        <h4>Teams Scouted</h4>
+                        <h4 data-i18n="pit-data.teams_scouted">Teams Scouted</h4>
                         <div id="pit-team-count" class="metric-value">0</div>
                     </div>
                     <div>
-                        <h4>Coverage</h4>
+                        <h4 data-i18n="pit-data.coverage">Coverage</h4>
                         <div id="pit-coverage" class="metric-value">0%</div>
                     </div>
                     <div>
-                        <h4>Last Update</h4>
+                        <h4 data-i18n="pit-data.last_update">Last Update</h4>
                         <div id="pit-last-updated" class="metric-value text-compact">--</div>
                     </div>
                 </div>
@@ -79,19 +79,19 @@
             <div class="card mt-20">
                 <div class="split">
                     <div class="field">
-                        <label for="event-filter">Event</label>
+                        <label for="event-filter" data-i18n="events.event">Event</label>
                         <select id="event-filter" class="select-wide"></select>
                     </div>
                     <div class="field">
-                        <label for="team-search">Search teams</label>
-                        <input id="team-search" type="search" placeholder="Team number or name" />
+                        <label for="team-search" data-i18n="all-data.search_teams">Search teams</label>
+                        <input id="team-search" type="search" data-i18n-placeholder="all-data.placeholder_team_number_or_name" placeholder="Team number or name" />
                     </div>
                     <div class="field">
-                        <label for="field-filter">Quick field</label>
+                        <label for="field-filter" data-i18n="pit-data.quick_field">Quick field</label>
                         <select id="field-filter" class="select-wide"></select>
                     </div>
                     <div class="field">
-                        <label>Coverage filter</label>
+                        <label data-i18n="pit-data.coverage_filter">Coverage filter</label>
                         <label class="inline-control">
                             <input id="missing-only" type="checkbox" />
                             Needs pit scouting
@@ -100,24 +100,24 @@
                 </div>
                 <div class="row gap-12 wrap mt-18">
                     <button id="export-pit-csv" class="btn ghost" type="button" data-i18n="pitdata.export_csv">Export CSV</button>
-                    <span id="pit-filter-status" class="badge">Showing all teams</span>
+                    <span id="pit-filter-status" class="badge" data-i18n="pit-data.showing_all_teams">Showing all teams</span>
                 </div>
             </div>
 
             <div class="split mt-20">
                 <div class="card">
                     <div class="row justify-between align-center wrap gap-12">
-                        <h2 class="section-title">Team Coverage</h2>
-                        <span id="pit-table-count" class="badge">0 teams</span>
+                        <h2 class="section-title" data-i18n="pit-data.team_coverage">Team Coverage</h2>
+                        <span id="pit-table-count" class="badge" data-i18n="pit-data.0_teams">0 teams</span>
                     </div>
                     <div class="table-scroll mt-12">
                         <table class="table" id="pit-data-table">
                             <thead>
                                 <tr>
-                                    <th>Team</th>
-                                    <th>Status</th>
-                                    <th>Updated</th>
-                                    <th id="quick-field-header">Quick Field</th>
+                                    <th data-i18n="all-data.team">Team</th>
+                                    <th data-i18n="pitdata.csv.status">Status</th>
+                                    <th data-i18n="pitdata.updated">Updated</th>
+                                    <th id="quick-field-header" data-i18n="quick_field">Quick Field</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -127,8 +127,8 @@
 
                 <div class="card">
                     <div class="row justify-between align-center wrap gap-12">
-                        <h2 id="pit-detail-title" class="section-title">Select a team</h2>
-                        <span id="pit-detail-status" class="badge">No team selected</span>
+                        <h2 id="pit-detail-title" class="section-title" data-i18n="pitdata.select_team">Select a team</h2>
+                        <span id="pit-detail-status" class="badge" data-i18n="pitdata.no_team_selected">No team selected</span>
                     </div>
                     <div id="pit-detail" class="pit-detail mt-12">
                         <p class="notice" data-i18n="pitdata.choose_team_notice">Choose a team from the coverage table to see its pit scouting answers.</p>

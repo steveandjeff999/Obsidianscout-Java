@@ -1227,31 +1227,34 @@ fun Application.configureRoutes() {
                     call.respond(HttpStatusCode.NoContent)
                 }
                 webSocket("/{id}/collaborate/{kind}") {
-                    val session = call.sessions.get<UserSession>() ?: return@webSocket close(
+                    val session = call.sessions.get<UserSession>() ?: return@webSocket this.close(
                         CloseReason(CloseReason.Codes.VIOLATED_POLICY, "No session")
                     )
-                    val id = call.parameters["id"]?.toIntOrNull() ?: return@webSocket close(
+                    val id = call.parameters["id"]?.toIntOrNull() ?: return@webSocket this.close(
                         CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid alliance ID")
                     )
-                    val kind = call.parameters["kind"] ?: return@webSocket close(
+                    val kind = call.parameters["kind"] ?: return@webSocket this.close(
                         CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid config kind")
                     )
                     
-                    // Verify user is a member of this alliance
-                    val isMember = transaction {
-                        AllianceMemberships
-                            .selectAll().where {
-                                (AllianceMemberships.allianceId eq id) and
-                                (AllianceMemberships.teamNumber eq session.teamNumber) and
-                                (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED"))
-                            }
-                            .any()
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        // Verify user is a member of this alliance
+                        val isMember = transaction {
+                            AllianceMemberships
+                                .selectAll().where {
+                                    (AllianceMemberships.allianceId eq id) and
+                                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                                    (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED"))
+                                }
+                                .any()
+                        }
+                        if (!isMember) {
+                            this@webSocket.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Not a member"))
+                            return@withContext
+                        }
+                        
+                        AllianceCollaborationManager.handleConnection(this@webSocket, id, kind, session)
                     }
-                    if (!isMember) {
-                        return@webSocket close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Not a member"))
-                    }
-                    
-                    AllianceCollaborationManager.handleConnection(this, id, kind, session)
                 }
             }
         }

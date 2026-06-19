@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 let originalMainContentHTML = "";
 let mainContentWrapper = null;
 let mainContent = null;
@@ -217,7 +222,7 @@ async function loadTeams(eventKey, teamSelect) {
     teamSelect.innerHTML = "";
     const placeholder = document.createElement("option");
     placeholder.value = "";
-    placeholder.textContent = "Select team";
+    placeholder.textContent = t('pit_scout.select_team', "Select team");
     teamSelect.appendChild(placeholder);
 
     teams.forEach((team) => {

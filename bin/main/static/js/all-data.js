@@ -48,7 +48,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const originalHTML = dynamicContainer.innerHTML;
 
     async function loadAllScoutingData() {
-        Obsidianscout.showLoadingSpinner(dynamicContainer, "Loading all scouting data...");
+        Obsidianscout.showLoadingSpinner(dynamicContainer, t('all_data.loading_all_scouting_data', "Loading all scouting data..."));
         try {
             const settingsResponse = await Obsidianscout.request("/api/settings");
             state.settings = settingsResponse.settings;
@@ -370,7 +370,7 @@ function renderTableSection(state) {
         const tr = document.createElement("tr");
         const td = document.createElement("td");
         td.colSpan = 4;
-        td.textContent = "No entries match the current filters.";
+        td.textContent = t('all_data.no_entries_match_the_current_filters', "No entries match the current filters.");
         tr.appendChild(td);
         body.appendChild(tr);
         renderDetail(state, null);

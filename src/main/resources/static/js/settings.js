@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -610,7 +615,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             emptyNotice.className = "notice";
             emptyNotice.style.textAlign = "center";
             emptyNotice.style.padding = "24px";
-            emptyNotice.textContent = "No fields configured. Click '+ Add Field' to start building!";
+            emptyNotice.textContent = t('settings.no_fields_configured', "No fields configured. Click '+ Add Field' to start building!");
             visualFieldsList.appendChild(emptyNotice);
             return;
         }

@@ -32,72 +32,72 @@
 
         <main class="main-content">
             <div class="card">
-                <h1>Match Prescouting</h1>
-                <p class="notice">Enter an event code, load the teams/matches, then fill in the form driven by config JSON.</p>
+                <h1 data-i18n="prescout-scout.match_prescouting">Match Prescouting</h1>
+                <p class="notice" data-i18n="prescout-qual.enter_an_event_code_load_the_t">Enter an event code, load the teams/matches, then fill in the form driven by config JSON.</p>
 
                 <div class="split mb-18">
                     <div class="field">
-                        <label for="event-code-input">Event Code</label>
+                        <label for="event-code-input" data-i18n="prescout-pit.event_code">Event Code</label>
                         <div class="row gap-8">
-                            <input id="event-code-input" type="text" placeholder="e.g. 2024micmp" style="min-width: 140px;" />
-                            <button id="load-event-btn" class="btn" type="button">Load</button>
+                            <input id="event-code-input" type="text" data-i18n-placeholder="prescout-pit.placeholder_eg_2024micmp" placeholder="e.g. 2024micmp" style="min-width: 140px;" />
+                            <button id="load-event-btn" class="btn" type="button" data-i18n="prescout-pit.load">Load</button>
                         </div>
                     </div>
                     <div class="field">
-                        <label for="team-select">Team</label>
+                        <label for="team-select" data-i18n="all-data.team">Team</label>
                         <select id="team-select" disabled></select>
                     </div>
                     <div class="field">
-                        <label for="match-select">Match</label>
+                        <label for="match-select" data-i18n="matches.match">Match</label>
                         <select id="match-select" class="select-wide" disabled></select>
                     </div>
                     <div class="field">
-                        <label>Timezone</label>
+                        <label data-i18n="dashboard.timezone">Timezone</label>
                         <div id="timezone-badge" class="badge">--</div>
                     </div>
                 </div>
 
                 <form id="scouting-form" class="form-grid">
-                    <div id="form-blocked" class="notice">Enter an event code and click Load, then select a team and match to start scouting.</div>
+                    <div id="form-blocked" class="notice" data-i18n="prescout-qual.enter_an_event_code_and_click_">Enter an event code and click Load, then select a team and match to start scouting.</div>
 
                     <div id="scouting-tabs" class="tab-row hidden">
-                        <button type="button" class="tab active" data-tab="auto">Auto</button>
-                        <button type="button" class="tab" data-tab="teleop">Teleop</button>
-                        <button type="button" class="tab" data-tab="endgame">Endgame</button>
-                        <button type="button" class="tab" data-tab="postmatch">Post Match</button>
+                        <button type="button" class="tab active" data-tab="auto" data-i18n="phase.auto">Auto</button>
+                        <button type="button" class="tab" data-tab="teleop" data-i18n="phase.teleop">Teleop</button>
+                        <button type="button" class="tab" data-tab="endgame" data-i18n="phase.endgame">Endgame</button>
+                        <button type="button" class="tab" data-tab="postmatch" data-i18n="prescout-scout.post_match">Post Match</button>
                     </div>
 
                     <div id="form-fields" class="form-grid"></div>
 
                     <div id="points-preview" class="card soft hidden">
-                        <h3>Points preview</h3>
-                        <p class="notice">Auto, teleop, endgame, and total update as you fill out the form.</p>
+                        <h3 data-i18n="prescout-scout.points_preview">Points preview</h3>
+                        <p class="notice" data-i18n="prescout-scout.auto_teleop_endgame_and_total_">Auto, teleop, endgame, and total update as you fill out the form.</p>
                         <div class="metrics">
                             <div>
-                                <h4>Auto</h4>
+                                <h4 data-i18n="phase.auto">Auto</h4>
                                 <div id="points-auto" class="metric-value">0</div>
                             </div>
                             <div>
-                                <h4>Teleop</h4>
+                                <h4 data-i18n="phase.teleop">Teleop</h4>
                                 <div id="points-teleop" class="metric-value">0</div>
                             </div>
                             <div>
-                                <h4>Endgame</h4>
+                                <h4 data-i18n="phase.endgame">Endgame</h4>
                                 <div id="points-endgame" class="metric-value">0</div>
                             </div>
                             <div>
-                                <h4>Total</h4>
+                                <h4 data-i18n="prescout-scout.total">Total</h4>
                                 <div id="points-total" class="metric-value">0</div>
                             </div>
                         </div>
                     </div>
 
                     <div class="row gap-12 wrap">
-                        <button id="scout-submit" class="btn" type="submit" disabled>Save entry</button>
-                        <button id="scout-save-offline" class="btn secondary" type="button" disabled>Save Offline</button>
-                        <button id="scout-export-json" class="btn secondary" type="button" disabled>Export JSON</button>
-                        <button id="scout-gen-qr" class="btn secondary" type="button" disabled>Generate QR</button>
-                        <button id="scout-clear" class="btn ghost" type="button" disabled>Clear form</button>
+                        <button id="scout-submit" class="btn" type="submit" disabled data-i18n="scout.save_entry">Save entry</button>
+                        <button id="scout-save-offline" class="btn secondary" type="button" disabled data-i18n="scout.save_offline">Save Offline</button>
+                        <button id="scout-export-json" class="btn secondary" type="button" disabled data-i18n="pit-scout.export_json">Export JSON</button>
+                        <button id="scout-gen-qr" class="btn secondary" type="button" disabled data-i18n="pit-scout.generate_qr">Generate QR</button>
+                        <button id="scout-clear" class="btn ghost" type="button" disabled data-i18n="scout.clear_form">Clear form</button>
                     </div>
                 </form>
             </div>

@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 import QrScanner from '/vendor/qr-scanner.min.js';
 QrScanner.WORKER_PATH = '/vendor/qr-scanner-worker.min.js';
 
@@ -64,7 +69,7 @@ function initScanner() {
             } else {
                 const opt = document.createElement("option");
                 opt.value = "";
-                opt.textContent = "No camera found";
+                opt.textContent = t('qr_scanner.no_camera_found', "No camera found");
                 cameraSelect.appendChild(opt);
                 toggleScanBtn.disabled = true;
             }
@@ -90,7 +95,7 @@ function initScanner() {
 
     async function startScanning(cameraId) {
         toggleScanBtn.disabled = true;
-        toggleScanBtn.textContent = "Starting...";
+        toggleScanBtn.textContent = t('qr_scanner.starting', "Starting...");
 
         // Create container wrapper for video and canvas overlay
         readerContainer.innerHTML = "";
@@ -156,7 +161,7 @@ function initScanner() {
             lastDetection = null;
             
             toggleScanBtn.disabled = false;
-            toggleScanBtn.textContent = "Stop Scanning";
+            toggleScanBtn.textContent = t('qr_scanner.stop_scanning', "Stop Scanning");
             toggleScanBtn.className = "btn ghost";
             cameraSelect.disabled = true;
             Obsidianscout.showToast("Scanner active", "success");
@@ -179,7 +184,7 @@ function initScanner() {
         } catch (err) {
             console.error("Failed to start scanning:", err);
             toggleScanBtn.disabled = false;
-            toggleScanBtn.textContent = "Start Scanning";
+            toggleScanBtn.textContent = t('qr_scanner.start_scanning', "Start Scanning");
             toggleScanBtn.className = "btn";
             cameraSelect.disabled = false;
             Obsidianscout.showToast("Failed to access camera stream", "error");
@@ -211,7 +216,7 @@ function initScanner() {
         overlayCanvasElement = null;
 
         toggleScanBtn.disabled = false;
-        toggleScanBtn.textContent = "Start Scanning";
+        toggleScanBtn.textContent = t('qr_scanner.start_scanning', "Start Scanning");
         toggleScanBtn.className = "btn";
         cameraSelect.disabled = false;
 
@@ -680,7 +685,7 @@ function initScanner() {
         }
 
         uploadQueueBtn.disabled = true;
-        uploadQueueBtn.textContent = "Uploading...";
+        uploadQueueBtn.textContent = t('qr_scanner.uploading', "Uploading...");
 
         let successCount = 0;
         let failCount = 0;
@@ -721,7 +726,7 @@ function initScanner() {
             renderQueue();
         }
 
-        uploadQueueBtn.textContent = "Upload Queue";
+        uploadQueueBtn.textContent = t('qr_scanner.upload_queue', "Upload Queue");
         updateUploadButtonState();
 
         if (successCount > 0) {

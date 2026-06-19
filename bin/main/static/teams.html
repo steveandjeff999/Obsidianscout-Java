@@ -107,7 +107,7 @@
 
                     <div class="field" style="min-width: 240px; margin-top: 0;">
 
-                        <label for="event-filter" style="margin-bottom: 4px;">View Event</label>
+                        <label for="event-filter" style="margin-bottom: 4px;" data-i18n="matches.view_event">View Event</label>
 
                         <select id="event-filter" class="select-wide"></select>
 
@@ -124,13 +124,13 @@
                     <table class="table" id="teams-table">
                         <thead>
                             <tr>
-                                <th>Team</th>
-                                <th>Name</th>
-                                <th>Location</th>
-                                <th>Avg Points</th>
-                                <th>OPR</th>
-                                <th>EPA</th>
-                                <th class="admin-only hidden">Action</th>
+                                <th data-i18n="all-data.team">Team</th>
+                                <th data-i18n="teams.name">Name</th>
+                                <th data-i18n="teams.location">Location</th>
+                                <th data-i18n="teams.avg_points">Avg Points</th>
+                                <th data-i18n="alliance-selection.opr">OPR</th>
+                                <th data-i18n="alliance-selection.epa">EPA</th>
+                                <th class="admin-only hidden" data-i18n="events.action">Action</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -152,9 +152,9 @@
 
             <div class="modal-header">
 
-                <h2 class="modal-title" id="team-modal-title">Add Team Manually</h2>
+                <h2 class="modal-title" id="team-modal-title" data-i18n="teams.add_manual">Add Team Manually</h2>
 
-                <button class="modal-close" id="team-modal-close" type="button">&times;</button>
+                <button class="modal-close" id="team-modal-close" type="button" data-i18n="alliance-selection.times">&times;</button>
 
             </div>
 
@@ -162,7 +162,7 @@
 
                 <div class="field">
 
-                    <label for="team-event-key">Event</label>
+                    <label for="team-event-key" data-i18n="events.event">Event</label>
 
                     <select id="team-event-key" required></select>
 
@@ -170,37 +170,17 @@
 
                 <div class="field">
 
-                    <label for="team-number">Team Number</label>
+                    <label for="team-number" data-i18n="pitdata.csv.team_number">Team Number</label>
 
-                    <input type="number" id="team-number" required placeholder="e.g. 9999" />
+                    <input type="number" id="team-number" required data-i18n-placeholder="teams.placeholder_eg_9999" placeholder="e.g. 9999" />
 
                 </div>
 
                 <div class="field">
 
-                    <label for="team-name">Team Name</label>
+                    <label for="team-name" data-i18n="pitdata.csv.team_name">Team Name</label>
 
-                    <input type="text" id="team-name" required placeholder="e.g. Obsidian Bots" />
-
-                </div>
-
-                <div class="form-grid form-grid-wide">
-
-                    <div class="field">
-
-                        <label for="team-city">City</label>
-
-                        <input type="text" id="team-city" placeholder="e.g. Dallas" />
-
-                    </div>
-
-                    <div class="field">
-
-                        <label for="team-state">State/Province</label>
-
-                        <input type="text" id="team-state" placeholder="e.g. TX" />
-
-                    </div>
+                    <input type="text" id="team-name" required data-i18n-placeholder="teams.placeholder_eg_obsidian_bots" placeholder="e.g. Obsidian Bots" />
 
                 </div>
 
@@ -208,13 +188,17 @@
 
                     <div class="field">
 
-                        <label for="team-country">Country</label>
+                        <label for="team-city" data-i18n="team.city">City</label>
 
-                        <input type="text" id="team-country" placeholder="e.g. USA" value="USA" />
+                        <input type="text" id="team-city" data-i18n-placeholder="teams.placeholder_eg_dallas" placeholder="e.g. Dallas" />
 
                     </div>
 
                     <div class="field">
+
+                        <label for="team-state" data-i18n="team.stateprovince">State/Province</label>
+
+                        <input type="text" id="team-state" data-i18n-placeholder="teams.placeholder_eg_tx" placeholder="e.g. TX" />
 
                     </div>
 
@@ -224,7 +208,23 @@
 
                     <div class="field">
 
-                        <label for="team-opr">OPR</label>
+                        <label for="team-country" data-i18n="team.country">Country</label>
+
+                        <input type="text" id="team-country" data-i18n-placeholder="teams.placeholder_eg_usa" placeholder="e.g. USA" value="USA" />
+
+                    </div>
+
+                    <div class="field">
+
+                    </div>
+
+                </div>
+
+                <div class="form-grid form-grid-wide">
+
+                    <div class="field">
+
+                        <label for="team-opr" data-i18n="alliance-selection.opr">OPR</label>
 
                         <input type="number" step="0.01" id="team-opr" placeholder="0.0" />
 
@@ -232,7 +232,7 @@
 
                     <div class="field">
 
-                        <label for="team-epa">EPA</label>
+                        <label for="team-epa" data-i18n="alliance-selection.epa">EPA</label>
 
                         <input type="number" step="0.01" id="team-epa" placeholder="0.0" />
 

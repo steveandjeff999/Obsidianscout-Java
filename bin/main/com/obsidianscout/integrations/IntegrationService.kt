@@ -336,20 +336,12 @@ object IntegrationService {
                 val matchKeys = ApiMatches.select(ApiMatches.eventKey)
                     .withDistinct()
                     .map { it[ApiMatches.eventKey].lowercase().trim() }
-                // Include manually added events. Use the same computedKey formula (year+eventCode)
-                // as the events list below so the keys match in the requiredKeys filter.
-                // Synced events from TBA/FIRST (which have a full API JSON body) are excluded here
-                // — they only appear when they have associated teams or matches.
-                val manualKeys = ApiEvents.select(ApiEvents.eventKey, ApiEvents.eventCode, ApiEvents.year, ApiEvents.dataJson)
+                // Include manually added events (bare stored key, no year+code computation).
+                val manualKeys = ApiEvents.select(ApiEvents.eventKey, ApiEvents.dataJson)
                     .mapNotNull { row ->
                         val json = row[ApiEvents.dataJson]
                         if (json.contains("manual") || json == "{}" || json.isBlank()) {
-                            val storedCode = row[ApiEvents.eventCode]
-                            if (!storedCode.isNullOrBlank()) {
-                                "${row[ApiEvents.year]}${storedCode}".lowercase().trim()
-                            } else {
-                                row[ApiEvents.eventKey].lowercase().trim()
-                            }
+                            row[ApiEvents.eventKey].lowercase().trim()
                         } else {
                             null
                         }
@@ -364,17 +356,14 @@ object IntegrationService {
                 query.andWhere { ApiEvents.year eq year }
             }
             val events = query.orderBy(ApiEvents.startDate, SortOrder.ASC).map { row ->
-                val storedCode = row[ApiEvents.eventCode]
-                val computedKey = if (!storedCode.isNullOrBlank()) {
-                    "${row[ApiEvents.year]}${storedCode}".lowercase()
-                } else {
-                    row[ApiEvents.eventKey]
-                }
+                // Use the stored eventKey as-is. TBA synced events already have the canonical
+                // year-prefixed key (e.g. "2026arc"). Manually added events keep exactly what
+                // the user typed. No year+code concatenation here.
                 EventRecord(
-                    eventKey = computedKey.lowercase().trim(),
+                    eventKey = row[ApiEvents.eventKey].lowercase().trim(),
                     name = row[ApiEvents.name],
                     year = row[ApiEvents.year],
-                    eventCode = storedCode,
+                    eventCode = row[ApiEvents.eventCode],
                     startDate = row[ApiEvents.startDate],
                     endDate = row[ApiEvents.endDate],
                     timezone = row[ApiEvents.timezone]
@@ -732,14 +721,18 @@ object IntegrationService {
 
     fun saveEvent(event: EventRecord): EventRecord {
         return transaction {
+            // Store exactly what the user typed — no year prefixing.
+            // TBA synced events already come in with the canonical year-prefixed key.
             val key = event.eventKey.lowercase().trim()
+            val eventCode = event.eventCode ?: key.removePrefix(event.year.toString())
+
             val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq key }.limit(1).firstOrNull()
             val now = Instant.now()
             if (existing == null) {
                 ApiEvents.insert {
-                    it[eventKey] = key
-                    it[year] = event.year
-                    it[eventCode] = event.eventCode ?: key.removePrefix(event.year.toString())
+                    it[ApiEvents.eventKey] = key
+                    it[ApiEvents.year] = event.year
+                    it[ApiEvents.eventCode] = eventCode
                     it[name] = event.name
                     it[startDate] = event.startDate
                     it[endDate] = event.endDate
@@ -748,9 +741,11 @@ object IntegrationService {
                     it[updatedAt] = now
                 }
             } else {
+                val oldStoredKey = existing[ApiEvents.eventKey]
                 ApiEvents.update({ ApiEvents.id eq existing[ApiEvents.id] }) {
-                    it[year] = event.year
-                    it[eventCode] = event.eventCode ?: key.removePrefix(event.year.toString())
+                    it[ApiEvents.eventKey] = key
+                    it[ApiEvents.year] = event.year
+                    it[ApiEvents.eventCode] = eventCode
                     it[name] = event.name
                     it[startDate] = event.startDate
                     it[endDate] = event.endDate
@@ -758,32 +753,47 @@ object IntegrationService {
                     it[dataJson] = "{\"manual\":true}"
                     it[updatedAt] = now
                 }
+                // Propagate if the stored key actually changed (e.g. legacy records)
+                if (oldStoredKey != key) {
+                    ApiTeams.update({ ApiTeams.eventKey eq oldStoredKey }) { it[ApiTeams.eventKey] = key }
+                    ApiMatches.update({ ApiMatches.eventKey eq oldStoredKey }) { it[ApiMatches.eventKey] = key }
+                    ScoutingEntries.update({ ScoutingEntries.eventKey eq oldStoredKey }) { it[ScoutingEntries.eventKey] = key }
+                    PitScoutingEntries.update({ PitScoutingEntries.eventKey eq oldStoredKey }) { it[PitScoutingEntries.eventKey] = key }
+                    QualitativeScoutingEntries.update({ QualitativeScoutingEntries.eventKey eq oldStoredKey }) { it[QualitativeScoutingEntries.eventKey] = key }
+                    EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq oldStoredKey }) { it[EpaOprHistoryCache.eventKey] = key }
+                    AllianceSelections.update({ AllianceSelections.eventKey eq oldStoredKey }) { it[AllianceSelections.eventKey] = key }
+                    ScoutingAlliances.update({ ScoutingAlliances.eventKey eq oldStoredKey }) { it[ScoutingAlliances.eventKey] = key }
+                }
             }
-            event.copy(eventKey = key)
+            event.copy(eventKey = key, eventCode = eventCode)
         }
     }
 
     /**
-     * Renames an event key and atomically propagates the change to every dependent table:
-     * ApiEvents, ApiTeams, ApiMatches, ScoutingEntries, PitScoutingEntries,
-     * QualitativeScoutingEntries, EpaOprHistoryCache, AllianceSelections, and ScoutingAlliances.
-     * Also updates metadata fields (name, year, eventCode, dates, timezone) on the event record.
+     * Updates an event's metadata and optionally renames its key, propagating the rename
+     * atomically across all dependent tables. [oldKey] is the stored eventKey as returned
+     * by listEvents (which now returns the raw stored key directly — no year+code building).
      */
     fun renameEvent(oldKey: String, event: EventRecord): EventRecord {
         return transaction {
             val oldNorm = oldKey.lowercase().trim()
+            // New key is exactly what the user typed — no year prefixing
             val newNorm = event.eventKey.lowercase().trim()
             val newCode = event.eventCode ?: newNorm.removePrefix(event.year.toString())
             val now = Instant.now()
 
+            // Direct lookup by stored key
             val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq oldNorm }.limit(1).firstOrNull()
                 ?: throw com.obsidianscout.auth.ApiException(
                     io.ktor.http.HttpStatusCode.NotFound,
                     "Event not found: $oldNorm"
                 )
 
-            // If the key is actually changing, check for collision
-            if (oldNorm != newNorm) {
+            // The key that was actually stored in this row (may differ from oldNorm for legacy rows)
+            val rawStoredKey = existing[ApiEvents.eventKey]
+
+            // Collision check for the new key (skip if same as old stored key)
+            if (rawStoredKey != newNorm) {
                 val collision = ApiEvents.selectAll().where { ApiEvents.eventKey eq newNorm }.limit(1).firstOrNull()
                 if (collision != null) {
                     throw com.obsidianscout.auth.ApiException(
@@ -793,7 +803,7 @@ object IntegrationService {
                 }
             }
 
-            // Update the canonical event record
+            // Update the canonical event record with the normalized key
             ApiEvents.update({ ApiEvents.id eq existing[ApiEvents.id] }) {
                 it[ApiEvents.eventKey] = newNorm
                 it[ApiEvents.year] = event.year
@@ -806,26 +816,24 @@ object IntegrationService {
                 it[ApiEvents.updatedAt] = now
             }
 
-            // Propagate key rename to all dependent tables (only needed when the key actually changes)
-            if (oldNorm != newNorm) {
-                ApiTeams.update({ ApiTeams.eventKey eq oldNorm }) {
+            // Propagate key rename across all dependent tables using the RAW stored key
+            // (which may be the legacy bare key, the old norm, or the new norm if unchanged)
+            if (rawStoredKey != newNorm) {
+                ApiTeams.update({ ApiTeams.eventKey eq rawStoredKey }) {
                     it[ApiTeams.eventKey] = newNorm
                 }
-                ApiMatches.update({ ApiMatches.eventKey eq oldNorm }) {
+                ApiMatches.update({ ApiMatches.eventKey eq rawStoredKey }) {
                     it[ApiMatches.eventKey] = newNorm
-                    // Also rewrite match keys that embed the event key (format: "<eventKey>_<compLevel><number>")
-                    // We do a separate per-row update below.
                 }
-                // Rewrite match keys that embed the old event key prefix
+                // Rewrite match keys that embed the old event key as a prefix
                 val affectedMatches = ApiMatches.selectAll().where { ApiMatches.eventKey eq newNorm }.toList()
                 for (mRow in affectedMatches) {
                     val oldMatchKey = mRow[ApiMatches.matchKey]
-                    if (oldMatchKey.startsWith(oldNorm)) {
-                        val newMatchKey = newNorm + oldMatchKey.removePrefix(oldNorm)
+                    if (oldMatchKey.startsWith(rawStoredKey)) {
+                        val newMatchKey = newNorm + oldMatchKey.removePrefix(rawStoredKey)
                         ApiMatches.update({ ApiMatches.matchKey eq oldMatchKey }) {
                             it[ApiMatches.matchKey] = newMatchKey
                         }
-                        // Cascade to scouting entries that reference the old match key
                         ScoutingEntries.update({ ScoutingEntries.matchKey eq oldMatchKey }) {
                             it[ScoutingEntries.matchKey] = newMatchKey
                         }
@@ -834,22 +842,22 @@ object IntegrationService {
                         }
                     }
                 }
-                ScoutingEntries.update({ ScoutingEntries.eventKey eq oldNorm }) {
+                ScoutingEntries.update({ ScoutingEntries.eventKey eq rawStoredKey }) {
                     it[ScoutingEntries.eventKey] = newNorm
                 }
-                PitScoutingEntries.update({ PitScoutingEntries.eventKey eq oldNorm }) {
+                PitScoutingEntries.update({ PitScoutingEntries.eventKey eq rawStoredKey }) {
                     it[PitScoutingEntries.eventKey] = newNorm
                 }
-                QualitativeScoutingEntries.update({ QualitativeScoutingEntries.eventKey eq oldNorm }) {
+                QualitativeScoutingEntries.update({ QualitativeScoutingEntries.eventKey eq rawStoredKey }) {
                     it[QualitativeScoutingEntries.eventKey] = newNorm
                 }
-                EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq oldNorm }) {
+                EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq rawStoredKey }) {
                     it[EpaOprHistoryCache.eventKey] = newNorm
                 }
-                AllianceSelections.update({ AllianceSelections.eventKey eq oldNorm }) {
+                AllianceSelections.update({ AllianceSelections.eventKey eq rawStoredKey }) {
                     it[AllianceSelections.eventKey] = newNorm
                 }
-                ScoutingAlliances.update({ ScoutingAlliances.eventKey eq oldNorm }) {
+                ScoutingAlliances.update({ ScoutingAlliances.eventKey eq rawStoredKey }) {
                     it[ScoutingAlliances.eventKey] = newNorm
                 }
             }

@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 let originalMainContentHTML = "";
 let mainContentWrapper = null;
 let mainContent = null;
@@ -119,7 +124,7 @@ function initEventFilter(state) {
     eventFilter.innerHTML = "";
     const allOption = document.createElement("option");
     allOption.value = "";
-    allOption.textContent = "All events";
+    allOption.textContent = t('graphs.all_events', "All events");
     eventFilter.appendChild(allOption);
     (state.events || []).forEach((event) => {
         const option = document.createElement("option");
@@ -287,7 +292,7 @@ function updateTeamList(state) {
     if (!teams.length) {
         const empty = document.createElement("p");
         empty.className = "notice";
-        empty.textContent = "No teams found for this event yet.";
+        empty.textContent = t('graphs.no_teams_found', "No teams found for this event yet.");
         list.appendChild(empty);
         updateSelectionSummary(state);
         return;
@@ -618,7 +623,7 @@ function appendPlotlyBarCard(container, titleText, series, noticeText, options =
     if (!series.length) {
         const empty = document.createElement("p");
         empty.className = "notice";
-        empty.textContent = "No data yet.";
+        empty.textContent = t('graphs.no_data_yet', "No data yet.");
         card.appendChild(empty);
         container.appendChild(card);
         return;

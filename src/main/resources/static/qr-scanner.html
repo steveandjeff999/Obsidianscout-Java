@@ -34,14 +34,14 @@
             <div class="scanner-container-grid">
                 <!-- Camera and Controls Card -->
                 <div class="card scanner-video-card">
-                    <h1>QR Code Scanner</h1>
-                    <p class="notice">Select your camera, click "Start Scanning", and hold the QR code in front of the lens.</p>
+                    <h1 data-i18n="qr-scanner.qr_code_scanner">QR Code Scanner</h1>
+                    <p class="notice" data-i18n="qr-scanner.select_your_camera_click_start">Select your camera, click "Start Scanning", and hold the QR code in front of the lens.</p>
                     
                     <!-- Camera Warning Banner -->
                     <div class="alert alert-warning" style="display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: var(--radius-sm); background: rgba(243, 156, 18, 0.1); border: 1px solid rgba(243, 156, 18, 0.3); color: #d35400; font-size: 13px; line-height: 1.4; margin-bottom: 16px;">
                         <span style="font-size: 16px;">⚠️</span>
                         <div>
-                            <strong>Camera Quality Notice:</strong> This scanner processes highly dense data. It requires a clear, well-focused camera feed to scan successfully. If you have webcam quality issues, please use the **Paste QR Data** section below.
+                            <strong data-i18n="qr-scanner.camera_quality_notice">Camera Quality Notice:</strong> This scanner processes highly dense data. It requires a clear, well-focused camera feed to scan successfully. If you have webcam quality issues, please use the **Paste QR Data** section below.
                         </div>
                     </div>
 
@@ -51,30 +51,30 @@
 
                     <div class="scanner-controls">
                         <div class="field">
-                            <label for="camera-select">Camera Source</label>
+                            <label for="camera-select" data-i18n="qr-scanner.camera_source">Camera Source</label>
                             <select id="camera-select">
-                                <option value="">Detecting cameras...</option>
+                                <option value="" data-i18n="qr-scanner.detecting_cameras">Detecting cameras...</option>
                             </select>
                         </div>
                         <div class="row gap-12 wrap">
-                            <button id="btn-toggle-scan" class="btn" type="button">Start Scanning</button>
+                            <button id="btn-toggle-scan" class="btn" type="button" data-i18n="qr-scanner.start_scanning">Start Scanning</button>
                         </div>
                     </div>
 
                     <div class="scanner-import-section mt-18" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 16px;">
-                        <label>Import JSON or Paste QR Data</label>
-                        <p class="notice" style="margin-bottom: 8px;">Upload scout JSON files or paste QR/JSON data directly below.</p>
+                        <label data-i18n="qr-scanner.import_json_or_paste_qr_data">Import JSON or Paste QR Data</label>
+                        <p class="notice" style="margin-bottom: 8px;" data-i18n="qr-scanner.upload_scout_json_files_or_pas">Upload scout JSON files or paste QR/JSON data directly below.</p>
                         
                         <div class="import-dropzone" id="import-dropzone" style="margin-bottom: 12px;">
                             <span class="import-icon">📥</span>
-                            <span class="import-text">Select JSON files or drag them here</span>
-                            <span class="import-subtext">Supports single or multiple scout JSON file imports</span>
+                            <span class="import-text" data-i18n="qr-scanner.select_json_files_or_drag_them">Select JSON files or drag them here</span>
+                            <span class="import-subtext" data-i18n="qr-scanner.supports_single_or_multiple_sc">Supports single or multiple scout JSON file imports</span>
                             <input type="file" id="import-file-input" accept=".json" multiple class="sr-only" />
                         </div>
 
                         <div class="field">
-                            <textarea id="paste-input" placeholder="Paste QR Code data (e.g. OSC:...) or raw JSON scout export here..." style="width: 100%; height: 80px; resize: vertical; font-family: monospace; font-size: 12px; margin-bottom: 8px; border-radius: var(--radius-sm); border: 1px solid rgba(0,0,0,0.15); padding: 8px; background: var(--bg-card); color: var(--text);"></textarea>
-                            <button id="btn-submit-paste" class="btn secondary" style="width: 100%;" type="button">Import Pasted Data</button>
+                            <textarea id="paste-input" data-i18n-placeholder="qr-scanner.placeholder_paste_qr_code_data_eg_osc_or_r" placeholder="Paste QR Code data (e.g. OSC:...) or raw JSON scout export here..." style="width: 100%; height: 80px; resize: vertical; font-family: monospace; font-size: 12px; margin-bottom: 8px; border-radius: var(--radius-sm); border: 1px solid rgba(0,0,0,0.15); padding: 8px; background: var(--bg-card); color: var(--text);"></textarea>
+                            <button id="btn-submit-paste" class="btn secondary" style="width: 100%;" type="button" data-i18n="qr-scanner.import_pasted_data">Import Pasted Data</button>
                         </div>
                     </div>
                 </div>
@@ -82,18 +82,18 @@
                 <!-- Queue / Sync Card -->
                 <div class="card scanner-queue-card">
                     <div class="scanner-queue-header">
-                        <h2>Scanned Queue</h2>
-                        <span id="queue-count-badge" class="badge">0 items</span>
+                        <h2 data-i18n="qr-scanner.scanned_queue">Scanned Queue</h2>
+                        <span id="queue-count-badge" class="badge" data-i18n="qr-scanner.0_items">0 items</span>
                     </div>
-                    <p class="notice">Decoded scouting entries will stack here. Upload them once you have connection.</p>
+                    <p class="notice" data-i18n="qr-scanner.decoded_scouting_entries_will_">Decoded scouting entries will stack here. Upload them once you have connection.</p>
                     
                     <div class="scanner-queue-list" id="queue-list-container">
-                        <div class="notice" id="empty-queue-notice" style="text-align: center; padding: 24px;">No items scanned yet. Ready to receive data.</div>
+                        <div class="notice" id="empty-queue-notice" style="text-align: center; padding: 24px;" data-i18n="qr-scanner.no_items_scanned_yet_ready_to_">No items scanned yet. Ready to receive data.</div>
                     </div>
 
                     <div class="row gap-12 wrap" style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 16px;">
-                        <button id="btn-upload-queue" class="btn" type="button" disabled>Upload Queue</button>
-                        <button id="btn-clear-queue" class="btn ghost" type="button">Clear Queue</button>
+                        <button id="btn-upload-queue" class="btn" type="button" disabled data-i18n="qr-scanner.upload_queue">Upload Queue</button>
+                        <button id="btn-clear-queue" class="btn ghost" type="button" data-i18n="qr-scanner.clear_queue">Clear Queue</button>
                     </div>
                 </div>
             </div>

@@ -19,6 +19,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.network.tls.certificates.generateCertificate
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
+import io.ktor.server.application.call
+import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.install
 import io.ktor.server.engine.applicationEngineEnvironment
 import io.ktor.server.engine.connector
@@ -26,7 +28,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.engine.sslConnector
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.callloging.CallLogging
-import io.ktor.server.plugins.compression.Compression
+import io.ktor.server.plugins.compression.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.plugins.statuspages.StatusPages
@@ -45,6 +47,14 @@ import javax.net.ssl.SSLException
 import javax.net.ssl.SSLHandshakeException
 import java.io.File
 import java.security.KeyStore
+import io.ktor.server.response.ApplicationSendPipeline
+import io.ktor.util.AttributeKey
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.ContinuationInterceptor
+
+private val OriginalDispatcherKey = AttributeKey<CoroutineDispatcher>("OriginalDispatcher")
 
 fun main() {
     val appConfig = AppConfigLoader.load()
@@ -78,7 +88,7 @@ fun main() {
             addLast("ssl-connection-closer", object : ChannelInboundHandlerAdapter() {
                 @Suppress("OVERRIDE_DEPRECATION")
                 override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-                    if (cause.isIgnorableException()) {
+                    if (cause.isSslException()) {
                         ctx.close()
                         return
                     }
@@ -90,6 +100,18 @@ fun main() {
 }
 
 fun Application.module(appConfig: AppConfig) {
+    intercept(ApplicationCallPipeline.Setup) {
+        val dispatcher = coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher ?: Dispatchers.Default
+        call.attributes.put(OriginalDispatcherKey, dispatcher)
+    }
+
+    sendPipeline.intercept(ApplicationSendPipeline.Before) {
+        val dispatcher = call.attributes.getOrNull(OriginalDispatcherKey) ?: Dispatchers.Default
+        withContext(dispatcher) {
+            proceed()
+        }
+    }
+
     install(com.obsidianscout.utils.ServerTimingPlugin)
     install(DefaultHeaders)
     install(WebSockets) {
@@ -98,9 +120,37 @@ fun Application.module(appConfig: AppConfig) {
         maxFrameSize = Long.MAX_VALUE
         masking = false
     }
-    install(Compression)
+    install(Compression) {
+        gzip {
+            condition {
+                !request.path().startsWith("/api")
+            }
+        }
+        deflate {
+            condition {
+                !request.path().startsWith("/api")
+            }
+        }
+    }
     install(CallLogging) {
-        filter { call -> call.request.path().startsWith("/api") }
+        filter { call -> 
+            if (appConfig.server.logging) true 
+            else call.request.path().startsWith("/api") 
+        }
+    }
+    if (appConfig.server.logging) {
+        intercept(io.ktor.server.application.ApplicationCallPipeline.Setup) {
+            val path = call.request.path()
+            val method = call.request.local.method.value
+            val id = java.util.UUID.randomUUID().toString().take(8)
+            println("[Request Start] [$id] $method $path")
+            try {
+                proceed()
+            } finally {
+                val status = call.response.status()
+                println("[Request End] [$id] $method $path -> ${status?.value ?: "Aborted/Connection Reset"}")
+            }
+        }
     }
     install(ContentNegotiation) {
         json(JsonSupport.json)
@@ -215,6 +265,17 @@ private fun Throwable.isIgnorableException(): Boolean {
             ) {
                 return true
             }
+        }
+        current = current.cause
+    }
+    return false
+}
+
+private fun Throwable.isSslException(): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is SSLHandshakeException || current is SSLException) {
+            return true
         }
         current = current.cause
     }

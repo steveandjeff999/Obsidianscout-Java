@@ -32,41 +32,41 @@
 
         <main class="main-content">
             <div class="card">
-                <h1>Qualitative Prescouting</h1>
-                <p class="notice">Enter an event code, load the teams/matches, then fill in the form driven by config JSON.</p>
+                <h1 data-i18n="prescout-qual.qualitative_prescouting">Qualitative Prescouting</h1>
+                <p class="notice" data-i18n="prescout-qual.enter_an_event_code_load_the_t">Enter an event code, load the teams/matches, then fill in the form driven by config JSON.</p>
 
                 <div class="split mb-18">
                     <div class="field">
-                        <label for="event-code-input">Event Code</label>
+                        <label for="event-code-input" data-i18n="prescout-pit.event_code">Event Code</label>
                         <div class="row gap-8">
-                            <input id="event-code-input" type="text" placeholder="e.g. 2024micmp" style="min-width: 140px;" />
-                            <button id="load-event-btn" class="btn" type="button">Load</button>
+                            <input id="event-code-input" type="text" data-i18n-placeholder="prescout-pit.placeholder_eg_2024micmp" placeholder="e.g. 2024micmp" style="min-width: 140px;" />
+                            <button id="load-event-btn" class="btn" type="button" data-i18n="prescout-pit.load">Load</button>
                         </div>
                     </div>
                     <div class="field">
-                        <label for="team-select">Team</label>
+                        <label for="team-select" data-i18n="all-data.team">Team</label>
                         <select id="team-select" disabled></select>
                     </div>
                     <div class="field">
-                        <label for="match-select">Match</label>
+                        <label for="match-select" data-i18n="matches.match">Match</label>
                         <select id="match-select" class="select-wide" disabled></select>
                     </div>
                     <div class="field">
-                        <label>Timezone</label>
+                        <label data-i18n="dashboard.timezone">Timezone</label>
                         <div id="timezone-badge" class="badge">--</div>
                     </div>
                 </div>
 
                 <form id="qual-scouting-form" class="form-grid">
-                    <div id="form-blocked" class="notice">Enter an event code and click Load, then select a team and match to start scouting.</div>
+                    <div id="form-blocked" class="notice" data-i18n="prescout-qual.enter_an_event_code_and_click_">Enter an event code and click Load, then select a team and match to start scouting.</div>
                     <div id="form-fields" class="form-grid"></div>
 
                     <div class="row gap-12 wrap">
-                        <button id="qual-submit" class="btn" type="submit" disabled>Save entry</button>
-                        <button id="qual-save-offline" class="btn secondary" type="button" disabled>Save Offline</button>
-                        <button id="qual-export-json" class="btn secondary" type="button" disabled>Export JSON</button>
-                        <button id="qual-gen-qr" class="btn secondary" type="button" disabled>Generate QR</button>
-                        <button id="qual-clear" class="btn ghost" type="button" disabled>Clear form</button>
+                        <button id="qual-submit" class="btn" type="submit" disabled data-i18n="scout.save_entry">Save entry</button>
+                        <button id="qual-save-offline" class="btn secondary" type="button" disabled data-i18n="scout.save_offline">Save Offline</button>
+                        <button id="qual-export-json" class="btn secondary" type="button" disabled data-i18n="pit-scout.export_json">Export JSON</button>
+                        <button id="qual-gen-qr" class="btn secondary" type="button" disabled data-i18n="pit-scout.generate_qr">Generate QR</button>
+                        <button id="qual-clear" class="btn ghost" type="button" disabled data-i18n="scout.clear_form">Clear form</button>
                     </div>
                 </form>
             </div>

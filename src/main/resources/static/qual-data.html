@@ -93,9 +93,9 @@
 
             <div class="card">
 
-                <h1>Qualitative performance center</h1>
+                <h1 data-i18n="qual-data.qualitative_performance_center">Qualitative performance center</h1>
 
-                <p class="notice">Analyze qualitative scouting across matches with configurable team rankings, metric-specific trends, and full entry drill-down.</p>
+                <p class="notice" data-i18n="qual-data.analyze_qualitative_scouting_a">Analyze qualitative scouting across matches with configurable team rankings, metric-specific trends, and full entry drill-down.</p>
 
 
 
@@ -103,7 +103,7 @@
 
                     <div>
 
-                        <h4>Entries</h4>
+                        <h4 data-i18n="dashboard.entries">Entries</h4>
 
                         <div id="qual-total-entries" class="metric-value">0</div>
 
@@ -111,7 +111,7 @@
 
                     <div>
 
-                        <h4>Teams Ranked</h4>
+                        <h4 data-i18n="qual-data.teams_ranked">Teams Ranked</h4>
 
                         <div id="qual-total-teams" class="metric-value">0</div>
 
@@ -119,7 +119,7 @@
 
                     <div>
 
-                        <h4>Ranking Metric</h4>
+                        <h4 data-i18n="qual-data.ranking_metric">Ranking Metric</h4>
 
                         <div id="qual-metric-summary" class="metric-value">--</div>
 
@@ -127,7 +127,7 @@
 
                     <div>
 
-                        <h4>Last Update</h4>
+                        <h4 data-i18n="pit-data.last_update">Last Update</h4>
 
                         <div id="qual-last-updated" class="metric-value text-compact">--</div>
 
@@ -145,7 +145,7 @@
 
                     <div class="field">
 
-                        <label for="qual-event-filter">Event</label>
+                        <label for="qual-event-filter" data-i18n="events.event">Event</label>
 
                         <select id="qual-event-filter" class="select-wide"></select>
 
@@ -153,15 +153,15 @@
 
                     <div class="field">
 
-                        <label for="qual-team-search">Team search</label>
+                        <label for="qual-team-search" data-i18n="qual-data.team_search">Team search</label>
 
-                        <input id="qual-team-search" type="search" placeholder="Team number or nickname" />
+                        <input id="qual-team-search" type="search" data-i18n-placeholder="qual-data.placeholder_team_number_or_nickname" placeholder="Team number or nickname" />
 
                     </div>
 
                     <div class="field">
 
-                        <label for="qual-rank-metric">Rank by metric</label>
+                        <label for="qual-rank-metric" data-i18n="qual-data.rank_by_metric">Rank by metric</label>
 
                         <select id="qual-rank-metric" class="select-wide"></select>
 
@@ -169,19 +169,19 @@
 
                     <div class="field">
 
-                        <label for="qual-rank-aggregate">Aggregation</label>
+                        <label for="qual-rank-aggregate" data-i18n="qual-data.aggregation">Aggregation</label>
 
                         <select id="qual-rank-aggregate" class="select-wide">
 
-                            <option value="avg">Average</option>
+                            <option value="avg" data-i18n="qual-data.average">Average</option>
 
-                            <option value="median">Median</option>
+                            <option value="median" data-i18n="qual-data.median">Median</option>
 
-                            <option value="latest">Latest</option>
+                            <option value="latest" data-i18n="qual-data.latest">Latest</option>
 
-                            <option value="max">Max</option>
+                            <option value="max" data-i18n="settings.max">Max</option>
 
-                            <option value="min">Min</option>
+                            <option value="min" data-i18n="settings.min">Min</option>
 
                         </select>
 
@@ -189,7 +189,7 @@
 
                     <div class="field">
 
-                        <label for="qual-min-entries">Min entries per team</label>
+                        <label for="qual-min-entries" data-i18n="qual-data.min_entries_per_team">Min entries per team</label>
 
                         <input id="qual-min-entries" type="number" min="1" value="1" />
 
@@ -197,21 +197,21 @@
 
                     <div class="field">
 
-                        <label for="qual-entry-sort">Entry sort</label>
+                        <label for="qual-entry-sort" data-i18n="qual-data.entry_sort">Entry sort</label>
 
                         <select id="qual-entry-sort" class="select-wide">
 
-                            <option value="createdAt-desc">Newest first</option>
+                            <option value="createdAt-desc" data-i18n="qual-data.newest_first">Newest first</option>
 
-                            <option value="createdAt-asc">Oldest first</option>
+                            <option value="createdAt-asc" data-i18n="qual-data.oldest_first">Oldest first</option>
 
-                            <option value="metric-desc">Metric high to low</option>
+                            <option value="metric-desc" data-i18n="qual-data.metric_high_to_low">Metric high to low</option>
 
-                            <option value="metric-asc">Metric low to high</option>
+                            <option value="metric-asc" data-i18n="qual-data.metric_low_to_high">Metric low to high</option>
 
-                            <option value="team-asc">Team number</option>
+                            <option value="team-asc" data-i18n="qual-data.team_number">Team number</option>
 
-                            <option value="match-asc">Match number</option>
+                            <option value="match-asc" data-i18n="qual-data.match_number">Match number</option>
 
                         </select>
 
@@ -219,7 +219,7 @@
 
                     <div class="field">
 
-                        <label>Pending entries</label>
+                        <label data-i18n="qual-data.pending_entries">Pending entries</label>
 
                         <label class="inline-control">
 
@@ -235,9 +235,9 @@
 
                 <div class="row gap-12 wrap mt-18">
 
-                    <button id="qual-reset-filters" class="btn ghost" type="button">Reset filters</button>
+                    <button id="qual-reset-filters" class="btn ghost" type="button" data-i18n="qual-data.reset_filters">Reset filters</button>
 
-                    <span id="qual-filter-status" class="badge">Showing all teams</span>
+                    <span id="qual-filter-status" class="badge" data-i18n="pit-data.showing_all_teams">Showing all teams</span>
 
                 </div>
 
@@ -251,9 +251,9 @@
 
                     <div class="row justify-between align-center wrap gap-12">
 
-                        <h2 class="section-title">Team ranking</h2>
+                        <h2 class="section-title" data-i18n="qual-data.team_ranking">Team ranking</h2>
 
-                        <span id="qual-rank-count" class="badge">0 teams</span>
+                        <span id="qual-rank-count" class="badge" data-i18n="pit-data.0_teams">0 teams</span>
 
                     </div>
 
@@ -265,19 +265,19 @@
 
                                 <tr>
 
-                                    <th>Rank</th>
+                                    <th data-i18n="qual-data.rank">Rank</th>
 
-                                    <th>Team</th>
+                                    <th data-i18n="all-data.team">Team</th>
 
-                                    <th>Score</th>
+                                    <th data-i18n="qual-data.score">Score</th>
 
-                                    <th>Entries</th>
+                                    <th data-i18n="dashboard.entries">Entries</th>
 
                                     <th>Matches</th>
 
-                                    <th>Trend</th>
+                                    <th data-i18n="qual-data.trend">Trend</th>
 
-                                    <th>Updated</th>
+                                    <th data-i18n="pitdata.updated">Updated</th>
 
                                 </tr>
 
@@ -297,15 +297,15 @@
 
                     <div class="row justify-between align-center wrap gap-12">
 
-                        <h2 id="qual-team-title" class="section-title">Select a team</h2>
+                        <h2 id="qual-team-title" class="section-title" data-i18n="pitdata.select_team">Select a team</h2>
 
-                        <span id="qual-team-status" class="badge">No team selected</span>
+                        <span id="qual-team-status" class="badge" data-i18n="pitdata.no_team_selected">No team selected</span>
 
                     </div>
 
                     <div id="qual-team-detail" class="pit-detail mt-12">
 
-                        <p class="notice">Choose a ranked team to inspect match-by-match qualitative performance.</p>
+                        <p class="notice" data-i18n="qual-data.choose_a_ranked_team_to_inspec">Choose a ranked team to inspect match-by-match qualitative performance.</p>
 
                     </div>
 
@@ -321,9 +321,9 @@
 
                     <div class="row justify-between align-center wrap gap-12">
 
-                        <h2 class="section-title">Entry list</h2>
+                        <h2 class="section-title" data-i18n="qual-data.entry_list">Entry list</h2>
 
-                        <span id="qual-entry-count" class="badge">0 entries</span>
+                        <span id="qual-entry-count" class="badge" data-i18n="all-data.0_entries">0 entries</span>
 
                     </div>
 
@@ -335,15 +335,15 @@
 
                                 <tr>
 
-                                    <th>Team</th>
+                                    <th data-i18n="all-data.team">Team</th>
 
-                                    <th>Match</th>
+                                    <th data-i18n="matches.match">Match</th>
 
-                                    <th>Metric</th>
+                                    <th data-i18n="graphs.metric">Metric</th>
 
-                                    <th>Updated</th>
+                                    <th data-i18n="pitdata.updated">Updated</th>
 
-                                    <th>State</th>
+                                    <th data-i18n="qual-data.state">State</th>
 
                                 </tr>
 
@@ -363,15 +363,15 @@
 
                     <div class="row justify-between align-center wrap gap-12">
 
-                        <h2 id="qual-entry-title" class="section-title">Select an entry</h2>
+                        <h2 id="qual-entry-title" class="section-title" data-i18n="all-data.select_an_entry">Select an entry</h2>
 
-                        <span id="qual-entry-status" class="badge">No entry selected</span>
+                        <span id="qual-entry-status" class="badge" data-i18n="all-data.no_entry_selected">No entry selected</span>
 
                     </div>
 
                     <div id="qual-entry-detail" class="pit-detail mt-12">
 
-                        <p class="notice">Select an entry row to inspect complete qualitative values and notes.</p>
+                        <p class="notice" data-i18n="qual-data.select_an_entry_row_to_inspect">Select an entry row to inspect complete qualitative values and notes.</p>
 
                     </div>
 

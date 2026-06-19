@@ -1,3 +1,8 @@
+
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -267,7 +272,7 @@ function renderRankingTable(state, ui) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
         cell.colSpan = 7;
-        cell.textContent = "No teams match the current ranking filters.";
+        cell.textContent = t('qual_data.no_teams_match', "No teams match the current ranking filters.");
         row.appendChild(cell);
         ui.rankBody.appendChild(row);
         return;
@@ -320,8 +325,8 @@ function renderTeamDetail(state, ui) {
     const rowData = state.rankRows.find((row) => row.teamNumber === teamNumber);
 
     if (!rowData) {
-        ui.teamTitle.textContent = "Select a team";
-        ui.teamStatus.textContent = "No team selected";
+        ui.teamTitle.textContent = t('qual_data.select_team', "Select a team");
+        ui.teamStatus.textContent = t('qual_data.no_team_selected', "No team selected");
         const notice = document.createElement("p");
         notice.className = "notice";
         notice.textContent = "Choose a ranked team to inspect match-by-match qualitative performance.";
@@ -335,7 +340,7 @@ function renderTeamDetail(state, ui) {
     const summary = document.createElement("div");
     summary.className = "pit-detail-group";
     const summaryTitle = document.createElement("h3");
-    summaryTitle.textContent = "Performance summary";
+    summaryTitle.textContent = t('qual_data.performance_summary', "Performance summary");
     summary.appendChild(summaryTitle);
 
     const consistency = rowData.consistency !== null ? `${formatNumeric(rowData.consistency)} stdev` : "--";
@@ -357,13 +362,13 @@ function renderTeamDetail(state, ui) {
     const matchGroup = document.createElement("div");
     matchGroup.className = "pit-detail-group";
     const matchTitle = document.createElement("h3");
-    matchTitle.textContent = "Match-by-match";
+    matchTitle.textContent = t('qual_data.match_by_match', "Match-by-match");
     matchGroup.appendChild(matchTitle);
 
     if (!byMatch.length) {
         const empty = document.createElement("p");
         empty.className = "notice";
-        empty.textContent = "No match records available for this team under current filters.";
+        empty.textContent = t('qual_data.no_match_records', "No match records available for this team under current filters.");
         matchGroup.appendChild(empty);
     } else {
         byMatch.forEach((item) => {
@@ -378,7 +383,7 @@ function renderTeamDetail(state, ui) {
     const notesGroup = document.createElement("div");
     notesGroup.className = "pit-detail-group";
     const notesTitle = document.createElement("h3");
-    notesTitle.textContent = "Recent notes";
+    notesTitle.textContent = t('qual_data.recent_notes', "Recent notes");
     notesGroup.appendChild(notesTitle);
 
     if (!notes.length) {
@@ -398,8 +403,8 @@ function renderEntrySection(state, ui) {
     ui.entryCount.textContent = `${entries.length} ${entries.length === 1 ? "entry" : "entries"}`;
 
     if (!entries.length) {
-        ui.entryTitle.textContent = "Select an entry";
-        ui.entryStatus.textContent = "No entry selected";
+        ui.entryTitle.textContent = t('qual_data.select_entry', "Select an entry");
+        ui.entryStatus.textContent = t('qual_data.no_entry_selected', "No entry selected");
         ui.entryDetail.innerHTML = "";
         const notice = document.createElement("p");
         notice.className = "notice";
@@ -409,7 +414,7 @@ function renderEntrySection(state, ui) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
         cell.colSpan = 5;
-        cell.textContent = "No entries for the selected team.";
+        cell.textContent = t('qual_data.no_entries_selected_team', "No entries for the selected team.");
         row.appendChild(cell);
         ui.entryBody.appendChild(row);
         return;
@@ -460,8 +465,8 @@ function renderEntryDetail(state, ui, entry) {
     ui.entryDetail.innerHTML = "";
 
     if (!entry) {
-        ui.entryTitle.textContent = "Select an entry";
-        ui.entryStatus.textContent = "No entry selected";
+        ui.entryTitle.textContent = t('qual_data.select_entry', "Select an entry");
+        ui.entryStatus.textContent = t('qual_data.no_entry_selected', "No entry selected");
         const notice = document.createElement("p");
         notice.className = "notice";
         notice.textContent = "Select an entry row to inspect complete qualitative values and notes.";
@@ -493,7 +498,7 @@ function renderEntryDetail(state, ui, entry) {
     const metaGroup = document.createElement("div");
     metaGroup.className = "pit-detail-group";
     const metaTitle = document.createElement("h3");
-    metaTitle.textContent = "Entry metadata";
+    metaTitle.textContent = t('qual_data.entry_metadata', "Entry metadata");
     metaGroup.appendChild(metaTitle);
 
     const metaRows = [
@@ -909,7 +914,7 @@ function populateEventFilter(state, select) {
 
     const allOption = document.createElement("option");
     allOption.value = "all";
-    allOption.textContent = "All events";
+    allOption.textContent = t('qual_data.all_events', "All events");
     select.appendChild(allOption);
 
     state.events.forEach((event) => {
@@ -990,7 +995,7 @@ async function loadTeamMapForEvent(state) {
 
 function summarizeFilterStatus(state) {
     const parts = [];
-    parts.push(state.selectedEvent === "all" ? "All events" : state.selectedEvent);
+    parts.push(state.selectedEvent === "all" ? t('qual_data.all_events', "All events") : state.selectedEvent);
     parts.push(`Metric: ${metricById(state, state.selectedMetric).label}`);
     parts.push(`Aggregate: ${aggregateLabel(state.aggregateMode)}`);
     parts.push(`Min entries: ${state.minEntries}`);

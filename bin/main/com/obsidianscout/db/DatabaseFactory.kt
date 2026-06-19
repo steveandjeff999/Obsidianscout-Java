@@ -42,16 +42,20 @@ object DatabaseFactory {
             } else {
                 "org.sqlite.JDBC"
             }
-            maximumPoolSize = 20
-            minimumIdle = 2
-            connectionTimeout = 10_000  // fail fast after 10s instead of the 30s default
-            isAutoCommit = false
-            leakDetectionThreshold = 5000L
             if (type == "postgres") {
+                maximumPoolSize = 20
+                minimumIdle = 2
+                isAutoCommit = true
                 username = config.postgres.user
                 password = config.postgres.password
                 transactionIsolation = "TRANSACTION_READ_COMMITTED"
+            } else {
+                maximumPoolSize = 1
+                minimumIdle = 1
+                isAutoCommit = true
             }
+            connectionTimeout = 10_000  // fail fast after 10s instead of the 30s default
+            leakDetectionThreshold = 5000L
         }
 
         val dataSource = HikariDataSource(hikariConfig)
