@@ -84,18 +84,9 @@ fun main() {
     }
 
     embeddedServer(Netty, environment) {
-        channelPipelineConfig = {
-            addLast("ssl-connection-closer", object : ChannelInboundHandlerAdapter() {
-                @Suppress("OVERRIDE_DEPRECATION")
-                override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-                    if (cause.isSslException()) {
-                        ctx.close()
-                        return
-                    }
-                    ctx.fireExceptionCaught(cause)
-                }
-            })
-        }
+        connectionGroupSize = 2
+        workerGroupSize = 8
+        callGroupSize = 16
     }.start(wait = true)
 }
 
