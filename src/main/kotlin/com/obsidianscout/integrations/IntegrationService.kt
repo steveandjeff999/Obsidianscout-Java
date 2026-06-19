@@ -58,6 +58,68 @@ import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.Base64
 
+
+private val firstWorldDivisionToTba = mapOf(
+    "milstein" to "mil",
+    "curie" to "cur",
+    "archimedes" to "arc",
+    "daly" to "dal",
+    "galileo" to "gal",
+    "hopper" to "hop",
+    "johnson" to "joh",
+    "newton" to "new"
+)
+
+private val tbaWorldDivisionToFirst = firstWorldDivisionToTba.entries.associate { (first, tba) -> tba to first }
+
+internal fun canonicalTbaEventCode(code: String?): String {
+    val normalized = code.orEmpty().trim().lowercase()
+    return firstWorldDivisionToTba[normalized] ?: normalized
+}
+
+internal fun canonicalTbaEventKey(year: Int, eventKeyOrCode: String?): String {
+    val normalized = eventKeyOrCode.orEmpty().trim().lowercase()
+    if (normalized.isBlank()) {
+        return ""
+    }
+    val keyYear = normalized.take(4)
+    return if (keyYear.all { it.isDigit() } && normalized.length > 4) {
+        "$keyYear${canonicalTbaEventCode(normalized.drop(4))}"
+    } else {
+        "$year${canonicalTbaEventCode(normalized)}"
+    }
+}
+
+internal fun canonicalStoredEventKey(year: Int, eventKey: String?): String {
+    val normalized = eventKey.orEmpty().trim().lowercase()
+    if (normalized.isBlank()) {
+        return ""
+    }
+    val keyYear = normalized.take(4)
+    if (keyYear.all { it.isDigit() } && normalized.length > 4) {
+        return canonicalTbaEventKey(year, normalized)
+    }
+    val canonicalCode = canonicalTbaEventCode(normalized)
+    return if (canonicalCode != normalized || tbaWorldDivisionToFirst.containsKey(canonicalCode)) {
+        "$year$canonicalCode"
+    } else {
+        normalized
+    }
+}
+
+internal fun firstEventCodeFor(year: Int, eventCode: String?, eventKey: String?): String {
+    val rawCode = eventCode.orEmpty().trim().ifBlank {
+        val normalizedKey = eventKey.orEmpty().trim()
+        if (normalizedKey.length > 4 && normalizedKey.take(4).all { it.isDigit() }) {
+            normalizedKey.drop(4)
+        } else {
+            normalizedKey
+        }
+    }
+    val canonicalTbaCode = canonicalTbaEventCode(rawCode)
+    return (tbaWorldDivisionToFirst[canonicalTbaCode] ?: canonicalTbaCode).uppercase()
+}
+
 object IntegrationService {
     private val log = LoggerFactory.getLogger("IntegrationService")
     private val client = HttpClient(CIO) {
@@ -81,7 +143,7 @@ object IntegrationService {
     }
 
     suspend fun syncEventData(settings: ApiSettings): SyncCounts {
-        val eventKey = settings.resolvedEventKey()
+        val eventKey = canonicalTbaEventKey(settings.year, settings.resolvedEventKey())
         if (eventKey.isBlank()) {
             return SyncCounts(0, 0)
         }
@@ -176,7 +238,7 @@ object IntegrationService {
     }
 
     suspend fun syncCustomEventData(settings: ApiSettings, eventKey: String): SyncCounts {
-        val key = eventKey.lowercase().trim()
+        val key = canonicalStoredEventKey(settings.year, eventKey)
         if (key.isBlank()) {
             return SyncCounts(0, 0)
         }
@@ -271,12 +333,12 @@ object IntegrationService {
     }
 
     suspend fun syncStats(settings: ApiSettings, customEventKey: String? = null): Int {
-        val eventKey = (customEventKey ?: settings.resolvedEventKey()).lowercase().trim()
+        val eventKey = canonicalStoredEventKey(settings.year, customEventKey ?: settings.resolvedEventKey())
         if (eventKey.isBlank()) {
             return 0
         }
-        val tbaEnabled = settings.useTbaOpr && settings.apiKeys.tbaKey.isNotBlank()
-        val statboticsEnabled = settings.useStatboticsEpa
+        val tbaEnabled = settings.apiKeys.tbaKey.isNotBlank()
+        val statboticsEnabled = true
         val oprs = if (tbaEnabled) {
             fetchTbaOprs(settings, eventKey)
         } else {
@@ -1058,7 +1120,12 @@ object IntegrationService {
             }
         }
         return events
-            .map { it.copy(eventKey = it.eventKey.lowercase()) }
+            .map {
+                it.copy(
+                    eventKey = canonicalTbaEventKey(it.year, it.eventKey),
+                    eventCode = canonicalTbaEventCode(it.eventCode)
+                )
+            }
             .distinctBy { it.eventKey }
     }
 
@@ -1157,7 +1224,7 @@ object IntegrationService {
         if (key.isBlank()) {
             return null
         }
-        val normalizedKey = eventKey.lowercase()
+        val normalizedKey = canonicalTbaEventKey(settings.year, eventKey)
         val url = "https://www.thebluealliance.com/api/v3/event/$normalizedKey"
         return try {
             val element = client.get(url) {
@@ -1216,7 +1283,7 @@ object IntegrationService {
         if (key.isBlank()) {
             return emptyList()
         }
-        val normalizedKey = eventKey.lowercase()
+        val normalizedKey = canonicalTbaEventKey(settings.year, eventKey)
         val url = "https://www.thebluealliance.com/api/v3/event/${normalizedKey}/teams/simple"
         val element = client.get(url) {
             header("X-TBA-Auth-Key", key)
@@ -1246,7 +1313,7 @@ object IntegrationService {
         if (key.isBlank()) {
             return emptyList()
         }
-        val normalizedKey = eventKey.lowercase()
+        val normalizedKey = canonicalTbaEventKey(settings.year, eventKey)
         val url = "https://www.thebluealliance.com/api/v3/event/${normalizedKey}/matches"
         val element = client.get(url) {
             header("X-TBA-Auth-Key", key)
@@ -1282,7 +1349,8 @@ object IntegrationService {
         if (key.isBlank()) {
             return emptyMap()
         }
-        val url = "https://www.thebluealliance.com/api/v3/event/${eventKey}/oprs"
+        val normalizedKey = canonicalTbaEventKey(settings.year, eventKey)
+        val url = "https://www.thebluealliance.com/api/v3/event/${normalizedKey}/oprs"
         return try {
             val element = client.get(url) {
                 header("X-TBA-Auth-Key", key)
@@ -1293,7 +1361,7 @@ object IntegrationService {
                 entry.key to primitive?.content?.toDoubleOrNull().orZero()
             }
         } catch (error: Exception) {
-            log.warn("TBA OPR fetch failed for $eventKey: ${error.message}")
+            log.warn("TBA OPR fetch failed for $normalizedKey: ${error.message}")
             emptyMap()
         }
     }
@@ -1332,7 +1400,7 @@ object IntegrationService {
     }
 
     suspend fun syncEpaOprHistory(settings: ApiSettings, eventKey: String) {
-        val normalizedKey = eventKey.lowercase().trim()
+        val normalizedKey = canonicalStoredEventKey(settings.year, eventKey)
         if (normalizedKey.isBlank()) return
         
         val oprs = fetchTbaOprs(settings, normalizedKey)
@@ -1362,7 +1430,7 @@ object IntegrationService {
     }
 
     fun getEpaOprHistory(settings: ApiSettings, eventKey: String): Pair<Map<String, Double>, List<JsonElement>> {
-        val normalizedKey = eventKey.lowercase().trim()
+        val normalizedKey = canonicalStoredEventKey(settings.year, eventKey)
         val cached = transaction {
             EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
         }
@@ -1416,7 +1484,7 @@ object IntegrationService {
             val obj = item.jsonObject
             val eventCode = obj.readString("code") ?: obj.readString("eventCode")
             val eventKey = if (!eventCode.isNullOrBlank()) {
-                "${settings.year}${eventCode.trim().lowercase()}"
+                canonicalTbaEventKey(settings.year, eventCode)
             } else {
                 return@mapNotNull null
             }
@@ -1649,18 +1717,7 @@ private fun JsonObject.readTeamsByStation(): Pair<List<String>, List<String>> {
     return red to blue
 }
 
-private fun ApiSettings.firstEventCode(eventKey: String): String {
-    val trimmed = eventCode.trim()
-    if (trimmed.isNotBlank()) {
-        return trimmed.uppercase()
-    }
-    val prefix = year.toString()
-    return if (eventKey.lowercase().startsWith(prefix)) {
-        eventKey.drop(prefix.length).uppercase()
-    } else {
-        eventKey.uppercase()
-    }
-}
+private fun ApiSettings.firstEventCode(eventKey: String): String = firstEventCodeFor(year, eventCode, eventKey)
 
 private fun parseFirstMatchItems(
     root: JsonElement,
@@ -1776,11 +1833,11 @@ private const val TIMEZONE_MAX = 64
 private fun resolveEventCode(event: EventSyncRecord): String? {
     val trimmed = event.eventCode?.trim()
     if (!trimmed.isNullOrBlank()) {
-        return trimmed
+        return canonicalTbaEventCode(trimmed)
     }
     val prefix = event.year.toString()
     return if (event.eventKey.startsWith(prefix)) {
-        event.eventKey.drop(prefix.length)
+        canonicalTbaEventCode(event.eventKey.drop(prefix.length))
     } else {
         null
     }
@@ -1788,9 +1845,9 @@ private fun resolveEventCode(event: EventSyncRecord): String? {
 
 private fun resolveEventKey(event: EventSyncRecord, eventCode: String?): String {
     val computed = if (!eventCode.isNullOrBlank()) {
-        "${event.year}${eventCode}".lowercase()
+        canonicalTbaEventKey(event.year, eventCode)
     } else {
-        event.eventKey.lowercase()
+        canonicalTbaEventKey(event.year, event.eventKey)
     }
     return computed.take(EVENT_KEY_MAX)
 }

@@ -189,24 +189,28 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (users.length === 0) return;
                 const pill = document.createElement("span");
                 const hasReacted = users.includes(me.username);
-                pill.className = `reaction-pill ${hasReacted ? "active" : ""}`;
+                pill.className = `reaction-pill ${hasReacted ? "active" : ""} ${isMe ? "readonly" : ""}`;
                 pill.innerHTML = `<span>${emoji}</span><span>${users.length}</span>`;
                 pill.title = users.join(", ");
-                pill.addEventListener("click", () => {
-                    toggleReaction(msg.id, emoji);
-                });
+                if (!isMe) {
+                    pill.addEventListener("click", () => {
+                        toggleReaction(msg.id, emoji);
+                    });
+                }
                 reactionSection.appendChild(pill);
             });
 
-            // Add reaction button
-            const addReactBtn = document.createElement("button");
-            addReactBtn.className = "add-reaction-btn";
-            addReactBtn.textContent = "+";
-            addReactBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                showReactionPicker(addReactBtn, msg.id);
-            });
-            reactionSection.appendChild(addReactBtn);
+            // Add reaction button - only show if it is not my message
+            if (!isMe) {
+                const addReactBtn = document.createElement("button");
+                addReactBtn.className = "add-reaction-btn";
+                addReactBtn.textContent = "+";
+                addReactBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    showReactionPicker(addReactBtn, msg.id);
+                });
+                reactionSection.appendChild(addReactBtn);
+            }
 
             bubble.appendChild(reactionSection);
             row.appendChild(bubble);

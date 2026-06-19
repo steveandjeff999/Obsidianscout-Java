@@ -86,6 +86,9 @@ object ChatService {
 
     fun toggleReaction(id: Int, username: String, emoji: String): ChatMessageDto? = transaction {
         val row = ChatMessages.selectAll().where { ChatMessages.id eq id }.firstOrNull() ?: return@transaction null
+        if (row[ChatMessages.username] == username) {
+            throw IllegalArgumentException("Cannot react to your own message")
+        }
         val currentReactionsJson = row[ChatMessages.reactionsJson]
         val currentReactions: Map<String, List<String>> = try {
             JsonSupport.json.decodeFromString(currentReactionsJson)

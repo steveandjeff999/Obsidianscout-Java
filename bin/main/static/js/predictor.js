@@ -83,6 +83,14 @@ async function loadPredictorData() {
                 datasourceSelect.appendChild(optOpr);
             }
 
+            const datasourceParam = new URLSearchParams(window.location.search).get("datasource");
+            if (datasourceParam) {
+                const validOptions = Array.from(datasourceSelect.options).map(o => o.value);
+                if (validOptions.includes(datasourceParam)) {
+                    datasourceSelect.value = datasourceParam;
+                }
+            }
+
             datasourceSelect.addEventListener("change", () => {
                 if (currentPrediction) {
                     renderPrediction(currentPrediction);
@@ -92,12 +100,24 @@ async function loadPredictorData() {
             datasourceField.classList.add("hidden");
         }
 
-        if (!currentEventKey) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const matchKeyParam = urlParams.get("matchKey");
+        const eventKeyParam = urlParams.get("eventKey");
+        let inferredEventKey = null;
+        if (matchKeyParam) {
+            const regexMatch = matchKeyParam.match(/^([0-9]{4}[a-zA-Z0-9]+)/);
+            if (regexMatch) {
+                inferredEventKey = regexMatch[1];
+            }
+        }
+        const targetEventKey = eventKeyParam || inferredEventKey || currentEventKey;
+
+        if (!targetEventKey) {
             matchSelect.innerHTML = '<option value="">No event configured in settings</option>';
             return;
         }
 
-        const matches = await Obsidianscout.request(`/api/matches?eventKey=${currentEventKey}`);
+        const matches = await Obsidianscout.request(`/api/matches?eventKey=${targetEventKey}`);
         matchSelect.innerHTML = '<option value="">-- Choose a Match --</option>';
         if (matches.length === 0) {
             matchSelect.innerHTML = '<option value="">No matches found for event</option>';
@@ -111,27 +131,68 @@ async function loadPredictorData() {
             matchSelect.appendChild(opt);
         });
 
+        const loadingState = document.getElementById("predictor-loading-state");
+        const loadingText = document.getElementById("predictor-loading-text");
+
         matchSelect.addEventListener("change", async () => {
             const matchKey = matchSelect.value;
             if (!matchKey) {
                 workspace.classList.add("hidden");
                 emptyState.classList.remove("hidden");
+                if (loadingState) loadingState.classList.add("hidden");
                 currentPrediction = null;
                 return;
             }
 
             try {
                 workspace.classList.add("hidden");
-                const prediction = await Obsidianscout.request(`/api/matches/predict?matchKey=${matchKey}`);
+                emptyState.classList.add("hidden");
+                
+                if (loadingState && loadingText) {
+                    const datasourceSelect = document.getElementById("datasource-select");
+                    const selectedSource = (currentSettings && (currentSettings.useStatboticsEpa || currentSettings.useTbaOpr) && datasourceSelect) 
+                        ? datasourceSelect.value 
+                        : "scouted";
+                    
+                    if (selectedSource === "epa" || selectedSource === "opr" || selectedSource === "all") {
+                        loadingText.textContent = t("event_predictor.fetching", "Fetching data from API...");
+                    } else {
+                        loadingText.textContent = t("event_predictor.calculating", "Calculating predictions...");
+                    }
+                    loadingState.classList.remove("hidden");
+                }
+
+                const prediction = await Obsidianscout.request(`/api/matches/predict?matchKey=${matchKey}&eventKey=${targetEventKey}`);
                 currentPrediction = prediction;
                 renderPrediction(prediction);
-                emptyState.classList.add("hidden");
+                
+                if (loadingState) loadingState.classList.add("hidden");
                 workspace.classList.remove("hidden");
             } catch (err) {
                 console.error("Prediction fetch failed", err);
+                if (loadingState) loadingState.classList.add("hidden");
+                emptyState.classList.remove("hidden");
                 Obsidianscout.showToast(err.message || "Failed to load prediction details", "error");
             }
         });
+
+        if (matchKeyParam) {
+            const normalizedKey = matchKeyParam.toLowerCase().trim();
+            let foundVal = null;
+            for (let i = 0; i < matchSelect.options.length; i++) {
+                const optVal = matchSelect.options[i].value.toLowerCase().trim();
+                if (optVal === normalizedKey || optVal.endsWith(normalizedKey) || normalizedKey.endsWith(optVal)) {
+                    foundVal = matchSelect.options[i].value;
+                    break;
+                }
+            }
+            if (foundVal) {
+                matchSelect.value = foundVal;
+                matchSelect.dispatchEvent(new Event("change"));
+            } else {
+                console.warn("Match key option not found in select dropdown:", matchKeyParam);
+            }
+        }
     } catch (error) {
         console.error("Failed to load predictor data:", error);
         Obsidianscout.showRetryButton(mainContentWrapper, "Failed to load predictor data: " + error.message, loadPredictorData);

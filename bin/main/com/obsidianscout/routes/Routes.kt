@@ -872,15 +872,36 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: AllianceService.getEffectiveSettings(session.teamNumber).resolvedEventKey()
-                    call.respond(IntegrationService.listMatches(eventKey))
+                    val eventKeyLower = eventKey.lowercase().trim()
+                    val count = transaction {
+                        com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.eventKey eq eventKeyLower }.count()
+                    }
+                    if (count == 0L) {
+                        val settings = transaction { AllianceService.getEffectiveSettings(session.teamNumber) }
+                        try {
+                            IntegrationService.syncCustomEventData(settings, eventKeyLower)
+                        } catch (e: Exception) {
+                            // ignore or log
+                        }
+                    }
+                    call.respond(IntegrationService.listMatches(eventKeyLower))
                 }
                 get("/predict") {
                     val session = call.requireSession()
                     val matchKey = call.request.queryParameters["matchKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing matchKey parameter")
+                    val eventKey = call.request.queryParameters["eventKey"]
                     val forcePrescout = call.request.queryParameters["usePrescout"]?.toBoolean() ?: false
-                    val prediction = PredictorService.predict(session, matchKey, forcePrescout)
+                    val prediction = PredictorService.predict(session, matchKey, forcePrescout, eventKey)
                     call.respond(prediction)
+                }
+                get("/predict-all") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
+                    val forcePrescout = call.request.queryParameters["usePrescout"]?.toBoolean() ?: false
+                    val predictions = PredictorService.predictAll(session, eventKey, forcePrescout)
+                    call.respond(predictions)
                 }
                 post {
                     call.requireAdmin()
@@ -1113,9 +1134,13 @@ fun Application.configureRoutes() {
                     val id = call.parameters["id"]?.toIntOrNull()
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
                     val request = call.receive<ReactMessageRequest>()
-                    val updated = ChatService.toggleReaction(id, session.username, request.emoji)
-                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
-                    call.respond(updated)
+                    try {
+                        val updated = ChatService.toggleReaction(id, session.username, request.emoji)
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
+                        call.respond(updated)
+                    } catch (e: IllegalArgumentException) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, e.message ?: "Cannot react to your own message")
+                    }
                 }
                 get("/groups") {
                     val session = call.requireSession()
@@ -1425,6 +1450,7 @@ fun Application.configureRoutes() {
             "team" to "team.html",
             "matches" to "matches.html",
             "predictor" to "predictor.html",
+            "event-predictor" to "event-predictor.html",
             "alliances" to "alliances.html",
             "alliance-edit" to "alliance-edit.html",
             "alliance-selection" to "alliance-selection.html",

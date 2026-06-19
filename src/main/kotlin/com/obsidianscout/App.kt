@@ -41,20 +41,10 @@ import io.ktor.server.sessions.SessionProvider
 import com.obsidianscout.auth.KeepMeLoggedInSessionTransport
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.websocket.*
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInboundHandlerAdapter
 import javax.net.ssl.SSLException
 import javax.net.ssl.SSLHandshakeException
 import java.io.File
 import java.security.KeyStore
-import io.ktor.server.response.ApplicationSendPipeline
-import io.ktor.util.AttributeKey
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlin.coroutines.ContinuationInterceptor
-
-private val OriginalDispatcherKey = AttributeKey<CoroutineDispatcher>("OriginalDispatcher")
 
 fun main() {
     val appConfig = AppConfigLoader.load()
@@ -91,18 +81,6 @@ fun main() {
 }
 
 fun Application.module(appConfig: AppConfig) {
-    intercept(ApplicationCallPipeline.Setup) {
-        val dispatcher = coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher ?: Dispatchers.Default
-        call.attributes.put(OriginalDispatcherKey, dispatcher)
-    }
-
-    sendPipeline.intercept(ApplicationSendPipeline.Before) {
-        val dispatcher = call.attributes.getOrNull(OriginalDispatcherKey) ?: Dispatchers.Default
-        withContext(dispatcher) {
-            proceed()
-        }
-    }
-
     install(com.obsidianscout.utils.ServerTimingPlugin)
     install(DefaultHeaders)
     install(WebSockets) {

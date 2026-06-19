@@ -44,11 +44,11 @@ data class ApiSettings(
     val apiKeys: ApiKeys = ApiKeys()
 ) {
     fun resolvedEventKey(): String {
-        val code = eventCode.trim().lowercase()
+        val code = eventCode.trim()
         if (code.isNotBlank()) {
-            return "${year}$code"
+            return canonicalTbaEventKey(year, code)
         }
-        return eventKey.trim().lowercase()
+        return canonicalStoredEventKey(year, eventKey)
     }
 }
 
@@ -126,12 +126,12 @@ object SettingsService {
     private fun normalize(settings: ApiSettings): ApiSettings {
         val eventCode = resolveEventCode(settings)
         val resolvedKey = if (eventCode.isNotBlank()) {
-            "${settings.year}${eventCode.lowercase()}"
+            canonicalTbaEventKey(settings.year, eventCode)
         } else {
-            settings.eventKey.trim().lowercase()
+            canonicalStoredEventKey(settings.year, settings.eventKey)
         }
         return settings.copy(
-            eventCode = eventCode,
+            eventCode = canonicalTbaEventCode(eventCode),
             eventKey = resolvedKey,
             timezone = settings.timezone.ifBlank { "America/New_York" },
             preferredSource = settings.preferredSource.lowercase()
@@ -166,7 +166,7 @@ object SettingsService {
         }
         val legacyKey = settings.eventKey.trim()
         if (legacyKey.length > 4 && legacyKey.take(4).all { it.isDigit() }) {
-            return legacyKey.drop(4)
+            return canonicalTbaEventCode(legacyKey.drop(4))
         }
         return ""
     }
