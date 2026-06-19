@@ -40,6 +40,7 @@ data class ApiSettings(
     val preferredSource: String = "tba",
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
+    val chatEnabled: Boolean = true,
     val apiKeys: ApiKeys = ApiKeys()
 ) {
     fun resolvedEventKey(): String {

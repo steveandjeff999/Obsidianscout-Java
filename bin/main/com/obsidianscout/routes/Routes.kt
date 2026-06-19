@@ -64,15 +64,18 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.and
 import com.obsidianscout.db.AllianceMemberships
 import com.obsidianscout.db.ScoutingAlliances
+import com.obsidianscout.db.ChatService
+import com.obsidianscout.db.ChatMessages
+
 
 fun Application.configureRoutes() {
     routing {
-        intercept(ApplicationCallPipeline.Call) {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                proceed()
-            }
-        }
         route("/api") {
+            intercept(ApplicationCallPipeline.Call) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    proceed()
+                }
+            }
             intercept(ApplicationCallPipeline.Plugins) {
                 call.response.headers.append(HttpHeaders.CacheControl, "no-cache, no-store, must-revalidate")
                 call.response.headers.append(HttpHeaders.Pragma, "no-cache")
@@ -1079,6 +1082,49 @@ fun Application.configureRoutes() {
                 call.respond(HttpStatusCode.NoContent)
             }
 
+            route("/chat") {
+                intercept(ApplicationCallPipeline.Plugins) {
+                    val session = call.requireSession()
+                    val settings = SettingsService.getSettings(session.teamNumber)
+                    if (!settings.chatEnabled) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Chat is disabled by team admin")
+                    }
+                }
+                get("/messages") {
+                    val session = call.requireSession()
+                    val groupName = call.request.queryParameters["group"] ?: "general"
+                    val messages = ChatService.getMessages(session.teamNumber, groupName)
+                    call.respond(messages)
+                }
+                post("/messages") {
+                    val session = call.requireSession()
+                    val request = call.receive<SendMessageRequest>()
+                    val message = ChatService.sendMessage(
+                        teamNumber = session.teamNumber,
+                        groupName = request.groupName,
+                        userId = session.userId,
+                        username = session.username,
+                        content = request.content
+                    )
+                    call.respond(message)
+                }
+                post("/messages/{id}/react") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
+                    val request = call.receive<ReactMessageRequest>()
+                    val updated = ChatService.toggleReaction(id, session.username, request.emoji)
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
+                    call.respond(updated)
+                }
+                get("/groups") {
+                    val session = call.requireSession()
+                    val groups = ChatService.getGroups(session.teamNumber)
+                    call.respond(groups)
+                }
+            }
+
+
             route("/alliances") {
 
                 get {
@@ -1227,31 +1273,133 @@ fun Application.configureRoutes() {
                     call.respond(HttpStatusCode.NoContent)
                 }
                 webSocket("/{id}/collaborate/{kind}") {
-                    val session = call.sessions.get<UserSession>() ?: return@webSocket close(
+                    val session = call.sessions.get<UserSession>() ?: return@webSocket this.close(
                         CloseReason(CloseReason.Codes.VIOLATED_POLICY, "No session")
                     )
-                    val id = call.parameters["id"]?.toIntOrNull() ?: return@webSocket close(
+                    val id = call.parameters["id"]?.toIntOrNull() ?: return@webSocket this.close(
                         CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid alliance ID")
                     )
-                    val kind = call.parameters["kind"] ?: return@webSocket close(
+                    val kind = call.parameters["kind"] ?: return@webSocket this.close(
                         CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid config kind")
                     )
                     
-                    // Verify user is a member of this alliance
-                    val isMember = transaction {
-                        AllianceMemberships
-                            .selectAll().where {
-                                (AllianceMemberships.allianceId eq id) and
-                                (AllianceMemberships.teamNumber eq session.teamNumber) and
-                                (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED"))
-                            }
-                            .any()
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        // Verify user is a member of this alliance
+                        val isMember = transaction {
+                            AllianceMemberships
+                                .selectAll().where {
+                                    (AllianceMemberships.allianceId eq id) and
+                                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                                    (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED"))
+                                }
+                                .any()
+                        }
+                        if (!isMember) {
+                            this@webSocket.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Not a member"))
+                            return@withContext
+                        }
+                        
+                        AllianceCollaborationManager.handleConnection(this@webSocket, id, kind, session)
                     }
-                    if (!isMember) {
-                        return@webSocket close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Not a member"))
+                }
+            }
+
+            route("/banners") {
+                get {
+                    val session = call.requireSession()
+                    val active = com.obsidianscout.db.BannerService.getActive(session.teamNumber)
+                    call.respond(active)
+                }
+            }
+
+            route("/admin/banners") {
+                get {
+                    val session = call.requireAdmin()
+                    val all = if (session.role == com.obsidianscout.auth.UserRole.SUPERADMIN) {
+                        com.obsidianscout.db.BannerService.getAll()
+                    } else {
+                        com.obsidianscout.db.BannerService.getAll(session.teamNumber)
                     }
+                    call.respond(all)
+                }
+                post {
+                    val session = call.requireAdmin()
+                    val request = call.receive<com.obsidianscout.routes.BannerCreateRequest>()
                     
-                    AllianceCollaborationManager.handleConnection(this, id, kind, session)
+                    val targetTeam = request.teamNumber ?: 0
+                    if (targetTeam == 0) {
+                        if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Only superadmins can create sitewide banners")
+                        }
+                    } else {
+                        if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && targetTeam != session.teamNumber) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only create banners for your own team")
+                        }
+                    }
+
+                    val created = com.obsidianscout.db.BannerService.create(request)
+                    call.respond(created)
+                }
+                put("/{id}") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
+                    val request = call.receive<com.obsidianscout.routes.BannerUpdateRequest>()
+
+                    val existing = com.obsidianscout.db.BannerService.getById(id)
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Banner not found")
+
+                    if (existing.teamNumber == 0) {
+                        if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Only superadmins can modify sitewide banners")
+                        }
+                    } else {
+                        if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && existing.teamNumber != session.teamNumber) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only modify banners for your own team")
+                        }
+                    }
+
+                    val targetTeam = request.teamNumber
+                    if (targetTeam != null) {
+                        if (targetTeam == 0) {
+                            if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+                                throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Only superadmins can target banners sitewide")
+                            }
+                        } else {
+                            if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && targetTeam != session.teamNumber) {
+                                throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only target banners to your own team")
+                            }
+                        }
+                    }
+
+                    val updated = com.obsidianscout.db.BannerService.update(id, request)
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Banner not found")
+                    call.respond(updated)
+                }
+                delete("/{id}") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"]?.toIntOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
+
+                    val existing = com.obsidianscout.db.BannerService.getById(id)
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Banner not found")
+
+                    if (existing.teamNumber == 0) {
+                        if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Only superadmins can delete sitewide banners")
+                        }
+                    } else {
+                        if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && existing.teamNumber != session.teamNumber) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only delete banners for your own team")
+                        }
+                    }
+
+                    val deleted = com.obsidianscout.db.BannerService.delete(id)
+                    if (deleted) {
+                        call.respond(HttpStatusCode.NoContent)
+                    } else {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Banner not found")
+                    }
                 }
             }
         }
@@ -1283,7 +1431,9 @@ fun Application.configureRoutes() {
             "users" to "users.html",
             "config" to "config.html",
             "qr-scanner" to "qr-scanner.html",
-            "cache-manager" to "cache-manager.html"
+            "cache-manager" to "cache-manager.html",
+            "banners" to "banners.html",
+            "chat" to "chat.html"
         )
 
         pages.forEach { (path, fileName) ->
@@ -1342,6 +1492,7 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         preferredSource = preferredSource,
         useStatboticsEpa = useStatboticsEpa,
         useTbaOpr = useTbaOpr,
+        chatEnabled = chatEnabled,
         apiKeys = ApiKeysPayload(
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
@@ -1358,6 +1509,7 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         preferredSource = preferredSource,
         useStatboticsEpa = useStatboticsEpa,
         useTbaOpr = useTbaOpr,
+        chatEnabled = chatEnabled,
         apiKeys = com.obsidianscout.integrations.ApiKeys(
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,

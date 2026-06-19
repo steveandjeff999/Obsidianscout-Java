@@ -2,7 +2,7 @@
     'use strict';
 
     const { request, requireAuth, showToast, setUserBadge, setActiveNav,
-            adjustNavForRole, wireLogout, initTheme, wireThemeToggle, isAdmin } = window.Obsidianscout;
+            adjustNavForRole, wireLogout, initTheme, wireThemeToggle, isAdmin, t } = window.Obsidianscout;
 
     let currentUser = null;
     let alliances = [];
@@ -123,15 +123,18 @@
         const countBadge = document.getElementById('alliance-count');
         if (!grid) return;
 
-        countBadge.textContent = alliances.length + ' alliance' + (alliances.length !== 1 ? 's' : '');
+        const countText = alliances.length === 1 
+            ? t('alliances.alliance_count_singular', '1 alliance') 
+            : t('alliances.alliance_count_plural', '{count} alliances').replace('{count}', alliances.length);
+        countBadge.textContent = countText;
 
         if (!alliances.length) {
             grid.innerHTML = `
                 <div class="card" style="grid-column:1/-1;">
                     <div class="empty-state">
                         <div class="empty-icon">🤝</div>
-                        <p>No alliances yet. Create one and invite partner teams to start sharing data.</p>
-                        ${isAdmin(currentUser?.role) ? '<button class="btn" onclick="document.getElementById(\'btn-create-alliance\').click()">+ Create Alliance</button>' : ''}
+                        <p>${t('alliances.no_alliances', 'No alliances yet. Create one and invite partner teams to start sharing data.')}</p>
+                        ${isAdmin(currentUser?.role) ? `<button class="btn" onclick="document.getElementById('btn-create-alliance').click()">${t('alliances.new_alliance', '+ New Alliance')}</button>` : ''}
                     </div>
                 </div>`;
             return;
@@ -148,7 +151,8 @@
 
         const chips = members.map(m => {
             const cls = m.status.toLowerCase();
-            const label = m.status.charAt(0) + m.status.slice(1).toLowerCase();
+            const fallbackLabel = m.status.charAt(0) + m.status.slice(1).toLowerCase();
+            const label = t('alliances.invite_badge_' + cls, fallbackLabel);
             const canRemove = canManage && m.teamNumber !== currentUser?.teamNumber;
             
             // Can leave if not the last admin
@@ -156,15 +160,15 @@
                 (m.status !== 'ADMIN' || members.filter(x => x.status === 'ADMIN').length > 1);
 
             const canPromote = canManage && m.status === 'ACCEPTED';
-            const promoteBtn = canPromote ? `<button class="promote-member btn-xs ghost" style="padding:1px 6px; font-size:10px; margin-left:6px; border-radius:4px;" type="button" data-alliance="${alliance.id}" data-team="${m.teamNumber}" title="Promote to Admin">Make Admin</button>` : '';
-            const disabledLabel = m.disabled ? ' <span style="color:#e05252; font-weight:normal;">(Disabled)</span>' : '';
+            const promoteBtn = canPromote ? `<button class="promote-member btn-xs ghost" style="padding:1px 6px; font-size:10px; margin-left:6px; border-radius:4px;" type="button" data-alliance="${alliance.id}" data-team="${m.teamNumber}" title="${t('alliances.make_admin', 'Make Admin')}">${t('alliances.make_admin', 'Make Admin')}</button>` : '';
+            const disabledLabel = m.disabled ? ` <span style="color:#e05252; font-weight:normal;">(${t('alliances.invite_badge_disabled', 'Disabled')})</span>` : '';
 
             return `<span class="member-chip ${cls}" title="Team ${m.teamNumber} — ${label}">
                 Team ${m.teamNumber}
                 <span style="opacity:0.55;font-weight:400;margin-left:2px;">(${label})</span>
                 ${disabledLabel}
                 ${promoteBtn}
-                ${(canRemove || isSelf) ? `<button class="remove-member" type="button" data-alliance="${alliance.id}" data-team="${m.teamNumber}" title="Remove team" aria-label="Remove Team ${m.teamNumber}">×</button>` : ''}
+                ${(canRemove || isSelf) ? `<button class="remove-member" type="button" data-alliance="${alliance.id}" data-team="${m.teamNumber}" title="${t('alliances.remove_team', 'Remove team')}" aria-label="${t('alliances.remove_team', 'Remove team')} ${m.teamNumber}">×</button>` : ''}
             </span>`;
         }).join('');
 
@@ -174,19 +178,21 @@
 
         const actions = [];
         if (canManage) {
-            actions.push(`<button class="btn-xs ghost" data-action="edit-alliance" data-id="${alliance.id}">Edit</button>`);
-            actions.push(`<button class="btn-xs warn" data-action="invite-team" data-id="${alliance.id}">+ Invite Team</button>`);
-            actions.push(`<button class="btn-xs ghost" data-action="import-data" data-id="${alliance.id}">Import Data</button>`);
-            actions.push(`<button class="btn-xs danger" data-action="delete-alliance" data-id="${alliance.id}">Delete</button>`);
+            actions.push(`<button class="btn-xs ghost" data-action="edit-alliance" data-id="${alliance.id}">${t('common.edit', 'Edit')}</button>`);
+            actions.push(`<button class="btn-xs warn" data-action="invite-team" data-id="${alliance.id}">${t('alliances.invite_team', '+ Invite Team')}</button>`);
+            actions.push(`<button class="btn-xs ghost" data-action="import-data" data-id="${alliance.id}">${t('alliances.import_data', 'Import Data')}</button>`);
+            actions.push(`<button class="btn-xs danger" data-action="delete-alliance" data-id="${alliance.id}">${t('common.delete', 'Delete')}</button>`);
         } else {
             // Non-admin can leave if they're an accepted member
             if (myMembership && myMembership.status === 'ACCEPTED') {
-                actions.push(`<button class="btn-xs danger" data-action="leave-alliance" data-id="${alliance.id}" data-team="${currentUser.teamNumber}">Leave</button>`);
+                actions.push(`<button class="btn-xs danger" data-action="leave-alliance" data-id="${alliance.id}" data-team="${currentUser.teamNumber}">${t('alliances.leave', 'Leave')}</button>`);
             }
         }
 
         const admins = members.filter(m => m.status === 'ADMIN').map(m => m.teamNumber);
-        const adminsText = admins.length > 1 ? `Admins: Teams ${admins.join(', ')}` : `Admin: Team ${admins[0] || alliance.ownerTeamNumber}`;
+        const adminsText = admins.length > 1 
+            ? t('alliances.admins', 'Admins: Teams {teams}').replace('{teams}', admins.join(', ')) 
+            : t('alliances.admin', 'Admin: Team {team}').replace('{team}', admins[0] || alliance.ownerTeamNumber);
 
         const isMember = myMembership && (myMembership.status === 'ADMIN' || myMembership.status === 'ACCEPTED');
         const isActive = myMembership && myMembership.active;
@@ -194,7 +200,7 @@
         if (isMember) {
             activeSection = `
                 <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(0,0,0,0.06); padding-top: 10px;">
-                    <span style="font-size: 12px; font-weight: 700; color: var(--muted);">Active Alliance (use config and share data)</span>
+                    <span style="font-size: 12px; font-weight: 700; color: var(--muted);">${t('alliances.active_label', 'Active Alliance (use config and share data)')}</span>
                     <label class="switch">
                         <input type="checkbox" id="active-alliance-${alliance.id}" data-alliance-id="${alliance.id}" data-action="toggle-active" ${isActive ? 'checked' : ''} />
                         <span class="slider round"></span>
@@ -204,7 +210,7 @@
         }
 
         const activeBadge = isActive
-            ? `<span style="background:#2ecc71;color:white;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">Active</span>`
+            ? `<span style="background:#2ecc71;color:white;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">${t('alliances.active_badge', 'Active')}</span>`
             : '';
 
         const cardStyle = isActive
@@ -227,8 +233,8 @@
                 </div>
                 ${alliance.notes ? `<p style="margin:0;font-size:13px;color:var(--muted);line-height:1.5;">${escHtml(alliance.notes)}</p>` : ''}
                 <div>
-                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;">Members</div>
-                    <div class="member-list">${chips || '<span style="font-size:13px;color:var(--muted);">No members yet</span>'}</div>
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;">${t('alliances.members', 'Members')}</div>
+                    <div class="member-list">${chips || `<span style="font-size:13px;color:var(--muted);">${t('alliances.no_members', 'No members yet')}</span>`}</div>
                 </div>
                 ${activeSection}
                 ${actions.length ? `<div class="alliance-actions" style="margin-top:10px;">${actions.join('')}</div>` : ''}
@@ -256,14 +262,14 @@
                 <div class="invite-card-info">
                     <div class="invite-card-name">${escHtml(inv.name)}</div>
                     <div class="invite-card-meta">
-                        Created by Team ${inv.ownerTeamNumber}
+                        ${t('alliances.created_by_team', 'Created by Team {team}').replace('{team}', inv.ownerTeamNumber)}
                         ${inv.eventKey ? ` · ${inv.eventKey}` : ''}
-                        · ${inv.members?.length || 0} member(s)
+                        · ${t('alliances.members_count', '{count} member(s)').replace('{count}', inv.members?.length || 0)}
                     </div>
                 </div>
                 <div class="invite-card-actions">
-                    <button class="btn-xs accept" data-action="accept-invite" data-id="${inv.id}">Accept</button>
-                    <button class="btn-xs danger" data-action="decline-invite" data-id="${inv.id}">Decline</button>
+                    <button class="btn-xs accept" data-action="accept-invite" data-id="${inv.id}">${t('alliances.accept', 'Accept')}</button>
+                    <button class="btn-xs danger" data-action="decline-invite" data-id="${inv.id}">${t('alliances.decline', 'Decline')}</button>
                 </div>
             </div>`).join('');
     }

@@ -22,7 +22,8 @@ data class ServerConfig(
     val port: Int = 8080,
     val sessionSecret: String = "change-me",
     val cookieSecure: Boolean = false,
-    val https: HttpsConfig = HttpsConfig()
+    val https: HttpsConfig = HttpsConfig(),
+    val logging: Boolean = false
 )
 
 @Serializable

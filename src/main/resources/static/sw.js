@@ -1,11 +1,15 @@
-const CACHE_NAME = 'obsidianscout-shell-v19';
+const CACHE_NAME = 'obsidianscout-shell-v20';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 // Minimal critical assets pre-cached during install to avoid connection pool saturation
 const ASSETS = [
     '/favicon.ico',
     '/css/app.css',
-    '/js/common.js'
+    '/js/common.js',
+    '/i18n/en.json',
+    '/i18n/es.json',
+    '/i18n/tr.json',
+    '/i18n/he.json'
 ];
 
 function fetchWithTimeout(request, timeoutMs) {

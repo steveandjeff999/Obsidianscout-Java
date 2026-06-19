@@ -213,3 +213,27 @@ object AllianceSelections : IntIdTable("alliance_selections") {
     }
 }
 
+object Banners : IntIdTable("banners") {
+    val teamNumber = integer("team_number").default(0)
+    val message = text("message")
+    val bannerType = varchar("banner_type", 32).default("info")
+    val isDismissible = bool("is_dismissible").default(true)
+    val isExpandable = bool("is_expandable").default(false)
+    val expandableMessage = text("expandable_message").default("")
+    val isActive = bool("is_active").default(true)
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+}
+
+object ChatMessages : IntIdTable("chat_messages") {
+    val teamNumber = integer("team_number")
+    val groupName = varchar("group_name", 64)
+    val userId = reference("user_id", Users)
+    val username = varchar("username", 64)
+    val content = text("content")
+    val createdAt = timestamp("created_at")
+    val reactionsJson = text("reactions_json").default("{}")
+}
+
+
+

@@ -380,6 +380,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("settings-source").value = settings.preferredSource || "tba";
             document.getElementById("settings-epa").checked = settings.useStatboticsEpa;
             document.getElementById("settings-opr").checked = settings.useTbaOpr;
+            document.getElementById("settings-chat").checked = settings.chatEnabled;
             document.getElementById("settings-tba-key").value = settings.apiKeys.tbaKey || "";
             document.getElementById("settings-first-user").value = settings.apiKeys.firstUsername || "";
             document.getElementById("settings-first-key").value = settings.apiKeys.firstKey || "";
@@ -468,6 +469,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     preferredSource: document.getElementById("settings-source").value,
                     useStatboticsEpa: document.getElementById("settings-epa").checked,
                     useTbaOpr: document.getElementById("settings-opr").checked,
+                    chatEnabled: document.getElementById("settings-chat").checked,
                     apiKeys: {
                         tbaKey: document.getElementById("settings-tba-key").value.trim(),
                         firstUsername: document.getElementById("settings-first-user").value.trim(),
@@ -1366,6 +1368,7 @@ async function loadSettings() {
         document.getElementById("settings-source").value = settings.preferredSource || "tba";
         document.getElementById("settings-epa").checked = settings.useStatboticsEpa;
         document.getElementById("settings-opr").checked = settings.useTbaOpr;
+        document.getElementById("settings-chat").checked = settings.chatEnabled;
         document.getElementById("settings-tba-key").value = settings.apiKeys.tbaKey || "";
         document.getElementById("settings-first-user").value = settings.apiKeys.firstUsername || "";
         document.getElementById("settings-first-key").value = settings.apiKeys.firstKey || "";

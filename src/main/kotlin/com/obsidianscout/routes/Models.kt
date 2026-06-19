@@ -99,6 +99,7 @@ data class ApiSettingsPayload(
     val preferredSource: String = "tba",
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
+    val chatEnabled: Boolean = true,
     val apiKeys: ApiKeysPayload = ApiKeysPayload()
 )
 
@@ -332,4 +333,66 @@ data class SmtpTestConnectionRequest(
     val encryption: String,
     val testEmail: String
 )
+
+@Serializable
+data class BannerDto(
+    val id: Int,
+    val teamNumber: Int,
+    val message: String,
+    val bannerType: String,
+    val isDismissible: Boolean,
+    val isExpandable: Boolean,
+    val expandableMessage: String,
+    val isActive: Boolean,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class BannerCreateRequest(
+    val teamNumber: Int? = 0,
+    val message: String,
+    val bannerType: String? = "info",
+    val isDismissible: Boolean? = true,
+    val isExpandable: Boolean? = false,
+    val expandableMessage: String? = "",
+    val isActive: Boolean? = true
+)
+
+@Serializable
+data class BannerUpdateRequest(
+    val teamNumber: Int? = null,
+    val message: String? = null,
+    val bannerType: String? = null,
+    val isDismissible: Boolean? = null,
+    val isExpandable: Boolean? = null,
+    val expandableMessage: String? = null,
+    val isActive: Boolean? = null
+)
+
+@Serializable
+data class ChatMessageDto(
+    val id: Int,
+    val teamNumber: Int,
+    val groupName: String,
+    val userId: Int,
+    val username: String,
+    val content: String,
+    val createdAt: String,
+    val reactions: Map<String, List<String>>, // maps reaction emoji to list of usernames who reacted
+    val profilePicture: String? = null
+)
+
+@Serializable
+data class SendMessageRequest(
+    val groupName: String,
+    val content: String
+)
+
+@Serializable
+data class ReactMessageRequest(
+    val emoji: String
+)
+
+
 

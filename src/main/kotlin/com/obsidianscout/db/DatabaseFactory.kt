@@ -78,7 +78,9 @@ object DatabaseFactory {
                 AllianceMemberships,
                 EpaOprHistoryCache,
                 PasswordResetTokens,
-                AllianceSelections
+                AllianceSelections,
+                Banners,
+                ChatMessages
             )
         }
     }

@@ -29,6 +29,7 @@ import com.obsidianscout.scouting.AllianceService
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.ContentType
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
@@ -991,6 +992,11 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
     routing {
         route("/api/mobile") {
+            intercept(ApplicationCallPipeline.Call) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    proceed()
+                }
+            }
             // Health check
             get("/health") {
                 call.respond(MobileHealthResponse(timestamp = Instant.now().toString()))

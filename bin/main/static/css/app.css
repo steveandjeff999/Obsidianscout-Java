@@ -2856,6 +2856,169 @@ input:checked + .slider:before {
     border-radius: 50%;
 }
 
+/* ── Banner Notification Styles ── */
+.banner-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 24px;
+    width: 100%;
+}
+
+.banner-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-radius: var(--radius-sm);
+    border-left: 5px solid transparent;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    position: relative;
+    animation: slideDownIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+@keyframes slideDownIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Light Theme Banners */
+.banner-item.banner-info {
+    background: rgba(224, 242, 254, 0.7);
+    border-color: #0ea5e9;
+    color: #0369a1;
+    border: 1px solid rgba(14, 165, 233, 0.2);
+    border-left-width: 5px;
+}
+
+.banner-item.banner-warning {
+    background: rgba(254, 243, 199, 0.7);
+    border-color: #f59e0b;
+    color: #b45309;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-left-width: 5px;
+}
+
+.banner-item.banner-success {
+    background: rgba(220, 252, 231, 0.7);
+    border-color: #10b981;
+    color: #15803d;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-left-width: 5px;
+}
+
+.banner-item.banner-danger {
+    background: rgba(254, 226, 226, 0.7);
+    border-color: #ef4444;
+    color: #b91c1c;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-left-width: 5px;
+}
+
+/* Dark Theme Banners */
+body.theme-dark .banner-item.banner-info {
+    background: rgba(12, 74, 110, 0.6);
+    border-color: #38bdf8;
+    color: #e0f2fe;
+    border: 1px solid rgba(56, 189, 248, 0.15);
+    border-left-width: 5px;
+}
+
+body.theme-dark .banner-item.banner-warning {
+    background: rgba(120, 53, 4, 0.6);
+    border-color: #fbbf24;
+    color: #fef3c7;
+    border: 1px solid rgba(251, 191, 36, 0.15);
+    border-left-width: 5px;
+}
+
+body.theme-dark .banner-item.banner-success {
+    background: rgba(6, 78, 59, 0.6);
+    border-color: #34d399;
+    color: #d1fae5;
+    border: 1px solid rgba(52, 211, 153, 0.15);
+    border-left-width: 5px;
+}
+
+body.theme-dark .banner-item.banner-danger {
+    background: rgba(127, 29, 29, 0.6);
+    border-color: #f87171;
+    color: #fee2e2;
+    border: 1px solid rgba(248, 113, 113, 0.15);
+    border-left-width: 5px;
+}
+
+.banner-body {
+    flex: 1;
+    padding-right: 12px;
+}
+
+.banner-message {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.banner-details {
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(0, 0, 0, 0.1);
+    white-space: pre-wrap;
+}
+
+body.theme-dark .banner-details {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.banner-details.hidden {
+    display: none;
+}
+
+.btn-banner-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+.btn-banner-toggle:hover {
+    opacity: 1;
+}
+
+.btn-banner-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    line-height: 1;
+    color: inherit;
+    opacity: 0.6;
+    cursor: pointer;
+    padding: 0 4px;
+    transition: opacity 0.2s ease;
+}
+
+.btn-banner-close:hover {
+    opacity: 1;
+}
+
+
 
 
 

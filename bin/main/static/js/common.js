@@ -288,24 +288,12 @@
     async function loadLocale(lang) {
         if (!lang) lang = "en";
         if (i18nCache[lang]) return i18nCache[lang];
-        // Try localStorage first
-        try {
-            const cached = safeGetItem(`i18n:${lang}`);
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                i18nCache[lang] = parsed;
-                return parsed;
-            }
-        } catch (e) {
-            // ignore
-        }
 
         try {
             const res = await fetch(`/i18n/${lang}.json`);
             if (!res.ok) throw new Error("Locale fetch failed");
             const json = await res.json();
             i18nCache[lang] = json;
-            safeSetItem(`i18n:${lang}`, JSON.stringify(json));
             return json;
         } catch (error) {
             if (lang !== "en") return loadLocale("en");
@@ -647,6 +635,9 @@
         // Hide Users link for SCOUT and ANALYTICS
         if (!isAdmin(role)) {
             document.querySelectorAll('.sidebar-link[data-page="users"]').forEach((link) => {
+                link.style.display = "none";
+            });
+            document.querySelectorAll('.sidebar-link[data-page="banners"]').forEach((link) => {
                 link.style.display = "none";
             });
         }
@@ -1121,6 +1112,20 @@
 
     // Set up Service Worker and Global Connection Listeners
     document.addEventListener("DOMContentLoaded", () => {
+        // Clean up legacy i18n caches in localStorage
+        try {
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith("i18n:")) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(k => localStorage.removeItem(k));
+        } catch (e) {
+            // ignore
+        }
+
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js')
                 .then(reg => console.log('[ServiceWorker] Scope:', reg.scope))
@@ -1303,11 +1308,104 @@
         document.body.insertAdjacentElement('afterbegin', svg);
     }
 
+    async function loadAndRenderBanners() {
+        const mainContent = document.querySelector(".main-content");
+        if (!mainContent) return;
+
+        try {
+            const page = document.body.dataset.page;
+            if (page === "login" || page === "reset-password") return;
+
+            const banners = await request("/api/banners");
+            if (!banners || banners.length === 0) return;
+
+            let dismissed = [];
+            try {
+                const saved = localStorage.getItem("obsidianscout:dismissed_banners");
+                if (saved) dismissed = JSON.parse(saved);
+            } catch (e) {
+                console.warn("Failed to load dismissed banners", e);
+            }
+
+            let container = document.querySelector(".banner-container");
+            if (!container) {
+                container = document.createElement("div");
+                container.className = "banner-container";
+                mainContent.insertBefore(container, mainContent.firstChild);
+            }
+
+            container.innerHTML = "";
+
+            banners.forEach(banner => {
+                if (banner.isDismissible && dismissed.includes(banner.id)) {
+                    return;
+                }
+
+                const item = document.createElement("div");
+                item.className = `banner-item banner-${banner.bannerType}`;
+                item.dataset.id = banner.id;
+
+                let html = `
+                    <div class="banner-body">
+                        <div class="banner-message">${banner.message}</div>
+                `;
+
+                if (banner.isExpandable && banner.expandableMessage) {
+                    html += `
+                        <div class="banner-details hidden">${banner.expandableMessage}</div>
+                        <button class="btn-banner-toggle" type="button">Read More</button>
+                    `;
+                }
+
+                html += `</div>`;
+
+                if (banner.isDismissible) {
+                    html += `<button class="btn-banner-close" type="button" aria-label="Close banner">&times;</button>`;
+                }
+
+                item.innerHTML = html;
+
+                if (banner.isExpandable && banner.expandableMessage) {
+                    const toggleBtn = item.querySelector(".btn-banner-toggle");
+                    const details = item.querySelector(".banner-details");
+                    toggleBtn.addEventListener("click", () => {
+                        const isHidden = details.classList.toggle("hidden");
+                        toggleBtn.textContent = isHidden ? "Read More" : "Show Less";
+                    });
+                }
+
+                if (banner.isDismissible) {
+                    const closeBtn = item.querySelector(".btn-banner-close");
+                    closeBtn.addEventListener("click", () => {
+                        item.remove();
+                        dismissed.push(banner.id);
+                        try {
+                            localStorage.setItem("obsidianscout:dismissed_banners", JSON.stringify(dismissed));
+                        } catch (e) {
+                            console.warn("Failed to save dismissed banners", e);
+                        }
+                        if (container.children.length === 0) {
+                            container.remove();
+                        }
+                    });
+                }
+
+                container.appendChild(item);
+            });
+        } catch (error) {
+            console.error("Failed to load banners:", error);
+        }
+    }
+
     // Run at DOM ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', injectLiquidGlassSVG);
+        document.addEventListener('DOMContentLoaded', () => {
+            injectLiquidGlassSVG();
+            loadAndRenderBanners();
+        });
     } else {
         injectLiquidGlassSVG();
+        loadAndRenderBanners();
     }
 
     window.Obsidianscout = {
