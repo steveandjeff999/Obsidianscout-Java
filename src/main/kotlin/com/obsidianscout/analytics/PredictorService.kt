@@ -332,8 +332,8 @@ object PredictorService {
             val useStatboticsEpa = settings.useStatboticsEpa
             val useTbaOpr = settings.useTbaOpr
 
-            val allTeamsInEvent = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
-            val bbotMappings = com.obsidianscout.integrations.IntegrationService.getBBotMappings(eventKey)
+            val allTeamsInEvent = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyLower }.toList()
+            val bbotMappings = com.obsidianscout.integrations.IntegrationService.getBBotMappings(eventKeyLower)
             
             val teamKeyByNumber = mutableMapOf<Int, String>()
             val teamNumberByKey = mutableMapOf<String, Int>()
@@ -411,7 +411,7 @@ object PredictorService {
             val groupedEntries = entries.groupBy { it.targetTeamNumber }
             val entriesByTeam = teamNumbers.associateWith { teamNumber ->
                 val teamEntries = groupedEntries[teamNumber] ?: emptyList()
-                val currentEventEntries = teamEntries.filter { it.eventKey == eventKey && !it.isPrescout }
+                val currentEventEntries = teamEntries.filter { it.eventKey == eventKeyLower && !it.isPrescout }
                 val prescoutEntries = teamEntries.filter { it.isPrescout }
                 
                 if (forcePrescout || currentEventEntries.size < 3) {

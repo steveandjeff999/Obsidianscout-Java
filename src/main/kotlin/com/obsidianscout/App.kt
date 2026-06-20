@@ -45,6 +45,8 @@ import javax.net.ssl.SSLException
 import javax.net.ssl.SSLHandshakeException
 import java.io.File
 import java.security.KeyStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 fun main() {
     val appConfig = AppConfigLoader.load()
@@ -74,13 +76,14 @@ fun main() {
     }
 
     embeddedServer(Netty, environment) {
-        connectionGroupSize = 2
-        workerGroupSize = 8
-        callGroupSize = 16
+        connectionGroupSize = 4
+        workerGroupSize = 32
+        callGroupSize = 64
     }.start(wait = true)
 }
 
 fun Application.module(appConfig: AppConfig) {
+
     install(com.obsidianscout.utils.ServerTimingPlugin)
     install(DefaultHeaders)
     install(WebSockets) {

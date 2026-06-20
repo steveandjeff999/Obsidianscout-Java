@@ -90,6 +90,11 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
         into("config")
     }
     
+    // Copy the docs folder
+    from(file("../docs")) {
+        into("docs")
+    }
+    
     // Set destination directory
     into(rootProject.layout.buildDirectory.dir("bundle"))
     
@@ -142,6 +147,11 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
                     "\$1\"changeme\""
                 )
             }
+            // Set database type to sqlite
+            text = text.replace(
+                Regex("(\"type\"\\s*:\\s*)\"[^\"]*\""),
+                "\$1\"sqlite\""
+            )
             configFile.writeText(text)
             println("Sanitized secrets in bundle config: ${configFile.absolutePath}")
         }

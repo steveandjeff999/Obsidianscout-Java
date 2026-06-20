@@ -441,6 +441,63 @@ fun Application.configureRoutes() {
                 }
             }
 
+            route("/docs") {
+                get {
+                    call.requireSession()
+                    val lang = call.request.queryParameters["lang"]?.lowercase() ?: "en"
+                    val docsDir = findDocsDir()
+                    if (!docsDir.exists()) {
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Docs directory not found"))
+                        return@get
+                    }
+                    val baseFiles = docsDir.listFiles { _, name -> 
+                        name.endsWith(".md") && !name.contains("_es.md") && !name.contains("_tr.md") && !name.contains("_he.md")
+                    }?.sortedBy { it.name } ?: emptyList()
+                    
+                    val files = baseFiles.map { baseFile ->
+                        val baseName = baseFile.nameWithoutExtension
+                        val translatedFile = java.io.File(docsDir, "${baseName}_$lang.md")
+                        val fileToRead = if (lang != "en" && translatedFile.exists() && translatedFile.isFile) {
+                            translatedFile
+                        } else {
+                            baseFile
+                        }
+                        val content = fileToRead.readText()
+                        val title = content.lineSequence().firstOrNull { it.startsWith("#") }
+                            ?.removePrefix("#")?.trim() ?: fileToRead.nameWithoutExtension
+                        mapOf(
+                            "filename" to baseFile.name,
+                            "title" to title
+                        )
+                    }
+                    call.respond(files)
+                }
+                get("/{filename}") {
+                    call.requireSession()
+                    val filename = call.parameters["filename"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing filename")
+                    if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid filename")
+                    }
+                    val lang = call.request.queryParameters["lang"]?.lowercase() ?: "en"
+                    val docsDir = findDocsDir()
+                    val baseFile = java.io.File(docsDir, filename)
+                    val baseName = baseFile.nameWithoutExtension
+                    val translatedFile = java.io.File(docsDir, "${baseName}_$lang.md")
+                    val fileToRead = if (lang != "en" && translatedFile.exists() && translatedFile.isFile) {
+                        translatedFile
+                    } else {
+                        baseFile
+                    }
+                    if (!fileToRead.exists() || !fileToRead.isFile || !fileToRead.name.endsWith(".md")) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Doc not found")
+                    }
+                    call.respond(mapOf(
+                        "filename" to filename,
+                        "content" to fileToRead.readText()
+                    ))
+                }
+            }
+
             route("/config") {
                 get {
                     val session = call.requireSession()
@@ -1459,7 +1516,8 @@ fun Application.configureRoutes() {
             "qr-scanner" to "qr-scanner.html",
             "cache-manager" to "cache-manager.html",
             "banners" to "banners.html",
-            "chat" to "chat.html"
+            "chat" to "chat.html",
+            "docs" to "docs.html"
         )
 
         pages.forEach { (path, fileName) ->
@@ -1542,4 +1600,15 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
             firstKey = apiKeys.firstKey
         )
     )
+}
+
+private fun findDocsDir(): java.io.File {
+    val paths = listOf("docs", "Obsidianscout/docs", "../docs")
+    for (p in paths) {
+        val f = java.io.File(p)
+        if (f.exists() && f.isDirectory) {
+            return f
+        }
+    }
+    return java.io.File("docs")
 }

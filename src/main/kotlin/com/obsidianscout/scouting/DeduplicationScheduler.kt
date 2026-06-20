@@ -46,98 +46,102 @@ object DeduplicationScheduler {
         var pitDeleted = 0
         var qualDeleted = 0
         
-        transaction {
-            // 1. ScoutingEntries
-            val matchRows = ScoutingEntries.selectAll().toList()
-            val matchGrouped = matchRows.groupBy { row ->
-                val target = row[ScoutingEntries.targetTeamNumber]
-                val event = row[ScoutingEntries.eventKey]
-                val match = row[ScoutingEntries.matchKey]
-                val isPrescout = row[ScoutingEntries.isPrescout]
-                MatchGroupKey(event, match, target, isPrescout)
-            }
-            matchGrouped.forEach { (key, group) ->
-                val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
-                val toDelete = mutableListOf<Int>()
-                group.forEach { row ->
-                    val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
-                    val dup = unique.find { uRow ->
-                        val uData = JsonSupport.json.parseToJsonElement(uRow[ScoutingEntries.dataJson]).jsonObject
-                        JsonSupport.scoutingDataAgrees(data, uData)
-                    }
-                    if (dup != null) {
-                        toDelete.add(row[ScoutingEntries.id].value)
-                    } else {
-                        unique.add(row)
-                    }
+        // 1. ScoutingEntries
+        val matchRows = transaction { ScoutingEntries.selectAll().toList() }
+        val matchGrouped = matchRows.groupBy { row ->
+            val target = row[ScoutingEntries.targetTeamNumber]
+            val event = row[ScoutingEntries.eventKey]
+            val match = row[ScoutingEntries.matchKey]
+            val isPrescout = row[ScoutingEntries.isPrescout]
+            MatchGroupKey(event, match, target, isPrescout)
+        }
+        matchGrouped.forEach { (key, group) ->
+            val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
+            val toDelete = mutableListOf<Int>()
+            group.forEach { row ->
+                val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
+                val dup = unique.find { uRow ->
+                    val uData = JsonSupport.json.parseToJsonElement(uRow[ScoutingEntries.dataJson]).jsonObject
+                    JsonSupport.scoutingDataAgrees(data, uData)
                 }
-                if (toDelete.isNotEmpty()) {
+                if (dup != null) {
+                    toDelete.add(row[ScoutingEntries.id].value)
+                } else {
+                    unique.add(row)
+                }
+            }
+            if (toDelete.isNotEmpty()) {
+                transaction {
                     ScoutingEntries.deleteWhere { ScoutingEntries.id inList toDelete }
-                    matchDeleted += toDelete.size
                 }
-                ScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout)
+                matchDeleted += toDelete.size
             }
-            
-            // 2. PitScoutingEntries
-            val pitRows = PitScoutingEntries.selectAll().toList()
-            val pitGrouped = pitRows.groupBy { row ->
-                val target = row[PitScoutingEntries.targetTeamNumber]
-                val event = row[PitScoutingEntries.eventKey]
-                val isPrescout = row[PitScoutingEntries.isPrescout]
-                PitGroupKey(event, target, isPrescout)
-            }
-            pitGrouped.forEach { (key, group) ->
-                val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
-                val toDelete = mutableListOf<Int>()
-                group.forEach { row ->
-                    val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
-                    val dup = unique.find { uRow ->
-                        val uData = JsonSupport.json.parseToJsonElement(uRow[PitScoutingEntries.dataJson]).jsonObject
-                        JsonSupport.scoutingDataAgrees(data, uData)
-                    }
-                    if (dup != null) {
-                        toDelete.add(row[PitScoutingEntries.id].value)
-                    } else {
-                        unique.add(row)
-                    }
+            ScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout)
+        }
+        
+        // 2. PitScoutingEntries
+        val pitRows = transaction { PitScoutingEntries.selectAll().toList() }
+        val pitGrouped = pitRows.groupBy { row ->
+            val target = row[PitScoutingEntries.targetTeamNumber]
+            val event = row[PitScoutingEntries.eventKey]
+            val isPrescout = row[PitScoutingEntries.isPrescout]
+            PitGroupKey(event, target, isPrescout)
+        }
+        pitGrouped.forEach { (key, group) ->
+            val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
+            val toDelete = mutableListOf<Int>()
+            group.forEach { row ->
+                val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
+                val dup = unique.find { uRow ->
+                    val uData = JsonSupport.json.parseToJsonElement(uRow[PitScoutingEntries.dataJson]).jsonObject
+                    JsonSupport.scoutingDataAgrees(data, uData)
                 }
-                if (toDelete.isNotEmpty()) {
+                if (dup != null) {
+                    toDelete.add(row[PitScoutingEntries.id].value)
+                } else {
+                    unique.add(row)
+                }
+            }
+            if (toDelete.isNotEmpty()) {
+                transaction {
                     PitScoutingEntries.deleteWhere { PitScoutingEntries.id inList toDelete }
-                    pitDeleted += toDelete.size
                 }
-                PitScoutingService.recalculateDiscrepancies(key.eventKey, key.targetTeamNumber, key.isPrescout)
+                pitDeleted += toDelete.size
             }
-            
-            // 3. QualitativeScoutingEntries
-            val qualRows = QualitativeScoutingEntries.selectAll().toList()
-            val qualGrouped = qualRows.groupBy { row ->
-                val target = row[QualitativeScoutingEntries.targetTeamNumber]
-                val event = row[QualitativeScoutingEntries.eventKey]
-                val match = row[QualitativeScoutingEntries.matchKey]
-                val isPrescout = row[QualitativeScoutingEntries.isPrescout]
-                QualitativeGroupKey(event, match, target, isPrescout)
-            }
-            qualGrouped.forEach { (key, group) ->
-                val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
-                val toDelete = mutableListOf<Int>()
-                group.forEach { row ->
-                    val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
-                    val dup = unique.find { uRow ->
-                        val uData = JsonSupport.json.parseToJsonElement(uRow[QualitativeScoutingEntries.dataJson]).jsonObject
-                        JsonSupport.scoutingDataAgrees(data, uData)
-                    }
-                    if (dup != null) {
-                        toDelete.add(row[QualitativeScoutingEntries.id].value)
-                    } else {
-                        unique.add(row)
-                    }
+            PitScoutingService.recalculateDiscrepancies(key.eventKey, key.targetTeamNumber, key.isPrescout)
+        }
+        
+        // 3. QualitativeScoutingEntries
+        val qualRows = transaction { QualitativeScoutingEntries.selectAll().toList() }
+        val qualGrouped = qualRows.groupBy { row ->
+            val target = row[QualitativeScoutingEntries.targetTeamNumber]
+            val event = row[QualitativeScoutingEntries.eventKey]
+            val match = row[QualitativeScoutingEntries.matchKey]
+            val isPrescout = row[QualitativeScoutingEntries.isPrescout]
+            QualitativeGroupKey(event, match, target, isPrescout)
+        }
+        qualGrouped.forEach { (key, group) ->
+            val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
+            val toDelete = mutableListOf<Int>()
+            group.forEach { row ->
+                val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
+                val dup = unique.find { uRow ->
+                    val uData = JsonSupport.json.parseToJsonElement(uRow[QualitativeScoutingEntries.dataJson]).jsonObject
+                    JsonSupport.scoutingDataAgrees(data, uData)
                 }
-                if (toDelete.isNotEmpty()) {
+                if (dup != null) {
+                    toDelete.add(row[QualitativeScoutingEntries.id].value)
+                } else {
+                    unique.add(row)
+                }
+            }
+            if (toDelete.isNotEmpty()) {
+                transaction {
                     QualitativeScoutingEntries.deleteWhere { QualitativeScoutingEntries.id inList toDelete }
-                    qualDeleted += toDelete.size
                 }
-                QualitativeScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout)
+                qualDeleted += toDelete.size
             }
+            QualitativeScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout)
         }
         log.info("Deduplication cleanup complete: deleted $matchDeleted match, $pitDeleted pit, $qualDeleted qualitative entries.")
     }

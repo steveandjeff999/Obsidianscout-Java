@@ -1478,7 +1478,7 @@ object IntegrationService {
     }
 
     private suspend fun fetchFirstEvents(settings: ApiSettings): List<EventSyncRecord> {
-        val root = fetchFirstJson(settings, "events")
+        val root = fetchFirstJson(settings, settings.year, "events")
         val array = root.findArray(listOf("Events", "events"))
         return array.mapNotNull { item ->
             val obj = item.jsonObject
@@ -1502,8 +1502,12 @@ object IntegrationService {
     }
 
     private suspend fun fetchFirstTeams(settings: ApiSettings, eventKey: String): List<TeamSyncRecord> {
+        val detectedYear = if (eventKey.length >= 4 && eventKey.take(4).all { it.isDigit() }) {
+            eventKey.take(4).toIntOrNull()
+        } else null
+        val year = detectedYear ?: settings.year
         val eventCode = settings.firstEventCode(eventKey)
-        val root = fetchFirstJson(settings, "teams?eventCode=$eventCode")
+        val root = fetchFirstJson(settings, year, "teams?eventCode=$eventCode")
         val array = root.findArray(listOf("Teams", "teams"))
         return array.mapNotNull { item ->
             val obj = item.jsonObject
@@ -1525,6 +1529,10 @@ object IntegrationService {
     }
 
     private suspend fun fetchFirstMatches(settings: ApiSettings, eventKey: String): List<MatchSyncRecord> {
+        val detectedYear = if (eventKey.length >= 4 && eventKey.take(4).all { it.isDigit() }) {
+            eventKey.take(4).toIntOrNull()
+        } else null
+        val year = detectedYear ?: settings.year
         val eventCode = settings.firstEventCode(eventKey)
         if (eventCode.isBlank()) {
             return emptyList()
@@ -1552,20 +1560,20 @@ object IntegrationService {
         }
 
         for ((apiLevel, defaultLevel) in matchLevels) {
-            val matchesRoot = fetchFirstJson(settings, "matches/$eventCode?tournamentLevel=$apiLevel")
+            val matchesRoot = fetchFirstJson(settings, year, "matches/$eventCode?tournamentLevel=$apiLevel")
             parseFirstMatchItems(matchesRoot, normalizedEventKey, defaultLevel).forEach { upsert(it) }
         }
 
         for ((apiLevel, defaultLevel) in scheduleLevels) {
-            val scheduleRoot = fetchFirstJson(settings, "schedule/$eventCode?tournamentLevel=$apiLevel")
+            val scheduleRoot = fetchFirstJson(settings, year, "schedule/$eventCode?tournamentLevel=$apiLevel")
             parseFirstMatchItems(scheduleRoot, normalizedEventKey, defaultLevel).forEach { upsert(it) }
         }
 
         if (results.isEmpty()) {
-            parseFirstMatchItems(fetchFirstJson(settings, "matches/$eventCode"), normalizedEventKey, "")
+            parseFirstMatchItems(fetchFirstJson(settings, year, "matches/$eventCode"), normalizedEventKey, "")
                 .forEach { upsert(it) }
         } else {
-            val fallbackMatches = parseFirstMatchItems(fetchFirstJson(settings, "matches/$eventCode"), normalizedEventKey, "")
+            val fallbackMatches = parseFirstMatchItems(fetchFirstJson(settings, year, "matches/$eventCode"), normalizedEventKey, "")
             fallbackMatches
                 .filter { MatchCanonical.normalizeCompLevel(it.compLevel) == "practice" }
                 .forEach { upsert(it) }
@@ -1583,14 +1591,14 @@ object IntegrationService {
      * Fetches JSON from the FIRST API. Handles non-JSON error responses gracefully
      * by returning an empty JsonArray instead of crashing.
      */
-    private suspend fun fetchFirstJson(settings: ApiSettings, path: String): JsonElement {
+    private suspend fun fetchFirstJson(settings: ApiSettings, year: Int, path: String): JsonElement {
         val user = settings.apiKeys.firstUsername
         val key = settings.apiKeys.firstKey
         if (user.isBlank() || key.isBlank()) {
             return JsonArray(emptyList())
         }
         val token = Base64.getEncoder().encodeToString("$user:$key".toByteArray())
-        val url = "https://frc-api.firstinspires.org/v3.0/${settings.year}/$path"
+        val url = "https://frc-api.firstinspires.org/v3.0/$year/$path"
         try {
             val response = client.get(url) {
                 header(HttpHeaders.Authorization, "Basic $token")
@@ -1717,7 +1725,14 @@ private fun JsonObject.readTeamsByStation(): Pair<List<String>, List<String>> {
     return red to blue
 }
 
-private fun ApiSettings.firstEventCode(eventKey: String): String = firstEventCodeFor(year, eventCode, eventKey)
+private fun ApiSettings.firstEventCode(eventKey: String): String {
+    val resolvedConfiguredKey = this.resolvedEventKey().lowercase().trim()
+    val targetKey = eventKey.lowercase().trim()
+    val isCustomSync = targetKey.isNotBlank() && targetKey != resolvedConfiguredKey
+    
+    val codeToUse = if (isCustomSync) "" else this.eventCode
+    return firstEventCodeFor(this.year, codeToUse, eventKey)
+}
 
 private fun parseFirstMatchItems(
     root: JsonElement,
