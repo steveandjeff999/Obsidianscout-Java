@@ -10,7 +10,8 @@
             "keystorePath": "config/obsidianscout.jks",
             "keystorePassword": "1a93a013ad4e60ba42f5461069fa90234d2024645613ed647d6d6526c66503f5",
             "keyAlias": "obsidianscout"
-        }
+        },
+        "logging": false
     },
     "database": {
         "type": "postgres",
@@ -30,5 +31,10 @@
         "adminUsername": "admin",
         "adminTeamNumber": 0,
         "adminPassword": "changeme"
+    },
+    "vapid": {
+        "publicKey": "BNfBcRvG-bL2zJfhSRh_bG5pZHDwwTpxxqmc2PQD0Q9HYScACJWr00BgnMcjEM-jnJXC_kphEMSZ-IjUf8QmpIM",
+        "privateKey": "exj8LHlxAgYbko5DoXetOIywJ121iHrYQAlO96OfmzA",
+        "subject": "mailto:admin@obsidianscout.com"
     }
 }

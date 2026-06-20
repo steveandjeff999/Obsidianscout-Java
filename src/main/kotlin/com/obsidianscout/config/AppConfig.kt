@@ -13,7 +13,8 @@ import java.security.SecureRandom
 data class AppConfig(
     val server: ServerConfig = ServerConfig(),
     val database: DatabaseConfig = DatabaseConfig(),
-    val seed: SeedConfig = SeedConfig()
+    val seed: SeedConfig = SeedConfig(),
+    val vapid: VapidConfig = VapidConfig()
 )
 
 @Serializable
@@ -64,6 +65,13 @@ data class SeedConfig(
     val adminPassword: String = "change-me"
 )
 
+@Serializable
+data class VapidConfig(
+    val publicKey: String = "",
+    val privateKey: String = "",
+    val subject: String = "mailto:admin@obsidianscout.com"
+)
+
 object AppConfigLoader {
     private val defaultPath = Paths.get("config", "app-config.json")
 
@@ -105,6 +113,14 @@ object AppConfigLoader {
             generateSecret()
         } else config.server.https.keystorePassword
 
+        val (vapidPublicKey, vapidPrivateKey) = if (config.vapid.publicKey.isBlank() || config.vapid.privateKey.isBlank()) {
+            changed = true
+            val keys = com.obsidianscout.utils.VapidKeyGenerator.generate()
+            Pair(keys.publicKey, keys.privateKey)
+        } else {
+            Pair(config.vapid.publicKey, config.vapid.privateKey)
+        }
+
         // Admin password is intentionally excluded — it stays as "changeme" and
         // must be changed manually by the user after deploying.
 
@@ -127,13 +143,17 @@ object AppConfigLoader {
                 https = config.server.https.copy(
                     keystorePassword = keystorePassword
                 )
+            ),
+            vapid = config.vapid.copy(
+                publicKey = vapidPublicKey,
+                privateKey = vapidPrivateKey
             )
         )
 
         val updatedText = JsonSupport.json.encodeToString(updated)
         Files.writeString(path, updatedText)
 
-        println("[ObsidianScout] Default secrets detected — auto-generated secure random values and saved to ${path.toAbsolutePath()}")
+        println("[ObsidianScout] Default secrets or VAPID keys detected — auto-generated secure values and saved to ${path.toAbsolutePath()}")
 
         return updated
     }

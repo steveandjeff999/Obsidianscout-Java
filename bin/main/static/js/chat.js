@@ -25,6 +25,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     const messageContainer = document.getElementById("message-container");
     const chatMessageInput = document.getElementById("chat-message-input");
     const btnSendMessage = document.getElementById("btn-send-message");
+    const btnBackChannels = document.getElementById("btn-back-channels");
+
+    // Autocomplete state
+    let mentionDropdown = null;
+    let mentionOptions = [];
+    let activeMentionIndex = 0;
+    let mentionTriggerIndex = -1;
+    let groupUnreads = {};
 
     // Emoji reaction list
     const emojis = ["👍", "❤️", "🔥", "😂", "😮", "😢"];
@@ -56,9 +64,27 @@ document.addEventListener("DOMContentLoaded", async () => {
             const groups = await Obsidianscout.request("/api/chat/groups");
             const combined = Array.from(new Set(["general", ...groups]));
             knownGroups = combined;
-            renderGroups();
+            await loadGroupUnreads();
         } catch (e) {
             console.error("Failed to load groups", e);
+        }
+    }
+
+    async function loadGroupUnreads() {
+        try {
+            const status = await Obsidianscout.request("/api/chat/unread-status");
+            if (status && status.groups) {
+                groupUnreads = {};
+                status.groups.forEach(g => {
+                    groupUnreads[g.groupName] = {
+                        unreadCount: g.unreadCount,
+                        mentionCount: g.mentionCount
+                    };
+                });
+                renderGroups();
+            }
+        } catch (e) {
+            console.error("Failed to load group unread status:", e);
         }
     }
 
@@ -67,7 +93,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         knownGroups.forEach(group => {
             const item = document.createElement("div");
             item.className = `group-item ${group === currentGroup ? "active" : ""}`;
-            item.textContent = `# ${group}`;
+            
+            const labelSpan = document.createElement("span");
+            labelSpan.textContent = `# ${group}`;
+            item.appendChild(labelSpan);
+
+            if (group !== currentGroup && groupUnreads[group]) {
+                const info = groupUnreads[group];
+                if (info.mentionCount > 0) {
+                    const badge = document.createElement("span");
+                    badge.className = "group-badge";
+                    badge.textContent = info.mentionCount;
+                    item.appendChild(badge);
+                } else if (info.unreadCount > 0) {
+                    const dot = document.createElement("span");
+                    dot.className = "group-dot";
+                    item.appendChild(dot);
+                }
+            }
+
             item.addEventListener("click", () => {
                 switchGroup(group);
             });
@@ -87,6 +131,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Load messages immediately & reset polling timer
         loadMessages();
         startPolling();
+
+        // Slide in chat on mobile
+        chatActiveContainer.classList.add("show-chat");
     }
 
     // Messages loader
@@ -98,6 +145,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Only render if the active group hasn't changed since request was made
             if (targetGroup === currentGroup) {
                 renderMessages(messages);
+                try {
+                    await Obsidianscout.request("/api/chat/read", {
+                        method: "POST",
+                        json: { groupName: targetGroup }
+                    });
+                    window.dispatchEvent(new CustomEvent("obsidianscout:chat-read", { detail: { groupName: targetGroup } }));
+                } catch (readErr) {
+                    console.error("Failed to mark group as read:", readErr);
+                }
             }
         } catch (e) {
             console.error("Failed to load messages", e);
@@ -268,6 +324,147 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // Autocomplete Mentions Logic
+    async function loadMentionOptions() {
+        try {
+            const teamUsers = await Obsidianscout.request("/api/chat/team-users");
+            const filteredUsers = teamUsers.filter(u => u.toLowerCase() !== "deleted user");
+            mentionOptions = ["everyone", "channel", ...filteredUsers];
+        } catch (e) {
+            console.error("Failed to load team users for mentions:", e);
+            mentionOptions = ["everyone", "channel"];
+        }
+    }
+
+    function handleChatInput() {
+        const cursor = chatMessageInput.selectionStart;
+        const value = chatMessageInput.value;
+        const textUpToCursor = value.slice(0, cursor);
+
+        // Find the nearest preceding '@' that is at start of line or preceded by a space/newline
+        let atIndex = -1;
+        for (let i = cursor - 1; i >= 0; i--) {
+            if (textUpToCursor[i] === '@') {
+                if (i === 0 || textUpToCursor[i - 1] === ' ' || textUpToCursor[i - 1] === '\n') {
+                    atIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (atIndex !== -1) {
+            const query = textUpToCursor.slice(atIndex + 1);
+            if (!query.includes('\n')) {
+                const filtered = mentionOptions.filter(opt => 
+                    opt.toLowerCase().includes(query.toLowerCase())
+                );
+
+                if (filtered.length > 0) {
+                    mentionTriggerIndex = atIndex;
+                    showMentionDropdown(filtered, query);
+                    return;
+                }
+            }
+        }
+
+        closeMentionDropdown();
+    }
+
+    function showMentionDropdown(filtered, query) {
+        if (!mentionDropdown) {
+            mentionDropdown = document.createElement("div");
+            mentionDropdown.className = "mention-dropdown";
+            const inputArea = document.querySelector(".chat-input-area");
+            inputArea.appendChild(mentionDropdown);
+        }
+
+        mentionDropdown.innerHTML = "";
+
+        if (activeMentionIndex >= filtered.length) {
+            activeMentionIndex = 0;
+        }
+
+        filtered.forEach((opt, idx) => {
+            const item = document.createElement("div");
+            const isActive = idx === activeMentionIndex;
+            item.className = `mention-item ${isActive ? "active" : ""} ${["everyone", "channel"].includes(opt) ? "special-mention" : ""}`;
+            item.textContent = `@${opt}`;
+            
+            item.addEventListener("click", () => {
+                insertMention(opt);
+            });
+
+            mentionDropdown.appendChild(item);
+        });
+
+        const activeItem = mentionDropdown.children[activeMentionIndex];
+        if (activeItem) {
+            activeItem.scrollIntoView({ block: "nearest" });
+        }
+    }
+
+    function closeMentionDropdown() {
+        if (mentionDropdown) {
+            mentionDropdown.remove();
+            mentionDropdown = null;
+        }
+        activeMentionIndex = 0;
+        mentionTriggerIndex = -1;
+    }
+
+    function insertMention(opt) {
+        if (mentionTriggerIndex === -1) return;
+
+        const value = chatMessageInput.value;
+        const cursor = chatMessageInput.selectionStart;
+
+        const before = value.slice(0, mentionTriggerIndex);
+        const after = value.slice(cursor);
+        
+        const mentionText = `@${opt} `;
+        chatMessageInput.value = before + mentionText + after;
+
+        const newCursorPos = mentionTriggerIndex + mentionText.length;
+        chatMessageInput.setSelectionRange(newCursorPos, newCursorPos);
+        chatMessageInput.focus();
+
+        closeMentionDropdown();
+    }
+
+    function handleChatKeyDown(e) {
+        if (mentionDropdown) {
+            const items = mentionDropdown.querySelectorAll(".mention-item");
+            if (items.length > 0) {
+                if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    activeMentionIndex = (activeMentionIndex + 1) % items.length;
+                    handleChatInput();
+                } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    activeMentionIndex = (activeMentionIndex - 1 + items.length) % items.length;
+                    handleChatInput();
+                } else if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    const query = chatMessageInput.value.slice(mentionTriggerIndex + 1, chatMessageInput.selectionStart);
+                    const filtered = mentionOptions.filter(opt => 
+                        opt.toLowerCase().includes(query.toLowerCase())
+                    );
+                    if (filtered[activeMentionIndex]) {
+                        insertMention(filtered[activeMentionIndex]);
+                    }
+                } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    closeMentionDropdown();
+                }
+            }
+        } else {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+    }
+
     // Send Message
     async function sendMessage() {
         const text = chatMessageInput.value.trim();
@@ -290,9 +487,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     btnSendMessage.addEventListener("click", sendMessage);
-    chatMessageInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-            sendMessage();
+    chatMessageInput.addEventListener("keydown", handleChatKeyDown);
+    chatMessageInput.addEventListener("input", handleChatInput);
+
+    if (btnBackChannels) {
+        btnBackChannels.addEventListener("click", () => {
+            chatActiveContainer.classList.remove("show-chat");
+        });
+    }
+
+    document.addEventListener("click", (e) => {
+        if (mentionDropdown && !e.target.closest(".chat-input-area")) {
+            closeMentionDropdown();
         }
     });
 
@@ -319,6 +525,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         stopPolling();
         pollInterval = setInterval(() => {
             loadMessages();
+            loadGroupUnreads();
         }, 2000);
     }
 
@@ -333,7 +540,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     const isEnabled = await checkChatSettings();
     if (isEnabled) {
         await loadGroups();
-        await loadMessages();
-        startPolling();
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialGroup = urlParams.get('group') || "general";
+        const groupToSwitch = knownGroups.includes(initialGroup) ? initialGroup : "general";
+        switchGroup(groupToSwitch);
+        
+        await loadMentionOptions();
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'SWITCH_GROUP') {
+                    if (knownGroups.includes(event.data.groupName)) {
+                        switchGroup(event.data.groupName);
+                    }
+                }
+            });
+        }
     }
 });

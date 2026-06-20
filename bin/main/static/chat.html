@@ -75,6 +75,31 @@
             width: 100%;
         }
 
+        .group-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #ff3b30;
+            border-radius: 50%;
+            margin-left: 8px;
+            flex-shrink: 0;
+            box-shadow: 0 0 6px rgba(255, 59, 48, 0.6);
+        }
+
+        .group-badge {
+            background-color: #ff3b30;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 10px;
+            text-align: center;
+            line-height: 1;
+            margin-left: 8px;
+            flex-shrink: 0;
+            box-shadow: 0 0 6px rgba(255, 59, 48, 0.6);
+        }
+
         .chat-main {
             flex: 1;
             display: flex;
@@ -331,7 +356,140 @@
         .hidden {
             display: none !important;
         }
+
+        /* Autocomplete dropdown styles */
+        .chat-input-area {
+            position: relative; /* to anchor the autocomplete dropdown */
+        }
+
+        .mention-dropdown {
+            position: absolute;
+            bottom: 100%;
+            left: 24px;
+            width: calc(100% - 48px);
+            max-width: 320px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12), 0 8px 32px rgba(0, 0, 0, 0.08);
+            overflow-y: auto;
+            max-height: 200px;
+            z-index: 1000;
+            margin-bottom: 8px;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            box-sizing: border-box;
+        }
+
+        .mention-item {
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+        }
+
+        .mention-item.special-mention {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .mention-item:hover, .mention-item.active {
+            background: var(--surface-3);
+            color: var(--ink);
+        }
+
+        /* Mobile Friendliness */
+        @media (max-width: 768px) {
+            body[data-page="chat"] .main-content {
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            .chat-container {
+                position: relative;
+                height: calc(100vh - 56px) !important; /* height minus top bar */
+                border-radius: 0;
+                border-left: none;
+                border-right: none;
+                border-bottom: none;
+            }
+
+            .chat-sidebar {
+                width: 100% !important;
+                position: absolute;
+                top: 0;
+                left: 0;
+                height: 100%;
+                z-index: 10;
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                box-sizing: border-box;
+            }
+
+            .chat-main {
+                width: 100% !important;
+                position: absolute;
+                top: 0;
+                left: 0;
+                height: 100%;
+                z-index: 5;
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+
+            /* State toggle */
+            .chat-container.show-chat .chat-sidebar {
+                transform: translateX(-100%);
+                pointer-events: none;
+            }
+
+            .chat-container.show-chat .chat-main {
+                transform: translateX(0);
+                z-index: 15;
+            }
+
+            .chat-container:not(.show-chat) .chat-sidebar {
+                transform: translateX(0);
+            }
+
+            .chat-container:not(.show-chat) .chat-main {
+                transform: translateX(100%);
+            }
+
+            .btn-back-to-channels {
+                display: inline-flex !important;
+            }
+
+            .chat-header {
+                padding: 12px 16px;
+            }
+
+            .message-area {
+                padding: 16px;
+            }
+
+            .message-row {
+                max-width: 90%;
+            }
+
+            .chat-input-area {
+                padding: 12px 16px;
+            }
+            
+            .mention-dropdown {
+                left: 16px;
+                width: calc(100% - 32px);
+            }
+        }
     </style>
+    <link rel="manifest" href="/manifest.json" />
 </head>
 <body data-page="chat">
     <script>
@@ -391,7 +549,10 @@
                     </div>
 
                     <div class="chat-header">
-                        <h2 id="current-group-title"># general</h2>
+                        <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                            <button class="btn ghost btn-back-to-channels" id="btn-back-channels" style="padding: 8px 12px; display: none; font-size: 13px; font-weight: 600;">☰ Channels</button>
+                            <h2 id="current-group-title" style="margin: 0; font-size: 18px;"># general</h2>
+                        </div>
                     </div>
 
                     <div class="message-area" id="message-container">

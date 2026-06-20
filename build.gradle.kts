@@ -49,6 +49,9 @@ dependencies {
 
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("org.eclipse.angus:jakarta.mail:2.0.3")
+    implementation("nl.martijndwars:web-push:5.1.2")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78")
+    implementation("org.apache.httpcomponents:httpclient:4.5.14")
     testImplementation(kotlin("test"))
 }
 

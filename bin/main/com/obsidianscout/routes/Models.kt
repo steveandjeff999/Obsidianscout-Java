@@ -394,5 +394,37 @@ data class ReactMessageRequest(
     val emoji: String
 )
 
+@Serializable
+data class GroupUnreadStatus(
+    val groupName: String,
+    val unreadCount: Int,
+    val mentionCount: Int
+)
+
+@Serializable
+data class UnreadStatusDto(
+    val unreadCount: Int,
+    val mentionCount: Int,
+    val groups: List<GroupUnreadStatus> = emptyList()
+)
+
+@Serializable
+data class ReadChatGroupRequest(
+    val groupName: String
+)
+
+@Serializable
+data class PushSubscriptionDto(
+    val endpoint: String,
+    val keys: PushKeysDto
+)
+
+@Serializable
+data class PushKeysDto(
+    val p256dh: String,
+    val auth: String
+)
+
+
 
 

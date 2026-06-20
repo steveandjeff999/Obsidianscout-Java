@@ -235,5 +235,28 @@ object ChatMessages : IntIdTable("chat_messages") {
     val reactionsJson = text("reactions_json").default("{}")
 }
 
+object UserChatLastRead : IntIdTable("user_chat_last_read") {
+    val userId = reference("user_id", Users)
+    val groupName = varchar("group_name", 64)
+    val lastReadAt = timestamp("last_read_at")
+
+    init {
+        uniqueIndex("ux_user_chat_last_read_user_group", userId, groupName)
+    }
+}
+
+object PushSubscriptions : IntIdTable("push_subscriptions") {
+    val userId = reference("user_id", Users)
+    val endpoint = text("endpoint")
+    val p256dh = varchar("p256dh", 255)
+    val auth = varchar("auth", 255)
+    val createdAt = timestamp("created_at")
+
+    init {
+        uniqueIndex("ux_push_subscriptions_endpoint", endpoint)
+    }
+}
+
+
 
 

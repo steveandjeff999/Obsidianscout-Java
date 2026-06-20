@@ -80,7 +80,9 @@ object DatabaseFactory {
                 PasswordResetTokens,
                 AllianceSelections,
                 Banners,
-                ChatMessages
+                ChatMessages,
+                UserChatLastRead,
+                PushSubscriptions
             )
         }
     }

@@ -192,8 +192,7 @@
             const data = text ? safeParse(text) : null;
             if (!response.ok) {
                 if (response.status === 401) {
-                    const isLoginPage = document.body && document.body.dataset.page === "login";
-                    const isAuthRequest = path.includes("/api/auth/login") || path.includes("/api/auth/register") || path.includes("/api/auth/status");
+                    const isAuthRequest = path.includes("/api/auth/login") || path.includes("/api/auth/register") || path.includes("/api/auth/status") || path.includes("/api/push");
                     if (!isLoginPage && !isAuthRequest) {
                         checkLoginStatus().then(loggedIn => {
                             if (!loggedIn) {
@@ -1109,6 +1108,70 @@
             }
         });
     }
+    async function initChatUnreadPolling() {
+        const page = document.body.dataset.page;
+        if (page === "login" || page === "reset-password") return;
+
+        const loggedIn = await checkLoginStatus();
+        if (!loggedIn) return;
+
+        try {
+            const settingsResponse = await request("/api/settings?local=true");
+            if (!settingsResponse || !settingsResponse.settings || !settingsResponse.settings.chatEnabled) {
+                return;
+            }
+        } catch (e) {
+            console.warn("Failed to fetch settings for chat unreads:", e);
+            return;
+        }
+
+        async function fetchUnreadStatus() {
+            try {
+                const status = await request("/api/chat/unread-status");
+                if (status) {
+                    updateChatBadge(status.unreadCount, status.mentionCount);
+                }
+            } catch (e) {
+                if (e.status === 401) {
+                    clearInterval(pollInterval);
+                }
+                console.warn("Failed to fetch chat unread status:", e);
+            }
+        }
+
+        function updateChatBadge(unreadCount, mentionCount) {
+            const chatLink = document.getElementById("nav-chat");
+            if (!chatLink) return;
+
+            // Remove existing
+            const existingBadge = chatLink.querySelector(".nav-chat-badge, .nav-chat-dot");
+            if (existingBadge) {
+                existingBadge.remove();
+            }
+
+            if (mentionCount > 0) {
+                const badge = document.createElement("span");
+                badge.className = "nav-chat-badge";
+                badge.textContent = mentionCount;
+                chatLink.appendChild(badge);
+            } else if (unreadCount > 0) {
+                const dot = document.createElement("span");
+                dot.className = "nav-chat-dot";
+                chatLink.appendChild(dot);
+            }
+        }
+
+        // Poll every 10 seconds
+        const pollInterval = setInterval(fetchUnreadStatus, 10000);
+
+        // Initial fetch
+        fetchUnreadStatus();
+
+        // Listen for immediate update events when user reads messages
+        window.addEventListener("obsidianscout:chat-read", () => {
+            fetchUnreadStatus();
+        });
+    }
 
     // Set up Service Worker and Global Connection Listeners
     document.addEventListener("DOMContentLoaded", () => {
@@ -1126,9 +1189,62 @@
             // ignore
         }
 
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding)
+                .replace(/\-/g, '+')
+                .replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        async function initPushNotifications(registration) {
+            if (!('PushManager' in window)) {
+                console.warn('[Push] Push messaging is not supported in this browser');
+                return;
+            }
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    console.warn('[Push] Permission for notifications was denied');
+                    return;
+                }
+
+                let subscription = await registration.pushManager.getSubscription();
+                if (!subscription) {
+                    const response = await request("/api/push/public-key");
+                    if (!response || !response.publicKey) {
+                        console.warn('[Push] Failed to load VAPID public key from server');
+                        return;
+                    }
+                    const applicationServerKey = urlBase64ToUint8Array(response.publicKey);
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: applicationServerKey
+                    });
+                }
+                await request("/api/push/subscribe", {
+                    method: "POST",
+                    json: subscription
+                });
+                console.log('[Push] Subscribed successfully and registered on backend');
+            } catch (e) {
+                console.warn('[Push] Failed to register push subscription:', e);
+            }
+        }
+
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js')
-                .then(reg => console.log('[ServiceWorker] Scope:', reg.scope))
+                .then(reg => {
+                    console.log('[ServiceWorker] Scope:', reg.scope);
+                    navigator.serviceWorker.ready.then(readyReg => {
+                        initPushNotifications(readyReg);
+                    });
+                })
                 .catch(err => console.error('[ServiceWorker] Registration failed:', err));
         }
 
@@ -1165,6 +1281,7 @@
         // Load selected language bundle and apply translations
         loadLocale(safeGetItem('obsidianscout:lang') || 'en').then(() => applyTranslations());
         restoreScrollPositions();
+        initChatUnreadPolling();
     });
 
     window.addEventListener("beforeunload", (event) => {

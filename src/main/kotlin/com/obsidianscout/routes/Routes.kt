@@ -12,16 +12,23 @@ import com.obsidianscout.auth.requireSession
 import com.obsidianscout.auth.requireSuperAdmin
 import com.obsidianscout.auth.EmailService
 import com.obsidianscout.db.PasswordResetTokens
-import com.obsidianscout.integrations.SmtpSettings
+import com.obsidianscout.db.PushSubscriptions
+import com.obsidianscout.db.PushNotificationService
+import com.obsidianscout.config.AppConfigLoader
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.lowerCase
+import java.time.Instant
 import com.obsidianscout.config.ConfigService
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.integrations.ApiSettings
 import com.obsidianscout.integrations.IntegrationService
 import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.SyncScheduler
+import com.obsidianscout.integrations.SmtpSettings
 import com.obsidianscout.scouting.PitScoutingService
 import com.obsidianscout.scouting.QualitativeScoutingService
 import com.obsidianscout.scouting.ScoutingService
@@ -1184,6 +1191,11 @@ fun Application.configureRoutes() {
                         username = session.username,
                         content = request.content
                     )
+                    try {
+                        PushNotificationService.sendChatNotification(message)
+                    } catch (e: Exception) {
+                        call.application.environment.log.error("Failed to trigger push notifications", e)
+                    }
                     call.respond(message)
                 }
                 post("/messages/{id}/react") {
@@ -1203,6 +1215,60 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val groups = ChatService.getGroups(session.teamNumber)
                     call.respond(groups)
+                }
+                get("/unread-status") {
+                    val session = call.requireSession()
+                    val status = ChatService.getUnreadStatus(session.userId, session.teamNumber, session.username)
+                    call.respond(status)
+                }
+                post("/read") {
+                    val session = call.requireSession()
+                    val request = call.receive<ReadChatGroupRequest>()
+                    ChatService.updateLastRead(session.userId, request.groupName)
+                    call.respond(HttpStatusCode.OK)
+                }
+                get("/team-users") {
+                    val session = call.requireSession()
+                    val usernames = transaction {
+                        com.obsidianscout.db.Users.selectAll()
+                            .where { (com.obsidianscout.db.Users.teamNumber eq session.teamNumber) and (com.obsidianscout.db.Users.username neq "Deleted User") }
+                            .map { it[com.obsidianscout.db.Users.username] }
+                            .sorted()
+                    }
+                    call.respond(usernames)
+                }
+            }
+
+            route("/push") {
+                get("/public-key") {
+                    val appConfig = AppConfigLoader.load()
+                    call.respond(mapOf("publicKey" to appConfig.vapid.publicKey))
+                }
+                post("/subscribe") {
+                    val session = call.requireSession()
+                    val subscription = call.receive<PushSubscriptionDto>()
+                    
+                    transaction {
+                        val existing = PushSubscriptions.selectAll()
+                            .where { PushSubscriptions.endpoint eq subscription.endpoint }
+                            .firstOrNull()
+                        if (existing == null) {
+                            PushSubscriptions.insert {
+                                it[userId] = session.userId
+                                it[endpoint] = subscription.endpoint
+                                it[p256dh] = subscription.keys.p256dh
+                                it[auth] = subscription.keys.auth
+                                it[createdAt] = Instant.now()
+                            }
+                        } else {
+                            PushSubscriptions.update({ PushSubscriptions.endpoint eq subscription.endpoint }) {
+                                it[userId] = session.userId
+                                it[p256dh] = subscription.keys.p256dh
+                                it[auth] = subscription.keys.auth
+                            }
+                        }
+                    }
+                    call.respond(HttpStatusCode.OK, mapOf("success" to true))
                 }
             }
 

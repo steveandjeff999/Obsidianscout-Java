@@ -16,7 +16,10 @@ import com.obsidianscout.routes.configureMobileRoutes
 import com.obsidianscout.routes.MobileApiException
 import com.obsidianscout.routes.MobileErrorResponse
 import io.ktor.http.HttpStatusCode
-import io.ktor.network.tls.certificates.generateCertificate
+import io.ktor.network.tls.certificates.buildKeyStore
+import io.ktor.network.tls.certificates.saveToFile
+import java.security.Security
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.call
@@ -49,6 +52,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 fun main() {
+    Security.addProvider(BouncyCastleProvider())
     val appConfig = AppConfigLoader.load()
     DatabaseFactory.init(appConfig.database)
     ConfigService.ensureDefaultConfig()
@@ -208,12 +212,13 @@ private fun loadOrCreateKeyStore(appConfig: AppConfig): KeyStore {
     val keystoreFile = File(httpsConfig.keystorePath)
     if (!keystoreFile.exists()) {
         keystoreFile.parentFile?.mkdirs()
-        generateCertificate(
-            file = keystoreFile,
-            keyAlias = httpsConfig.keyAlias,
-            keyPassword = httpsConfig.keystorePassword,
-            jksPassword = httpsConfig.keystorePassword
-        )
+        val keyStore = buildKeyStore {
+            certificate(httpsConfig.keyAlias) {
+                password = httpsConfig.keystorePassword
+                domains = listOf("localhost", "127.0.0.1", "192.168.1.130")
+            }
+        }
+        keyStore.saveToFile(keystoreFile, httpsConfig.keystorePassword)
     }
     val keyStore = KeyStore.getInstance("JKS")
     keystoreFile.inputStream().use { input ->

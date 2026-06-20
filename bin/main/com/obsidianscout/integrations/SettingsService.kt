@@ -44,16 +44,11 @@ data class ApiSettings(
     val apiKeys: ApiKeys = ApiKeys()
 ) {
     fun resolvedEventKey(): String {
-        val code = eventCode.trim().lowercase()
+        val code = eventCode.trim()
         if (code.isNotBlank()) {
-            return "${year}${toTbaEventCode(code)}"
+            return canonicalTbaEventKey(year, code)
         }
-        val key = eventKey.trim().lowercase()
-        val prefix = year.toString()
-        if (key.startsWith(prefix)) {
-            return "${prefix}${toTbaEventCode(key.drop(prefix.length))}"
-        }
-        return toTbaEventCode(key)
+        return canonicalStoredEventKey(year, eventKey)
     }
 }
 
@@ -129,21 +124,14 @@ object SettingsService {
     }
 
     private fun normalize(settings: ApiSettings): ApiSettings {
-        val rawCode = resolveEventCode(settings)
-        val eventCode = toTbaEventCode(rawCode)
+        val eventCode = resolveEventCode(settings)
         val resolvedKey = if (eventCode.isNotBlank()) {
-            "${settings.year}${eventCode}"
+            canonicalTbaEventKey(settings.year, eventCode)
         } else {
-            val key = settings.eventKey.trim().lowercase()
-            val prefix = settings.year.toString()
-            if (key.startsWith(prefix)) {
-                "${prefix}${toTbaEventCode(key.drop(prefix.length))}"
-            } else {
-                toTbaEventCode(key)
-            }
+            canonicalStoredEventKey(settings.year, settings.eventKey)
         }
         return settings.copy(
-            eventCode = eventCode,
+            eventCode = canonicalTbaEventCode(eventCode),
             eventKey = resolvedKey,
             timezone = settings.timezone.ifBlank { "America/New_York" },
             preferredSource = settings.preferredSource.lowercase()
@@ -178,7 +166,7 @@ object SettingsService {
         }
         val legacyKey = settings.eventKey.trim()
         if (legacyKey.length > 4 && legacyKey.take(4).all { it.isDigit() }) {
-            return legacyKey.drop(4)
+            return canonicalTbaEventCode(legacyKey.drop(4))
         }
         return ""
     }
@@ -220,44 +208,4 @@ object SettingsService {
         }
         return settings
     }
-}
-
-fun toTbaEventCode(code: String): String {
-    val norm = code.trim().lowercase()
-    return when (norm) {
-        "milstein", "mil" -> "mil"
-        "curie", "cur" -> "cur"
-        "archimedes", "arc" -> "arc"
-        "daly", "dal" -> "dal"
-        "galileo", "gal" -> "gal"
-        "hopper", "hop" -> "hop"
-        "johnson", "joh" -> "joh"
-        "newton", "new" -> "new"
-        else -> norm
-    }
-}
-
-fun toFirstEventCode(code: String): String {
-    val norm = code.trim().uppercase()
-    return when (norm) {
-        "MIL", "MILSTEIN" -> "MILSTEIN"
-        "CUR", "CURIE" -> "CURIE"
-        "ARC", "ARCHIMEDES" -> "ARCHIMEDES"
-        "DAL", "DALY" -> "DALY"
-        "GAL", "GALILEO" -> "GALILEO"
-        "HOP", "HOPPER" -> "HOPPER"
-        "JOH", "JOHNSON" -> "JOHNSON"
-        "NEW", "NEWTON" -> "NEWTON"
-        else -> norm
-    }
-}
-
-fun toTbaEventKey(eventKey: String): String {
-    val key = eventKey.lowercase().trim()
-    if (key.length >= 4 && key.take(4).all { it.isDigit() }) {
-        val yearPrefix = key.take(4)
-        val code = key.drop(4)
-        return yearPrefix + toTbaEventCode(code)
-    }
-    return toTbaEventCode(key)
 }

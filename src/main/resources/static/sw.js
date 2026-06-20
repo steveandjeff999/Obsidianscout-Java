@@ -99,3 +99,68 @@ self.addEventListener('fetch', (event) => {
         })
     );
 });
+
+// Push event listener: Handle incoming push messages
+self.addEventListener('push', (event) => {
+    let data = {};
+    if (event.data) {
+        try {
+            data = event.data.json();
+        } catch (e) {
+            data = { title: 'New Message', body: event.data.text() };
+        }
+    }
+
+    const title = data.title || 'New Chat Message';
+    const options = {
+        body: data.body || 'You have received a new message.',
+        icon: '/assets/images/obsidian/obsidian-192.png',
+        badge: '/assets/images/obsidian/obsidian-192.png',
+        tag: data.tag || 'chat-notification',
+        data: data.data || { url: '/chat' },
+        vibrate: [100, 50, 100],
+        actions: [
+            { action: 'open', title: 'Open Chat' }
+        ]
+    };
+
+    event.waitUntil(
+        self.registration.showNotification(title, options)
+    );
+});
+
+// Notification click listener: Open chat or focus tab and route group
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    
+    let urlToOpen = '/chat';
+    if (event.notification.data && event.notification.data.url) {
+        urlToOpen = event.notification.data.url;
+    }
+    
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+            // Check if there is already a window open with this URL
+            for (let i = 0; i < windowClients.length; i++) {
+                const client = windowClients[i];
+                if (client.url.includes('/chat') && 'focus' in client) {
+                    // Send a message to the page to switch group if needed
+                    if (event.notification.data && event.notification.data.groupName) {
+                        client.postMessage({
+                            type: 'SWITCH_GROUP',
+                            groupName: event.notification.data.groupName
+                        });
+                    }
+                    return client.focus();
+                }
+            }
+            // If no window is open, open a new one
+            if (clients.openWindow) {
+                if (event.notification.data && event.notification.data.groupName) {
+                    urlToOpen += `?group=${encodeURIComponent(event.notification.data.groupName)}`;
+                }
+                return clients.openWindow(urlToOpen);
+            }
+        })
+    );
+});

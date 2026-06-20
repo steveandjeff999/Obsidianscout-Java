@@ -3018,6 +3018,56 @@ body.theme-dark .banner-details {
     opacity: 1;
 }
 
+/* ── Chat Sidebar Badges ─────────────────────────────────────────── */
+.sidebar-link {
+    position: relative;
+}
+
+.nav-chat-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #ff3b30;
+    border-radius: 50%;
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    box-shadow: 0 0 6px rgba(255, 59, 48, 0.6);
+}
+
+.nav-chat-badge {
+    background-color: #ff3b30;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 14px;
+    text-align: center;
+    line-height: 1;
+    box-shadow: 0 0 6px rgba(255, 59, 48, 0.6);
+}
+
+.sidebar.collapsed .sidebar-link .nav-chat-dot {
+    right: 8px;
+    top: 8px;
+    transform: none;
+}
+
+.sidebar.collapsed .sidebar-link .nav-chat-badge {
+    right: 4px;
+    top: 4px;
+    transform: none;
+    font-size: 0.65rem;
+    padding: 1px 4px;
+    min-width: 10px;
+}
+
+
 
 
 

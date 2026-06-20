@@ -21,7 +21,6 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.SortOrder
 import com.obsidianscout.auth.ApiException
 
 object PredictorService {
@@ -64,8 +63,8 @@ object PredictorService {
         val needsStatsSync = transaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
-            val checkEpa = settings.useStatboticsEpa && allTeams.isNotEmpty() && (allTeams.count { it[ApiTeams.epa] != null && it[ApiTeams.epa] != 0.0 } < allTeams.size * 0.5)
-            val checkOpr = settings.useTbaOpr && allTeams.isNotEmpty() && (allTeams.count { it[ApiTeams.opr] != null && it[ApiTeams.opr] != 0.0 } < allTeams.size * 0.5)
+            val checkEpa = settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
+            val checkOpr = settings.useTbaOpr && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.opr] == null || it[ApiTeams.opr] == 0.0 }
             checkEpa || checkOpr
         }
 
@@ -150,7 +149,7 @@ object PredictorService {
                     parts[1].toIntOrNull()
                 } else {
                     val primaryKey = parts[0].trim().lowercase()
-                    val numFromKey = primaryKey.removePrefix("frc").takeWhile { it.isDigit() }.toIntOrNull()
+                    val numFromKey = primaryKey.removePrefix("frc").toIntOrNull()
                     if (numFromKey != null) {
                         numFromKey
                     } else {
@@ -216,27 +215,14 @@ object PredictorService {
                 val teamNumber = if (parts.size > 1) {
                     parts[1].toIntOrNull() ?: 0
                 } else {
-                    primaryKey.removePrefix("frc").takeWhile { it.isDigit() }.toIntOrNull() ?: teamNumberByKey[primaryKey] ?: 0
+                    primaryKey.removePrefix("frc").toIntOrNull() ?: teamNumberByKey[primaryKey] ?: 0
                 }
                 
                 val resolvedKey = teamKeyByNumber[teamNumber] ?: primaryKey
                 val teamRow = teamInfoMap[resolvedKey] ?: teamInfoMap[primaryKey]
-                var nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name)
-                var epa = teamRow?.get(ApiTeams.epa)
-                var opr = teamRow?.get(ApiTeams.opr)
-                if ((epa == null && opr == null || nickname == null) && teamNumber > 0) {
-                    val fallback = getFallbackStatsRow(teamNumber)
-                    if (fallback != null) {
-                        if (nickname == null) {
-                            nickname = fallback[ApiTeams.nickname] ?: fallback[ApiTeams.name]
-                        }
-                        if (epa == null) epa = fallback[ApiTeams.epa]
-                        if (opr == null) opr = fallback[ApiTeams.opr]
-                    }
-                }
-                if (nickname == null) {
-                    nickname = "Team $teamNumber"
-                }
+                val nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name) ?: "Team $teamNumber"
+                val epa = teamRow?.get(ApiTeams.epa)
+                val opr = teamRow?.get(ApiTeams.opr)
 
                 val teamEntries = entriesByTeam[teamNumber] ?: emptyList()
                 val avgScore = if (teamEntries.isNotEmpty()) {
@@ -264,14 +250,14 @@ object PredictorService {
             val redPredictions = redTeamKeys.map { predictTeam(it) }
             val bluePredictions = blueTeamKeys.map { predictTeam(it) }
 
-            val totalRedScouted = redPredictions.mapNotNull { it.averageScoutedScore ?: it.epa ?: it.opr }.sum()
-            val totalBlueScouted = bluePredictions.mapNotNull { it.averageScoutedScore ?: it.epa ?: it.opr }.sum()
+            val totalRedScouted = redPredictions.mapNotNull { it.averageScoutedScore }.sum()
+            val totalBlueScouted = bluePredictions.mapNotNull { it.averageScoutedScore }.sum()
 
-            val totalRedEpa = redPredictions.mapNotNull { it.epa ?: it.opr ?: it.averageScoutedScore }.sum()
-            val totalBlueEpa = bluePredictions.mapNotNull { it.epa ?: it.opr ?: it.averageScoutedScore }.sum()
+            val totalRedEpa = redPredictions.mapNotNull { it.epa }.sum()
+            val totalBlueEpa = bluePredictions.mapNotNull { it.epa }.sum()
 
-            val totalRedOpr = redPredictions.mapNotNull { it.opr ?: it.epa ?: it.averageScoutedScore }.sum()
-            val totalBlueOpr = bluePredictions.mapNotNull { it.opr ?: it.epa ?: it.averageScoutedScore }.sum()
+            val totalRedOpr = redPredictions.mapNotNull { it.opr }.sum()
+            val totalBlueOpr = bluePredictions.mapNotNull { it.opr }.sum()
 
             MatchPredictionResponse(
                 matchKey = matchKey,
@@ -311,8 +297,8 @@ object PredictorService {
         val needsStatsSync = transaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyLower }.toList()
-            val checkEpa = settings.useStatboticsEpa && allTeams.isNotEmpty() && (allTeams.count { it[ApiTeams.epa] != null && it[ApiTeams.epa] != 0.0 } < allTeams.size * 0.5)
-            val checkOpr = settings.useTbaOpr && allTeams.isNotEmpty() && (allTeams.count { it[ApiTeams.opr] != null && it[ApiTeams.opr] != 0.0 } < allTeams.size * 0.5)
+            val checkEpa = settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
+            val checkOpr = settings.useTbaOpr && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.opr] == null || it[ApiTeams.opr] == 0.0 }
             checkEpa || checkOpr
         }
 
@@ -448,27 +434,14 @@ object PredictorService {
                     val teamNumber = if (parts.size > 1) {
                         parts[1].toIntOrNull() ?: 0
                     } else {
-                        primaryKey.removePrefix("frc").takeWhile { it.isDigit() }.toIntOrNull() ?: teamNumberByKey[primaryKey] ?: 0
+                        primaryKey.removePrefix("frc").toIntOrNull() ?: teamNumberByKey[primaryKey] ?: 0
                     }
                     
                     val resolvedKey = teamKeyByNumber[teamNumber] ?: primaryKey
                     val teamRow = teamInfoMap[resolvedKey] ?: teamInfoMap[primaryKey]
-                    var nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name)
-                    var epa = teamRow?.get(ApiTeams.epa)
-                    var opr = teamRow?.get(ApiTeams.opr)
-                    if ((epa == null && opr == null || nickname == null) && teamNumber > 0) {
-                        val fallback = getFallbackStatsRow(teamNumber)
-                        if (fallback != null) {
-                            if (nickname == null) {
-                                nickname = fallback[ApiTeams.nickname] ?: fallback[ApiTeams.name]
-                            }
-                            if (epa == null) epa = fallback[ApiTeams.epa]
-                            if (opr == null) opr = fallback[ApiTeams.opr]
-                        }
-                    }
-                    if (nickname == null) {
-                        nickname = "Team $teamNumber"
-                    }
+                    val nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name) ?: "Team $teamNumber"
+                    val epa = teamRow?.get(ApiTeams.epa)
+                    val opr = teamRow?.get(ApiTeams.opr)
 
                     val teamEntries = entriesByTeam[teamNumber] ?: emptyList()
                     val avgScore = if (teamEntries.isNotEmpty()) {
@@ -512,14 +485,14 @@ object PredictorService {
                 val redPredictions = redTeamKeys.map { getOrCreateTeamPrediction(it) }
                 val bluePredictions = blueTeamKeys.map { getOrCreateTeamPrediction(it) }
 
-                val totalRedScouted = redPredictions.mapNotNull { it.averageScoutedScore ?: it.epa ?: it.opr }.sum()
-                val totalBlueScouted = bluePredictions.mapNotNull { it.averageScoutedScore ?: it.epa ?: it.opr }.sum()
+                val totalRedScouted = redPredictions.mapNotNull { it.averageScoutedScore }.sum()
+                val totalBlueScouted = bluePredictions.mapNotNull { it.averageScoutedScore }.sum()
 
-                val totalRedEpa = redPredictions.mapNotNull { it.epa ?: it.opr ?: it.averageScoutedScore }.sum()
-                val totalBlueEpa = bluePredictions.mapNotNull { it.epa ?: it.opr ?: it.averageScoutedScore }.sum()
+                val totalRedEpa = redPredictions.mapNotNull { it.epa }.sum()
+                val totalBlueEpa = bluePredictions.mapNotNull { it.epa }.sum()
 
-                val totalRedOpr = redPredictions.mapNotNull { it.opr ?: it.epa ?: it.averageScoutedScore }.sum()
-                val totalBlueOpr = bluePredictions.mapNotNull { it.opr ?: it.epa ?: it.averageScoutedScore }.sum()
+                val totalRedOpr = redPredictions.mapNotNull { it.opr }.sum()
+                val totalBlueOpr = bluePredictions.mapNotNull { it.opr }.sum()
 
                 MatchPredictionResponse(
                     matchKey = matchKey,
@@ -553,14 +526,6 @@ object PredictorService {
             "ef" -> 5
             "playoff" -> 6
             else -> 7
-        }
-    }
-
-    private fun getFallbackStatsRow(teamNumber: Int): org.jetbrains.exposed.sql.ResultRow? {
-        return transaction {
-            ApiTeams.selectAll().where { ApiTeams.teamNumber eq teamNumber }
-                .orderBy(ApiTeams.id, SortOrder.DESC)
-                .firstOrNull { it[ApiTeams.epa] != null || it[ApiTeams.opr] != null }
         }
     }
 }
