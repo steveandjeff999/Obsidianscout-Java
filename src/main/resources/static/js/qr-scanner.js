@@ -140,8 +140,9 @@ function initScanner() {
             video: {
                 deviceId: cameraId ? { exact: cameraId } : undefined,
                 facingMode: cameraId ? undefined : "environment",
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+                width: { ideal: 800 },
+                height: { ideal: 600 },
+                resizeMode: "none"
             },
             audio: false
         };
@@ -150,6 +151,33 @@ function initScanner() {
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             currentStream = stream;
             videoElement.srcObject = stream;
+            
+            // Apply advanced constraints for focus and sharpness if supported
+            const track = stream.getVideoTracks()[0];
+            if (track) {
+                try {
+                    const capabilities = typeof track.getCapabilities === "function" ? track.getCapabilities() : {};
+                    const adv = {};
+                    
+                    if (capabilities.focusMode) {
+                        if (capabilities.focusMode.includes("continuous")) {
+                            adv.focusMode = "continuous";
+                        } else if (capabilities.focusMode.includes("manual")) {
+                            adv.focusMode = "manual";
+                        }
+                    }
+                    
+                    if (capabilities.sharpness) {
+                        adv.sharpness = capabilities.sharpness.max || 100;
+                    }
+                    
+                    if (Object.keys(adv).length > 0) {
+                        await track.applyConstraints({ advanced: [adv] });
+                    }
+                } catch (capErr) {
+                    console.warn("Could not apply advanced media track constraints:", capErr);
+                }
+            }
             
             // Wait for video to start playing
             await new Promise((resolve) => {
@@ -295,6 +323,7 @@ function initScanner() {
                         offscreenCanvas.width = 400;
                         offscreenCanvas.height = 400;
                         const ctx = offscreenCanvas.getContext("2d");
+                        ctx.imageSmoothingEnabled = false;
                         
                         // Draw raw color image for JAB Code scan first
                         ctx.drawImage(videoElement, sx, sy, scanBoxSizeInVideo, scanBoxSizeInVideo, 0, 0, 400, 400);
@@ -337,6 +366,7 @@ function initScanner() {
                         offscreenCanvas.height = fullH;
                         
                         const ctx = offscreenCanvas.getContext("2d");
+                        ctx.imageSmoothingEnabled = false;
                         // Draw raw color image first
                         ctx.drawImage(videoElement, 0, 0, vw, vh, 0, 0, fullW, fullH);
                         

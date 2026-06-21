@@ -43,6 +43,15 @@ function initScanner() {
     let videoElement = null;
     let overlayCanvasElement = null;
     const offscreenCanvas = document.createElement("canvas");
+    let jabInterface = null;
+
+    if (typeof window.JabcodeJSInterface !== "undefined") {
+        try {
+            jabInterface = new window.JabcodeJSInterface();
+        } catch (e) {
+            console.error("Failed to initialize JabcodeJSInterface:", e);
+        }
+    }
 
     let queue = JSON.parse(localStorage.getItem("obsidianscout:scanned_qr_entries") || "[]");
 
@@ -131,8 +140,9 @@ function initScanner() {
             video: {
                 deviceId: cameraId ? { exact: cameraId } : undefined,
                 facingMode: cameraId ? undefined : "environment",
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+                width: { ideal: 800 },
+                height: { ideal: 600 },
+                resizeMode: "none"
             },
             audio: false
         };
@@ -141,6 +151,33 @@ function initScanner() {
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             currentStream = stream;
             videoElement.srcObject = stream;
+            
+            // Apply advanced constraints for focus and sharpness if supported
+            const track = stream.getVideoTracks()[0];
+            if (track) {
+                try {
+                    const capabilities = typeof track.getCapabilities === "function" ? track.getCapabilities() : {};
+                    const adv = {};
+                    
+                    if (capabilities.focusMode) {
+                        if (capabilities.focusMode.includes("continuous")) {
+                            adv.focusMode = "continuous";
+                        } else if (capabilities.focusMode.includes("manual")) {
+                            adv.focusMode = "manual";
+                        }
+                    }
+                    
+                    if (capabilities.sharpness) {
+                        adv.sharpness = capabilities.sharpness.max || 100;
+                    }
+                    
+                    if (Object.keys(adv).length > 0) {
+                        await track.applyConstraints({ advanced: [adv] });
+                    }
+                } catch (capErr) {
+                    console.warn("Could not apply advanced media track constraints:", capErr);
+                }
+            }
             
             // Wait for video to start playing
             await new Promise((resolve) => {
@@ -286,18 +323,39 @@ function initScanner() {
                         offscreenCanvas.width = 400;
                         offscreenCanvas.height = 400;
                         const ctx = offscreenCanvas.getContext("2d");
+                        ctx.imageSmoothingEnabled = false;
                         
-                        // Apply filters on canvas copy
-                        ctx.filter = "grayscale(1) contrast(1.6) brightness(1.15)";
+                        // Draw raw color image for JAB Code scan first
                         ctx.drawImage(videoElement, sx, sy, scanBoxSizeInVideo, scanBoxSizeInVideo, 0, 0, 400, 400);
-                        ctx.filter = "none";
                         
-                        // Sharpen and inline contrast boost
-                        sharpenAndContrast(ctx, 400, 400);
-                        
-                        const result = await QrScanner.scanImage(offscreenCanvas, { returnDetailedScanResult: true });
-                        if (result && result.data) {
-                            handleScanResult(result, sx, sy, scanBoxSizeInVideo, 400);
+                        let qrResult = null;
+                        let jabResultText = null;
+
+                        // Try JAB Code scan every 6 frames
+                        if (jabInterface && frameCount % 6 === 0) {
+                            try {
+                                const dataUrl = offscreenCanvas.toDataURL("image/png");
+                                jabResultText = await jabInterface.decode_message(dataUrl);
+                            } catch (e) {
+                                // JAB decode failed, normal behavior
+                            }
+                        }
+
+                        if (jabResultText) {
+                            handleJabScanResult(jabResultText);
+                        } else {
+                            // Apply filters for QR scan
+                            ctx.filter = "grayscale(1) contrast(1.6) brightness(1.15)";
+                            ctx.drawImage(videoElement, sx, sy, scanBoxSizeInVideo, scanBoxSizeInVideo, 0, 0, 400, 400);
+                            ctx.filter = "none";
+                            
+                            // Sharpen and inline contrast boost
+                            sharpenAndContrast(ctx, 400, 400);
+                            
+                            qrResult = await QrScanner.scanImage(offscreenCanvas, { returnDetailedScanResult: true });
+                            if (qrResult && qrResult.data) {
+                                handleScanResult(qrResult, sx, sy, scanBoxSizeInVideo, 400);
+                            }
                         }
                     } else {
                         // Scan full frame (downscaled for performance)
@@ -308,20 +366,42 @@ function initScanner() {
                         offscreenCanvas.height = fullH;
                         
                         const ctx = offscreenCanvas.getContext("2d");
-                        ctx.filter = "grayscale(1) contrast(1.4) brightness(1.1)";
+                        ctx.imageSmoothingEnabled = false;
+                        // Draw raw color image first
                         ctx.drawImage(videoElement, 0, 0, vw, vh, 0, 0, fullW, fullH);
-                        ctx.filter = "none";
                         
-                        // Mild sharpen
-                        sharpenAndContrast(ctx, fullW, fullH);
-                        
-                        const result = await QrScanner.scanImage(offscreenCanvas, { returnDetailedScanResult: true });
-                        if (result && result.data) {
-                            handleScanResult(result, 0, 0, vw, fullW);
+                        let qrResult = null;
+                        let jabResultText = null;
+
+                        // Try JAB Code scan every 6 frames
+                        if (jabInterface && frameCount % 6 === 0) {
+                            try {
+                                const dataUrl = offscreenCanvas.toDataURL("image/png");
+                                jabResultText = await jabInterface.decode_message(dataUrl);
+                            } catch (e) {
+                                // JAB decode failed, normal behavior
+                            }
+                        }
+
+                        if (jabResultText) {
+                            handleJabScanResult(jabResultText);
+                        } else {
+                            // Apply filters for QR scan
+                            ctx.filter = "grayscale(1) contrast(1.4) brightness(1.1)";
+                            ctx.drawImage(videoElement, 0, 0, vw, vh, 0, 0, fullW, fullH);
+                            ctx.filter = "none";
+                            
+                            // Mild sharpen
+                            sharpenAndContrast(ctx, fullW, fullH);
+                            
+                            qrResult = await QrScanner.scanImage(offscreenCanvas, { returnDetailedScanResult: true });
+                            if (qrResult && qrResult.data) {
+                                handleScanResult(qrResult, 0, 0, vw, fullW);
+                            }
                         }
                     }
                 } catch (err) {
-                    // No QR code found, silent failure is normal
+                    // Silent failure is normal if no code is found
                 } finally {
                     scanInProgress = false;
                 }
@@ -455,7 +535,28 @@ function initScanner() {
     }
 
     function drawHighlight() {
-        if (!lastDetection || !lastDetection.cornerPoints) return;
+        if (!lastDetection) return;
+
+        const ctx = overlayCanvasElement.getContext("2d");
+        const displayWidth = overlayCanvasElement.width;
+        const displayHeight = overlayCanvasElement.height;
+
+        if (lastDetection.isJab) {
+            // Draw green border around the center scan box
+            const scanBoxSizeInDisplay = Math.min(displayWidth, displayHeight) * 0.7;
+            const dx = (displayWidth - scanBoxSizeInDisplay) / 2;
+            const dy = (displayHeight - scanBoxSizeInDisplay) / 2;
+            
+            ctx.fillStyle = "rgba(46, 204, 113, 0.25)";
+            ctx.fillRect(dx, dy, scanBoxSizeInDisplay, scanBoxSizeInDisplay);
+            
+            ctx.strokeStyle = "#2ecc71";
+            ctx.lineWidth = 3.5;
+            ctx.strokeRect(dx, dy, scanBoxSizeInDisplay, scanBoxSizeInDisplay);
+            return;
+        }
+
+        if (!lastDetection.cornerPoints) return;
 
         const pts = lastDetection.cornerPoints;
         const sx = lastDetection.sx;
@@ -465,11 +566,8 @@ function initScanner() {
 
         const vw = videoElement.videoWidth;
         const vh = videoElement.videoHeight;
-        const displayWidth = overlayCanvasElement.width;
-        const displayHeight = overlayCanvasElement.height;
 
         const mappedPts = pts.map(pt => mapPoint(pt, sx, sy, scanSizeInVideo, processingSize, vw, vh, displayWidth, displayHeight));
-        const ctx = overlayCanvasElement.getContext("2d");
 
         // 1. Draw glowing green background overlay inside the QR corners
         ctx.fillStyle = "rgba(46, 204, 113, 0.25)";
@@ -524,6 +622,22 @@ function initScanner() {
             const data = result.data;
             stopScanning();
             onScanSuccess(data);
+        }, 300);
+    }
+
+    function handleJabScanResult(decodedText) {
+        isSuccessState = true;
+        lastDetection = {
+            isJab: true
+        };
+
+        // Play the beep instantly
+        playBeep();
+
+        // Wait 300ms to let the user see the green outline flash, then trigger completion
+        setTimeout(() => {
+            stopScanning();
+            onScanSuccess(decodedText);
         }, 300);
     }
 

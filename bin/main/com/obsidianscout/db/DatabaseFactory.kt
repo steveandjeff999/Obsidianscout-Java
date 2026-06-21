@@ -50,8 +50,8 @@ object DatabaseFactory {
                 password = config.postgres.password
                 transactionIsolation = "TRANSACTION_READ_COMMITTED"
             } else {
-                maximumPoolSize = 1
-                minimumIdle = 1
+                maximumPoolSize = 16
+                minimumIdle = 2
                 isAutoCommit = true
             }
             connectionTimeout = 10_000  // fail fast after 10s instead of the 30s default

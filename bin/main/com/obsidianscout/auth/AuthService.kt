@@ -46,7 +46,8 @@ data class UserRecord(
     val role: UserRole,
     val createdAt: String,
     val email: String? = null,
-    val profilePicture: String? = null
+    val profilePicture: String? = null,
+    val notificationPreference: String = "all"
 )
 
 object AuthService {
@@ -247,7 +248,8 @@ object AuthService {
         newEmail: String? = null,
         newTeamNumber: Int? = null,
         newProfilePicture: String? = null,
-        clearProfilePicture: Boolean = false
+        clearProfilePicture: Boolean = false,
+        newNotificationPreference: String? = null
     ): UserRecord {
         // Hash outside the transaction if needed
         val newHash = newPassword?.takeIf { it.isNotBlank() }
@@ -298,6 +300,7 @@ object AuthService {
                 if (newHash != null)             stmt[passwordHash] = newHash
                 if (newRole != null)             stmt[role] = newRole.name
                 if (newEmail != null)            stmt[email] = newEmail.takeIf { it.isNotBlank() }
+                if (newNotificationPreference != null) stmt[notificationPreference] = newNotificationPreference
                 if (newTeamNumber != null && callerSession.role == UserRole.SUPERADMIN) {
                     stmt[teamNumber] = newTeamNumber
                 }
@@ -405,7 +408,8 @@ object AuthService {
             },
             createdAt = row[Users.createdAt].toString(),
             email = row[Users.email],
-            profilePicture = row[Users.profilePicture]
+            profilePicture = row[Users.profilePicture],
+            notificationPreference = row[Users.notificationPreference]
         )
     }
 

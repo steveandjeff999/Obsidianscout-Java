@@ -11,6 +11,7 @@ object Users : IntIdTable("users") {
     val createdAt = timestamp("created_at")
     val email = varchar("email", 255).nullable()
     val profilePicture = text("profile_picture").nullable()
+    val notificationPreference = varchar("notification_preference", 16).default("all")
 
     init {
         uniqueIndex("ux_users_username_team", username, teamNumber)
