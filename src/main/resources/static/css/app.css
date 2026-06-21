@@ -124,6 +124,23 @@ body.theme-dark .sidebar {
     margin-bottom: 24px;
 }
 
+.sidebar-section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    color: var(--muted);
+    margin: 16px 12px 6px;
+    opacity: 0.65;
+}
+body.theme-dark .sidebar-section-title {
+    color: var(--muted);
+    opacity: 0.8;
+}
+.sidebar.collapsed .sidebar-section-title {
+    display: none;
+}
+
 .sidebar-header {
     display: flex;
     align-items: center;
@@ -3065,6 +3082,95 @@ body.theme-dark .banner-details {
     font-size: 0.65rem;
     padding: 1px 4px;
     min-width: 10px;
+}
+
+/* Robot Role Filter & Badge styles */
+.btn-role-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background-color: var(--surface-3);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+.btn-role-filter:hover {
+    background-color: var(--surface-2);
+}
+.btn-role-filter.active {
+    background-color: var(--primary);
+    color: var(--on-primary);
+    border-color: var(--primary);
+}
+.btn-role-filter svg {
+    stroke: currentColor;
+    fill: none;
+}
+
+.role-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    margin: 2px;
+}
+/* Role specific badge colors */
+.role-badge.role-cycling { background-color: #1e3a8a; color: #eff6ff; }
+.role-badge.role-stealing { background-color: #78350f; color: #fef3c7; }
+.role-badge.role-scoring { background-color: #064e3b; color: #ecfdf5; }
+.role-badge.role-feeding { background-color: #134e4a; color: #f0fdfa; }
+.role-badge.role-defending { background-color: #4c1d95; color: #f5f3ff; }
+.role-badge.role-nc { background-color: #374151; color: #f9fafb; }
+
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    min-width: 32px;
+}
+.rank-badge.rank-1 { background-color: rgba(234, 179, 8, 0.2); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.4); }
+.rank-badge.rank-2 { background-color: rgba(156, 163, 175, 0.2); color: #9ca3af; border: 1px solid rgba(156, 163, 175, 0.4); }
+.rank-badge.rank-3 { background-color: rgba(202, 138, 4, 0.2); color: #ca8a04; border: 1px solid rgba(202, 138, 4, 0.4); }
+.rank-badge.rank-default { background-color: rgba(255, 255, 255, 0.05); color: var(--text); border: 1px solid var(--border); }
+
+/* Sleek rating progress bar */
+.qual-rating-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.qual-progress-bar-container {
+    width: 60px;
+    height: 4px;
+    background-color: var(--surface-3);
+    border-radius: 2px;
+    overflow: hidden;
+    display: inline-block;
+}
+.qual-progress-bar {
+    height: 100%;
+    background-color: var(--primary);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+.appearance-badge {
+    background-color: rgba(6, 182, 212, 0.1);
+    color: #06b6d4;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
 }
 
 

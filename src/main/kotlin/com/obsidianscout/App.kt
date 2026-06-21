@@ -83,6 +83,8 @@ fun main() {
         connectionGroupSize = 4
         workerGroupSize = 32
         callGroupSize = 64
+        requestReadTimeoutSeconds = 60
+        responseWriteTimeoutSeconds = 60
     }.start(wait = true)
 }
 

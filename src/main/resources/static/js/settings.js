@@ -365,6 +365,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (configVersionInput) {
                 configVersionInput.addEventListener("input", updateRawFromVisual);
             }
+            const roleCheckbox = document.getElementById("config-enable-role-collection");
+            if (roleCheckbox) {
+                roleCheckbox.addEventListener("change", () => {
+                    currentConfig.enableRobotRoleCollection = roleCheckbox.checked;
+                    updateRawFromVisual();
+                });
+            }
 
             if (btnAddField) {
                 btnAddField.addEventListener("click", addField);
@@ -591,6 +598,21 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (configVersionInput) {
                 configVersionInput.value = currentConfig.version || 1;
             }
+
+            // Qualitative settings card visibility & checkbox state
+            const cardQual = document.getElementById("qualitative-settings-card");
+            if (cardQual) {
+                if (activeConfigKind === "qual") {
+                    cardQual.classList.remove("hidden");
+                    const roleCheckbox = document.getElementById("config-enable-role-collection");
+                    if (roleCheckbox) {
+                        roleCheckbox.checked = !!currentConfig.enableRobotRoleCollection;
+                    }
+                } else {
+                    cardQual.classList.add("hidden");
+                }
+            }
+
             renderVisualFields();
             showVisualEditor();
         } catch (error) {
@@ -607,7 +629,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             title: parsed.title || defaultTitle,
             version: Number(parsed.version) || 1,
             fields: fields,
-            analytics: Array.isArray(parsed.analytics) ? parsed.analytics : []
+            analytics: Array.isArray(parsed.analytics) ? parsed.analytics : [],
+            enableRobotRoleCollection: !!parsed.enableRobotRoleCollection
         };
     }
 
@@ -1349,11 +1372,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             return cleaned;
         });
 
+        const roleCheckbox = document.getElementById("config-enable-role-collection");
+        const enableRoles = roleCheckbox ? roleCheckbox.checked : !!currentConfig.enableRobotRoleCollection;
+
         const cleanedConfig = {
             title: titleVal,
             version: versionVal,
             fields: cleanedFields,
-            analytics: currentConfig.analytics || []
+            analytics: currentConfig.analytics || [],
+            enableRobotRoleCollection: activeConfigKind === "qual" ? enableRoles : false
         };
 
         editor.value = JSON.stringify(cleanedConfig, null, 2);

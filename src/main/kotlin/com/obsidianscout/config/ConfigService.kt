@@ -31,7 +31,8 @@ data class ScoutingConfig(
     @SerialName("tba_key") val tbaKey: String? = null,
     @SerialName("first_username") val firstUsername: String? = null,
     @SerialName("first_key") val firstKey: String? = null,
-    @SerialName("event_code") val eventCode: String? = null
+    @SerialName("event_code") val eventCode: String? = null,
+    @SerialName("enable_robot_role_collection") val enableRobotRoleCollection: Boolean = false
 )
 
 @Serializable

@@ -57,6 +57,11 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.Base64
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 
 private val firstWorldDivisionToTba = mapOf(
@@ -127,9 +132,9 @@ object IntegrationService {
             json(JsonSupport.json)
         }
         install(HttpTimeout) {
-            requestTimeoutMillis = 15000L
-            connectTimeoutMillis = 10000L
-            socketTimeoutMillis = 10000L
+            requestTimeoutMillis = 60000L
+            connectTimeoutMillis = 30000L
+            socketTimeoutMillis = 30000L
         }
     }
 
@@ -147,87 +152,108 @@ object IntegrationService {
         if (eventKey.isBlank()) {
             return SyncCounts(0, 0)
         }
-        upsertEventRecord(settings, eventKey)
-        val teams = fetchMergedTeams(settings, eventKey)
-        val matches = fetchMergedMatches(settings, eventKey)
-        val now = Instant.now()
-        transaction {
-            val removed = MatchCanonical.deduplicateDatabaseForEvent(eventKey)
-            if (removed > 0) {
-                log.info("Cleaned $removed duplicate match row(s) before sync for $eventKey")
+        
+        val (event, teams, matches) = coroutineScope {
+            val eventDeferred = async {
+                fetchTbaEventDetail(settings, eventKey)
+                    ?: fetchFirstEventDetail(settings, eventKey)
+                    ?: EventSyncRecord(
+                        eventKey = eventKey,
+                        year = settings.year,
+                        eventCode = settings.eventCode.ifBlank { eventKey.removePrefix(settings.year.toString()) },
+                        name = eventKey,
+                        startDate = null,
+                        endDate = null,
+                        timezone = settings.timezone,
+                        dataJson = "{}"
+                    )
             }
-            teams.forEach { team ->
-                val existing = ApiTeams.selectAll().where {
-                    (ApiTeams.eventKey eq team.eventKey) and (ApiTeams.teamKey eq team.teamKey)
-                }.limit(1).firstOrNull()
-                if (existing == null) {
-                    ApiTeams.insert {
-                        it[ApiTeams.eventKey] = team.eventKey
-                        it[ApiTeams.teamKey] = team.teamKey
-                        it[ApiTeams.teamNumber] = team.teamNumber
-                        it[ApiTeams.name] = team.name.clipTeamText()
-                        it[ApiTeams.nickname] = team.nickname.clipTeamText()
-                        it[ApiTeams.city] = team.city.clipTeamLocation()
-                        it[ApiTeams.state] = team.state.clipTeamLocation()
-                        it[ApiTeams.country] = team.country.clipTeamLocation()
-                        it[ApiTeams.opr] = team.opr
-                        it[ApiTeams.epa] = team.epa
-                        it[ApiTeams.dataJson] = team.dataJson
-                        it[ApiTeams.updatedAt] = now
-                    }
-                } else {
-                    ApiTeams.update({ ApiTeams.id eq existing[ApiTeams.id] }) {
-                        it[ApiTeams.teamNumber] = team.teamNumber
-                        it[ApiTeams.name] = team.name.clipTeamText()
-                        it[ApiTeams.nickname] = team.nickname.clipTeamText()
-                        it[ApiTeams.city] = team.city.clipTeamLocation()
-                        it[ApiTeams.state] = team.state.clipTeamLocation()
-                        it[ApiTeams.country] = team.country.clipTeamLocation()
-                        if (team.opr != null) {
-                            it[ApiTeams.opr] = team.opr
-                        }
-                        if (team.epa != null) {
-                            it[ApiTeams.epa] = team.epa
-                        }
-                        it[ApiTeams.dataJson] = team.dataJson
-                        it[ApiTeams.updatedAt] = now
-                    }
-                }
-            }
+            val teamsDeferred = async { fetchMergedTeams(settings, eventKey) }
+            val matchesDeferred = async { fetchMergedMatches(settings, eventKey) }
+            Triple(eventDeferred.await(), teamsDeferred.await(), matchesDeferred.await())
+        }
 
-            matches.forEach { match ->
-                val canonical = MatchCanonical.canonicalize(match)
-                val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
-                if (existing == null) {
-                    ApiMatches.insert {
-                        it[ApiMatches.matchKey] = canonical.matchKey
-                        it[ApiMatches.eventKey] = canonical.eventKey
-                        it[ApiMatches.compLevel] = canonical.compLevel
-                        it[ApiMatches.setNumber] = canonical.setNumber
-                        it[ApiMatches.matchNumber] = canonical.matchNumber
-                        it[ApiMatches.scheduledTime] = canonical.scheduledTime
-                        it[ApiMatches.actualTime] = canonical.actualTime
-                        it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
-                        it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
-                        it[ApiMatches.dataJson] = canonical.dataJson
-                        it[ApiMatches.updatedAt] = now
-                    }
-                } else {
-                    ApiMatches.update({ ApiMatches.id eq existing[ApiMatches.id] }) {
-                        it[ApiMatches.eventKey] = canonical.eventKey
-                        it[ApiMatches.compLevel] = canonical.compLevel
-                        it[ApiMatches.setNumber] = canonical.setNumber
-                        it[ApiMatches.matchNumber] = canonical.matchNumber
-                        it[ApiMatches.scheduledTime] = canonical.scheduledTime
-                        it[ApiMatches.actualTime] = canonical.actualTime
-                        it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
-                        it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
-                        it[ApiMatches.dataJson] = canonical.dataJson
-                        it[ApiMatches.updatedAt] = now
+        val now = Instant.now()
+        withContext(Dispatchers.IO) {
+            transaction {
+                upsertEvent(event, now)
+                val removed = MatchCanonical.deduplicateDatabaseForEvent(eventKey)
+                if (removed > 0) {
+                    log.info("Cleaned $removed duplicate match row(s) before sync for $eventKey")
+                }
+                teams.forEach { team ->
+                    val existing = ApiTeams.selectAll().where {
+                        (ApiTeams.eventKey eq team.eventKey) and (ApiTeams.teamKey eq team.teamKey)
+                    }.limit(1).firstOrNull()
+                    if (existing == null) {
+                        ApiTeams.insert {
+                            it[ApiTeams.eventKey] = team.eventKey
+                            it[ApiTeams.teamKey] = team.teamKey
+                            it[ApiTeams.teamNumber] = team.teamNumber
+                            it[ApiTeams.name] = team.name.clipTeamText()
+                            it[ApiTeams.nickname] = team.nickname.clipTeamText()
+                            it[ApiTeams.city] = team.city.clipTeamLocation()
+                            it[ApiTeams.state] = team.state.clipTeamLocation()
+                            it[ApiTeams.country] = team.country.clipTeamLocation()
+                            it[ApiTeams.opr] = team.opr
+                            it[ApiTeams.epa] = team.epa
+                            it[ApiTeams.dataJson] = team.dataJson
+                            it[ApiTeams.updatedAt] = now
+                        }
+                    } else {
+                        ApiTeams.update({ ApiTeams.id eq existing[ApiTeams.id] }) {
+                            it[ApiTeams.teamNumber] = team.teamNumber
+                            it[ApiTeams.name] = team.name.clipTeamText()
+                            it[ApiTeams.nickname] = team.nickname.clipTeamText()
+                            it[ApiTeams.city] = team.city.clipTeamLocation()
+                            it[ApiTeams.state] = team.state.clipTeamLocation()
+                            it[ApiTeams.country] = team.country.clipTeamLocation()
+                            if (team.opr != null) {
+                                it[ApiTeams.opr] = team.opr
+                            }
+                            if (team.epa != null) {
+                                it[ApiTeams.epa] = team.epa
+                            }
+                            it[ApiTeams.dataJson] = team.dataJson
+                            it[ApiTeams.updatedAt] = now
+                        }
                     }
                 }
+
+                matches.forEach { match ->
+                    val canonical = MatchCanonical.canonicalize(match)
+                    val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
+                    if (existing == null) {
+                        ApiMatches.insert {
+                            it[ApiMatches.matchKey] = canonical.matchKey
+                            it[ApiMatches.eventKey] = canonical.eventKey
+                            it[ApiMatches.compLevel] = canonical.compLevel
+                            it[ApiMatches.setNumber] = canonical.setNumber
+                            it[ApiMatches.matchNumber] = canonical.matchNumber
+                            it[ApiMatches.scheduledTime] = canonical.scheduledTime
+                            it[ApiMatches.actualTime] = canonical.actualTime
+                            it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
+                            it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
+                            it[ApiMatches.dataJson] = canonical.dataJson
+                            it[ApiMatches.updatedAt] = now
+                        }
+                    } else {
+                        ApiMatches.update({ ApiMatches.id eq existing[ApiMatches.id] }) {
+                            it[ApiMatches.eventKey] = canonical.eventKey
+                            it[ApiMatches.compLevel] = canonical.compLevel
+                            it[ApiMatches.setNumber] = canonical.setNumber
+                            it[ApiMatches.matchNumber] = canonical.matchNumber
+                            it[ApiMatches.scheduledTime] = canonical.scheduledTime
+                            it[ApiMatches.actualTime] = canonical.actualTime
+                            it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
+                            it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
+                            it[ApiMatches.dataJson] = canonical.dataJson
+                            it[ApiMatches.updatedAt] = now
+                        }
+                    }
+                }
+                MatchCanonical.deduplicateDatabaseForEvent(eventKey)
             }
-            MatchCanonical.deduplicateDatabaseForEvent(eventKey)
         }
         try {
             syncStats(settings)
@@ -242,87 +268,108 @@ object IntegrationService {
         if (key.isBlank()) {
             return SyncCounts(0, 0)
         }
-        upsertEventRecord(settings, key)
-        val teams = fetchMergedTeams(settings, key)
-        val matches = fetchMergedMatches(settings, key)
-        val now = Instant.now()
-        transaction {
-            val removed = MatchCanonical.deduplicateDatabaseForEvent(key)
-            if (removed > 0) {
-                log.info("Cleaned $removed duplicate match row(s) before sync for $key")
+        
+        val (event, teams, matches) = coroutineScope {
+            val eventDeferred = async {
+                fetchTbaEventDetail(settings, key)
+                    ?: fetchFirstEventDetail(settings, key)
+                    ?: EventSyncRecord(
+                        eventKey = key,
+                        year = settings.year,
+                        eventCode = settings.eventCode.ifBlank { key.removePrefix(settings.year.toString()) },
+                        name = key,
+                        startDate = null,
+                        endDate = null,
+                        timezone = settings.timezone,
+                        dataJson = "{}"
+                    )
             }
-            teams.forEach { team ->
-                val existing = ApiTeams.selectAll().where {
-                    (ApiTeams.eventKey eq team.eventKey) and (ApiTeams.teamKey eq team.teamKey)
-                }.limit(1).firstOrNull()
-                if (existing == null) {
-                    ApiTeams.insert {
-                        it[ApiTeams.eventKey] = team.eventKey
-                        it[ApiTeams.teamKey] = team.teamKey
-                        it[ApiTeams.teamNumber] = team.teamNumber
-                        it[ApiTeams.name] = team.name.clipTeamText()
-                        it[ApiTeams.nickname] = team.nickname.clipTeamText()
-                        it[ApiTeams.city] = team.city.clipTeamLocation()
-                        it[ApiTeams.state] = team.state.clipTeamLocation()
-                        it[ApiTeams.country] = team.country.clipTeamLocation()
-                        it[ApiTeams.opr] = team.opr
-                        it[ApiTeams.epa] = team.epa
-                        it[ApiTeams.dataJson] = team.dataJson
-                        it[ApiTeams.updatedAt] = now
-                    }
-                } else {
-                    ApiTeams.update({ ApiTeams.id eq existing[ApiTeams.id] }) {
-                        it[ApiTeams.teamNumber] = team.teamNumber
-                        it[ApiTeams.name] = team.name.clipTeamText()
-                        it[ApiTeams.nickname] = team.nickname.clipTeamText()
-                        it[ApiTeams.city] = team.city.clipTeamLocation()
-                        it[ApiTeams.state] = team.state.clipTeamLocation()
-                        it[ApiTeams.country] = team.country.clipTeamLocation()
-                        if (team.opr != null) {
-                            it[ApiTeams.opr] = team.opr
-                        }
-                        if (team.epa != null) {
-                            it[ApiTeams.epa] = team.epa
-                        }
-                        it[ApiTeams.dataJson] = team.dataJson
-                        it[ApiTeams.updatedAt] = now
-                    }
-                }
-            }
+            val teamsDeferred = async { fetchMergedTeams(settings, key) }
+            val matchesDeferred = async { fetchMergedMatches(settings, key) }
+            Triple(eventDeferred.await(), teamsDeferred.await(), matchesDeferred.await())
+        }
 
-            matches.forEach { match ->
-                val canonical = MatchCanonical.canonicalize(match)
-                val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
-                if (existing == null) {
-                    ApiMatches.insert {
-                        it[ApiMatches.matchKey] = canonical.matchKey
-                        it[ApiMatches.eventKey] = canonical.eventKey
-                        it[ApiMatches.compLevel] = canonical.compLevel
-                        it[ApiMatches.setNumber] = canonical.setNumber
-                        it[ApiMatches.matchNumber] = canonical.matchNumber
-                        it[ApiMatches.scheduledTime] = canonical.scheduledTime
-                        it[ApiMatches.actualTime] = canonical.actualTime
-                        it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
-                        it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
-                        it[ApiMatches.dataJson] = canonical.dataJson
-                        it[ApiMatches.updatedAt] = now
-                    }
-                } else {
-                    ApiMatches.update({ ApiMatches.id eq existing[ApiMatches.id] }) {
-                        it[ApiMatches.eventKey] = canonical.eventKey
-                        it[ApiMatches.compLevel] = canonical.compLevel
-                        it[ApiMatches.setNumber] = canonical.setNumber
-                        it[ApiMatches.matchNumber] = canonical.matchNumber
-                        it[ApiMatches.scheduledTime] = canonical.scheduledTime
-                        it[ApiMatches.actualTime] = canonical.actualTime
-                        it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
-                        it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
-                        it[ApiMatches.dataJson] = canonical.dataJson
-                        it[ApiMatches.updatedAt] = now
+        val now = Instant.now()
+        withContext(Dispatchers.IO) {
+            transaction {
+                upsertEvent(event, now)
+                val removed = MatchCanonical.deduplicateDatabaseForEvent(key)
+                if (removed > 0) {
+                    log.info("Cleaned $removed duplicate match row(s) before sync for $key")
+                }
+                teams.forEach { team ->
+                    val existing = ApiTeams.selectAll().where {
+                        (ApiTeams.eventKey eq team.eventKey) and (ApiTeams.teamKey eq team.teamKey)
+                    }.limit(1).firstOrNull()
+                    if (existing == null) {
+                        ApiTeams.insert {
+                            it[ApiTeams.eventKey] = team.eventKey
+                            it[ApiTeams.teamKey] = team.teamKey
+                            it[ApiTeams.teamNumber] = team.teamNumber
+                            it[ApiTeams.name] = team.name.clipTeamText()
+                            it[ApiTeams.nickname] = team.nickname.clipTeamText()
+                            it[ApiTeams.city] = team.city.clipTeamLocation()
+                            it[ApiTeams.state] = team.state.clipTeamLocation()
+                            it[ApiTeams.country] = team.country.clipTeamLocation()
+                            it[ApiTeams.opr] = team.opr
+                            it[ApiTeams.epa] = team.epa
+                            it[ApiTeams.dataJson] = team.dataJson
+                            it[ApiTeams.updatedAt] = now
+                        }
+                    } else {
+                        ApiTeams.update({ ApiTeams.id eq existing[ApiTeams.id] }) {
+                            it[ApiTeams.teamNumber] = team.teamNumber
+                            it[ApiTeams.name] = team.name.clipTeamText()
+                            it[ApiTeams.nickname] = team.nickname.clipTeamText()
+                            it[ApiTeams.city] = team.city.clipTeamLocation()
+                            it[ApiTeams.state] = team.state.clipTeamLocation()
+                            it[ApiTeams.country] = team.country.clipTeamLocation()
+                            if (team.opr != null) {
+                                it[ApiTeams.opr] = team.opr
+                            }
+                            if (team.epa != null) {
+                                it[ApiTeams.epa] = team.epa
+                            }
+                            it[ApiTeams.dataJson] = team.dataJson
+                            it[ApiTeams.updatedAt] = now
+                        }
                     }
                 }
+
+                matches.forEach { match ->
+                    val canonical = MatchCanonical.canonicalize(match)
+                    val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
+                    if (existing == null) {
+                        ApiMatches.insert {
+                            it[ApiMatches.matchKey] = canonical.matchKey
+                            it[ApiMatches.eventKey] = canonical.eventKey
+                            it[ApiMatches.compLevel] = canonical.compLevel
+                            it[ApiMatches.setNumber] = canonical.setNumber
+                            it[ApiMatches.matchNumber] = canonical.matchNumber
+                            it[ApiMatches.scheduledTime] = canonical.scheduledTime
+                            it[ApiMatches.actualTime] = canonical.actualTime
+                            it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
+                            it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
+                            it[ApiMatches.dataJson] = canonical.dataJson
+                            it[ApiMatches.updatedAt] = now
+                        }
+                    } else {
+                        ApiMatches.update({ ApiMatches.id eq existing[ApiMatches.id] }) {
+                            it[ApiMatches.eventKey] = canonical.eventKey
+                            it[ApiMatches.compLevel] = canonical.compLevel
+                            it[ApiMatches.setNumber] = canonical.setNumber
+                            it[ApiMatches.matchNumber] = canonical.matchNumber
+                            it[ApiMatches.scheduledTime] = canonical.scheduledTime
+                            it[ApiMatches.actualTime] = canonical.actualTime
+                            it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
+                            it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
+                            it[ApiMatches.dataJson] = canonical.dataJson
+                            it[ApiMatches.updatedAt] = now
+                        }
+                    }
+                }
+                MatchCanonical.deduplicateDatabaseForEvent(key)
             }
-            MatchCanonical.deduplicateDatabaseForEvent(key)
         }
         try {
             syncStats(settings, key)
@@ -339,37 +386,36 @@ object IntegrationService {
         }
         val tbaEnabled = settings.apiKeys.tbaKey.isNotBlank()
         val statboticsEnabled = true
-        val oprs = if (tbaEnabled) {
-            fetchTbaOprs(settings, eventKey)
-        } else {
-            null
+        
+        val (oprs, epas) = coroutineScope {
+            val oprsDeferred = if (tbaEnabled) async { fetchTbaOprs(settings, eventKey) } else null
+            val epasDeferred = if (statboticsEnabled) async { fetchStatboticsEpas(eventKey) } else null
+            oprsDeferred?.await() to epasDeferred?.await()
         }
-        val epas = if (statboticsEnabled) {
-            fetchStatboticsEpas(eventKey)
-        } else {
-            null
-        }
+
         if (oprs == null && epas == null) {
             return 0
         }
         val now = Instant.now()
-        transaction {
-            val teamsList = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
-            teamsList.forEach { row ->
-                val teamKey = row[ApiTeams.teamKey]
-                val opr = oprs?.get(teamKey)
-                val epa = epas?.get(teamKey)
-                val hasOpr = oprs != null && oprs.containsKey(teamKey)
-                val hasEpa = epas != null && epas.containsKey(teamKey)
-                if (hasOpr || hasEpa) {
-                    ApiTeams.update({ ApiTeams.id eq row[ApiTeams.id] }) {
-                        if (hasOpr) {
-                            it[ApiTeams.opr] = opr
+        withContext(Dispatchers.IO) {
+            transaction {
+                val teamsList = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
+                teamsList.forEach { row ->
+                    val teamKey = row[ApiTeams.teamKey]
+                    val opr = oprs?.get(teamKey)
+                    val epa = epas?.get(teamKey)
+                    val hasOpr = oprs != null && oprs.containsKey(teamKey)
+                    val hasEpa = epas != null && epas.containsKey(teamKey)
+                    if (hasOpr || hasEpa) {
+                        ApiTeams.update({ ApiTeams.id eq row[ApiTeams.id] }) {
+                            if (hasOpr) {
+                                it[ApiTeams.opr] = opr
+                            }
+                            if (hasEpa) {
+                                it[ApiTeams.epa] = epa
+                            }
+                            it[ApiTeams.updatedAt] = now
                         }
-                        if (hasEpa) {
-                            it[ApiTeams.epa] = epa
-                        }
-                        it[ApiTeams.updatedAt] = now
                     }
                 }
             }
@@ -1129,40 +1175,42 @@ object IntegrationService {
             .distinctBy { it.eventKey }
     }
 
-    private suspend fun fetchMergedTeams(settings: ApiSettings, eventKey: String): List<TeamSyncRecord> {
-        val teams = mutableListOf<TeamSyncRecord>()
-        if (hasTbaCredentials(settings)) {
-            teams.addAll(fetchTbaTeams(settings, eventKey))
-        }
-        if (hasFirstCredentials(settings)) {
-            teams.addAll(fetchFirstTeams(settings, eventKey))
-        }
+    private suspend fun fetchMergedTeams(settings: ApiSettings, eventKey: String): List<TeamSyncRecord> = coroutineScope {
+        val tbaDeferred = if (hasTbaCredentials(settings)) async { fetchTbaTeams(settings, eventKey) } else null
+        val firstDeferred = if (hasFirstCredentials(settings)) async { fetchFirstTeams(settings, eventKey) } else null
+
+        val tbaTeams = tbaDeferred?.await() ?: emptyList()
+        val firstTeams = firstDeferred?.await() ?: emptyList()
+
+        val teams = (tbaTeams + firstTeams).toMutableList()
         if (teams.isEmpty()) {
-            when (settings.preferredSource) {
-                "first" -> teams.addAll(fetchFirstTeams(settings, eventKey))
-                else -> teams.addAll(fetchTbaTeams(settings, eventKey))
+            val fallbackTeams = when (settings.preferredSource) {
+                "first" -> fetchFirstTeams(settings, eventKey)
+                else -> fetchTbaTeams(settings, eventKey)
             }
+            teams.addAll(fallbackTeams)
         }
-        return teams
+        teams
             .groupBy { "${it.eventKey.lowercase()}_${it.teamKey.lowercase()}" }
             .map { (_, group) -> group.maxByOrNull { it.dataJson.length } ?: group.first() }
     }
 
-    private suspend fun fetchMergedMatches(settings: ApiSettings, eventKey: String): List<MatchSyncRecord> {
-        val matches = mutableListOf<MatchSyncRecord>()
-        if (hasTbaCredentials(settings)) {
-            matches.addAll(fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") })
-        }
-        if (hasFirstCredentials(settings)) {
-            matches.addAll(fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") })
-        }
+    private suspend fun fetchMergedMatches(settings: ApiSettings, eventKey: String): List<MatchSyncRecord> = coroutineScope {
+        val tbaDeferred = if (hasTbaCredentials(settings)) async { fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") } } else null
+        val firstDeferred = if (hasFirstCredentials(settings)) async { fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") } } else null
+
+        val tbaMatches = tbaDeferred?.await() ?: emptyList()
+        val firstMatches = firstDeferred?.await() ?: emptyList()
+
+        val matches = (tbaMatches + firstMatches).toMutableList()
         if (matches.isEmpty()) {
-            when (settings.preferredSource) {
-                "first" -> matches.addAll(fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") })
-                else -> matches.addAll(fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") })
+            val fallbackMatches = when (settings.preferredSource) {
+                "first" -> fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") }
+                else -> fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") }
             }
+            matches.addAll(fallbackMatches)
         }
-        return MatchCanonical.mergeAll(matches)
+        MatchCanonical.mergeAll(matches)
     }
 
     private suspend fun upsertEventRecord(settings: ApiSettings, eventKey: String) {
@@ -1559,24 +1607,36 @@ object IntegrationService {
             }
         }
 
-        for ((apiLevel, defaultLevel) in matchLevels) {
-            val matchesRoot = fetchFirstJson(settings, year, "matches/$eventCode?tournamentLevel=$apiLevel")
-            parseFirstMatchItems(matchesRoot, normalizedEventKey, defaultLevel).forEach { upsert(it) }
-        }
+        coroutineScope {
+            val matchesJobs = matchLevels.map { (apiLevel, defaultLevel) ->
+                async {
+                    val matchesRoot = fetchFirstJson(settings, year, "matches/$eventCode?tournamentLevel=$apiLevel")
+                    parseFirstMatchItems(matchesRoot, normalizedEventKey, defaultLevel)
+                }
+            }
+            val scheduleJobs = scheduleLevels.map { (apiLevel, defaultLevel) ->
+                async {
+                    val scheduleRoot = fetchFirstJson(settings, year, "schedule/$eventCode?tournamentLevel=$apiLevel")
+                    parseFirstMatchItems(scheduleRoot, normalizedEventKey, defaultLevel)
+                }
+            }
+            val fallbackJob = async {
+                val fallbackMatchesRoot = fetchFirstJson(settings, year, "matches/$eventCode")
+                parseFirstMatchItems(fallbackMatchesRoot, normalizedEventKey, "")
+            }
 
-        for ((apiLevel, defaultLevel) in scheduleLevels) {
-            val scheduleRoot = fetchFirstJson(settings, year, "schedule/$eventCode?tournamentLevel=$apiLevel")
-            parseFirstMatchItems(scheduleRoot, normalizedEventKey, defaultLevel).forEach { upsert(it) }
-        }
+            // Wait for all fetches to complete concurrently
+            val fetchedMatchesList = matchesJobs.awaitAll() + scheduleJobs.awaitAll()
+            fetchedMatchesList.flatten().forEach { upsert(it) }
 
-        if (results.isEmpty()) {
-            parseFirstMatchItems(fetchFirstJson(settings, year, "matches/$eventCode"), normalizedEventKey, "")
-                .forEach { upsert(it) }
-        } else {
-            val fallbackMatches = parseFirstMatchItems(fetchFirstJson(settings, year, "matches/$eventCode"), normalizedEventKey, "")
-            fallbackMatches
-                .filter { MatchCanonical.normalizeCompLevel(it.compLevel) == "practice" }
-                .forEach { upsert(it) }
+            val fallbackMatches = fallbackJob.await()
+            if (results.isEmpty()) {
+                fallbackMatches.forEach { upsert(it) }
+            } else {
+                fallbackMatches
+                    .filter { MatchCanonical.normalizeCompLevel(it.compLevel) == "practice" }
+                    .forEach { upsert(it) }
+            }
         }
 
         if (results.isNotEmpty()) {

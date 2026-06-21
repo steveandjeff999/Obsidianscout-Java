@@ -87,6 +87,11 @@ async function loadQualScoutPageData(me) {
                 fieldContainer.appendChild(node);
             });
 
+        if (config.enableRobotRoleCollection) {
+            const roleNode = buildRobotRoleCollectionField();
+            fieldContainer.appendChild(roleNode);
+        }
+
         if (clearButton) {
             clearButton.addEventListener("click", () => {
                 clearFormFields(fields, form);
@@ -567,6 +572,17 @@ function buildPayload(fields, form) {
             payload[field.id] = value;
         }
     }
+
+    // Role collection payload
+    const roleContainer = form.querySelector("#robot-role-collection-container");
+    if (roleContainer) {
+        const checked = [];
+        roleContainer.querySelectorAll(".robot-role-checkbox:checked").forEach(cb => {
+            checked.push(cb.value);
+        });
+        payload.robotRoles = checked;
+    }
+
     return payload;
 }
 
@@ -623,6 +639,22 @@ function applyEntryToForm(entry, fields, form) {
             }
         }
     });
+
+    const roleContainer = form.querySelector("#robot-role-collection-container");
+    if (roleContainer) {
+        roleContainer.querySelectorAll(".robot-role-checkbox").forEach(cb => {
+            cb.checked = false;
+            cb.dispatchEvent(new Event("change"));
+        });
+        const roles = entry.data.robotRoles || [];
+        roles.forEach(role => {
+            const cb = roleContainer.querySelector(`.robot-role-checkbox[value='${role}']`);
+            if (cb) {
+                cb.checked = true;
+                cb.dispatchEvent(new Event("change"));
+            }
+        });
+    }
 }
 
 function clearFormFields(fields, form) {
@@ -646,6 +678,82 @@ function clearFormFields(fields, form) {
             }
         }
     });
+
+    const roleContainer = form.querySelector("#robot-role-collection-container");
+    if (roleContainer) {
+        roleContainer.querySelectorAll(".robot-role-checkbox").forEach(cb => {
+            cb.checked = false;
+            cb.dispatchEvent(new Event("change"));
+        });
+    }
+}
+
+function buildRobotRoleCollectionField() {
+    const wrapper = document.createElement("div");
+    wrapper.id = "robot-role-collection-container";
+    wrapper.className = "form-section mt-18";
+
+    const title = document.createElement("h3");
+    title.textContent = "Robot Roles";
+    wrapper.appendChild(title);
+
+    const rolesContainer = document.createElement("div");
+    rolesContainer.className = "row wrap gap-8 mt-12";
+
+    const roles = [
+        { name: "Cycling", val: "Cycling" },
+        { name: "Stealing", val: "Stealing" },
+        { name: "Scoring", val: "Scoring" },
+        { name: "Feeding", val: "Feeding" },
+        { name: "Defending", val: "Defending" },
+        { name: "N/C", val: "N/C" }
+    ];
+
+    roles.forEach(r => {
+        const label = document.createElement("label");
+        label.className = "checkbox-btn";
+        label.style.display = "inline-flex";
+        label.style.alignItems = "center";
+        label.style.gap = "6px";
+        label.style.padding = "8px 16px";
+        label.style.borderRadius = "20px";
+        label.style.border = "1px solid var(--border)";
+        label.style.cursor = "pointer";
+        label.style.userSelect = "none";
+        label.style.fontSize = "13px";
+        label.style.fontWeight = "600";
+        label.style.background = "var(--surface-3)";
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = r.val;
+        input.className = "robot-role-checkbox hidden";
+        input.style.display = "none";
+
+        const text = document.createElement("span");
+        text.textContent = r.name;
+
+        label.appendChild(input);
+        label.appendChild(text);
+
+        const updateStyle = () => {
+            if (input.checked) {
+                label.style.background = "var(--primary)";
+                label.style.color = "var(--on-primary)";
+                label.style.borderColor = "var(--primary)";
+            } else {
+                label.style.background = "var(--surface-3)";
+                label.style.color = "var(--text)";
+                label.style.borderColor = "var(--border)";
+            }
+        };
+
+        input.addEventListener("change", updateStyle);
+        rolesContainer.appendChild(label);
+    });
+
+    wrapper.appendChild(rolesContainer);
+    return wrapper;
 }
 
 function setFormEnabled(form, notice, enabled) {

@@ -1575,6 +1575,8 @@ fun Application.configureRoutes() {
             "graphs" to "graphs.html",
             "events" to "events.html",
             "teams" to "teams.html",
+            "rankings" to "rankings.html",
+            "qual-rankings" to "qual-rankings.html",
             "team" to "team.html",
             "matches" to "matches.html",
             "predictor" to "predictor.html",
