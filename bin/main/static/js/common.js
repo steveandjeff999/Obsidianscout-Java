@@ -71,19 +71,8 @@
     }
 
     function clearAllCaches() {
-        try {
-            const keys = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith("cache:")) {
-                    keys.push(key);
-                }
-            }
-            keys.forEach(key => safeRemoveItem(key));
-            console.log("[Offline Cache] Cleared all caches after write operation");
-        } catch (e) {
-            console.warn("[Offline Cache] Failed to clear caches:", e);
-        }
+        // Trigger background sync with instructions to clear old/stale keys only after successful downloads
+        syncOfflineCache(true);
     }
 
     function saveScrollPositions() {
@@ -259,11 +248,21 @@
                 return false;
             }
             if (!response.ok) {
+                const cachedMe = safeGetItem("cache:/api/auth/me");
+                if (cachedMe) {
+                    console.warn("[Offline Cache] Server status check failed (not 401). Assuming logged in from cache.");
+                    return true;
+                }
                 return false;
             }
             const data = await response.json();
             return !!(data && data.loggedIn);
         } catch (error) {
+            const cachedMe = safeGetItem("cache:/api/auth/me");
+            if (cachedMe) {
+                console.warn("[Offline Cache] Network check failed. Assuming logged in from cache.", error);
+                return true;
+            }
             return false;
         }
     }
@@ -1237,6 +1236,91 @@
         });
     }
 
+    async function syncOfflineCache(clearOldOthers = false) {
+        if (!navigator.onLine) return;
+        const loggedIn = await checkLoginStatus();
+        if (!loggedIn) return;
+
+        try {
+            const settingsResponse = await request("/api/settings", { timeoutMs: 5000 }).catch(() => null);
+            const user = await getMe().catch(() => null);
+            if (!settingsResponse || !settingsResponse.settings) {
+                return;
+            }
+
+            const settings = settingsResponse.settings;
+            const eventKey = resolveEventKey(settings);
+            const isAdminUser = user && isAdmin(user.role);
+
+            const endpoints = [
+                "/api/auth/me",
+                "/api/settings",
+                "/api/settings?local=true",
+                "/api/config",
+                "/api/pit-config",
+                "/api/qual-config",
+                "/api/events?cached=1",
+                "/api/summary",
+                "/api/scouting",
+                "/api/scouting?includePrescout=true",
+                "/api/pit-scouting",
+                "/api/pit-scouting?includePrescout=true",
+                "/api/qual-scouting",
+                "/api/qual-scouting?includePrescout=true",
+                "/api/prescout/scouting",
+                "/api/prescout/pit-scouting",
+                "/api/prescout/qual-scouting",
+                "/api/alliances",
+                "/api/alliances/invites",
+                "/api/alliances/invites/count",
+                "/api/alliances/import-sources"
+            ];
+
+            if (settings.year) {
+                endpoints.push(`/api/events?year=${settings.year}&cached=1`);
+            }
+            if (eventKey) {
+                endpoints.push(`/api/teams?eventKey=${eventKey}`);
+                endpoints.push(`/api/matches?eventKey=${eventKey}`);
+                endpoints.push(`/api/alliance-selection?eventKey=${eventKey}`);
+            }
+            if (isAdminUser) {
+                endpoints.push("/api/admin/users");
+                endpoints.push("/api/admin/email-settings");
+            }
+
+            console.log("[Offline Cache] Starting background sync of " + endpoints.length + " endpoints...");
+            
+            const updatedKeys = new Set();
+            let successCount = 0;
+
+            for (const endpoint of endpoints) {
+                try {
+                    await request(endpoint, { timeoutMs: 8000 });
+                    updatedKeys.add("cache:" + endpoint);
+                    successCount++;
+                } catch (e) {
+                    console.warn("[Offline Cache] Sync failed for " + endpoint + ":", e.message || e);
+                }
+            }
+            console.log("[Offline Cache] Background sync complete. Successfully updated " + successCount + " endpoints.");
+
+            if (clearOldOthers && successCount > 0) {
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith("cache:") && key !== "cache:/api/auth/me" && !updatedKeys.has(key)) {
+                        keysToRemove.push(key);
+                    }
+                }
+                keysToRemove.forEach(key => safeRemoveItem(key));
+                console.log("[Offline Cache] Cleared " + keysToRemove.length + " old/stale cache keys.");
+            }
+        } catch (err) {
+            console.warn("[Offline Cache] Sync loop failed:", err);
+        }
+    }
+
     // Set up Service Worker and Global Connection Listeners
     document.addEventListener("DOMContentLoaded", () => {
         // Clean up legacy i18n caches in localStorage
@@ -1347,6 +1431,7 @@
             if (!isCacheManager) {
                 syncOfflineEntries();
             }
+            syncOfflineCache();
             const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
             const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
             if (isDataPage && !isUserEditing) {
@@ -1361,11 +1446,15 @@
             if (!isCacheManager) {
                 syncOfflineEntries();
             }
+            syncOfflineCache();
         }
         // Load selected language bundle and apply translations
         loadLocale(safeGetItem('obsidianscout:lang') || 'en').then(() => applyTranslations());
         restoreScrollPositions();
         initChatUnreadPolling();
+
+        // Run background cache synchronization every 5 minutes
+        setInterval(syncOfflineCache, 300000);
     });
 
     window.addEventListener("beforeunload", (event) => {
