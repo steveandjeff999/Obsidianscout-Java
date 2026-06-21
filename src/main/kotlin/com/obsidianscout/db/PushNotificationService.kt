@@ -12,6 +12,7 @@ import kotlinx.serialization.encodeToString
 import nl.martijndwars.webpush.Notification
 import nl.martijndwars.webpush.PushService
 import nl.martijndwars.webpush.Subscription
+import nl.martijndwars.webpush.Encoding
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
@@ -33,6 +34,13 @@ data class PushPayload(
 data class PushPayloadData(
     val url: String,
     val groupName: String
+)
+
+data class TargetUserNotification(
+    val username: String,
+    val preference: String,
+    val endpoint: String,
+    val subscription: Subscription
 )
 
 object PushNotificationService {
@@ -66,10 +74,11 @@ object PushNotificationService {
                     (PushSubscriptions innerJoin Users).selectAll()
                         .where { (Users.teamNumber eq message.teamNumber) and (Users.id neq message.userId) }
                         .map { row ->
-                            Triple(
-                                row[Users.username],
-                                row[PushSubscriptions.endpoint],
-                                Subscription(
+                            TargetUserNotification(
+                                username = row[Users.username],
+                                preference = row[Users.notificationPreference],
+                                endpoint = row[PushSubscriptions.endpoint],
+                                subscription = Subscription(
                                     row[PushSubscriptions.endpoint],
                                     Subscription.Keys(row[PushSubscriptions.p256dh], row[PushSubscriptions.auth])
                                 )
@@ -81,10 +90,20 @@ object PushNotificationService {
 
                 val pushService = getPushService()
 
-                for ((username, endpoint, subscription) in targetUsers) {
-                    val isMentioned = message.content.contains("@$username", ignoreCase = true) ||
+                for (target in targetUsers) {
+                    // Skip if user disabled notifications completely
+                    if (target.preference == "none") {
+                        continue
+                    }
+
+                    val isMentioned = message.content.contains("@${target.username}", ignoreCase = true) ||
                                       message.content.contains("@everyone", ignoreCase = true) ||
                                       message.content.contains("@channel", ignoreCase = true)
+
+                    // Skip if user only wants mentions and is not mentioned
+                    if (target.preference == "mentions" && !isMentioned) {
+                        continue
+                    }
 
                     val title = if (isMentioned) {
                         "Mentioned in #${message.groupName}"
@@ -113,17 +132,17 @@ object PushNotificationService {
                     )
 
                     try {
-                        val notification = Notification(subscription, payload)
-                        val response = pushService.send(notification)
+                        val notification = Notification(target.subscription, payload)
+                        val response = pushService.send(notification, Encoding.AES128GCM)
                         val statusCode = response.statusLine.statusCode
                         if (statusCode == 410 || statusCode == 404) {
-                            println("[Push] Subscription expired or invalid (HTTP $statusCode). Deleting: $endpoint")
+                            println("[Push] Subscription expired or invalid (HTTP $statusCode). Deleting: ${target.endpoint}")
                             transaction {
-                                PushSubscriptions.deleteWhere { PushSubscriptions.endpoint eq endpoint }
+                                PushSubscriptions.deleteWhere { PushSubscriptions.endpoint eq target.endpoint }
                             }
                         }
                     } catch (e: Exception) {
-                        println("[Push] Failed to send push to $endpoint: ${e.message}")
+                        println("[Push] Failed to send push to ${target.endpoint}: ${e.message}")
                     }
                 }
             } catch (e: Exception) {

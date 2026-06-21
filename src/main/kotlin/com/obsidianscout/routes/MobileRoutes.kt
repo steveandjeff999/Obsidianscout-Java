@@ -992,11 +992,6 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
     routing {
         route("/api/mobile") {
-            intercept(ApplicationCallPipeline.Call) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    proceed()
-                }
-            }
             // Health check
             get("/health") {
                 call.respond(MobileHealthResponse(timestamp = Instant.now().toString()))

@@ -1,11 +1,67 @@
-const CACHE_NAME = 'obsidianscout-shell-v20';
+const CACHE_NAME = 'obsidianscout-shell-v23';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
-// Minimal critical assets pre-cached during install to avoid connection pool saturation
+// Application shell assets cached during install
 const ASSETS = [
     '/favicon.ico',
+    '/assets/images/obsidian/obsidian-192.png',
+    '/assets/images/obsidian/obsidian-512.png',
+    '/',
+    '/dashboard',
+    '/scout',
+    '/pit-scout',
+    '/qual-scout',
+    '/prescout',
+    '/prescout-scout',
+    '/prescout-pit',
+    '/prescout-qual',
+    '/qr-scanner',
+    '/pit-data',
+    '/analytics',
+    '/graphs',
+    '/events',
+    '/teams',
+    '/matches',
+    '/predictor',
+    '/alliances',
+    '/alliance-edit',
+    '/all-data',
+    '/cache-manager',
+    '/qual-data',
+    '/team',
+    '/users',
+    '/config',
     '/css/app.css',
     '/js/common.js',
+    '/js/login.js',
+    '/js/dashboard.js',
+    '/js/scout.js',
+    '/js/pit-scout.js',
+    '/js/qual-scout.js',
+    '/js/prescout-scout.js',
+    '/js/prescout-pit.js',
+    '/js/prescout-qual.js',
+    '/js/qr-scanner.js',
+    '/js/pit-data.js',
+    '/js/analytics.js',
+    '/js/graphs.js',
+    '/js/events.js',
+    '/js/teams.js',
+    '/js/matches.js',
+    '/js/predictor.js',
+    '/js/alliances.js',
+    '/js/alliance-edit.js',
+    '/js/all-data.js',
+    '/js/cache-manager.js',
+    '/js/qual-data.js',
+    '/js/team.js',
+    '/js/users.js',
+    '/js/settings.js',
+    '/vendor/qrcode.min.js',
+    '/vendor/qr-scanner.min.js',
+    '/vendor/qr-scanner-worker.min.js',
+    '/vendor/jabcodeJSLib.min.js',
+    '/vendor/plotly-2.32.0.min.js',
     '/i18n/en.json',
     '/i18n/es.json',
     '/i18n/tr.json',
@@ -22,12 +78,12 @@ function fetchWithTimeout(request, timeoutMs) {
     });
 }
 
-// Install: Cache only the minimal critical assets
+// Install: Cache all application shell assets sequentially to avoid connection pool saturation
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(async (cache) => {
-                console.log('[ServiceWorker] Pre-caching minimal critical assets');
+                console.log('[ServiceWorker] Pre-caching offline shell assets sequentially');
                 for (const url of ASSETS) {
                     try {
                         const response = await fetch(url);
@@ -35,7 +91,7 @@ self.addEventListener('install', (event) => {
                             await cache.put(url, response);
                         }
                     } catch (err) {
-                        console.warn(`[ServiceWorker] Failed to fetch critical asset ${url}:`, err);
+                        console.warn(`[ServiceWorker] Failed to fetch shell asset ${url}:`, err);
                     }
                 }
             })
@@ -61,26 +117,49 @@ self.addEventListener('activate', (event) => {
 
 // Fetch: Intercept requests
 self.addEventListener('fetch', (event) => {
-    // If online, bypass the Service Worker completely to ensure native network loading
-    if (navigator.onLine) {
+    const url = new URL(event.request.url);
+
+    // Skip non-GET requests, API calls, and non-http/https requests (like chrome-extension://)
+    if (event.request.method !== 'GET' || 
+        url.pathname.startsWith('/api') ||
+        (url.protocol !== 'http:' && url.protocol !== 'https:')) {
         return;
     }
 
-    const url = new URL(event.request.url);
-
-    // Skip non-GET requests, API calls, and HTML/navigation requests
-    if (event.request.method !== 'GET' || 
-        url.pathname.startsWith('/api') || 
-        event.request.mode === 'navigate' || 
+    // 1. Navigation / HTML pages: Network-First with Cache Fallback
+    if (event.request.mode === 'navigate' || 
         url.pathname.endsWith('.html') || 
         url.pathname === '/' || 
         !url.pathname.includes('.')) {
+        
+        event.respondWith(
+            fetch(event.request)
+                .then((networkResponse) => {
+                    if (networkResponse.status === 200) {
+                        const responseClone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(event.request, responseClone);
+                        });
+                    }
+                    return networkResponse;
+                })
+                .catch(() => {
+                    // Fallback to cache if offline
+                    return caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
+                        if (cachedResponse) {
+                            return cachedResponse;
+                        }
+                        // Fallback to root index page if specific page not cached
+                        return caches.match('/', { ignoreSearch: true });
+                    });
+                })
+        );
         return;
     }
 
-    // Static assets (JS, CSS, images, vendor libraries): Cache-First, fallback to Network
+    // 2. Static assets (JS, CSS, images, vendor libraries): Cache-First, fallback to Network
     event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
+        caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
             if (cachedResponse) {
                 return cachedResponse;
             }
@@ -93,7 +172,6 @@ self.addEventListener('fetch', (event) => {
                 }
                 return networkResponse;
             }).catch(() => {
-                // Return a fallback or just let it fail
                 return new Response('Offline resource not cached', { status: 503, statusText: 'Offline' });
             });
         })

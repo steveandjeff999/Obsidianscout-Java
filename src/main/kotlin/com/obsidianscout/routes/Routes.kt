@@ -78,11 +78,6 @@ import com.obsidianscout.db.ChatMessages
 fun Application.configureRoutes() {
     routing {
         route("/api") {
-            intercept(ApplicationCallPipeline.Call) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    proceed()
-                }
-            }
             intercept(ApplicationCallPipeline.Plugins) {
                 call.response.headers.append(HttpHeaders.CacheControl, "no-cache, no-store, must-revalidate")
                 call.response.headers.append(HttpHeaders.Pragma, "no-cache")
@@ -106,7 +101,8 @@ fun Application.configureRoutes() {
                         teamNumber = user.teamNumber,
                         role = user.role,
                         email = user.email,
-                        profilePicture = null
+                        profilePicture = null,
+                        notificationPreference = user.notificationPreference
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
@@ -117,7 +113,8 @@ fun Application.configureRoutes() {
                         teamNumber = user.teamNumber,
                         role = user.role,
                         email = user.email,
-                        profilePicture = user.profilePicture
+                        profilePicture = user.profilePicture,
+                        notificationPreference = user.notificationPreference
                     )
                     call.respond(LoginResponse(responseSession))
                 }
@@ -136,7 +133,8 @@ fun Application.configureRoutes() {
                         teamNumber = user.teamNumber,
                         role = user.role,
                         email = user.email,
-                        profilePicture = null
+                        profilePicture = null,
+                        notificationPreference = user.notificationPreference
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
@@ -147,7 +145,8 @@ fun Application.configureRoutes() {
                         teamNumber = user.teamNumber,
                         role = user.role,
                         email = user.email,
-                        profilePicture = user.profilePicture
+                        profilePicture = user.profilePicture,
+                        notificationPreference = user.notificationPreference
                     )
                     call.respond(LoginResponse(responseSession))
                 }
@@ -167,7 +166,8 @@ fun Application.configureRoutes() {
                         teamNumber = user.teamNumber,
                         role = user.role,
                         email = user.email,
-                        profilePicture = user.profilePicture
+                        profilePicture = user.profilePicture,
+                        notificationPreference = user.notificationPreference
                     )
                     call.respond(MeResponse(responseSession))
                 }
@@ -1152,10 +1152,15 @@ fun Application.configureRoutes() {
                     newRole = null,
                     newEmail = request.email,
                     newProfilePicture = request.profilePicture,
-                    clearProfilePicture = request.clearProfilePicture
+                    clearProfilePicture = request.clearProfilePicture,
+                    newNotificationPreference = request.notificationPreference
                 )
-                // Refresh the session so /api/auth/me returns the updated picture and email
-                val updatedSession = session.copy(profilePicture = null, email = updated.email)
+                // Refresh the session so /api/auth/me returns the updated details
+                val updatedSession = session.copy(
+                    profilePicture = null,
+                    email = updated.email,
+                    notificationPreference = updated.notificationPreference
+                )
                 call.sessions.set(updatedSession)
                 call.respond(updated)
             }

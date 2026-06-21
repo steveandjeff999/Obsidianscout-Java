@@ -147,6 +147,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalNotificationPrefWidget(currentMe) {
+        const personalNotifPref = document.getElementById("personal-notification-pref");
+        if (!personalNotifPref) return;
+
+        personalNotifPref.value = currentMe.notificationPreference || "all";
+
+        personalNotifPref.addEventListener("change", async (e) => {
+            const val = e.target.value;
+            try {
+                const updated = await Obsidianscout.request("/api/user/profile-picture", {
+                    method: "PUT",
+                    json: { notificationPreference: val }
+                });
+                currentMe.notificationPreference = updated.notificationPreference;
+                personalNotifPref.value = updated.notificationPreference || "all";
+                Obsidianscout.showToast("Notification preferences updated", "success");
+            } catch (err) {
+                Obsidianscout.showToast(err.message || "Failed to update notification preferences", "error");
+            }
+        });
+    }
+
     function wirePersonalDeleteAccountWidget(currentMe) {
         const deleteBtn = document.getElementById("personal-delete-account");
         if (!deleteBtn) return;
@@ -210,6 +232,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         wirePersonalAvatarWidget(me);
         wirePersonalEmailWidget(me);
+        wirePersonalNotificationPrefWidget(me);
         wirePersonalDeleteAccountWidget(me);
 
         wireTabs();
@@ -296,6 +319,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             wirePersonalAvatarWidget(me);
             wirePersonalEmailWidget(me);
+            wirePersonalNotificationPrefWidget(me);
             wirePersonalDeleteAccountWidget(me);
 
             // Sub-tab switching logic

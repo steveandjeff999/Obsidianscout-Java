@@ -1039,11 +1039,15 @@
         backdrop.innerHTML = `
             <div class="modal-container">
                 <div class="modal-header">
-                    <h3 class="modal-title" data-i18n="qr.title">Scouting Entry QR Code</h3>
+                    <h3 class="modal-title" data-i18n="qr.title">Scouting Entry Barcode</h3>
                     <button class="modal-close" id="qr-modal-close-btn">&times;</button>
                 </div>
                 <div class="modal-body qr-modal-body">
-                    <div class="qr-code-wrapper" id="qr-code-canvas-container"></div>
+                    <div class="tab-row mb-12" style="margin-bottom: 16px; display: flex; width: 100%;">
+                        <button type="button" class="tab active" id="qr-modal-tab-qr" style="flex: 1;">QR Code</button>
+                        <button type="button" class="tab" id="qr-modal-tab-jab" style="flex: 1;">JAB Code</button>
+                    </div>
+                    <div class="qr-code-wrapper" id="qr-code-canvas-container" style="min-height: 384px; display: flex; align-items: center; justify-content: center;"></div>
                     <div class="qr-details">
                         <p><strong data-i18n="qr.type">Type:</strong> <span>${typeLabel}</span></p>
                         <p><strong data-i18n="qr.team">Team:</strong> <span>${teamNum}</span></p>
@@ -1051,7 +1055,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn secondary" id="qr-modal-download-btn" data-i18n="qr.download">Download QR Code</button>
+                    <button class="btn secondary" id="qr-modal-download-btn" data-i18n="qr.download">Download Barcode</button>
                     <button class="btn ghost" id="qr-modal-close-footer-btn" data-i18n="qr.close">Close</button>
                 </div>
             </div>
@@ -1065,20 +1069,64 @@
         const qrString = JSON.stringify(qrPayload);
         const compressedString = await compressData(qrString);
 
-        const qrcode = new QRCode(container, {
-            text: compressedString,
-            width: 384,
-            height: 384,
-            colorDark : "#000000",
-            colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.M
-        });
+        let activeTab = "qr";
+        let jabInterface = null;
+
+        const renderBarcode = async () => {
+            container.innerHTML = "";
+            if (activeTab === "qr") {
+                new QRCode(container, {
+                    text: compressedString,
+                    width: 384,
+                    height: 384,
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.M
+                });
+            } else {
+                if (typeof window.JabcodeJSInterface === "undefined") {
+                    container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 20px;">Loading JAB Code library...</div>`;
+                    for (let i = 0; i < 30; i++) {
+                        await new Promise(r => setTimeout(r, 100));
+                        if (typeof window.JabcodeJSInterface !== "undefined") {
+                            break;
+                        }
+                    }
+                    if (typeof window.JabcodeJSInterface === "undefined") {
+                        container.innerHTML = `<div style="color: #c84b31; text-align: center; padding: 20px;">Failed to load JAB Code library.</div>`;
+                        showToast("JAB Code library is not available offline or failed to load", "error");
+                        return;
+                    }
+                }
+                if (!jabInterface) {
+                    try {
+                        jabInterface = new window.JabcodeJSInterface();
+                    } catch (e) {
+                        console.error(e);
+                        container.innerHTML = `<div style="color: #c84b31; text-align: center; padding: 20px;">Failed to initialize JAB Code.</div>`;
+                        return;
+                    }
+                }
+                try {
+                    const base64Png = jabInterface.encode_message(compressedString);
+                    container.innerHTML = `<img src="${base64Png}" style="width: 384px; height: 384px; display: block; margin: 0 auto; object-fit: contain;" />`;
+                } catch (e) {
+                    console.error("JAB Code generation error:", e);
+                    container.innerHTML = `<div style="color: #c84b31; text-align: center; padding: 20px;">Failed to generate JAB Code.</div>`;
+                }
+            }
+        };
+
+        // Render QR Code initially
+        await renderBarcode();
 
         backdrop.classList.add("show");
 
         const closeBtn = document.getElementById("qr-modal-close-btn");
         const closeFooterBtn = document.getElementById("qr-modal-close-footer-btn");
         const downloadBtn = document.getElementById("qr-modal-download-btn");
+        const tabQr = document.getElementById("qr-modal-tab-qr");
+        const tabJab = document.getElementById("qr-modal-tab-jab");
 
         const closeModal = () => {
             backdrop.classList.remove("show");
@@ -1086,6 +1134,22 @@
 
         closeBtn.addEventListener("click", closeModal);
         closeFooterBtn.addEventListener("click", closeModal);
+
+        tabQr.addEventListener("click", () => {
+            if (activeTab === "qr") return;
+            activeTab = "qr";
+            tabQr.classList.add("active");
+            tabJab.classList.remove("active");
+            renderBarcode();
+        });
+
+        tabJab.addEventListener("click", () => {
+            if (activeTab === "jab") return;
+            activeTab = "jab";
+            tabJab.classList.add("active");
+            tabQr.classList.remove("active");
+            renderBarcode();
+        });
 
         downloadBtn.addEventListener("click", () => {
             const img = container.querySelector("img");
@@ -1099,12 +1163,12 @@
             if (src) {
                 const a = document.createElement("a");
                 a.href = src;
-                a.download = `qr_${qrPayload.type}_${teamNum}${matchKey ? '_' + matchKey : ''}.png`;
+                a.download = `${activeTab}_${qrPayload.type}_${teamNum}${matchKey ? '_' + matchKey : ''}.png`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
             } else {
-                showToast("Could not download QR image yet", "error");
+                showToast("Could not download barcode image yet", "error");
             }
         });
     }
@@ -1116,7 +1180,7 @@
         if (!loggedIn) return;
 
         try {
-            const settingsResponse = await request("/api/settings?local=true");
+            const settingsResponse = await request("/api/settings?local=true", { timeoutMs: 3000 });
             if (!settingsResponse || !settingsResponse.settings || !settingsResponse.settings.chatEnabled) {
                 return;
             }
@@ -1127,7 +1191,7 @@
 
         async function fetchUnreadStatus() {
             try {
-                const status = await request("/api/chat/unread-status");
+                const status = await request("/api/chat/unread-status", { timeoutMs: 3000 });
                 if (status) {
                     updateChatBadge(status.unreadCount, status.mentionCount);
                 }
