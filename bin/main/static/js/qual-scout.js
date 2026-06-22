@@ -694,7 +694,7 @@ function buildRobotRoleCollectionField() {
     wrapper.className = "form-section mt-18";
 
     const title = document.createElement("h3");
-    title.textContent = "Robot Roles";
+    title.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('qual_scout.robot_roles', 'Robot Roles') : 'Robot Roles';
     wrapper.appendChild(title);
 
     const rolesContainer = document.createElement("div");
@@ -731,7 +731,7 @@ function buildRobotRoleCollectionField() {
         input.style.display = "none";
 
         const text = document.createElement("span");
-        text.textContent = r.name;
+        text.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(`qual_scout.role.${r.val.toLowerCase().replace('/', '')}`, r.name) : r.name;
 
         label.appendChild(input);
         label.appendChild(text);
