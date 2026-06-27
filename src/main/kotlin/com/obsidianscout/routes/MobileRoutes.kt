@@ -2663,8 +2663,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val session = call.requireMobileAdmin(secret)
                 val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber)
 
-                val queued = com.obsidianscout.integrations.SyncScheduler.enqueueFullSync(settings)
-                val message = if (queued) "Sync enqueued in background" else "Another sync is already running"
+                val queued = com.obsidianscout.integrations.SyncScheduler.enqueueFullSync(session.teamNumber, settings)
+                val message = if (queued) "Sync enqueued in background" else "Sync is already running for team ${session.teamNumber}"
 
                 call.respond(
                     MobileSyncTriggerResponse(

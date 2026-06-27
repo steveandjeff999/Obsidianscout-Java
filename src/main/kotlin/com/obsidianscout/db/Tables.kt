@@ -177,6 +177,7 @@ object AllianceMemberships : IntIdTable("alliance_memberships") {
 
     init {
         uniqueIndex("ux_alliance_memberships_alliance_team", allianceId, teamNumber)
+        index("idx_alliance_memberships_team_active", false, teamNumber, active)
     }
 }
 
@@ -234,6 +235,10 @@ object ChatMessages : IntIdTable("chat_messages") {
     val content = text("content")
     val createdAt = timestamp("created_at")
     val reactionsJson = text("reactions_json").default("{}")
+
+    init {
+        index("idx_chat_messages_team_group", false, teamNumber, groupName)
+    }
 }
 
 object UserChatLastRead : IntIdTable("user_chat_last_read") {

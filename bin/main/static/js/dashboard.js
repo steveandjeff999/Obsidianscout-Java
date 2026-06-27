@@ -101,9 +101,7 @@ async function loadDashboardData() {
             Obsidianscout.resolveEventKey(settings) || t("dashboard.not_set", "Not set");
         document.getElementById("summary-timezone").textContent = localizeTimezone(settings.timezone);
 
-        const syncTeamsMatches = document.getElementById("sync-teams-matches");
-        const syncEvents = document.getElementById("sync-events");
-        const syncStats = document.getElementById("sync-stats");
+        const syncAll = document.getElementById("sync-all");
         const syncStatus = document.getElementById("sync-status");
 
         window.addEventListener("obsidianscout:languagechange", async () => {
@@ -115,9 +113,9 @@ async function loadDashboardData() {
         });
 
         if (!Obsidianscout.isAdmin(currentUser.role)) {
-            syncTeamsMatches.disabled = true;
-            syncEvents.disabled = true;
-            syncStats.disabled = true;
+            if (syncAll) {
+                syncAll.disabled = true;
+            }
             if (syncStatus) {
                 syncStatus.textContent = t("dashboard.admin_sync_required", "Admin access required to sync.");
             }
@@ -125,15 +123,11 @@ async function loadDashboardData() {
             if (syncStatus && status) {
                 await refreshSyncStatus(syncStatus);
             }
-            syncTeamsMatches.addEventListener("click", () =>
-                runSync(syncTeamsMatches, "/api/integrations/sync/event", true)
-            );
-            syncEvents.addEventListener("click", () =>
-                runSync(syncEvents, "/api/integrations/sync/events", true)
-            );
-            syncStats.addEventListener("click", () =>
-                runSync(syncStats, "/api/integrations/sync/stats", true)
-            );
+            if (syncAll) {
+                syncAll.addEventListener("click", () =>
+                    runSync(syncAll, "/api/integrations/sync/all", true)
+                );
+            }
         }
 
     } catch (error) {

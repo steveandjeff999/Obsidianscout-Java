@@ -120,6 +120,7 @@ object SettingsService {
                 }
             }
         }
+        com.obsidianscout.scouting.AllianceService.clearEffectiveSettingsCache()
         return normalized
     }
 

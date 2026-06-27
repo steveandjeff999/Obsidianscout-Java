@@ -124,6 +124,7 @@
   "dashboard.sync_summary": "סונכרנו {teams} קבוצות ו-{matches} משחקים עבור {teamCount} קבוצה/ות",
   "dashboard.sync_no_teams": "אין קבוצות מוגדרות לסנכרון אוטומטי.",
   "dashboard.sync_failed_teams": "הסנכרון נכשל עבור {count} קבוצה/ות",
+  "dashboard.sync_data": "סנכרן נתונים",
   "dashboard.sync_events": "סנכרן אירועים",
   "dashboard.sync_stats": "סנכרן סטטיסטיקות",
   "analytics.title": "אנליטיקה מהקונפיגורציה",

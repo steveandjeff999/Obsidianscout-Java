@@ -15,32 +15,85 @@ object SyncScheduler {
 
     const val INTERVAL_MS: Long = 450_000L // 7.5 minutes
 
-    @Volatile
-    var lastSyncAt: Instant? = null
+    class TeamSyncStatus {
+        @Volatile
+        var lastSyncAt: Instant? = null
 
-    @Volatile
-    var lastSyncSummary: String? = null
+        @Volatile
+        var lastSyncSummary: String? = null
 
-    @Volatile
-    var lastSyncError: String? = null
+        @Volatile
+        var lastSyncError: String? = null
 
-    @Volatile
-    var lastSyncTeams: Int? = null
+        @Volatile
+        var lastSyncTeams: Int? = null
 
-    @Volatile
-    var lastSyncMatches: Int? = null
+        @Volatile
+        var lastSyncMatches: Int? = null
 
-    @Volatile
-    var lastSyncTeamCount: Int? = null
+        @Volatile
+        var lastSyncTeamCount: Int? = null
 
-    @Volatile
-    var lastSyncFailedTeams: Int? = null
+        @Volatile
+        var lastSyncFailedTeams: Int? = null
 
-    @Volatile
-    var syncInProgress: Boolean = false
+        @Volatile
+        var syncInProgress: Boolean = false
 
-    @Volatile
-    var currentSyncLabel: String? = null
+        @Volatile
+        var currentSyncLabel: String? = null
+    }
+
+    private val teamStatuses = java.util.concurrent.ConcurrentHashMap<Int, TeamSyncStatus>()
+
+    fun getStatusForTeam(teamNumber: Int): TeamSyncStatus {
+        return teamStatuses.computeIfAbsent(teamNumber) { TeamSyncStatus() }
+    }
+
+    @Deprecated("Use getStatusForTeam(teamNumber)")
+    var lastSyncAt: Instant?
+        get() = getStatusForTeam(0).lastSyncAt
+        set(value) { getStatusForTeam(0).lastSyncAt = value }
+
+    @Deprecated("Use getStatusForTeam(teamNumber)")
+    var lastSyncSummary: String?
+        get() = getStatusForTeam(0).lastSyncSummary
+        set(value) { getStatusForTeam(0).lastSyncSummary = value }
+
+    @Deprecated("Use getStatusForTeam(teamNumber)")
+    var lastSyncError: String?
+        get() = getStatusForTeam(0).lastSyncError
+        set(value) { getStatusForTeam(0).lastSyncError = value }
+
+    @Deprecated("Use getStatusForTeam(teamNumber)")
+    var lastSyncTeams: Int?
+        get() = getStatusForTeam(0).lastSyncTeams
+        set(value) { getStatusForTeam(0).lastSyncTeams = value }
+
+    @Deprecated("Use getStatusForTeam(teamNumber)")
+    var lastSyncMatches: Int?
+        get() = getStatusForTeam(0).lastSyncMatches
+        set(value) { getStatusForTeam(0).lastSyncMatches = value }
+
+    @Deprecated("Use getStatusForTeam(teamNumber)")
+    var lastSyncTeamCount: Int?
+        get() = getStatusForTeam(0).lastSyncTeamCount
+        set(value) { getStatusForTeam(0).lastSyncTeamCount = value }
+
+    @Deprecated("Use getStatusForTeam(teamNumber)")
+    var lastSyncFailedTeams: Int?
+        get() = getStatusForTeam(0).lastSyncFailedTeams
+        set(value) { getStatusForTeam(0).lastSyncFailedTeams = value }
+
+    @Deprecated("Use getStatusForTeam(teamNumber)")
+    var syncInProgress: Boolean
+        get() = getStatusForTeam(0).syncInProgress
+        set(value) { getStatusForTeam(0).syncInProgress = value }
+
+    @Deprecated("Use getStatusForTeam(teamNumber)")
+    var currentSyncLabel: String?
+        get() = getStatusForTeam(0).currentSyncLabel
+        set(value) { getStatusForTeam(0).currentSyncLabel = value }
 
     private var scope: CoroutineScope? = null
     private val syncLock = Any()
@@ -66,34 +119,41 @@ object SyncScheduler {
         scope = null
     }
 
-    fun enqueueEventSync(settings: ApiSettings): Boolean {
+    @Deprecated("Use enqueueEventSync(teamNumber, settings)")
+    fun enqueueEventSync(settings: ApiSettings): Boolean = enqueueEventSync(0, settings)
+
+    fun enqueueEventSync(teamNumber: Int, settings: ApiSettings): Boolean {
         val activeScope = scope ?: return false
-        if (!beginSync("Manual event list sync")) {
+        if (!beginSync(teamNumber, "Manual event list sync")) {
             return false
         }
         activeScope.launch {
             try {
                 val count = IntegrationService.syncEvents(settings)
-                lastSyncAt = Instant.now()
-                lastSyncSummary = "Manual event list sync complete: $count events"
-                lastSyncError = null
-                lastSyncTeams = null
-                lastSyncMatches = null
-                lastSyncTeamCount = null
-                lastSyncFailedTeams = null
-                log.info(lastSyncSummary)
+                val status = getStatusForTeam(teamNumber)
+                status.lastSyncAt = Instant.now()
+                status.lastSyncSummary = "Manual event list sync complete: $count events"
+                status.lastSyncError = null
+                status.lastSyncTeams = null
+                status.lastSyncMatches = null
+                status.lastSyncTeamCount = null
+                status.lastSyncFailedTeams = null
+                log.info("Manual event list sync complete for team $teamNumber: $count events")
             } catch (error: Exception) {
-                recordFailure("Manual event list sync failed", error)
+                recordFailure(teamNumber, "Manual event list sync failed", error)
             } finally {
-                finishSync()
+                finishSync(teamNumber)
             }
         }
         return true
     }
 
-    fun enqueueEventDataSync(settings: ApiSettings): Boolean {
+    @Deprecated("Use enqueueEventDataSync(teamNumber, settings)")
+    fun enqueueEventDataSync(settings: ApiSettings): Boolean = enqueueEventDataSync(0, settings)
+
+    fun enqueueEventDataSync(teamNumber: Int, settings: ApiSettings): Boolean {
         val activeScope = scope ?: return false
-        if (!beginSync("Manual teams and matches sync")) {
+        if (!beginSync(teamNumber, "Manual teams and matches sync")) {
             return false
         }
         activeScope.launch {
@@ -104,29 +164,33 @@ object SyncScheduler {
                     try {
                         IntegrationService.syncEpaOprHistory(settings, eventKey)
                     } catch (e: Exception) {
-                        log.warn("EPA/OPR history sync failed: ${e.message}")
+                        log.warn("EPA/OPR history sync failed for team $teamNumber: ${e.message}")
                     }
                 }
-                lastSyncAt = Instant.now()
-                lastSyncSummary = "Manual sync: ${counts.teams} teams, ${counts.matches} matches"
-                lastSyncTeams = counts.teams
-                lastSyncMatches = counts.matches
-                lastSyncTeamCount = 1
-                lastSyncFailedTeams = null
-                lastSyncError = null
-                log.info(lastSyncSummary)
+                val status = getStatusForTeam(teamNumber)
+                status.lastSyncAt = Instant.now()
+                status.lastSyncSummary = "Manual sync: ${counts.teams} teams, ${counts.matches} matches"
+                status.lastSyncTeams = counts.teams
+                status.lastSyncMatches = counts.matches
+                status.lastSyncTeamCount = 1
+                status.lastSyncFailedTeams = null
+                status.lastSyncError = null
+                log.info("Manual sync complete for team $teamNumber: ${counts.teams} teams, ${counts.matches} matches")
             } catch (error: Exception) {
-                recordFailure("Manual teams and matches sync failed", error)
+                recordFailure(teamNumber, "Manual teams and matches sync failed", error)
             } finally {
-                finishSync()
+                finishSync(teamNumber)
             }
         }
         return true
     }
 
-    fun enqueueStatsSync(settings: ApiSettings): Boolean {
+    @Deprecated("Use enqueueStatsSync(teamNumber, settings)")
+    fun enqueueStatsSync(settings: ApiSettings): Boolean = enqueueStatsSync(0, settings)
+
+    fun enqueueStatsSync(teamNumber: Int, settings: ApiSettings): Boolean {
         val activeScope = scope ?: return false
-        if (!beginSync("Manual stats sync")) {
+        if (!beginSync(teamNumber, "Manual stats sync")) {
             return false
         }
         activeScope.launch {
@@ -137,47 +201,46 @@ object SyncScheduler {
                     try {
                         IntegrationService.syncEpaOprHistory(settings, eventKey)
                     } catch (e: Exception) {
-                        log.warn("EPA/OPR history sync failed: ${e.message}")
+                        log.warn("EPA/OPR history sync failed for team $teamNumber: ${e.message}")
                     }
                 }
-                lastSyncAt = Instant.now()
-                lastSyncSummary = "Manual stats sync complete: $count team stat record(s)"
-                lastSyncError = null
-                lastSyncTeams = count
-                lastSyncMatches = null
-                lastSyncTeamCount = 1
-                lastSyncFailedTeams = null
-                log.info(lastSyncSummary)
+                val status = getStatusForTeam(teamNumber)
+                status.lastSyncAt = Instant.now()
+                status.lastSyncSummary = "Manual stats sync complete: $count team stat record(s)"
+                status.lastSyncError = null
+                status.lastSyncTeams = count
+                status.lastSyncMatches = null
+                status.lastSyncTeamCount = 1
+                status.lastSyncFailedTeams = null
+                log.info("Manual stats sync complete for team $teamNumber: $count team stat record(s)")
             } catch (error: Exception) {
-                recordFailure("Manual stats sync failed", error)
+                recordFailure(teamNumber, "Manual stats sync failed", error)
             } finally {
-                finishSync()
+                finishSync(teamNumber)
             }
         }
         return true
     }
 
     suspend fun runScheduledSync() {
-        if (!beginSync("Auto-sync")) {
-            return
-        }
         try {
             runScheduledSyncUnchecked()
-        } finally {
-            finishSync()
+        } catch (e: Exception) {
+            log.error("Scheduled sync error: ${e.message}", e)
         }
     }
 
     private suspend fun runScheduledSyncUnchecked() {
         val teams = SettingsService.teamNumbersEligibleForAutoSync()
         if (teams.isEmpty()) {
-            lastSyncSummary = "No teams with event code and API keys configured"
-            lastSyncAt = Instant.now()
-            lastSyncError = null
-            lastSyncTeams = null
-            lastSyncMatches = null
-            lastSyncTeamCount = null
-            lastSyncFailedTeams = null
+            val status = getStatusForTeam(0)
+            status.lastSyncSummary = "No teams with event code and API keys configured"
+            status.lastSyncAt = Instant.now()
+            status.lastSyncError = null
+            status.lastSyncTeams = null
+            status.lastSyncMatches = null
+            status.lastSyncTeamCount = null
+            status.lastSyncFailedTeams = null
             return
         }
 
@@ -186,6 +249,9 @@ object SyncScheduler {
         var failures = 0
 
         teams.forEach { teamNumber ->
+            if (!beginSync(teamNumber, "Auto-sync")) {
+                return@forEach
+            }
             try {
                 val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber)
                 val counts = IntegrationService.syncEventData(settings)
@@ -199,57 +265,68 @@ object SyncScheduler {
                         log.warn("Auto-sync EPA/OPR history sync failed for team $teamNumber: ${e.message}")
                     }
                 }
+                val status = getStatusForTeam(teamNumber)
+                status.lastSyncAt = Instant.now()
+                status.lastSyncError = null
+                status.lastSyncTeams = counts.teams
+                status.lastSyncMatches = counts.matches
+                status.lastSyncTeamCount = 1
+                status.lastSyncFailedTeams = null
+                status.lastSyncSummary = "Auto-sync complete: ${counts.teams} teams, ${counts.matches} matches"
             } catch (error: Exception) {
                 failures++
                 log.warn("Auto-sync failed for team $teamNumber: ${error.message}")
+                recordFailure(teamNumber, "Auto-sync failed", error)
+            } finally {
+                finishSync(teamNumber)
             }
         }
-
-        lastSyncAt = Instant.now()
-        lastSyncError = if (failures > 0) "$failures team sync(s) failed" else null
-        lastSyncTeams = totalTeams
-        lastSyncMatches = totalMatches
-        lastSyncTeamCount = teams.size
-        lastSyncFailedTeams = if (failures > 0) failures else null
-        lastSyncSummary = "Synced $totalTeams teams and $totalMatches matches for ${teams.size} team(s)"
-        log.info("Auto-sync complete: $lastSyncSummary")
     }
 
-    private fun beginSync(label: String): Boolean {
-        synchronized(syncLock) {
-            if (syncInProgress) {
-                lastSyncError = "Sync already running"
+    private fun beginSync(teamNumber: Int, label: String): Boolean {
+        val status = getStatusForTeam(teamNumber)
+        synchronized(status) {
+            if (status.syncInProgress) {
+                status.lastSyncError = "Sync already running"
                 return false
             }
-            syncInProgress = true
-            currentSyncLabel = label
-            lastSyncError = null
-            lastSyncSummary = "$label started"
+            status.syncInProgress = true
+            status.currentSyncLabel = label
+            status.lastSyncError = null
+            status.lastSyncSummary = "$label started"
             return true
         }
     }
 
-    private fun finishSync() {
-        synchronized(syncLock) {
-            syncInProgress = false
-            currentSyncLabel = null
+    private fun finishSync(teamNumber: Int) {
+        val status = getStatusForTeam(teamNumber)
+        synchronized(status) {
+            status.syncInProgress = false
+            status.currentSyncLabel = null
         }
     }
 
-    private fun recordFailure(label: String, error: Exception) {
-        lastSyncAt = Instant.now()
-        lastSyncError = error.message ?: label
-        lastSyncSummary = label
-        lastSyncTeams = null
-        lastSyncMatches = null
-        lastSyncTeamCount = null
-        lastSyncFailedTeams = 1
-        log.warn("$label: ${error.message}")
+    private fun recordFailure(teamNumber: Int, label: String, error: Exception) {
+        val status = getStatusForTeam(teamNumber)
+        synchronized(status) {
+            status.lastSyncAt = Instant.now()
+            status.lastSyncError = error.message ?: label
+            status.lastSyncSummary = label
+            status.lastSyncTeams = null
+            status.lastSyncMatches = null
+            status.lastSyncTeamCount = null
+            status.lastSyncFailedTeams = 1
+            log.warn("$label for team $teamNumber: ${error.message}")
+        }
     }
 
-    fun enqueueCustomEventDataSync(settings: ApiSettings, eventKey: String): Boolean {
+    @Deprecated("Use enqueueCustomEventDataSync(teamNumber, settings, eventKey)")
+    fun enqueueCustomEventDataSync(settings: ApiSettings, eventKey: String): Boolean =
+        enqueueCustomEventDataSync(0, settings, eventKey)
+
+    fun enqueueCustomEventDataSync(teamNumber: Int, settings: ApiSettings, eventKey: String): Boolean {
         val activeScope = scope ?: return false
-        if (!beginSync("Manual custom event sync: $eventKey")) {
+        if (!beginSync(teamNumber, "Manual custom event sync: $eventKey")) {
             return false
         }
         activeScope.launch {
@@ -258,54 +335,60 @@ object SyncScheduler {
                 try {
                     IntegrationService.syncEpaOprHistory(settings, eventKey)
                 } catch (e: Exception) {
-                    log.warn("Custom event EPA/OPR history sync failed: ${e.message}")
+                    log.warn("Custom event EPA/OPR history sync failed for team $teamNumber: ${e.message}")
                 }
-                lastSyncAt = Instant.now()
-                lastSyncSummary = "Custom event sync complete: $eventKey - ${counts.teams} teams, ${counts.matches} matches"
-                lastSyncTeams = counts.teams
-                lastSyncMatches = counts.matches
-                lastSyncTeamCount = 1
-                lastSyncFailedTeams = null
-                lastSyncError = null
-                log.info(lastSyncSummary)
+                val status = getStatusForTeam(teamNumber)
+                status.lastSyncAt = Instant.now()
+                status.lastSyncSummary = "Custom event sync complete: $eventKey - ${counts.teams} teams, ${counts.matches} matches"
+                status.lastSyncTeams = counts.teams
+                status.lastSyncMatches = counts.matches
+                status.lastSyncTeamCount = 1
+                status.lastSyncFailedTeams = null
+                status.lastSyncError = null
+                log.info("Custom event sync complete for team $teamNumber: $eventKey - ${counts.teams} teams, ${counts.matches} matches")
             } catch (error: Exception) {
-                recordFailure("Custom event sync failed for $eventKey", error)
+                recordFailure(teamNumber, "Custom event sync failed for $eventKey", error)
             } finally {
-                finishSync()
+                finishSync(teamNumber)
             }
         }
         return true
     }
 
-    fun enqueueFullSync(settings: ApiSettings): Boolean {
+    @Deprecated("Use enqueueFullSync(teamNumber, settings)")
+    fun enqueueFullSync(settings: ApiSettings): Boolean = enqueueFullSync(0, settings)
+
+    fun enqueueFullSync(teamNumber: Int, settings: ApiSettings): Boolean {
         val activeScope = scope ?: return false
-        if (!beginSync("Manual full sync")) {
+        if (!beginSync(teamNumber, "Manual full sync")) {
             return false
         }
         activeScope.launch {
             try {
                 val eventsCount = IntegrationService.syncEvents(settings)
                 val counts = IntegrationService.syncEventData(settings)
+                val statsCount = IntegrationService.syncStats(settings)
                 val eventKey = settings.resolvedEventKey()
                 if (eventKey.isNotBlank()) {
                     try {
                         IntegrationService.syncEpaOprHistory(settings, eventKey)
                     } catch (e: Exception) {
-                        log.warn("Full sync EPA/OPR history sync failed: ${e.message}")
+                        log.warn("Full sync EPA/OPR history sync failed for team $teamNumber: ${e.message}")
                     }
                 }
-                lastSyncAt = Instant.now()
-                lastSyncSummary = "Manual full sync complete: $eventsCount events, ${counts.teams} teams, ${counts.matches} matches"
-                lastSyncTeams = counts.teams
-                lastSyncMatches = counts.matches
-                lastSyncTeamCount = 1
-                lastSyncFailedTeams = null
-                lastSyncError = null
-                log.info(lastSyncSummary)
+                val status = getStatusForTeam(teamNumber)
+                status.lastSyncAt = Instant.now()
+                status.lastSyncSummary = "Manual full sync complete: $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats"
+                status.lastSyncTeams = counts.teams
+                status.lastSyncMatches = counts.matches
+                status.lastSyncTeamCount = 1
+                status.lastSyncFailedTeams = null
+                status.lastSyncError = null
+                log.info("Manual full sync complete for team $teamNumber: $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats")
             } catch (error: Exception) {
-                recordFailure("Manual full sync failed", error)
+                recordFailure(teamNumber, "Manual full sync failed", error)
             } finally {
-                finishSync()
+                finishSync(teamNumber)
             }
         }
         return true

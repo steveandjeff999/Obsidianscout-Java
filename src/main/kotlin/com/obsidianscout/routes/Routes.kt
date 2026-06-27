@@ -827,7 +827,7 @@ fun Application.configureRoutes() {
                         val matchCount = com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.eventKey eq eventKey }.count().toInt()
                         Pair(teamCount, matchCount)
                     }
-                    com.obsidianscout.integrations.SyncScheduler.enqueueCustomEventDataSync(settings, eventKey)
+                    com.obsidianscout.integrations.SyncScheduler.enqueueCustomEventDataSync(session.teamNumber, settings, eventKey)
                     call.respond(com.obsidianscout.integrations.SyncCounts(cachedTeams, cachedMatches))
                 }
             }
@@ -994,45 +994,62 @@ fun Application.configureRoutes() {
 
             route("/integrations") {
                 get("/sync/status") {
-                    call.requireSession()
+                    val session = call.requireSession()
+                    val status = SyncScheduler.getStatusForTeam(session.teamNumber)
                     call.respond(
                         SyncStatusResponse(
                             intervalMinutes = SyncScheduler.INTERVAL_MS / 60_000.0,
-                            lastSyncAt = SyncScheduler.lastSyncAt?.toString(),
-                            lastSyncSummary = SyncScheduler.lastSyncSummary,
-                            lastSyncError = SyncScheduler.lastSyncError,
-                            lastSyncTeams = SyncScheduler.lastSyncTeams,
-                            lastSyncMatches = SyncScheduler.lastSyncMatches,
-                            lastSyncTeamCount = SyncScheduler.lastSyncTeamCount,
-                            lastSyncFailedTeams = SyncScheduler.lastSyncFailedTeams,
-                            syncInProgress = SyncScheduler.syncInProgress,
-                            currentSyncLabel = SyncScheduler.currentSyncLabel
+                            lastSyncAt = status.lastSyncAt?.toString(),
+                            lastSyncSummary = status.lastSyncSummary,
+                            lastSyncError = status.lastSyncError,
+                            lastSyncTeams = status.lastSyncTeams,
+                            lastSyncMatches = status.lastSyncMatches,
+                            lastSyncTeamCount = status.lastSyncTeamCount,
+                            lastSyncFailedTeams = status.lastSyncFailedTeams,
+                            syncInProgress = status.syncInProgress,
+                            currentSyncLabel = status.currentSyncLabel
                         )
                     )
                 }
                 post("/sync/events") {
                     val session = call.requireAdmin()
                     val settings = AllianceService.getEffectiveSettings(session.teamNumber)
-                    val queued = SyncScheduler.enqueueEventSync(settings)
-                    val status = if (queued) HttpStatusCode.Accepted else HttpStatusCode.Conflict
-                    val message = if (queued) "Event sync started" else "Another sync is already running"
-                    call.respond(status, SyncResponse(0, settings.preferredSource, settings.resolvedEventKey(), queued, message))
+                    val queued = SyncScheduler.enqueueEventSync(session.teamNumber, settings)
+                    if (queued) {
+                        call.respond(HttpStatusCode.Accepted, SyncResponse(0, settings.preferredSource, settings.resolvedEventKey(), queued, "Event sync started"))
+                    } else {
+                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "Sync is already running for team ${session.teamNumber}"))
+                    }
                 }
                 post("/sync/event") {
                     val session = call.requireAdmin()
                     val settings = AllianceService.getEffectiveSettings(session.teamNumber)
-                    val queued = SyncScheduler.enqueueEventDataSync(settings)
-                    val status = if (queued) HttpStatusCode.Accepted else HttpStatusCode.Conflict
-                    val message = if (queued) "Teams and matches sync started" else "Another sync is already running"
-                    call.respond(status, SyncResponse(0, settings.preferredSource, settings.resolvedEventKey(), queued, message))
+                    val queued = SyncScheduler.enqueueEventDataSync(session.teamNumber, settings)
+                    if (queued) {
+                        call.respond(HttpStatusCode.Accepted, SyncResponse(0, settings.preferredSource, settings.resolvedEventKey(), queued, "Teams and matches sync started"))
+                    } else {
+                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "Sync is already running for team ${session.teamNumber}"))
+                    }
                 }
                 post("/sync/stats") {
                     val session = call.requireAdmin()
                     val settings = AllianceService.getEffectiveSettings(session.teamNumber)
-                    val queued = SyncScheduler.enqueueStatsSync(settings)
-                    val status = if (queued) HttpStatusCode.Accepted else HttpStatusCode.Conflict
-                    val message = if (queued) "Stats sync started" else "Another sync is already running"
-                    call.respond(status, SyncResponse(0, "stats", settings.resolvedEventKey(), queued, message))
+                    val queued = SyncScheduler.enqueueStatsSync(session.teamNumber, settings)
+                    if (queued) {
+                        call.respond(HttpStatusCode.Accepted, SyncResponse(0, "stats", settings.resolvedEventKey(), queued, "Stats sync started"))
+                    } else {
+                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "Sync is already running for team ${session.teamNumber}"))
+                    }
+                }
+                post("/sync/all") {
+                    val session = call.requireAdmin()
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
+                    val queued = SyncScheduler.enqueueFullSync(session.teamNumber, settings)
+                    if (queued) {
+                        call.respond(HttpStatusCode.Accepted, SyncResponse(0, "all", settings.resolvedEventKey(), queued, "Full sync started"))
+                    } else {
+                        call.respond(HttpStatusCode.Conflict, mapOf("error" to "Sync is already running for team ${session.teamNumber}"))
+                    }
                 }
             }
 

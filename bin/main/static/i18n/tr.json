@@ -84,6 +84,7 @@
   "dashboard.sync_summary": "{teamCount} takım için {teams} takım ve {matches} maç eşitlendi",
   "dashboard.sync_no_teams": "Otomatik eşitleme için yapılandırılmış takım yok.",
   "dashboard.sync_failed_teams": "{count} takımın eşitlemesi başarısız oldu",
+  "dashboard.sync_data": "Verileri eşitle",
   "dashboard.sync_teams_matches": "Takımları ve maçları eşitle",
   "dashboard.sync_events": "Etkinlikleri eşitle",
   "dashboard.sync_stats": "İstatistikleri eşitle",

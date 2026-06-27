@@ -35,6 +35,9 @@ import io.ktor.server.plugins.compression.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.plugins.cachingheaders.CachingHeaders
+import io.ktor.http.content.CachingOptions
+import io.ktor.http.CacheControl
 import io.ktor.server.request.path
 import io.ktor.server.response.respond
 import io.ktor.server.sessions.Sessions
@@ -107,6 +110,16 @@ fun Application.module(appConfig: AppConfig) {
         deflate {
             condition {
                 !request.path().startsWith("/api")
+            }
+        }
+    }
+    install(CachingHeaders) {
+        options { call, _ ->
+            val path = call.request.path()
+            if (path.contains("/vendor/") || path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) {
+                CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 3600 * 24 * 30)) // 30 days
+            } else {
+                CachingOptions(CacheControl.NoCache(CacheControl.Visibility.Public))
             }
         }
     }

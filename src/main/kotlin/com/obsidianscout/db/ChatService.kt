@@ -7,6 +7,11 @@ import kotlinx.serialization.encodeToString
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.or
+import org.jetbrains.exposed.sql.lowerCase
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
@@ -165,46 +170,42 @@ object ChatService {
             .where { UserChatLastRead.userId eq userId }
             .associate { it[UserChatLastRead.groupName] to it[UserChatLastRead.lastReadAt] }
 
-        val dbGroups = ChatMessages.selectAll()
+        val dbGroups = ChatMessages.select(ChatMessages.groupName)
             .where { ChatMessages.teamNumber eq teamNumber }
+            .withDistinct()
             .map { it[ChatMessages.groupName] }
-            .distinct()
         val groups = (dbGroups + "general").distinct()
-
-        val allMessages = ChatMessages.selectAll()
-            .where { ChatMessages.teamNumber eq teamNumber }
-            .toList()
 
         var totalUnreadCount = 0
         var totalMentionCount = 0
 
         val userMention = "@$username"
+        val userMentionLower = "%${userMention.lowercase()}%"
 
         val groupStatuses = groups.map { groupName ->
             val lastRead = lastReads[groupName] ?: Instant.EPOCH
-            var groupUnread = 0
-            var groupMention = 0
 
-            val groupMsgs = allMessages.filter { it[ChatMessages.groupName] == groupName }
-            for (msg in groupMsgs) {
-                val msgUserId = msg[ChatMessages.userId].value
-                if (msgUserId == userId) continue
+            val unreadCount = ChatMessages.selectAll().where {
+                (ChatMessages.teamNumber eq teamNumber) and
+                (ChatMessages.groupName eq groupName) and
+                (ChatMessages.userId neq userId) and
+                (ChatMessages.createdAt greater lastRead)
+            }.count().toInt()
 
-                val msgCreatedAt = msg[ChatMessages.createdAt]
-                if (msgCreatedAt.isAfter(lastRead)) {
-                    groupUnread++
-                    totalUnreadCount++
-                    val content = msg[ChatMessages.content]
-                    if (content.contains(userMention, ignoreCase = true) ||
-                        content.contains("@everyone", ignoreCase = true) ||
-                        content.contains("@channel", ignoreCase = true)) {
-                        groupMention++
-                        totalMentionCount++
-                    }
-                }
-            }
+            val mentionCount = ChatMessages.selectAll().where {
+                (ChatMessages.teamNumber eq teamNumber) and
+                (ChatMessages.groupName eq groupName) and
+                (ChatMessages.userId neq userId) and
+                (ChatMessages.createdAt greater lastRead) and
+                ((ChatMessages.content.lowerCase() like userMentionLower) or
+                 (ChatMessages.content.lowerCase() like "%@everyone%") or
+                 (ChatMessages.content.lowerCase() like "%@channel%"))
+            }.count().toInt()
 
-            GroupUnreadStatus(groupName, groupUnread, groupMention)
+            totalUnreadCount += unreadCount
+            totalMentionCount += mentionCount
+
+            GroupUnreadStatus(groupName, unreadCount, mentionCount)
         }
 
         UnreadStatusDto(totalUnreadCount, totalMentionCount, groupStatuses)

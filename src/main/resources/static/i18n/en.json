@@ -85,6 +85,7 @@
   "dashboard.sync_summary": "Synced {teams} teams and {matches} matches for {teamCount} team(s)",
   "dashboard.sync_no_teams": "No teams configured for auto-sync.",
   "dashboard.sync_failed_teams": "{count} team sync(s) failed",
+  "dashboard.sync_data": "Sync data",
   "dashboard.sync_teams_matches": "Sync teams & matches",
   "dashboard.sync_events": "Sync events",
   "dashboard.sync_stats": "Sync stats",

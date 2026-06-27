@@ -85,6 +85,7 @@
   "dashboard.sync_summary": "Sincronizados {teams} equipos y {matches} partidos para {teamCount} equipo(s)",
   "dashboard.sync_no_teams": "No hay equipos configurados para la sincronización automática.",
   "dashboard.sync_failed_teams": "Falló la sincronización de {count} equipo(s)",
+  "dashboard.sync_data": "Sincronizar datos",
   "dashboard.sync_teams_matches": "Sincronizar equipos y partidos",
   "dashboard.sync_events": "Sincronizar eventos",
   "dashboard.sync_stats": "Sincronizar estadísticas",
