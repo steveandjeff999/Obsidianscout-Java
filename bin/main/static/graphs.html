@@ -179,7 +179,15 @@
 
                     <div class="form-grid mt-12">
 
-                        <div class="field">
+                        <div class="field hidden" id="datasource-field">
+
+                            <label for="datasource-select" data-i18n="predictor.data_source">Data Source</label>
+
+                            <select id="datasource-select" class="select-wide"></select>
+
+                        </div>
+
+                        <div class="field" id="metric-field">
 
                             <label for="graph-metric" data-i18n="graphs.metric">Metric</label>
 
@@ -187,7 +195,7 @@
 
                         </div>
 
-                        <div class="field">
+                        <div class="field" id="view-field">
 
                             <label for="graph-view" data-i18n="graphs.data_view">Data view</label>
 
@@ -219,7 +227,7 @@
 
                         </div>
 
-                        <div class="field" style="display: flex; align-items: center; gap: 8px; grid-column: span 2;">
+                        <div class="field" id="prescout-field" style="display: flex; align-items: center; gap: 8px; grid-column: span 2;">
 
                             <input type="checkbox" id="include-prescout-checkbox" style="width: auto; margin-top: 0;" />
 

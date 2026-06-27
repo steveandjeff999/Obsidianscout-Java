@@ -46,7 +46,7 @@ async function loadGraphsPageData() {
         ]);
 
         mainContentWrapper.innerHTML = originalMainContentHTML;
-        initGraphsPage({ config, entries, events });
+        await initGraphsPage({ config, entries, events, settings });
     } catch (error) {
         console.error("Failed to load graphs data:", error);
         Obsidianscout.showRetryButton(mainContentWrapper, "Failed to load graphs data: " + error.message, loadGraphsPageData);
@@ -70,11 +70,12 @@ const GRAPH_TYPES = [
     { id: "histogram", label: "Histogram", group: "distribution" }
 ];
 
-function initGraphsPage({ config, entries, events }) {
+async function initGraphsPage({ config, entries, events, settings }) {
     const state = {
         config,
         entries,
         events,
+        settings,
         eventKey: "",
         selectedTeams: new Set(),
         metricId: "",
@@ -82,12 +83,20 @@ function initGraphsPage({ config, entries, events }) {
         sort: "value_desc",
         selectedGraphTypes: new Set(["bar"]),
         forcePrescout: false,
-        eventTeams: new Set()
+        eventTeams: new Set(),
+        eventTeamsMap: new Map(),
+        datasource: "scouted"
     };
 
     renderSummary(entries);
     initMetricOptions(state);
     initEventFilter(state);
+    initDatasource(state);
+
+    if (state.eventKey) {
+        await loadTeamsForEvent(state);
+    }
+
     initTeamSelection(state);
     initGraphTypeControls(state);
     wireGraphOptions(state);
@@ -126,12 +135,23 @@ function initEventFilter(state) {
     allOption.value = "";
     allOption.textContent = t('graphs.all_events', "All events");
     eventFilter.appendChild(allOption);
+
+    const defaultEventKey = state.settings ? (Obsidianscout.resolveEventKey(state.settings) || "") : "";
+
     (state.events || []).forEach((event) => {
         const option = document.createElement("option");
         option.value = event.eventKey;
         option.textContent = `${event.name} (${event.year})`;
+        if (event.eventKey === defaultEventKey) {
+            option.selected = true;
+        }
         eventFilter.appendChild(option);
     });
+
+    if (defaultEventKey) {
+        state.eventKey = defaultEventKey;
+    }
+
     eventFilter.addEventListener("change", async () => {
         state.eventKey = eventFilter.value;
         await loadTeamsForEvent(state);
@@ -141,6 +161,80 @@ function initEventFilter(state) {
             status.textContent = state.eventKey ? `Filtered to ${eventFilter.selectedOptions[0].text}` : "Showing all events";
         }
     });
+
+    if (status && defaultEventKey) {
+        const selectedOpt = eventFilter.selectedOptions[0];
+        if (selectedOpt) {
+            status.textContent = `Filtered to ${selectedOpt.text}`;
+        }
+    }
+}
+
+function initDatasource(state) {
+    const datasourceField = document.getElementById("datasource-field");
+    const datasourceSelect = document.getElementById("datasource-select");
+    if (!datasourceField || !datasourceSelect) {
+        return;
+    }
+
+    const settings = state.settings;
+    if (settings && (settings.useStatboticsEpa || settings.useTbaOpr)) {
+        datasourceField.classList.remove("hidden");
+        datasourceSelect.innerHTML = "";
+
+        if (settings.useStatboticsEpa && settings.useTbaOpr) {
+            const optAll = document.createElement("option");
+            optAll.value = "all";
+            optAll.textContent = t('rankings.metric.all', "All Three");
+            datasourceSelect.appendChild(optAll);
+        }
+
+        const optScouted = document.createElement("option");
+        optScouted.value = "scouted";
+        optScouted.textContent = t('predictor.scouted_data', "Scouted Data");
+        optScouted.selected = true;
+        datasourceSelect.appendChild(optScouted);
+
+        if (settings.useStatboticsEpa) {
+            const optEpa = document.createElement("option");
+            optEpa.value = "epa";
+            optEpa.textContent = t('predictor.statbotics_epa', "Statbotics EPA");
+            datasourceSelect.appendChild(optEpa);
+        }
+
+        if (settings.useTbaOpr) {
+            const optOpr = document.createElement("option");
+            optOpr.value = "opr";
+            optOpr.textContent = t('predictor.tba_opr', "TBA OPR");
+            datasourceSelect.appendChild(optOpr);
+        }
+
+        datasourceSelect.addEventListener("change", () => {
+            state.datasource = datasourceSelect.value;
+            toggleFieldsForDatasource(state);
+        });
+    } else {
+        datasourceField.classList.add("hidden");
+        state.datasource = "scouted";
+    }
+
+    toggleFieldsForDatasource(state);
+}
+
+function toggleFieldsForDatasource(state) {
+    const metricField = document.getElementById("metric-field");
+    const viewField = document.getElementById("view-field");
+    const prescoutField = document.getElementById("prescout-field");
+
+    if (state.datasource === "scouted") {
+        metricField?.classList.remove("hidden");
+        viewField?.classList.remove("hidden");
+        prescoutField?.classList.remove("hidden");
+    } else {
+        metricField?.classList.add("hidden");
+        viewField?.classList.add("hidden");
+        prescoutField?.classList.add("hidden");
+    }
 }
 
 function initTeamSelection(state) {
@@ -274,17 +368,27 @@ function updateTeamList(state) {
     if (!list) {
         return;
     }
-    const filteredEntries = getFilteredEntriesForEvent(state);
-    let teams = Array.from(new Set(filteredEntries.map((entry) => entry.targetTeamNumber).filter(Boolean)));
 
+    let teams;
     if (state.eventKey && state.eventTeams && state.eventTeams.size > 0) {
-        teams = teams.filter(teamNumber => state.eventTeams.has(teamNumber));
+        teams = Array.from(state.eventTeams);
+        // Clean up selectedTeams to only keep valid teams for the event
         state.selectedTeams.forEach(teamNumber => {
             if (!state.eventTeams.has(teamNumber)) {
                 state.selectedTeams.delete(teamNumber);
             }
         });
+    } else {
+        const filteredEntries = getFilteredEntriesForEvent(state);
+        teams = Array.from(new Set(filteredEntries.map((entry) => entry.targetTeamNumber).filter(Boolean)));
     }
+
+    const scoutedTeamNumbers = new Set(
+        state.entries
+            .filter((entry) => !state.eventKey || entry.eventKey === state.eventKey)
+            .map((entry) => entry.targetTeamNumber)
+            .filter(Boolean)
+    );
 
     teams.sort((a, b) => a - b);
     list.innerHTML = "";
@@ -318,9 +422,18 @@ function updateTeamList(state) {
         const meta = document.createElement("div");
         meta.className = "team-list-meta";
         const title = document.createElement("strong");
-        title.textContent = `Team ${teamNumber}`;
+
+        const teamRecord = state.eventTeamsMap ? state.eventTeamsMap.get(teamNumber) : null;
+        const nickname = teamRecord ? (teamRecord.nickname || teamRecord.name) : "";
+        title.textContent = nickname ? `Team ${teamNumber} - ${nickname}` : `Team ${teamNumber}`;
+
         const sub = document.createElement("small");
-        sub.textContent = "Scouted";
+        const isScouted = scoutedTeamNumbers.has(teamNumber);
+        sub.textContent = isScouted ? "Scouted" : "Not Scouted";
+        if (!isScouted) {
+            sub.style.color = "var(--ink-muted, #737373)";
+        }
+
         meta.appendChild(title);
         meta.appendChild(sub);
 
@@ -335,6 +448,7 @@ function updateTeamList(state) {
 
 async function loadTeamsForEvent(state) {
     state.eventTeams = new Set();
+    state.eventTeamsMap = new Map();
     if (!state.eventKey) {
         return;
     }
@@ -344,6 +458,7 @@ async function loadTeamsForEvent(state) {
             teams.forEach(team => {
                 if (team.teamNumber) {
                     state.eventTeams.add(team.teamNumber);
+                    state.eventTeamsMap.set(team.teamNumber, team);
                 }
             });
         }
@@ -357,7 +472,10 @@ function updateSelectionSummary(state) {
     const status = document.getElementById("team-selection-status");
     const pills = document.getElementById("selected-pills-container");
     const filteredEntries = filterEntries(state.entries, state.eventKey);
-    const totalTeams = new Set(filteredEntries.map((entry) => entry.targetTeamNumber).filter(Boolean)).size;
+
+    const totalTeams = (state.eventKey && state.eventTeams && state.eventTeams.size > 0)
+        ? state.eventTeams.size
+        : new Set(filteredEntries.map((entry) => entry.targetTeamNumber).filter(Boolean)).size;
 
     if (badge) {
         badge.textContent = state.selectedTeams.size ? `${state.selectedTeams.size} selected` : "No teams selected";
@@ -472,6 +590,38 @@ function generateGraphs(state) {
         return;
     }
 
+    if (state.datasource && state.datasource !== "scouted") {
+        selectedGraphTypes.forEach((graphType) => {
+            if (graphType === "box" || graphType === "violin" || graphType === "histogram") {
+                const card = document.createElement("div");
+                card.className = "card";
+                const title = document.createElement("h3");
+                title.textContent = `${getDatasourceLabel(state.datasource)} - ${graphType}`;
+                card.appendChild(title);
+                card.appendChild(buildNotice("Distribution graphs are only supported for Scouted Data."));
+                output.appendChild(card);
+                return;
+            }
+
+            const card = document.createElement("div");
+            card.className = "card";
+            const title = document.createElement("h3");
+            title.textContent = `${getDatasourceLabel(state.datasource)} - ${graphType}`;
+            card.appendChild(title);
+
+            const chart = createPlotlyContainer(320);
+            card.appendChild(chart);
+            output.appendChild(card);
+
+            renderNonScoutedGraph(graphType, chart, selectedTeams, state);
+        });
+
+        if (loading) {
+            loading.classList.add("hidden");
+        }
+        return;
+    }
+
     const metric = state.metricMap.get(state.metricId);
     const filteredEntries = getFilteredEntriesForTeams(state);
 
@@ -522,6 +672,106 @@ function generateGraphs(state) {
 
     if (loading) {
         loading.classList.add("hidden");
+    }
+}
+
+function getDatasourceLabel(datasource) {
+    if (datasource === "epa") return t('predictor.statbotics_epa', "Statbotics EPA");
+    if (datasource === "opr") return t('predictor.tba_opr', "TBA OPR");
+    if (datasource === "all") return t('rankings.metric.all', "All Three");
+    return t('predictor.scouted_data', "Scouted Data");
+}
+
+function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
+    const theme = resolveThemeTokens();
+
+    // 1. Build the data series
+    const data = selectedTeams.map(teamNumber => {
+        const team = state.eventTeamsMap ? state.eventTeamsMap.get(teamNumber) : null;
+        return {
+            teamNumber,
+            label: `Team ${teamNumber}`,
+            epa: team ? (team.epa !== null && team.epa !== undefined ? team.epa : 0) : 0,
+            opr: team ? (team.opr !== null && team.opr !== undefined ? team.opr : 0) : 0,
+            scouted: team ? (team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints : 0) : 0
+        };
+    });
+
+    // 2. Sort the data based on state.sort
+    const sortField = state.datasource === "all" ? "epa" : state.datasource;
+
+    data.sort((a, b) => {
+        if (state.sort === "team_asc") return a.teamNumber - b.teamNumber;
+        if (state.sort === "team_desc") return b.teamNumber - a.teamNumber;
+        if (state.sort === "value_asc") return a[sortField] - b[sortField];
+        return b[sortField] - a[sortField]; // value_desc
+    });
+
+    const labels = data.map(item => item.label);
+
+    if (graphType === "bar") {
+        if (state.datasource === "epa") {
+            const series = data.map(item => ({ label: item.label, value: item.epa }));
+            renderPlotlyBar(container, series, { orientation: "h" });
+        } else if (state.datasource === "opr") {
+            const series = data.map(item => ({ label: item.label, value: item.opr }));
+            renderPlotlyBar(container, series, { orientation: "h" });
+        } else if (state.datasource === "all") {
+            // Grouped bar chart comparing Scouted, EPA, and OPR
+            const series = [];
+            series.push({
+                name: "Scouted Average",
+                x: labels,
+                y: data.map(item => item.scouted)
+            });
+            if (state.settings?.useStatboticsEpa) {
+                series.push({
+                    name: "Statbotics EPA",
+                    x: labels,
+                    y: data.map(item => item.epa)
+                });
+            }
+            if (state.settings?.useTbaOpr) {
+                series.push({
+                    name: "TBA OPR",
+                    x: labels,
+                    y: data.map(item => item.opr)
+                });
+            }
+            renderPlotlyMultiBar(container, series);
+        }
+        return;
+    }
+
+    if (graphType === "line" || graphType === "scatter" || graphType === "area") {
+        const series = [];
+        if (state.datasource === "scouted" || state.datasource === "all") {
+            series.push({
+                name: "Scouted Average",
+                x: labels,
+                y: data.map(item => item.scouted)
+            });
+        }
+        if (state.datasource === "epa" || state.datasource === "all") {
+            if (state.settings?.useStatboticsEpa || state.datasource === "epa") {
+                series.push({
+                    name: "Statbotics EPA",
+                    x: labels,
+                    y: data.map(item => item.epa)
+                });
+            }
+        }
+        if (state.datasource === "opr" || state.datasource === "all") {
+            if (state.settings?.useTbaOpr || state.datasource === "opr") {
+                series.push({
+                    name: "TBA OPR",
+                    x: labels,
+                    y: data.map(item => item.opr)
+                });
+            }
+        }
+        renderPlotlyMultiLine(container, series, { mode: graphType, dataView: "averages" });
+        return;
     }
 }
 
