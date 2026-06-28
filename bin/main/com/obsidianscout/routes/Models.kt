@@ -426,6 +426,14 @@ data class PushKeysDto(
     val auth: String
 )
 
+@Serializable
+data class ContactRequest(
+    val type: String,
+    val name: String,
+    val replyToEmail: String? = null,
+    val message: String
+)
+
 
 
 

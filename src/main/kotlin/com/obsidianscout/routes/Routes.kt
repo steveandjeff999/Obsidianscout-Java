@@ -1572,6 +1572,66 @@ fun Application.configureRoutes() {
                     }
                 }
             }
+
+            route("/contact") {
+                post {
+                    val session = call.requireSession()
+                    val request = call.receive<ContactRequest>()
+                    
+                    val smtp = SettingsService.getSmtpSettings()
+                    if (smtp.host.isBlank()) {
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.ServiceUnavailable,
+                            "SMTP email settings are not configured. Please contact a superadmin."
+                        )
+                    }
+                    
+                    val formattedType = when (request.type.uppercase()) {
+                        "BUG_REPORT" -> "Bug Report"
+                        "FEATURE_REQUEST" -> "Feature Request"
+                        "OTHER" -> "Other"
+                        else -> request.type
+                    }
+                    
+                    val subject = "ObsidianScout: ${formattedType} from ${session.username} (Team ${session.teamNumber})"
+                    val userEmailInfo = session.email?.let { "<strong>Account Email:</strong> ${it}<br/>" } ?: ""
+                    val replyToInfo = if (request.replyToEmail.isNullOrBlank()) "" else "<strong>Reply-To Email:</strong> ${request.replyToEmail}<br/>"
+                    
+                    val body = """
+                        <html>
+                        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                            <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                                <h2 style="color: #4f46e5; border-bottom: 2px solid #edf2f7; padding-bottom: 10px;">New Contact Form Submission</h2>
+                                <p><strong>Type:</strong> ${formattedType}</p>
+                                <p><strong>Sender Name:</strong> ${request.name}</p>
+                                <p><strong>Logged-in Account:</strong> ${session.username} (Team ${session.teamNumber})</p>
+                                <p>${userEmailInfo}</p>
+                                <p>${replyToInfo}</p>
+                                <p><strong>Message:</strong></p>
+                                <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; border: 1px solid #e5e7eb; white-space: pre-wrap;">
+                                    ${request.message}
+                                </div>
+                            </div>
+                        </body>
+                        </html>
+                    """.trimIndent()
+                    
+                    try {
+                        EmailService.sendEmail(
+                            to = "obsidianscoutfrc@gmail.com",
+                            subject = subject,
+                            body = body
+                        )
+                    } catch (e: Exception) {
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.InternalServerError,
+                            "Failed to send email: ${e.message}"
+                        )
+                    }
+                    
+                    call.respond(mapOf("success" to true))
+                }
+            }
         }
 
         val pages = mapOf(
@@ -1607,7 +1667,8 @@ fun Application.configureRoutes() {
             "cache-manager" to "cache-manager.html",
             "banners" to "banners.html",
             "chat" to "chat.html",
-            "docs" to "docs.html"
+            "docs" to "docs.html",
+            "contact" to "contact.html"
         )
 
         pages.forEach { (path, fileName) ->
