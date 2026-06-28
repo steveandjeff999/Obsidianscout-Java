@@ -1,0 +1,24 @@
+# =========================================================================
+# ObsidianScout Caddy Reverse Proxy Configuration
+# =========================================================================
+#
+# Caddy is a modern, cross-platform reverse proxy that automatically
+# provisions and renews SSL certificates (via Let's Encrypt / ZeroSSL).
+# It has built-in WebSocket support with zero additional configuration.
+#
+# To use this configuration:
+# 1. Install Caddy (https://caddyserver.com).
+# 2. Update your domain name below.
+# 3. Run: caddy run --config Caddyfile
+#
+
+# For Local Testing (uses internal self-signed certificates):
+https://localhost:8443, https://127.0.0.1:8443 {
+    tls internal
+    reverse_proxy http://127.0.0.1:8080
+}
+
+# For Production (uncomment and replace with your actual domain):
+# https://yourdomain.com {
+#     reverse_proxy http://127.0.0.1:8080
+# }

@@ -33,6 +33,7 @@ dependencies {
     implementation("io.ktor:ktor-server-caching-headers-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-core-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-cio-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-client-websockets-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-content-negotiation-jvm:$ktorVersion")
     implementation("io.ktor:ktor-network-tls-certificates-jvm:$ktorVersion")
 

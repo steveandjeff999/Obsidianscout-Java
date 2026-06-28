@@ -29,7 +29,7 @@ data class ServerConfig(
 
 @Serializable
 data class HttpsConfig(
-    val enabled: Boolean = true,
+    val enabled: Boolean = false,
     val port: Int = 8443,
     val keystorePath: String = "config/obsidianscout.jks",
     val keystorePassword: String = "change-me",

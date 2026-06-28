@@ -68,18 +68,11 @@ fun main() {
             host = appConfig.server.host
             port = appConfig.server.port
         }
-        if (appConfig.server.https.enabled) {
-            val keyStore = loadOrCreateKeyStore(appConfig)
-            sslConnector(
-                keyStore = keyStore,
-                keyAlias = appConfig.server.https.keyAlias,
-                keyStorePassword = { appConfig.server.https.keystorePassword.toCharArray() },
-                privateKeyPassword = { appConfig.server.https.keystorePassword.toCharArray() }
-            ) {
-                host = appConfig.server.host
-                port = appConfig.server.https.port
-            }
-        }
+    }
+
+    if (appConfig.server.https.enabled) {
+        val keyStore = loadOrCreateKeyStore(appConfig)
+        com.obsidianscout.utils.ProxyServer.start(appConfig, keyStore)
     }
 
     embeddedServer(Netty, environment) {
