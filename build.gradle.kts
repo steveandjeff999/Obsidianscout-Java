@@ -100,6 +100,14 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
     from(file("../docs")) {
         into("docs")
     }
+
+    // Copy the update scripts
+    from(file("scripts/update.sh")) {
+        into(".")
+    }
+    from(file("scripts/update.bat")) {
+        into(".")
+    }
     
     // Set destination directory
     into(rootProject.layout.buildDirectory.dir("bundle"))
@@ -129,6 +137,12 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
         val resetSh = File(bundleDir, "reset-superadmin.sh")
         resetSh.writeText("#!/bin/sh\njava -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n")
         resetSh.setExecutable(true, false)
+
+        // Unix update script
+        val updateSh = File(bundleDir, "update.sh")
+        if (updateSh.exists()) {
+            updateSh.setExecutable(true, false)
+        }
 
 
         // Sanitize secrets in the copied config — reset every known secret field
