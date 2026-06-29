@@ -49,7 +49,9 @@ fun main() {
     }
     
     println("\nFetching releases from GitHub...")
-    val client = HttpClient.newHttpClient()
+    val client = HttpClient.newBuilder()
+        .followRedirects(HttpClient.Redirect.NORMAL)
+        .build()
     val request = HttpRequest.newBuilder()
         .uri(URI.create("https://api.github.com/repos/steveandjeff999/Obsidianscout-Java/releases"))
         .header("Accept", "application/vnd.github.v3+json")
@@ -161,10 +163,16 @@ fun main() {
     println("\nDownloading update from: ${selectedRelease.url}")
     
     val zipRequest = HttpRequest.newBuilder().uri(URI.create(selectedRelease.url)).build()
-    try {
+    val zipResponse = try {
         client.send(zipRequest, HttpResponse.BodyHandlers.ofFile(zipFile.toPath()))
     } catch (e: Exception) {
         System.err.println("Download failed: ${e.message}")
+        tempDir.deleteRecursively()
+        exitProcess(1)
+    }
+    
+    if (zipResponse.statusCode() != 200) {
+        System.err.println("Error: Failed to download update. HTTP status: ${zipResponse.statusCode()}")
         tempDir.deleteRecursively()
         exitProcess(1)
     }

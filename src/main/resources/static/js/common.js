@@ -181,6 +181,7 @@
             const data = text ? safeParse(text) : null;
             if (!response.ok) {
                 if (response.status === 401) {
+                    const isLoginPage = document.body && document.body.getAttribute("data-page") === "login";
                     const isAuthRequest = path.includes("/api/auth/login") || path.includes("/api/auth/register") || path.includes("/api/auth/status") || path.includes("/api/push");
                     if (!isLoginPage && !isAuthRequest) {
                         checkLoginStatus().then(loggedIn => {
