@@ -133,6 +133,10 @@
 
     async function request(path, options = {}) {
         const method = options.method || "GET";
+        let isLoginPage = false;
+        try {
+            isLoginPage = typeof document !== 'undefined' && document.body && document.body.getAttribute("data-page") === "login";
+        } catch (e) {}
 
         if (method === "GET" && !navigator.onLine) {
             const cachedText = safeGetItem("cache:" + path);
@@ -181,7 +185,6 @@
             const data = text ? safeParse(text) : null;
             if (!response.ok) {
                 if (response.status === 401) {
-                    const isLoginPage = document.body && document.body.getAttribute("data-page") === "login";
                     const isAuthRequest = path.includes("/api/auth/login") || path.includes("/api/auth/register") || path.includes("/api/auth/status") || path.includes("/api/push");
                     if (!isLoginPage && !isAuthRequest) {
                         checkLoginStatus().then(loggedIn => {
