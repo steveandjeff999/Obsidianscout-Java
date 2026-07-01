@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Data Sharing</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="backup">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <!-- Automatically replaced by Ktor with base.html sidebar -->
+        </aside>
+
+        <main class="main-content">
+            <div id="admin-locked" class="card hidden">
+                <h2>Admin only</h2>
+                <p class="notice">You need admin access to export or import team data.</p>
+            </div>
+
+            <div id="admin-panel" class="card">
+                <h1>Data Sharing</h1>
+                <p class="notice">
+                    Export your team's configuration, users, and scouting records to share with other servers or download locally. 
+                    You can also import data files back into this server instance.
+                </p>
+
+                <div class="split mt-24">
+                    <!-- Export Card -->
+                    <div class="card soft">
+                        <h3>Export Data</h3>
+                        <p class="notice" style="margin-bottom: 16px;">
+                            Download a backup of your team's scouting data or the entire team database.
+                        </p>
+                        
+                        <div class="field">
+                            <label for="export-type">Data to Export</label>
+                            <select id="export-type" class="select-wide">
+                                <option value="scouting">Scouting Data Only (Entries)</option>
+                                <option value="entire">Entire Team Database (Users, Configs, Settings & Entries)</option>
+                            </select>
+                        </div>
+
+                        <div class="field mt-12">
+                            <label for="export-format">Export Format</label>
+                            <select id="export-format" class="select-wide">
+                                <option value="obsidiandb">Custom Backup (.obsidiandb)</option>
+                                <option value="csv">Standard CSV Archive (.zip)</option>
+                            </select>
+                        </div>
+
+                        <div class="mt-20">
+                            <button id="btn-export" class="btn" type="button">Export and Download</button>
+                        </div>
+                    </div>
+
+                    <!-- Import Card -->
+                    <div class="card soft">
+                        <h3>Import Data</h3>
+                        <p class="notice" style="margin-bottom: 16px;">
+                            Upload a previously exported <code>.obsidiandb</code> or <code>.zip</code> file to import records.
+                        </p>
+
+                        <div class="field">
+                            <label>Select Backup File</label>
+                            <div class="import-dropzone" id="drop-zone">
+                                <span class="import-icon">📁</span>
+                                <span class="import-text">Drag backup file here or click to browse</span>
+                                <span class="import-subtext">Supports .obsidiandb, .json, and .zip formats</span>
+                                <input type="file" id="import-file" class="input-hidden" accept=".obsidiandb,.json,.zip" />
+                            </div>
+                            <div id="file-info" class="mt-8 font-medium hidden" style="color: var(--accent);"></div>
+                        </div>
+
+                        <div class="mt-20">
+                            <button id="btn-import" class="btn secondary" type="button" disabled>Import Data</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Report Container (hidden initially) -->
+                <div id="import-report-card" class="card soft mt-24 hidden" style="border: 1px solid var(--accent); background: var(--bg-soft);">
+                    <h3 style="color: var(--accent);">Import Report</h3>
+                    <p id="report-summary-text" class="notice mt-8"></p>
+                    
+                    <div style="overflow-x: auto; margin-top: 16px;">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Data Type</th>
+                                    <th>Imported / Created</th>
+                                    <th>Skipped / Duplicates</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-table-body">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/backup.js"></script>
+</body>
+</html>

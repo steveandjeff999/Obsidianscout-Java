@@ -50,6 +50,10 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
+import io.ktor.server.response.respondBytes
+import io.ktor.server.request.receiveMultipart
+import io.ktor.http.content.PartData
+import io.ktor.http.content.streamProvider
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
@@ -1155,6 +1159,56 @@ fun Application.configureRoutes() {
                         )
                     }
                 }
+
+                get("/export") {
+                    val session = call.requireAdmin()
+                    val type = call.request.queryParameters["type"] ?: "scouting"
+                    val format = call.request.queryParameters["format"] ?: "obsidiandb"
+
+                    if (format == "obsidiandb") {
+                        val backup = com.obsidianscout.db.BackupService.exportBackup(session.teamNumber, type)
+                        val jsonString = JsonSupport.json.encodeToString(com.obsidianscout.db.ObsidianDbBackup.serializer(), backup)
+                        call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"team_${session.teamNumber}_backup_${type}.obsidiandb\"")
+                        call.respondText(jsonString, ContentType.Application.Json)
+                    } else if (format == "csv") {
+                        val zipBytes = com.obsidianscout.db.BackupService.exportCsv(session.teamNumber, type)
+                        call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"team_${session.teamNumber}_backup_${type}.zip\"")
+                        call.respondBytes(zipBytes, ContentType.Application.Zip)
+                    } else {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Unsupported format: $format")
+                    }
+                }
+
+                post("/import") {
+                    val session = call.requireAdmin()
+                    val multipart = call.receiveMultipart()
+                    var fileBytes: ByteArray? = null
+                    var fileName = ""
+                    while (true) {
+                        val part = multipart.readPart() ?: break
+                        if (part is PartData.FileItem) {
+                            fileBytes = part.streamProvider().readBytes()
+                            fileName = part.originalFileName ?: ""
+                        }
+                        part.dispose()
+                    }
+
+                    if (fileBytes == null) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "No file uploaded")
+                    }
+
+                    val report = if (fileName.endsWith(".obsidiandb") || fileName.endsWith(".json")) {
+                        val jsonString = String(fileBytes!!, Charsets.UTF_8)
+                        val backup = JsonSupport.json.decodeFromString<com.obsidianscout.db.ObsidianDbBackup>(jsonString)
+                        com.obsidianscout.db.BackupService.importBackup(session.teamNumber, backup, session.userId)
+                    } else if (fileName.endsWith(".zip")) {
+                        com.obsidianscout.db.BackupService.importCsv(session.teamNumber, fileBytes!!, session.userId)
+                    } else {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Unsupported file format. Please upload .obsidiandb or .zip")
+                    }
+
+                    call.respond(report)
+                }
             } // end /admin route
 
             // Self-service profile picture endpoint (any authenticated user)
@@ -1663,6 +1717,7 @@ fun Application.configureRoutes() {
             "alliance-selection" to "alliance-selection.html",
             "users" to "users.html",
             "config" to "config.html",
+            "backup" to "backup.html",
             "qr-scanner" to "qr-scanner.html",
             "cache-manager" to "cache-manager.html",
             "banners" to "banners.html",
