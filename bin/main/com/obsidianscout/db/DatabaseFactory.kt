@@ -110,12 +110,19 @@ object DatabaseFactory {
      */
     private fun ensurePostgresDatabaseExists(config: DatabaseConfig) {
         val pg = config.postgres
+        // Identifiers in PostgreSQL are case-folded to lower-case unless quoted.
+        val dbName = pg.database.lowercase()
+        
+        // Database name is validated to be lowercase alphanumeric+underscore
+        // to prevent SQL injection or connection issues.
+        require(dbName.matches(Regex("[a-z0-9_]+"))) {
+            "Postgres database name must contain only lowercase letters, digits, and underscores."
+        }
+
         val sslSuffix = if (pg.ssl) "?sslmode=require" else ""
         val maintenanceUrl = "jdbc:postgresql://${pg.host}:${pg.port}/postgres$sslSuffix"
         DriverManager.getConnection(maintenanceUrl, pg.user, pg.password).use { conn ->
             conn.autoCommit = true
-            // Identifiers in PostgreSQL are case-folded to lower-case unless quoted.
-            val dbName = pg.database.lowercase()
             conn.createStatement().use { stmt ->
                 val exists = conn
                     .prepareStatement("SELECT 1 FROM pg_database WHERE datname = ?")
@@ -123,11 +130,6 @@ object DatabaseFactory {
                     .executeQuery()
                     .next()
                 if (!exists) {
-                    // Database name is validated to be lowercase alphanumeric+underscore
-                    // to prevent SQL injection via the config file.
-                    require(dbName.matches(Regex("[a-z0-9_]+"))) {
-                        "Postgres database name must contain only lowercase letters, digits, and underscores."
-                    }
                     stmt.execute("CREATE DATABASE \"$dbName\"")
                     println("Created PostgreSQL database: $dbName")
                 }
