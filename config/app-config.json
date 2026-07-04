@@ -28,9 +28,9 @@
         }
     },
     "seed": {
-        "adminUsername": "admin",
+        "adminUsername": "superadmin",
         "adminTeamNumber": 0,
-        "adminPassword": "changeme"
+        "adminPassword": "5454"
     },
     "vapid": {
         "publicKey": "BNfBcRvG-bL2zJfhSRh_bG5pZHDwwTpxxqmc2PQD0Q9HYScACJWr00BgnMcjEM-jnJXC_kphEMSZ-IjUf8QmpIM",

@@ -650,6 +650,11 @@
                 link.style.display = "none";
             });
         }
+
+        // Show Migration link only for SUPERADMIN
+        document.querySelectorAll('.sidebar-link[data-page="migration"]').forEach((link) => {
+            link.style.display = isSuperAdmin(role) ? "block" : "none";
+        });
     }
 
     function wireLogout() {

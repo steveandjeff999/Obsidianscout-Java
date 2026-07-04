@@ -17,6 +17,7 @@
     --bg: radial-gradient(ellipse at 20% 10%, #ffecd2 0%, #f6f1e8 40%, #daeef0 100%);
     --primary: var(--accent);
     --ink-muted: var(--muted);
+    --danger: #df382c;
 }
 
 * {
@@ -55,6 +56,7 @@ body.theme-dark {
         0 16px 40px rgba(0,0,0,0.42),
         0 40px 80px rgba(0,0,0,0.28);
     --bg: radial-gradient(ellipse at 20% 10%, #1a1f2e 0%, #13161c 45%, #0d1015 100%);
+    --danger: #ff5252;
 }
 
 body.theme-dark::before {
@@ -1311,6 +1313,22 @@ button {
         inset 0 -2px 3px rgba(0, 0, 0, 0.12), 
         0 14px 28px rgba(37, 90, 156, 0.35);
 }
+
+.btn.danger {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 50%, rgba(255, 255, 255, 0) 51%), var(--danger);
+    box-shadow: 
+        inset 0 2px 3px rgba(255, 255, 255, 0.45), 
+        inset 0 -2px 3px rgba(0, 0, 0, 0.15), 
+        0 8px 20px rgba(223, 56, 44, 0.25);
+}
+
+.btn.danger:hover {
+    box-shadow: 
+        inset 0 2px 4px rgba(255, 255, 255, 0.6), 
+        inset 0 -2px 3px rgba(0, 0, 0, 0.12), 
+        0 14px 28px rgba(223, 56, 44, 0.35);
+}
+
 
 .split {
     display: grid;

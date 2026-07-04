@@ -434,6 +434,13 @@ data class ContactRequest(
     val message: String
 )
 
+@Serializable
+data class MigrationRequest(
+    val sourceType: String,
+    val sqliteInstancePath: String? = null,
+    val pgConfig: com.obsidianscout.db.PostgresMigrationConfig? = null
+)
+
 
 
 

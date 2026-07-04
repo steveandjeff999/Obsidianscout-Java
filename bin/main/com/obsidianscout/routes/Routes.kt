@@ -1133,6 +1133,22 @@ fun Application.configureRoutes() {
                     call.respond(saved)
                 }
 
+                get("/migration/status") {
+                    call.requireSuperAdmin()
+                    call.respond(com.obsidianscout.db.MigrationService.getStatus())
+                }
+
+                post("/migration/run") {
+                    call.requireSuperAdmin()
+                    val req = call.receive<MigrationRequest>()
+                    com.obsidianscout.db.MigrationService.startMigration(
+                        sourceType = req.sourceType,
+                        sqliteInstancePath = req.sqliteInstancePath,
+                        pgConfig = req.pgConfig
+                    )
+                    call.respond(mapOf("success" to true))
+                }
+
                 post("/email-settings/test") {
                     call.requireSuperAdmin()
                     val testReq = call.receive<SmtpTestConnectionRequest>()
@@ -1745,7 +1761,8 @@ fun Application.configureRoutes() {
             "banners" to "banners.html",
             "chat" to "chat.html",
             "docs" to "docs.html",
-            "contact" to "contact.html"
+            "contact" to "contact.html",
+            "migration" to "migration.html"
         )
 
         pages.forEach { (path, fileName) ->

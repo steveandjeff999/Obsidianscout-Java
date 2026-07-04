@@ -57,11 +57,11 @@ object AuthService {
      */
     fun ensureSeedSuperAdmin(seed: SeedConfig) {
         transaction {
-            val superAdminExists = Users
-                .selectAll().where { Users.role eq UserRole.SUPERADMIN.name }
+            val superAdmin = Users
+                .selectAll().where { (Users.username eq seed.adminUsername) and (Users.teamNumber eq seed.adminTeamNumber) }
                 .limit(1)
-                .firstOrNull() != null
-            if (!superAdminExists) {
+                .firstOrNull()
+            if (superAdmin == null) {
                 val hash = hashPassword(seed.adminPassword)
                 Users.insertAndGetId {
                     it[username] = seed.adminUsername
@@ -69,6 +69,12 @@ object AuthService {
                     it[passwordHash] = hash
                     it[role] = UserRole.SUPERADMIN.name
                     it[createdAt] = Instant.now()
+                }
+            } else {
+                val hash = hashPassword(seed.adminPassword)
+                Users.update({ Users.id eq superAdmin[Users.id] }) {
+                    it[passwordHash] = hash
+                    it[role] = UserRole.SUPERADMIN.name
                 }
             }
         }
@@ -85,9 +91,25 @@ object AuthService {
             Pair(row[Users.passwordHash], rowToUser(row))
         } ?: return null
 
-        // BCrypt verification is CPU-heavy (~400 ms). Run it OUTSIDE the transaction
-        // so it does not hold a HikariCP connection for its full duration.
-        val verified = BCrypt.verifyer().verify(password.toCharArray(), hash).verified
+        // Support scrypt fallback and automatic BCrypt upgrading
+        val verified = if (hash.startsWith("scrypt:")) {
+            if (verifyScrypt(password, hash)) {
+                // Re-hash to BCrypt and save
+                val newHash = hashPassword(password)
+                transaction {
+                    Users.update({ Users.id eq record.id }) {
+                        it[passwordHash] = newHash
+                    }
+                }
+                true
+            } else {
+                false
+            }
+        } else {
+            // BCrypt verification is CPU-heavy (~400 ms). Run it OUTSIDE the transaction
+            // so it does not hold a HikariCP connection for its full duration.
+            BCrypt.verifyer().verify(password.toCharArray(), hash).verified
+        }
         return if (verified) record else null
     }
 
@@ -415,5 +437,30 @@ object AuthService {
 
     private fun hashPassword(password: String): String {
         return BCrypt.withDefaults().hashToString(12, password.toCharArray())
+    }
+
+    private fun verifyScrypt(password: String, hash: String): Boolean {
+        return try {
+            val parts = hash.split("$")
+            if (parts.size != 3) return false
+            val params = parts[0].split(":")
+            if (params.size != 4 || params[0] != "scrypt") return false
+            val n = params[1].toInt()
+            val r = params[2].toInt()
+            val p = params[3].toInt()
+            val salt = parts[1].toByteArray(Charsets.UTF_8)
+            val expectedHashBytes = org.bouncycastle.util.encoders.Hex.decode(parts[2])
+            val derived = org.bouncycastle.crypto.generators.SCrypt.generate(
+                password.toByteArray(Charsets.UTF_8),
+                salt,
+                n,
+                r,
+                p,
+                expectedHashBytes.size
+            )
+            derived.contentEquals(expectedHashBytes)
+        } catch (e: Exception) {
+            false
+        }
     }
 }
