@@ -193,6 +193,7 @@ object MigrationService {
             return if (useSqlite) {
                 val dbFile = File(sqliteInstancePath, dbName)
                 require(dbFile.exists()) { "SQLite database file not found: ${dbFile.absolutePath}" }
+                Class.forName("org.sqlite.JDBC")
                 DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}")
             } else {
                 val targetDb = when (dbName) {
@@ -204,6 +205,7 @@ object MigrationService {
                     else -> pgConfig!!.database
                 }
                 val url = "jdbc:postgresql://${pgConfig.host}:${pgConfig.port}/$targetDb"
+                Class.forName("org.postgresql.Driver")
                 DriverManager.getConnection(url, pgConfig.user, pgConfig.passwordPlain)
             }
         }
