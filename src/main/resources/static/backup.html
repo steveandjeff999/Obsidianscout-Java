@@ -68,6 +68,14 @@
                             </select>
                         </div>
 
+                        <div class="field mt-12 hidden" id="field-export-scope">
+                            <label for="export-scope">Backup Scope</label>
+                            <select id="export-scope" class="select-wide">
+                                <option value="team">My Team Only</option>
+                                <option value="global">All Teams & System Data (Superadmin)</option>
+                            </select>
+                        </div>
+
                         <div class="mt-20">
                             <button id="btn-export" class="btn" type="button">Export and Download</button>
                         </div>
@@ -89,6 +97,14 @@
                                 <input type="file" id="import-file" class="input-hidden" accept=".obsidiandb,.json,.zip" />
                             </div>
                             <div id="file-info" class="mt-8 font-medium hidden" style="color: var(--accent);"></div>
+                        </div>
+
+                        <div class="field mt-12 hidden" id="field-import-scope">
+                            <label for="import-scope">Import Scope</label>
+                            <select id="import-scope" class="select-wide">
+                                <option value="team">My Team Only</option>
+                                <option value="global">All Teams & System Data (Superadmin)</option>
+                            </select>
                         </div>
 
                         <div class="mt-20">

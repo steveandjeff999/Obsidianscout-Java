@@ -839,9 +839,26 @@ body.theme-dark .card.soft {
 
 /* Mobile / small-screen improvements */
 @media (max-width: 900px) {
+    :root {
+        --bg: #f3f4f6; /* Clean, soft light gray background */
+    }
+
+    body.theme-dark {
+        --bg: #0f172a; /* Deep neutral dark background */
+    }
+
+    body::before {
+        display: none; /* Hide the top-left bright gradient overlay */
+    }
+
+    .orb {
+        display: none !important; /* Hide floating background orbs to reduce glare and visual noise on small screens */
+    }
+
     .shell {
         padding: 20px 12px;
     }
+
 
     .sidebar {
         position: fixed;

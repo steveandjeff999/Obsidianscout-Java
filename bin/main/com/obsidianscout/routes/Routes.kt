@@ -1164,15 +1164,28 @@ fun Application.configureRoutes() {
                     val session = call.requireAdmin()
                     val type = call.request.queryParameters["type"] ?: "scouting"
                     val format = call.request.queryParameters["format"] ?: "obsidiandb"
+                    val requestedScope = call.request.queryParameters["scope"] ?: "team"
+
+                    val isSuperAdmin = session.role == com.obsidianscout.auth.UserRole.SUPERADMIN
+                    val scope = if (requestedScope == "global") {
+                        if (!isSuperAdmin) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Only superadmins can perform global exports")
+                        }
+                        "global"
+                    } else {
+                        "team"
+                    }
 
                     if (format == "obsidiandb") {
-                        val backup = com.obsidianscout.db.BackupService.exportBackup(session.teamNumber, type)
+                        val backup = com.obsidianscout.db.BackupService.exportBackup(session.teamNumber, type, scope)
                         val jsonString = JsonSupport.json.encodeToString(com.obsidianscout.db.ObsidianDbBackup.serializer(), backup)
-                        call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"team_${session.teamNumber}_backup_${type}.obsidiandb\"")
+                        val filename = if (scope == "global") "global_backup_${type}.obsidiandb" else "team_${session.teamNumber}_backup_${type}.obsidiandb"
+                        call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"$filename\"")
                         call.respondText(jsonString, ContentType.Application.Json)
                     } else if (format == "csv") {
-                        val zipBytes = com.obsidianscout.db.BackupService.exportCsv(session.teamNumber, type)
-                        call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"team_${session.teamNumber}_backup_${type}.zip\"")
+                        val zipBytes = com.obsidianscout.db.BackupService.exportCsv(session.teamNumber, type, scope)
+                        val filename = if (scope == "global") "global_backup_${type}.zip" else "team_${session.teamNumber}_backup_${type}.zip"
+                        call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"$filename\"")
                         call.respondBytes(zipBytes, ContentType.Application.Zip)
                     } else {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Unsupported format: $format")
@@ -1181,6 +1194,13 @@ fun Application.configureRoutes() {
 
                 post("/import") {
                     val session = call.requireAdmin()
+                    val requestedScope = call.request.queryParameters["scope"] ?: "team"
+                    val isSuperAdmin = session.role == com.obsidianscout.auth.UserRole.SUPERADMIN
+
+                    if (requestedScope == "global" && !isSuperAdmin) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Only superadmins can perform global imports")
+                    }
+
                     val multipart = call.receiveMultipart()
                     var fileBytes: ByteArray? = null
                     var fileName = ""
@@ -1200,9 +1220,11 @@ fun Application.configureRoutes() {
                     val report = if (fileName.endsWith(".obsidiandb") || fileName.endsWith(".json")) {
                         val jsonString = String(fileBytes!!, Charsets.UTF_8)
                         val backup = JsonSupport.json.decodeFromString<com.obsidianscout.db.ObsidianDbBackup>(jsonString)
-                        com.obsidianscout.db.BackupService.importBackup(session.teamNumber, backup, session.userId)
+                        val importAsGlobal = isSuperAdmin && requestedScope == "global" && backup.scope == "global"
+                        com.obsidianscout.db.BackupService.importBackup(session.teamNumber, backup, session.userId, importAsGlobal)
                     } else if (fileName.endsWith(".zip")) {
-                        com.obsidianscout.db.BackupService.importCsv(session.teamNumber, fileBytes!!, session.userId)
+                        val importAsGlobal = isSuperAdmin && requestedScope == "global"
+                        com.obsidianscout.db.BackupService.importCsv(session.teamNumber, fileBytes!!, session.userId, importAsGlobal)
                     } else {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Unsupported file format. Please upload .obsidiandb or .zip")
                     }

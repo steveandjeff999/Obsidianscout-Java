@@ -18,6 +18,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
+    const isSuperAdmin = me.role === "SUPERADMIN";
+    if (isSuperAdmin) {
+        document.getElementById("field-export-scope")?.classList.remove("hidden");
+        document.getElementById("field-import-scope")?.classList.remove("hidden");
+    }
+
     const exportTypeSelect = document.getElementById("export-type");
     const exportFormatSelect = document.getElementById("export-format");
     const btnExport = document.getElementById("btn-export");
@@ -35,16 +41,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     btnExport.addEventListener("click", () => {
         const type = exportTypeSelect.value;
         const format = exportFormatSelect.value;
+        const scope = isSuperAdmin ? (document.getElementById("export-scope")?.value || "team") : "team";
         btnExport.disabled = true;
         btnExport.textContent = "Generating export...";
 
-        const url = `/api/admin/export?type=${type}&format=${format}`;
+        const url = `/api/admin/export?type=${type}&format=${format}&scope=${scope}`;
         
         // Trigger download
         const a = document.createElement("a");
         a.href = url;
-        // The header from Ktor controls attachment naming, but this is a nice fallback
-        a.download = `team_${me.teamNumber}_backup_${type}.${format === "obsidiandb" ? "obsidiandb" : "zip"}`;
+        const filename = scope === "global" ? `global_backup_${type}.${format === "obsidiandb" ? "obsidiandb" : "zip"}` : `team_${me.teamNumber}_backup_${type}.${format === "obsidiandb" ? "obsidiandb" : "zip"}`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -111,8 +118,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const formData = new FormData();
         formData.append("file", file);
 
+        const scope = isSuperAdmin ? (document.getElementById("import-scope")?.value || "team") : "team";
+
         try {
-            const response = await fetch("/api/admin/import", {
+            const response = await fetch(`/api/admin/import?scope=${scope}`, {
                 method: "POST",
                 body: formData,
                 credentials: "same-origin"
@@ -144,7 +153,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // 4. Render Import Report
     function displayReport(report) {
-        reportSummaryText.textContent = `Summary: ${report.message || "Success"}. Imported type: ${report.type === "entire" ? "Entire Database" : "Scouting Data Only"}.`;
+        const scopeName = report.scope === "global" ? "Global Scope" : "Team Scope";
+        reportSummaryText.textContent = `Summary: ${report.message || "Success"}. Imported type: ${report.type === "entire" ? "Entire Database" : "Scouting Data Only"} (${scopeName}).`;
         reportTableBody.innerHTML = "";
 
         const items = [];
@@ -161,6 +171,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         items.push({ name: "Scouting Entries", imported: report.scoutingEntriesImported, skipped: report.scoutingEntriesSkipped, action: "Created" });
         items.push({ name: "Pit Scouting Entries", imported: report.pitEntriesImported, skipped: report.pitEntriesSkipped, action: "Created" });
         items.push({ name: "Qualitative Scouting Entries", imported: report.qualEntriesImported, skipped: report.qualEntriesSkipped, action: "Created" });
+
+        if (report.scope === "global") {
+            items.push({ name: "API Events (TBA)", imported: report.apiEventsImported, skipped: report.apiEventsSkipped, action: "Created/Updated" });
+            items.push({ name: "API Teams (TBA)", imported: report.apiTeamsImported, skipped: report.apiTeamsSkipped, action: "Created/Updated" });
+            items.push({ name: "API Matches (TBA)", imported: report.apiMatchesImported, skipped: report.apiMatchesSkipped, action: "Created/Updated" });
+            items.push({ name: "EPA/OPR History Cache", imported: report.epaOprHistoryCacheImported, skipped: report.epaOprHistoryCacheSkipped, action: "Created/Updated" });
+            items.push({ name: "Alliance Selections", imported: report.allianceSelectionsImported, skipped: report.allianceSelectionsSkipped, action: "Created/Updated" });
+            items.push({ name: "Push Subscriptions", imported: report.pushSubscriptionsImported, skipped: report.pushSubscriptionsSkipped, action: "Created" });
+            items.push({ name: "User Chat Last Reads", imported: report.chatLastReadsImported, skipped: report.chatLastReadsSkipped, action: "Created/Updated" });
+            items.push({ name: "Password Reset Tokens", imported: report.passwordResetTokensImported, skipped: report.passwordResetTokensSkipped, action: "Created" });
+        }
 
         items.forEach(item => {
             const tr = document.createElement("tr");
