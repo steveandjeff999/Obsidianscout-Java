@@ -1149,6 +1149,96 @@ fun Application.configureRoutes() {
                     call.respond(mapOf("success" to true))
                 }
 
+                post("/reset-database") {
+                    val session = call.requireSuperAdmin()
+                    val req = call.receive<ResetDatabaseRequest>()
+                    
+                    val userRecord = transaction {
+                        com.obsidianscout.db.Users
+                            .selectAll().where { com.obsidianscout.db.Users.id eq session.userId }
+                            .limit(1)
+                            .firstOrNull()
+                    } ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "Superadmin user not found")
+
+                    val hash = userRecord[com.obsidianscout.db.Users.passwordHash]
+                    val verified = at.favre.lib.crypto.bcrypt.BCrypt.verifyer().verify(req.password.toCharArray(), hash).verified
+                    if (!verified) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "Invalid password")
+                    }
+
+                    val originalId = session.userId
+                    val originalUsername = userRecord[com.obsidianscout.db.Users.username]
+                    val originalTeamNumber = userRecord[com.obsidianscout.db.Users.teamNumber]
+                    val originalPasswordHash = userRecord[com.obsidianscout.db.Users.passwordHash]
+                    val originalRole = userRecord[com.obsidianscout.db.Users.role]
+                    val originalEmail = userRecord[com.obsidianscout.db.Users.email]
+                    val originalProfilePicture = userRecord[com.obsidianscout.db.Users.profilePicture]
+                    val originalNotificationPreference = userRecord[com.obsidianscout.db.Users.notificationPreference]
+
+                    transaction {
+                        org.jetbrains.exposed.sql.SchemaUtils.drop(
+                            com.obsidianscout.db.Users,
+                            com.obsidianscout.db.ScoutingConfigs,
+                            com.obsidianscout.db.PitScoutingConfigs,
+                            com.obsidianscout.db.QualitativeScoutingConfigs,
+                            com.obsidianscout.db.ScoutingEntries,
+                            com.obsidianscout.db.PitScoutingEntries,
+                            com.obsidianscout.db.QualitativeScoutingEntries,
+                            com.obsidianscout.db.AppSettings,
+                            com.obsidianscout.db.ApiEvents,
+                            com.obsidianscout.db.ApiTeams,
+                            com.obsidianscout.db.ApiMatches,
+                            com.obsidianscout.db.ScoutingAlliances,
+                            com.obsidianscout.db.AllianceMemberships,
+                            com.obsidianscout.db.EpaOprHistoryCache,
+                            com.obsidianscout.db.PasswordResetTokens,
+                            com.obsidianscout.db.AllianceSelections,
+                            com.obsidianscout.db.Banners,
+                            com.obsidianscout.db.ChatMessages,
+                            com.obsidianscout.db.UserChatLastRead,
+                            com.obsidianscout.db.PushSubscriptions
+                        )
+
+                        org.jetbrains.exposed.sql.SchemaUtils.create(
+                            com.obsidianscout.db.Users,
+                            com.obsidianscout.db.ScoutingConfigs,
+                            com.obsidianscout.db.PitScoutingConfigs,
+                            com.obsidianscout.db.QualitativeScoutingConfigs,
+                            com.obsidianscout.db.ScoutingEntries,
+                            com.obsidianscout.db.PitScoutingEntries,
+                            com.obsidianscout.db.QualitativeScoutingEntries,
+                            com.obsidianscout.db.AppSettings,
+                            com.obsidianscout.db.ApiEvents,
+                            com.obsidianscout.db.ApiTeams,
+                            com.obsidianscout.db.ApiMatches,
+                            com.obsidianscout.db.ScoutingAlliances,
+                            com.obsidianscout.db.AllianceMemberships,
+                            com.obsidianscout.db.EpaOprHistoryCache,
+                            com.obsidianscout.db.PasswordResetTokens,
+                            com.obsidianscout.db.AllianceSelections,
+                            com.obsidianscout.db.Banners,
+                            com.obsidianscout.db.ChatMessages,
+                            com.obsidianscout.db.UserChatLastRead,
+                            com.obsidianscout.db.PushSubscriptions
+                        )
+
+                        com.obsidianscout.db.Users.insert {
+                            it[id] = org.jetbrains.exposed.dao.id.EntityID(originalId, com.obsidianscout.db.Users)
+                            it[username] = originalUsername
+                            it[teamNumber] = originalTeamNumber
+                            it[passwordHash] = originalPasswordHash
+                            it[role] = originalRole
+                            it[email] = originalEmail
+                            it[profilePicture] = originalProfilePicture
+                            it[notificationPreference] = originalNotificationPreference
+                            it[createdAt] = Instant.now()
+                        }
+                    }
+
+                    call.respond(mapOf("success" to true))
+                }
+
+
                 post("/email-settings/test") {
                     call.requireSuperAdmin()
                     val testReq = call.receive<SmtpTestConnectionRequest>()
@@ -1755,6 +1845,7 @@ fun Application.configureRoutes() {
             "alliance-selection" to "alliance-selection.html",
             "users" to "users.html",
             "config" to "config.html",
+            "admin-settings" to "admin-settings.html",
             "backup" to "backup.html",
             "qr-scanner" to "qr-scanner.html",
             "cache-manager" to "cache-manager.html",
@@ -1762,7 +1853,9 @@ fun Application.configureRoutes() {
             "chat" to "chat.html",
             "docs" to "docs.html",
             "contact" to "contact.html",
-            "migration" to "migration.html"
+            "migration" to "migration.html",
+            "404" to "404.html",
+            "500" to "500.html"
         )
 
         pages.forEach { (path, fileName) ->
@@ -1783,7 +1876,7 @@ fun Application.configureRoutes() {
     }
 }
 
-private suspend fun ApplicationCall.respondStaticHtml(fileName: String) {
+internal suspend fun ApplicationCall.respondStaticHtml(fileName: String, status: HttpStatusCode = HttpStatusCode.OK) {
     val (html, sidebar) = measureSuspend("load-html", "Load HTML from Resource") {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val resource = Thread.currentThread().contextClassLoader.getResource("static/$fileName")
@@ -1809,7 +1902,7 @@ private suspend fun ApplicationCall.respondStaticHtml(fileName: String) {
             )
         }
     }
-    respondText(rendered, ContentType.Text.Html)
+    respondText(rendered, ContentType.Text.Html, status)
 }
 
 private fun ApiSettings.toPayload(): ApiSettingsPayload {
@@ -1826,7 +1919,10 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
             firstKey = apiKeys.firstKey
-        )
+        ),
+        scoutPages = scoutPages,
+        analyticsPages = analyticsPages,
+        adminPages = adminPages
     )
 }
 
@@ -1843,7 +1939,10 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
             firstKey = apiKeys.firstKey
-        )
+        ),
+        scoutPages = if (scoutPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_SCOUT_PAGES else scoutPages,
+        analyticsPages = if (analyticsPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_ANALYTICS_PAGES else analyticsPages,
+        adminPages = if (adminPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_ADMIN_PAGES else adminPages
     )
 }
 

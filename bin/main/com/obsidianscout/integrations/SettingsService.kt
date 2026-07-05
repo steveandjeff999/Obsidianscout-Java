@@ -30,6 +30,24 @@ data class SmtpSettings(
     val encryption: String = "STARTTLS" // SSL_TLS, STARTTLS, NONE
 )
 
+val DEFAULT_SCOUT_PAGES = listOf(
+    "dashboard", "chat", "scout", "pit-scout", "qual-scout", "qr-scanner", "contact"
+)
+
+val DEFAULT_ANALYTICS_PAGES = listOf(
+    "dashboard", "scout", "pit-scout", "qual-scout", "qr-scanner",
+    "all-data", "qual-data", "pit-data", "analytics", "graphs",
+    "teams", "rankings", "qual-rankings", "matches", "predictor",
+    "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact"
+)
+
+val DEFAULT_ADMIN_PAGES = listOf(
+    "dashboard", "admin-settings", "users", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
+    "all-data", "qual-data", "pit-data", "analytics", "graphs",
+    "teams", "rankings", "qual-rankings", "matches", "predictor",
+    "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact"
+)
+
 @Serializable
 data class ApiSettings(
     val year: Int = Year.now().value,
@@ -41,7 +59,10 @@ data class ApiSettings(
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
     val chatEnabled: Boolean = true,
-    val apiKeys: ApiKeys = ApiKeys()
+    val apiKeys: ApiKeys = ApiKeys(),
+    val scoutPages: List<String> = DEFAULT_SCOUT_PAGES,
+    val analyticsPages: List<String> = DEFAULT_ANALYTICS_PAGES,
+    val adminPages: List<String> = DEFAULT_ADMIN_PAGES
 ) {
     fun resolvedEventKey(): String {
         val code = eventCode.trim()
@@ -131,11 +152,20 @@ object SettingsService {
         } else {
             canonicalStoredEventKey(settings.year, settings.eventKey)
         }
+        val normalizedScoutPages = if ("dashboard" !in settings.scoutPages) settings.scoutPages + "dashboard" else settings.scoutPages
+        val normalizedAnalyticsPages = if ("dashboard" !in settings.analyticsPages) settings.analyticsPages + "dashboard" else settings.analyticsPages
+        val normalizedAdminPages = settings.adminPages.toMutableList().apply {
+            if ("dashboard" !in this) add("dashboard")
+            if ("admin-settings" !in this) add("admin-settings")
+        }
         return settings.copy(
             eventCode = canonicalTbaEventCode(eventCode),
             eventKey = resolvedKey,
             timezone = settings.timezone.ifBlank { "America/New_York" },
-            preferredSource = settings.preferredSource.lowercase()
+            preferredSource = settings.preferredSource.lowercase(),
+            scoutPages = normalizedScoutPages,
+            analyticsPages = normalizedAnalyticsPages,
+            adminPages = normalizedAdminPages
         )
     }
 

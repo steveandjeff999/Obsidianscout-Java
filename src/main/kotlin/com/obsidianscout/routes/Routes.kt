@@ -1845,6 +1845,7 @@ fun Application.configureRoutes() {
             "alliance-selection" to "alliance-selection.html",
             "users" to "users.html",
             "config" to "config.html",
+            "admin-settings" to "admin-settings.html",
             "backup" to "backup.html",
             "qr-scanner" to "qr-scanner.html",
             "cache-manager" to "cache-manager.html",
@@ -1852,7 +1853,9 @@ fun Application.configureRoutes() {
             "chat" to "chat.html",
             "docs" to "docs.html",
             "contact" to "contact.html",
-            "migration" to "migration.html"
+            "migration" to "migration.html",
+            "404" to "404.html",
+            "500" to "500.html"
         )
 
         pages.forEach { (path, fileName) ->
@@ -1873,7 +1876,7 @@ fun Application.configureRoutes() {
     }
 }
 
-private suspend fun ApplicationCall.respondStaticHtml(fileName: String) {
+internal suspend fun ApplicationCall.respondStaticHtml(fileName: String, status: HttpStatusCode = HttpStatusCode.OK) {
     val (html, sidebar) = measureSuspend("load-html", "Load HTML from Resource") {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val resource = Thread.currentThread().contextClassLoader.getResource("static/$fileName")
@@ -1899,7 +1902,7 @@ private suspend fun ApplicationCall.respondStaticHtml(fileName: String) {
             )
         }
     }
-    respondText(rendered, ContentType.Text.Html)
+    respondText(rendered, ContentType.Text.Html, status)
 }
 
 private fun ApiSettings.toPayload(): ApiSettingsPayload {
@@ -1916,7 +1919,10 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
             firstKey = apiKeys.firstKey
-        )
+        ),
+        scoutPages = scoutPages,
+        analyticsPages = analyticsPages,
+        adminPages = adminPages
     )
 }
 
@@ -1933,7 +1939,10 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
             firstKey = apiKeys.firstKey
-        )
+        ),
+        scoutPages = if (scoutPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_SCOUT_PAGES else scoutPages,
+        analyticsPages = if (analyticsPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_ANALYTICS_PAGES else analyticsPages,
+        adminPages = if (adminPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_ADMIN_PAGES else adminPages
     )
 }
 

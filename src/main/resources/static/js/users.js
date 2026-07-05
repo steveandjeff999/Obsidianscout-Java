@@ -376,7 +376,7 @@ async function loadUsers(me, openModal, append = false) {
 
         users.forEach((user) => {
             currentUsers.push(user);
-            const roleLabel = user.role === "SUPERADMIN" ? "Super Admin"
+            const roleLabel = user.role === "SUPERADMIN" ? "Site Admin"
                 : user.role.charAt(0) + user.role.slice(1).toLowerCase();
 
             // Superadmin can edit anyone; admin can edit non-superadmin users on their team

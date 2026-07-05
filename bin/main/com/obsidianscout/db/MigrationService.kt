@@ -42,6 +42,34 @@ data class MigrationStatusPayload(
     val alliancesMigrated: Int
 )
 
+fun normalizeEventCode(value: String?): String {
+    if (value == null) return ""
+    var code = value.trim().uppercase()
+    if (code.isEmpty()) return ""
+    // Heal repeated year prefixes: 20262026ARLI -> 2026ARLI
+    while (code.length >= 8 && code.substring(0, 4).all { it.isDigit() } && code.substring(4, 8) == code.substring(0, 4)) {
+        code = code.substring(0, 4) + code.substring(8)
+    }
+    return code
+}
+
+fun splitEventCode(code: String): Pair<Int?, String> {
+    val normalized = normalizeEventCode(code)
+    if (normalized.length > 4 && normalized.substring(0, 4).all { it.isDigit() }) {
+        val year = normalized.substring(0, 4).toIntOrNull()
+        if (year != null) {
+            return Pair(year, normalized.substring(4))
+        }
+    }
+    return Pair(null, normalized)
+}
+
+fun constructEventKey(eventCode: String, eventYear: Int): String {
+    val normalized = normalizeEventCode(eventCode)
+    val (_, rawCode) = splitEventCode(normalized)
+    return "${eventYear}${rawCode.lowercase()}"
+}
+
 object MigrationService {
     @Volatile
     private var running = false
@@ -165,6 +193,7 @@ object MigrationService {
             return if (useSqlite) {
                 val dbFile = File(sqliteInstancePath, dbName)
                 require(dbFile.exists()) { "SQLite database file not found: ${dbFile.absolutePath}" }
+                Class.forName("org.sqlite.JDBC")
                 DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}")
             } else {
                 val targetDb = when (dbName) {
@@ -176,6 +205,7 @@ object MigrationService {
                     else -> pgConfig!!.database
                 }
                 val url = "jdbc:postgresql://${pgConfig.host}:${pgConfig.port}/$targetDb"
+                Class.forName("org.postgresql.Driver")
                 DriverManager.getConnection(url, pgConfig.user, pgConfig.passwordPlain)
             }
         }
@@ -280,7 +310,8 @@ object MigrationService {
                     val start = rs.getString("start_date")
                     val end = rs.getString("end_date")
 
-                    val generatedKey = "${yearVal}${codeVal.lowercase()}"
+                    val generatedKey = constructEventKey(codeVal, yearVal)
+                    val (_, rawCode) = splitEventCode(codeVal)
                     
                     transaction {
                         val exists = ApiEvents.selectAll().where { ApiEvents.eventKey eq generatedKey }.any()
@@ -288,7 +319,7 @@ object MigrationService {
                             ApiEvents.insert {
                                 it[eventKey] = generatedKey
                                 it[year] = yearVal
-                                it[eventCode] = codeVal.lowercase()
+                                it[eventCode] = rawCode.lowercase()
                                 it[name] = nameVal
                                 it[startDate] = start
                                 it[endDate] = end
@@ -561,7 +592,7 @@ object MigrationService {
                     val sharedPit = rs.getString("shared_pit_config")
 
                     val (evCode, evYear) = allianceEvents[oldId] ?: Pair("", "2026")
-                    val evKey = if (evCode.isNotBlank()) "${evYear}${evCode.lowercase()}" else ""
+                    val evKey = if (evCode.isNotBlank()) constructEventKey(evCode, evYear.toIntOrNull() ?: 2026) else ""
 
                     val newAllianceId = transaction {
                         val existing = ScoutingAlliances.selectAll().where { (ScoutingAlliances.name eq nameVal) and (ScoutingAlliances.ownerTeamNumber eq owner) }

@@ -101,7 +101,10 @@ data class ApiSettingsPayload(
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
     val chatEnabled: Boolean = true,
-    val apiKeys: ApiKeysPayload = ApiKeysPayload()
+    val apiKeys: ApiKeysPayload = ApiKeysPayload(),
+    val scoutPages: List<String> = emptyList(),
+    val analyticsPages: List<String> = emptyList(),
+    val adminPages: List<String> = emptyList()
 )
 
 @Serializable
@@ -440,6 +443,12 @@ data class MigrationRequest(
     val sqliteInstancePath: String? = null,
     val pgConfig: com.obsidianscout.db.PostgresMigrationConfig? = null
 )
+
+@Serializable
+data class ResetDatabaseRequest(
+    val password: String
+)
+
 
 
 

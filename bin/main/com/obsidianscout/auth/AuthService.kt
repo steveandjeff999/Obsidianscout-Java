@@ -57,11 +57,11 @@ object AuthService {
      */
     fun ensureSeedSuperAdmin(seed: SeedConfig) {
         transaction {
-            val superAdminExists = Users
-                .selectAll().where { Users.role eq UserRole.SUPERADMIN.name }
+            val superAdmin = Users
+                .selectAll().where { (Users.username eq seed.adminUsername) and (Users.teamNumber eq seed.adminTeamNumber) }
                 .limit(1)
-                .firstOrNull() != null
-            if (!superAdminExists) {
+                .firstOrNull()
+            if (superAdmin == null) {
                 val hash = hashPassword(seed.adminPassword)
                 Users.insertAndGetId {
                     it[username] = seed.adminUsername
@@ -69,6 +69,12 @@ object AuthService {
                     it[passwordHash] = hash
                     it[role] = UserRole.SUPERADMIN.name
                     it[createdAt] = Instant.now()
+                }
+            } else {
+                val hash = hashPassword(seed.adminPassword)
+                Users.update({ Users.id eq superAdmin[Users.id] }) {
+                    it[passwordHash] = hash
+                    it[role] = UserRole.SUPERADMIN.name
                 }
             }
         }

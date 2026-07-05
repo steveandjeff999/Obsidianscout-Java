@@ -15,6 +15,7 @@ import com.obsidianscout.routes.configureRoutes
 import com.obsidianscout.routes.configureMobileRoutes
 import com.obsidianscout.routes.MobileApiException
 import com.obsidianscout.routes.MobileErrorResponse
+import com.obsidianscout.routes.respondStaticHtml
 import io.ktor.http.HttpStatusCode
 import io.ktor.network.tls.certificates.buildKeyStore
 import io.ktor.network.tls.certificates.saveToFile
@@ -181,6 +182,20 @@ fun Application.module(appConfig: AppConfig) {
         }
     }
     install(StatusPages) {
+        status(HttpStatusCode.NotFound) { call, _ ->
+            if (call.request.path().startsWith("/api")) {
+                call.respond(HttpStatusCode.NotFound, ErrorResponse("Not found"))
+            } else {
+                call.respondStaticHtml("404.html", HttpStatusCode.NotFound)
+            }
+        }
+        status(HttpStatusCode.InternalServerError) { call, _ ->
+            if (call.request.path().startsWith("/api")) {
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal server error"))
+            } else {
+                call.respondStaticHtml("500.html", HttpStatusCode.InternalServerError)
+            }
+        }
         exception<MobileApiException> { call, cause ->
             call.respond(cause.status, MobileErrorResponse(success = false, error = cause.message, errorCode = cause.errorCode))
         }
@@ -197,7 +212,11 @@ fun Application.module(appConfig: AppConfig) {
             }
             call.application.environment.log.error("Unhandled error", cause)
             try {
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Server error"))
+                if (call.request.path().startsWith("/api")) {
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Server error"))
+                } else {
+                    call.respondStaticHtml("500.html", HttpStatusCode.InternalServerError)
+                }
             } catch (_: Throwable) {
                 // Ignore subsequent writes if channel is closed
             }

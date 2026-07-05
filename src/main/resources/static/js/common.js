@@ -498,7 +498,45 @@
             window.location.href = "/";
             return null;
         }
-        return await getMe();
+        const me = await getMe();
+        if (!me) {
+            return null;
+        }
+
+        // Pre-fetch settings to ensure local cache is populated for role-based navigation checks
+        let settings = null;
+        try {
+            const response = await request("/api/settings");
+            settings = response.settings || response;
+        } catch (e) {
+            console.warn("Failed to pre-fetch settings for role adjustments:", e);
+            try {
+                const cachedText = safeGetItem("cache:/api/settings");
+                if (cachedText) {
+                    const parsed = JSON.parse(cachedText);
+                    settings = parsed.settings || parsed;
+                }
+            } catch (err) {}
+        }
+
+        // Verify page-level access permissions
+        const currentPage = typeof document !== 'undefined' && document.body && document.body.getAttribute("data-page");
+        if (currentPage && settings && (me.role === "SCOUT" || me.role === "ANALYTICS" || me.role === "ADMIN")) {
+            const allowedPages = me.role === "SCOUT" ? settings.scoutPages : (me.role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
+            if (allowedPages && Array.isArray(allowedPages)) {
+                const bypassPages = ["settings", "login", "index", "dashboard"];
+                if (!bypassPages.includes(currentPage) && !allowedPages.includes(currentPage)) {
+                    showToast("You do not have access to this page", "error");
+                    const fallback = allowedPages.includes("dashboard") ? "/dashboard" : "/config";
+                    setTimeout(() => {
+                        window.location.href = fallback;
+                    }, 500);
+                    return null;
+                }
+            }
+        }
+
+        return me;
     }
 
     /**
@@ -547,7 +585,7 @@
         if (!badge || !user) {
             return;
         }
-        const roleLabel = user.role === "SUPERADMIN" ? "Super Admin" : user.role.charAt(0) + user.role.slice(1).toLowerCase();
+        const roleLabel = user.role === "SUPERADMIN" ? "Site Admin" : user.role.charAt(0) + user.role.slice(1).toLowerCase();
 
         // Build avatar element
         const initials = (user.username || "?").slice(0, 2).toUpperCase();
@@ -642,11 +680,7 @@
             document.querySelectorAll('.sidebar-link[data-page="banners"]').forEach((link) => {
                 link.style.display = "none";
             });
-        }
-
-        // Hide Analytics for SCOUT
-        if (!canAccessAnalytics(role)) {
-            document.querySelectorAll('.sidebar-link[data-page="analytics"]').forEach((link) => {
+            document.querySelectorAll('.sidebar-link[data-page="admin-settings"]').forEach((link) => {
                 link.style.display = "none";
             });
         }
@@ -655,6 +689,29 @@
         document.querySelectorAll('.sidebar-link[data-page="migration"]').forEach((link) => {
             link.style.display = isSuperAdmin(role) ? "block" : "none";
         });
+
+        // Hide links based on dynamic role permissions list
+        if (role === "SCOUT" || role === "ANALYTICS" || role === "ADMIN") {
+            try {
+                const settingsText = safeGetItem("cache:/api/settings");
+                if (settingsText) {
+                    const parsed = JSON.parse(settingsText);
+                    const settings = parsed.settings || parsed;
+                    const allowedPages = role === "SCOUT" ? settings.scoutPages : (role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
+                    if (allowedPages && Array.isArray(allowedPages)) {
+                        document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
+                            const page = link.dataset.page;
+                            const bypassPages = ["settings", "migration", "login", "index"];
+                            if (!bypassPages.includes(page) && !allowedPages.includes(page)) {
+                                link.style.display = "none";
+                            }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to parse settings for dynamic nav adjust:", err);
+            }
+        }
     }
 
     function wireLogout() {
