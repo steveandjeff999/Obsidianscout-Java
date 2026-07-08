@@ -49,6 +49,24 @@ val DEFAULT_ADMIN_PAGES = listOf(
 )
 
 @Serializable
+data class ThemeSettings(
+    val name: String = "Default",
+    val lightAccent: String = "",
+    val lightAccent2: String = "",
+    val lightAccent3: String = "",
+    val lightBg: String = "",
+    val lightInk: String = "",
+    val lightMuted: String = "",
+    val darkAccent: String = "",
+    val darkAccent2: String = "",
+    val darkAccent3: String = "",
+    val darkBg: String = "",
+    val darkInk: String = "",
+    val darkMuted: String = "",
+    val btnRadius: String = "999px"
+)
+
+@Serializable
 data class ApiSettings(
     val year: Int = Year.now().value,
     val eventCode: String = "",
@@ -62,7 +80,11 @@ data class ApiSettings(
     val apiKeys: ApiKeys = ApiKeys(),
     val scoutPages: List<String> = DEFAULT_SCOUT_PAGES,
     val analyticsPages: List<String> = DEFAULT_ANALYTICS_PAGES,
-    val adminPages: List<String> = DEFAULT_ADMIN_PAGES
+    val adminPages: List<String> = DEFAULT_ADMIN_PAGES,
+    val theme: ThemeSettings = ThemeSettings(),
+    val themes: List<ThemeSettings> = emptyList(),
+    val activeThemeName: String = "",
+    val setupWizardCompleted: Boolean = false
 ) {
     fun resolvedEventKey(): String {
         val code = eventCode.trim()

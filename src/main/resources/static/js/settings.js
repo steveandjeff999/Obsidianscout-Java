@@ -165,6 +165,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalHapticPrefWidget() {
+        const personalHapticPref = document.getElementById("personal-haptic-pref");
+        if (!personalHapticPref) return;
+
+        personalHapticPref.value = Obsidianscout.safeGetItem("obsidianscout:haptic_feedback") || "enabled";
+
+        personalHapticPref.addEventListener("change", (e) => {
+            const val = e.target.value;
+            Obsidianscout.safeSetItem("obsidianscout:haptic_feedback", val);
+            Obsidianscout.showToast("Personal settings saved", "success");
+            if (val === "enabled" && typeof Obsidianscout.triggerHaptic === "function") {
+                Obsidianscout.triggerHaptic("success");
+            }
+        });
+    }
+
     // Initialize personal setting dropdown
     const personalDisplaySelect = document.getElementById("personal-team-display");
     if (personalDisplaySelect) {
@@ -180,4 +196,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalEmailWidget(me);
     wirePersonalNotificationPrefWidget(me);
     wirePersonalDeleteAccountWidget(me);
+    wirePersonalHapticPrefWidget();
 });

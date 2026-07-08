@@ -69,6 +69,13 @@ data class CreateUserRequest(
 )
 
 @Serializable
+data class TourProgress(
+    val completed: List<String> = emptyList(),
+    val active: String? = null,
+    val stepIndex: Int = 0
+)
+
+@Serializable
 data class UpdateUserRequest(
     val username: String? = null,
     val password: String? = null,
@@ -104,7 +111,11 @@ data class ApiSettingsPayload(
     val apiKeys: ApiKeysPayload = ApiKeysPayload(),
     val scoutPages: List<String> = emptyList(),
     val analyticsPages: List<String> = emptyList(),
-    val adminPages: List<String> = emptyList()
+    val adminPages: List<String> = emptyList(),
+    val theme: com.obsidianscout.integrations.ThemeSettings = com.obsidianscout.integrations.ThemeSettings(),
+    val themes: List<com.obsidianscout.integrations.ThemeSettings> = emptyList(),
+    val activeThemeName: String = "",
+    val setupWizardCompleted: Boolean = false
 )
 
 @Serializable
@@ -448,6 +459,12 @@ data class MigrationRequest(
 data class ResetDatabaseRequest(
     val password: String
 )
+
+@Serializable
+data class WipeTeamDataRequest(
+    val password: String
+)
+
 
 
 

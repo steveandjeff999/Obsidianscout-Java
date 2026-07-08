@@ -284,18 +284,38 @@ document.addEventListener("DOMContentLoaded", async () => {
             renderVisualFields();
             showVisualEditor();
 
+            // Helper functions to safely assign values/checked states
+            const setVal = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.value = val;
+            };
+            const setChecked = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.checked = val;
+            };
+            const getVal = (id, fallback = "") => {
+                const el = document.getElementById(id);
+                return el ? el.value : fallback;
+            };
+            const getChecked = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.checked : false;
+            };
+
             // Populate settings
             loadedSettings = settingsResponse.settings;
-            document.getElementById("settings-year").value = loadedSettings.year;
-            document.getElementById("settings-event-code").value = loadedSettings.eventCode || "";
-            document.getElementById("settings-timezone").value = loadedSettings.timezone || "America/New_York";
-            document.getElementById("settings-source").value = loadedSettings.preferredSource || "tba";
-            document.getElementById("settings-epa").checked = loadedSettings.useStatboticsEpa;
-            document.getElementById("settings-opr").checked = loadedSettings.useTbaOpr;
-            document.getElementById("settings-chat").checked = loadedSettings.chatEnabled;
-            document.getElementById("settings-tba-key").value = loadedSettings.apiKeys.tbaKey || "";
-            document.getElementById("settings-first-user").value = loadedSettings.apiKeys.firstUsername || "";
-            document.getElementById("settings-first-key").value = loadedSettings.apiKeys.firstKey || "";
+            setVal("settings-year", loadedSettings.year);
+            setVal("settings-event-code", loadedSettings.eventCode || "");
+            setVal("settings-timezone", loadedSettings.timezone || "America/New_York");
+            setVal("settings-source", loadedSettings.preferredSource || "tba");
+            setChecked("settings-epa", loadedSettings.useStatboticsEpa);
+            setChecked("settings-opr", loadedSettings.useTbaOpr);
+            setChecked("settings-chat", loadedSettings.chatEnabled);
+            if (loadedSettings.apiKeys) {
+                setVal("settings-tba-key", loadedSettings.apiKeys.tbaKey || "");
+                setVal("settings-first-user", loadedSettings.apiKeys.firstUsername || "");
+                setVal("settings-first-key", loadedSettings.apiKeys.firstKey || "");
+            }
 
             // Render permissions checkboxes
             renderPermissionsCheckboxes(
@@ -303,6 +323,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 loadedSettings.analyticsPages || [],
                 loadedSettings.adminPages || []
             );
+
+            // Wire Setup Wizard manual trigger
+            const btnRunWizard = document.getElementById("btn-run-setup-wizard");
+            if (btnRunWizard) {
+                btnRunWizard.addEventListener("click", () => {
+                    Obsidianscout.showSetupWizardModal(me, loadedSettings, true);
+                });
+            }
+
+
 
             // Save configuration
             saveButton.addEventListener("click", async () => {
@@ -380,128 +410,183 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
 
             // API settings save
-            document.getElementById("settings-save").addEventListener("click", async () => {
-                loadedSettings.year = Number(document.getElementById("settings-year").value || new Date().getFullYear());
-                loadedSettings.eventCode = document.getElementById("settings-event-code").value.trim();
-                loadedSettings.timezone = document.getElementById("settings-timezone").value.trim();
-                loadedSettings.preferredSource = document.getElementById("settings-source").value;
-                loadedSettings.useStatboticsEpa = document.getElementById("settings-epa").checked;
-                loadedSettings.useTbaOpr = document.getElementById("settings-opr").checked;
-                loadedSettings.chatEnabled = document.getElementById("settings-chat").checked;
-                loadedSettings.apiKeys = {
-                    tbaKey: document.getElementById("settings-tba-key").value.trim(),
-                    firstUsername: document.getElementById("settings-first-user").value.trim(),
-                    firstKey: document.getElementById("settings-first-key").value.trim()
-                };
+            const settingsSaveBtn = document.getElementById("settings-save");
+            if (settingsSaveBtn) {
+                settingsSaveBtn.addEventListener("click", async () => {
+                    loadedSettings.year = Number(getVal("settings-year") || new Date().getFullYear());
+                    loadedSettings.eventCode = getVal("settings-event-code").trim();
+                    loadedSettings.timezone = getVal("settings-timezone").trim();
+                    loadedSettings.preferredSource = getVal("settings-source");
+                    loadedSettings.useStatboticsEpa = getChecked("settings-epa");
+                    loadedSettings.useTbaOpr = getChecked("settings-opr");
+                    loadedSettings.chatEnabled = getChecked("settings-chat");
+                    loadedSettings.apiKeys = {
+                        tbaKey: getVal("settings-tba-key").trim(),
+                        firstUsername: getVal("settings-first-user").trim(),
+                        firstKey: getVal("settings-first-key").trim()
+                    };
 
-                try {
-                    const response = await Obsidianscout.request("/api/settings", {
-                        method: "PUT",
-                        json: loadedSettings
-                    });
-                    loadedSettings = response.settings;
-                    Obsidianscout.showToast("API settings saved", "success");
-                } catch (error) {
-                    Obsidianscout.showToast(error.message || "Save failed", "error");
-                }
-            });
-
-            // Permissions save
-            document.getElementById("permissions-save").addEventListener("click", async () => {
-                const scoutPages = [];
-                const analyticsPages = [];
-                const adminPages = [];
-                
-                configurablePages.forEach((page) => {
-                    if (document.getElementById(`scout-page-${page.id}`).checked) {
-                        scoutPages.push(page.id);
-                    }
-                    if (document.getElementById(`analytics-page-${page.id}`).checked) {
-                        analyticsPages.push(page.id);
-                    }
-                    if (document.getElementById(`admin-page-${page.id}`).checked) {
-                        adminPages.push(page.id);
+                    try {
+                        const response = await Obsidianscout.request("/api/settings", {
+                            method: "PUT",
+                            json: loadedSettings
+                        });
+                        loadedSettings = response.settings;
+                        Obsidianscout.showToast("API settings saved", "success");
+                    } catch (error) {
+                        Obsidianscout.showToast(error.message || "Save failed", "error");
                     }
                 });
-                
-                loadedSettings.scoutPages = scoutPages;
-                loadedSettings.analyticsPages = analyticsPages;
-                loadedSettings.adminPages = adminPages;
+            }
 
-                try {
-                    const response = await Obsidianscout.request("/api/settings", {
-                        method: "PUT",
-                        json: loadedSettings
+            // Permissions save
+            const permissionsSaveBtn = document.getElementById("permissions-save");
+            if (permissionsSaveBtn) {
+                permissionsSaveBtn.addEventListener("click", async () => {
+                    const scoutPages = [];
+                    const analyticsPages = [];
+                    const adminPages = [];
+                    
+                    configurablePages.forEach((page) => {
+                        const scoutEl = document.getElementById(`scout-page-${page.id}`);
+                        const analyticsEl = document.getElementById(`analytics-page-${page.id}`);
+                        const adminEl = document.getElementById(`admin-page-${page.id}`);
+                        if (scoutEl && scoutEl.checked) {
+                            scoutPages.push(page.id);
+                        }
+                        if (analyticsEl && analyticsEl.checked) {
+                            analyticsPages.push(page.id);
+                        }
+                        if (adminEl && adminEl.checked) {
+                            adminPages.push(page.id);
+                        }
                     });
-                    loadedSettings = response.settings;
-                    Obsidianscout.showToast("Permissions saved successfully", "success");
-                } catch (error) {
-                    Obsidianscout.showToast(error.message || "Failed to save permissions", "error");
-                }
-            });
+                    
+                    loadedSettings.scoutPages = scoutPages;
+                    loadedSettings.analyticsPages = analyticsPages;
+                    loadedSettings.adminPages = adminPages;
+                    loadedSettings.chatEnabled = getChecked("settings-chat");
+
+                    try {
+                        const response = await Obsidianscout.request("/api/settings", {
+                            method: "PUT",
+                            json: loadedSettings
+                        });
+                        loadedSettings = response.settings;
+                        Obsidianscout.showToast("Permissions saved successfully", "success");
+                    } catch (error) {
+                        Obsidianscout.showToast(error.message || "Failed to save permissions", "error");
+                    }
+                });
+            }
 
             // Populate email settings if superadmin
             if (isUserSuperAdmin && emailResponse) {
                 const tabEmail = document.getElementById("tab-email");
                 if (tabEmail) tabEmail.classList.remove("hidden");
 
-                document.getElementById("settings-email-host").value = emailResponse.host || "";
-                document.getElementById("settings-email-port").value = emailResponse.port || 587;
-                document.getElementById("settings-email-username").value = emailResponse.username || "";
-                document.getElementById("settings-email-password").value = emailResponse.passwordPlain || "";
-                document.getElementById("settings-email-from").value = emailResponse.fromAddress || "";
-                document.getElementById("settings-email-encryption").value = emailResponse.encryption || "STARTTLS";
+                setVal("settings-email-host", emailResponse.host || "");
+                setVal("settings-email-port", emailResponse.port || 587);
+                setVal("settings-email-username", emailResponse.username || "");
+                setVal("settings-email-password", emailResponse.passwordPlain || "");
+                setVal("settings-email-from", emailResponse.fromAddress || "");
+                setVal("settings-email-encryption", emailResponse.encryption || "STARTTLS");
 
                 // Save SMTP settings listener
-                document.getElementById("settings-email-save").addEventListener("click", async () => {
-                    const payload = {
-                        host: document.getElementById("settings-email-host").value.trim(),
-                        port: parseInt(document.getElementById("settings-email-port").value, 10) || 587,
-                        username: document.getElementById("settings-email-username").value.trim(),
-                        passwordPlain: document.getElementById("settings-email-password").value.trim(),
-                        fromAddress: document.getElementById("settings-email-from").value.trim(),
-                        encryption: document.getElementById("settings-email-encryption").value
-                    };
-                    try {
-                        await Obsidianscout.request("/api/admin/email-settings", {
-                            method: "PUT",
-                            json: payload
-                        });
-                        Obsidianscout.showToast("Email settings saved", "success");
-                    } catch (err) {
-                        Obsidianscout.showToast(err.message || "Failed to save email settings", "error");
-                    }
-                });
+                const emailSaveBtn = document.getElementById("settings-email-save");
+                if (emailSaveBtn) {
+                    emailSaveBtn.addEventListener("click", async () => {
+                        const payload = {
+                            host: getVal("settings-email-host").trim(),
+                            port: parseInt(getVal("settings-email-port"), 10) || 587,
+                            username: getVal("settings-email-username").trim(),
+                            passwordPlain: getVal("settings-email-password").trim(),
+                            fromAddress: getVal("settings-email-from").trim(),
+                            encryption: getVal("settings-email-encryption")
+                        };
+                        try {
+                            await Obsidianscout.request("/api/admin/email-settings", {
+                                method: "PUT",
+                                json: payload
+                            });
+                            Obsidianscout.showToast("Email settings saved", "success");
+                        } catch (err) {
+                            Obsidianscout.showToast(err.message || "Failed to save email settings", "error");
+                        }
+                    });
+                }
 
                 // Test SMTP settings listener
-                document.getElementById("settings-email-test").addEventListener("click", async () => {
-                    const testEmail = document.getElementById("settings-email-test-address").value.trim();
-                    if (!testEmail) {
-                        Obsidianscout.showToast("Please enter a recipient email address", "error");
+                const emailTestBtn = document.getElementById("settings-email-test");
+                if (emailTestBtn) {
+                    emailTestBtn.addEventListener("click", async () => {
+                        const testEmail = getVal("settings-email-test-address").trim();
+                        if (!testEmail) {
+                            Obsidianscout.showToast("Please enter a recipient email address", "error");
+                            return;
+                        }
+                        Obsidianscout.showToast("Sending test email...", "info");
+                        try {
+                            await Obsidianscout.request("/api/admin/email-settings/test", {
+                                method: "POST",
+                                json: {
+                                    host: getVal("settings-email-host").trim(),
+                                    port: parseInt(getVal("settings-email-port"), 10) || 587,
+                                    username: getVal("settings-email-username").trim(),
+                                    passwordPlain: getVal("settings-email-password").trim(),
+                                    fromAddress: getVal("settings-email-from").trim(),
+                                    encryption: getVal("settings-email-encryption"),
+                                    testEmail: testEmail
+                                }
+                            });
+                            Obsidianscout.showToast("Test email sent successfully", "success");
+                        } catch (err) {
+                            Obsidianscout.showToast(err.message || "Failed to send test email", "error");
+                        }
+                }
+            }
+
+            // Wipe Team Scouting Data logic
+            const btnWipeTeamData = document.getElementById("btn-wipe-team-data");
+            const wipePasswordConfirm = document.getElementById("wipe-password-confirm");
+            if (btnWipeTeamData && wipePasswordConfirm) {
+                btnWipeTeamData.addEventListener("click", async () => {
+                    const password = wipePasswordConfirm.value;
+                    if (!password) {
+                        Obsidianscout.showToast("Please enter your password to confirm data wipe.", "error");
                         return;
                     }
-                    Obsidianscout.showToast("Sending test email...", "info");
+
+                    if (!confirm("ARE YOU ABSOLUTELY SURE? This will permanently delete all of your team's match, pit, and qualitative scouting entries, as well as synced events, teams, and matches!")) {
+                        return;
+                    }
+
+                    btnWipeTeamData.disabled = true;
                     try {
-                        await Obsidianscout.request("/api/admin/email-settings/test", {
+                        const res = await Obsidianscout.request("/api/admin/wipe-team-data", {
                             method: "POST",
-                            json: {
-                                host: document.getElementById("settings-email-host").value.trim(),
-                                port: parseInt(document.getElementById("settings-email-port").value, 10) || 587,
-                                username: document.getElementById("settings-email-username").value.trim(),
-                                passwordPlain: document.getElementById("settings-email-password").value.trim(),
-                                fromAddress: document.getElementById("settings-email-from").value.trim(),
-                                encryption: document.getElementById("settings-email-encryption").value,
-                                testEmail: testEmail
-                            }
+                            json: { password: password }
                         });
-                        Obsidianscout.showToast("Test email sent successfully", "success");
-                    } catch (err) {
-                        Obsidianscout.showToast(err.message || "Failed to send test email", "error");
+
+                        if (res.success) {
+                            Obsidianscout.showToast("Team scouting data wiped successfully!", "success");
+                            wipePasswordConfirm.value = "";
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1000);
+                        } else {
+                            Obsidianscout.showToast("Failed to wipe team data: " + (res.error || "Unknown error"), "error");
+                            btnWipeTeamData.disabled = false;
+                        }
+                    } catch (e) {
+                        Obsidianscout.showToast("Error wiping team data: " + e.message, "error");
+                        btnWipeTeamData.disabled = false;
                     }
                 });
             }
 
         } catch (error) {
+
             console.error("Failed to load settings data:", error);
             Obsidianscout.showRetryButton(adminPanelWrapper, "Failed to load settings: " + error.message, loadSettingsPageData);
         }

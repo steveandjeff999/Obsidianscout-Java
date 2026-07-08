@@ -206,6 +206,14 @@
 
             if (opts.method === "GET") {
                 safeSetItem("cache:" + path, text);
+                if (path && (path === "/api/settings" || path.startsWith("/api/settings?"))) {
+                    try {
+                        const settings = data.settings || data;
+                        applyCustomTheme(settings);
+                    } catch (e) {
+                        console.error("Failed to apply custom theme from settings fetch:", e);
+                    }
+                }
             } else {
                 clearAllCaches();
             }
@@ -492,6 +500,392 @@
         }
     }
 
+    function showSetupWizardModal(me, settings, forceOpen = false) {
+        if (document.getElementById("setup-wizard-backdrop")) return;
+
+        const backdrop = document.createElement("div");
+        backdrop.id = "setup-wizard-backdrop";
+        backdrop.className = "modal-backdrop show";
+
+        const container = document.createElement("div");
+        container.className = "modal-container";
+        container.style.width = "min(650px, 95vw)";
+        container.style.maxHeight = "95vh";
+        backdrop.appendChild(container);
+        document.body.appendChild(backdrop);
+
+        let currentStep = 1;
+        const totalSteps = 4;
+        
+        const localSettings = JSON.parse(JSON.stringify(settings));
+        if (!localSettings.apiKeys) {
+            localSettings.apiKeys = { tbaKey: "", firstUsername: "", firstKey: "" };
+        }
+        
+        let uploadedGameConfigJson = null;
+
+        function updateStepUI() {
+            const dots = container.querySelectorAll(".wizard-step-dot");
+            dots.forEach((dot, index) => {
+                const stepNum = index + 1;
+                dot.classList.remove("active", "completed");
+                if (stepNum === currentStep) {
+                    dot.classList.add("active");
+                } else if (stepNum < currentStep) {
+                    dot.classList.add("completed");
+                    dot.innerHTML = "&#10003;";
+                } else {
+                    dot.innerHTML = stepNum;
+                }
+            });
+
+            const progressPercent = ((currentStep - 1) / (totalSteps - 1)) * 100;
+            const progressBar = container.querySelector(".wizard-progress-bar");
+            if (progressBar) {
+                progressBar.style.width = `${progressPercent}%`;
+            }
+
+            const contents = container.querySelectorAll(".wizard-step-content");
+            contents.forEach((content) => {
+                const stepNum = parseInt(content.dataset.step, 10);
+                if (stepNum === currentStep) {
+                    content.classList.add("active");
+                } else {
+                    content.classList.remove("active");
+                }
+            });
+
+            const btnBack = container.querySelector(".btn-wizard-back");
+            const btnNext = container.querySelector(".btn-wizard-next");
+            
+            if (btnBack) {
+                btnBack.style.display = currentStep === 1 ? "none" : "block";
+            }
+            if (btnNext) {
+                if (currentStep === totalSteps) {
+                    btnNext.textContent = "Finish & Sync";
+                    btnNext.className = "btn btn-wizard-next";
+                } else {
+                    btnNext.textContent = "Next";
+                    btnNext.className = "btn secondary btn-wizard-next";
+                }
+            }
+        }
+
+        function validateStep() {
+            if (currentStep === 2) {
+                const yearInput = container.querySelector("#wizard-year").value.trim();
+                if (yearInput) {
+                    const yearVal = parseInt(yearInput, 10);
+                    if (isNaN(yearVal) || yearVal < 2000 || yearVal > 2100) {
+                        showToast("Please enter a valid season year (e.g. 2026)", "error");
+                        return false;
+                    }
+                } else if (!localSettings.year) {
+                    showToast("Please enter a valid season year (e.g. 2026)", "error");
+                    return false;
+                }
+
+                const timezoneVal = container.querySelector("#wizard-timezone").value.trim();
+                if (!timezoneVal && !localSettings.timezone) {
+                    showToast("Please enter a timezone (e.g. America/New_York)", "error");
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function saveInputsToState() {
+            if (currentStep === 2) {
+                const yearInput = container.querySelector("#wizard-year");
+                if (yearInput && yearInput.value) {
+                    const yearVal = parseInt(yearInput.value, 10);
+                    if (!isNaN(yearVal)) localSettings.year = yearVal;
+                }
+                const codeInput = container.querySelector("#wizard-event-code");
+                if (codeInput) {
+                    const codeVal = codeInput.value.trim();
+                    if (codeVal) localSettings.eventCode = codeVal.toLowerCase();
+                }
+                const tzInput = container.querySelector("#wizard-timezone");
+                if (tzInput) {
+                    const tzVal = tzInput.value.trim();
+                    if (tzVal) localSettings.timezone = tzVal;
+                }
+                const sourceInput = container.querySelector("#wizard-source");
+                if (sourceInput && sourceInput.value) {
+                    localSettings.preferredSource = sourceInput.value;
+                }
+            } else if (currentStep === 3) {
+                const tbaInput = container.querySelector("#wizard-tba-key");
+                if (tbaInput) {
+                    const tbaVal = tbaInput.value.trim();
+                    if (tbaVal) localSettings.apiKeys.tbaKey = tbaVal;
+                }
+                const firstUserInput = container.querySelector("#wizard-first-user");
+                if (firstUserInput) {
+                    const firstUserVal = firstUserInput.value.trim();
+                    if (firstUserVal) localSettings.apiKeys.firstUsername = firstUserVal;
+                }
+                const firstKeyInput = container.querySelector("#wizard-first-key");
+                if (firstKeyInput) {
+                    const firstKeyVal = firstKeyInput.value.trim();
+                    if (firstKeyVal) localSettings.apiKeys.firstKey = firstKeyVal;
+                }
+            }
+        }
+
+        function closeWizard() {
+            backdrop.remove();
+        }
+
+        async function handleCancel() {
+            if (confirm("Are you sure you want to exit the setup wizard? This will skip the initial setup (you can still configure settings manually in Admin Settings) and prevent this wizard from showing again on every page reload.")) {
+                try {
+                    localSettings.setupWizardCompleted = true;
+                    const response = await request("/api/settings", {
+                        method: "PUT",
+                        json: localSettings
+                    });
+                    safeSetItem("cache:/api/settings", JSON.stringify(response.settings || response));
+                    closeWizard();
+                    showToast("Setup skipped. You can configure settings anytime in Admin Settings.", "info");
+                    if (forceOpen) {
+                        setTimeout(() => window.location.reload(), 1000);
+                    }
+                } catch (e) {
+                    console.error("Failed to mark setup wizard as completed:", e);
+                    closeWizard();
+                }
+            }
+        }
+
+        container.innerHTML = `
+            <div class="modal-header">
+                <h2 class="modal-title">Admin Setup Wizard</h2>
+                <button class="modal-close btn-wizard-cancel" aria-label="Close">&times;</button>
+            </div>
+            
+            <div class="wizard-progress">
+                <div class="wizard-progress-bar"></div>
+                <div class="wizard-step-dot active">1</div>
+                <div class="wizard-step-dot">2</div>
+                <div class="wizard-step-dot">3</div>
+                <div class="wizard-step-dot">4</div>
+            </div>
+            
+            <div class="wizard-body" style="margin-bottom: 24px; min-height: 250px;">
+                <div class="wizard-step-content active" data-step="1">
+                    <div class="wizard-welcome-card">
+                        <span class="wizard-welcome-icon">🚀</span>
+                        <h3 class="wizard-welcome-title">Welcome to ObsidianScout!</h3>
+                        <p class="wizard-welcome-desc">Let's configure your team's scouting workspace in a few quick steps. We'll set up your event configurations, API keys, and confirm your scouting forms.</p>
+                        
+                        <div class="wizard-section-divider"></div>
+                        
+                        <p class="notice" style="margin-bottom: 16px;">
+                            We highly recommend reviewing our Getting Started Guide first to learn how the database, syncing, and roles operate.
+                        </p>
+                        <a href="/docs" target="_blank" class="btn" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; width: 100%; max-width: 320px; margin: 0 auto 12px;">
+                            📖 Read Getting Started Tutorial
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="wizard-step-content" data-step="2">
+                    <h3 style="margin-top: 0; margin-bottom: 8px;">FRC Event & Season Details</h3>
+                    <p class="notice" style="margin-bottom: 16px;">Specify your current season year and the event code to sync teams and matches from the FRC APIs.</p>
+                    
+                    <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div class="field">
+                            <label for="wizard-year">Season Year</label>
+                            <input id="wizard-year" type="number" value="${localSettings.year || new Date().getFullYear()}" />
+                            <span class="wizard-field-desc">The 4-digit FRC season year.</span>
+                        </div>
+                        <div class="field">
+                            <label for="wizard-event-code">Event Code</label>
+                            <input id="wizard-event-code" type="text" placeholder="e.g. okok" value="${localSettings.eventCode || ''}" />
+                            <span class="wizard-field-desc">Short event code (e.g., 'okok' for Oklahoma Regional).</span>
+                        </div>
+                        <div class="field">
+                            <label for="wizard-timezone">Timezone</label>
+                            <input id="wizard-timezone" type="text" placeholder="America/New_York" value="${localSettings.timezone || 'America/New_York'}" />
+                            <span class="wizard-field-desc">Database logs and schedule offsets use this timezone.</span>
+                        </div>
+                        <div class="field">
+                            <label for="wizard-source">Preferred API Source</label>
+                            <select id="wizard-source">
+                                <option value="tba" ${localSettings.preferredSource === 'tba' ? 'selected' : ''}>The Blue Alliance</option>
+                                <option value="first" ${localSettings.preferredSource === 'first' ? 'selected' : ''}>FIRST API</option>
+                            </select>
+                            <span class="wizard-field-desc">The primary API to fetch event schedule.</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="wizard-step-content" data-step="3">
+                    <h3 style="margin-top: 0; margin-bottom: 8px;">API Credentials</h3>
+                    <p class="notice" style="margin-bottom: 16px;">Enter your API keys to enable automatic schedule syncing. Leave blank if syncing offline via QR codes.</p>
+                    
+                    <div class="field" style="margin-bottom: 16px;">
+                        <label for="wizard-tba-key">The Blue Alliance Read Key</label>
+                        <input id="wizard-tba-key" type="password" placeholder="TBA Read API Key" value="${localSettings.apiKeys.tbaKey || ''}" />
+                    </div>
+                    
+                    <div class="wizard-section-divider"></div>
+                    
+                    <div class="split" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div class="field">
+                            <label for="wizard-first-user">FIRST API Username</label>
+                            <input id="wizard-first-user" type="text" placeholder="FIRST Username" value="${localSettings.apiKeys.firstUsername || ''}" />
+                        </div>
+                        <div class="field">
+                            <label for="wizard-first-key">FIRST API Key</label>
+                            <input id="wizard-first-key" type="password" placeholder="FIRST API Secret Key" value="${localSettings.apiKeys.firstKey || ''}" />
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="wizard-step-content" data-step="4">
+                    <h3 style="margin-top: 0; margin-bottom: 8px;">Verify Scouting Forms</h3>
+                    <p class="notice" style="margin-bottom: 16px;">ObsidianScout comes pre-loaded with default scouting forms. You can optionally upload a custom Game Form configuration JSON file below.</p>
+                    
+                    <div class="field">
+                        <label class="btn ghost btn-file" style="display: inline-flex; width: 100%; justify-content: center; padding: 12px; margin-bottom: 12px; cursor: pointer;">
+                            📁 Import Custom Game Form JSON
+                            <input id="wizard-config-import" class="input-hidden" type="file" accept="application/json" />
+                        </label>
+                        <div id="wizard-import-status" class="notice" style="text-align: center; color: var(--accent-2); font-weight: 600;"></div>
+                    </div>
+                    
+                    <div class="wizard-card-preview">
+                        <h4 style="margin: 0 0 8px 0; font-size: 14px;">Forms status:</h4>
+                        <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted); display: grid; gap: 4px;">
+                            <li>✓ Default Match/Game Scouting Form loaded</li>
+                            <li>✓ Default Pit Scouting Form loaded</li>
+                            <li>✓ Default Qualitative Scouting Form loaded</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn ghost btn-wizard-cancel" style="margin-right: auto;">Exit</button>
+                <button type="button" class="btn ghost btn-wizard-back" style="display: none;">Back</button>
+                <button type="button" class="btn secondary btn-wizard-next">Next</button>
+            </div>
+        `;
+
+        const btnCancelList = container.querySelectorAll(".btn-wizard-cancel");
+        btnCancelList.forEach(btn => btn.addEventListener("click", handleCancel));
+
+        const btnBack = container.querySelector(".btn-wizard-back");
+        btnBack.addEventListener("click", () => {
+            if (currentStep > 1) {
+                saveInputsToState();
+                currentStep--;
+                updateStepUI();
+            }
+        });
+
+        const btnNext = container.querySelector(".btn-wizard-next");
+        btnNext.addEventListener("click", async () => {
+            if (!validateStep()) return;
+            saveInputsToState();
+
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateStepUI();
+            } else {
+                btnNext.disabled = true;
+                btnNext.textContent = "Saving...";
+                
+                try {
+                    localSettings.setupWizardCompleted = true;
+                    
+                    const code = localSettings.eventCode.trim();
+                    if (code) {
+                        localSettings.eventKey = `${localSettings.year}${code}`.toLowerCase();
+                    }
+                    
+                    const response = await request("/api/settings", {
+                        method: "PUT",
+                        json: localSettings
+                    });
+                    
+                    if (uploadedGameConfigJson) {
+                        await request("/api/config", {
+                            method: "PUT",
+                            json: {
+                                configJson: JSON.stringify(uploadedGameConfigJson)
+                            }
+                        });
+                    }
+
+                    safeSetItem("cache:/api/settings", JSON.stringify(response.settings || response));
+                    
+                    showToast("Configuration saved successfully!", "success");
+                    closeWizard();
+
+                    const eventKey = localSettings.eventKey;
+                    if (eventKey) {
+                        showToast(`Initiating data sync for ${eventKey}...`, "info");
+                        request(`/api/prescout/sync-event?eventKey=${eventKey}`, { method: "POST" })
+                            .then((counts) => {
+                                showToast(`Sync finished! Cached ${counts.syncedTeams || counts.teams || 0} teams and ${counts.syncedMatches || counts.matches || 0} matches.`, "success");
+                                window.dispatchEvent(new CustomEvent("obsidianscout:offline-entries-synced"));
+                                if (window.location.pathname.includes("dashboard") || window.location.pathname.includes("admin-settings")) {
+                                    setTimeout(() => window.location.reload(), 1500);
+                                }
+                            })
+                            .catch(err => {
+                                console.error("Sync failed:", err);
+                                showToast("Initial sync failed: API keys might be invalid or rate limited.", "error");
+                            });
+                    }
+                    
+                    if (forceOpen) {
+                        setTimeout(() => window.location.reload(), 1000);
+                    }
+
+                } catch (error) {
+                    console.error("Setup Wizard save failed:", error);
+                    showToast("Failed to save settings: " + error.message, "error");
+                    btnNext.disabled = false;
+                    btnNext.textContent = "Finish & Sync";
+                }
+            }
+        });
+
+        const configImportInput = container.querySelector("#wizard-config-import");
+        if (configImportInput) {
+            configImportInput.addEventListener("change", () => {
+                const file = configImportInput.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const text = reader.result;
+                    try {
+                        const parsed = JSON.parse(text);
+                        if (!parsed.fields) parsed.fields = [];
+                        uploadedGameConfigJson = parsed;
+                        
+                        const statusEl = container.querySelector("#wizard-import-status");
+                        if (statusEl) {
+                            statusEl.textContent = `✓ Custom Game Form "${parsed.title || 'Imported'}" verified and ready to save.`;
+                        }
+                        showToast("Scouting config file loaded successfully!", "success");
+                    } catch (e) {
+                        showToast("Invalid config JSON file format.", "error");
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        updateStepUI();
+    }
+
     async function requireAuth() {
         const loggedIn = await checkLoginStatus();
         if (!loggedIn) {
@@ -524,7 +918,7 @@
         if (currentPage && settings && (me.role === "SCOUT" || me.role === "ANALYTICS" || me.role === "ADMIN")) {
             const allowedPages = me.role === "SCOUT" ? settings.scoutPages : (me.role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
             if (allowedPages && Array.isArray(allowedPages)) {
-                const bypassPages = ["settings", "login", "index", "dashboard"];
+                const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor"];
                 if (!bypassPages.includes(currentPage) && !allowedPages.includes(currentPage)) {
                     showToast("You do not have access to this page", "error");
                     const fallback = allowedPages.includes("dashboard") ? "/dashboard" : "/config";
@@ -533,6 +927,24 @@
                     }, 500);
                     return null;
                 }
+            }
+        }
+
+        try {
+            initTour(me);
+        } catch (e) {
+            console.warn("Failed to initialize ObsidianScout Tour:", e);
+        }
+
+        // Setup Wizard Auto Trigger
+        if (settings && isAdmin(me.role) && !settings.setupWizardCompleted) {
+            const bypassPages = ["login", "index", "reset-password", "migration"];
+            if (currentPage && !bypassPages.includes(currentPage)) {
+                setTimeout(() => {
+                    if (!document.getElementById("setup-wizard-backdrop")) {
+                        showSetupWizardModal(me, settings);
+                    }
+                }, 400);
             }
         }
 
@@ -564,6 +976,36 @@
         return hasRole(role, "ANALYTICS");
     }
 
+    function triggerHaptic(type = "light") {
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+            const hapticSetting = safeGetItem("obsidianscout:haptic_feedback") || "enabled";
+            if (hapticSetting !== "enabled") {
+                return;
+            }
+            try {
+                switch (type) {
+                    case "light":
+                    case "tap":
+                    case "click":
+                        navigator.vibrate(12);
+                        break;
+                    case "medium":
+                        navigator.vibrate(30);
+                        break;
+                    case "success":
+                        navigator.vibrate([20, 50, 20]);
+                        break;
+                    case "warning":
+                    case "error":
+                        navigator.vibrate([60, 50, 60]);
+                        break;
+                }
+            } catch (e) {
+                console.warn("Haptic feedback failed:", e);
+            }
+        }
+    }
+
     function showToast(message, tone = "info") {
         let root = document.getElementById(toastRootId);
         if (!root) {
@@ -578,6 +1020,14 @@
         setTimeout(() => {
             toast.remove();
         }, 2800);
+
+        if (tone === "success") {
+            triggerHaptic("success");
+        } else if (tone === "error") {
+            triggerHaptic("error");
+        } else if (tone === "warning") {
+            triggerHaptic("warning");
+        }
     }
 
     function setUserBadge(user) {
@@ -701,7 +1151,7 @@
                     if (allowedPages && Array.isArray(allowedPages)) {
                         document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                             const page = link.dataset.page;
-                            const bypassPages = ["settings", "migration", "login", "index"];
+                            const bypassPages = ["settings", "migration", "login", "index", "theme-editor"];
                             if (!bypassPages.includes(page) && !allowedPages.includes(page)) {
                                 link.style.display = "none";
                             }
@@ -730,9 +1180,86 @@
         });
     }
 
+    function applyCustomTheme(themeOrSettings) {
+        if (!themeOrSettings) return;
+        
+        let theme = themeOrSettings;
+        if (themeOrSettings.theme !== undefined) {
+            theme = themeOrSettings.theme || {};
+            safeSetItem("obsidian-custom-theme-config", JSON.stringify(theme));
+        }
+        
+        const isDark = document.body.classList.contains("theme-dark");
+        const target = document.body;
+        if (!target) return;
+        
+        if (theme.btnRadius) target.style.setProperty('--btn-radius', theme.btnRadius);
+        else target.style.removeProperty('--btn-radius');
+        
+        if (isDark) {
+            if (theme.darkAccent) target.style.setProperty('--accent', theme.darkAccent);
+            else target.style.removeProperty('--accent');
+            
+            if (theme.darkAccent2) target.style.setProperty('--accent-2', theme.darkAccent2);
+            else target.style.removeProperty('--accent-2');
+            
+            if (theme.darkAccent3) target.style.setProperty('--accent-3', theme.darkAccent3);
+            else target.style.removeProperty('--accent-3');
+            
+            if (theme.darkInk) {
+                target.style.setProperty('--ink', theme.darkInk);
+                target.style.color = theme.darkInk;
+            } else {
+                target.style.removeProperty('--ink');
+                target.style.color = '';
+            }
+            
+            if (theme.darkMuted) target.style.setProperty('--muted', theme.darkMuted);
+            else target.style.removeProperty('--muted');
+            
+            if (theme.darkBg) target.style.setProperty('--bg', theme.darkBg);
+            else target.style.removeProperty('--bg');
+        } else {
+            if (theme.lightAccent) target.style.setProperty('--accent', theme.lightAccent);
+            else target.style.removeProperty('--accent');
+            
+            if (theme.lightAccent2) target.style.setProperty('--accent-2', theme.lightAccent2);
+            else target.style.removeProperty('--accent-2');
+            
+            if (theme.lightAccent3) target.style.setProperty('--accent-3', theme.lightAccent3);
+            else target.style.removeProperty('--accent-3');
+            
+            if (theme.lightInk) {
+                target.style.setProperty('--ink', theme.lightInk);
+                target.style.color = theme.lightInk;
+            } else {
+                target.style.removeProperty('--ink');
+                target.style.color = '';
+            }
+            
+            if (theme.lightMuted) target.style.setProperty('--muted', theme.lightMuted);
+            else target.style.removeProperty('--muted');
+            
+            if (theme.lightBg) target.style.setProperty('--bg', theme.lightBg);
+            else target.style.removeProperty('--bg');
+        }
+    }
+
     function initTheme() {
         const saved = safeGetItem("obsidian-theme") || "light";
         document.body.classList.toggle("theme-dark", saved === "dark");
+        try {
+            const cachedTheme = safeGetItem("obsidian-custom-theme-config");
+            if (cachedTheme) {
+                applyCustomTheme(JSON.parse(cachedTheme));
+            } else {
+                const cachedText = safeGetItem("cache:/api/settings");
+                if (cachedText) {
+                    const parsed = JSON.parse(cachedText);
+                    applyCustomTheme(parsed.settings || parsed);
+                }
+            }
+        } catch (e) {}
     }
 
     function wireThemeToggle() {
@@ -743,6 +1270,18 @@
         toggle.addEventListener("click", () => {
             const isDark = document.body.classList.toggle("theme-dark");
             safeSetItem("obsidian-theme", isDark ? "dark" : "light");
+            try {
+                const cachedTheme = safeGetItem("obsidian-custom-theme-config");
+                if (cachedTheme) {
+                    applyCustomTheme(JSON.parse(cachedTheme));
+                } else {
+                    const cachedText = safeGetItem("cache:/api/settings");
+                    if (cachedText) {
+                        const parsed = JSON.parse(cachedText);
+                        applyCustomTheme(parsed.settings || parsed);
+                    }
+                }
+            } catch (e) {}
         });
     }
 
@@ -1472,9 +2011,11 @@
         }
 
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
                 .then(reg => {
                     console.log('[ServiceWorker] Scope:', reg.scope);
+                    // Force an update check on page load
+                    reg.update().catch(err => console.warn('[ServiceWorker] Update check failed:', err));
                     navigator.serviceWorker.ready.then(readyReg => {
                         initPushNotifications(readyReg);
                     });
@@ -1753,15 +2294,517 @@
         }
     }
 
+    // ==========================================================================
+    // Interactive Tour Logic
+    // ==========================================================================
+
+    const TOUR_STEPS = {
+        scout_beginner: [
+            { page: "dashboard", target: ".main-content h1", titleKey: "tour.step.dashboard.title", descKey: "tour.step.dashboard.desc" },
+            { page: "scout", target: "#scouting-form", titleKey: "tour.step.scout.title", descKey: "tour.step.scout.desc" },
+            { page: "pit-scout", target: "#pit-scouting-form", titleKey: "tour.step.pit_scout.title", descKey: "tour.step.pit_scout.desc" },
+            { page: "qr-scanner", target: ".main-content", titleKey: "tour.step.qr_scanner.title", descKey: "tour.step.qr_scanner.desc" }
+        ],
+        scout_intermediate: [
+            { page: "all-data", target: ".main-content", titleKey: "tour.step.all_data.title", descKey: "tour.step.all_data.desc" },
+            { page: "qual-data", target: ".main-content", titleKey: "tour.step.qual_data.title", descKey: "tour.step.qual_data.desc" },
+            { page: "pit-data", target: ".main-content", titleKey: "tour.step.pit_data.title", descKey: "tour.step.pit_data.desc" }
+        ],
+        scout_advanced: [
+            { page: "analytics", target: ".main-content", titleKey: "tour.step.analytics.title", descKey: "tour.step.analytics.desc" },
+            { page: "graphs", target: ".main-content", titleKey: "tour.step.graphs.title", descKey: "tour.step.graphs.desc" },
+            { page: "predictor", target: ".main-content", titleKey: "tour.step.predictor.title", descKey: "tour.step.predictor.desc" },
+            { page: "alliance-selection", target: ".main-content", titleKey: "tour.step.alliance_selection.title", descKey: "tour.step.alliance_selection.desc" }
+        ],
+        admin_beginner: [
+            { page: "dashboard", target: "#nav-user", titleKey: "tour.step.admin_badge.title", descKey: "tour.step.admin_badge.desc" },
+            { page: "users", target: ".main-content", titleKey: "tour.step.admin_users.title", descKey: "tour.step.admin_users.desc" },
+            { page: "banners", target: ".main-content", titleKey: "tour.step.admin_banners.title", descKey: "tour.step.admin_banners.desc" }
+        ],
+        admin_intermediate: [
+            { page: "admin-settings", target: "#admin-panel", titleKey: "tour.step.admin_panel.title", descKey: "tour.step.admin_panel.desc" },
+            { page: "admin-settings", target: "#tab-config", titleKey: "tour.step.admin_tab_config.title", descKey: "tour.step.admin_tab_config.desc", clickToAdvance: true },
+            { page: "admin-settings", target: "button[data-config-kind='pit']", titleKey: "tour.step.admin_config_pit.title", descKey: "tour.step.admin_config_pit.desc", clickToAdvance: true },
+            { page: "admin-settings", target: "#btn-raw-editor", titleKey: "tour.step.admin_config_raw.title", descKey: "tour.step.admin_config_raw.desc", clickToAdvance: true },
+            { page: "admin-settings", target: "#tab-api", titleKey: "tour.step.admin_tab_api.title", descKey: "tour.step.admin_tab_api.desc", clickToAdvance: true },
+            { page: "admin-settings", target: "#tab-api", titleKey: "tour.step.admin_api_desc.title", descKey: "tour.step.admin_api_desc.desc" },
+            { page: "admin-settings", target: "#tab-permissions", titleKey: "tour.step.admin_tab_permissions.title", descKey: "tour.step.admin_tab_permissions.desc", clickToAdvance: true },
+            { page: "admin-settings", target: "#tab-permissions", titleKey: "tour.step.admin_permissions_desc.title", descKey: "tour.step.admin_permissions_desc.desc" }
+        ],
+        admin_advanced: [
+            { page: "backup", target: ".main-content", titleKey: "tour.step.admin_backup.title", descKey: "tour.step.admin_backup.desc" },
+            { page: "migration", target: ".main-content", titleKey: "tour.step.admin_migration.title", descKey: "tour.step.admin_migration.desc" }
+        ]
+    };
+
+    function isPageAccessible(page, role) {
+        const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor"];
+        if (bypassPages.includes(page)) return true;
+
+        if (["users", "banners", "admin-settings"].includes(page) && !isAdmin(role)) {
+            return false;
+        }
+        if (page === "migration" && !isSuperAdmin(role)) {
+            return false;
+        }
+
+        try {
+            const settingsText = safeGetItem("cache:/api/settings");
+            if (settingsText) {
+                const parsed = JSON.parse(settingsText);
+                const settings = parsed.settings || parsed;
+                const allowedPages = role === "SCOUT" ? settings.scoutPages : (role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
+                if (allowedPages && Array.isArray(allowedPages)) {
+                    return allowedPages.includes(page);
+                }
+            }
+        } catch (e) {}
+
+        const link = document.querySelector(`.sidebar-link[data-page="${page}"]`);
+        if (link && link.style.display === "none") {
+            return false;
+        }
+
+        return true;
+    }
+
+    function getTourStepsForRoleAndLevel(me, level) {
+        const rawSteps = TOUR_STEPS[level] || [];
+        return rawSteps.filter(step => isPageAccessible(step.page, me.role));
+    }
+
+
+    async function syncTourProgressToServer() {
+        if (!navigator.onLine) return;
+        const active = safeGetItem('obsidianscout:tour_active') === 'true' ? safeGetItem('obsidianscout:tour_level') : null;
+        const stepIndex = parseInt(safeGetItem('obsidianscout:tour_step_index') || '0', 10);
+        const completed = JSON.parse(safeGetItem('obsidianscout:tour_completed_list') || '[]');
+        
+        try {
+            await request('/api/user/tour-progress', {
+                method: 'POST',
+                json: { active, stepIndex, completed }
+            });
+        } catch (e) {
+            console.warn('[Tour] Failed to sync progress to server:', e);
+        }
+    }
+
+    async function initTour(me) {
+        if (!me) return;
+
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) {
+            const footer = sidebar.querySelector('.sidebar-footer');
+            if (footer && !document.getElementById('btn-take-tour')) {
+                const btn = document.createElement('button');
+                btn.id = 'btn-take-tour';
+                btn.className = 'btn ghost';
+                btn.type = 'button';
+                btn.style.marginTop = '8px';
+                btn.style.width = '100%';
+                btn.textContent = t('tour.take_tour', 'Take a Tour');
+                btn.addEventListener('click', () => {
+                    showTourLevelSelector(me);
+                });
+                footer.insertBefore(btn, footer.lastChild);
+            }
+        }
+
+        const hasFetched = sessionStorage.getItem('obsidianscout:tour_fetched') === 'true';
+        if (navigator.onLine && !hasFetched) {
+            try {
+                const res = await request('/api/user/tour-progress');
+                if (res) {
+                    sessionStorage.setItem('obsidianscout:tour_fetched', 'true');
+                    if (res.active) {
+                        safeSetItem('obsidianscout:tour_active', 'true');
+                        safeSetItem('obsidianscout:tour_level', res.active);
+                        safeSetItem('obsidianscout:tour_step_index', String(res.stepIndex || 0));
+                    } else {
+                        if (safeGetItem('obsidianscout:tour_active') === 'true') {
+                            safeRemoveItem('obsidianscout:tour_active');
+                            safeRemoveItem('obsidianscout:tour_level');
+                            safeRemoveItem('obsidianscout:tour_step_index');
+                        }
+                    }
+                    if (res.completed && Array.isArray(res.completed)) {
+                        safeSetItem('obsidianscout:tour_completed_list', JSON.stringify(res.completed));
+                    }
+                }
+            } catch (e) {
+                console.warn('[Tour] Failed to load progress from server:', e);
+            }
+        }
+
+        const isActive = safeGetItem('obsidianscout:tour_active') === 'true';
+        if (isActive) {
+            runActiveTourStep(me);
+        }
+    }
+
+    function runActiveTourStep(me) {
+        const level = safeGetItem('obsidianscout:tour_level');
+        const stepIndexStr = safeGetItem('obsidianscout:tour_step_index');
+        let stepIndex = parseInt(stepIndexStr, 10);
+        if (isNaN(stepIndex)) stepIndex = 0;
+
+        const steps = getTourStepsForRoleAndLevel(me, level);
+        if (!steps || steps.length === 0 || stepIndex >= steps.length) {
+            endTour();
+            return;
+        }
+
+        const step = steps[stepIndex];
+        const currentPage = document.body.dataset.page;
+
+        if (step.page !== currentPage) {
+            const link = document.querySelector(`.sidebar-link[data-page="${step.page}"]`);
+            if (link && link.href) {
+                window.location.href = link.href;
+            } else {
+                const fallbackUrls = {
+                    "settings": "/config",
+                    "backup": "/backup",
+                    "migration": "/migration"
+                };
+                const url = fallbackUrls[step.page] || ("/" + step.page);
+                window.location.href = url;
+            }
+            return;
+        }
+
+        let retries = 0;
+        const maxRetries = 16;
+        const checkInterval = setInterval(() => {
+            const el = document.querySelector(step.target);
+            if (el && el.offsetHeight > 0) {
+                clearInterval(checkInterval);
+                displayTourStepPopup(el, step, stepIndex, steps.length, me);
+            } else {
+                retries++;
+                if (retries >= maxRetries) {
+                    clearInterval(checkInterval);
+                    displayTourStepPopup(null, step, stepIndex, steps.length, me);
+                }
+            }
+        }, 250);
+    }
+
+    let activePopup = null;
+    let activeBackdrop = null;
+
+    function displayTourStepPopup(targetEl, step, stepIndex, totalSteps, me) {
+        clearTourDOM();
+
+        const backdrop = document.createElement('div');
+        backdrop.className = 'tour-backdrop';
+        document.body.appendChild(backdrop);
+        activeBackdrop = backdrop;
+
+        if (targetEl) {
+            targetEl.classList.add('tour-highlighted');
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        const popup = document.createElement('div');
+        popup.className = 'tour-popup';
+        
+        const currentNum = stepIndex + 1;
+        const progressText = t('tour.step_progress', `Step ${currentNum} of ${totalSteps}`)
+                                .replace('{current}', currentNum)
+                                .replace('{total}', totalSteps);
+
+        const titleText = t(step.titleKey, step.titleKey);
+        const descText = t(step.descKey, step.descKey);
+
+        const isLast = stepIndex === totalSteps - 1;
+
+        popup.innerHTML = `
+            <button class="tour-popup-close" aria-label="Close">&times;</button>
+            <h3>${titleText}</h3>
+            <p>${descText}</p>
+            <div class="tour-popup-footer">
+                <span class="tour-popup-progress">${progressText}</span>
+                <div class="tour-popup-nav">
+                    ${stepIndex > 0 ? `<button type="button" class="btn-tour-back">${t('tour.btn_back', 'Back')}</button>` : ''}
+                    <button type="button" class="btn-tour-next">${isLast ? t('tour.btn_finish', 'Finish') : t('tour.btn_next', 'Next')}</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(popup);
+        activePopup = popup;
+
+        popup.querySelector('.tour-popup-close').addEventListener('click', () => {
+            endTour();
+        });
+
+        const nextBtn = popup.querySelector('.btn-tour-next');
+        const isClickToAdvance = step.clickToAdvance === true && targetEl;
+
+        if (isClickToAdvance) {
+            if (nextBtn) {
+                nextBtn.style.display = 'none';
+            }
+            const progress = popup.querySelector('.tour-popup-progress');
+            if (progress) {
+                progress.innerHTML += ` <span style="display:block;margin-top:4px;color:var(--accent-2);font-weight:700;font-size:10px;">${t('tour.click_to_advance', '(Click highlighted element to continue)')}</span>`;
+            }
+
+            const advanceHandler = async () => {
+                clearTourDOM();
+                safeSetItem('obsidianscout:tour_step_index', stepIndex + 1);
+                await syncTourProgressToServer();
+                setTimeout(() => {
+                    runActiveTourStep(me);
+                }, 150);
+            };
+
+            targetEl.addEventListener('click', advanceHandler, { once: true });
+            targetEl._tourAdvanceHandler = advanceHandler;
+        } else {
+            if (nextBtn) {
+                nextBtn.addEventListener('click', async () => {
+                    if (isLast) {
+                        const currentLevel = safeGetItem('obsidianscout:tour_level');
+                        await endTour(currentLevel);
+                        showToast(t('tour.finished_toast', 'Tutorial completed!'), 'success');
+                    } else {
+                        safeSetItem('obsidianscout:tour_step_index', stepIndex + 1);
+                        await syncTourProgressToServer();
+                        runActiveTourStep(me);
+                    }
+                });
+            }
+        }
+
+        const backBtn = popup.querySelector('.btn-tour-back');
+        if (backBtn) {
+            backBtn.addEventListener('click', async () => {
+                safeSetItem('obsidianscout:tour_step_index', Math.max(0, stepIndex - 1));
+                await syncTourProgressToServer();
+                runActiveTourStep(me);
+            });
+        }
+
+        if (targetEl) {
+            positionPopupNextToElement(popup, targetEl);
+            const reposition = () => positionPopupNextToElement(popup, targetEl);
+            window.addEventListener('resize', reposition);
+            window.addEventListener('scroll', reposition);
+            popup.dataset.repositionListeners = 'true';
+            popup._reposition = reposition;
+        } else {
+            popup.style.position = 'fixed';
+            popup.style.top = '50%';
+            popup.style.left = '50%';
+            popup.style.transform = 'translate(-50%, -50%)';
+        }
+    }
+
+    function positionPopupNextToElement(popup, targetEl) {
+        const rect = targetEl.getBoundingClientRect();
+        const popupWidth = popup.offsetWidth || 320;
+        const popupHeight = popup.offsetHeight || 150;
+        const margin = 12;
+
+        let top = rect.bottom + window.scrollY + margin;
+        let left = rect.left + window.scrollX + (rect.width - popupWidth) / 2;
+
+        if (rect.bottom + popupHeight + margin > window.innerHeight) {
+            if (rect.top - popupHeight - margin > 0) {
+                top = rect.top + window.scrollY - popupHeight - margin;
+            } else {
+                if (rect.right + popupWidth + margin < window.innerWidth) {
+                    top = rect.top + window.scrollY + (rect.height - popupHeight) / 2;
+                    left = rect.right + window.scrollX + margin;
+                } else if (rect.left - popupWidth - margin > 0) {
+                    top = rect.top + window.scrollY + (rect.height - popupHeight) / 2;
+                    left = rect.left + window.scrollX - popupWidth - margin;
+                }
+            }
+        }
+
+        const viewportWidth = window.innerWidth;
+        if (left < 10) left = 10;
+        if (left + popupWidth > viewportWidth - 10) left = viewportWidth - popupWidth - 10;
+
+        popup.style.top = `${top}px`;
+        popup.style.left = `${left}px`;
+    }
+
+    function clearTourDOM() {
+        if (activePopup && activePopup.dataset.repositionListeners === 'true' && activePopup._reposition) {
+            window.removeEventListener('resize', activePopup._reposition);
+            window.removeEventListener('scroll', activePopup._reposition);
+        }
+
+        document.querySelectorAll('.tour-highlighted, [id^="tab-"], [data-config-kind], .sidebar-link, button').forEach(el => {
+            if (el._tourAdvanceHandler) {
+                el.removeEventListener('click', el._tourAdvanceHandler);
+                delete el._tourAdvanceHandler;
+            }
+        });
+
+        document.querySelectorAll('.tour-highlighted').forEach(el => {
+            el.classList.remove('tour-highlighted');
+        });
+
+        if (activePopup) {
+            activePopup.remove();
+            activePopup = null;
+        }
+        if (activeBackdrop) {
+            activeBackdrop.remove();
+            activeBackdrop = null;
+        }
+    }
+
+    async function endTour(completedLevelKey = null) {
+        clearTourDOM();
+        safeRemoveItem('obsidianscout:tour_active');
+        safeRemoveItem('obsidianscout:tour_level');
+        safeRemoveItem('obsidianscout:tour_step_index');
+        
+        if (completedLevelKey) {
+            const completed = JSON.parse(safeGetItem('obsidianscout:tour_completed_list') || '[]');
+            if (!completed.includes(completedLevelKey)) {
+                completed.push(completedLevelKey);
+            }
+            safeSetItem('obsidianscout:tour_completed_list', JSON.stringify(completed));
+        }
+
+        await syncTourProgressToServer();
+    }
+
+    function showTourLevelSelector(me) {
+        const existing = document.getElementById('tour-level-modal-overlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'tour-level-modal-overlay';
+        overlay.className = 'tour-modal-overlay';
+
+        const isUserAdmin = isAdmin(me.role) || isSuperAdmin(me.role);
+        const completedList = JSON.parse(safeGetItem('obsidianscout:tour_completed_list') || '[]');
+        
+        const checkMark = (levelKey) => {
+            if (completedList.includes(levelKey)) {
+                return ` <span style="color:var(--accent-3);font-size:12px;margin-left:4px;font-weight:700;">✔</span>`;
+            }
+            return '';
+        };
+
+        let adminSectionHtml = '';
+        if (isUserAdmin) {
+            adminSectionHtml = `
+                <div class="tour-modal-section-title">${t('tour.admin_track', 'Administrator-only Tracks')}</div>
+                <div class="tour-level-grid">
+                    <button type="button" class="tour-level-btn" data-level="admin_beginner">
+                        <span class="tour-level-name">${t('tour.level_beginner', 'Beginner Track')}${checkMark('admin_beginner')}</span>
+                        <span class="tour-level-desc">${t('tour.step.admin_badge.title', 'User Management & Roles')}</span>
+                    </button>
+                    <button type="button" class="tour-level-btn" data-level="admin_intermediate">
+                        <span class="tour-level-name">${t('tour.level_intermediate', 'Intermediate Track')}${checkMark('admin_intermediate')}</span>
+                        <span class="tour-level-desc">${t('tour.step.admin_configs.title', 'Configs & Permissions')}</span>
+                    </button>
+                    <button type="button" class="tour-level-btn" data-level="admin_advanced">
+                        <span class="tour-level-name">${t('tour.level_advanced', 'Advanced Track')}${checkMark('admin_advanced')}</span>
+                        <span class="tour-level-desc">${t('tour.step.admin_backup.title', 'Backups & Legacy Migrations')}</span>
+                    </button>
+                </div>
+            `;
+        }
+
+        overlay.innerHTML = `
+            <div class="tour-modal">
+                <button class="tour-modal-close" aria-label="Close">&times;</button>
+                <h2>${t('tour.welcome_title', 'Take a Tour!')}</h2>
+                <p>${t('tour.welcome_desc', 'Welcome to ObsidianScout! Select your experience level to start a custom, interactive walkthrough of our features.')}</p>
+                
+                <div class="tour-modal-section-title">${t('tour.scout_analytics_track', 'Scout & Analytics Tracks')}</div>
+                <div class="tour-level-grid">
+                    <button type="button" class="tour-level-btn" data-level="scout_beginner">
+                        <span class="tour-level-name">${t('tour.level_beginner', 'Beginner Track')}${checkMark('scout_beginner')}</span>
+                        <span class="tour-level-desc">${t('tour.step.dashboard.title', 'Forms & Basic Entry')}</span>
+                    </button>
+                    <button type="button" class="tour-level-btn" data-level="scout_intermediate">
+                        <span class="tour-level-name">${t('tour.level_intermediate', 'Intermediate Track')}${checkMark('scout_intermediate')}</span>
+                        <span class="tour-level-desc">${t('tour.step.all_data.title', 'Data Browsing & Queries')}</span>
+                    </button>
+                    <button type="button" class="tour-level-btn" data-level="scout_advanced">
+                        <span class="tour-level-name">${t('tour.level_advanced', 'Advanced Track')}${checkMark('scout_advanced')}</span>
+                        <span class="tour-level-desc">${t('tour.step.analytics.title', 'Charts, Predictions & Synergy')}</span>
+                    </button>
+                </div>
+
+                ${adminSectionHtml}
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        overlay.querySelector('.tour-modal-close').addEventListener('click', () => {
+            overlay.remove();
+        });
+
+        overlay.querySelectorAll('.tour-level-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const level = btn.dataset.level;
+                overlay.remove();
+                startTour(me, level);
+            });
+        });
+    }
+
+    async function startTour(me, level) {
+        safeSetItem('obsidianscout:tour_active', 'true');
+        safeSetItem('obsidianscout:tour_level', level);
+        safeSetItem('obsidianscout:tour_step_index', 0);
+        await syncTourProgressToServer();
+        runActiveTourStep(me);
+    }
+
+    function initHapticDelegation() {
+        document.addEventListener("click", (e) => {
+            const target = e.target;
+            const button = target.closest("button");
+            if (button) {
+                if (button.disabled) return;
+                triggerHaptic("light");
+                return;
+            }
+            if (target.type === "checkbox") {
+                triggerHaptic("light");
+                return;
+            }
+        }, { passive: true });
+
+        document.addEventListener("input", (e) => {
+            if (e.target.type === "range") {
+                triggerHaptic("light");
+            }
+        }, { passive: true });
+
+        document.addEventListener("change", (e) => {
+            if (e.target.tagName === "SELECT") {
+                triggerHaptic("light");
+            }
+        }, { passive: true });
+    }
+
     // Run at DOM ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             injectLiquidGlassSVG();
             loadAndRenderBanners();
+            initHapticDelegation();
         });
     } else {
         injectLiquidGlassSVG();
         loadAndRenderBanners();
+        initHapticDelegation();
     }
 
     window.Obsidianscout = {
@@ -1770,6 +2813,7 @@
         checkLoginStatus,
         requireAuth,
         showToast,
+        triggerHaptic,
         setUserBadge,
         refreshNavAvatar,
         setActiveNav,
@@ -1800,5 +2844,9 @@
         ,compressData
         ,decompressData
         ,CACHE_CONFIGS
+        ,startTour
+        ,endTour
+        ,showTourLevelSelector
+        ,showSetupWizardModal
     };
 })();

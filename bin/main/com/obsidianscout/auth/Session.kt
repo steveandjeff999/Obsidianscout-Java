@@ -25,7 +25,8 @@ data class UserSession(
     val role: UserRole,
     val email: String? = null,
     val profilePicture: String? = null,
-    val notificationPreference: String = "all"
+    val notificationPreference: String = "all",
+    val tourProgress: String? = null
 )
 
 class ApiException(val status: HttpStatusCode, override val message: String) : RuntimeException(message)

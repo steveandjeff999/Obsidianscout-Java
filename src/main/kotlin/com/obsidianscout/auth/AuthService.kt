@@ -47,7 +47,8 @@ data class UserRecord(
     val createdAt: String,
     val email: String? = null,
     val profilePicture: String? = null,
-    val notificationPreference: String = "all"
+    val notificationPreference: String = "all",
+    val tourProgress: String? = null
 )
 
 object AuthService {
@@ -271,7 +272,8 @@ object AuthService {
         newTeamNumber: Int? = null,
         newProfilePicture: String? = null,
         clearProfilePicture: Boolean = false,
-        newNotificationPreference: String? = null
+        newNotificationPreference: String? = null,
+        newTourProgress: String? = null
     ): UserRecord {
         // Hash outside the transaction if needed
         val newHash = newPassword?.takeIf { it.isNotBlank() }
@@ -330,6 +332,9 @@ object AuthService {
                     stmt[profilePicture] = null
                 } else if (newProfilePicture != null) {
                     stmt[profilePicture] = newProfilePicture
+                }
+                if (newTourProgress != null) {
+                    stmt[tourProgress] = newTourProgress
                 }
             }
 
@@ -431,7 +436,8 @@ object AuthService {
             createdAt = row[Users.createdAt].toString(),
             email = row[Users.email],
             profilePicture = row[Users.profilePicture],
-            notificationPreference = row[Users.notificationPreference]
+            notificationPreference = row[Users.notificationPreference],
+            tourProgress = row[Users.tourProgress]
         )
     }
 

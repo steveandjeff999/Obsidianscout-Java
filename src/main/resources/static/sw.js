@@ -157,13 +157,10 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 2. Static assets (JS, CSS, images, vendor libraries): Cache-First, fallback to Network
+    // 2. Static assets (JS, CSS, images, vendor libraries): Stale-While-Revalidate (fetch updated versions in background)
     event.respondWith(
         caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-            return fetch(event.request).then((networkResponse) => {
+            const fetchPromise = fetch(event.request).then((networkResponse) => {
                 if (networkResponse.status === 200) {
                     const responseClone = networkResponse.clone();
                     caches.open(CACHE_NAME).then((cache) => {
@@ -171,7 +168,17 @@ self.addEventListener('fetch', (event) => {
                     });
                 }
                 return networkResponse;
-            }).catch(() => {
+            });
+
+            if (cachedResponse) {
+                // Fetch in background to update cache for next time, catching errors silently
+                fetchPromise.catch((err) => {
+                    console.warn(`[ServiceWorker] Background update failed for ${event.request.url}:`, err);
+                });
+                return cachedResponse;
+            }
+
+            return fetchPromise.catch(() => {
                 return new Response('Offline resource not cached', { status: 503, statusText: 'Offline' });
             });
         })

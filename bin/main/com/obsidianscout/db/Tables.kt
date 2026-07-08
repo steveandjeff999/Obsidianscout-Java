@@ -12,6 +12,7 @@ object Users : IntIdTable("users") {
     val email = varchar("email", 255).nullable()
     val profilePicture = text("profile_picture").nullable()
     val notificationPreference = varchar("notification_preference", 16).default("all")
+    val tourProgress = text("tour_progress").nullable()
 
     init {
         uniqueIndex("ux_users_username_team", username, teamNumber)

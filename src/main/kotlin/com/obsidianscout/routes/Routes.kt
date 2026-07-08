@@ -18,8 +18,14 @@ import com.obsidianscout.config.AppConfigLoader
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.and
+
+
 import org.jetbrains.exposed.sql.lowerCase
 import java.time.Instant
 import com.obsidianscout.config.ConfigService
@@ -106,7 +112,8 @@ fun Application.configureRoutes() {
                         role = user.role,
                         email = user.email,
                         profilePicture = null,
-                        notificationPreference = user.notificationPreference
+                        notificationPreference = user.notificationPreference,
+                        tourProgress = user.tourProgress
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
@@ -118,7 +125,8 @@ fun Application.configureRoutes() {
                         role = user.role,
                         email = user.email,
                         profilePicture = user.profilePicture,
-                        notificationPreference = user.notificationPreference
+                        notificationPreference = user.notificationPreference,
+                        tourProgress = user.tourProgress
                     )
                     call.respond(LoginResponse(responseSession))
                 }
@@ -138,7 +146,8 @@ fun Application.configureRoutes() {
                         role = user.role,
                         email = user.email,
                         profilePicture = null,
-                        notificationPreference = user.notificationPreference
+                        notificationPreference = user.notificationPreference,
+                        tourProgress = user.tourProgress
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
@@ -150,7 +159,8 @@ fun Application.configureRoutes() {
                         role = user.role,
                         email = user.email,
                         profilePicture = user.profilePicture,
-                        notificationPreference = user.notificationPreference
+                        notificationPreference = user.notificationPreference,
+                        tourProgress = user.tourProgress
                     )
                     call.respond(LoginResponse(responseSession))
                 }
@@ -171,7 +181,8 @@ fun Application.configureRoutes() {
                         role = user.role,
                         email = user.email,
                         profilePicture = user.profilePicture,
-                        notificationPreference = user.notificationPreference
+                        notificationPreference = user.notificationPreference,
+                        tourProgress = user.tourProgress
                     )
                     call.respond(MeResponse(responseSession))
                 }
@@ -1238,6 +1249,53 @@ fun Application.configureRoutes() {
                     call.respond(mapOf("success" to true))
                 }
 
+                post("/wipe-team-data") {
+                    val session = call.requireAdmin()
+                    val req = call.receive<WipeTeamDataRequest>()
+                    
+                    val userRecord = transaction {
+                        com.obsidianscout.db.Users
+                            .selectAll().where { com.obsidianscout.db.Users.id eq session.userId }
+                            .limit(1)
+                            .firstOrNull()
+                    } ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "User not found")
+
+                    val hash = userRecord[com.obsidianscout.db.Users.passwordHash]
+                    val verified = at.favre.lib.crypto.bcrypt.BCrypt.verifyer().verify(req.password.toCharArray(), hash).verified
+                    if (!verified) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "Invalid password")
+                    }
+
+                    transaction {
+                        // Delete ALL scouting entries completely
+                        com.obsidianscout.db.ScoutingEntries.deleteWhere { com.obsidianscout.db.ScoutingEntries.id neq -1 }
+                        com.obsidianscout.db.PitScoutingEntries.deleteWhere { com.obsidianscout.db.PitScoutingEntries.id neq -1 }
+                        com.obsidianscout.db.QualitativeScoutingEntries.deleteWhere { com.obsidianscout.db.QualitativeScoutingEntries.id neq -1 }
+
+                        
+                        // Delete ALL cached global events, teams, matches, stats, and selection data
+                        com.obsidianscout.db.ApiEvents.deleteWhere { com.obsidianscout.db.ApiEvents.id neq -1 }
+                        com.obsidianscout.db.ApiTeams.deleteWhere { com.obsidianscout.db.ApiTeams.id neq -1 }
+                        com.obsidianscout.db.ApiMatches.deleteWhere { com.obsidianscout.db.ApiMatches.id neq -1 }
+                        com.obsidianscout.db.EpaOprHistoryCache.deleteWhere { com.obsidianscout.db.EpaOprHistoryCache.id neq -1 }
+                        com.obsidianscout.db.AllianceSelections.deleteWhere { com.obsidianscout.db.AllianceSelections.id neq -1 }
+
+
+                        // Clear the active event and setup wizard state in the settings for this team
+                        val settings = SettingsService.getSettings(session.teamNumber)
+                        val clearedSettings = settings.copy(
+                            eventCode = "",
+                            eventKey = "",
+                            setupWizardCompleted = false
+                        )
+                        SettingsService.updateSettings(session.teamNumber, clearedSettings)
+                    }
+                    
+                    call.respond(mapOf("success" to true))
+                }
+
+
+
 
                 post("/email-settings/test") {
                     call.requireSuperAdmin()
@@ -1358,10 +1416,41 @@ fun Application.configureRoutes() {
                 val updatedSession = session.copy(
                     profilePicture = null,
                     email = updated.email,
-                    notificationPreference = updated.notificationPreference
+                    notificationPreference = updated.notificationPreference,
+                    tourProgress = updated.tourProgress
                 )
                 call.sessions.set(updatedSession)
                 call.respond(updated)
+            }
+
+            get("/user/tour-progress") {
+                val session = call.requireSession()
+                val user = AuthService.getUserById(session.userId)
+                    ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "User not found")
+                val rawProgress = user.tourProgress ?: "{}"
+                call.respondText(rawProgress, ContentType.Application.Json)
+            }
+
+            post("/user/tour-progress") {
+                val session = call.requireSession()
+                val request = call.receive<String>()
+                val updated = AuthService.updateUser(
+                    callerSession = session,
+                    targetUserId = session.userId,
+                    newUsername = null,
+                    newPassword = null,
+                    newRole = null,
+                    newEmail = null,
+                    newProfilePicture = null,
+                    clearProfilePicture = false,
+                    newNotificationPreference = null,
+                    newTourProgress = request
+                )
+                val updatedSession = session.copy(
+                    tourProgress = updated.tourProgress
+                )
+                call.sessions.set(updatedSession)
+                call.respond(HttpStatusCode.OK, mapOf("message" to "Tour progress updated"))
             }
 
             delete("/user") {
@@ -1854,6 +1943,7 @@ fun Application.configureRoutes() {
             "docs" to "docs.html",
             "contact" to "contact.html",
             "migration" to "migration.html",
+            "theme-editor" to "theme-editor.html",
             "404" to "404.html",
             "500" to "500.html"
         )
@@ -1906,6 +1996,7 @@ internal suspend fun ApplicationCall.respondStaticHtml(fileName: String, status:
 }
 
 private fun ApiSettings.toPayload(): ApiSettingsPayload {
+    val activeTheme = themes.firstOrNull { it.name == activeThemeName } ?: themes.firstOrNull() ?: theme
     return ApiSettingsPayload(
         year = year,
         eventCode = eventCode,
@@ -1922,7 +2013,11 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         ),
         scoutPages = scoutPages,
         analyticsPages = analyticsPages,
-        adminPages = adminPages
+        adminPages = adminPages,
+        theme = activeTheme,
+        themes = themes,
+        activeThemeName = activeThemeName,
+        setupWizardCompleted = setupWizardCompleted
     )
 }
 
@@ -1942,7 +2037,11 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         ),
         scoutPages = if (scoutPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_SCOUT_PAGES else scoutPages,
         analyticsPages = if (analyticsPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_ANALYTICS_PAGES else analyticsPages,
-        adminPages = if (adminPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_ADMIN_PAGES else adminPages
+        adminPages = if (adminPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_ADMIN_PAGES else adminPages,
+        theme = theme,
+        themes = themes,
+        activeThemeName = activeThemeName,
+        setupWizardCompleted = setupWizardCompleted
     )
 }
 

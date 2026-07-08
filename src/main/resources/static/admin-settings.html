@@ -56,6 +56,28 @@
 
                 <h1 data-i18n="nav.admin-settings">Admin Settings</h1>
 
+                <!-- Team Theme Editor Card -->
+                <div class="card soft mb-24" style="background: var(--surface-2); padding: 20px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <h2 style="margin: 0; font-size: 18px;">Team Custom Theme</h2>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;">Customize button shapes, text and accent colors, and background presets for your team.</p>
+                        </div>
+                        <a href="/theme-editor" class="btn" style="display: inline-block; text-align: center; text-decoration: none; padding: 10px 20px; font-size: 14px;">Open Theme Customizer</a>
+                    </div>
+                </div>
+
+                <!-- Team Setup Wizard Card -->
+                <div class="card soft mb-24" style="background: var(--surface-2); padding: 20px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <h2 style="margin: 0; font-size: 18px;">Team Setup Wizard</h2>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;">Run the setup wizard to configure FRC event year, keys, forms, and view the tutorial.</p>
+                        </div>
+                        <button id="btn-run-setup-wizard" class="btn" type="button" style="padding: 10px 20px; font-size: 14px;">Run Setup Wizard</button>
+                    </div>
+                </div>
+
                 <div class="tab-row">
 
                     <button class="tab active" data-tab="config" id="tab-config" type="button" data-i18n="config.scouting_configs">Scouting configs</button>
@@ -65,7 +87,6 @@
                     <button class="tab hidden" data-tab="email" id="tab-email" type="button" data-i18n="config.email_settings">Email settings</button>
 
                     <button class="tab" data-tab="permissions" id="tab-permissions" type="button" data-i18n="settings.permissions">Permissions</button>
-
                 </div>
 
                 <div data-panel="config">
@@ -233,8 +254,6 @@
 
                                 <label><input id="settings-opr" type="checkbox" /> Use TBA OPR</label>
 
-                                <label><input id="settings-chat" type="checkbox" /> <span data-i18n="config.enable_team_chat">Enable Team Chat</span></label>
-
                             </div>
 
                         </div>
@@ -383,6 +402,18 @@
 
                     <p class="notice" data-i18n="config.configure_role_page_access">Configure which pages each user role (Scout and Analytics) can access and see in the sidebar.</p>
 
+                    <div class="card soft mt-20">
+
+                        <h3 data-i18n="settings.general_permissions">General Permissions</h3>
+
+                        <div class="grid gap-8">
+
+                            <label><input id="settings-chat" type="checkbox" /> <span data-i18n="config.enable_team_chat">Enable Team Chat</span></label>
+
+                        </div>
+
+                    </div>
+
                     <div class="split mt-20" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
 
                         <div class="card soft">
@@ -425,7 +456,26 @@
 
                 </div>
 
+                <!-- Danger Zone: Wipe Team Scouting Data -->
+                <div class="card soft mt-24" style="border: 1px solid var(--danger); background: rgba(223, 56, 44, 0.03); padding: 20px; border-radius: 12px;">
+                    <h2 style="color: var(--danger); display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px;">
+                        <span>⚠️</span> Danger Zone: Wipe Team Scouting Data
+                    </h2>
+                    <p class="notice mt-8" style="margin-bottom: 0;">
+                        This will permanently delete all of your team's match scouting entries, pit scouting entries, and qualitative scouting entries, as well as the cached event, team, and match data for your team's synced events. Your team settings, configurations, users, and alliances will be kept.
+                        <strong>This action is irreversible.</strong>
+                    </p>
+                    <div class="field mt-16" style="max-width: 400px;">
+                        <label for="wipe-password-confirm">Confirm with your Admin Password</label>
+                        <input type="password" id="wipe-password-confirm" class="input-wide" placeholder="Enter password to confirm" style="width: 100%;" />
+                    </div>
+                    <div class="mt-20">
+                        <button id="btn-wipe-team-data" class="btn danger" type="button" style="padding: 10px 20px; font-size: 14px;">Wipe Team Scouting Data</button>
+                    </div>
+                </div>
+
             </div>
+
 
         </main>
 
