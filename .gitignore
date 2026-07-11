@@ -5,3 +5,4 @@ out/
 *.iml
 *.log
 data/
+.cockroach/cockroach.exe

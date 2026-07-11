@@ -25,10 +25,11 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.deleteWhere
 import java.time.Instant
+import java.util.UUID
 
 @Serializable
 data class ScoutingEntryRecord(
-    val id: Int,
+    val id: String,
     val ownerTeamNumber: Int,
     val targetTeamNumber: Int?,
     val eventKey: String?,
@@ -73,7 +74,7 @@ object ScoutingService {
                 val conflictStr = row[ScoutingEntries.conflictingTeams]
                 val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
                 ScoutingEntryRecord(
-                    id = row[ScoutingEntries.id].value,
+                    id = row[ScoutingEntries.id].value.toString(),
                     ownerTeamNumber = row[ScoutingEntries.ownerTeamNumber],
                     targetTeamNumber = row[ScoutingEntries.targetTeamNumber],
                     eventKey = row[ScoutingEntries.eventKey],
@@ -114,7 +115,7 @@ object ScoutingService {
                 val conflictStr = row[ScoutingEntries.conflictingTeams]
                 val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
                 ScoutingEntryRecord(
-                    id = row[ScoutingEntries.id].value,
+                    id = row[ScoutingEntries.id].value.toString(),
                     ownerTeamNumber = row[ScoutingEntries.ownerTeamNumber],
                     targetTeamNumber = row[ScoutingEntries.targetTeamNumber],
                     eventKey = row[ScoutingEntries.eventKey],
@@ -241,7 +242,7 @@ object ScoutingService {
             val conflictStr = duplicate[ScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
             return ScoutingEntryRecord(
-                id = duplicate[ScoutingEntries.id].value,
+                id = duplicate[ScoutingEntries.id].value.toString(),
                 ownerTeamNumber = duplicate[ScoutingEntries.ownerTeamNumber],
                 targetTeamNumber = duplicate[ScoutingEntries.targetTeamNumber],
                 eventKey = duplicate[ScoutingEntries.eventKey],
@@ -258,6 +259,7 @@ object ScoutingService {
 
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
         val now = Instant.now()
+        val callerUuid = UUID.fromString(session.userId)
 
         val id = transaction {
             ScoutingEntries.insertAndGetId {
@@ -267,7 +269,7 @@ object ScoutingService {
                 it[matchKey] = meta.matchKey
                 it[matchNumber] = meta.matchNumber
                 it[ScoutingEntries.dataJson] = dataJson
-                it[submittedByUserId] = EntityID(session.userId, com.obsidianscout.db.Users)
+                it[submittedByUserId] = EntityID(callerUuid, com.obsidianscout.db.Users)
                 it[createdAt] = now
                 it[ScoutingEntries.isPrescout] = isPrescout
             }
@@ -290,7 +292,7 @@ object ScoutingService {
             val conflictStr = updatedRow[ScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
             ScoutingEntryRecord(
-                id = id.value,
+                id = id.value.toString(),
                 ownerTeamNumber = session.teamNumber,
                 targetTeamNumber = meta.targetTeamNumber,
                 eventKey = meta.eventKey,
@@ -327,10 +329,14 @@ object ScoutingService {
 
     fun updateEntry(
         session: UserSession,
-        entryId: Int,
+        entryId: String,
         request: ScoutingEntryRequest,
         config: ScoutingConfig
     ): ScoutingEntryRecord {
+        val entryUuid = runCatching { UUID.fromString(entryId) }.getOrElse {
+            throw ApiException(HttpStatusCode.BadRequest, "Invalid entry ID format")
+        }
+
         val missing = config.fields.filter { it.required && !request.data.containsKey(it.id) }
         if (missing.isNotEmpty()) {
             val missingList = missing.joinToString(", ") { it.id }
@@ -344,7 +350,7 @@ object ScoutingService {
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
 
         return transaction {
-            val row = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryId }.firstOrNull()
+            val row = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryUuid }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Scouting entry not found")
 
             val ownerTeam = row[ScoutingEntries.ownerTeamNumber]
@@ -367,7 +373,7 @@ object ScoutingService {
             val oldTargetTeamNumber = row[ScoutingEntries.targetTeamNumber]
             val oldIsPrescout = row[ScoutingEntries.isPrescout]
 
-            ScoutingEntries.update({ ScoutingEntries.id eq entryId }) {
+            ScoutingEntries.update({ ScoutingEntries.id eq entryUuid }) {
                 it[targetTeamNumber] = meta.targetTeamNumber
                 it[eventKey] = meta.eventKey
                 it[matchKey] = meta.matchKey
@@ -379,7 +385,7 @@ object ScoutingService {
             recalculateDiscrepancies(oldEventKey, oldMatchKey, oldTargetTeamNumber, oldIsPrescout)
             recalculateDiscrepancies(meta.eventKey, meta.matchKey, meta.targetTeamNumber, oldIsPrescout)
 
-            val updatedRow = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryId }.first()
+            val updatedRow = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryUuid }.first()
             val data = JsonSupport.json.parseToJsonElement(updatedRow[ScoutingEntries.dataJson]).jsonObject
             val mKey = updatedRow[ScoutingEntries.matchKey]
             val matchPlayedTime = mKey?.let { mk ->
@@ -391,7 +397,7 @@ object ScoutingService {
             val conflictStr = updatedRow[ScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
             ScoutingEntryRecord(
-                id = updatedRow[ScoutingEntries.id].value,
+                id = updatedRow[ScoutingEntries.id].value.toString(),
                 ownerTeamNumber = updatedRow[ScoutingEntries.ownerTeamNumber],
                 targetTeamNumber = updatedRow[ScoutingEntries.targetTeamNumber],
                 eventKey = updatedRow[ScoutingEntries.eventKey],
@@ -407,9 +413,12 @@ object ScoutingService {
         }
     }
 
-    fun deleteEntry(session: UserSession, entryId: Int) {
+    fun deleteEntry(session: UserSession, entryId: String) {
+        val entryUuid = runCatching { UUID.fromString(entryId) }.getOrElse {
+            throw ApiException(HttpStatusCode.BadRequest, "Invalid entry ID format")
+        }
         transaction {
-            val row = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryId }.firstOrNull()
+            val row = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryUuid }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Scouting entry not found")
 
             val ownerTeam = row[ScoutingEntries.ownerTeamNumber]
@@ -432,7 +441,7 @@ object ScoutingService {
             val targetTeamNumber = row[ScoutingEntries.targetTeamNumber]
             val isPrescout = row[ScoutingEntries.isPrescout]
 
-            ScoutingEntries.deleteWhere { ScoutingEntries.id eq entryId }
+            ScoutingEntries.deleteWhere { ScoutingEntries.id eq entryUuid }
 
             // Recalculate discrepancies
             recalculateDiscrepancies(eventKey, matchKey, targetTeamNumber, isPrescout)

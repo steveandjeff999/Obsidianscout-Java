@@ -1,9 +1,9 @@
 package com.obsidianscout.db
 
-import org.jetbrains.exposed.dao.id.IntIdTable
+import org.jetbrains.exposed.dao.id.UUIDTable
 import org.jetbrains.exposed.sql.javatime.timestamp
 
-object Users : IntIdTable("users") {
+object Users : UUIDTable("users") {
     val username = varchar("username", 64)
     val teamNumber = integer("team_number")
     val passwordHash = varchar("password_hash", 255)
@@ -19,7 +19,7 @@ object Users : IntIdTable("users") {
     }
 }
 
-object ScoutingConfigs : IntIdTable("scouting_configs") {
+object ScoutingConfigs : UUIDTable("scouting_configs") {
     val teamNumber = integer("team_number").default(0)
     val configJson = text("config_json")
     val updatedAt = timestamp("updated_at")
@@ -29,7 +29,7 @@ object ScoutingConfigs : IntIdTable("scouting_configs") {
     }
 }
 
-object PitScoutingConfigs : IntIdTable("pit_scouting_configs") {
+object PitScoutingConfigs : UUIDTable("pit_scouting_configs") {
     val teamNumber = integer("team_number").default(0)
     val configJson = text("config_json")
     val updatedAt = timestamp("updated_at")
@@ -39,7 +39,7 @@ object PitScoutingConfigs : IntIdTable("pit_scouting_configs") {
     }
 }
 
-object QualitativeScoutingConfigs : IntIdTable("qualitative_scouting_configs") {
+object QualitativeScoutingConfigs : UUIDTable("qualitative_scouting_configs") {
     val teamNumber = integer("team_number").default(0)
     val configJson = text("config_json")
     val updatedAt = timestamp("updated_at")
@@ -49,7 +49,7 @@ object QualitativeScoutingConfigs : IntIdTable("qualitative_scouting_configs") {
     }
 }
 
-object ScoutingEntries : IntIdTable("scouting_entries") {
+object ScoutingEntries : UUIDTable("scouting_entries") {
     val ownerTeamNumber = integer("owner_team_number")
     val targetTeamNumber = integer("target_team_number").nullable()
     val eventKey = varchar("event_key", 64).nullable()
@@ -63,7 +63,7 @@ object ScoutingEntries : IntIdTable("scouting_entries") {
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
 }
 
-object PitScoutingEntries : IntIdTable("pit_scouting_entries") {
+object PitScoutingEntries : UUIDTable("pit_scouting_entries") {
     val ownerTeamNumber = integer("owner_team_number")
     val targetTeamNumber = integer("target_team_number").nullable()
     val eventKey = varchar("event_key", 64).nullable()
@@ -75,7 +75,7 @@ object PitScoutingEntries : IntIdTable("pit_scouting_entries") {
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
 }
 
-object QualitativeScoutingEntries : IntIdTable("qualitative_scouting_entries") {
+object QualitativeScoutingEntries : UUIDTable("qualitative_scouting_entries") {
     val ownerTeamNumber = integer("owner_team_number")
     val targetTeamNumber = integer("target_team_number").nullable()
     val eventKey = varchar("event_key", 64).nullable()
@@ -89,7 +89,7 @@ object QualitativeScoutingEntries : IntIdTable("qualitative_scouting_entries") {
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
 }
 
-object AppSettings : IntIdTable("app_settings") {
+object AppSettings : UUIDTable("app_settings") {
     val teamNumber = integer("team_number").default(0)
     val settingsJson = text("settings_json")
     val updatedAt = timestamp("updated_at")
@@ -99,7 +99,7 @@ object AppSettings : IntIdTable("app_settings") {
     }
 }
 
-object ApiEvents : IntIdTable("api_events") {
+object ApiEvents : UUIDTable("api_events") {
     val eventKey = varchar("event_key", 64)
     val year = integer("year")
     val eventCode = varchar("event_code", 32).nullable()
@@ -115,7 +115,7 @@ object ApiEvents : IntIdTable("api_events") {
     }
 }
 
-object ApiTeams : IntIdTable("api_teams") {
+object ApiTeams : UUIDTable("api_teams") {
     val eventKey = varchar("event_key", 64)
     val teamKey = varchar("team_key", 32)
     val teamNumber = integer("team_number")
@@ -134,7 +134,7 @@ object ApiTeams : IntIdTable("api_teams") {
     }
 }
 
-object ApiMatches : IntIdTable("api_matches") {
+object ApiMatches : UUIDTable("api_matches") {
     val matchKey = varchar("match_key", 64)
     val eventKey = varchar("event_key", 64)
     val compLevel = varchar("comp_level", 16)
@@ -152,7 +152,7 @@ object ApiMatches : IntIdTable("api_matches") {
     }
 }
 
-object ScoutingAlliances : IntIdTable("scouting_alliances") {
+object ScoutingAlliances : UUIDTable("scouting_alliances") {
     val name = varchar("name", 128)
     val ownerTeamNumber = integer("owner_team_number")
     val eventKey = varchar("event_key", 64).nullable()
@@ -166,7 +166,7 @@ object ScoutingAlliances : IntIdTable("scouting_alliances") {
     val eventCode = varchar("event_code", 32).nullable()
 }
 
-object AllianceMemberships : IntIdTable("alliance_memberships") {
+object AllianceMemberships : UUIDTable("alliance_memberships") {
     val allianceId = reference("alliance_id", ScoutingAlliances)
     val teamNumber = integer("team_number")
     /** ADMIN | INVITED | ACCEPTED | DECLINED */
@@ -182,7 +182,7 @@ object AllianceMemberships : IntIdTable("alliance_memberships") {
     }
 }
 
-object EpaOprHistoryCache : IntIdTable("epa_opr_history_cache") {
+object EpaOprHistoryCache : UUIDTable("epa_opr_history_cache") {
     val eventKey = varchar("event_key", 64)
     val oprsJson = text("oprs_json")
     val epaHistoryJson = text("epa_history_json")
@@ -193,7 +193,7 @@ object EpaOprHistoryCache : IntIdTable("epa_opr_history_cache") {
     }
 }
 
-object PasswordResetTokens : IntIdTable("password_reset_tokens") {
+object PasswordResetTokens : UUIDTable("password_reset_tokens") {
     val userId = reference("user_id", Users).nullable()
     val email = varchar("email", 255).nullable()
     val token = varchar("token", 128)
@@ -205,7 +205,7 @@ object PasswordResetTokens : IntIdTable("password_reset_tokens") {
     }
 }
 
-object AllianceSelections : IntIdTable("alliance_selections") {
+object AllianceSelections : UUIDTable("alliance_selections") {
     val ownerKey = varchar("owner_key", 64)
     val eventKey = varchar("event_key", 64)
     val selectionJson = text("selection_json")
@@ -216,7 +216,7 @@ object AllianceSelections : IntIdTable("alliance_selections") {
     }
 }
 
-object Banners : IntIdTable("banners") {
+object Banners : UUIDTable("banners") {
     val teamNumber = integer("team_number").default(0)
     val message = text("message")
     val bannerType = varchar("banner_type", 32).default("info")
@@ -228,7 +228,7 @@ object Banners : IntIdTable("banners") {
     val updatedAt = timestamp("updated_at")
 }
 
-object ChatMessages : IntIdTable("chat_messages") {
+object ChatMessages : UUIDTable("chat_messages") {
     val teamNumber = integer("team_number")
     val groupName = varchar("group_name", 64)
     val userId = reference("user_id", Users)
@@ -242,7 +242,7 @@ object ChatMessages : IntIdTable("chat_messages") {
     }
 }
 
-object UserChatLastRead : IntIdTable("user_chat_last_read") {
+object UserChatLastRead : UUIDTable("user_chat_last_read") {
     val userId = reference("user_id", Users)
     val groupName = varchar("group_name", 64)
     val lastReadAt = timestamp("last_read_at")
@@ -252,7 +252,7 @@ object UserChatLastRead : IntIdTable("user_chat_last_read") {
     }
 }
 
-object PushSubscriptions : IntIdTable("push_subscriptions") {
+object PushSubscriptions : UUIDTable("push_subscriptions") {
     val userId = reference("user_id", Users)
     val endpoint = text("endpoint")
     val p256dh = varchar("p256dh", 255)

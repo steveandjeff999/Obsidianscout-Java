@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Contact</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <style>
+        .contact-card {
+            max-width: 600px;
+            margin: 24px auto 0 auto;
+        }
+        .form-grid {
+            display: grid;
+            gap: 20px;
+        }
+        .spinner-inline {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Make disabled input look read-only and premium */
+        input:disabled, select:disabled, textarea:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            background: rgba(255, 255, 255, 0.03);
+        }
+    </style>
+</head>
+<body data-page="contact">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <!-- Sidebar will be replaced by Ktor with base.html -->
+        </aside>
+
+        <main class="main-content">
+            <div class="card">
+                <h1 data-i18n="contact.title">Contact Us</h1>
+                <p class="notice" data-i18n="contact.notice">Submit a bug report, feature request, or general feedback.</p>
+            </div>
+
+            <div class="card contact-card">
+                <form id="contact-form" class="form-grid">
+                    <div class="field">
+                        <label for="contact-name" data-i18n="contact.label.name">Your Name</label>
+                        <input id="contact-name" type="text" required />
+                    </div>
+
+                    <div class="field">
+                        <label for="contact-email" data-i18n="contact.label.email">Reply-To Email Address</label>
+                        <input id="contact-email" type="email" required />
+                    </div>
+
+                    <div class="field">
+                        <label for="contact-team" data-i18n="contact.label.team">Team Number</label>
+                        <input id="contact-team" type="text" readonly disabled />
+                    </div>
+
+                    <div class="field">
+                        <label for="contact-type" data-i18n="contact.label.type">Submission Type</label>
+                        <select id="contact-type" required>
+                            <option value="BUG_REPORT" data-i18n="contact.type.bug_report">Bug Report</option>
+                            <option value="FEATURE_REQUEST" data-i18n="contact.type.feature_request">Feature Request</option>
+                            <option value="OTHER" data-i18n="contact.type.other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="contact-message" data-i18n="contact.label.message">Message</label>
+                        <textarea id="contact-message" rows="8" required data-i18n-placeholder="contact.placeholder.message" placeholder="Please describe your bug, feature request, or feedback here..."></textarea>
+                    </div>
+
+                    <button id="contact-submit-btn" class="btn primary" type="submit" style="display: flex; justify-content: center; align-items: center; gap: 8px;">
+                        <span id="btn-text" data-i18n="contact.btn.send">Send Message</span>
+                        <div class="spinner-inline" id="submit-spinner"></div>
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/contact.js"></script>
+</body>
+</html>

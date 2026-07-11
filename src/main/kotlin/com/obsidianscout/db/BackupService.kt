@@ -14,6 +14,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import com.obsidianscout.utils.CSVHelper
+import java.util.UUID
 
 @Serializable
 data class UserBackupDto(
@@ -86,7 +87,7 @@ data class QualitativeScoutingEntryBackupDto(
 
 @Serializable
 data class ScoutingAllianceBackupDto(
-    val id: Int,
+    val id: String,
     val name: String,
     val ownerTeamNumber: Int,
     val eventKey: String?,
@@ -102,7 +103,7 @@ data class ScoutingAllianceBackupDto(
 
 @Serializable
 data class AllianceMembershipBackupDto(
-    val allianceId: Int,
+    val allianceId: String,
     val teamNumber: Int,
     val status: String,
     val invitedAt: Long,
@@ -433,7 +434,7 @@ object BackupService {
             val alliances = if (scope == "global" || type == "entire") {
                 alliancesQuery.map { row ->
                     ScoutingAllianceBackupDto(
-                        id = row[ScoutingAlliances.id].value,
+                        id = row[ScoutingAlliances.id].value.toString(),
                         name = row[ScoutingAlliances.name],
                         ownerTeamNumber = row[ScoutingAlliances.ownerTeamNumber],
                         eventKey = row[ScoutingAlliances.eventKey],
@@ -453,7 +454,7 @@ object BackupService {
             val allianceMemberships = if (scope == "global") {
                 AllianceMemberships.selectAll().map { row ->
                     AllianceMembershipBackupDto(
-                        allianceId = row[AllianceMemberships.allianceId].value,
+                        allianceId = row[AllianceMemberships.allianceId].value.toString(),
                         teamNumber = row[AllianceMemberships.teamNumber],
                         status = row[AllianceMemberships.status],
                         invitedAt = row[AllianceMemberships.invitedAt].toEpochMilli(),
@@ -463,9 +464,9 @@ object BackupService {
                     )
                 }
             } else if (type == "entire" && allianceIds.isNotEmpty()) {
-                AllianceMemberships.selectAll().where { AllianceMemberships.allianceId inList allianceIds }.map { row ->
+                AllianceMemberships.selectAll().where { AllianceMemberships.allianceId inList allianceIds.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() } }.map { row ->
                     AllianceMembershipBackupDto(
-                        allianceId = row[AllianceMemberships.allianceId].value,
+                        allianceId = row[AllianceMemberships.allianceId].value.toString(),
                         teamNumber = row[AllianceMemberships.teamNumber],
                         status = row[AllianceMemberships.status],
                         invitedAt = row[AllianceMemberships.invitedAt].toEpochMilli(),
@@ -656,7 +657,7 @@ object BackupService {
         }
     }
 
-    fun importBackup(targetTeamNumber: Int, backup: ObsidianDbBackup, currentUserId: Int, isSuperAdmin: Boolean = false): ImportReport {
+    fun importBackup(targetTeamNumber: Int, backup: ObsidianDbBackup, currentUserId: String, isSuperAdmin: Boolean = false): ImportReport {
         return transaction {
             val isGlobalImport = isSuperAdmin && backup.scope == "global"
 
@@ -703,7 +704,7 @@ object BackupService {
             }
 
             // 1. Users mapping: (username, teamNumber) -> target UserId
-            val userMap = mutableMapOf<Pair<String, Int>, Int>()
+            val userMap = mutableMapOf<Pair<String, Int>, UUID>()
             
             // Query current users in target scope to populate map
             val usersQuery = if (isGlobalImport) Users.selectAll() else Users.selectAll().where { Users.teamNumber eq targetTeamNumber }
@@ -816,9 +817,9 @@ object BackupService {
             }
 
             // Helpers to resolve UserId
-            fun getUserId(username: String, originalTeam: Int): Int {
+            fun getUserId(username: String, originalTeam: Int): UUID {
                 val assignedTeam = getTargetTeam(originalTeam)
-                return userMap[Pair(username, assignedTeam)] ?: currentUserId
+                return userMap[Pair(username, assignedTeam)] ?: runCatching { UUID.fromString(currentUserId) }.getOrElse { UUID.randomUUID() }
             }
 
             // 3. Scouting Entries import
@@ -916,7 +917,7 @@ object BackupService {
 
             // 4. Alliances and Alliance memberships
             if (backup.scope == "global" || backup.type == "entire") {
-                val allianceIdMap = mutableMapOf<Int, Int>()
+                val allianceIdMap = mutableMapOf<String, UUID>()
 
                 for (a in backup.alliances) {
                     val assignedTeam = getTargetTeam(a.ownerTeamNumber)
@@ -1489,7 +1490,7 @@ object BackupService {
         return bos.toByteArray()
     }
 
-    fun importCsv(targetTeamNumber: Int, zipBytes: ByteArray, currentUserId: Int, isSuperAdmin: Boolean = false): ImportReport {
+    fun importCsv(targetTeamNumber: Int, zipBytes: ByteArray, currentUserId: String, isSuperAdmin: Boolean = false): ImportReport {
         val files = readZip(zipBytes)
         
         // Parse CSV entries into objects
@@ -1593,7 +1594,7 @@ object BackupService {
         val alliances = files["alliances.csv"]?.let { content ->
             CSVHelper.parseCSV(content).map { r ->
                 ScoutingAllianceBackupDto(
-                    id = r["id"]!!.toInt(),
+                    id = r["id"]!!,
                     name = r["name"]!!,
                     ownerTeamNumber = r["owner_team_number"]!!.toInt(),
                     eventKey = r["event_key"]?.takeIf { it.isNotBlank() },
@@ -1612,7 +1613,7 @@ object BackupService {
         val allianceMemberships = files["alliance_memberships.csv"]?.let { content ->
             CSVHelper.parseCSV(content).map { r ->
                 AllianceMembershipBackupDto(
-                    allianceId = r["alliance_id"]!!.toInt(),
+                    allianceId = r["alliance_id"]!!, // UUID string
                     teamNumber = r["team_number"]!!.toInt(),
                     status = r["status"]!!,
                     invitedAt = r["invited_at"]!!.toLong(),

@@ -1,0 +1,158 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link class="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ObsidianScout | Settings</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+
+    <link rel="manifest" href="/manifest.json" />
+</head>
+
+<body data-page="settings">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="orb orb-2"></div>
+
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+
+        <aside class="sidebar">
+            <!-- Sidebar will be replaced by Ktor with base.html -->
+        </aside>
+
+        <main class="main-content">
+
+            <div id="personal-panel" class="card">
+
+                <h1 data-i18n="config.personal_settings">Personal Settings</h1>
+
+                <!-- Profile picture -->
+                <div class="form-grid" style="margin-bottom: 20px;">
+                    <div class="field">
+                        <label data-i18n="config.profile_picture">Profile Picture</label>
+                        <div class="profile-pic-wrapper">
+                            <div class="profile-pic-preview">
+                                <div id="personal-avatar-placeholder" class="profile-pic-initials" style="display:none" title="Click to upload"></div>
+                                <img id="personal-avatar-img" class="profile-pic-img" src="" alt="Avatar" style="display:none" title="Click to upload" />
+                                <input type="file" id="personal-avatar-input" accept="image/*" style="display:none" aria-label="Upload profile picture" />
+                            </div>
+                            <div class="profile-pic-actions">
+                                <label for="personal-avatar-input" class="profile-pic-label" data-i18n="config.upload_photo">📷 Upload photo</label>
+                                <button type="button" id="personal-avatar-remove" class="profile-pic-remove" data-i18n="config.remove">Remove</button>
+                                <p class="profile-pic-hint" data-i18n="config.auto_resized_to_9696_px">Auto-resized to 96×96 px</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+
+                    <div class="field">
+
+                        <label for="personal-team-display" data-i18n="config.team_number_display_format">Team number display format</label>
+
+                        <select id="personal-team-display">
+
+                            <option value="merged" data-i18n="config.keynumber_eg_254b9999">Key/Number (e.g. 254b/9999)</option>
+
+                            <option value="number" data-i18n="config.number_only_eg_9999">Number only (e.g. 9999)</option>
+
+                            <option value="key" data-i18n="config.key_only_eg_254b">Key only (e.g. 254b)</option>
+
+                        </select>
+
+                    </div>
+
+                    <div class="field">
+
+                        <label for="personal-notification-pref" data-i18n="config.notification_preference">Notification Preference</label>
+
+                        <select id="personal-notification-pref">
+
+                            <option value="all" data-i18n="config.notify_all">All messages</option>
+
+                            <option value="mentions" data-i18n="config.notify_mentions">Mentions only</option>
+
+                            <option value="none" data-i18n="config.notify_none">None</option>
+
+                        </select>
+
+                    </div>
+
+                    <div class="field">
+
+                        <label for="personal-haptic-pref" data-i18n="config.haptic_feedback">Haptic Feedback</label>
+
+                        <select id="personal-haptic-pref">
+
+                            <option value="enabled" data-i18n="config.haptic_enabled">Enabled</option>
+
+                            <option value="disabled" data-i18n="config.haptic_disabled">Disabled</option>
+
+                        </select>
+
+                    </div>
+
+                </div>
+
+                <div class="form-grid" style="margin-top: 20px;">
+
+                    <div class="field">
+
+                        <label for="personal-email" data-i18n="config.email_address">Email Address</label>
+
+                        <input id="personal-email" type="email" data-i18n-placeholder="config.placeholder_scoutexamplecom" placeholder="scout@example.com" />
+
+                        <p class="notice mt-6" data-i18n="config.used_for_password_recovery_if_">Used for password recovery if you forget your credentials.</p>
+
+                    </div>
+
+                </div>
+
+                <div class="row gap-12 wrap mt-18">
+
+                    <button id="personal-save-email" class="btn" type="button" data-i18n="config.save_email">Save email</button>
+
+                </div>
+
+                <div class="card soft danger-zone mt-24" style="border: 1px solid rgba(220, 53, 69, 0.2); background: rgba(220, 53, 69, 0.02); padding: 18px; border-radius: 12px; margin-top: 24px;">
+                    <h3 style="color: #dc3545; margin-top: 0;" data-i18n="config.danger_zone">Danger Zone</h3>
+                    <p class="notice" style="margin-bottom: 16px;" data-i18n="config.once_you_delete_your_account_t">Once you delete your account, there is no going back. Please be certain.</p>
+                    <button id="personal-delete-account" class="btn delete-btn" type="button" style="background: #dc3545; color: #fff; border: none; padding: 10px 20px; font-weight: 600; border-radius: 8px; cursor: pointer;" data-i18n="config.delete_account">Delete Account</button>
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
+
+    <script defer src="/js/common.js"></script>
+
+    <script defer src="/js/settings.js"></script>
+
+</body>
+
+</html>

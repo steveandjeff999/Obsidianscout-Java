@@ -10,6 +10,7 @@ import java.sql.DriverManager
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.util.UUID
 import kotlin.concurrent.thread
 
 import kotlinx.serialization.Serializable
@@ -234,7 +235,7 @@ object MigrationService {
 
         // 1. Migrate Users
         updateStatus(msg = "Migrating users...", prog = 10)
-        val oldToNewUserId = mutableMapOf<Int, Int>()
+        val oldToNewUserId = mutableMapOf<Int, UUID>()
         connect("users.db").use { conn ->
             val stmt = conn.createStatement()
             val query = """
@@ -490,7 +491,17 @@ object MigrationService {
             Users.selectAll().where { Users.role eq UserRole.SUPERADMIN.name }
                 .limit(1)
                 .map { it[Users.id].value }
-                .firstOrNull() ?: 1
+                .firstOrNull() ?: Users.insertAndGetId {
+                    it[username] = "migration-fallback"
+                    it[teamNumber] = 0
+                    it[passwordHash] = ""
+                    it[role] = UserRole.SUPERADMIN.name
+                    it[createdAt] = Instant.now()
+                    it[email] = null
+                    it[profilePicture] = null
+                    it[notificationPreference] = "none"
+                    it[tourProgress] = null
+                }.value
         }
 
         // 5. Migrate Scouting Entries
@@ -558,7 +569,7 @@ object MigrationService {
 
         // 6. Migrate Scouting Alliances & Memberships
         updateStatus(msg = "Migrating alliances...", prog = 95)
-        val oldToNewAllianceId = mutableMapOf<Int, Int>()
+        val oldToNewAllianceId = mutableMapOf<Int, UUID>()
 
         connect("scouting.db").use { conn ->
             // Query event code and year for alliances from link table scouting_alliance_event

@@ -12,6 +12,7 @@ import kotlinx.serialization.encodeToString
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 object AllianceCollaborationManager {
@@ -29,11 +30,11 @@ object AllianceCollaborationManager {
 
     private val rooms = ConcurrentHashMap<String, ConcurrentHashMap<DefaultWebSocketServerSession, EditorInfo>>()
 
-    private fun getRoomKey(allianceId: Int, kind: String): String = "$allianceId:$kind"
+    private fun getRoomKey(allianceId: UUID, kind: String): String = "$allianceId:$kind"
 
     suspend fun handleConnection(
         session: DefaultWebSocketServerSession,
-        allianceId: Int,
+        allianceId: UUID,
         kind: String,
         userSession: UserSession
     ) {
@@ -124,7 +125,7 @@ object AllianceCollaborationManager {
         }
     }
 
-    private suspend fun broadcastPresence(allianceId: Int, kind: String) {
+    private suspend fun broadcastPresence(allianceId: UUID, kind: String) {
         val roomKey = getRoomKey(allianceId, kind)
         val room = rooms[roomKey] ?: return
         val editors = room.values.toList()

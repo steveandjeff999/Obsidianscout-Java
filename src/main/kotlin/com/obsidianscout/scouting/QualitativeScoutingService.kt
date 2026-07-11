@@ -26,10 +26,11 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.deleteWhere
 import java.time.Instant
+import java.util.UUID
 
 @Serializable
 data class QualitativeScoutingEntryRecord(
-    val id: Int,
+    val id: String,
     val ownerTeamNumber: Int,
     val targetTeamNumber: Int?,
     val eventKey: String?,
@@ -69,7 +70,7 @@ object QualitativeScoutingService {
                 val conflictStr = row[QualitativeScoutingEntries.conflictingTeams]
                 val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
                 QualitativeScoutingEntryRecord(
-                    id = row[QualitativeScoutingEntries.id].value,
+                    id = row[QualitativeScoutingEntries.id].value.toString(),
                     ownerTeamNumber = row[QualitativeScoutingEntries.ownerTeamNumber],
                     targetTeamNumber = row[QualitativeScoutingEntries.targetTeamNumber],
                     eventKey = row[QualitativeScoutingEntries.eventKey],
@@ -110,7 +111,7 @@ object QualitativeScoutingService {
                 val conflictStr = row[QualitativeScoutingEntries.conflictingTeams]
                 val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
                 QualitativeScoutingEntryRecord(
-                    id = row[QualitativeScoutingEntries.id].value,
+                    id = row[QualitativeScoutingEntries.id].value.toString(),
                     ownerTeamNumber = row[QualitativeScoutingEntries.ownerTeamNumber],
                     targetTeamNumber = row[QualitativeScoutingEntries.targetTeamNumber],
                     eventKey = row[QualitativeScoutingEntries.eventKey],
@@ -237,7 +238,7 @@ object QualitativeScoutingService {
             val conflictStr = duplicate[QualitativeScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
             return QualitativeScoutingEntryRecord(
-                id = duplicate[QualitativeScoutingEntries.id].value,
+                id = duplicate[QualitativeScoutingEntries.id].value.toString(),
                 ownerTeamNumber = duplicate[QualitativeScoutingEntries.ownerTeamNumber],
                 targetTeamNumber = duplicate[QualitativeScoutingEntries.targetTeamNumber],
                 eventKey = duplicate[QualitativeScoutingEntries.eventKey],
@@ -263,7 +264,7 @@ object QualitativeScoutingService {
                 it[matchKey] = meta.matchKey
                 it[matchNumber] = meta.matchNumber
                 it[QualitativeScoutingEntries.dataJson] = dataJson
-                it[submittedByUserId] = EntityID(session.userId, Users)
+                it[submittedByUserId] = EntityID(UUID.fromString(session.userId), Users)
                 it[createdAt] = now
                 it[QualitativeScoutingEntries.isPrescout] = isPrescout
             }
@@ -285,7 +286,7 @@ object QualitativeScoutingService {
             val conflictStr = updatedRow[QualitativeScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
             QualitativeScoutingEntryRecord(
-                id = id.value,
+                id = id.value.toString(),
                 ownerTeamNumber = session.teamNumber,
                 targetTeamNumber = meta.targetTeamNumber,
                 eventKey = meta.eventKey,
@@ -322,10 +323,13 @@ object QualitativeScoutingService {
 
     fun updateEntry(
         session: UserSession,
-        entryId: Int,
+        entryId: String,
         request: ScoutingEntryRequest,
         config: ScoutingConfig
     ): QualitativeScoutingEntryRecord {
+        val entryUuid = runCatching { UUID.fromString(entryId) }.getOrElse {
+            throw ApiException(HttpStatusCode.BadRequest, "Invalid entry ID format")
+        }
         val missing = config.fields.filter { it.required && !request.data.containsKey(it.id) }
         if (missing.isNotEmpty()) {
             val missingList = missing.joinToString(", ") { it.id }
@@ -339,7 +343,7 @@ object QualitativeScoutingService {
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
 
         return transaction {
-            val row = QualitativeScoutingEntries.selectAll().where { QualitativeScoutingEntries.id eq entryId }.firstOrNull()
+            val row = QualitativeScoutingEntries.selectAll().where { QualitativeScoutingEntries.id eq entryUuid }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Qualitative scouting entry not found")
 
             val ownerTeam = row[QualitativeScoutingEntries.ownerTeamNumber]
@@ -362,7 +366,7 @@ object QualitativeScoutingService {
             val oldTargetTeamNumber = row[QualitativeScoutingEntries.targetTeamNumber]
             val oldIsPrescout = row[QualitativeScoutingEntries.isPrescout]
 
-            QualitativeScoutingEntries.update({ QualitativeScoutingEntries.id eq entryId }) {
+            QualitativeScoutingEntries.update({ QualitativeScoutingEntries.id eq entryUuid }) {
                 it[targetTeamNumber] = meta.targetTeamNumber
                 it[eventKey] = meta.eventKey
                 it[matchKey] = meta.matchKey
@@ -373,7 +377,7 @@ object QualitativeScoutingService {
             recalculateDiscrepancies(oldEventKey, oldMatchKey, oldTargetTeamNumber, oldIsPrescout)
             recalculateDiscrepancies(meta.eventKey, meta.matchKey, meta.targetTeamNumber, oldIsPrescout)
 
-            val updatedRow = QualitativeScoutingEntries.selectAll().where { QualitativeScoutingEntries.id eq entryId }.first()
+            val updatedRow = QualitativeScoutingEntries.selectAll().where { QualitativeScoutingEntries.id eq entryUuid }.first()
             val data = JsonSupport.json.parseToJsonElement(updatedRow[QualitativeScoutingEntries.dataJson]).jsonObject
             val mKey = updatedRow[QualitativeScoutingEntries.matchKey]
             val matchPlayedTime = mKey?.let { mk ->
@@ -385,7 +389,7 @@ object QualitativeScoutingService {
             val conflictStr = updatedRow[QualitativeScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
             QualitativeScoutingEntryRecord(
-                id = updatedRow[QualitativeScoutingEntries.id].value,
+                id = updatedRow[QualitativeScoutingEntries.id].value.toString(),
                 ownerTeamNumber = updatedRow[QualitativeScoutingEntries.ownerTeamNumber],
                 targetTeamNumber = updatedRow[QualitativeScoutingEntries.targetTeamNumber],
                 eventKey = updatedRow[QualitativeScoutingEntries.eventKey],
@@ -401,9 +405,12 @@ object QualitativeScoutingService {
         }
     }
 
-    fun deleteEntry(session: UserSession, entryId: Int) {
+    fun deleteEntry(session: UserSession, entryId: String) {
+        val entryUuid = runCatching { UUID.fromString(entryId) }.getOrElse {
+            throw ApiException(HttpStatusCode.BadRequest, "Invalid entry ID format")
+        }
         transaction {
-            val row = QualitativeScoutingEntries.selectAll().where { QualitativeScoutingEntries.id eq entryId }.firstOrNull()
+            val row = QualitativeScoutingEntries.selectAll().where { QualitativeScoutingEntries.id eq entryUuid }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Qualitative scouting entry not found")
 
             val ownerTeam = row[QualitativeScoutingEntries.ownerTeamNumber]
@@ -426,7 +433,7 @@ object QualitativeScoutingService {
             val targetTeamNumber = row[QualitativeScoutingEntries.targetTeamNumber]
             val isPrescout = row[QualitativeScoutingEntries.isPrescout]
 
-            QualitativeScoutingEntries.deleteWhere { QualitativeScoutingEntries.id eq entryId }
+            QualitativeScoutingEntries.deleteWhere { QualitativeScoutingEntries.id eq entryUuid }
 
             recalculateDiscrepancies(eventKey, matchKey, targetTeamNumber, isPrescout)
         }

@@ -16,10 +16,11 @@ import io.ktor.util.AttributeKey
 import com.obsidianscout.db.Users
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.util.UUID
 
 @Serializable
 data class UserSession(
-    val userId: Int,
+    val userId: String,
     val username: String,
     val teamNumber: Int,
     val role: UserRole,
@@ -35,7 +36,8 @@ suspend fun ApplicationCall.requireSession(): UserSession {
     val session = sessions.get<UserSession>()
         ?: throw ApiException(HttpStatusCode.Unauthorized, "Not signed in")
     val exists = transaction {
-        Users.selectAll().where { Users.id eq session.userId }.any()
+        val uuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
+        if (uuid == null) false else Users.selectAll().where { Users.id eq uuid }.any()
     }
     if (!exists) {
         sessions.clear<UserSession>()

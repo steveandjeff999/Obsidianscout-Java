@@ -13,6 +13,7 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import java.time.Instant
+import java.util.UUID
 
 object BannerService {
 
@@ -31,8 +32,9 @@ object BannerService {
         }.map { it.toDto() }
     }
 
-    fun getById(id: Int): BannerDto? = transaction {
-        Banners.selectAll().where { Banners.id eq id }.firstOrNull()?.toDto()
+    fun getById(id: String): BannerDto? = transaction {
+        val uuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction null
+        Banners.selectAll().where { Banners.id eq uuid }.firstOrNull()?.toDto()
     }
 
     fun create(dto: BannerCreateRequest): BannerDto = transaction {
@@ -50,8 +52,9 @@ object BannerService {
         Banners.selectAll().where { Banners.id eq id.value }.first().toDto()
     }
 
-    fun update(id: Int, dto: BannerUpdateRequest): BannerDto? = transaction {
-        val count = Banners.update({ Banners.id eq id }) {
+    fun update(id: String, dto: BannerUpdateRequest): BannerDto? = transaction {
+        val uuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction null
+        val count = Banners.update({ Banners.id eq uuid }) {
             dto.teamNumber?.let { v -> it[teamNumber] = v }
             dto.message?.let { v -> it[message] = v }
             dto.bannerType?.let { v -> it[bannerType] = v }
@@ -62,18 +65,19 @@ object BannerService {
             it[updatedAt] = Instant.now()
         }
         if (count > 0) {
-            Banners.selectAll().where { Banners.id eq id }.firstOrNull()?.toDto()
+            Banners.selectAll().where { Banners.id eq uuid }.firstOrNull()?.toDto()
         } else {
             null
         }
     }
 
-    fun delete(id: Int): Boolean = transaction {
-        Banners.deleteWhere { Banners.id eq id } > 0
+    fun delete(id: String): Boolean = transaction {
+        val uuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction false
+        Banners.deleteWhere { Banners.id eq uuid } > 0
     }
 
     private fun ResultRow.toDto(): BannerDto = BannerDto(
-        id = this[Banners.id].value,
+        id = this[Banners.id].value.toString(),
         teamNumber = this[Banners.teamNumber],
         message = this[Banners.message],
         bannerType = this[Banners.bannerType],

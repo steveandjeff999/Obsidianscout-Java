@@ -110,7 +110,7 @@ object JwtHelper {
         return try {
             val verifier = JWT.require(getAlgorithm(secret)).build()
             val jwt = verifier.verify(token)
-            val userId = jwt.getClaim("userId").asInt() ?: return null
+            val userId = jwt.getClaim("userId").asString() ?: return null
             val username = jwt.getClaim("username").asString() ?: return null
             val teamNumber = jwt.getClaim("teamNumber").asInt() ?: return null
             val roleStr = jwt.getClaim("role").asString() ?: return null
@@ -139,7 +139,7 @@ suspend fun ApplicationCall.requireMobileSession(secret: String): UserSession {
     val session = JwtHelper.verifyToken(token, secret)
         ?: throw MobileApiException(HttpStatusCode.Unauthorized, "Invalid or expired token", "INVALID_TOKEN")
     val exists = transaction {
-        Users.selectAll().where { Users.id eq session.userId }.any()
+        Users.selectAll().where { Users.id eq UUID.fromString(session.userId) }.any()
     }
     if (!exists) {
         throw MobileApiException(HttpStatusCode.Unauthorized, "Account has been deleted", "AUTH_REQUIRED")
@@ -176,7 +176,7 @@ data class MobileLoginRequest(
 
 @Serializable
 data class MobileUser(
-    val id: Int,
+    val id: String,
     val username: String,
     @SerialName("team_number") val teamNumber: Int,
     val roles: List<String>,
@@ -200,7 +200,7 @@ data class MobileProfileMe(
 
 @Serializable
 data class MobileUserWithUrl(
-    val id: Int,
+    val id: String,
     val username: String,
     @SerialName("team_number") val teamNumber: Int,
     @SerialName("profile_picture") val profilePicture: String,
@@ -225,7 +225,7 @@ data class MobileVerifyResponse(
 
 @Serializable
 data class MobileEvent(
-    val id: Int,
+    val id: String,
     val name: String,
     val code: String,
     val location: String,
@@ -244,7 +244,7 @@ data class MobileEventsResponse(
 
 @Serializable
 data class MobileTeam(
-    val id: Int,
+    val id: String,
     @SerialName("team_number") val teamNumber: Int,
     @SerialName("team_name") val teamName: String,
     val location: String
@@ -261,7 +261,7 @@ data class MobileTeamsResponse(
 
 @Serializable
 data class MobileEventShort(
-    val id: Int,
+    val id: String,
     val name: String,
     val code: String
 )
@@ -274,7 +274,7 @@ data class MobileTeamResponse(
 
 @Serializable
 data class MobileMatch(
-    val id: Int,
+    val id: String,
     @SerialName("match_number") val matchNumber: Int,
     @SerialName("match_type") val matchType: String,
     @SerialName("red_alliance") val redAlliance: String,
@@ -297,8 +297,8 @@ data class MobileMatchesResponse(
 
 @Serializable
 data class MobileScoutingSubmitRequest(
-    @SerialName("team_id") val teamId: Int? = null,
-    @SerialName("match_id") val matchId: Int? = null,
+    @SerialName("team_id") val teamId: String? = null,
+    @SerialName("match_id") val matchId: String? = null,
     val data: JsonObject? = null,
     @SerialName("offline_id") val offlineId: String? = null,
     val qualitative: Boolean = false,
@@ -309,8 +309,8 @@ data class MobileScoutingSubmitRequest(
 @Serializable
 data class MobileScoutingSubmitResponse(
     val success: Boolean = true,
-    @SerialName("scouting_id") val scoutingId: Int? = null,
-    @SerialName("qualitative_id") val qualitativeId: Int? = null,
+    @SerialName("scouting_id") val scoutingId: String? = null,
+    @SerialName("qualitative_id") val qualitativeId: String? = null,
     val message: String,
     @SerialName("offline_id") val offlineId: String? = null
 )
@@ -322,8 +322,8 @@ data class MobileBulkSubmitRequest(
 
 @Serializable
 data class MobileBulkEntry(
-    @SerialName("team_id") val teamId: Int,
-    @SerialName("match_id") val matchId: Int,
+    @SerialName("team_id") val teamId: String,
+    @SerialName("match_id") val matchId: String,
     val data: JsonObject,
     @SerialName("offline_id") val offlineId: String? = null,
     val timestamp: String? = null
@@ -333,7 +333,7 @@ data class MobileBulkEntry(
 data class MobileBulkResult(
     @SerialName("offline_id") val offlineId: String?,
     val success: Boolean,
-    @SerialName("scouting_id") val scoutingId: Int? = null,
+    @SerialName("scouting_id") val scoutingId: String? = null,
     val error: String? = null
 )
 
@@ -347,9 +347,9 @@ data class MobileBulkSubmitResponse(
 
 @Serializable
 data class MobileScoutingHistoryEntry(
-    val id: Int,
-    @SerialName("team_id") val teamId: Int,
-    @SerialName("match_id") val matchId: Int,
+    val id: String,
+    @SerialName("team_id") val teamId: String,
+    @SerialName("match_id") val matchId: String,
     val timestamp: String,
     val data: JsonObject
 )
@@ -363,10 +363,10 @@ data class MobileScoutingHistoryResponse(
 
 @Serializable
 data class MobilePitSubmitRequest(
-    @SerialName("team_id") val teamId: Int,
+    @SerialName("team_id") val teamId: String,
     val data: JsonObject,
     val images: List<String> = emptyList(),
-    @SerialName("event_id") val eventId: Int? = null,
+    @SerialName("event_id") val eventId: String? = null,
     @SerialName("event_code") val eventCode: String? = null,
     @SerialName("local_id") val localId: String? = null,
     @SerialName("device_id") val deviceId: String? = null
@@ -375,7 +375,7 @@ data class MobilePitSubmitRequest(
 @Serializable
 data class MobilePitSubmitResponse(
     val success: Boolean = true,
-    @SerialName("pit_scouting_id") val pitScoutingId: Int,
+    @SerialName("pit_scouting_id") val pitScoutingId: String,
     val message: String
 )
 
@@ -399,7 +399,7 @@ data class MobileCurrentDataModeResponse(
     val success: Boolean = true,
     @SerialName("epa_source") val epaSource: String,
     @SerialName("data_mode") val dataMode: String,
-    @SerialName("event_id") val eventDbId: Int,
+    @SerialName("event_id") val eventDbId: String,
     @SerialName("team_count") val teamCount: Int,
     @SerialName("requested_team_numbers") val requestedTeamNumbers: List<Int>,
     @SerialName("includes_scouted_data") val includesScoutedData: Boolean,
@@ -417,7 +417,7 @@ data class MobileDataModeTeam(
 
 @Serializable
 data class MobileDataModeMatchPoint(
-    @SerialName("match_id") val matchId: Int,
+    @SerialName("match_id") val matchId: String,
     @SerialName("match_number") val matchNumber: Int,
     @SerialName("scouted_auto_points") val scoutedAutoPoints: Double,
     @SerialName("scouted_teleop_points") val scoutedTeleopPoints: Double,
@@ -439,7 +439,7 @@ data class MobileEpaOprHistoryRequest(
 @Serializable
 data class MobileEpaOprHistoryResponse(
     val success: Boolean = true,
-    @SerialName("event_id") val eventDbId: Int,
+    @SerialName("event_id") val eventDbId: String,
     @SerialName("event_code") val eventCode: String,
     @SerialName("tba_event_key") val tbaEventKey: String,
     @SerialName("team_count") val teamCount: Int,
@@ -496,7 +496,7 @@ data class MobileSaveConfigResponse(
 
 @Serializable
 data class MobileAllianceDetail(
-    val id: Int,
+    val id: String,
     val name: String,
     val description: String?,
     @SerialName("member_count") val memberCount: Int,
@@ -507,17 +507,17 @@ data class MobileAllianceDetail(
 
 @Serializable
 data class MobilePendingInvite(
-    val id: Int,
-    @SerialName("alliance_id") val allianceId: Int,
+    val id: String,
+    @SerialName("alliance_id") val allianceId: String,
     @SerialName("alliance_name") val allianceName: String,
     @SerialName("from_team") val fromTeam: Int
 )
 
 @Serializable
 data class MobileSentInvite(
-    val id: Int,
+    val id: String,
     @SerialName("to_team") val toTeam: Int,
-    @SerialName("alliance_id") val allianceId: Int,
+    @SerialName("alliance_id") val allianceId: String,
     @SerialName("alliance_name") val allianceName: String
 )
 
@@ -527,7 +527,7 @@ data class MobileAlliancesResponse(
     @SerialName("my_alliances") val myAlliances: List<MobileAllianceDetail>,
     @SerialName("pending_invitations") val pendingInvitations: List<MobilePendingInvite>,
     @SerialName("sent_invitations") val sentInvitations: List<MobileSentInvite>,
-    @SerialName("active_alliance_id") val activeAllianceId: Int?
+    @SerialName("active_alliance_id") val activeAllianceId: String?
 )
 
 @Serializable
@@ -539,7 +539,7 @@ data class MobileCreateAllianceRequest(
 @Serializable
 data class MobileCreateAllianceResponse(
     val success: Boolean = true,
-    @SerialName("alliance_id") val allianceId: Int
+    @SerialName("alliance_id") val allianceId: String
 )
 
 @Serializable
@@ -609,9 +609,9 @@ data class ChatMessage(
     val recipient: String? = null, // username for DM, "alliance" or null for alliance/group
     val text: String,
     val timestamp: String, // ISO 8601
-    @SerialName("sender_id") val sender_id: Int? = null,
-    @SerialName("recipient_id") val recipient_id: Int? = null,
-    @SerialName("conversation_id") val conversation_id: Int? = null,
+    @SerialName("sender_id") val sender_id: String? = null,
+    @SerialName("recipient_id") val recipient_id: String? = null,
+    @SerialName("conversation_id") val conversation_id: String? = null,
     @SerialName("offline_id") val offline_id: String? = null,
     val read: Boolean = false,
     val edited: Boolean = false,
@@ -630,7 +630,7 @@ data class MobileChatMessagesResponse(
 
 @Serializable
 data class MobileChatMember(
-    val id: Int,
+    val id: String,
     val username: String,
     @SerialName("display_name") val displayName: String,
     @SerialName("team_number") val teamNumber: Int
@@ -644,7 +644,7 @@ data class MobileChatMembersResponse(
 
 @Serializable
 data class MobileChatSendRequest(
-    @SerialName("recipient_id") val recipientId: Int? = null,
+    @SerialName("recipient_id") val recipientId: String? = null,
     @SerialName("conversation_type") val conversationType: String? = null,
     val group: String? = null,
     val body: String,
@@ -659,7 +659,7 @@ data class MobileChatSendResponse(
 
 @Serializable
 data class MobileConversation(
-    val id: Int,
+    val id: String,
     val type: String, // "direct", "alliance", "group"
     val title: String,
     @SerialName("last_message") val lastMessage: String?,
@@ -800,7 +800,7 @@ data class MobileAdminRolesResponse(
 
 @Serializable
 data class MobileAdminUser(
-    val id: Int,
+    val id: String,
     val username: String,
     val email: String?,
     @SerialName("team_number") val teamNumber: Int,
@@ -1005,7 +1005,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val user = if (req.username.isNullOrBlank()) {
                     val candidateUsers = transaction {
                         AuthService.listUsers(
-                            callerSession = UserSession(0, "system", req.teamNumber, UserRole.SUPERADMIN),
+                            callerSession = UserSession("", "system", req.teamNumber, UserRole.SUPERADMIN),
                             teamFilter = req.teamNumber
                         )
                     }
@@ -1181,12 +1181,12 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         counts to dbIds
                     }
                 } else {
-                    emptyMap<String, Int>() to emptyMap<String, Int>()
+                    emptyMap<String, Int>() to emptyMap<String, java.util.UUID>()
                 }
 
                 val mapped = events.map { ev ->
                     val teamCount = teamCountsMap[ev.eventKey] ?: 0
-                    val dbId = eventDbIdsMap[ev.eventKey] ?: 0
+                    val dbId = eventDbIdsMap[ev.eventKey]?.toString() ?: ""
                     MobileEvent(
                         id = dbId,
                         name = ev.name,
@@ -1226,7 +1226,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
 
                 val mapped = paged.map { t ->
-                    val dbId = teamIdMap[t.teamNumber] ?: t.teamNumber
+                    val dbId = teamIdMap[t.teamNumber]?.toString() ?: t.teamNumber.toString()
                     mapTeamRecord(t, dbId)
                 }
 
@@ -1246,7 +1246,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val eventRow = transaction {
                     ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.firstOrNull()
                 }
-                val eventDbId = eventRow?.get(ApiEvents.id)?.value ?: 0
+                val eventDbId = eventRow?.get(ApiEvents.id)?.value?.toString() ?: ""
                 val eventName = eventRow?.get(ApiEvents.name) ?: "Configured Event"
                 val eventCode = eventRow?.get(ApiEvents.eventCode) ?: eventKey.removePrefix(session.teamNumber.toString())
 
@@ -1262,7 +1262,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
 
                 val mapped = paged.map { t ->
-                    val dbId = teamIdMap[t.teamNumber] ?: t.teamNumber
+                    val dbId = teamIdMap[t.teamNumber]?.toString() ?: t.teamNumber.toString()
                     mapTeamRecord(t, dbId)
                 }
 
@@ -1278,11 +1278,11 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             get("/teams/{id}") {
                 call.requireMobileSession(secret)
-                val id = call.parameters["id"]?.toIntOrNull()
+                val id = call.parameters["id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing team id", "MISSING_DATA")
 
                 val teamRow = transaction {
-                    ApiTeams.selectAll().where { ApiTeams.id eq id }.firstOrNull()
+                    ApiTeams.selectAll().where { ApiTeams.id eq UUID.fromString(id) }.firstOrNull()
                 } ?: throw MobileApiException(HttpStatusCode.NotFound, "Team not found", "TEAM_NOT_FOUND")
 
                 val nickname = teamRow[ApiTeams.nickname] ?: teamRow[ApiTeams.name] ?: "Team ${teamRow[ApiTeams.teamNumber]}"
@@ -1337,7 +1337,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 val mapped = matches.map { m ->
                     val row = matchDbMap[m.matchKey]
-                    val dbId = row?.get(ApiMatches.id)?.value ?: 0
+                    val dbId = row?.get(ApiMatches.id)?.value?.toString() ?: ""
                     val dataJsonStr = row?.get(ApiMatches.dataJson) ?: "{}"
                     val (redScore, blueScore, winner) = parseMatchScores(dataJsonStr)
                     MobileMatch(
@@ -1381,7 +1381,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val eventRow = transaction {
                     ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.firstOrNull()
                 }
-                val eventDbId = eventRow?.get(ApiEvents.id)?.value ?: 0
+                val eventDbId = eventRow?.get(ApiEvents.id)?.value?.toString() ?: ""
                 val eventName = eventRow?.get(ApiEvents.name) ?: "Configured Event"
                 val eventCode = eventRow?.get(ApiEvents.eventCode) ?: eventKey.removePrefix(session.teamNumber.toString())
 
@@ -1399,7 +1399,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 val mapped = matches.map { m ->
                     val row = matchDbMap[m.matchKey]
-                    val dbId = row?.get(ApiMatches.id)?.value ?: 0
+                    val dbId = row?.get(ApiMatches.id)?.value?.toString() ?: ""
                     val dataJsonStr = row?.get(ApiMatches.dataJson) ?: "{}"
                     val (redScore, blueScore, winner) = parseMatchScores(dataJsonStr)
                     MobileMatch(
@@ -1436,7 +1436,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing required field: match_id", "MISSING_FIELD")
                     
                     val matchRow = transaction {
-                        ApiMatches.selectAll().where { ApiMatches.id eq matchId }.firstOrNull()
+                        ApiMatches.selectAll().where { ApiMatches.id eq UUID.fromString(matchId) }.firstOrNull()
                     } ?: throw MobileApiException(HttpStatusCode.NotFound, "Match not found", "MATCH_NOT_FOUND")
 
                     val eventKey = matchRow[ApiMatches.eventKey]
@@ -1448,7 +1448,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                     val config = ConfigService.getQualitativeConfig(session.teamNumber)
 
-                    var lastId = 0
+                    var lastId = ""
                     transaction {
                         teamData.keys.forEach allianceLoop@{ allianceKey ->
                             val teamsObj = teamData[allianceKey]?.jsonObject ?: return@allianceLoop
@@ -1495,11 +1495,11 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing required field: data", "MISSING_FIELD")
 
                     val teamRow = transaction {
-                        ApiTeams.selectAll().where { ApiTeams.id eq teamId }.firstOrNull()
+                        ApiTeams.selectAll().where { ApiTeams.id eq UUID.fromString(teamId) }.firstOrNull()
                     } ?: throw MobileApiException(HttpStatusCode.NotFound, "Team not found", "TEAM_NOT_FOUND")
 
                     val matchRow = transaction {
-                        ApiMatches.selectAll().where { ApiMatches.id eq matchId }.firstOrNull()
+                        ApiMatches.selectAll().where { ApiMatches.id eq UUID.fromString(matchId) }.firstOrNull()
                     } ?: throw MobileApiException(HttpStatusCode.NotFound, "Match not found", "MATCH_NOT_FOUND")
 
                     val targetTeamNumber = teamRow[ApiTeams.teamNumber]
@@ -1552,17 +1552,17 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 val config = ConfigService.getConfig(session.teamNumber)
 
-                val teamIds = req.entries.map { it.teamId }.distinct()
-                val matchIds = req.entries.map { it.matchId }.distinct()
+                val teamUuids = req.entries.map { it.teamId }.distinct().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+                val matchUuids = req.entries.map { it.matchId }.distinct().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
 
                 val (teamRowsMap, matchRowsMap) = transaction {
-                    val teams = if (teamIds.isNotEmpty()) {
-                        ApiTeams.selectAll().where { ApiTeams.id inList teamIds }
+                    val teams = if (teamUuids.isNotEmpty()) {
+                        ApiTeams.selectAll().where { ApiTeams.id inList teamUuids }
                             .associateBy { it[ApiTeams.id].value }
                     } else emptyMap()
 
-                    val matches = if (matchIds.isNotEmpty()) {
-                        ApiMatches.selectAll().where { ApiMatches.id inList matchIds }
+                    val matches = if (matchUuids.isNotEmpty()) {
+                        ApiMatches.selectAll().where { ApiMatches.id inList matchUuids }
                             .associateBy { it[ApiMatches.id].value }
                     } else emptyMap()
 
@@ -1571,8 +1571,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 req.entries.forEach { entry ->
                     try {
-                        val teamRow = teamRowsMap[entry.teamId]
-                        val matchRow = matchRowsMap[entry.matchId]
+                        val teamRow = teamRowsMap[runCatching { UUID.fromString(entry.teamId) }.getOrNull()]
+                        val matchRow = matchRowsMap[runCatching { UUID.fromString(entry.matchId) }.getOrNull()]
 
                         if (teamRow == null || matchRow == null) {
                             failedCount++
@@ -1657,14 +1657,14 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 val mapped = myEntries.map { entry ->
                     val targetTeamId = if (entry.eventKey != null && entry.targetTeamNumber != null) {
-                        teamIdMap[entry.eventKey to entry.targetTeamNumber] ?: 0
+                        teamIdMap[entry.eventKey to entry.targetTeamNumber]?.toString() ?: ""
                     } else {
-                        0
+                        ""
                     }
                     val matchId = if (entry.matchKey != null) {
-                        matchIdMap[entry.matchKey] ?: 0
+                        matchIdMap[entry.matchKey]?.toString() ?: ""
                     } else {
-                        0
+                        ""
                     }
                     MobileScoutingHistoryEntry(
                         id = entry.id,
@@ -1699,7 +1699,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
 
                 val teamRow = transaction {
-                    ApiTeams.selectAll().where { ApiTeams.id eq req.teamId }.firstOrNull()
+                    ApiTeams.selectAll().where { ApiTeams.id eq UUID.fromString(req.teamId) }.firstOrNull()
                 } ?: throw MobileApiException(HttpStatusCode.NotFound, "Team not found", "TEAM_NOT_FOUND")
 
                 val targetTeamNumber = teamRow[ApiTeams.teamNumber]
@@ -1793,7 +1793,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val eventRow = transaction {
                     ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.firstOrNull()
                 }
-                val eventDbId = eventRow?.get(ApiEvents.id)?.value ?: 0
+                val eventDbId = eventRow?.get(ApiEvents.id)?.value?.toString() ?: ""
 
                 val teamsList = IntegrationService.listTeams(eventKey, session)
                 val matchesList = IntegrationService.listMatches(eventKey)
@@ -1821,7 +1821,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 val matchesInEvent = matchesList.map { row ->
                     val matchKey = row.matchKey
-                    val matchId = matchIdMap[matchKey] ?: 0
+                    val matchId = matchIdMap[matchKey]?.toString() ?: ""
                     val matchNumber = row.matchNumber ?: 0
                     val redTeams = row.redTeams
                     val blueTeams = row.blueTeams
@@ -1903,7 +1903,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.firstOrNull()
                 } ?: throw MobileApiException(HttpStatusCode.NotFound, "Event not found", "EVENT_NOT_FOUND")
 
-                val eventDbId = eventRow[ApiEvents.id].value
+                val eventDbId = eventRow[ApiEvents.id].value.toString()
                 val eventCode = eventRow[ApiEvents.eventCode] ?: eventKey.removePrefix(session.teamNumber.toString())
                 val tbaEventKey = eventKey
 
@@ -2098,7 +2098,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val details = allianceList.map { item ->
                     val memberCount = transaction {
                         AllianceMemberships.selectAll().where { 
-                            (AllianceMemberships.allianceId eq item.id) and 
+                            (AllianceMemberships.allianceId eq UUID.fromString(item.id)) and 
                             (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED")) 
                         }.count().toInt()
                     }
@@ -2115,10 +2115,10 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val mappedPending = transaction {
                     invitesList.map { item ->
                         val membershipId = AllianceMemberships.selectAll().where {
-                            (AllianceMemberships.allianceId eq item.id) and
+                            (AllianceMemberships.allianceId eq UUID.fromString(item.id)) and
                             (AllianceMemberships.teamNumber eq session.teamNumber) and
                             (AllianceMemberships.status eq "INVITED")
-                        }.firstOrNull()?.get(AllianceMemberships.id)?.value ?: item.id
+                        }.firstOrNull()?.get(AllianceMemberships.id)?.value?.toString() ?: item.id
                         
                         MobilePendingInvite(
                             id = membershipId,
@@ -2129,7 +2129,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     }
                 }
 
-                val activeAllianceId = AllianceService.getActiveAllianceId(session.teamNumber)
+                val activeAllianceId = AllianceService.getActiveAllianceId(session.teamNumber)?.toString()
 
                 call.respond(
                     MobileAlliancesResponse(
@@ -2154,7 +2154,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             post("/alliances/{alliance_id}/invite") {
                 val session = call.requireMobileAdmin(secret)
-                val allianceId = call.parameters["alliance_id"]?.toIntOrNull()
+                val allianceId = call.parameters["alliance_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing alliance_id", "MISSING_DATA")
                 val req = call.receive<MobileInviteRequest>()
 
@@ -2164,7 +2164,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             post("/invitations/{invitation_id}/respond") {
                 val session = call.requireMobileSession(secret)
-                val invitationId = call.parameters["invitation_id"]?.toIntOrNull()
+                val invitationId = call.parameters["invitation_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing invitation_id", "MISSING_DATA")
                 val req = call.receive<MobileRespondInviteRequest>()
 
@@ -2175,7 +2175,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             post("/alliances/{alliance_id}/toggle") {
                 call.requireMobileAdmin(secret)
-                call.parameters["alliance_id"]?.toIntOrNull()
+                val allianceId = call.parameters["alliance_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing alliance_id", "MISSING_DATA")
                 val req = call.receive<MobileToggleAllianceRequest>()
 
@@ -2189,11 +2189,11 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             post("/alliances/{alliance_id}/leave") {
                 val session = call.requireMobileSession(secret)
-                val allianceId = call.parameters["alliance_id"]?.toIntOrNull()
+                val allianceId = call.parameters["alliance_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing alliance_id", "MISSING_DATA")
                 
                 transaction {
-                    AllianceMemberships.deleteWhere { (AllianceMemberships.allianceId eq allianceId) and (AllianceMemberships.teamNumber eq session.teamNumber) }
+                    AllianceMemberships.deleteWhere { (AllianceMemberships.allianceId eq UUID.fromString(allianceId)) and (AllianceMemberships.teamNumber eq session.teamNumber) }
                 }
 
                 call.respond(MobileLeaveAllianceResponse(message = "Successfully left alliance", allianceDeleted = false))
@@ -2203,7 +2203,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             get("/chat/messages") {
                 val session = call.requireMobileSession(secret)
                 val type = call.request.queryParameters["type"] ?: "dm"
-                val otherUserId = call.request.queryParameters["user"]?.toIntOrNull()
+                val otherUserId = call.request.queryParameters["user"]
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
                 val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
 
@@ -2213,7 +2213,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val messages = if (type == "dm") {
                     if (otherUserId != null) {
                         val otherUser = transaction {
-                            AuthService.listUsers(UserSession(0, "system", teamNumber, UserRole.SUPERADMIN), teamFilter = teamNumber)
+                            AuthService.listUsers(UserSession("", "system", teamNumber, UserRole.SUPERADMIN), teamFilter = teamNumber)
                                 .find { it.id == otherUserId }
                         } ?: throw MobileApiException(HttpStatusCode.NotFound, "User not found", "USER_NOT_FOUND")
 
@@ -2242,7 +2242,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             get("/chat/members") {
                 val session = call.requireMobileSession(secret)
                 val users = transaction {
-                    AuthService.listUsers(UserSession(0, "system", session.teamNumber, UserRole.SUPERADMIN), teamFilter = session.teamNumber)
+                    AuthService.listUsers(UserSession("", "system", session.teamNumber, UserRole.SUPERADMIN), teamFilter = session.teamNumber)
                 }.filter { it.username != session.username }
 
                 val mapped = users.map { u ->
@@ -2270,7 +2270,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 if (req.recipientId != null) {
                     val otherUser = transaction {
-                        AuthService.listUsers(UserSession(0, "system", teamNumber, UserRole.SUPERADMIN), teamFilter = teamNumber)
+                        AuthService.listUsers(UserSession("", "system", teamNumber, UserRole.SUPERADMIN), teamFilter = teamNumber)
                             .find { it.id == req.recipientId }
                     } ?: throw MobileApiException(HttpStatusCode.NotFound, "Recipient not found", "USER_NOT_IN_SCOPE")
 
@@ -2328,7 +2328,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                             val last = messages.last()
                             val otherUserStr = file.name.removeSuffix("_chat_history.json").split("_").find { it != session.username } ?: ""
                             val otherUser = transaction {
-                                AuthService.listUsers(UserSession(0, "system", teamNumber, UserRole.SUPERADMIN), teamFilter = teamNumber)
+                                AuthService.listUsers(UserSession("", "system", teamNumber, UserRole.SUPERADMIN), teamFilter = teamNumber)
                                     .find { it.username == otherUserStr }
                             }
                             if (otherUser != null) {
@@ -2377,7 +2377,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     }
                     conversations.add(
                         MobileConversation(
-                            id = activeAllianceId,
+                            id = activeAllianceId.toString(),
                             type = "alliance",
                             title = "Alliance Chat",
                             lastMessage = last?.text,
@@ -2402,7 +2402,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         val last = messages.lastOrNull()
                         conversations.add(
                             MobileConversation(
-                                id = groupName.hashCode(),
+                                id = groupName,
                                 type = "group",
                                 title = groupName,
                                 lastMessage = last?.text,
@@ -2419,19 +2419,19 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             get("/chat/conversations/{conversation_id}/messages") {
                 val session = call.requireMobileSession(secret)
-                val conversationId = call.parameters["conversation_id"]?.toIntOrNull()
+                val conversationId = call.parameters["conversation_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing conversation_id", "MISSING_DATA")
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
 
                 val teamNumber = session.teamNumber
                 val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
 
-                val messages = if (activeAllianceId != null && activeAllianceId == conversationId) {
+                val messages = if (activeAllianceId != null && activeAllianceId.toString() == conversationId) {
                     val file = File("instance/chat/groups/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
                     loadMessages(file)
                 } else {
                     val otherUser = transaction {
-                        AuthService.listUsers(UserSession(0, "system", teamNumber, UserRole.SUPERADMIN), teamFilter = teamNumber)
+                        AuthService.listUsers(UserSession("", "system", teamNumber, UserRole.SUPERADMIN), teamFilter = teamNumber)
                             .find { it.id == conversationId }
                     }
                     if (otherUser != null) {
@@ -2533,7 +2533,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val groupName = req.group.trim().replace("/", "_")
                 
                 val teamUsers = transaction {
-                    AuthService.listUsers(UserSession(0, "system", teamNumber, UserRole.SUPERADMIN), teamFilter = teamNumber)
+                    AuthService.listUsers(UserSession("", "system", teamNumber, UserRole.SUPERADMIN), teamFilter = teamNumber)
                 }.map { it.username }.toSet()
 
                 val validMembers = req.members.filter { teamUsers.contains(it) }
@@ -2583,7 +2583,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
 
                 val teamUsers = transaction {
-                    AuthService.listUsers(UserSession(0, "system", session.teamNumber, UserRole.SUPERADMIN), teamFilter = session.teamNumber)
+                    AuthService.listUsers(UserSession("", "system", session.teamNumber, UserRole.SUPERADMIN), teamFilter = session.teamNumber)
                 }.map { it.username }.toSet()
 
                 val validAdd = req.members.filter { teamUsers.contains(it) }
@@ -2731,7 +2731,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             get("/admin/users/{user_id}") {
                 val session = call.requireMobileAdmin(secret)
-                val userId = call.parameters["user_id"]?.toIntOrNull()
+                val userId = call.parameters["user_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing user_id", "MISSING_DATA")
 
                 val target = transaction {
@@ -2747,7 +2747,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             put("/admin/users/{user_id}") {
                 val session = call.requireMobileAdmin(secret)
-                val userId = call.parameters["user_id"]?.toIntOrNull()
+                val userId = call.parameters["user_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing user_id", "MISSING_DATA")
 
                 val req = call.receive<MobileAdminUpdateUserRequest>()
@@ -2785,7 +2785,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             delete("/admin/users/{user_id}") {
                 val session = call.requireMobileAdmin(secret)
-                val userId = call.parameters["user_id"]?.toIntOrNull()
+                val userId = call.parameters["user_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing user_id", "MISSING_DATA")
 
                 try {
@@ -2870,15 +2870,9 @@ fun resolveEventKey(eventId: String?, teamNumber: Int): String {
     }
     val trimmed = eventId.trim().lowercase()
     
-    val numericId = trimmed.toIntOrNull()
-    if (numericId != null) {
-        val dbKey = transaction {
-            ApiEvents.selectAll().where { ApiEvents.id eq numericId }
-                .firstOrNull()?.get(ApiEvents.eventKey)
-        }
-        if (dbKey != null) return dbKey
-    }
-    
+    // Note: ApiEvents now uses UUID primary keys; numeric ID lookups are no longer supported.
+    // If the trimmed string looks like a complete event key, return it directly.
+
     if (trimmed.length > 4 && trimmed.take(4).all { it.isDigit() }) {
         return trimmed
     }
@@ -2894,7 +2888,7 @@ fun resolveEventKey(eventId: String?, teamNumber: Int): String {
     return "$season$trimmed"
 }
 
-fun mapTeamRecord(team: TeamRecord, dbId: Int): MobileTeam {
+fun mapTeamRecord(team: TeamRecord, dbId: String): MobileTeam {
     val loc = listOfNotNull(team.city, team.state).filter { it.isNotBlank() }.joinToString(", ")
     return MobileTeam(
         id = dbId,
@@ -2976,7 +2970,7 @@ fun scorePhase(config: ScoutingConfig, data: JsonObject, phase: String): Double 
         }
 }
 
-fun findDuplicatePitScouting(ownerTeam: Int, localId: String): Int? {
+fun findDuplicatePitScouting(ownerTeam: Int, localId: String): String? {
     return transaction {
         PitScoutingEntries.selectAll().where { PitScoutingEntries.ownerTeamNumber eq ownerTeam }
             .mapNotNull { row ->
@@ -2984,7 +2978,7 @@ fun findDuplicatePitScouting(ownerTeam: Int, localId: String): Int? {
                 try {
                     val jsonObj = JsonSupport.json.parseToJsonElement(dataJson).jsonObject
                     val lId = jsonObj["local_id"]?.jsonPrimitive?.content
-                    if (lId == localId) row[PitScoutingEntries.id].value else null
+                    if (lId == localId) row[PitScoutingEntries.id].value.toString() else null
                 } catch (_: Exception) {
                     null
                 }

@@ -158,7 +158,9 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
                 "sessionSecret",
                 "keystorePassword",
                 "adminPassword",
-                "password"   // covers database.postgres.password
+                "password",   // covers database.postgres.password
+                "db_password",
+                "google_sheet_password"
             )
             for (field in secretFields) {
                 // Matches: "fieldName": "<any value>" and replaces the value with "changeme"

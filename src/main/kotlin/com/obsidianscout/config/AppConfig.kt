@@ -14,7 +14,13 @@ data class AppConfig(
     val server: ServerConfig = ServerConfig(),
     val database: DatabaseConfig = DatabaseConfig(),
     val seed: SeedConfig = SeedConfig(),
-    val vapid: VapidConfig = VapidConfig()
+    val vapid: VapidConfig = VapidConfig(),
+    val database_type: String = "sqlite", // Supported options: "sqlite", "postgres", "cockroach"
+    val db_username: String = "",
+    val db_password: String = "",
+    val google_sheet_url: String = "",
+    val google_sheet_password: String = "",
+    val cockroach_port: Int = 26257
 )
 
 @Serializable
@@ -86,6 +92,12 @@ object AppConfigLoader {
         }
         val text = Files.readString(path)
         var config = JsonSupport.json.decodeFromString<AppConfig>(text)
+
+        // If the configuration file is missing the new fields, write them back to disk.
+        if (!text.contains("database_type")) {
+            val updatedText = JsonSupport.json.encodeToString(config)
+            Files.writeString(path, updatedText)
+        }
 
         // Auto-rotate any secrets that are still at their shipped default values.
         config = autoRotateSecrets(config, path)

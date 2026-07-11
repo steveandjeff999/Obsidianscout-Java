@@ -14,12 +14,14 @@ import nl.martijndwars.webpush.PushService
 import nl.martijndwars.webpush.Subscription
 import nl.martijndwars.webpush.Encoding
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.security.Security
+import java.util.UUID
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 @Serializable
@@ -70,10 +72,15 @@ object PushNotificationService {
         scope.launch {
             try {
                 // 1. Find all users in the same team except the sender
+                val senderUuid = runCatching { UUID.fromString(message.userId) }.getOrNull()
                 val targetUsers = transaction {
-                    (PushSubscriptions innerJoin Users).selectAll()
-                        .where { (Users.teamNumber eq message.teamNumber) and (Users.id neq message.userId) }
-                        .map { row ->
+                    val q = (PushSubscriptions innerJoin Users).selectAll()
+                    val filtered = if (senderUuid != null) {
+                        q.where { (Users.teamNumber eq message.teamNumber) and (Users.id neq senderUuid) }
+                    } else {
+                        q.where { Users.teamNumber eq message.teamNumber }
+                    }
+                    filtered.map { row ->
                             TargetUserNotification(
                                 username = row[Users.username],
                                 preference = row[Users.notificationPreference],

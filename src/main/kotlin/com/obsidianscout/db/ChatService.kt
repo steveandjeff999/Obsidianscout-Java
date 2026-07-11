@@ -19,6 +19,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.innerJoin
 import java.time.Instant
+import java.util.UUID
+import org.jetbrains.exposed.dao.id.EntityID
 import com.obsidianscout.routes.UnreadStatusDto
 import com.obsidianscout.routes.GroupUnreadStatus
 
@@ -38,10 +40,10 @@ object ChatService {
                 }
 
                 ChatMessageDto(
-                    id = row[ChatMessages.id].value,
+                    id = row[ChatMessages.id].value.toString(),
                     teamNumber = row[ChatMessages.teamNumber],
                     groupName = row[ChatMessages.groupName],
-                    userId = row[ChatMessages.userId].value,
+                    userId = row[ChatMessages.userId].value.toString(),
                     username = row[ChatMessages.username],
                     content = row[ChatMessages.content],
                     createdAt = row[ChatMessages.createdAt].toString(),
@@ -59,17 +61,18 @@ object ChatService {
             .sorted()
     }
 
-    fun sendMessage(teamNumber: Int, groupName: String, userId: Int, username: String, content: String): ChatMessageDto = transaction {
+    fun sendMessage(teamNumber: Int, groupName: String, userId: String, username: String, content: String): ChatMessageDto = transaction {
+        val userUuid = UUID.fromString(userId)
         val id = ChatMessages.insertAndGetId {
             it[ChatMessages.teamNumber] = teamNumber
             it[ChatMessages.groupName] = groupName
-            it[ChatMessages.userId] = userId
+            it[ChatMessages.userId] = EntityID(userUuid, Users)
             it[ChatMessages.username] = username
             it[ChatMessages.content] = content
             it[ChatMessages.createdAt] = Instant.now()
             it[ChatMessages.reactionsJson] = "{}"
         }
-        val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
+        val user = Users.selectAll().where { Users.id eq userUuid }.firstOrNull()
         val profilePic = user?.get(Users.profilePicture)
 
         val row = ChatMessages.selectAll().where { ChatMessages.id eq id }.first()
@@ -81,10 +84,10 @@ object ChatService {
         }
 
         ChatMessageDto(
-            id = row[ChatMessages.id].value,
+            id = row[ChatMessages.id].value.toString(),
             teamNumber = row[ChatMessages.teamNumber],
             groupName = row[ChatMessages.groupName],
-            userId = row[ChatMessages.userId].value,
+            userId = row[ChatMessages.userId].value.toString(),
             username = row[ChatMessages.username],
             content = row[ChatMessages.content],
             createdAt = row[ChatMessages.createdAt].toString(),
@@ -93,8 +96,9 @@ object ChatService {
         )
     }
 
-    fun toggleReaction(id: Int, username: String, emoji: String): ChatMessageDto? = transaction {
-        val row = ChatMessages.selectAll().where { ChatMessages.id eq id }.firstOrNull() ?: return@transaction null
+    fun toggleReaction(id: String, username: String, emoji: String): ChatMessageDto? = transaction {
+        val msgUuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction null
+        val row = ChatMessages.selectAll().where { ChatMessages.id eq msgUuid }.firstOrNull() ?: return@transaction null
         if (row[ChatMessages.username] == username) {
             throw IllegalArgumentException("Cannot react to your own message")
         }
@@ -122,11 +126,11 @@ object ChatService {
 
         val newReactionsJson = JsonSupport.json.encodeToString(updatedReactions)
 
-        ChatMessages.update({ ChatMessages.id eq id }) {
+        ChatMessages.update({ ChatMessages.id eq msgUuid }) {
             it[reactionsJson] = newReactionsJson
         }
 
-        (ChatMessages innerJoin Users).selectAll().where { ChatMessages.id eq id }.firstOrNull()?.let { r ->
+        (ChatMessages innerJoin Users).selectAll().where { ChatMessages.id eq msgUuid }.firstOrNull()?.let { r ->
             val reactionsJsonStr = r[ChatMessages.reactionsJson]
             val parsedReactions: Map<String, List<String>> = try {
                 JsonSupport.json.decodeFromString(reactionsJsonStr)
@@ -135,10 +139,10 @@ object ChatService {
             }
 
             ChatMessageDto(
-                id = r[ChatMessages.id].value,
+                id = r[ChatMessages.id].value.toString(),
                 teamNumber = r[ChatMessages.teamNumber],
                 groupName = r[ChatMessages.groupName],
-                userId = r[ChatMessages.userId].value,
+                userId = r[ChatMessages.userId].value.toString(),
                 username = r[ChatMessages.username],
                 content = r[ChatMessages.content],
                 createdAt = r[ChatMessages.createdAt].toString(),
@@ -148,26 +152,28 @@ object ChatService {
         }
     }
 
-    fun updateLastRead(userId: Int, groupName: String) = transaction {
+    fun updateLastRead(userId: String, groupName: String) = transaction {
+        val userUuid = UUID.fromString(userId)
         val existing = UserChatLastRead.selectAll()
-            .where { (UserChatLastRead.userId eq userId) and (UserChatLastRead.groupName eq groupName) }
+            .where { (UserChatLastRead.userId eq userUuid) and (UserChatLastRead.groupName eq groupName) }
             .firstOrNull()
         if (existing != null) {
-            UserChatLastRead.update({ (UserChatLastRead.userId eq userId) and (UserChatLastRead.groupName eq groupName) }) {
+            UserChatLastRead.update({ (UserChatLastRead.userId eq userUuid) and (UserChatLastRead.groupName eq groupName) }) {
                 it[lastReadAt] = Instant.now()
             }
         } else {
             UserChatLastRead.insert {
-                it[UserChatLastRead.userId] = userId
+                it[UserChatLastRead.userId] = EntityID(userUuid, Users)
                 it[UserChatLastRead.groupName] = groupName
                 it[lastReadAt] = Instant.now()
             }
         }
     }
 
-    fun getUnreadStatus(userId: Int, teamNumber: Int, username: String): UnreadStatusDto = transaction {
+    fun getUnreadStatus(userId: String, teamNumber: Int, username: String): UnreadStatusDto = transaction {
+        val userUuid = UUID.fromString(userId)
         val lastReads = UserChatLastRead.selectAll()
-            .where { UserChatLastRead.userId eq userId }
+            .where { UserChatLastRead.userId eq userUuid }
             .associate { it[UserChatLastRead.groupName] to it[UserChatLastRead.lastReadAt] }
 
         val dbGroups = ChatMessages.select(ChatMessages.groupName)
@@ -188,14 +194,14 @@ object ChatService {
             val unreadCount = ChatMessages.selectAll().where {
                 (ChatMessages.teamNumber eq teamNumber) and
                 (ChatMessages.groupName eq groupName) and
-                (ChatMessages.userId neq userId) and
+                (ChatMessages.userId neq userUuid) and
                 (ChatMessages.createdAt greater lastRead)
             }.count().toInt()
 
             val mentionCount = ChatMessages.selectAll().where {
                 (ChatMessages.teamNumber eq teamNumber) and
                 (ChatMessages.groupName eq groupName) and
-                (ChatMessages.userId neq userId) and
+                (ChatMessages.userId neq userUuid) and
                 (ChatMessages.createdAt greater lastRead) and
                 ((ChatMessages.content.lowerCase() like userMentionLower) or
                  (ChatMessages.content.lowerCase() like "%@everyone%") or

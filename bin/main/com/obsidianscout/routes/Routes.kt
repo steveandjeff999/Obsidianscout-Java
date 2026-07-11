@@ -19,15 +19,19 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.SqlExpressionBuilder
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNotNull
 import org.jetbrains.exposed.sql.and
 
 
 import org.jetbrains.exposed.sql.lowerCase
 import java.time.Instant
+import java.util.UUID
+import org.jetbrains.exposed.dao.id.EntityID
 import com.obsidianscout.config.ConfigService
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.integrations.ApiSettings
@@ -372,11 +376,11 @@ fun Application.configureRoutes() {
                         if (userIdVal != null) {
                             com.obsidianscout.db.Users
                                 .selectAll().where { com.obsidianscout.db.Users.id eq userIdVal }
-                                .map { AccountInfo(it[com.obsidianscout.db.Users.id].value, it[com.obsidianscout.db.Users.username], it[com.obsidianscout.db.Users.teamNumber]) }
+                                .map { AccountInfo(it[com.obsidianscout.db.Users.id].value.toString(), it[com.obsidianscout.db.Users.username], it[com.obsidianscout.db.Users.teamNumber]) }
                         } else if (!emailVal.isNullOrBlank()) {
                             com.obsidianscout.db.Users
                                 .selectAll().where { com.obsidianscout.db.Users.email.lowerCase() eq emailVal.lowercase() }
-                                .map { AccountInfo(it[com.obsidianscout.db.Users.id].value, it[com.obsidianscout.db.Users.username], it[com.obsidianscout.db.Users.teamNumber]) }
+                                .map { AccountInfo(it[com.obsidianscout.db.Users.id].value.toString(), it[com.obsidianscout.db.Users.username], it[com.obsidianscout.db.Users.teamNumber]) }
                         } else {
                             emptyList()
                         }
@@ -416,16 +420,18 @@ fun Application.configureRoutes() {
                     val tokenEmail = tokenRow[com.obsidianscout.db.PasswordResetTokens.email]
 
                     val finalUserId = if (tokenUserId != null) {
-                        tokenUserId.value
+                        tokenUserId.value.toString()
                     } else if (!tokenEmail.isNullOrBlank()) {
                         val reqUserId = request.userId
                             ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Account selection is required.")
-                        
+                        val reqUuid = runCatching { UUID.fromString(reqUserId) }.getOrElse {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid user ID format.")
+                        }
                         // Verify that the requested userId has the matching email address
                         val isValidAccount = transaction {
                             com.obsidianscout.db.Users
                                 .selectAll().where { 
-                                    (com.obsidianscout.db.Users.id eq reqUserId) and 
+                                    (com.obsidianscout.db.Users.id eq reqUuid) and 
                                     (com.obsidianscout.db.Users.email.lowerCase() eq tokenEmail.lowercase()) 
                                 }
                                 .any()
@@ -709,7 +715,7 @@ fun Application.configureRoutes() {
                 }
                 put("/{id}") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     val request = call.receive<ScoutingEntryRequest>()
                     val config = ConfigService.getConfig(session.teamNumber)
@@ -718,7 +724,7 @@ fun Application.configureRoutes() {
                 }
                 delete("/{id}") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     ScoutingService.deleteEntry(session, id)
                     call.respond(HttpStatusCode.NoContent)
@@ -741,7 +747,7 @@ fun Application.configureRoutes() {
                 }
                 put("/{id}") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     val request = call.receive<ScoutingEntryRequest>()
                     val config = ConfigService.getPitConfig(session.teamNumber)
@@ -750,7 +756,7 @@ fun Application.configureRoutes() {
                 }
                 delete("/{id}") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     PitScoutingService.deleteEntry(session, id)
                     call.respond(HttpStatusCode.NoContent)
@@ -773,7 +779,7 @@ fun Application.configureRoutes() {
                 }
                 put("/{id}") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     val request = call.receive<ScoutingEntryRequest>()
                     val config = ConfigService.getQualitativeConfig(session.teamNumber)
@@ -782,7 +788,7 @@ fun Application.configureRoutes() {
                 }
                 delete("/{id}") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     QualitativeScoutingService.deleteEntry(session, id)
                     call.respond(HttpStatusCode.NoContent)
@@ -1106,7 +1112,7 @@ fun Application.configureRoutes() {
                 }
                 put("/users/{id}") {
                     val session = call.requireAdmin()
-                    val userId = call.parameters["id"]?.toIntOrNull()
+                    val userId = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid user id")
                     val request = call.receive<UpdateUserRequest>()
                     val updated = AuthService.updateUser(
@@ -1123,7 +1129,7 @@ fun Application.configureRoutes() {
                 }
                 delete("/users/{id}") {
                     val session = call.requireAdmin()
-                    val userId = call.parameters["id"]?.toIntOrNull()
+                    val userId = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid user id")
                     AuthService.deleteUser(session, userId)
                     if (userId == session.userId) {
@@ -1165,10 +1171,13 @@ fun Application.configureRoutes() {
                     val req = call.receive<ResetDatabaseRequest>()
                     
                     val userRecord = transaction {
-                        com.obsidianscout.db.Users
-                            .selectAll().where { com.obsidianscout.db.Users.id eq session.userId }
-                            .limit(1)
-                            .firstOrNull()
+                        val uuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
+                        if (uuid != null) {
+                            com.obsidianscout.db.Users
+                                .selectAll().where { com.obsidianscout.db.Users.id eq uuid }
+                                .limit(1)
+                                .firstOrNull()
+                        } else null
                     } ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "Superadmin user not found")
 
                     val hash = userRecord[com.obsidianscout.db.Users.passwordHash]
@@ -1234,7 +1243,7 @@ fun Application.configureRoutes() {
                         )
 
                         com.obsidianscout.db.Users.insert {
-                            it[id] = org.jetbrains.exposed.dao.id.EntityID(originalId, com.obsidianscout.db.Users)
+                            it[id] = EntityID(UUID.fromString(originalId), com.obsidianscout.db.Users)
                             it[username] = originalUsername
                             it[teamNumber] = originalTeamNumber
                             it[passwordHash] = originalPasswordHash
@@ -1254,10 +1263,13 @@ fun Application.configureRoutes() {
                     val req = call.receive<WipeTeamDataRequest>()
                     
                     val userRecord = transaction {
-                        com.obsidianscout.db.Users
-                            .selectAll().where { com.obsidianscout.db.Users.id eq session.userId }
-                            .limit(1)
-                            .firstOrNull()
+                        val uuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
+                        if (uuid != null) {
+                            com.obsidianscout.db.Users
+                                .selectAll().where { com.obsidianscout.db.Users.id eq uuid }
+                                .limit(1)
+                                .firstOrNull()
+                        } else null
                     } ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "User not found")
 
                     val hash = userRecord[com.obsidianscout.db.Users.passwordHash]
@@ -1268,17 +1280,17 @@ fun Application.configureRoutes() {
 
                     transaction {
                         // Delete ALL scouting entries completely
-                        com.obsidianscout.db.ScoutingEntries.deleteWhere { com.obsidianscout.db.ScoutingEntries.id neq -1 }
-                        com.obsidianscout.db.PitScoutingEntries.deleteWhere { com.obsidianscout.db.PitScoutingEntries.id neq -1 }
-                        com.obsidianscout.db.QualitativeScoutingEntries.deleteWhere { com.obsidianscout.db.QualitativeScoutingEntries.id neq -1 }
+                        com.obsidianscout.db.ScoutingEntries.deleteWhere { com.obsidianscout.db.ScoutingEntries.id.isNotNull() }
+                        com.obsidianscout.db.PitScoutingEntries.deleteWhere { com.obsidianscout.db.PitScoutingEntries.id.isNotNull() }
+                        com.obsidianscout.db.QualitativeScoutingEntries.deleteWhere { com.obsidianscout.db.QualitativeScoutingEntries.id.isNotNull() }
 
                         
                         // Delete ALL cached global events, teams, matches, stats, and selection data
-                        com.obsidianscout.db.ApiEvents.deleteWhere { com.obsidianscout.db.ApiEvents.id neq -1 }
-                        com.obsidianscout.db.ApiTeams.deleteWhere { com.obsidianscout.db.ApiTeams.id neq -1 }
-                        com.obsidianscout.db.ApiMatches.deleteWhere { com.obsidianscout.db.ApiMatches.id neq -1 }
-                        com.obsidianscout.db.EpaOprHistoryCache.deleteWhere { com.obsidianscout.db.EpaOprHistoryCache.id neq -1 }
-                        com.obsidianscout.db.AllianceSelections.deleteWhere { com.obsidianscout.db.AllianceSelections.id neq -1 }
+                        com.obsidianscout.db.ApiEvents.deleteWhere { com.obsidianscout.db.ApiEvents.id.isNotNull() }
+                        com.obsidianscout.db.ApiTeams.deleteWhere { com.obsidianscout.db.ApiTeams.id.isNotNull() }
+                        com.obsidianscout.db.ApiMatches.deleteWhere { com.obsidianscout.db.ApiMatches.id.isNotNull() }
+                        com.obsidianscout.db.EpaOprHistoryCache.deleteWhere { com.obsidianscout.db.EpaOprHistoryCache.id.isNotNull() }
+                        com.obsidianscout.db.AllianceSelections.deleteWhere { com.obsidianscout.db.AllianceSelections.id.isNotNull() }
 
 
                         // Clear the active event and setup wizard state in the settings for this team
@@ -1493,7 +1505,7 @@ fun Application.configureRoutes() {
                 }
                 post("/messages/{id}/react") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
                     val request = call.receive<ReactMessageRequest>()
                     try {
@@ -1547,7 +1559,7 @@ fun Application.configureRoutes() {
                             .firstOrNull()
                         if (existing == null) {
                             PushSubscriptions.insert {
-                                it[userId] = session.userId
+                                it[userId] = EntityID(UUID.fromString(session.userId), com.obsidianscout.db.Users)
                                 it[endpoint] = subscription.endpoint
                                 it[p256dh] = subscription.keys.p256dh
                                 it[auth] = subscription.keys.auth
@@ -1555,7 +1567,7 @@ fun Application.configureRoutes() {
                             }
                         } else {
                             PushSubscriptions.update({ PushSubscriptions.endpoint eq subscription.endpoint }) {
-                                it[userId] = session.userId
+                                it[userId] = EntityID(UUID.fromString(session.userId), com.obsidianscout.db.Users)
                                 it[p256dh] = subscription.keys.p256dh
                                 it[auth] = subscription.keys.auth
                             }
@@ -1594,21 +1606,21 @@ fun Application.configureRoutes() {
                 }
                 put("/{id}") {
                     val session = call.requireAdmin()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val req = call.receive<UpdateAllianceRequest>()
                     call.respond(AllianceService.updateAlliance(session, id, req.name, req.eventKey, req.notes, req.year, req.eventCode))
                 }
                 delete("/{id}") {
                     val session = call.requireAdmin()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     AllianceService.deleteAlliance(session, id)
                     call.respond(HttpStatusCode.NoContent)
                 }
                 post("/{id}/invite") {
                     val session = call.requireAdmin()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val req = call.receive<InviteTeamRequest>()
                     AllianceService.inviteTeam(session, id, req.partnerTeamNumber)
@@ -1616,7 +1628,7 @@ fun Application.configureRoutes() {
                 }
                 post("/{id}/import") {
                     val session = call.requireAdmin()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val req = call.receive<AllianceImportDataRequest>()
                     val result = AllianceService.importAllianceData(
@@ -1641,7 +1653,7 @@ fun Application.configureRoutes() {
                 }
                 post("/{id}/respond") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val req = call.receive<RespondInviteRequest>()
                     AllianceService.respondToInvite(session, id, req.accept)
@@ -1649,7 +1661,7 @@ fun Application.configureRoutes() {
                 }
                 delete("/{id}/members/{teamNumber}") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val targetTeam = call.parameters["teamNumber"]?.toIntOrNull()
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid team number")
@@ -1658,7 +1670,7 @@ fun Application.configureRoutes() {
                 }
                 get("/{id}") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val alliance = call.measure("alliance-db", "Get Alliance Query") {
                         AllianceService.getAlliance(session, id)
@@ -1667,7 +1679,7 @@ fun Application.configureRoutes() {
                 }
                 get("/{id}/config/{kind}") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val kind = call.parameters["kind"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid kind")
@@ -1675,8 +1687,11 @@ fun Application.configureRoutes() {
                     // Verify membership (throws if not member)
                     AllianceService.getAlliance(session, id)
                     
+                    val idUuid = runCatching { java.util.UUID.fromString(id) }.getOrElse {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id format")
+                    }
                     val configJson = transaction {
-                        val row = ScoutingAlliances.selectAll().where { ScoutingAlliances.id eq id }.firstOrNull()
+                        val row = ScoutingAlliances.selectAll().where { ScoutingAlliances.id eq idUuid }.firstOrNull()
                         if (row != null) {
                             when (kind) {
                                 "game", "match" -> row[ScoutingAlliances.matchConfigJson]
@@ -1690,7 +1705,7 @@ fun Application.configureRoutes() {
                 }
                 post("/{id}/toggle-active") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val req = call.receive<ToggleAllianceActiveRequest>()
                     AllianceService.toggleActiveMembership(session, id, req.active)
@@ -1698,7 +1713,7 @@ fun Application.configureRoutes() {
                 }
                 post("/{id}/toggle-disable") {
                     val session = call.requireSession()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val req = call.receive<ToggleAllianceDisableRequest>()
                     AllianceService.toggleActiveMembership(session, id, !req.disabled)
@@ -1706,7 +1721,7 @@ fun Application.configureRoutes() {
                 }
                 post("/{id}/members/{teamNumber}/promote") {
                     val session = call.requireAdmin()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val targetTeam = call.parameters["teamNumber"]?.toIntOrNull()
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid team number")
@@ -1717,9 +1732,12 @@ fun Application.configureRoutes() {
                     val session = call.sessions.get<UserSession>() ?: return@webSocket this.close(
                         CloseReason(CloseReason.Codes.VIOLATED_POLICY, "No session")
                     )
-                    val id = call.parameters["id"]?.toIntOrNull() ?: return@webSocket this.close(
+                    val id = call.parameters["id"] ?: return@webSocket this.close(
                         CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid alliance ID")
                     )
+                    val idUuid = runCatching { UUID.fromString(id) }.getOrElse {
+                        return@webSocket this.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid alliance ID"))
+                    }
                     val kind = call.parameters["kind"] ?: return@webSocket this.close(
                         CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid config kind")
                     )
@@ -1729,7 +1747,7 @@ fun Application.configureRoutes() {
                         val isMember = transaction {
                             AllianceMemberships
                                 .selectAll().where {
-                                    (AllianceMemberships.allianceId eq id) and
+                                    (AllianceMemberships.allianceId eq idUuid) and
                                     (AllianceMemberships.teamNumber eq session.teamNumber) and
                                     (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED"))
                                 }
@@ -1740,7 +1758,7 @@ fun Application.configureRoutes() {
                             return@withContext
                         }
                         
-                        AllianceCollaborationManager.handleConnection(this@webSocket, id, kind, session)
+                        AllianceCollaborationManager.handleConnection(this@webSocket, idUuid, kind, session)
                     }
                 }
             }
@@ -1783,7 +1801,7 @@ fun Application.configureRoutes() {
                 }
                 put("/{id}") {
                     val session = call.requireAdmin()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     val request = call.receive<com.obsidianscout.routes.BannerUpdateRequest>()
 
@@ -1819,7 +1837,7 @@ fun Application.configureRoutes() {
                 }
                 delete("/{id}") {
                     val session = call.requireAdmin()
-                    val id = call.parameters["id"]?.toIntOrNull()
+                    val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
 
                     val existing = com.obsidianscout.db.BannerService.getById(id)

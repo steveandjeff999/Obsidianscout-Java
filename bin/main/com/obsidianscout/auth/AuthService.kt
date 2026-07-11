@@ -25,6 +25,7 @@ import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
 import java.time.Instant
+import java.util.UUID
 
 @Serializable
 enum class UserRole {
@@ -40,7 +41,7 @@ enum class UserRole {
 
 @Serializable
 data class UserRecord(
-    val id: Int,
+    val id: String,
     val username: String,
     val teamNumber: Int,
     val role: UserRole,
@@ -97,9 +98,12 @@ object AuthService {
             if (verifyScrypt(password, hash)) {
                 // Re-hash to BCrypt and save
                 val newHash = hashPassword(password)
-                transaction {
-                    Users.update({ Users.id eq record.id }) {
-                        it[passwordHash] = newHash
+                val userUuid = runCatching { UUID.fromString(record.id) }.getOrNull()
+                if (userUuid != null) {
+                    transaction {
+                        Users.update({ Users.id eq userUuid }) {
+                            it[passwordHash] = newHash
+                        }
                     }
                 }
                 true
@@ -264,7 +268,7 @@ object AuthService {
      */
     fun updateUser(
         callerSession: UserSession,
-        targetUserId: Int,
+        targetUserId: String,
         newUsername: String?,
         newPassword: String?,
         newRole: UserRole?,
@@ -275,12 +279,16 @@ object AuthService {
         newNotificationPreference: String? = null,
         newTourProgress: String? = null
     ): UserRecord {
+        val targetUuid = runCatching { UUID.fromString(targetUserId) }.getOrElse {
+            throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
+        }
+
         // Hash outside the transaction if needed
         val newHash = newPassword?.takeIf { it.isNotBlank() }
             ?.let { hashPassword(it) }
 
         return transaction {
-            val targetRow = Users.selectAll().where { Users.id eq targetUserId }
+            val targetRow = Users.selectAll().where { Users.id eq targetUuid }
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "User not found")
 
@@ -312,14 +320,14 @@ object AuthService {
                 val exists = Users.selectAll().where { 
                     (Users.username eq checkUsername) and 
                     (Users.teamNumber eq targetTeamFinal) and 
-                    (Users.id neq targetUserId) 
+                    (Users.id neq targetUuid) 
                 }.any()
                 if (exists) {
                     throw ApiException(HttpStatusCode.Conflict, "Username is already taken on this team")
                 }
             }
 
-            Users.update({ Users.id eq targetUserId }) { stmt ->
+            Users.update({ Users.id eq targetUuid }) { stmt ->
                 if (!newUsername.isNullOrBlank()) stmt[username] = newUsername
                 if (newHash != null)             stmt[passwordHash] = newHash
                 if (newRole != null)             stmt[role] = newRole.name
@@ -338,14 +346,18 @@ object AuthService {
                 }
             }
 
-            val updated = Users.selectAll().where { Users.id eq targetUserId }.first()
+            val updated = Users.selectAll().where { Users.id eq targetUuid }.first()
             rowToUser(updated)
         }
     }
 
-    fun deleteUser(callerSession: UserSession, targetUserId: Int) {
+    fun deleteUser(callerSession: UserSession, targetUserId: String) {
+        val targetUuid = runCatching { UUID.fromString(targetUserId) }.getOrElse {
+            throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
+        }
+
         val (targetRole, targetTeam) = transaction {
-            val targetRow = Users.selectAll().where { Users.id eq targetUserId }
+            val targetRow = Users.selectAll().where { Users.id eq targetUuid }
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "User not found")
             val role = try { UserRole.valueOf(targetRow[Users.role]) } catch (_: Exception) { UserRole.SCOUT }
@@ -396,27 +408,28 @@ object AuthService {
                 }
 
             // Transfer scouting entries to the placeholder user
-            ScoutingEntries.update({ ScoutingEntries.submittedByUserId eq targetUserId }) {
+            ScoutingEntries.update({ ScoutingEntries.submittedByUserId eq targetUuid }) {
                 it[submittedByUserId] = deletedUserEntityId
             }
-            PitScoutingEntries.update({ PitScoutingEntries.submittedByUserId eq targetUserId }) {
+            PitScoutingEntries.update({ PitScoutingEntries.submittedByUserId eq targetUuid }) {
                 it[submittedByUserId] = deletedUserEntityId
             }
-            QualitativeScoutingEntries.update({ QualitativeScoutingEntries.submittedByUserId eq targetUserId }) {
+            QualitativeScoutingEntries.update({ QualitativeScoutingEntries.submittedByUserId eq targetUuid }) {
                 it[submittedByUserId] = deletedUserEntityId
             }
 
             // Delete password reset tokens for the target user
-            PasswordResetTokens.deleteWhere { userId eq targetUserId }
+            PasswordResetTokens.deleteWhere { userId eq targetUuid }
 
             // Delete the target user
-            Users.deleteWhere { Users.id eq targetUserId }
+            Users.deleteWhere { Users.id eq targetUuid }
         }
     }
 
-    fun getUserById(userId: Int): UserRecord? {
+    fun getUserById(userId: String): UserRecord? {
+        val uuid = runCatching { UUID.fromString(userId) }.getOrNull() ?: return null
         return transaction {
-            Users.selectAll().where { Users.id eq userId }
+            Users.selectAll().where { Users.id eq uuid }
                 .limit(1)
                 .map { rowToUser(it) }
                 .firstOrNull()
@@ -425,7 +438,7 @@ object AuthService {
 
     private fun rowToUser(row: ResultRow): UserRecord {
         return UserRecord(
-            id = row[Users.id].value,
+            id = row[Users.id].value.toString(),
             username = row[Users.username],
             teamNumber = row[Users.teamNumber],
             role = try {

@@ -26,7 +26,7 @@ fun main() {
     println("Test 1: Verifying JWT Token functionality...")
     val secret = "test_super_secret_session_secret_key_1234567890"
     val session = UserSession(
-        userId = 42,
+        userId = "00000000-0000-0000-0000-000000000042",
         username = "scouter_test",
         teamNumber = 862,
         role = UserRole.SCOUT,

@@ -319,7 +319,7 @@ data class ForgotPasswordRequest(
 
 @Serializable
 data class AccountInfo(
-    val userId: Int,
+    val userId: String,
     val username: String,
     val teamNumber: Int
 )
@@ -333,7 +333,7 @@ data class VerifyResetTokenResponse(
 @Serializable
 data class ResetPasswordRequest(
     val token: String,
-    val userId: Int? = null,
+    val userId: String? = null,
     val newUsername: String? = null,
     val newPassword: String
 )
@@ -351,7 +351,7 @@ data class SmtpTestConnectionRequest(
 
 @Serializable
 data class BannerDto(
-    val id: Int,
+    val id: String,
     val teamNumber: Int,
     val message: String,
     val bannerType: String,
@@ -387,10 +387,10 @@ data class BannerUpdateRequest(
 
 @Serializable
 data class ChatMessageDto(
-    val id: Int,
+    val id: String,
     val teamNumber: Int,
     val groupName: String,
-    val userId: Int,
+    val userId: String,
     val username: String,
     val content: String,
     val createdAt: String,

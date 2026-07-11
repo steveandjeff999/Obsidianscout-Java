@@ -184,7 +184,7 @@ object PredictorService {
             val rawEntries = entriesQuery.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
                 ScoutingEntryRecord(
-                    id = row[ScoutingEntries.id].value,
+                    id = row[ScoutingEntries.id].value.toString(),
                     ownerTeamNumber = row[ScoutingEntries.ownerTeamNumber],
                     targetTeamNumber = row[ScoutingEntries.targetTeamNumber],
                     eventKey = row[ScoutingEntries.eventKey],
@@ -396,7 +396,7 @@ object PredictorService {
             val rawEntries = entriesQuery.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
                 ScoutingEntryRecord(
-                    id = row[ScoutingEntries.id].value,
+                    id = row[ScoutingEntries.id].value.toString(),
                     ownerTeamNumber = row[ScoutingEntries.ownerTeamNumber],
                     targetTeamNumber = row[ScoutingEntries.targetTeamNumber],
                     eventKey = row[ScoutingEntries.eventKey],

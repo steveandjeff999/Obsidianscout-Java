@@ -57,7 +57,7 @@ object DeduplicationScheduler {
         }
         matchGrouped.forEach { (key, group) ->
             val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
-            val toDelete = mutableListOf<Int>()
+            val toDelete = mutableListOf<java.util.UUID>()
             group.forEach { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
                 val dup = unique.find { uRow ->
@@ -89,7 +89,7 @@ object DeduplicationScheduler {
         }
         pitGrouped.forEach { (key, group) ->
             val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
-            val toDelete = mutableListOf<Int>()
+            val toDelete = mutableListOf<java.util.UUID>()
             group.forEach { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
                 val dup = unique.find { uRow ->
@@ -122,7 +122,7 @@ object DeduplicationScheduler {
         }
         qualGrouped.forEach { (key, group) ->
             val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
-            val toDelete = mutableListOf<Int>()
+            val toDelete = mutableListOf<java.util.UUID>()
             group.forEach { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
                 val dup = unique.find { uRow ->

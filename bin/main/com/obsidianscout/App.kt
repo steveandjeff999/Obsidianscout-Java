@@ -54,11 +54,25 @@ import java.io.File
 import java.security.KeyStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.obsidianscout.db.orchestration.CockroachOrchestrator
+
+private var cockroachOrchestrator: CockroachOrchestrator? = null
+
 
 fun main() {
     Security.addProvider(BouncyCastleProvider())
     val appConfig = AppConfigLoader.load()
-    DatabaseFactory.init(appConfig.database)
+    
+    val dbConfig = if (appConfig.database_type.lowercase() == "cockroach") {
+        val orchestrator = CockroachOrchestrator(appConfig)
+        val config = orchestrator.orchestrate()
+        cockroachOrchestrator = orchestrator
+        config
+    } else {
+        appConfig.database
+    }
+
+    DatabaseFactory.init(dbConfig)
     ConfigService.ensureDefaultConfig()
     SettingsService.ensureDefaultSettings()
     AuthService.ensureSeedSuperAdmin(appConfig.seed)
@@ -231,6 +245,7 @@ fun Application.module(appConfig: AppConfig) {
     environment.monitor.subscribe(ApplicationStopped) {
         SyncScheduler.stop()
         com.obsidianscout.scouting.DeduplicationScheduler.stop()
+        cockroachOrchestrator?.stop()
     }
 }
 
