@@ -34,7 +34,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     private var isInsecure: Boolean = true
     private var failedLeaderChecks = 0
 
-    private val version = "v24.1.1"
+    private val version = "v26.2.3"
     private val linuxDownloadUrl = if (isArm) {
         "https://binaries.cockroachdb.com/cockroach-$version.linux-arm64.tgz"
     } else {
