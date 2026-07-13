@@ -23,7 +23,20 @@ object DatabaseFactory {
         "user_chat_last_read", "push_subscriptions"
     )
 
+    @Volatile
+    var isReady = false
+        private set
+
+    private var activeDataSource: HikariDataSource? = null
+
     fun init(config: DatabaseConfig) {
+        isReady = false
+        try {
+            activeDataSource?.close()
+        } catch (e: Exception) {
+            // ignore
+        }
+
         ensureJdbcDriverLoaded(config.type)
 
         if (config.type.lowercase() == "postgres") {
@@ -55,10 +68,11 @@ object DatabaseFactory {
                 isAutoCommit = true
             }
             connectionTimeout = 10_000  // fail fast after 10s instead of the 30s default
-            leakDetectionThreshold = 5000L
+            leakDetectionThreshold = 60000L
         }
 
         val dataSource = HikariDataSource(hikariConfig)
+        activeDataSource = dataSource
         Database.connect(dataSource)
 
         // Run the INT->UUID migration if the database still has the old schema
@@ -88,6 +102,8 @@ object DatabaseFactory {
                 PushSubscriptions
             )
         }
+        
+        isReady = true
     }
 
     /**
@@ -854,8 +870,10 @@ object DatabaseFactory {
     }
 
     private fun buildPostgresUrl(config: DatabaseConfig): String {
-        val base = "jdbc:postgresql://${config.postgres.host}:${config.postgres.port}/${config.postgres.database}"
-        return if (config.postgres.ssl) {
+        val pg = config.postgres
+        val hostPart = if (pg.host.contains(",") || pg.host.contains(":")) pg.host else "${pg.host}:${pg.port}"
+        val base = "jdbc:postgresql://$hostPart/${pg.database}"
+        return if (pg.ssl) {
             "$base?sslmode=require"
         } else {
             "$base?sslmode=disable"
@@ -880,22 +898,38 @@ object DatabaseFactory {
             "Postgres database name must contain only lowercase letters, digits, and underscores."
         }
 
+        val hostPart = if (pg.host.contains(",") || pg.host.contains(":")) pg.host else "${pg.host}:${pg.port}"
         val sslSuffix = if (pg.ssl) "?sslmode=require" else "?sslmode=disable"
-        val maintenanceUrl = "jdbc:postgresql://${pg.host}:${pg.port}/postgres$sslSuffix"
-        DriverManager.getConnection(maintenanceUrl, pg.user, pg.password).use { conn ->
-            conn.autoCommit = true
-            conn.createStatement().use { stmt ->
-                val exists = conn
-                    .prepareStatement("SELECT 1 FROM pg_database WHERE datname = ?")
-                    .also { it.setString(1, dbName) }
-                    .executeQuery()
-                    .next()
-                if (!exists) {
-                    stmt.execute("CREATE DATABASE \"$dbName\"")
-                    println("Created PostgreSQL database: $dbName")
+        val maintenanceUrl = "jdbc:postgresql://$hostPart/postgres$sslSuffix"
+        var retries = 5
+        var lastException: Exception? = null
+        while (retries > 0) {
+            try {
+                DriverManager.getConnection(maintenanceUrl, pg.user, pg.password).use { conn ->
+                    conn.autoCommit = true
+                    conn.createStatement().use { stmt ->
+                        val exists = conn
+                            .prepareStatement("SELECT 1 FROM pg_database WHERE datname = ?")
+                            .also { it.setString(1, dbName) }
+                            .executeQuery()
+                            .next()
+                        if (!exists) {
+                            stmt.execute("CREATE DATABASE \"$dbName\"")
+                            println("Created PostgreSQL database: $dbName")
+                        }
+                    }
+                }
+                return // successfully connected and checked database
+            } catch (e: Exception) {
+                lastException = e
+                retries--
+                if (retries > 0) {
+                    println("[Database] Connecting to database failed, retrying in 3 seconds ($retries attempts left): ${e.message}")
+                    Thread.sleep(3000)
                 }
             }
         }
+        throw IllegalStateException("Failed to connect to database after 5 attempts. Last error: ${lastException?.message}", lastException)
     }
 
     private fun ensureJdbcDriverLoaded(type: String) {

@@ -97,6 +97,24 @@ fun Application.configureRoutes() {
                 call.response.headers.append(HttpHeaders.Pragma, "no-cache")
                 call.response.headers.append(HttpHeaders.Expires, "0")
             }
+            route("/cluster") {
+                get("/status") {
+                    call.respond(
+                        buildJsonObject {
+                            put("dbReady", com.obsidianscout.db.DatabaseFactory.isReady)
+                            put("isDbActive", com.obsidianscout.db.orchestration.CockroachOrchestrator.isDbActive)
+                            put("leaderIp", com.obsidianscout.db.orchestration.CockroachOrchestrator.currentLeaderIp ?: "")
+                        }
+                    )
+                }
+                get("/time") {
+                    call.respond(
+                        buildJsonObject {
+                            put("currentTimeMillis", System.currentTimeMillis())
+                        }
+                    )
+                }
+            }
             route("/auth") {
                 post("/login") {
                     val request = call.receive<LoginRequest>()

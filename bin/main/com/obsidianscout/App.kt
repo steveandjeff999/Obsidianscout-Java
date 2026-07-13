@@ -54,33 +54,24 @@ import java.io.File
 import java.security.KeyStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 import com.obsidianscout.db.orchestration.CockroachOrchestrator
 
 private var cockroachOrchestrator: CockroachOrchestrator? = null
+
+@Serializable
+data class DbInitResponse(val status: String, val message: String)
 
 
 fun main() {
     Security.addProvider(BouncyCastleProvider())
     val appConfig = AppConfigLoader.load()
     
-    val dbConfig = if (appConfig.database_type.lowercase() == "cockroach") {
-        val orchestrator = CockroachOrchestrator(appConfig)
-        val config = orchestrator.orchestrate()
-        cockroachOrchestrator = orchestrator
-        config
-    } else {
-        appConfig.database
-    }
-
-    DatabaseFactory.init(dbConfig)
-    ConfigService.ensureDefaultConfig()
-    SettingsService.ensureDefaultSettings()
-    AuthService.ensureSeedSuperAdmin(appConfig.seed)
-
     val environment = applicationEngineEnvironment {
         module { module(appConfig) }
         connector {
-            host = appConfig.server.host
+            host = if (appConfig.server.host == "127.0.0.1") "0.0.0.0" else appConfig.server.host
             port = appConfig.server.port
         }
     }
@@ -135,6 +126,38 @@ fun Application.module(appConfig: AppConfig) {
         filter { call -> 
             if (appConfig.server.logging) true 
             else call.request.path().startsWith("/api") 
+        }
+    }
+    
+    // Intercept requests to serve 503 if database is not ready
+    intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
+        val path = call.request.path()
+        // Exclude cluster status endpoints and static/vendor assets from the blocking interceptor
+        val isExcluded = path.startsWith("/api/cluster/") ||
+                path.contains("/vendor/") ||
+                path.contains("/css/") ||
+                path.contains("/js/") ||
+                path.contains("/assets/") ||
+                path.endsWith(".js") ||
+                path.endsWith(".css") ||
+                path.endsWith(".png") ||
+                path.endsWith(".ico") ||
+                path.endsWith(".woff2") ||
+                path.endsWith(".json")
+
+        if (!isExcluded && !DatabaseFactory.isReady) {
+            if (path.startsWith("/api")) {
+                call.respond(
+                    HttpStatusCode.ServiceUnavailable,
+                    DbInitResponse(
+                        status = "initializing",
+                        message = "Database cluster is currently booting up. Please retry in a few moments."
+                    )
+                )
+            } else {
+                call.respondStaticHtml("503.html", HttpStatusCode.ServiceUnavailable)
+            }
+            finish() // terminate processing of this call
         }
     }
     if (appConfig.server.logging) {
@@ -240,8 +263,33 @@ fun Application.module(appConfig: AppConfig) {
     configureRoutes()
     configureMobileRoutes(appConfig)
 
-    SyncScheduler.start()
-    com.obsidianscout.scouting.DeduplicationScheduler.start()
+    // Run database orchestration and initialization in a background coroutine
+    launch(Dispatchers.IO) {
+        try {
+            val dbConfig = if (appConfig.database_type.lowercase() == "cockroach") {
+                val orchestrator = CockroachOrchestrator(appConfig)
+                cockroachOrchestrator = orchestrator
+                orchestrator.orchestrate()
+            } else {
+                appConfig.database
+            }
+
+            DatabaseFactory.init(dbConfig)
+            ConfigService.ensureDefaultConfig()
+            SettingsService.ensureDefaultSettings()
+            AuthService.ensureSeedSuperAdmin(appConfig.seed)
+
+            SyncScheduler.start()
+            com.obsidianscout.scouting.DeduplicationScheduler.start()
+            println("[Database] Background database initialization completed successfully.")
+            
+            // Start failover checks only after initial setup is fully complete and successful
+            cockroachOrchestrator?.startFailoverLoop()
+        } catch (e: Exception) {
+            environment.log.error("Fatal: Database orchestration failed during background startup", e)
+        }
+    }
+
     environment.monitor.subscribe(ApplicationStopped) {
         SyncScheduler.stop()
         com.obsidianscout.scouting.DeduplicationScheduler.stop()
