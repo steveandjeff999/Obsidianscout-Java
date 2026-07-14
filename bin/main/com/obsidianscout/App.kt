@@ -55,6 +55,7 @@ import java.security.KeyStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import com.obsidianscout.db.orchestration.CockroachOrchestrator
 
@@ -265,34 +266,67 @@ fun Application.module(appConfig: AppConfig) {
 
     // Run database orchestration and initialization in a background coroutine
     launch(Dispatchers.IO) {
-        try {
-            val dbConfig = if (appConfig.database_type.lowercase() == "cockroach") {
-                val orchestrator = CockroachOrchestrator(appConfig)
-                cockroachOrchestrator = orchestrator
-                orchestrator.orchestrate()
-            } else {
-                appConfig.database
+        var initialized = false
+        var attempts = 0
+        var dbConfig: com.obsidianscout.config.DatabaseConfig? = null
+        while (!initialized) {
+            try {
+                attempts++
+                if (attempts > 1) {
+                    println("[Database] Retrying database orchestration and pool startup in 10 seconds (attempt #$attempts)...")
+                    delay(10000)
+                }
+
+                if (appConfig.database_type.lowercase() == "cockroach") {
+                    val orchestrator = cockroachOrchestrator ?: run {
+                        val newOrch = CockroachOrchestrator(appConfig)
+                        cockroachOrchestrator = newOrch
+                        newOrch
+                    }
+                    if (dbConfig == null || !orchestrator.isProcessAlive()) {
+                        dbConfig = orchestrator.orchestrate()
+                    }
+                } else {
+                    dbConfig = appConfig.database
+                }
+
+                DatabaseFactory.orchestrator = cockroachOrchestrator
+                DatabaseFactory.init(
+                    config = dbConfig!!,
+                    runMigration = (cockroachOrchestrator?.amILeader() ?: true),
+                    isCockroach = (appConfig.database_type.lowercase() == "cockroach")
+                )
+                ConfigService.ensureDefaultConfig()
+                SettingsService.ensureDefaultSettings()
+                AuthService.ensureSeedSuperAdmin(appConfig.seed)
+
+                SyncScheduler.start()
+                com.obsidianscout.scouting.DeduplicationScheduler.start()
+                println("[Database] Background database initialization completed successfully.")
+                
+                // Start failover checks and replication monitoring only after initial setup is fully complete and successful
+                cockroachOrchestrator?.startFailoverLoop()
+                cockroachOrchestrator?.startReplicationMonitor()
+                initialized = true
+            } catch (e: Exception) {
+                environment.log.error("Database orchestration failed (attempt #$attempts)", e)
+                try {
+                    DatabaseFactory.close()
+                } catch (closeEx: Exception) {
+                    // Ignore
+                }
             }
-
-            DatabaseFactory.init(dbConfig)
-            ConfigService.ensureDefaultConfig()
-            SettingsService.ensureDefaultSettings()
-            AuthService.ensureSeedSuperAdmin(appConfig.seed)
-
-            SyncScheduler.start()
-            com.obsidianscout.scouting.DeduplicationScheduler.start()
-            println("[Database] Background database initialization completed successfully.")
-            
-            // Start failover checks only after initial setup is fully complete and successful
-            cockroachOrchestrator?.startFailoverLoop()
-        } catch (e: Exception) {
-            environment.log.error("Fatal: Database orchestration failed during background startup", e)
         }
     }
 
     environment.monitor.subscribe(ApplicationStopped) {
         SyncScheduler.stop()
         com.obsidianscout.scouting.DeduplicationScheduler.stop()
+        try {
+            DatabaseFactory.close()
+        } catch (closeEx: Exception) {
+            // Ignore
+        }
         cockroachOrchestrator?.stop()
     }
 }

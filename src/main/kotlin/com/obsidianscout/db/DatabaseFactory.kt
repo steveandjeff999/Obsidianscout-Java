@@ -6,6 +6,7 @@ import com.zaxxer.hikari.HikariDataSource
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.sql.DriverManager
@@ -25,17 +26,22 @@ object DatabaseFactory {
 
     @Volatile
     var isReady = false
-        private set
-
+    @Volatile
+    var orchestrator: com.obsidianscout.db.orchestration.CockroachOrchestrator? = null
     private var activeDataSource: HikariDataSource? = null
 
-    fun init(config: DatabaseConfig) {
-        isReady = false
+    fun close() {
         try {
             activeDataSource?.close()
         } catch (e: Exception) {
             // ignore
         }
+        activeDataSource = null
+        isReady = false
+    }
+
+    fun init(config: DatabaseConfig, runMigration: Boolean = true, isCockroach: Boolean = false) {
+        close()
 
         ensureJdbcDriverLoaded(config.type)
 
@@ -61,7 +67,7 @@ object DatabaseFactory {
                 isAutoCommit = true
                 username = config.postgres.user
                 password = config.postgres.password
-                transactionIsolation = "TRANSACTION_READ_COMMITTED"
+                transactionIsolation = if (isCockroach) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
             } else {
                 maximumPoolSize = 16
                 minimumIdle = 2
@@ -76,10 +82,10 @@ object DatabaseFactory {
         Database.connect(dataSource)
 
         // Run the INT->UUID migration if the database still has the old schema
-        migrateIntToUuidIfNeeded(config)
+        if (runMigration) {
+            migrateIntToUuidIfNeeded(config, isCockroach)
 
-        transaction {
-            SchemaUtils.createMissingTablesAndColumns(
+            val tables = listOf(
                 Users,
                 ScoutingConfigs,
                 PitScoutingConfigs,
@@ -101,6 +107,62 @@ object DatabaseFactory {
                 UserChatLastRead,
                 PushSubscriptions
             )
+
+            if (isCockroach) {
+                println("[Database] Executing raw DDL schema creation for CockroachDB...")
+                dataSource.connection.use { conn ->
+                    conn.autoCommit = true
+                    conn.createStatement().use { stmt ->
+                        for (ddl in cockroachDdlList) {
+                            val tableNameExtract = ddl.trim().substringAfter("CREATE TABLE IF NOT EXISTS ").substringBefore(" (").trim()
+                            if (tableNameExtract.isNotEmpty() && !ddl.trim().startsWith("CREATE INDEX") && ddl.contains("CREATE TABLE")) {
+                                println("[Database] Ensuring table $tableNameExtract...")
+                                try {
+                                    stmt.executeUpdate(ddl)
+                                } catch (e: Exception) {
+                                    println("[Database] Warning/Error executing DDL statement: ${e.message}")
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                transaction {
+                    SchemaUtils.createMissingTablesAndColumns(*tables.toTypedArray())
+                }
+            }
+        } else {
+            // For followers: verify that the database schema is already initialized by the leader.
+            // Loop and wait for the tables to be created by the leader instead of failing and restarting the pool.
+            val isPostgres = config.type.lowercase() == "postgres"
+            var schemaReady = false
+            val start = System.currentTimeMillis()
+            val maxWaitMs = 600_000 // Wait up to 10 minutes for CockroachDB cluster DDLs
+            
+            while (System.currentTimeMillis() - start < maxWaitMs) {
+                schemaReady = try {
+                    val orch = orchestrator
+                    if (orch != null) {
+                        orch.isLeaderSchemaReady()
+                    } else {
+                        dataSource!!.connection.use { conn ->
+                            conn.autoCommit = true
+                            val existing = getExistingTables(conn)
+                            existing.contains("users") && existing.contains("alliance_memberships")
+                        }
+                    }
+                } catch (e: Exception) {
+                    false
+                }
+                
+                if (schemaReady) break
+                println("[Database] Database schema is not initialized yet. Waiting for leader to complete migrations (elapsed: ${(System.currentTimeMillis() - start) / 1000}s)...")
+                Thread.sleep(5000)
+            }
+            
+            if (!schemaReady) {
+                throw IllegalStateException("Database schema initialization by leader timed out after 600s.")
+            }
         }
         
         isReady = true
@@ -121,7 +183,7 @@ object DatabaseFactory {
      * UUIDs are always generated by the JVM (UUID.randomUUID()), never by a database
      * function such as gen_random_uuid(), so they are safe for multi-master replication.
      */
-    private fun migrateIntToUuidIfNeeded(config: DatabaseConfig) {
+    private fun migrateIntToUuidIfNeeded(config: DatabaseConfig, isCockroach: Boolean) {
         val isPostgres = config.type.lowercase() == "postgres"
         ensureJdbcDriverLoaded(config.type)
         val jdbcUrl = if (isPostgres) buildPostgresUrl(config) else buildSqliteUrl(config)
@@ -207,28 +269,53 @@ object DatabaseFactory {
 
                 // ── 3. Create new UUID tables via Exposed ───────────────────────
                 transaction {
-                    SchemaUtils.createMissingTablesAndColumns(
-                        Users,
-                        ScoutingConfigs,
-                        PitScoutingConfigs,
-                        QualitativeScoutingConfigs,
-                        ScoutingEntries,
-                        PitScoutingEntries,
-                        QualitativeScoutingEntries,
-                        AppSettings,
-                        ApiEvents,
-                        ApiTeams,
-                        ApiMatches,
-                        ScoutingAlliances,
-                        AllianceMemberships,
-                        EpaOprHistoryCache,
-                        PasswordResetTokens,
-                        AllianceSelections,
-                        Banners,
-                        ChatMessages,
-                        UserChatLastRead,
-                        PushSubscriptions
-                    )
+                    if (isCockroach) {
+                        SchemaUtils.create(
+                            Users,
+                            ScoutingConfigs,
+                            PitScoutingConfigs,
+                            QualitativeScoutingConfigs,
+                            ScoutingEntries,
+                            PitScoutingEntries,
+                            QualitativeScoutingEntries,
+                            AppSettings,
+                            ApiEvents,
+                            ApiTeams,
+                            ApiMatches,
+                            ScoutingAlliances,
+                            AllianceMemberships,
+                            EpaOprHistoryCache,
+                            PasswordResetTokens,
+                            AllianceSelections,
+                            Banners,
+                            ChatMessages,
+                            UserChatLastRead,
+                            PushSubscriptions
+                        )
+                    } else {
+                        SchemaUtils.createMissingTablesAndColumns(
+                            Users,
+                            ScoutingConfigs,
+                            PitScoutingConfigs,
+                            QualitativeScoutingConfigs,
+                            ScoutingEntries,
+                            PitScoutingEntries,
+                            QualitativeScoutingEntries,
+                            AppSettings,
+                            ApiEvents,
+                            ApiTeams,
+                            ApiMatches,
+                            ScoutingAlliances,
+                            AllianceMemberships,
+                            EpaOprHistoryCache,
+                            PasswordResetTokens,
+                            AllianceSelections,
+                            Banners,
+                            ChatMessages,
+                            UserChatLastRead,
+                            PushSubscriptions
+                        )
+                    }
                 }
 
                 // ── 4. Copy data, minting UUIDs on the server ───────────────────
@@ -654,21 +741,57 @@ object DatabaseFactory {
         }
         return null
     }
+    private fun getExistingTables(conn: java.sql.Connection): Set<String> {
+        val tables = mutableSetOf<String>()
+        try {
+            conn.prepareStatement(
+                """
+                SELECT c.relname FROM pg_class c 
+                JOIN pg_namespace n ON n.oid = c.relnamespace 
+                WHERE (n.nspname = current_schema() OR n.nspname = 'public') 
+                  AND c.relkind = 'r'
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    while (rs.next()) {
+                        tables.add(rs.getString(1).lowercase())
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // ignore
+        }
+        return tables
+    }
 
     private fun tableExists(conn: java.sql.Connection, tableName: String, isPostgres: Boolean): Boolean {
         return if (isPostgres) {
-            conn.prepareStatement(
-                "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?"
-            ).use { ps ->
-                ps.setString(1, tableName)
-                ps.executeQuery().use { it.next() }
+            try {
+                conn.prepareStatement(
+                    """
+                    SELECT 1 FROM pg_class c 
+                    JOIN pg_namespace n ON n.oid = c.relnamespace 
+                    WHERE (n.nspname = current_schema() OR n.nspname = 'public') 
+                      AND c.relname = ? 
+                      AND c.relkind = 'r'
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setString(1, tableName.lowercase())
+                    ps.executeQuery().use { it.next() }
+                }
+            } catch (e: Exception) {
+                false
             }
         } else {
-            conn.prepareStatement(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?"
-            ).use { ps ->
-                ps.setString(1, tableName)
-                ps.executeQuery().use { it.next() }
+            try {
+                conn.prepareStatement(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?"
+                ).use { ps ->
+                    ps.setString(1, tableName)
+                    ps.executeQuery().use { it.next() }
+                }
+            } catch (e: Exception) {
+                false
             }
         }
     }
@@ -873,11 +996,8 @@ object DatabaseFactory {
         val pg = config.postgres
         val hostPart = if (pg.host.contains(",") || pg.host.contains(":")) pg.host else "${pg.host}:${pg.port}"
         val base = "jdbc:postgresql://$hostPart/${pg.database}"
-        return if (pg.ssl) {
-            "$base?sslmode=require"
-        } else {
-            "$base?sslmode=disable"
-        }
+        val ssl = if (pg.ssl) "sslmode=require" else "sslmode=disable"
+        return "$base?$ssl&reWriteBatchedInserts=true"
     }
 
     /**
@@ -938,4 +1058,262 @@ object DatabaseFactory {
             else -> Class.forName("org.sqlite.JDBC")
         }
     }
+
+    private val cockroachDdlList = listOf(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            username VARCHAR(64) NOT NULL,
+            team_number INT NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            role VARCHAR(16) NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            email VARCHAR(255) NULL,
+            profile_picture TEXT NULL,
+            notification_preference VARCHAR(16) NOT NULL DEFAULT 'all',
+            tour_progress TEXT NULL,
+            CONSTRAINT ux_users_username_team UNIQUE (username, team_number)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS scouting_configs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            team_number INT NOT NULL DEFAULT 0,
+            config_json TEXT NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_scouting_configs_team UNIQUE (team_number)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS pit_scouting_configs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            team_number INT NOT NULL DEFAULT 0,
+            config_json TEXT NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_pit_scouting_configs_team UNIQUE (team_number)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS qualitative_scouting_configs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            team_number INT NOT NULL DEFAULT 0,
+            config_json TEXT NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_qualitative_scouting_configs_team UNIQUE (team_number)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS scouting_entries (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            owner_team_number INT NOT NULL,
+            target_team_number INT NULL,
+            event_key VARCHAR(64) NULL,
+            match_key VARCHAR(64) NULL,
+            match_number INT NULL,
+            data_json TEXT NOT NULL,
+            submitted_by_user_id UUID NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            is_prescout BOOL NOT NULL DEFAULT FALSE,
+            has_discrepancy BOOL NOT NULL DEFAULT FALSE,
+            conflicting_teams VARCHAR(255) NOT NULL DEFAULT ''
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS pit_scouting_entries (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            owner_team_number INT NOT NULL,
+            target_team_number INT NULL,
+            event_key VARCHAR(64) NULL,
+            data_json TEXT NOT NULL,
+            submitted_by_user_id UUID NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            is_prescout BOOL NOT NULL DEFAULT FALSE,
+            has_discrepancy BOOL NOT NULL DEFAULT FALSE,
+            conflicting_teams VARCHAR(255) NOT NULL DEFAULT ''
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS qualitative_scouting_entries (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            owner_team_number INT NOT NULL,
+            target_team_number INT NULL,
+            event_key VARCHAR(64) NULL,
+            match_key VARCHAR(64) NULL,
+            match_number INT NULL,
+            data_json TEXT NOT NULL,
+            submitted_by_user_id UUID NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            is_prescout BOOL NOT NULL DEFAULT FALSE,
+            has_discrepancy BOOL NOT NULL DEFAULT FALSE,
+            conflicting_teams VARCHAR(255) NOT NULL DEFAULT ''
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS app_settings (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            team_number INT NOT NULL DEFAULT 0,
+            settings_json TEXT NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_app_settings_team UNIQUE (team_number)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS api_events (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            event_key VARCHAR(64) NOT NULL,
+            year INT NOT NULL,
+            event_code VARCHAR(32) NULL,
+            name VARCHAR(512) NOT NULL,
+            start_date VARCHAR(32) NULL,
+            end_date VARCHAR(32) NULL,
+            timezone VARCHAR(64) NULL,
+            data_json TEXT NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_api_events_key UNIQUE (event_key)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS api_teams (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            event_key VARCHAR(64) NOT NULL,
+            team_key VARCHAR(32) NOT NULL,
+            team_number INT NOT NULL,
+            name VARCHAR(512) NULL,
+            nickname VARCHAR(512) NULL,
+            city VARCHAR(80) NULL,
+            state VARCHAR(80) NULL,
+            country VARCHAR(80) NULL,
+            opr DOUBLE PRECISION NULL,
+            epa DOUBLE PRECISION NULL,
+            data_json TEXT NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_api_teams_event_team UNIQUE (event_key, team_key)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS api_matches (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            match_key VARCHAR(64) NOT NULL,
+            event_key VARCHAR(64) NOT NULL,
+            comp_level VARCHAR(16) NOT NULL,
+            set_number INT NULL,
+            match_number INT NULL,
+            scheduled_time BIGINT NULL,
+            actual_time BIGINT NULL,
+            red_teams TEXT NOT NULL,
+            blue_teams TEXT NOT NULL,
+            data_json TEXT NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_api_matches_key UNIQUE (match_key)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS scouting_alliances (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(128) NOT NULL,
+            owner_team_number INT NOT NULL,
+            event_key VARCHAR(64) NULL,
+            notes TEXT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            match_config_json TEXT NULL,
+            pit_config_json TEXT NULL,
+            qualitative_config_json TEXT NULL,
+            year INT NULL,
+            event_code VARCHAR(32) NULL
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS alliance_memberships (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            alliance_id UUID NOT NULL,
+            team_number INT NOT NULL,
+            status VARCHAR(16) NOT NULL,
+            invited_at TIMESTAMPTZ NOT NULL,
+            responded_at TIMESTAMPTZ NULL,
+            disabled BOOL NOT NULL DEFAULT FALSE,
+            active BOOL NOT NULL DEFAULT FALSE,
+            CONSTRAINT ux_alliance_memberships_alliance_team UNIQUE (alliance_id, team_number),
+            INDEX idx_alliance_memberships_team_active (team_number, active)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS epa_opr_history_cache (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            event_key VARCHAR(64) NOT NULL,
+            oprs_json TEXT NOT NULL,
+            epa_history_json TEXT NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_epa_opr_history_cache_event UNIQUE (event_key)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NULL,
+            email VARCHAR(255) NULL,
+            token VARCHAR(128) NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL,
+            used BOOL NOT NULL DEFAULT FALSE,
+            CONSTRAINT ux_password_reset_tokens_token UNIQUE (token)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS alliance_selections (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            owner_key VARCHAR(64) NOT NULL,
+            event_key VARCHAR(64) NOT NULL,
+            selection_json TEXT NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_alliance_selections_owner_event UNIQUE (owner_key, event_key)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS banners (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            team_number INT NOT NULL DEFAULT 0,
+            message TEXT NOT NULL,
+            banner_type VARCHAR(32) NOT NULL DEFAULT 'info',
+            is_dismissible BOOL NOT NULL DEFAULT TRUE,
+            is_expandable BOOL NOT NULL DEFAULT FALSE,
+            expandable_message TEXT NOT NULL DEFAULT '',
+            is_active BOOL NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            team_number INT NOT NULL,
+            group_name VARCHAR(64) NOT NULL,
+            user_id UUID NOT NULL,
+            username VARCHAR(64) NOT NULL,
+            content TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            reactions_json TEXT NOT NULL DEFAULT '{}',
+            INDEX idx_chat_messages_team_group (team_number, group_name)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS user_chat_last_read (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL,
+            group_name VARCHAR(64) NOT NULL,
+            last_read_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_user_chat_last_read_user_group UNIQUE (user_id, group_name)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL,
+            endpoint TEXT NOT NULL,
+            p256dh VARCHAR(255) NOT NULL,
+            auth VARCHAR(255) NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            CONSTRAINT ux_push_subscriptions_endpoint UNIQUE (endpoint)
+        )
+        """.trimIndent()
+    )
 }

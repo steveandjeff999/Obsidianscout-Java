@@ -28,6 +28,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     private val binaryName = if (isWindows) "cockroach.exe" else "cockroach"
     private val binaryFile = File(rootDir, binaryName)
     private var pollJob: Job? = null
+    private var replicationJob: Job? = null
     private val knownPeers = java.util.concurrent.ConcurrentHashMap.newKeySet<Pair<String, Int>>()
     private var tailscaleIp: String = "127.0.0.1"
     private var port: Int = 26257
@@ -47,7 +48,11 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
      * Returns a DatabaseConfig configured to connect to this local CockroachDB instance.
      */
     fun orchestrate(): DatabaseConfig {
+        currentLeaderIp = null
         println("[Cockroach] Starting autonomous database lifecycle...")
+
+        // Clean up any orphaned processes from previous runs
+        killExistingProcesses()
 
         // 1. Ensure installed
         ensureInstalled()
@@ -91,9 +96,20 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             val status = queryPeerStatus(peer.first)
             if (status != null) {
                 if (!status.leaderIp.isNullOrBlank()) {
-                    println("[Cockroach] Peer at ${peer.first} reports leader is ${status.leaderIp}")
-                    leaderIp = status.leaderIp
-                    break
+                    val reportedLeader = status.leaderIp
+                    if (reportedLeader == tailscaleIp) {
+                        println("[Cockroach] Peer at ${peer.first} reports we ($tailscaleIp) are the leader, but we are initializing.")
+                    } else {
+                        // Verify that the reported leader is actually online and responsive
+                        val leaderStatus = queryPeerStatus(reportedLeader)
+                        if (leaderStatus != null) {
+                            println("[Cockroach] Peer at ${peer.first} reports leader is $reportedLeader, and it is online.")
+                            leaderIp = reportedLeader
+                            break
+                        } else {
+                            println("[Cockroach] Peer at ${peer.first} reports leader is $reportedLeader, but it is offline/unreachable. Ignoring.")
+                        }
+                    }
                 } else if (status.isDbActive) {
                     println("[Cockroach] Peer at ${peer.first} has active database. Treating it as leader.")
                     leaderIp = peer.first
@@ -183,6 +199,9 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                 }
             } else {
                 println("[Cockroach] SQL engine is ready.")
+                if (leaderIp == tailscaleIp) {
+                    configureClusterReplication(tailscaleIp, port, isInsecure)
+                }
             }
 
             // 10. Setup DB User and Password if requested
@@ -214,6 +233,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
      */
     fun stop() {
         pollJob?.cancel()
+        replicationJob?.cancel()
         process?.let {
             if (it.isAlive) {
                 println("[Cockroach] Stopping database process...")
@@ -226,6 +246,42 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             }
         }
         isDbActive = false
+        currentLeaderIp = null
+    }
+
+    fun isLeaderSchemaReady(): Boolean {
+        val leader = currentLeaderIp ?: return false
+        if (leader == tailscaleIp) return true
+        val status = queryPeerStatus(leader)
+        return status?.dbReady ?: false
+    }
+
+    fun isProcessAlive(): Boolean {
+        return process?.isAlive ?: false
+    }
+
+    fun amILeader(): Boolean {
+        return tailscaleIp == currentLeaderIp
+    }
+
+    private fun killExistingProcesses() {
+        try {
+            val os = System.getProperty("os.name").lowercase()
+            if (os.contains("win")) {
+                ProcessBuilder("taskkill", "/F", "/IM", "cockroach.exe")
+                    .redirectErrorStream(true)
+                    .start()
+                    .waitFor()
+            } else {
+                ProcessBuilder("killall", "-9", "cockroach")
+                    .redirectErrorStream(true)
+                    .start()
+                    .waitFor()
+            }
+            println("[Cockroach] Cleaned up any existing cockroach processes.")
+        } catch (e: Exception) {
+            // ignore
+        }
     }
 
     private fun fetchLeaderTime(leaderIp: String): Long? {
@@ -396,6 +452,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                                     println("[Cockroach] We are the new leader. Initializing cluster...")
                                     initializeCluster(tailscaleIp, port, isInsecure)
                                     waitForSqlReady(tailscaleIp, port, isInsecure, 30)
+                                    configureClusterReplication(tailscaleIp, port, isInsecure)
                                 }
 
                                 val newDbConfig = DatabaseConfig(
@@ -409,7 +466,8 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                                         ssl = !isInsecure
                                     )
                                 )
-                                com.obsidianscout.db.DatabaseFactory.init(newDbConfig)
+                                 com.obsidianscout.db.DatabaseFactory.orchestrator = this@CockroachOrchestrator
+                                 com.obsidianscout.db.DatabaseFactory.init(newDbConfig, runMigration = (newLeaderIp == tailscaleIp), isCockroach = true)
                             }
                         }
                     }
@@ -686,6 +744,122 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         val initProcess = initPb.start()
         val exitCode = initProcess.waitFor()
         println("[Cockroach] Cluster initialization returned exit code: $exitCode")
+    }
+
+    fun startReplicationMonitor() {
+        if (!amILeader()) return
+        replicationJob?.cancel()
+        
+        replicationJob = CoroutineScope(Dispatchers.IO).launch {
+            var currentReplicas = 1
+            println("[Cockroach] Starting background replication monitor...")
+            while (isActive) {
+                try {
+                    val activeNodes = getActiveNodesCount()
+                    if (activeNodes >= 2 && currentReplicas == 1) {
+                        println("[Cockroach] $activeNodes active nodes detected. Upgrading cluster replication factor to 3...")
+                        if (setReplicationFactor(3)) {
+                            currentReplicas = 3
+                            println("[Cockroach] Replication factor successfully set to 3.")
+                        }
+                    } else if (activeNodes < 2 && currentReplicas == 3) {
+                        println("[Cockroach] WARNING: Active nodes fell to $activeNodes. Cluster is under-quorum.")
+                    }
+                } catch (e: Exception) {
+                    // Ignore
+                }
+                delay(10000)
+            }
+        }
+    }
+
+    private fun getActiveNodesCount(): Int {
+        var count = 1
+        try {
+            val cmd = listOf(
+                binaryFile.absolutePath,
+                "sql",
+                "--host=$tailscaleIp:$port",
+                "-e",
+                "SELECT count(*) FROM crdb_internal.gossip_nodes WHERE membership = 'ACTIVE';"
+            ) + if (isInsecure) listOf("--insecure") else listOf("--certs-dir=${File(rootDir, "certs").absolutePath}")
+
+            val pb = ProcessBuilder(cmd)
+                .directory(rootDir)
+            val proc = pb.start()
+            val output = proc.inputStream.bufferedReader().use { it.readText() }.trim()
+            proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+            
+            val lines = output.lines()
+            for (line in lines) {
+                val num = line.trim().toIntOrNull()
+                if (num != null) {
+                    count = num
+                    break
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
+        return count
+    }
+
+    private fun setReplicationFactor(replicas: Int): Boolean {
+        val sql = "ALTER RANGE default CONFIGURE ZONE USING num_replicas = $replicas; ALTER RANGE system CONFIGURE ZONE USING num_replicas = $replicas;"
+        val cmd = listOf(
+            binaryFile.absolutePath,
+            "sql",
+            "--host=$tailscaleIp:$port",
+            "-e",
+            sql
+        ) + if (isInsecure) listOf("--insecure") else listOf("--certs-dir=${File(rootDir, "certs").absolutePath}")
+
+        return try {
+            val pb = ProcessBuilder(cmd)
+                .directory(rootDir)
+            val proc = pb.start()
+            val exitCode = proc.waitFor()
+            exitCode == 0
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun configureClusterReplication(
+        tailscaleIp: String,
+        port: Int,
+        isInsecure: Boolean
+    ) {
+        val logFile = File(rootDir, "cockroach.log")
+        val sql = "ALTER RANGE default CONFIGURE ZONE USING num_replicas = 1; ALTER RANGE system CONFIGURE ZONE USING num_replicas = 1;"
+        
+        val cmd = mutableListOf(
+            binaryFile.absolutePath,
+            "sql",
+            "--host=$tailscaleIp:$port",
+            "-e",
+            sql
+        )
+
+        if (isInsecure) {
+            cmd.add("--insecure")
+        } else {
+            val certsDir = File(rootDir, "certs")
+            cmd.add("--certs-dir=${certsDir.absolutePath}")
+        }
+
+        try {
+            val sqlPb = ProcessBuilder(cmd)
+                .directory(rootDir)
+                .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
+                .redirectError(ProcessBuilder.Redirect.appendTo(logFile))
+
+            val sqlProcess = sqlPb.start()
+            val exitCode = sqlProcess.waitFor()
+            println("[Cockroach] Set cluster replication factor to 1 (exit code: $exitCode)")
+        } catch (e: Exception) {
+            println("[Cockroach] Failed to set replication factor to 1: ${e.message}")
+        }
     }
 
     private fun createDatabaseUser(
