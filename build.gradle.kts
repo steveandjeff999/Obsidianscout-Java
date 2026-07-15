@@ -108,6 +108,12 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
     from(file("scripts/update.bat")) {
         into(".")
     }
+    from(file("scripts/configure_ntp.sh")) {
+        into(".")
+    }
+    from(file("scripts/configure_ntp.ps1")) {
+        into(".")
+    }
     
     // Set destination directory
     into(rootProject.layout.buildDirectory.dir("bundle"))

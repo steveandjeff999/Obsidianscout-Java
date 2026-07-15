@@ -28,7 +28,7 @@ object DatabaseFactory {
     var isReady = false
     @Volatile
     var orchestrator: com.obsidianscout.db.orchestration.CockroachOrchestrator? = null
-    private var activeDataSource: HikariDataSource? = null
+    internal var activeDataSource: HikariDataSource? = null
 
     fun close() {
         try {
@@ -112,15 +112,18 @@ object DatabaseFactory {
                 println("[Database] Executing raw DDL schema creation for CockroachDB...")
                 dataSource.connection.use { conn ->
                     conn.autoCommit = true
+                    val existingTables = getExistingTables(conn)
                     conn.createStatement().use { stmt ->
                         for (ddl in cockroachDdlList) {
-                            val tableNameExtract = ddl.trim().substringAfter("CREATE TABLE IF NOT EXISTS ").substringBefore(" (").trim()
+                            val tableNameExtract = ddl.trim().substringAfter("CREATE TABLE IF NOT EXISTS ").substringBefore(" (").trim().lowercase()
                             if (tableNameExtract.isNotEmpty() && !ddl.trim().startsWith("CREATE INDEX") && ddl.contains("CREATE TABLE")) {
-                                println("[Database] Ensuring table $tableNameExtract...")
-                                try {
-                                    stmt.executeUpdate(ddl)
-                                } catch (e: Exception) {
-                                    println("[Database] Warning/Error executing DDL statement: ${e.message}")
+                                if (!existingTables.contains(tableNameExtract)) {
+                                    println("[Database] Creating table $tableNameExtract...")
+                                    try {
+                                        stmt.executeUpdate(ddl)
+                                    } catch (e: Exception) {
+                                        println("[Database] Warning/Error executing DDL statement: ${e.message}")
+                                    }
                                 }
                             }
                         }

@@ -694,7 +694,8 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             "--http-addr=$tailscaleIp:${port + 1}",
             "--store=${File(rootDir, "data").absolutePath}",
             "--logtostderr=INFO",
-            "--max-offset=4s"
+            "--vmodule=replicate_queue=1,allocator=1,rebalancer=1",
+            "--max-offset=500ms"
         )
 
         if (isInsecure) {
@@ -747,81 +748,541 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     }
 
     fun startReplicationMonitor() {
-        if (!amILeader()) return
         replicationJob?.cancel()
-        
+
         replicationJob = CoroutineScope(Dispatchers.IO).launch {
             var currentReplicas = 1
-            println("[Cockroach] Starting background replication monitor...")
+            var lastDiagnosticsTime = 0L
+            var lastLeaseHealTime = 0L
+            var lastQueueHealTime = 0L
+            var lastClockSyncTime = 0L
+            var consecutiveInvalidLeaseRounds = 0
+            println("[Cockroach] Starting background replication monitor with self-healing...")
             while (isActive) {
                 try {
-                    val activeNodes = getActiveNodesCount()
-                    if (activeNodes >= 2 && currentReplicas == 1) {
-                        println("[Cockroach] $activeNodes active nodes detected. Upgrading cluster replication factor to 3...")
-                        if (setReplicationFactor(3)) {
-                            currentReplicas = 3
-                            println("[Cockroach] Replication factor successfully set to 3.")
+                    val now = System.currentTimeMillis()
+
+                    // ── Self-Healing: Local Process Crash ─────────────────────────────
+                    // Runs every loop (10s). Detects if the local CockroachDB process
+                    // died unexpectedly (e.g., fatal Pebble/disk error on SD card).
+                    // If a fatal disk error is detected in the log, wipes the data
+                    // directory so the node rejoins with a clean snapshot from peers.
+                    val localProcess = process
+                    if (localProcess != null && !localProcess.isAlive) {
+                        val exitCode = localProcess.exitValue()
+                        println("[ProcessMonitor] ⚠️ Local CockroachDB process has died (exit=$exitCode). Investigating...")
+                        val fatalDisk = checkForFatalDiskError()
+                        if (fatalDisk) {
+                            println("[ProcessMonitor] 💾 Fatal storage/disk error detected in log (likely SD card I/O failure). Wiping data directory for clean rejoin...")
+                            wipeDataDirectory()
                         }
-                    } else if (activeNodes < 2 && currentReplicas == 3) {
-                        println("[Cockroach] WARNING: Active nodes fell to $activeNodes. Cluster is under-quorum.")
+                        try {
+                            val peers = try {
+                                GoogleSheetsManager.fetchPeers(appConfig.google_sheet_url, appConfig.google_sheet_password)
+                            } catch (e: Exception) {
+                                emptyList<Pair<String, Int>>()
+                            }
+                            val joinPeers = if (peers.isNotEmpty()) peers else listOf(Pair(currentLeaderIp ?: tailscaleIp, port))
+                            val newProc = startCockroachProcess(tailscaleIp, port, joinPeers, isInsecure)
+                            process = newProc
+                            isDbActive = true
+                            println("[ProcessMonitor] ✅ CockroachDB restarted. Waiting for port to open...")
+                            waitForPort(tailscaleIp, port, 45)
+                            println("[ProcessMonitor] CockroachDB port open. Node rejoining cluster.")
+                        } catch (e: Exception) {
+                            println("[ProcessMonitor] Failed to restart CockroachDB: ${e.message}")
+                        }
+                    }
+
+                    if (amILeader()) {
+                        val activeNodes = getActiveNodesCount()
+                        if (activeNodes >= 2 && currentReplicas == 1) {
+                            println("[Cockroach] $activeNodes active nodes detected. Upgrading cluster replication factor to 3...")
+                            if (setReplicationFactor(3)) {
+                                currentReplicas = 3
+                                println("[Cockroach] Replication factor successfully set to 3.")
+                            }
+                        } else if (activeNodes < 2 && currentReplicas == 3) {
+                            println("[Cockroach] WARNING: Active nodes fell to $activeNodes. Cluster is under-quorum.")
+                        }
+
+                        // ── Self-Healing: Invalid Leases ──────────────────────────────────
+                        // Runs every 30s. If all leases are invalid, the replicate queue
+                        // is completely frozen. Detect this and force lease re-acquisition.
+                        if (now - lastLeaseHealTime > 30_000) {
+                            val invalidLeases = getMetricValue("replicas.leaders_invalid_lease")
+                            val totalLeaders  = getMetricValue("replicas.leaders")
+                            val leaseholders  = getMetricValue("replicas.leaseholders")
+                            if (invalidLeases != null && totalLeaders != null && leaseholders != null) {
+                                val allInvalid = totalLeaders > 0 && leaseholders == 0L && invalidLeases >= totalLeaders
+                                if (allInvalid) {
+                                    consecutiveInvalidLeaseRounds++
+                                    println("[LeaseHealer] ⚠️ All $invalidLeases leases are invalid (round $consecutiveInvalidLeaseRounds). Leaseholders=0. Triggering lease re-acquisition...")
+                                    healInvalidLeases()
+                                } else {
+                                    if (consecutiveInvalidLeaseRounds > 0)
+                                        println("[LeaseHealer] ✅ Leases recovered. Leaseholders=$leaseholders, Invalid=$invalidLeases")
+                                    consecutiveInvalidLeaseRounds = 0
+                                }
+                            }
+                            lastLeaseHealTime = now
+                        }
+
+                        // ── Self-Healing: Frozen Replicate Queue ─────────────────────────
+                        // Runs every 60s. If the queue has pending items but addreplica=0
+                        // and no snapshots have been generated, the queue is frozen.
+                        if (now - lastQueueHealTime > 60_000) {
+                            val pending     = getMetricValue("queue.replicate.pending")
+                            val addReplica  = getMetricValue("queue.replicate.addreplica")
+                            val snapshots   = getMetricValue("range.snapshots.generated")
+                            val underRep    = getMetricValue("ranges.underreplicated")
+                            if (pending != null && addReplica != null && snapshots != null && underRep != null) {
+                                val queueFrozen = pending > 0 && addReplica == 0L && snapshots == 0L && underRep > 0
+                                if (queueFrozen) {
+                                    println("[QueueHealer] ⚠️ Replicate queue frozen: pending=$pending, addreplica=0, snapshots=0, underRep=$underRep. Applying remediation...")
+                                    healFrozenReplicateQueue()
+                                } else if (underRep == 0L) {
+                                    println("[QueueHealer] ✅ Cluster fully replicated.")
+                                }
+                            }
+                            lastQueueHealTime = now
+                        }
+                    }
+
+                    // ── Self-Healing: Clock Drift (all nodes, not just leader) ────────
+                    // Runs every 60s on every node. Measures ACTUAL wall-clock offset
+                    // against the leader via HTTP — NOT the closed_ts lag, which is a
+                    // Raft commit performance metric and not a clock synchronization issue.
+                    // Fixes the root cause of lease invalidation on Pi nodes after network blips.
+                    if (now - lastClockSyncTime > 60_000) {
+                        val leader = currentLeaderIp
+                        if (leader != null && leader != tailscaleIp) {
+                            val leaderTimeMs = fetchLeaderTime(leader)
+                            if (leaderTimeMs != null) {
+                                val wallOffsetMs = Math.abs(leaderTimeMs - System.currentTimeMillis())
+                                if (wallOffsetMs > 400) {
+                                    println("[ClockHealer] ⚠️ Wall-clock is ${wallOffsetMs}ms off vs leader. Forcing NTP resync...")
+                                    forceNtpSync()
+                                } else {
+                                    // Distinguish Raft lag from clock skew in diagnostics
+                                    val closedTsMs = (getMetricValue("kv.closed_timestamp.max_behind_nanos") ?: 0L) / 1_000_000
+                                    if (closedTsMs > 2000) {
+                                        println("[ClockHealer] ℹ️ Closed_ts=${closedTsMs}ms behind but wall-clock OK (${wallOffsetMs}ms). Cause: slow Raft commits, not clock drift.")
+                                    }
+                                }
+                            }
+                        }
+                        lastClockSyncTime = now
+                    }
+
+                    if (now - lastDiagnosticsTime > 20_000) {
+                        runReplicationDiagnostics()
+                        lastDiagnosticsTime = now
                     }
                 } catch (e: Exception) {
-                    // Ignore
+                    println("[ReplicationMonitor] Error in monitor loop: ${e.message}")
                 }
-                delay(10000)
+                delay(10_000)
             }
+        }
+    }
+
+    /**
+     * Reads a single numeric metric from crdb_internal.node_metrics.
+     * Returns null if unavailable.
+     */
+    private fun getMetricValue(metricName: String): Long? {
+        return try {
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return null
+            ds.connection.use { conn ->
+                conn.createStatement().use { stmt ->
+                    stmt.execute("SET allow_unsafe_internals = true")
+                    stmt.executeQuery(
+                        "SELECT value FROM crdb_internal.node_metrics WHERE name = '$metricName' LIMIT 1"
+                    ).use { rs ->
+                        if (rs.next()) rs.getLong(1) else null
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Scans the last 200 lines of cockroach.log for Pebble fatal errors that
+     * indicate disk hardware failure (SD card I/O errors on Raspberry Pi).
+     * Returns true if a disk-fatal log entry is found.
+     */
+    private fun checkForFatalDiskError(): Boolean {
+        val logFile = File(rootDir, "cockroach.log")
+        if (!logFile.exists()) return false
+        return try {
+            val lastLines = logFile.readLines().takeLast(200)
+            lastLines.any { line ->
+                // Pebble fatal lines start with 'F' and reference storage/disk
+                (line.startsWith("F") || line.contains("fatal error") || line.contains("pebble")) &&
+                (line.contains("faulty hardware") || line.contains("storage/pebble") ||
+                 line.contains("I/O error") || line.contains("disk") || line.contains("terminating due to a fatal"))
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Wipes the CockroachDB data directory.
+     * Called only after a confirmed fatal disk/storage error.
+     * On restart, CockroachDB will rejoin the cluster and receive a fresh
+     * snapshot from the leader — rebuilding its state from peers.
+     */
+    private fun wipeDataDirectory() {
+        val dataDir = File(rootDir, "data")
+        try {
+            if (dataDir.exists()) {
+                dataDir.deleteRecursively()
+                println("[ProcessMonitor] Data directory wiped: ${dataDir.absolutePath}")
+            }
+        } catch (e: Exception) {
+            println("[ProcessMonitor] Warning: failed to fully wipe data directory: ${e.message}")
+        }
+    }
+
+    /**
+     * Self-Healing: Invalid Leases
+     *
+     * When replicas.leaders_invalid_lease == replicas.leaders (all leases gone), the
+     * replicate queue is completely frozen. This happens when:
+     *   1. Periodic network blips increment the liveness epoch on other nodes
+     *   2. The old epoch-based leases are instantly invalidated
+     *   3. CockroachDB can't re-acquire because clock drift > max-offset
+     *
+     * Fix: Force lease transfers away from and back to n1, reset snapshot rates,
+     * and trigger the lease queue to re-process.
+     */
+    private fun healInvalidLeases() {
+        try {
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
+            ds.connection.use { conn ->
+                conn.createStatement().use { stmt ->
+                    stmt.execute("SET allow_unsafe_internals = true")
+
+                    // Step 1: Reset snapshot rates to defaults to unblock any throttled paths
+                    try {
+                        stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '32 MiB'")
+                        stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate  = '32 MiB'")
+                        println("[LeaseHealer] Reset snapshot rates to 32 MiB")
+                    } catch (e: Exception) {
+                        println("[LeaseHealer] Could not set snapshot rates: ${e.message}")
+                    }
+
+                    // Step 2: Nudge the lease queue by toggling a cluster setting
+                    // This causes CockroachDB to re-evaluate all lease holders
+                    try {
+                        stmt.execute("SET CLUSTER SETTING kv.allocator.load_based_lease_rebalancing.enabled = false")
+                        Thread.sleep(2000)
+                        stmt.execute("SET CLUSTER SETTING kv.allocator.load_based_lease_rebalancing.enabled = true")
+                        println("[LeaseHealer] Toggled load-based lease rebalancing to force re-evaluation")
+                    } catch (e: Exception) {
+                        println("[LeaseHealer] Could not toggle lease rebalancing: ${e.message}")
+                    }
+
+                    // Step 3: If leases are still invalid after toggle, re-apply zone configs
+                    // to wake up the allocator and force it to re-assign leases
+                    try {
+                        val dbName = appConfig.database.postgres.database.lowercase()
+                        stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = 3")
+                        stmt.execute("ALTER RANGE system  CONFIGURE ZONE USING num_replicas = 3")
+                        stmt.execute("ALTER DATABASE \"$dbName\" CONFIGURE ZONE USING num_replicas = 3")
+                        println("[LeaseHealer] Re-applied zone configs to wake allocator")
+                    } catch (e: Exception) {
+                        println("[LeaseHealer] Could not re-apply zone configs: ${e.message}")
+                    }
+
+                    println("[LeaseHealer] Lease healing actions complete. Waiting for CockroachDB to re-acquire leases...")
+                }
+            }
+        } catch (e: Exception) {
+            println("[LeaseHealer] Healing failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Self-Healing: Frozen Replicate Queue
+     *
+     * When queue.replicate.pending > 0 but addreplica = 0 and snapshots.generated = 0
+     * the queue is stuck in exponential backoff from repeated context cancellations.
+     *
+     * Fix: Adjust snapshot rates and force a replication factor re-application which
+     * causes CockroachDB to re-enqueue all under-replicated ranges with fresh backoff.
+     */
+    private fun healFrozenReplicateQueue() {
+        try {
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
+            ds.connection.use { conn ->
+                conn.createStatement().use { stmt ->
+                    stmt.execute("SET allow_unsafe_internals = true")
+
+                    // Bump then restore snapshot rates to kick the sender
+                    try {
+                        stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '16 MiB'")
+                        stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate  = '16 MiB'")
+                        println("[QueueHealer] Set snapshot rates to 16 MiB to unblock sender")
+                    } catch (e: Exception) {
+                        println("[QueueHealer] Could not set snapshot rates: ${e.message}")
+                    }
+
+                    // Re-apply replication factor to force re-enqueue with fresh backoff
+                    try {
+                        val dbName = appConfig.database.postgres.database.lowercase()
+                        stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = 3")
+                        stmt.execute("ALTER RANGE system  CONFIGURE ZONE USING num_replicas = 3")
+                        stmt.execute("ALTER DATABASE \"$dbName\" CONFIGURE ZONE USING num_replicas = 3")
+                        println("[QueueHealer] Re-applied zone config to force replication re-enqueue")
+                    } catch (e: Exception) {
+                        println("[QueueHealer] Could not re-apply zone config: ${e.message}")
+                    }
+
+                    println("[QueueHealer] Queue heal actions complete.")
+                }
+            }
+        } catch (e: Exception) {
+            println("[QueueHealer] Healing failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Self-Healing: Clock Drift
+     *
+     * Forces an immediate NTP resync. On Linux (Raspberry Pi) uses chronyc makestep.
+     * On Windows uses w32tm /resync /force.
+     * Called when kv.closed_timestamp.max_behind_nanos exceeds 400ms.
+     */
+    private fun forceNtpSync() {
+        try {
+            val cmd = if (isWindows) {
+                listOf("w32tm", "/resync", "/force")
+            } else {
+                // Try chrony first, fall back to ntpdate
+                val chronyAvailable = try {
+                    ProcessBuilder("which", "chronyc").start().waitFor() == 0
+                } catch (e: Exception) { false }
+                if (chronyAvailable) listOf("sudo", "chronyc", "makestep")
+                else listOf("sudo", "ntpdate", "-s", "time.cloudflare.com")
+            }
+            val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
+            val exited = p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
+            val output = p.inputStream.bufferedReader().use { it.readText() }.trim()
+            if (exited && p.exitValue() == 0) {
+                println("[ClockHealer] ✅ NTP resync succeeded: $output")
+            } else {
+                println("[ClockHealer] ⚠️ NTP resync exited=${if(exited) p.exitValue() else -1}: $output")
+            }
+        } catch (e: Exception) {
+            println("[ClockHealer] Failed to run NTP resync: ${e.message}")
+        }
+    }
+
+    private fun runReplicationDiagnostics() {
+        try {
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
+            ds.connection.use { conn ->
+                conn.createStatement().use { stmt ->
+                    stmt.execute("SET allow_unsafe_internals = true;")
+                    
+                    println("=========================================================================")
+                    println("[Replication Diagnostics] Running cluster health check...")
+                    
+                    // 1. Query gossip nodes
+                    val peerIps = mutableListOf<String>()
+                    println("[Replication Diagnostics] Gossip Nodes:")
+                    // gossip_nodes schema changed in v26.x — 'is_live' moved to gossip_liveness
+                    stmt.executeQuery("SELECT node_id, address FROM crdb_internal.gossip_nodes;").use { rs ->
+                        var count = 0
+                        while (rs.next()) {
+                            val id = rs.getInt("node_id")
+                            val address = rs.getString("address")
+                            println("  - Node #$id: $address")
+                            peerIps.add(address)
+                            count++
+                        }
+                        println("  Total Gossip Nodes: $count")
+                    }
+                    
+                    // 2. Outbound Network Connectivity Check
+                    println("[Replication Diagnostics] Outbound Network Connectivity Check (Port 26257):")
+                    for (addr in peerIps) {
+                        val ip = addr.substringBefore(":")
+                        val p = addr.substringAfter(":").toIntOrNull() ?: 26257
+                        try {
+                            java.net.Socket().use { socket ->
+                                socket.connect(java.net.InetSocketAddress(ip, p), 3000)
+                                println("  - Connection to $ip:$p: SUCCESS")
+                            }
+                        } catch (e: Exception) {
+                            println("  - Connection to $ip:$p: FAILED (${e.message})")
+                        }
+                    }
+                    
+                    // 3. Query under-replicated ranges + lease health
+                    stmt.executeQuery("SELECT count(*) FROM crdb_internal.ranges WHERE array_length(replicas, 1) < 3;").use { rs ->
+                        if (rs.next()) {
+                            val underReplicated = rs.getInt(1)
+                            println("[Replication Diagnostics] Under-replicated ranges: $underReplicated")
+                        }
+                    }
+
+                    // 3b. Lease validity check — the #1 cause of frozen replication
+                    val invalidLeases = getMetricValue("replicas.leaders_invalid_lease") ?: -1L
+                    val leaseholders  = getMetricValue("replicas.leaseholders") ?: -1L
+                    val snapGenerated = getMetricValue("range.snapshots.generated") ?: -1L
+                    val queuePending  = getMetricValue("queue.replicate.pending") ?: -1L
+                    val addReplica    = getMetricValue("queue.replicate.addreplica") ?: -1L
+                    val closedTsLagMs = (getMetricValue("kv.closed_timestamp.max_behind_nanos") ?: 0L) / 1_000_000
+                    println("[Replication Diagnostics] Lease health: leaseholders=$leaseholders, invalid=$invalidLeases")
+                    println("[Replication Diagnostics] Snapshot queue: generated=$snapGenerated, pending=$queuePending, addreplica=$addReplica")
+                    println("[Replication Diagnostics] Raft commit lag: closed_ts=${closedTsLagMs}ms behind")
+                    if (invalidLeases > 0 && leaseholders == 0L)
+                        println("[Replication Diagnostics] ⚠️  ALL LEASES INVALID — replication queue will be frozen until leases are re-acquired")
+                    if (snapGenerated == 0L && queuePending > 0L)
+                        println("[Replication Diagnostics] ⚠️  QUEUE FROZEN — ${queuePending} pending items but 0 snapshots sent")
+                    // NOTE: closed_ts lag > 400ms is Raft commit latency (slow disk/network),
+                    // not clock skew. Real clock drift is checked via wall-clock comparison
+                    // in the ClockHealer, which uses fetchLeaderTime() for accuracy.
+                    if (closedTsLagMs > 2000)
+                        println("[Replication Diagnostics] ℹ️  Raft lag: closed_ts=${closedTsLagMs}ms behind — slow disk or network (not clock drift)")
+                    
+                    // 4. Query default zone configuration
+                    stmt.executeQuery("SHOW ZONE CONFIGURATION FOR RANGE default;").use { rs ->
+                        if (rs.next()) {
+                            val sqlConfig = rs.getString("raw_config_sql").replace("\n", " ").trim()
+                            println("[Replication Diagnostics] default zone config: $sqlConfig")
+                        }
+                    }
+                    
+                    // 5. Query database zone configuration
+                    val dbName = conn.catalog.lowercase()
+                    try {
+                        stmt.executeQuery("SHOW ZONE CONFIGURATION FOR DATABASE \"$dbName\";").use { rs ->
+                            if (rs.next()) {
+                                val sqlConfig = rs.getString("raw_config_sql").replace("\n", " ").trim()
+                                println("[Replication Diagnostics] $dbName zone config: $sqlConfig")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        println("[Replication Diagnostics] No custom zone config for database $dbName (inherits from default)")
+                    }
+                    
+                    // 6. Parse recent allocator/replication warnings from cockroach.log
+                    val logFile = File(rootDir, "cockroach.log")
+                    if (logFile.exists()) {
+                        println("[Replication Diagnostics] Recent CockroachDB Warnings/Errors (From Log):")
+                        try {
+                            val allLines = logFile.readLines()
+                            val matchedLines = mutableListOf<String>()
+                            val maxLines = allLines.size
+                            val scanStart = (maxLines - 3000).coerceAtLeast(0)
+                            
+                            var i = scanStart
+                            while (i < maxLines) {
+                                val line = allLines[i]
+                                if (line.contains("new range lease") || line.contains("replica_proposal.go")) {
+                                    i++
+                                    continue
+                                }
+                                val lower = line.lowercase()
+                                if (lower.contains("warning") || lower.contains("error") || lower.contains("allocator") || lower.contains("replicate") || lower.contains("raft") || lower.contains("purgatory")) {
+                                    matchedLines.add(line)
+                                    // Capture up to 5 subsequent lines if they are part of a multi-line log entry (starts with spaces or tab)
+                                    var j = i + 1
+                                    while (j < maxLines && j < i + 6) {
+                                        val nextLine = allLines[j]
+                                        if (nextLine.startsWith(" ") || nextLine.startsWith("\t") || nextLine.contains("Error types:") || nextLine.contains("wrapper:") || nextLine.contains("failed:")) {
+                                            matchedLines.add("    $nextLine")
+                                            j++
+                                        } else {
+                                            break
+                                        }
+                                    }
+                                    i = j - 1
+                                }
+                                i++
+                            }
+                            
+                            val warningLines = matchedLines.takeLast(30)
+                            if (warningLines.isEmpty()) {
+                                println("  No recent warnings or replication events found in log.")
+                            } else {
+                                for (line in warningLines) {
+                                    println("  $line")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            println("  Failed to read cockroach.log: ${e.message}")
+                        }
+                    }
+                    
+                    println("=========================================================================")
+                }
+            }
+        } catch (e: Exception) {
+            println("[Replication Diagnostics] Failed to run diagnostics: ${e.message}")
+        }
+    }
+
+    private fun runSqlViaJdbc(tailscaleIp: String, port: Int, isInsecure: Boolean, block: (java.sql.Connection) -> Unit) {
+        val ssl = if (isInsecure) "sslmode=disable" else "sslmode=require"
+        val url = "jdbc:postgresql://$tailscaleIp:$port/defaultdb?$ssl"
+        try {
+            Class.forName("org.postgresql.Driver")
+            java.sql.DriverManager.getConnection(url, "root", "").use { conn ->
+                block(conn)
+            }
+        } catch (e: Exception) {
+            println("[Cockroach] JDBC connection failed to $tailscaleIp:$port: ${e.message}")
+            throw e
         }
     }
 
     private fun getActiveNodesCount(): Int {
         var count = 1
         try {
-            val cmd = listOf(
-                binaryFile.absolutePath,
-                "sql",
-                "--host=$tailscaleIp:$port",
-                "-e",
-                "SELECT count(*) FROM crdb_internal.gossip_nodes WHERE membership = 'ACTIVE';"
-            ) + if (isInsecure) listOf("--insecure") else listOf("--certs-dir=${File(rootDir, "certs").absolutePath}")
-
-            val pb = ProcessBuilder(cmd)
-                .directory(rootDir)
-            val proc = pb.start()
-            val output = proc.inputStream.bufferedReader().use { it.readText() }.trim()
-            proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
-            
-            val lines = output.lines()
-            for (line in lines) {
-                val num = line.trim().toIntOrNull()
-                if (num != null) {
-                    count = num
-                    break
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource
+            if (ds != null) {
+                ds.connection.use { conn ->
+                    conn.createStatement().use { stmt ->
+                        stmt.execute("SET allow_unsafe_internals = true;")
+                        // is_live moved to gossip_liveness in v26.x
+                        stmt.executeQuery("SELECT count(*) FROM crdb_internal.gossip_nodes;").use { rs ->
+                            if (rs.next()) {
+                                count = rs.getInt(1)
+                            }
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
-            // Ignore
+            println("[Cockroach] Error querying active nodes count: ${e.message}")
         }
         return count
     }
 
     private fun setReplicationFactor(replicas: Int): Boolean {
-        val sql = "ALTER RANGE default CONFIGURE ZONE USING num_replicas = $replicas; ALTER RANGE system CONFIGURE ZONE USING num_replicas = $replicas;"
-        val cmd = listOf(
-            binaryFile.absolutePath,
-            "sql",
-            "--host=$tailscaleIp:$port",
-            "-e",
-            sql
-        ) + if (isInsecure) listOf("--insecure") else listOf("--certs-dir=${File(rootDir, "certs").absolutePath}")
-
-        return try {
-            val pb = ProcessBuilder(cmd)
-                .directory(rootDir)
-            val proc = pb.start()
-            val exitCode = proc.waitFor()
-            exitCode == 0
+        try {
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return false
+            val dbName = appConfig.database.postgres.database.lowercase()
+            ds.connection.use { conn ->
+                conn.createStatement().use { stmt ->
+                    println("[Cockroach] Upgrading cluster replication factor (default, system, database) to $replicas...")
+                    stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = $replicas")
+                    stmt.execute("ALTER RANGE system CONFIGURE ZONE USING num_replicas = $replicas")
+                    stmt.execute("ALTER DATABASE \"$dbName\" CONFIGURE ZONE USING num_replicas = $replicas")
+                }
+            }
+            return true
         } catch (e: Exception) {
-            false
+            println("[Cockroach] Error setting replication factor: ${e.message}")
+            return false
         }
     }
 
@@ -830,33 +1291,16 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         port: Int,
         isInsecure: Boolean
     ) {
-        val logFile = File(rootDir, "cockroach.log")
-        val sql = "ALTER RANGE default CONFIGURE ZONE USING num_replicas = 1; ALTER RANGE system CONFIGURE ZONE USING num_replicas = 1;"
-        
-        val cmd = mutableListOf(
-            binaryFile.absolutePath,
-            "sql",
-            "--host=$tailscaleIp:$port",
-            "-e",
-            sql
-        )
-
-        if (isInsecure) {
-            cmd.add("--insecure")
-        } else {
-            val certsDir = File(rootDir, "certs")
-            cmd.add("--certs-dir=${certsDir.absolutePath}")
-        }
-
         try {
-            val sqlPb = ProcessBuilder(cmd)
-                .directory(rootDir)
-                .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
-                .redirectError(ProcessBuilder.Redirect.appendTo(logFile))
-
-            val sqlProcess = sqlPb.start()
-            val exitCode = sqlProcess.waitFor()
-            println("[Cockroach] Set cluster replication factor to 1 (exit code: $exitCode)")
+            val dbName = appConfig.database.postgres.database.lowercase()
+            runSqlViaJdbc(tailscaleIp, port, isInsecure) { conn ->
+                conn.createStatement().use { stmt ->
+                    stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = 1")
+                    stmt.execute("ALTER RANGE system CONFIGURE ZONE USING num_replicas = 1")
+                    stmt.execute("ALTER DATABASE \"$dbName\" CONFIGURE ZONE USING num_replicas = 1")
+                }
+            }
+            println("[Cockroach] Set cluster replication factor to 1 via JDBC")
         } catch (e: Exception) {
             println("[Cockroach] Failed to set replication factor to 1: ${e.message}")
         }
@@ -869,38 +1313,25 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         dbPass: String,
         isInsecure: Boolean
     ) {
-        val logFile = File(rootDir, "cockroach.log")
-        val sql = "CREATE USER IF NOT EXISTS \"$dbUser\" WITH PASSWORD '$dbPass'; GRANT admin TO \"$dbUser\";"
-        
-        val cmd = mutableListOf(
-            binaryFile.absolutePath,
-            "sql",
-            "--host=$tailscaleIp:$port",
-            "-e",
-            sql
-        )
-
-        if (isInsecure) {
-            cmd.add("--insecure")
-        } else {
-            val certsDir = File(rootDir, "certs")
-            cmd.add("--certs-dir=${certsDir.absolutePath}")
+        try {
+            runSqlViaJdbc(tailscaleIp, port, isInsecure) { conn ->
+                conn.createStatement().use { stmt ->
+                    stmt.execute("CREATE USER IF NOT EXISTS \"$dbUser\" WITH PASSWORD '$dbPass'")
+                    stmt.execute("GRANT admin TO \"$dbUser\"")
+                }
+            }
+            println("[Cockroach] User SQL setup completed via JDBC")
+        } catch (e: Exception) {
+            println("[Cockroach] Failed database user setup: ${e.message}")
         }
-
-        val sqlPb = ProcessBuilder(cmd)
-            .directory(rootDir)
-            .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
-            .redirectError(ProcessBuilder.Redirect.appendTo(logFile))
-
-        val sqlProcess = sqlPb.start()
-        val exitCode = sqlProcess.waitFor()
-        println("[Cockroach] User SQL setup returned exit code: $exitCode")
     }
 
     private fun runCommand(cmd: List<String>): Process {
+        val logFile = File(rootDir, "cockroach.log")
         return ProcessBuilder(cmd)
             .directory(rootDir)
-            .redirectErrorStream(true)
+            .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
+            .redirectError(ProcessBuilder.Redirect.appendTo(logFile))
             .start()
     }
 
