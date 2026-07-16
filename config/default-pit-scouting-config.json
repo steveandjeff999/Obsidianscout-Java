@@ -1,79 +1,136 @@
 {
-  "version": 1,
-  "title": "ObsidianScout Pit Scouting",
-  "fields": [
-    {
-      "id": "sectionRobot",
-      "label": "Robot",
-      "type": "section"
-    },
-    {
-      "id": "teamName",
-      "label": "Team Name",
-      "type": "text"
-    },
-    {
-      "id": "driveTrain",
-      "label": "Drive Train",
-      "type": "select",
-      "options": [
+    "version": 1,
+    "title": "ObsidianScout Pit Scouting",
+    "fields": [
         {
-          "label": "Swerve",
-          "value": "swerve",
-          "points": 0
+            "id": "sectionRobot",
+            "label": "Robot",
+            "type": "section",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
         },
         {
-          "label": "Tank",
-          "value": "tank",
-          "points": 0
+            "id": "teamName",
+            "label": "Team Name",
+            "type": "text",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
         },
         {
-          "label": "Mecanum",
-          "value": "mecanum",
-          "points": 0
+            "id": "driveTrain",
+            "label": "Drive Train",
+            "type": "select",
+            "required": false,
+            "phase": null,
+            "options": [
+                {
+                    "label": "Swerve",
+                    "value": "swerve",
+                    "points": 0.0
+                },
+                {
+                    "label": "Tank",
+                    "value": "tank",
+                    "points": 0.0
+                },
+                {
+                    "label": "Mecanum",
+                    "value": "mecanum",
+                    "points": 0.0
+                },
+                {
+                    "label": "Other",
+                    "value": "other",
+                    "points": 0.0
+                }
+            ],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
         },
         {
-          "label": "Other",
-          "value": "other",
-          "points": 0
+            "id": "robotWeight",
+            "label": "Robot Weight",
+            "type": "number",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": 0,
+            "max": 150,
+            "step": null,
+            "pointsPer": null
+        },
+        {
+            "id": "sectionCapabilities",
+            "label": "Capabilities",
+            "type": "section",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
+        },
+        {
+            "id": "hasAuto",
+            "label": "Has Autonomous",
+            "type": "checkbox",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
+        },
+        {
+            "id": "spareBatteries",
+            "label": "Spare Batteries",
+            "type": "counter",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": 0,
+            "max": null,
+            "step": 1,
+            "pointsPer": null
+        },
+        {
+            "id": "pitNotes",
+            "label": "Pit Notes",
+            "type": "textarea",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
         }
-      ]
-    },
-    {
-      "id": "robotWeight",
-      "label": "Robot Weight",
-      "type": "number",
-      "min": 0,
-      "max": 150
-    },
-    {
-      "id": "sectionCapabilities",
-      "label": "Capabilities",
-      "type": "section"
-    },
-    {
-      "id": "hasAuto",
-      "label": "Has Autonomous",
-      "type": "checkbox"
-    },
-    {
-      "id": "spareBatteries",
-      "label": "Spare Batteries",
-      "type": "counter",
-      "min": 0,
-      "step": 1
-    },
-    {
-      "id": "pitNotes",
-      "label": "Pit Notes",
-      "type": "textarea"
-    }
-  ],
-  "analytics": [
-    {
-      "id": "pitEntryCount",
-      "title": "Pit Entries Collected",
-      "type": "count"
-    }
-  ]
+    ],
+    "analytics": [
+        {
+            "id": "pitEntryCount",
+            "title": "Pit Entries Collected",
+            "type": "count",
+            "fieldId": null
+        }
+    ],
+    "tba_key": null,
+    "first_username": null,
+    "first_key": null,
+    "event_code": null,
+    "enable_robot_role_collection": false
 }

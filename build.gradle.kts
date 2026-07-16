@@ -84,7 +84,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
     group = "distribution"
     description = "Assembles a complete distribution bundle folder with the fat JAR, config files, and run scripts."
     
-    dependsOn("shadowJar")
+    dependsOn("shadowJar", "regenerateConfigs")
     
     // Copy the fat jar
     from(tasks.named("shadowJar")) {
@@ -217,6 +217,13 @@ tasks.register<JavaExec>("dumpSettings") {
     description = "Dumps app settings from database."
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.obsidianscout.utils.DumpSettingsKt")
+}
+
+tasks.register<JavaExec>("regenerateConfigs") {
+    group = "build"
+    description = "Regenerates all default configuration files from updated defaults in the code."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.obsidianscout.utils.RegenerateConfigsKt")
 }
 
 

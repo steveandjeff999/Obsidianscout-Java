@@ -1,109 +1,155 @@
 {
-  "version": 3,
-  "title": "ObsidianScout Default",
-  "fields": [
-    {
-      "id": "sectionAuto",
-      "label": "Auto",
-      "type": "section"
-    },
-    {
-      "id": "autoScore",
-      "label": "Auto Score",
-      "type": "counter",
-      "min": 0,
-      "max": 10,
-      "step": 1,
-      "pointsPer": 3
-    },
-    {
-      "id": "sectionTeleop",
-      "label": "Teleop",
-      "type": "section"
-    },
-    {
-      "id": "teleopCycles",
-      "label": "Teleop Cycles",
-      "type": "counter",
-      "min": 0,
-      "max": 30,
-      "step": 1,
-      "pointsPer": 1
-    },
-    {
-      "id": "sectionEndgame",
-      "label": "Endgame",
-      "type": "section"
-    },
-    {
-      "id": "endgame",
-      "label": "Endgame Result",
-      "type": "select",
-      "options": [
+    "version": 3,
+    "title": "ObsidianScout",
+    "fields": [
         {
-          "label": "Park",
-          "value": "Park",
-          "points": 5
+            "id": "sectionAuto",
+            "label": "Auto",
+            "type": "section",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
         },
         {
-          "label": "Climb",
-          "value": "Climb",
-          "points": 12
+            "id": "autoScore",
+            "label": "Auto Score",
+            "type": "counter",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": 0,
+            "max": 10,
+            "step": 1,
+            "pointsPer": 3.0
         },
         {
-          "label": "Fail",
-          "value": "Fail",
-          "points": 0
+            "id": "sectionTeleop",
+            "label": "Teleop",
+            "type": "section",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
+        },
+        {
+            "id": "teleopCycles",
+            "label": "Teleop Cycles",
+            "type": "counter",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": 0,
+            "max": 30,
+            "step": 1,
+            "pointsPer": 1.0
+        },
+        {
+            "id": "sectionEndgame",
+            "label": "Endgame",
+            "type": "section",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
+        },
+        {
+            "id": "endgame",
+            "label": "Endgame Result",
+            "type": "select",
+            "required": false,
+            "phase": null,
+            "options": [
+                {
+                    "label": "Park",
+                    "value": "Park",
+                    "points": 5.0
+                },
+                {
+                    "label": "Climb",
+                    "value": "Climb",
+                    "points": 12.0
+                },
+                {
+                    "label": "Fail",
+                    "value": "Fail",
+                    "points": 0.0
+                }
+            ],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
+        },
+        {
+            "id": "driverRating",
+            "label": "Driver Rating",
+            "type": "rating",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": 1,
+            "max": 5,
+            "step": null,
+            "pointsPer": 2.0
+        },
+        {
+            "id": "notes",
+            "label": "Notes",
+            "type": "text",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "pointsPer": null
         }
-      ]
-    },
-    {
-      "id": "driverRating",
-      "label": "Driver Rating",
-      "type": "rating",
-      "min": 1,
-      "max": 5,
-      "pointsPer": 2
-    },
-    {
-      "id": "notes",
-      "label": "Notes",
-      "type": "text"
-    }
-  ],
-  "analytics": [
-    {
-      "id": "entryCount",
-      "title": "Entries Collected",
-      "type": "count"
-    },
-    {
-      "id": "avgScore",
-      "title": "Average Score",
-      "type": "score_avg"
-    },
-    {
-      "id": "autoAvg",
-      "title": "Auto Score Avg",
-      "type": "avg",
-      "fieldId": "autoScore"
-    },
-    {
-      "id": "teleopAvg",
-      "title": "Teleop Cycles Avg",
-      "type": "avg",
-      "fieldId": "teleopCycles"
-    },
-    {
-      "id": "totalScore",
-      "title": "Total Points",
-      "type": "score_total"
-    },
-    {
-      "id": "endgameBreakdown",
-      "title": "Endgame Results",
-      "type": "bar",
-      "fieldId": "endgame"
-    }
-  ]
+    ],
+    "analytics": [
+        {
+            "id": "entryCount",
+            "title": "Entries Collected",
+            "type": "count",
+            "fieldId": null
+        },
+        {
+            "id": "avgScore",
+            "title": "Average Score",
+            "type": "score_avg",
+            "fieldId": null
+        },
+        {
+            "id": "autoAvg",
+            "title": "Auto Score Avg",
+            "type": "avg",
+            "fieldId": "autoScore"
+        },
+        {
+            "id": "teleopAvg",
+            "title": "Teleop Cycles Avg",
+            "type": "avg",
+            "fieldId": "teleopCycles"
+        },
+        {
+            "id": "totalScore",
+            "title": "Total Points",
+            "type": "score_total",
+            "fieldId": null
+        }
+    ],
+    "tba_key": null,
+    "first_username": null,
+    "first_key": null,
+    "event_code": null,
+    "enable_robot_role_collection": false
 }

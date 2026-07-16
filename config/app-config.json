@@ -2,13 +2,13 @@
     "server": {
         "host": "0.0.0.0",
         "port": 8080,
-        "sessionSecret": "43796d74356cd61f68d5fad66666bd098b8b6c44885419758d918d61bda16964",
+        "sessionSecret": "change-me",
         "cookieSecure": false,
         "https": {
-            "enabled": true,
+            "enabled": false,
             "port": 8443,
             "keystorePath": "config/obsidianscout.jks",
-            "keystorePassword": "2db1e0741d06e6a33d0edf679c2f103b01e2b82619deca0e06840332beff1de0",
+            "keystorePassword": "change-me",
             "keyAlias": "obsidianscout"
         },
         "logging": false
@@ -21,7 +21,7 @@
         "postgres": {
             "host": "localhost",
             "port": 5432,
-            "database": "obsidianscout",
+            "database": "obsidianscoutjava",
             "user": "postgres",
             "password": "postgres",
             "ssl": false
@@ -33,14 +33,14 @@
         "adminPassword": "change-me"
     },
     "vapid": {
-        "publicKey": "BOQzEqhnhhas1QRRZJlUCDI5zfGMi9KxeLxRkEahW0mdviJGeXb_mfH_zQl4mVPpZ3yVYT3_2er4481a9OgAgg4",
-        "privateKey": "MZtfTEMHRLfpOsi7ypafHZPe_BJZgfkkmfY9KMR5JPI",
+        "publicKey": "",
+        "privateKey": "",
         "subject": "mailto:admin@obsidianscout.com"
     },
-    "database_type": "cockroach",
+    "database_type": "sqlite",
     "db_username": "",
     "db_password": "",
-    "google_sheet_url": "https://docs.google.com/spreadsheets/d/1utbduIlY5h5T0sucyn5P1O1HX60SVmBN2zgXu_fIxTk/edit?usp=sharing",
+    "google_sheet_url": "",
     "google_sheet_password": "",
     "cockroach_port": 26257
 }

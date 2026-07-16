@@ -327,7 +327,7 @@ object ConfigService {
         }
     }
 
-    private fun defaultConfig(): ScoutingConfig {
+    internal fun defaultConfig(): ScoutingConfig {
         return ScoutingConfig(
             version = 3,
             title = "ObsidianScout",
@@ -421,7 +421,7 @@ object ConfigService {
         )
     }
 
-    private fun defaultPitConfig(): ScoutingConfig {
+    internal fun defaultPitConfig(): ScoutingConfig {
         return ScoutingConfig(
             version = 1,
             title = "ObsidianScout Pit Scouting",
@@ -487,7 +487,7 @@ object ConfigService {
         )
     }
 
-    private fun defaultQualitativeConfig(): ScoutingConfig {
+    internal fun defaultQualitativeConfig(): ScoutingConfig {
         return ScoutingConfig(
             version = 1,
             title = "ObsidianScout Qualitative Scouting",
