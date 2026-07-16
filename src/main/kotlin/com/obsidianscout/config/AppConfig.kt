@@ -58,7 +58,7 @@ data class SqliteConfig(
 data class PostgresConfig(
     val host: String = "localhost",
     val port: Int = 5432,
-    val database: String = "obsidianscout",
+    val database: String = "obsidianscoutjava",
     val user: String = "postgres",
     val password: String = "postgres",
     val ssl: Boolean = false

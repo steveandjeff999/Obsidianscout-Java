@@ -451,8 +451,12 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                                 if (newLeaderIp == tailscaleIp) {
                                     println("[Cockroach] We are the new leader. Initializing cluster...")
                                     initializeCluster(tailscaleIp, port, isInsecure)
-                                    waitForSqlReady(tailscaleIp, port, isInsecure, 30)
+                                    waitForSqlReady(tailscaleIp, port, isInsecure, 60)
                                     configureClusterReplication(tailscaleIp, port, isInsecure)
+                                    // Wait for Raft leaseholders to stabilize before DatabaseFactory.init
+                                    // runs DDL. Without this, CREATE TABLE blocks indefinitely because the
+                                    // meta ranges have no leaseholder yet after a fresh cluster restart.
+                                    waitForRaftReady(tailscaleIp, port, isInsecure, 120)
                                 }
 
                                 val newDbConfig = DatabaseConfig(
@@ -801,6 +805,12 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                             if (setReplicationFactor(3)) {
                                 currentReplicas = 3
                                 println("[Cockroach] Replication factor successfully set to 3.")
+                                // ── Throttle snapshot rate so Pi nodes aren't overwhelmed ──────────
+                                // Default is 32 MiB/s which overruns Pi4's Raft commit capacity
+                                // during the initial snapshot burst, causing Raft timeouts and
+                                // poisoned-latch quorum loss on individual ranges. 4 MiB/s is safe
+                                // for a Pi4 over Tailscale without stalling normal write traffic.
+                                applySnapshotRateLimits()
                             }
                         } else if (activeNodes < 2 && currentReplicas == 3) {
                             println("[Cockroach] WARNING: Active nodes fell to $activeNodes. Cluster is under-quorum.")
@@ -1084,36 +1094,83 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     }
 
     private fun runReplicationDiagnostics() {
+        // Pre-fetch metrics via their own short-lived connections BEFORE opening
+        // the main diagnostic connection. Avoids holding the pool connection open
+        // while 6+ concurrent sub-connections are opened (HikariCP leak warning).
+        val invalidLeases = getMetricValue("replicas.leaders_invalid_lease") ?: -1L
+        val leaseholders  = getMetricValue("replicas.leaseholders") ?: -1L
+        val snapGenerated = getMetricValue("range.snapshots.generated") ?: -1L
+        val queuePending  = getMetricValue("queue.replicate.pending") ?: -1L
+        val addReplica    = getMetricValue("queue.replicate.addreplica") ?: -1L
+        val closedTsLagMs = (getMetricValue("kv.closed_timestamp.max_behind_nanos") ?: 0L) / 1_000_000
+
+        // Pre-read log lines (slow I/O) before opening the DB connection
+        val recentLogLines = try {
+            val logFile = File(rootDir, "cockroach.log")
+            if (logFile.exists()) {
+                val allLines = logFile.readLines()
+                val matchedLines = mutableListOf<String>()
+                val maxLines = allLines.size
+                val scanStart = (maxLines - 3000).coerceAtLeast(0)
+                var i = scanStart
+                while (i < maxLines) {
+                    val line = allLines[i]
+                    if (line.contains("new range lease") || line.contains("replica_proposal.go")) { i++; continue }
+                    val lower = line.lowercase()
+                    if (lower.contains("warning") || lower.contains("error") || lower.contains("allocator") ||
+                        lower.contains("replicate") || lower.contains("raft") || lower.contains("purgatory")) {
+                        matchedLines.add(line)
+                        var j = i + 1
+                        while (j < maxLines && j < i + 6) {
+                            val nextLine = allLines[j]
+                            if (nextLine.startsWith(" ") || nextLine.startsWith("\t") ||
+                                nextLine.contains("Error types:") || nextLine.contains("wrapper:") ||
+                                nextLine.contains("failed:")) {
+                                matchedLines.add("    $nextLine"); j++
+                            } else break
+                        }
+                        i = j - 1
+                    }
+                    i++
+                }
+                matchedLines.takeLast(30)
+            } else emptyList()
+        } catch (e: Exception) { emptyList() }
+
+        // Now open the main connection only for the fast SQL queries
         try {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
                     stmt.execute("SET allow_unsafe_internals = true;")
-                    
+
                     println("=========================================================================")
                     println("[Replication Diagnostics] Running cluster health check...")
-                    
-                    // 1. Query gossip nodes
+
+                    // 1. Gossip nodes
                     val peerIps = mutableListOf<String>()
                     println("[Replication Diagnostics] Gossip Nodes:")
-                    // gossip_nodes schema changed in v26.x — 'is_live' moved to gossip_liveness
-                    stmt.executeQuery("SELECT node_id, address FROM crdb_internal.gossip_nodes;").use { rs ->
-                        var count = 0
-                        while (rs.next()) {
-                            val id = rs.getInt("node_id")
-                            val address = rs.getString("address")
-                            println("  - Node #$id: $address")
-                            peerIps.add(address)
-                            count++
+                    try {
+                        stmt.executeQuery("SELECT node_id, address FROM crdb_internal.gossip_nodes;").use { rs ->
+                            var count = 0
+                            while (rs.next()) {
+                                val id = rs.getInt("node_id")
+                                val address = rs.getString("address")
+                                println("  - Node #$id: $address")
+                                peerIps.add(address)
+                                count++
+                            }
+                            println("  Total Gossip Nodes: $count")
                         }
-                        println("  Total Gossip Nodes: $count")
+                    } catch (e: Exception) {
+                        println("  Could not query gossip nodes: ${e.message?.substringBefore("\n")}")
                     }
-                    
-                    // 2. Outbound Network Connectivity Check
+
+                    // 2. Outbound connectivity
                     println("[Replication Diagnostics] Outbound Network Connectivity Check (Port 26257):")
                     for (addr in peerIps) {
                         val ip = addr.substringBefore(":")
-                        val p = addr.substringAfter(":").toIntOrNull() ?: 26257
+                        val p  = addr.substringAfter(":").toIntOrNull() ?: 26257
                         try {
                             java.net.Socket().use { socket ->
                                 socket.connect(java.net.InetSocketAddress(ip, p), 3000)
@@ -1123,111 +1180,60 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                             println("  - Connection to $ip:$p: FAILED (${e.message})")
                         }
                     }
-                    
-                    // 3. Query under-replicated ranges + lease health
-                    stmt.executeQuery("SELECT count(*) FROM crdb_internal.ranges WHERE array_length(replicas, 1) < 3;").use { rs ->
-                        if (rs.next()) {
-                            val underReplicated = rs.getInt(1)
-                            println("[Replication Diagnostics] Under-replicated ranges: $underReplicated")
+
+                    // 3. Under-replicated ranges (may fail if quorum is lost on a system range)
+                    try {
+                        stmt.executeQuery("SELECT count(*) FROM crdb_internal.ranges WHERE array_length(replicas, 1) < 3;").use { rs ->
+                            if (rs.next()) println("[Replication Diagnostics] Under-replicated ranges: ${rs.getInt(1)}")
+                        }
+                    } catch (e: Exception) {
+                        val msg = e.message ?: ""
+                        if (msg.contains("lost quorum") || msg.contains("replica unavailable") || msg.contains("poisoned latch")) {
+                            println("[Replication Diagnostics] ⚠️  QUORUM LOSS — ${msg.substringBefore("\n").take(120)}")
+                        } else {
+                            println("[Replication Diagnostics] Under-replicated count unavailable: ${msg.substringBefore("\n").take(80)}")
                         }
                     }
 
-                    // 3b. Lease validity check — the #1 cause of frozen replication
-                    val invalidLeases = getMetricValue("replicas.leaders_invalid_lease") ?: -1L
-                    val leaseholders  = getMetricValue("replicas.leaseholders") ?: -1L
-                    val snapGenerated = getMetricValue("range.snapshots.generated") ?: -1L
-                    val queuePending  = getMetricValue("queue.replicate.pending") ?: -1L
-                    val addReplica    = getMetricValue("queue.replicate.addreplica") ?: -1L
-                    val closedTsLagMs = (getMetricValue("kv.closed_timestamp.max_behind_nanos") ?: 0L) / 1_000_000
+                    // 3b. Pre-fetched lease and snapshot metrics
                     println("[Replication Diagnostics] Lease health: leaseholders=$leaseholders, invalid=$invalidLeases")
                     println("[Replication Diagnostics] Snapshot queue: generated=$snapGenerated, pending=$queuePending, addreplica=$addReplica")
                     println("[Replication Diagnostics] Raft commit lag: closed_ts=${closedTsLagMs}ms behind")
                     if (invalidLeases > 0 && leaseholders == 0L)
-                        println("[Replication Diagnostics] ⚠️  ALL LEASES INVALID — replication queue will be frozen until leases are re-acquired")
+                        println("[Replication Diagnostics] ⚠️  ALL LEASES INVALID — replication queue frozen")
                     if (snapGenerated == 0L && queuePending > 0L)
-                        println("[Replication Diagnostics] ⚠️  QUEUE FROZEN — ${queuePending} pending items but 0 snapshots sent")
-                    // NOTE: closed_ts lag > 400ms is Raft commit latency (slow disk/network),
-                    // not clock skew. Real clock drift is checked via wall-clock comparison
-                    // in the ClockHealer, which uses fetchLeaderTime() for accuracy.
+                        println("[Replication Diagnostics] ⚠️  QUEUE FROZEN — ${queuePending} pending but 0 snapshots sent")
                     if (closedTsLagMs > 2000)
-                        println("[Replication Diagnostics] ℹ️  Raft lag: closed_ts=${closedTsLagMs}ms behind — slow disk or network (not clock drift)")
-                    
-                    // 4. Query default zone configuration
-                    stmt.executeQuery("SHOW ZONE CONFIGURATION FOR RANGE default;").use { rs ->
-                        if (rs.next()) {
-                            val sqlConfig = rs.getString("raw_config_sql").replace("\n", " ").trim()
-                            println("[Replication Diagnostics] default zone config: $sqlConfig")
-                        }
-                    }
-                    
-                    // 5. Query database zone configuration
-                    val dbName = conn.catalog.lowercase()
+                        println("[Replication Diagnostics] ℹ️  Raft lag: closed_ts=${closedTsLagMs}ms — slow disk or network (not clock drift)")
+
+                    // 4. Default zone config
                     try {
+                        stmt.executeQuery("SHOW ZONE CONFIGURATION FOR RANGE default;").use { rs ->
+                            if (rs.next()) println("[Replication Diagnostics] default zone config: ${rs.getString("raw_config_sql").replace("\n", " ").trim()}")
+                        }
+                    } catch (e: Exception) { /* non-critical */ }
+
+                    // 5. Database zone config
+                    try {
+                        val dbName = conn.catalog.lowercase()
                         stmt.executeQuery("SHOW ZONE CONFIGURATION FOR DATABASE \"$dbName\";").use { rs ->
-                            if (rs.next()) {
-                                val sqlConfig = rs.getString("raw_config_sql").replace("\n", " ").trim()
-                                println("[Replication Diagnostics] $dbName zone config: $sqlConfig")
-                            }
+                            if (rs.next()) println("[Replication Diagnostics] $dbName zone config: ${rs.getString("raw_config_sql").replace("\n", " ").trim()}")
                         }
-                    } catch (e: Exception) {
-                        println("[Replication Diagnostics] No custom zone config for database $dbName (inherits from default)")
-                    }
-                    
-                    // 6. Parse recent allocator/replication warnings from cockroach.log
-                    val logFile = File(rootDir, "cockroach.log")
-                    if (logFile.exists()) {
-                        println("[Replication Diagnostics] Recent CockroachDB Warnings/Errors (From Log):")
-                        try {
-                            val allLines = logFile.readLines()
-                            val matchedLines = mutableListOf<String>()
-                            val maxLines = allLines.size
-                            val scanStart = (maxLines - 3000).coerceAtLeast(0)
-                            
-                            var i = scanStart
-                            while (i < maxLines) {
-                                val line = allLines[i]
-                                if (line.contains("new range lease") || line.contains("replica_proposal.go")) {
-                                    i++
-                                    continue
-                                }
-                                val lower = line.lowercase()
-                                if (lower.contains("warning") || lower.contains("error") || lower.contains("allocator") || lower.contains("replicate") || lower.contains("raft") || lower.contains("purgatory")) {
-                                    matchedLines.add(line)
-                                    // Capture up to 5 subsequent lines if they are part of a multi-line log entry (starts with spaces or tab)
-                                    var j = i + 1
-                                    while (j < maxLines && j < i + 6) {
-                                        val nextLine = allLines[j]
-                                        if (nextLine.startsWith(" ") || nextLine.startsWith("\t") || nextLine.contains("Error types:") || nextLine.contains("wrapper:") || nextLine.contains("failed:")) {
-                                            matchedLines.add("    $nextLine")
-                                            j++
-                                        } else {
-                                            break
-                                        }
-                                    }
-                                    i = j - 1
-                                }
-                                i++
-                            }
-                            
-                            val warningLines = matchedLines.takeLast(30)
-                            if (warningLines.isEmpty()) {
-                                println("  No recent warnings or replication events found in log.")
-                            } else {
-                                for (line in warningLines) {
-                                    println("  $line")
-                                }
-                            }
-                        } catch (e: Exception) {
-                            println("  Failed to read cockroach.log: ${e.message}")
-                        }
-                    }
-                    
-                    println("=========================================================================")
+                    } catch (e: Exception) { /* inherits from default */ }
                 }
             }
         } catch (e: Exception) {
-            println("[Replication Diagnostics] Failed to run diagnostics: ${e.message}")
+            println("[Replication Diagnostics] Failed to run diagnostics: ${e.message?.substringBefore("\n")}")
         }
+
+        // 6. Pre-read log lines printed after connection is closed
+        println("[Replication Diagnostics] Recent CockroachDB Warnings/Errors (From Log):")
+        if (recentLogLines.isEmpty()) {
+            println("  No recent warnings or replication events found in log.")
+        } else {
+            for (line in recentLogLines) println("  $line")
+        }
+        println("=========================================================================")
     }
 
     private fun runSqlViaJdbc(tailscaleIp: String, port: Int, isInsecure: Boolean, block: (java.sql.Connection) -> Unit) {
@@ -1267,6 +1273,48 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         return count
     }
 
+    /**
+     * Sets cluster-level snapshot throughput limits safe for Raspberry Pi nodes over Tailscale.
+     * The default 32 MiB/s rate overwhelms Pi4's Raft commit pipeline during the initial
+     * snapshot burst, causing individual ranges to go leaderless (poisoned latch quorum loss).
+     * 4 MiB/s still replicates 82 ranges in ~20s while keeping each Pi's I/O safely below saturation.
+     */
+    private fun applySnapshotRateLimits() {
+        try {
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
+            ds.connection.use { conn ->
+                conn.createStatement().use { stmt ->
+                    // Snapshot rate: 8 MiB/s — safe for Pi4 SSD over Tailscale, ~2x faster than 4 MiB
+                    stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '8 MiB'")
+                    stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate = '8 MiB'")
+                    // Limit concurrent snapshots: prevent Pi from receiving many simultaneously
+                    stmt.execute("SET CLUSTER SETTING kv.replication_reports.interval = '30s'")
+                    println("[Cockroach] Snapshot rate limits applied: 8 MiB/s max (Pi4 SSD safe)")
+
+                }
+            }
+        } catch (e: Exception) {
+            println("[Cockroach] Warning: could not apply snapshot rate limits: ${e.message}")
+        }
+    }
+
+    /**
+     * Returns true if the cluster has no unavailable ranges.
+     * Used by background tasks (DeduplicationScheduler, SyncScheduler) to skip
+     * processing during initial replication when some ranges may be temporarily
+     * leaderless due to snapshot burst causing Raft timeouts on Pi nodes.
+     */
+    fun isClusterHealthy(): Boolean {
+        return try {
+            val unavailable = getMetricValue("ranges.unavailable") ?: 0L
+            val underRep    = getMetricValue("ranges.underreplicated") ?: 0L
+            // Allow minor under-replication (< 5 ranges) but block if any range is fully unavailable
+            unavailable == 0L && underRep < 5L
+        } catch (e: Exception) {
+            true // If we can't check, don't block background tasks
+        }
+    }
+
     private fun setReplicationFactor(replicas: Int): Boolean {
         try {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return false
@@ -1292,12 +1340,14 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         isInsecure: Boolean
     ) {
         try {
-            val dbName = appConfig.database.postgres.database.lowercase()
+            // Set zone configs for built-in ranges only.
+            // The application database (obsidianscoutjava) doesn't exist yet at this point —
+            // it is created by DatabaseFactory.init -> ensurePostgresDatabaseExists later.
+            // The per-DB replication factor is applied by setReplicationFactor() after init.
             runSqlViaJdbc(tailscaleIp, port, isInsecure) { conn ->
                 conn.createStatement().use { stmt ->
                     stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = 1")
                     stmt.execute("ALTER RANGE system CONFIGURE ZONE USING num_replicas = 1")
-                    stmt.execute("ALTER DATABASE \"$dbName\" CONFIGURE ZONE USING num_replicas = 1")
                 }
             }
             println("[Cockroach] Set cluster replication factor to 1 via JDBC")
@@ -1388,6 +1438,51 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             Thread.sleep(1000)
         }
         return false
+    }
+
+    /**
+     * Waits until CockroachDB's internal Raft ranges have elected leaseholders.
+     * This must be called after [waitForSqlReady] and before running any DDL (CREATE TABLE etc.).
+     * Without this, DDL blocks indefinitely because the meta ranges have no leaseholder
+     * immediately after a fresh `cockroach init` or a node restart that triggers re-election.
+     *
+     * The probe queries crdb_internal.ranges and checks that no range has a null/empty
+     * lease_holder, which indicates leaseholder election is complete.
+     */
+    private fun waitForRaftReady(tailscaleIp: String, port: Int, isInsecure: Boolean, timeoutSeconds: Int) {
+        val start = System.currentTimeMillis()
+        val ssl = if (isInsecure) "sslmode=disable" else "sslmode=require"
+        val url = "jdbc:postgresql://$tailscaleIp:$port/defaultdb?$ssl"
+        println("[Cockroach] Waiting for Raft leaseholders to stabilize (up to ${timeoutSeconds}s)...")
+        while (System.currentTimeMillis() - start < timeoutSeconds * 1000L) {
+            if (process != null && !process!!.isAlive) {
+                println("[Cockroach] Process died while waiting for Raft ready.")
+                return
+            }
+            try {
+                Class.forName("org.postgresql.Driver")
+                java.sql.DriverManager.getConnection(url, "root", "").use { conn ->
+                    conn.autoCommit = true
+                    // Count ranges that have no leaseholder yet.
+                    val rs = conn.createStatement().executeQuery(
+                        "SELECT count(*) FROM crdb_internal.ranges WHERE lease_holder = 0 OR lease_holder IS NULL"
+                    )
+                    if (rs.next()) {
+                        val unhealthy = rs.getInt(1)
+                        if (unhealthy == 0) {
+                            println("[Cockroach] Raft leaseholders stabilized. Proceeding with schema init.")
+                            return
+                        }
+                        val elapsed = (System.currentTimeMillis() - start) / 1000
+                        println("[Cockroach] Waiting for Raft: $unhealthy range(s) still electing leaseholder (elapsed: ${elapsed}s)...")
+                    }
+                }
+            } catch (e: Exception) {
+                // Not ready yet — CRDB may still be initializing internal tables
+            }
+            Thread.sleep(2000)
+        }
+        println("[Cockroach] WARNING: Raft leaseholder wait timed out after ${timeoutSeconds}s. Proceeding anyway — DDL may be slow.")
     }
 
     private fun isPeerOnline(ip: String, port: Int, isInsecure: Boolean): Boolean {

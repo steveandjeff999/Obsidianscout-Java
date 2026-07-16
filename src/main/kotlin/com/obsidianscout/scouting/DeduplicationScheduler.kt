@@ -41,7 +41,14 @@ object DeduplicationScheduler {
     }
     
     fun runCleanup() {
+        // Skip if cluster has unavailable ranges — touching user tables during
+        // initial replication causes "replica unavailable" errors on leaderless ranges.
+        if (!isClusterReady()) {
+            log.info("Skipping deduplication cleanup — cluster has unavailable ranges (replication in progress)")
+            return
+        }
         log.info("Running background deduplication cleanup...")
+
         var matchDeleted = 0
         var pitDeleted = 0
         var qualDeleted = 0
@@ -145,7 +152,32 @@ object DeduplicationScheduler {
         }
         log.info("Deduplication cleanup complete: deleted $matchDeleted match, $pitDeleted pit, $qualDeleted qualitative entries.")
     }
+
+    /**
+     * Returns true if the cluster has no fully-unavailable ranges.
+     * Queries crdb_internal.node_metrics directly via DatabaseFactory so this
+     * stays independent of any CockroachOrchestrator instance.
+     */
+    private fun isClusterReady(): Boolean {
+        return try {
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return true
+            ds.connection.use { conn ->
+                conn.createStatement().use { stmt ->
+                    stmt.execute("SET allow_unsafe_internals = true")
+                    stmt.executeQuery(
+                        "SELECT value FROM crdb_internal.node_metrics WHERE name = 'ranges.unavailable' LIMIT 1"
+                    ).use { rs ->
+                        val unavailable = if (rs.next()) rs.getLong(1) else 0L
+                        unavailable == 0L
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            true // If metrics are unreachable, don't block cleanup
+        }
+    }
 }
+
 
 private data class MatchGroupKey(
     val eventKey: String?,
