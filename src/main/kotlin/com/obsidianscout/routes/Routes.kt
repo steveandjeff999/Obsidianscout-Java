@@ -121,6 +121,7 @@ fun Application.configureRoutes() {
                     val user = AuthService.login(
                         username = request.username,
                         teamNumber = request.teamNumber,
+                        program = request.program,
                         password = request.password
                     ) ?: throw com.obsidianscout.auth.ApiException(
                         HttpStatusCode.Unauthorized,
@@ -131,6 +132,7 @@ fun Application.configureRoutes() {
                         userId = user.id,
                         username = user.username,
                         teamNumber = user.teamNumber,
+                        program = user.program,
                         role = user.role,
                         email = user.email,
                         profilePicture = null,
@@ -144,6 +146,7 @@ fun Application.configureRoutes() {
                         userId = user.id,
                         username = user.username,
                         teamNumber = user.teamNumber,
+                        program = user.program,
                         role = user.role,
                         email = user.email,
                         profilePicture = user.profilePicture,
@@ -157,6 +160,7 @@ fun Application.configureRoutes() {
                     val user = AuthService.register(
                         username = request.username,
                         teamNumber = request.teamNumber,
+                        program = request.program,
                         password = request.password,
                         role = request.role,
                         email = request.email
@@ -165,6 +169,7 @@ fun Application.configureRoutes() {
                         userId = user.id,
                         username = user.username,
                         teamNumber = user.teamNumber,
+                        program = user.program,
                         role = user.role,
                         email = user.email,
                         profilePicture = null,
@@ -178,6 +183,7 @@ fun Application.configureRoutes() {
                         userId = user.id,
                         username = user.username,
                         teamNumber = user.teamNumber,
+                        program = user.program,
                         role = user.role,
                         email = user.email,
                         profilePicture = user.profilePicture,
@@ -200,6 +206,7 @@ fun Application.configureRoutes() {
                         userId = user.id,
                         username = user.username,
                         teamNumber = user.teamNumber,
+                        program = user.program,
                         role = user.role,
                         email = user.email,
                         profilePicture = user.profilePicture,
@@ -549,7 +556,7 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val local = call.request.queryParameters["local"]?.toBoolean() ?: false
                     // Return JSON where any string `label` values are wrapped into { "en": "..." }
-                    val raw = ConfigService.getConfigJson(session.teamNumber, local)
+                    val raw = ConfigService.getConfigJson(session.teamNumber, session.program, local)
                     val elem = JsonSupport.json.parseToJsonElement(raw)
                     val obj = elem as? JsonObject
                     if (obj != null) {
@@ -591,7 +598,7 @@ fun Application.configureRoutes() {
                 put {
                     val session = call.requireAdmin()
                     val request = call.receive<ConfigUpdateRequest>()
-                    val updated = ConfigService.updateConfig(session.teamNumber, request.configJson)
+                    val updated = ConfigService.updateConfig(session.teamNumber, session.program, request.configJson)
                     call.respond(updated)
                 }
             }
@@ -600,7 +607,7 @@ fun Application.configureRoutes() {
                 get {
                     val session = call.requireSession()
                     val local = call.request.queryParameters["local"]?.toBoolean() ?: false
-                    val raw = ConfigService.getPitConfigJson(session.teamNumber, local)
+                    val raw = ConfigService.getPitConfigJson(session.teamNumber, session.program, local)
                     val elem = JsonSupport.json.parseToJsonElement(raw)
                     val obj = elem as? JsonObject
                     if (obj != null) {
@@ -641,7 +648,7 @@ fun Application.configureRoutes() {
                 put {
                     val session = call.requireAdmin()
                     val request = call.receive<ConfigUpdateRequest>()
-                    val updated = ConfigService.updatePitConfig(session.teamNumber, request.configJson)
+                    val updated = ConfigService.updatePitConfig(session.teamNumber, session.program, request.configJson)
                     call.respond(updated)
                 }
             }
@@ -650,7 +657,7 @@ fun Application.configureRoutes() {
                 get {
                     val session = call.requireSession()
                     val local = call.request.queryParameters["local"]?.toBoolean() ?: false
-                    val raw = ConfigService.getQualitativeConfigJson(session.teamNumber, local)
+                    val raw = ConfigService.getQualitativeConfigJson(session.teamNumber, session.program, local)
                     val elem = JsonSupport.json.parseToJsonElement(raw)
                     val obj = elem as? JsonObject
                     if (obj != null) {
@@ -691,7 +698,7 @@ fun Application.configureRoutes() {
                 put {
                     val session = call.requireAdmin()
                     val request = call.receive<ConfigUpdateRequest>()
-                    val updated = ConfigService.updateQualitativeConfig(session.teamNumber, request.configJson)
+                    val updated = ConfigService.updateQualitativeConfig(session.teamNumber, session.program, request.configJson)
                     call.respond(updated)
                 }
             }
@@ -702,9 +709,9 @@ fun Application.configureRoutes() {
                     val local = call.request.queryParameters["local"]?.toBoolean() ?: false
                     val settings = call.measure("settings-db", "Settings DB Query") {
                         if (local) {
-                            SettingsService.getSettings(session.teamNumber)
+                            SettingsService.getSettings(session.teamNumber, session.program)
                         } else {
-                            AllianceService.getEffectiveSettings(session.teamNumber)
+                            AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                         }
                     }
                     call.respond(SettingsResponse(settings.toPayload()))
@@ -860,7 +867,7 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
-                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val (cachedTeams, cachedMatches) = transaction {
                         val teamCount = com.obsidianscout.db.ApiTeams.selectAll().where { com.obsidianscout.db.ApiTeams.eventKey eq eventKey }.count().toInt()
                         val matchCount = com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.eventKey eq eventKey }.count().toInt()
@@ -880,7 +887,7 @@ fun Application.configureRoutes() {
                     val regularEntries = ScoutingService.listEntries(session, includePrescout = false)
                     val prescoutEntries = ScoutingService.listEntries(session, includePrescout = true).filter { it.isPrescout }
                     
-                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val currentEventKey = settings.resolvedEventKey()
                     
                     val mergedEntries = AnalyticsService.mergePrescoutEntries(
@@ -919,7 +926,7 @@ fun Application.configureRoutes() {
                         value == "1" || value.equals("true", ignoreCase = true)
                     } ?: false
 
-                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val activeKey = settings.resolvedEventKey()
 
                     val events = IntegrationService.listEvents(year, cachedOnly, activeKey, settings)
@@ -950,7 +957,7 @@ fun Application.configureRoutes() {
                 get {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
-                        ?: AllianceService.getEffectiveSettings(session.teamNumber).resolvedEventKey()
+                        ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
                     call.respond(IntegrationService.listTeams(eventKey, session))
                 }
                 post {
@@ -974,13 +981,13 @@ fun Application.configureRoutes() {
                 get {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
-                        ?: AllianceService.getEffectiveSettings(session.teamNumber).resolvedEventKey()
+                        ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
                     val eventKeyLower = eventKey.lowercase().trim()
                     val count = transaction {
                         com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.eventKey eq eventKeyLower }.count()
                     }
                     if (count == 0L) {
-                        val settings = transaction { AllianceService.getEffectiveSettings(session.teamNumber) }
+                        val settings = transaction { AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
                         try {
                             IntegrationService.syncCustomEventData(settings, eventKeyLower)
                         } catch (e: Exception) {
@@ -1034,7 +1041,7 @@ fun Application.configureRoutes() {
             route("/integrations") {
                 get("/sync/status") {
                     val session = call.requireSession()
-                    val status = SyncScheduler.getStatusForTeam(session.teamNumber)
+                    val status = SyncScheduler.getStatusForTeam(session.teamNumber, session.program)
                     call.respond(
                         SyncStatusResponse(
                             intervalMinutes = SyncScheduler.INTERVAL_MS / 60_000.0,
@@ -1052,7 +1059,7 @@ fun Application.configureRoutes() {
                 }
                 post("/sync/events") {
                     val session = call.requireAdmin()
-                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val queued = SyncScheduler.enqueueEventSync(session.teamNumber, settings)
                     if (queued) {
                         call.respond(HttpStatusCode.Accepted, SyncResponse(0, settings.preferredSource, settings.resolvedEventKey(), queued, "Event sync started"))
@@ -1062,7 +1069,7 @@ fun Application.configureRoutes() {
                 }
                 post("/sync/event") {
                     val session = call.requireAdmin()
-                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val queued = SyncScheduler.enqueueEventDataSync(session.teamNumber, settings)
                     if (queued) {
                         call.respond(HttpStatusCode.Accepted, SyncResponse(0, settings.preferredSource, settings.resolvedEventKey(), queued, "Teams and matches sync started"))
@@ -1072,7 +1079,7 @@ fun Application.configureRoutes() {
                 }
                 post("/sync/stats") {
                     val session = call.requireAdmin()
-                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val queued = SyncScheduler.enqueueStatsSync(session.teamNumber, settings)
                     if (queued) {
                         call.respond(HttpStatusCode.Accepted, SyncResponse(0, "stats", settings.resolvedEventKey(), queued, "Stats sync started"))
@@ -1082,7 +1089,7 @@ fun Application.configureRoutes() {
                 }
                 post("/sync/all") {
                     val session = call.requireAdmin()
-                    val settings = AllianceService.getEffectiveSettings(session.teamNumber)
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val queued = SyncScheduler.enqueueFullSync(session.teamNumber, settings)
                     if (queued) {
                         call.respond(HttpStatusCode.Accepted, SyncResponse(0, "all", settings.resolvedEventKey(), queued, "Full sync started"))
@@ -1097,6 +1104,7 @@ fun Application.configureRoutes() {
                     val session = call.requireAdmin()
                     val q = call.request.queryParameters["q"]
                     val teamNumber = call.request.queryParameters["teamNumber"]?.toIntOrNull()
+                    val program = call.request.queryParameters["program"]
                     val roleStr = call.request.queryParameters["role"]
                     val role = roleStr?.takeIf { it.isNotBlank() }?.let {
                         runCatching { UserRole.valueOf(it) }.getOrNull()
@@ -1110,6 +1118,7 @@ fun Application.configureRoutes() {
                             search = q,
                             teamFilter = teamNumber,
                             roleFilter = role,
+                            programFilter = program,
                             limit = limit,
                             offset = offset
                         )
@@ -1158,14 +1167,21 @@ fun Application.configureRoutes() {
 
                 get("/email-settings") {
                     call.requireSuperAdmin()
-                    call.respond(SettingsService.getSmtpSettings())
+                    val smtp = SettingsService.getSmtpSettings()
+                    call.respond(smtp.copy(passwordPlain = if (smtp.passwordPlain.isNotBlank()) "********" else ""))
                 }
 
                 put("/email-settings") {
                     call.requireSuperAdmin()
                     val smtp = call.receive<SmtpSettings>()
-                    val saved = SettingsService.updateSmtpSettings(smtp)
-                    call.respond(saved)
+                    val existing = SettingsService.getSmtpSettings()
+                    val merged = if (smtp.passwordPlain == "********") {
+                        smtp.copy(passwordPlain = existing.passwordPlain)
+                    } else {
+                        smtp
+                    }
+                    val saved = SettingsService.updateSmtpSettings(merged)
+                    call.respond(saved.copy(passwordPlain = if (saved.passwordPlain.isNotBlank()) "********" else ""))
                 }
 
                 get("/migration/status") {
@@ -1330,11 +1346,17 @@ fun Application.configureRoutes() {
                 post("/email-settings/test") {
                     call.requireSuperAdmin()
                     val testReq = call.receive<SmtpTestConnectionRequest>()
+                    val existing = SettingsService.getSmtpSettings()
+                    val resolvedPassword = if (testReq.passwordPlain == "********") {
+                        existing.passwordPlain
+                    } else {
+                        testReq.passwordPlain
+                    }
                     val tempSmtp = SmtpSettings(
                         host = testReq.host,
                         port = testReq.port,
                         username = testReq.username,
-                        passwordPlain = testReq.passwordPlain,
+                        passwordPlain = resolvedPassword,
                         fromAddress = testReq.fromAddress,
                         encryption = testReq.encryption
                     )
@@ -1616,7 +1638,7 @@ fun Application.configureRoutes() {
                 }
                 get("/invites/count") {
                     val session = call.requireSession()
-                    call.respond(InviteCountResponse(AllianceService.getInviteCount(session.teamNumber)))
+                    call.respond(InviteCountResponse(AllianceService.getInviteCount(session)))
                 }
                 get("/import-sources") {
                     val session = call.requireAdmin()
@@ -2043,9 +2065,9 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         useTbaOpr = useTbaOpr,
         chatEnabled = chatEnabled,
         apiKeys = ApiKeysPayload(
-            tbaKey = apiKeys.tbaKey,
+            tbaKey = if (apiKeys.tbaKey.isNotBlank()) "********" else "",
             firstUsername = apiKeys.firstUsername,
-            firstKey = apiKeys.firstKey
+            firstKey = if (apiKeys.firstKey.isNotBlank()) "********" else ""
         ),
         scoutPages = scoutPages,
         analyticsPages = analyticsPages,
@@ -2053,7 +2075,8 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         theme = activeTheme,
         themes = themes,
         activeThemeName = activeThemeName,
-        setupWizardCompleted = setupWizardCompleted
+        setupWizardCompleted = setupWizardCompleted,
+        program = program
     )
 }
 
@@ -2077,7 +2100,8 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         theme = theme,
         themes = themes,
         activeThemeName = activeThemeName,
-        setupWizardCompleted = setupWizardCompleted
+        setupWizardCompleted = setupWizardCompleted,
+        program = program
     )
 }
 

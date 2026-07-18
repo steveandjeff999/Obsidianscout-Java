@@ -14,6 +14,7 @@ data class ErrorResponse(
 data class LoginRequest(
     val username: String,
     val teamNumber: Int,
+    val program: String = "FRC",
     val password: String,
     val keepMeLoggedIn: Boolean = false
 )
@@ -22,6 +23,7 @@ data class LoginRequest(
 data class RegisterRequest(
     val username: String,
     val teamNumber: Int,
+    val program: String = "FRC",
     val password: String,
     val role: UserRole = UserRole.SCOUT,
     val email: String? = null,
@@ -115,7 +117,8 @@ data class ApiSettingsPayload(
     val theme: com.obsidianscout.integrations.ThemeSettings = com.obsidianscout.integrations.ThemeSettings(),
     val themes: List<com.obsidianscout.integrations.ThemeSettings> = emptyList(),
     val activeThemeName: String = "",
-    val setupWizardCompleted: Boolean = false
+    val setupWizardCompleted: Boolean = false,
+    val program: String = "FRC"
 )
 
 @Serializable

@@ -51,7 +51,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    currentTeamKey = `frc${currentTeamNumber}`;
+    currentTeamKey = `${Obsidianscout.getProgramPrefix()}${currentTeamNumber}`;
 
     // Handle Back Button
     document.getElementById("back-btn").addEventListener("click", () => {
@@ -121,7 +121,7 @@ async function loadTeamProfile() {
         // Filter and normalize matches
         state.matches = allMatches.filter(m => {
             const allTeamsInMatch = (m.redTeams || []).concat(m.blueTeams || []);
-            return allTeamsInMatch.some(k => k.replace(/^frc/, "") === String(currentTeamNumber));
+            return allTeamsInMatch.some(k => k.replace(/^(frc|ftc)/, "") === String(currentTeamNumber));
         });
 
         // Merge and filter entries for this team
@@ -272,7 +272,7 @@ function renderStats() {
 
 function renderOverview() {
     const t = state.team;
-    document.getElementById("info-team-key").value = t.teamKey || `frc${t.teamNumber}`;
+    document.getElementById("info-team-key").value = t.teamKey || `${Obsidianscout.getProgramPrefix()}${t.teamNumber}`;
     document.getElementById("info-team-number").value = t.teamNumber;
     document.getElementById("info-nickname").value = t.nickname || "";
     document.getElementById("info-formal-name").value = t.name || "";
@@ -350,7 +350,7 @@ function renderMatches() {
         redCell.className = "alliance-cell";
         match.redTeams.forEach(key => {
             const formatted = Obsidianscout.formatTeam(key);
-            const isSelf = key.replace(/^frc/, "") === String(currentTeamNumber);
+            const isSelf = key.replace(/^(frc|ftc)/, "") === String(currentTeamNumber);
             const badge = document.createElement("span");
             badge.className = `alliance-member-badge red-team ${isSelf ? 'highlight-self' : ''}`;
             badge.textContent = formatted;
@@ -363,7 +363,7 @@ function renderMatches() {
         blueCell.className = "alliance-cell";
         match.blueTeams.forEach(key => {
             const formatted = Obsidianscout.formatTeam(key);
-            const isSelf = key.replace(/^frc/, "") === String(currentTeamNumber);
+            const isSelf = key.replace(/^(frc|ftc)/, "") === String(currentTeamNumber);
             const badge = document.createElement("span");
             badge.className = `alliance-member-badge blue-team ${isSelf ? 'highlight-self' : ''}`;
             badge.textContent = formatted;

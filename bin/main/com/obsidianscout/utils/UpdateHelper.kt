@@ -214,16 +214,25 @@ fun main() {
                     if (userFile.exists() && userFile.length() > 0) {
                         println("Merging configuration schema changes for config/$relPath...")
                         try {
-                            val userJson = Json.parseToJsonElement(userFile.readText())
-                            val defaultJson = Json.parseToJsonElement(srcFile.readText())
-                            val merged = deepMerge(userJson, defaultJson)
-                            
-                            val prettyJson = Json { prettyPrint = true }
-                            userFile.writeText(prettyJson.encodeToString(JsonElement.serializer(), merged) + "\n")
-                        } catch (e: Exception) {
-                            println("Warning: Failed to merge config/$relPath, overwriting with default. Details: ${e.message}")
-                            srcFile.copyTo(userFile, overwrite = true)
-                        }
+                             val userJson = Json.parseToJsonElement(userFile.readText())
+                             val defaultJson = Json.parseToJsonElement(srcFile.readText())
+                             var merged = deepMerge(userJson, defaultJson)
+                             
+                             if (srcFile.name == "app-config.json" && merged is JsonObject) {
+                                 val newVersionVal = defaultJson.jsonObject["current_version"]
+                                 if (newVersionVal != null) {
+                                     val mutableMap = merged.toMutableMap()
+                                     mutableMap["current_version"] = newVersionVal
+                                     merged = JsonObject(mutableMap)
+                                 }
+                             }
+
+                             val prettyJson = Json { prettyPrint = true }
+                             userFile.writeText(prettyJson.encodeToString(JsonElement.serializer(), merged) + "\n")
+                         } catch (e: Exception) {
+                             println("Warning: Failed to merge config/$relPath, overwriting with default. Details: ${e.message}")
+                             srcFile.copyTo(userFile, overwrite = true)
+                         }
                     } else {
                         println("Adding new default config file config/$relPath...")
                         srcFile.copyTo(userFile)

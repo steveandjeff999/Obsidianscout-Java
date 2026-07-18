@@ -20,7 +20,16 @@ data class AppConfig(
     val db_password: String = "",
     val google_sheet_url: String = "",
     val google_sheet_password: String = "",
-    val cockroach_port: Int = 26257
+    val cockroach_port: Int = 26257,
+    val current_version: String = "0.2.5.4", // The version this server is running — update this on each release
+    val gist_update: GistUpdateConfig = GistUpdateConfig()
+)
+
+@Serializable
+data class GistUpdateConfig(
+    val enabled: Boolean = false,
+    val gist_url: String = "https://gist.githubusercontent.com/steveandjeff999/41b76376d064a6893ff2644b04447d9f/raw/Public-Version.json",
+    val check_interval_minutes: Long = 10
 )
 
 @Serializable

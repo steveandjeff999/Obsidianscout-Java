@@ -18,6 +18,7 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.and
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.Instant
@@ -71,51 +72,56 @@ object ConfigService {
 
     fun ensureDefaultConfig() {
         transaction {
-            val existing = ScoutingConfigs
-                .selectAll().where { ScoutingConfigs.teamNumber eq 0 }
-                .limit(1)
-                .firstOrNull() != null
-            if (!existing) {
-                val jsonText = loadDefaultConfigText()
-                ScoutingConfigs.insert {
-                    it[teamNumber] = 0
-                    it[configJson] = jsonText
-                    it[updatedAt] = Instant.now()
+            listOf("FRC", "FTC").forEach { prog ->
+                val existing = ScoutingConfigs
+                    .selectAll().where { (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq prog) }
+                    .limit(1)
+                    .firstOrNull() != null
+                if (!existing) {
+                    val jsonText = loadDefaultConfigText()
+                    ScoutingConfigs.insert {
+                        it[teamNumber] = 0
+                        it[program] = prog
+                        it[configJson] = jsonText
+                        it[updatedAt] = Instant.now()
+                    }
                 }
-            }
 
-            val existingPit = PitScoutingConfigs
-                .selectAll().where { PitScoutingConfigs.teamNumber eq 0 }
-                .limit(1)
-                .firstOrNull() != null
-            if (!existingPit) {
-                val jsonText = loadDefaultPitConfigText()
-                PitScoutingConfigs.insert {
-                    it[teamNumber] = 0
-                    it[configJson] = jsonText
-                    it[updatedAt] = Instant.now()
+                val existingPit = PitScoutingConfigs
+                    .selectAll().where { (PitScoutingConfigs.teamNumber eq 0) and (PitScoutingConfigs.program eq prog) }
+                    .limit(1)
+                    .firstOrNull() != null
+                if (!existingPit) {
+                    val jsonText = loadDefaultPitConfigText()
+                    PitScoutingConfigs.insert {
+                        it[teamNumber] = 0
+                        it[program] = prog
+                        it[configJson] = jsonText
+                        it[updatedAt] = Instant.now()
+                    }
                 }
-            }
 
-            val existingQualitative = QualitativeScoutingConfigs
-                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq 0 }
-                .limit(1)
-                .firstOrNull() != null
-            if (!existingQualitative) {
-                val jsonText = loadDefaultQualitativeConfigText()
-                QualitativeScoutingConfigs.insert {
-                    it[teamNumber] = 0
-                    it[configJson] = jsonText
-                    it[updatedAt] = Instant.now()
+                val existingQualitative = QualitativeScoutingConfigs
+                    .selectAll().where { (QualitativeScoutingConfigs.teamNumber eq 0) and (QualitativeScoutingConfigs.program eq prog) }
+                    .limit(1)
+                    .firstOrNull() != null
+                if (!existingQualitative) {
+                    val jsonText = loadDefaultQualitativeConfigText()
+                    QualitativeScoutingConfigs.insert {
+                        it[teamNumber] = 0
+                        it[program] = prog
+                        it[configJson] = jsonText
+                        it[updatedAt] = Instant.now()
+                    }
                 }
             }
         }
     }
 
-    fun getConfigJson(teamNumber: Int, local: Boolean = false): String {
+    fun getConfigJson(teamNumber: Int, program: String = "FRC", local: Boolean = false): String {
         return transaction {
             if (!local) {
-                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                 if (activeAllianceId != null) {
                     val allianceConfig = ScoutingAlliances
                         .selectAll().where { ScoutingAlliances.id eq activeAllianceId }
@@ -129,7 +135,7 @@ object ConfigService {
 
             // Try team-specific config first
             val teamConfig = ScoutingConfigs
-                .selectAll().where { ScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { (ScoutingConfigs.teamNumber eq teamNumber) and (ScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(ScoutingConfigs.configJson)
@@ -140,30 +146,31 @@ object ConfigService {
 
             // Fall back to team 0 (global default)
             ScoutingConfigs
-                .selectAll().where { ScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(ScoutingConfigs.configJson)
         } ?: loadDefaultConfigText()
     }
 
-    fun getConfig(teamNumber: Int, local: Boolean = false): ScoutingConfig {
-        val jsonText = normalizeConfigJson(getConfigJson(teamNumber, local))
+    fun getConfig(teamNumber: Int, program: String = "FRC", local: Boolean = false): ScoutingConfig {
+        val jsonText = normalizeConfigJson(getConfigJson(teamNumber, program, local))
         return JsonSupport.json.decodeFromString(jsonText)
     }
 
-    fun updateConfig(teamNumber: Int, newJson: String): ScoutingConfig {
+    fun updateConfig(teamNumber: Int, program: String = "FRC", newJson: String): ScoutingConfig {
         val normalizedJson = normalizeConfigJson(newJson)
         val parsed = JsonSupport.json.decodeFromString<ScoutingConfig>(normalizedJson)
         transaction {
 
             val row = ScoutingConfigs
-                .selectAll().where { ScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { (ScoutingConfigs.teamNumber eq teamNumber) and (ScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {
                 ScoutingConfigs.insert {
                     it[ScoutingConfigs.teamNumber] = teamNumber
+                    it[ScoutingConfigs.program] = program
                     it[configJson] = normalizedJson
                     it[updatedAt] = Instant.now()
                 }
@@ -177,10 +184,10 @@ object ConfigService {
         return parsed
     }
 
-    fun getPitConfigJson(teamNumber: Int, local: Boolean = false): String {
+    fun getPitConfigJson(teamNumber: Int, program: String = "FRC", local: Boolean = false): String {
         return transaction {
             if (!local) {
-                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                 if (activeAllianceId != null) {
                     val allianceConfig = ScoutingAlliances
                         .selectAll().where { ScoutingAlliances.id eq activeAllianceId }
@@ -193,7 +200,7 @@ object ConfigService {
             }
 
             val teamConfig = PitScoutingConfigs
-                .selectAll().where { PitScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { (PitScoutingConfigs.teamNumber eq teamNumber) and (PitScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(PitScoutingConfigs.configJson)
@@ -203,30 +210,31 @@ object ConfigService {
             }
 
             PitScoutingConfigs
-                .selectAll().where { PitScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { (PitScoutingConfigs.teamNumber eq 0) and (PitScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(PitScoutingConfigs.configJson)
         } ?: loadDefaultPitConfigText()
     }
 
-    fun getPitConfig(teamNumber: Int, local: Boolean = false): ScoutingConfig {
-        val jsonText = normalizeConfigJson(getPitConfigJson(teamNumber, local))
+    fun getPitConfig(teamNumber: Int, program: String = "FRC", local: Boolean = false): ScoutingConfig {
+        val jsonText = normalizeConfigJson(getPitConfigJson(teamNumber, program, local))
         return JsonSupport.json.decodeFromString(jsonText)
     }
 
-    fun updatePitConfig(teamNumber: Int, newJson: String): ScoutingConfig {
+    fun updatePitConfig(teamNumber: Int, program: String = "FRC", newJson: String): ScoutingConfig {
         val normalizedJson = normalizeConfigJson(newJson)
         val parsed = JsonSupport.json.decodeFromString<ScoutingConfig>(normalizedJson)
         transaction {
 
             val row = PitScoutingConfigs
-                .selectAll().where { PitScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { (PitScoutingConfigs.teamNumber eq teamNumber) and (PitScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {
                 PitScoutingConfigs.insert {
                     it[PitScoutingConfigs.teamNumber] = teamNumber
+                    it[PitScoutingConfigs.program] = program
                     it[configJson] = normalizedJson
                     it[updatedAt] = Instant.now()
                 }
@@ -240,10 +248,10 @@ object ConfigService {
         return parsed
     }
 
-    fun getQualitativeConfigJson(teamNumber: Int, local: Boolean = false): String {
+    fun getQualitativeConfigJson(teamNumber: Int, program: String = "FRC", local: Boolean = false): String {
         return transaction {
             if (!local) {
-                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                 if (activeAllianceId != null) {
                     val allianceConfig = ScoutingAlliances
                         .selectAll().where { ScoutingAlliances.id eq activeAllianceId }
@@ -256,7 +264,7 @@ object ConfigService {
             }
 
             val teamConfig = QualitativeScoutingConfigs
-                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { (QualitativeScoutingConfigs.teamNumber eq teamNumber) and (QualitativeScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(QualitativeScoutingConfigs.configJson)
@@ -266,30 +274,31 @@ object ConfigService {
             }
 
             QualitativeScoutingConfigs
-                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq 0 }
+                .selectAll().where { (QualitativeScoutingConfigs.teamNumber eq 0) and (QualitativeScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(QualitativeScoutingConfigs.configJson)
         } ?: loadDefaultQualitativeConfigText()
     }
 
-    fun getQualitativeConfig(teamNumber: Int, local: Boolean = false): ScoutingConfig {
-        val jsonText = normalizeConfigJson(getQualitativeConfigJson(teamNumber, local))
+    fun getQualitativeConfig(teamNumber: Int, program: String = "FRC", local: Boolean = false): ScoutingConfig {
+        val jsonText = normalizeConfigJson(getQualitativeConfigJson(teamNumber, program, local))
         return JsonSupport.json.decodeFromString(jsonText)
     }
 
-    fun updateQualitativeConfig(teamNumber: Int, newJson: String): ScoutingConfig {
+    fun updateQualitativeConfig(teamNumber: Int, program: String = "FRC", newJson: String): ScoutingConfig {
         val normalizedJson = normalizeConfigJson(newJson)
         val parsed = JsonSupport.json.decodeFromString<ScoutingConfig>(normalizedJson)
         transaction {
 
             val row = QualitativeScoutingConfigs
-                .selectAll().where { QualitativeScoutingConfigs.teamNumber eq teamNumber }
+                .selectAll().where { (QualitativeScoutingConfigs.teamNumber eq teamNumber) and (QualitativeScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {
                 QualitativeScoutingConfigs.insert {
                     it[QualitativeScoutingConfigs.teamNumber] = teamNumber
+                    it[QualitativeScoutingConfigs.program] = program
                     it[configJson] = normalizedJson
                     it[updatedAt] = Instant.now()
                 }

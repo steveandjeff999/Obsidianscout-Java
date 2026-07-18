@@ -362,12 +362,12 @@ function openEditModal(match) {
         timeInput.value = "";
     }
 
-    redTeam1.value = match.redTeams[0] ? match.redTeams[0].replace(/^frc/, "") : "";
-    redTeam2.value = match.redTeams[1] ? match.redTeams[1].replace(/^frc/, "") : "";
-    redTeam3.value = match.redTeams[2] ? match.redTeams[2].replace(/^frc/, "") : "";
-    blueTeam1.value = match.blueTeams[0] ? match.blueTeams[0].replace(/^frc/, "") : "";
-    blueTeam2.value = match.blueTeams[1] ? match.blueTeams[1].replace(/^frc/, "") : "";
-    blueTeam3.value = match.blueTeams[2] ? match.blueTeams[2].replace(/^frc/, "") : "";
+    redTeam1.value = match.redTeams[0] ? match.redTeams[0].replace(/^(frc|ftc)/, "") : "";
+    redTeam2.value = match.redTeams[1] ? match.redTeams[1].replace(/^(frc|ftc)/, "") : "";
+    redTeam3.value = match.redTeams[2] ? match.redTeams[2].replace(/^(frc|ftc)/, "") : "";
+    blueTeam1.value = match.blueTeams[0] ? match.blueTeams[0].replace(/^(frc|ftc)/, "") : "";
+    blueTeam2.value = match.blueTeams[1] ? match.blueTeams[1].replace(/^(frc|ftc)/, "") : "";
+    blueTeam3.value = match.blueTeams[2] ? match.blueTeams[2].replace(/^(frc|ftc)/, "") : "";
 
     modal.classList.add("show");
 }

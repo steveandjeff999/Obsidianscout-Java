@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.and
 import java.time.Instant
 import java.time.Year
 
@@ -84,7 +85,8 @@ data class ApiSettings(
     val theme: ThemeSettings = ThemeSettings(),
     val themes: List<ThemeSettings> = emptyList(),
     val activeThemeName: String = "",
-    val setupWizardCompleted: Boolean = false
+    val setupWizardCompleted: Boolean = false,
+    val program: String = "FRC"
 ) {
     fun resolvedEventKey(): String {
         val code = eventCode.trim()
@@ -99,26 +101,29 @@ object SettingsService {
 
     fun ensureDefaultSettings() {
         transaction {
-            val existing = AppSettings
-                .selectAll().where { AppSettings.teamNumber eq 0 }
-                .limit(1)
-                .firstOrNull() != null
-            if (!existing) {
-                val jsonText = JsonSupport.json.encodeToString(ApiSettings.serializer(), ApiSettings())
-                AppSettings.insert {
-                    it[teamNumber] = 0
-                    it[settingsJson] = jsonText
-                    it[updatedAt] = Instant.now()
+            listOf("FRC", "FTC").forEach { prog ->
+                val existing = AppSettings
+                    .selectAll().where { (AppSettings.teamNumber eq 0) and (AppSettings.program eq prog) }
+                    .limit(1)
+                    .firstOrNull() != null
+                if (!existing) {
+                    val jsonText = JsonSupport.json.encodeToString(ApiSettings.serializer(), ApiSettings(program = prog))
+                    AppSettings.insert {
+                        it[teamNumber] = 0
+                        it[program] = prog
+                        it[settingsJson] = jsonText
+                        it[updatedAt] = Instant.now()
+                    }
                 }
             }
         }
     }
 
-    fun getSettings(teamNumber: Int): ApiSettings {
+    fun getSettings(teamNumber: Int, program: String = "FRC"): ApiSettings {
         val jsonText = transaction {
             // Try team-specific settings first
             val teamSettings = AppSettings
-                .selectAll().where { AppSettings.teamNumber eq teamNumber }
+                .selectAll().where { (AppSettings.teamNumber eq teamNumber) and (AppSettings.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(AppSettings.settingsJson)
@@ -129,13 +134,13 @@ object SettingsService {
 
             // Fall back to team 0 (global default)
             AppSettings
-                .selectAll().where { AppSettings.teamNumber eq 0 }
+                .selectAll().where { (AppSettings.teamNumber eq 0) and (AppSettings.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(AppSettings.settingsJson)
         }
         val parsed = if (jsonText.isNullOrBlank()) {
-            ApiSettings()
+            ApiSettings(program = program)
         } else {
             JsonSupport.json.decodeFromString(ApiSettings.serializer(), jsonText)
         }
@@ -143,16 +148,24 @@ object SettingsService {
     }
 
     fun updateSettings(teamNumber: Int, settings: ApiSettings): ApiSettings {
-        val normalized = normalize(settings)
+        val program = settings.program
+        val existing = getSettings(teamNumber, program)
+        val mergedKeys = settings.apiKeys.copy(
+            tbaKey = if (settings.apiKeys.tbaKey == "********") existing.apiKeys.tbaKey else settings.apiKeys.tbaKey,
+            firstKey = if (settings.apiKeys.firstKey == "********") existing.apiKeys.firstKey else settings.apiKeys.firstKey
+        )
+        val settingsWithMergedKeys = settings.copy(apiKeys = mergedKeys)
+        val normalized = normalize(settingsWithMergedKeys)
         val jsonText = JsonSupport.json.encodeToString(ApiSettings.serializer(), normalized)
         transaction {
             val row = AppSettings
-                .selectAll().where { AppSettings.teamNumber eq teamNumber }
+                .selectAll().where { (AppSettings.teamNumber eq teamNumber) and (AppSettings.program eq program) }
                 .limit(1)
                 .firstOrNull()
             if (row == null) {
                 AppSettings.insert {
                     it[AppSettings.teamNumber] = teamNumber
+                    it[AppSettings.program] = program
                     it[settingsJson] = jsonText
                     it[updatedAt] = Instant.now()
                 }
@@ -191,13 +204,13 @@ object SettingsService {
         )
     }
 
-    fun teamNumbersEligibleForAutoSync(): List<Int> {
+    fun teamNumbersEligibleForAutoSync(): List<Pair<Int, String>> {
         return transaction {
             AppSettings.selectAll()
-                .map { it[AppSettings.teamNumber] }
+                .map { Pair(it[AppSettings.teamNumber], it[AppSettings.program]) }
                 .distinct()
-                .mapNotNull { teamNumber ->
-                    val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber)
+                .mapNotNull { (teamNumber, program) ->
+                    val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber, program)
                     if (settings.resolvedEventKey().isBlank()) {
                         return@mapNotNull null
                     }
@@ -207,7 +220,7 @@ object SettingsService {
                     if (!hasApi) {
                         return@mapNotNull null
                     }
-                    teamNumber
+                    Pair(teamNumber, program)
                 }
         }
     }

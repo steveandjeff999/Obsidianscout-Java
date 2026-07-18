@@ -8,6 +8,7 @@ let offset = 0;
 let currentSearch = "";
 let currentTeamFilter = "";
 let currentRoleFilter = "";
+let currentProgramFilter = "";
 let loadUsersController = null;
 let currentUsers = [];
 
@@ -63,6 +64,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.querySelector(".edit-superadmin-option").style.display = "";
         const filterSuperadminOpt = document.querySelector(".filter-superadmin-option");
         if (filterSuperadminOpt) filterSuperadminOpt.style.display = "";
+        const programFilterField = document.getElementById("program-filter-field");
+        if (programFilterField) programFilterField.style.display = "";
     }
 
     // Hide/disable team filter field if user is not a superadmin
@@ -260,6 +263,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const searchUsernameInput = document.getElementById("search-username");
     const searchTeamInput = document.getElementById("search-team");
     const searchRoleSelect = document.getElementById("search-role");
+    const searchProgramSelect = document.getElementById("search-program");
     const resetFiltersBtn = document.getElementById("reset-filters");
     const loadMoreBtn = document.getElementById("load-more-btn");
 
@@ -268,6 +272,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentSearch = searchUsernameInput.value.trim();
         currentTeamFilter = searchTeamInput.value.trim();
         currentRoleFilter = searchRoleSelect.value;
+        currentProgramFilter = searchProgramSelect ? searchProgramSelect.value : "";
         loadUsers(me, openModal, false);
     }
 
@@ -282,11 +287,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     searchRoleSelect.addEventListener("change", triggerSearch);
+    if (searchProgramSelect) {
+        searchProgramSelect.addEventListener("change", triggerSearch);
+    }
 
     resetFiltersBtn.addEventListener("click", () => {
         searchUsernameInput.value = "";
         searchTeamInput.value = "";
         searchRoleSelect.value = "";
+        if (searchProgramSelect) searchProgramSelect.value = "";
         triggerSearch();
     });
 
@@ -360,6 +369,7 @@ async function loadUsers(me, openModal, append = false) {
         if (currentSearch) params.append("q", currentSearch);
         if (currentTeamFilter) params.append("teamNumber", currentTeamFilter);
         if (currentRoleFilter) params.append("role", currentRoleFilter);
+        if (currentProgramFilter) params.append("program", currentProgramFilter);
 
         const users = await Obsidianscout.request(`/api/admin/users?${params.toString()}`, {
             signal: signal
@@ -386,10 +396,11 @@ async function loadUsers(me, openModal, append = false) {
             const emailDisplay = user.email || `<span style="color: var(--muted); font-style: italic;">None</span>`;
 
             const row = document.createElement("tr");
+            const teamDisplay = Obsidianscout.isSuperAdmin(me.role) ? `[${user.program}] ${user.teamNumber}` : user.teamNumber;
             row.innerHTML = `
                 <td>${user.username}</td>
                 <td>${emailDisplay}</td>
-                <td>${user.teamNumber}</td>
+                <td>${teamDisplay}</td>
                 <td>${roleLabel}</td>
                 <td>${new Date(user.createdAt).toLocaleDateString()}</td>
                 <td>

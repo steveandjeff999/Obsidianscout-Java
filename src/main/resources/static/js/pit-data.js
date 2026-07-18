@@ -130,7 +130,7 @@ async function loadTeamsForEvent(state) {
     }
     if (state.eventKey === "prescout") {
         const uniqueTeams = Array.from(new Set(state.entries.filter(e => e.isPrescout).map(e => e.targetTeamNumber).filter(Boolean)));
-        state.teams = uniqueTeams.map(teamNumber => ({ teamNumber, teamKey: `frc${teamNumber}`, nickname: `Team ${teamNumber}` }));
+        state.teams = uniqueTeams.map(teamNumber => ({ teamNumber, teamKey: `${Obsidianscout.getProgramPrefix()}${teamNumber}`, nickname: `Team ${teamNumber}` }));
         return;
     }
     try {

@@ -64,6 +64,13 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         this.port = port
         println("[Cockroach] Bound to Tailscale IP: $tailscaleIp on port $port")
 
+        // Check local firewall rules for active ports
+        val portsToCheck = mutableListOf(appConfig.server.port, port)
+        if (appConfig.server.https.enabled) {
+            portsToCheck.add(appConfig.server.https.port)
+        }
+        checkFirewallRules(portsToCheck)
+
         // 3. Fetch cluster peers (with retry in case network is not fully up yet)
         var peers = emptyList<Pair<String, Int>>()
         val fetchStart = System.currentTimeMillis()
@@ -285,14 +292,25 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     }
 
     private fun fetchLeaderTime(leaderIp: String): Long? {
-        val ports = listOf(appConfig.server.port, 8080, 8888, 80).distinct()
+        val isHttps = appConfig.server.https.enabled
+        val scheme = if (isHttps) "https" else "http"
+        val ports = listOf(
+            if (isHttps) appConfig.server.https.port else appConfig.server.port,
+            8080,
+            8888,
+            80
+        ).distinct()
         for (port in ports) {
             try {
-                val url = java.net.URL("http://$leaderIp:$port/api/cluster/time")
+                val url = java.net.URL("$scheme://$leaderIp:$port/api/cluster/time")
                 val connection = url.openConnection() as java.net.HttpURLConnection
+                if (isHttps && connection is javax.net.ssl.HttpsURLConnection) {
+                    connection.sslSocketFactory = createTrustAllSslContext().socketFactory
+                    connection.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
+                }
                 connection.requestMethod = "GET"
-                connection.connectTimeout = 1500
-                connection.readTimeout = 1500
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
                 if (connection.responseCode == 200) {
                     val responseText = connection.inputStream.bufferedReader().use { it.readText() }
                     val jsonElement = com.obsidianscout.config.JsonSupport.json.parseToJsonElement(responseText).jsonObject
@@ -344,15 +362,76 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         }
     }
 
+    private fun createTrustAllSslContext(): javax.net.ssl.SSLContext {
+        val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(
+            object : javax.net.ssl.X509TrustManager {
+                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate>? = null
+                override fun checkClientTrusted(certs: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(certs: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+            }
+        )
+        val sc = javax.net.ssl.SSLContext.getInstance("SSL")
+        sc.init(null, trustAllCerts, java.security.SecureRandom())
+        return sc
+    }
+
+    private fun checkFirewallRules(ports: List<Int>) {
+        if (!isWindows) {
+            try {
+                val p = ProcessBuilder("sudo", "ufw", "status").start()
+                if (p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0) {
+                    val status = p.inputStream.bufferedReader().use { it.readText() }
+                    println("[Firewall] UFW status:\n$status")
+                }
+            } catch (e: Exception) {
+                // ignore
+            }
+            return
+        }
+        
+        println("[Firewall] Checking local Windows Firewall rules for ports: $ports...")
+        try {
+            val portsString = ports.joinToString(",")
+            val pb = ProcessBuilder("powershell", "-Command", 
+                "Get-NetFirewallRule -Enabled True -Direction Inbound -Action Allow | Get-NetFirewallPortFilter | Where-Object { \$_.LocalPort -in @($portsString) } | Select-Object Protocol, LocalPort"
+            )
+            val p = pb.start()
+            if (p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0) {
+                val output = p.inputStream.bufferedReader().use { it.readText() }.trim()
+                if (output.isNotEmpty()) {
+                    println("[Firewall] Found inbound allow rules:\n$output")
+                } else {
+                    println("[Firewall] WARNING: No inbound allow rules found for ports $ports. Nodes might not be able to connect to us!")
+                }
+            } else {
+                val err = p.errorStream.bufferedReader().use { it.readText() }.trim()
+                println("[Firewall] Warning checking firewall rules: $err")
+            }
+        } catch (e: Exception) {
+            println("[Firewall] Could not check Windows Firewall rules: ${e.message}")
+        }
+    }
+
     private fun queryPeerStatus(ip: String): PeerStatus? {
-        val ports = listOf(appConfig.server.port, 8080, 8888, 80).distinct()
+        val isHttps = appConfig.server.https.enabled
+        val scheme = if (isHttps) "https" else "http"
+        val ports = listOf(
+            if (isHttps) appConfig.server.https.port else appConfig.server.port,
+            8080,
+            8888,
+            80
+        ).distinct()
         for (port in ports) {
             try {
-                val url = java.net.URL("http://$ip:$port/api/cluster/status")
+                val url = java.net.URL("$scheme://$ip:$port/api/cluster/status")
                 val connection = url.openConnection() as java.net.HttpURLConnection
+                if (isHttps && connection is javax.net.ssl.HttpsURLConnection) {
+                    connection.sslSocketFactory = createTrustAllSslContext().socketFactory
+                    connection.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
+                }
                 connection.requestMethod = "GET"
-                connection.connectTimeout = 1500
-                connection.readTimeout = 1500
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
                 if (connection.responseCode == 200) {
                     val responseText = connection.inputStream.bufferedReader().use { it.readText() }
                     val jsonElement = com.obsidianscout.config.JsonSupport.json.parseToJsonElement(responseText).jsonObject

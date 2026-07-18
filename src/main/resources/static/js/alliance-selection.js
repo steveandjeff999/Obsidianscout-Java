@@ -630,7 +630,7 @@
         const opr = team.opr !== null && team.opr !== undefined ? team.opr.toFixed(1) : "-";
         const teamMatches = state.matches.filter(m => {
             const allTeamsInMatch = (m.redTeams || []).concat(m.blueTeams || []);
-            return allTeamsInMatch.some(k => k.replace(/^frc/, "") === String(teamNumber));
+            return allTeamsInMatch.some(k => k.replace(/^(frc|ftc)/, "") === String(teamNumber));
         });
 
         document.getElementById("breakdown-stat-scouted").textContent = calculatedAvg;
@@ -792,7 +792,7 @@
             // Red alliance
             const redCell = document.createElement("td");
             (m.redTeams || []).forEach(key => {
-                const num = key.replace(/^frc/, "");
+                const num = key.replace(/^(frc|ftc)/, "");
                 const isSelf = num === String(teamNumber);
                 const badge = document.createElement("span");
                 badge.className = `alliance-member-badge red-team ${isSelf ? 'highlight-self' : ''}`;
@@ -804,7 +804,7 @@
             // Blue alliance
             const blueCell = document.createElement("td");
             (m.blueTeams || []).forEach(key => {
-                const num = key.replace(/^frc/, "");
+                const num = key.replace(/^(frc|ftc)/, "");
                 const isSelf = num === String(teamNumber);
                 const badge = document.createElement("span");
                 badge.className = `alliance-member-badge blue-team ${isSelf ? 'highlight-self' : ''}`;

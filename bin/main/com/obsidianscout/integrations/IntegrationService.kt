@@ -139,6 +139,9 @@ object IntegrationService {
     }
 
     suspend fun syncEvents(settings: ApiSettings): Int {
+        if (settings.program == "FTC") {
+            return FtcIntegrationService.syncEvents(settings)
+        }
         val events = fetchMergedEvents(settings)
         val now = Instant.now()
         transaction {
@@ -148,6 +151,9 @@ object IntegrationService {
     }
 
     suspend fun syncEventData(settings: ApiSettings): SyncCounts {
+        if (settings.program == "FTC") {
+            return FtcIntegrationService.syncEventData(settings)
+        }
         val eventKey = canonicalTbaEventKey(settings.year, settings.resolvedEventKey())
         if (eventKey.isBlank()) {
             return SyncCounts(0, 0)
@@ -264,6 +270,9 @@ object IntegrationService {
     }
 
     suspend fun syncCustomEventData(settings: ApiSettings, eventKey: String): SyncCounts {
+        if (settings.program == "FTC") {
+            return FtcIntegrationService.syncCustomEventData(settings, eventKey)
+        }
         val key = canonicalStoredEventKey(settings.year, eventKey)
         if (key.isBlank()) {
             return SyncCounts(0, 0)
@@ -380,6 +389,11 @@ object IntegrationService {
     }
 
     suspend fun syncStats(settings: ApiSettings, customEventKey: String? = null): Int {
+        if (settings.program == "FTC") {
+            val key = customEventKey ?: settings.resolvedEventKey()
+            FtcIntegrationService.syncStats(settings, key)
+            return 1
+        }
         val eventKey = canonicalStoredEventKey(settings.year, customEventKey ?: settings.resolvedEventKey())
         if (eventKey.isBlank()) {
             return 0
@@ -632,6 +646,9 @@ object IntegrationService {
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
             val bbotMappings = getBBotMappings(eventKey)
             
+            val isFtcEvent = eventKey.contains("ftc") || allTeams.any { it[ApiTeams.teamKey].startsWith("ftc") }
+            val defaultPrefix = if (isFtcEvent) "ftc" else "frc"
+
             // Build bidirectional resolution maps for B-bots and normal teams
             val teamKeyByNumber = mutableMapOf<Int, String>()
             val teamNumberByKey = mutableMapOf<String, Int>()
@@ -639,37 +656,37 @@ object IntegrationService {
 
             // First populate from B-bot mappings
             bbotMappings.forEach { m ->
-                val bKey = if (m.bbotKey.startsWith("frc")) m.bbotKey else "frc${m.bbotKey}"
-                val pKey = if (m.placeholderKey.startsWith("frc")) m.placeholderKey else "frc${m.placeholderKey}"
+                val bKey = if (m.bbotKey.startsWith(defaultPrefix)) m.bbotKey else "$defaultPrefix${m.bbotKey}"
+                val pKey = if (m.placeholderKey.startsWith(defaultPrefix)) m.placeholderKey else "$defaultPrefix${m.placeholderKey}"
                 val num = m.placeholderNumber
 
                 teamKeyByNumber[num] = bKey
                 
                 teamNumberByKey[bKey] = num
-                teamNumberByKey[bKey.removePrefix("frc")] = num
+                teamNumberByKey[bKey.removePrefix(defaultPrefix)] = num
                 teamNumberByKey[pKey] = num
-                teamNumberByKey[pKey.removePrefix("frc")] = num
+                teamNumberByKey[pKey.removePrefix(defaultPrefix)] = num
                 
                 canonicalKeyByKey[bKey] = bKey
-                canonicalKeyByKey[bKey.removePrefix("frc")] = bKey
+                canonicalKeyByKey[bKey.removePrefix(defaultPrefix)] = bKey
                 canonicalKeyByKey[pKey] = bKey
-                canonicalKeyByKey[pKey.removePrefix("frc")] = bKey
+                canonicalKeyByKey[pKey.removePrefix(defaultPrefix)] = bKey
             }
 
             // Then populate other teams
             allTeams.forEach { row ->
                 val origKey = row[ApiTeams.teamKey].lowercase().trim()
                 val num = row[ApiTeams.teamNumber]
-                val oKey = if (origKey.startsWith("frc")) origKey else "frc$origKey"
+                val oKey = if (origKey.startsWith(defaultPrefix)) origKey else "$defaultPrefix$origKey"
                 
                 if (!teamNumberByKey.containsKey(oKey)) {
                     teamKeyByNumber[num] = oKey
                     
                     teamNumberByKey[oKey] = num
-                    teamNumberByKey[oKey.removePrefix("frc")] = num
+                    teamNumberByKey[oKey.removePrefix(defaultPrefix)] = num
                     
                     canonicalKeyByKey[oKey] = oKey
-                    canonicalKeyByKey[oKey.removePrefix("frc")] = oKey
+                    canonicalKeyByKey[oKey.removePrefix(defaultPrefix)] = oKey
                 }
             }
 
@@ -690,18 +707,19 @@ object IntegrationService {
                     val rawKeys = decodeTeams(teamKeysJson)
                     rawKeys.map { key ->
                         val trimmedKey = key.trim().lowercase()
+                        val prefix = if (trimmedKey.startsWith("ftc") || (canonicalKeyByKey[trimmedKey]?.startsWith("ftc") == true)) "ftc" else "frc"
                         val canonicalKey = canonicalKeyByKey[trimmedKey] 
-                            ?: (if (trimmedKey.startsWith("frc")) trimmedKey else "frc$trimmedKey")
+                            ?: (if (trimmedKey.startsWith(prefix)) trimmedKey else "$prefix$trimmedKey")
                         
                         val num = teamNumberByKey[trimmedKey]
-                            ?: trimmedKey.removePrefix("frc").toIntOrNull()
+                            ?: trimmedKey.removePrefix(prefix).toIntOrNull()
                         
-                        if (num != null && canonicalKey.removePrefix("frc").lowercase() != num.toString()) {
-                            val cleanCanonical = if (canonicalKey.startsWith("frc")) canonicalKey else "frc$canonicalKey"
+                        if (num != null && canonicalKey.removePrefix(prefix).lowercase() != num.toString()) {
+                            val cleanCanonical = if (canonicalKey.startsWith(prefix)) canonicalKey else "$prefix$canonicalKey"
                             "$cleanCanonical/$num"
                         } else {
                             if (num != null && canonicalKey != trimmedKey) {
-                                val cleanCanonical = if (canonicalKey.startsWith("frc")) canonicalKey else "frc$canonicalKey"
+                                val cleanCanonical = if (canonicalKey.startsWith(prefix)) canonicalKey else "$prefix$canonicalKey"
                                 "$cleanCanonical/$num"
                             } else {
                                 key
@@ -1448,6 +1466,10 @@ object IntegrationService {
     }
 
     suspend fun syncEpaOprHistory(settings: ApiSettings, eventKey: String) {
+        if (settings.program == "FTC") {
+            FtcIntegrationService.syncEpaOprHistory(settings, eventKey)
+            return
+        }
         val normalizedKey = canonicalStoredEventKey(settings.year, eventKey)
         if (normalizedKey.isBlank()) return
         
@@ -1478,6 +1500,9 @@ object IntegrationService {
     }
 
     fun getEpaOprHistory(settings: ApiSettings, eventKey: String): Pair<Map<String, Double>, List<JsonElement>> {
+        if (settings.program == "FTC") {
+            return FtcIntegrationService.getEpaOprHistory(settings, eventKey)
+        }
         val normalizedKey = canonicalStoredEventKey(settings.year, eventKey)
         val cached = transaction {
             EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()

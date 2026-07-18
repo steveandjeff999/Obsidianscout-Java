@@ -660,6 +660,17 @@
             }
         }
 
+        const isFtc = me && me.program === "FTC";
+        const seasonTitle = isFtc ? "FTC Event & Season Details" : "FRC Event & Season Details";
+        const seasonDesc = isFtc ? "Specify your current season year and the event code to sync teams and matches from the FTC Scout APIs." : "Specify your current season year and the event code to sync teams and matches from the FRC APIs.";
+        const yearDesc = isFtc ? "The 4-digit FTC season year." : "The 4-digit FRC season year.";
+        const sourceTbaLabel = isFtc ? "FTC Scout" : "The Blue Alliance";
+        const sourceFirstLabel = isFtc ? "FIRST FTC API" : "FIRST API";
+        const credentialsDesc = isFtc ? "Enter your API credentials. FTC Scout does not require a key, but you can optionally configure official FIRST FTC API credentials below." : "Enter your API keys to enable automatic schedule syncing. Leave blank if syncing offline via QR codes.";
+        const tbaKeyStyle = isFtc ? "display: none;" : "margin-bottom: 16px;";
+        const firstUsernameLabel = isFtc ? "FIRST FTC API Username" : "FIRST API Username";
+        const firstKeyLabel = isFtc ? "FIRST FTC API Key" : "FIRST API Key";
+
         container.innerHTML = `
             <div class="modal-header">
                 <h2 class="modal-title">Admin Setup Wizard</h2>
@@ -693,14 +704,14 @@
                 </div>
                 
                 <div class="wizard-step-content" data-step="2">
-                    <h3 style="margin-top: 0; margin-bottom: 8px;">FRC Event & Season Details</h3>
-                    <p class="notice" style="margin-bottom: 16px;">Specify your current season year and the event code to sync teams and matches from the FRC APIs.</p>
+                    <h3 style="margin-top: 0; margin-bottom: 8px;">${seasonTitle}</h3>
+                    <p class="notice" style="margin-bottom: 16px;">${seasonDesc}</p>
                     
                     <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
                         <div class="field">
                             <label for="wizard-year">Season Year</label>
                             <input id="wizard-year" type="number" value="${localSettings.year || new Date().getFullYear()}" />
-                            <span class="wizard-field-desc">The 4-digit FRC season year.</span>
+                            <span class="wizard-field-desc">${yearDesc}</span>
                         </div>
                         <div class="field">
                             <label for="wizard-event-code">Event Code</label>
@@ -715,8 +726,8 @@
                         <div class="field">
                             <label for="wizard-source">Preferred API Source</label>
                             <select id="wizard-source">
-                                <option value="tba" ${localSettings.preferredSource === 'tba' ? 'selected' : ''}>The Blue Alliance</option>
-                                <option value="first" ${localSettings.preferredSource === 'first' ? 'selected' : ''}>FIRST API</option>
+                                <option value="tba" ${localSettings.preferredSource === 'tba' ? 'selected' : ''}>${sourceTbaLabel}</option>
+                                <option value="first" ${localSettings.preferredSource === 'first' ? 'selected' : ''}>${sourceFirstLabel}</option>
                             </select>
                             <span class="wizard-field-desc">The primary API to fetch event schedule.</span>
                         </div>
@@ -725,9 +736,9 @@
                 
                 <div class="wizard-step-content" data-step="3">
                     <h3 style="margin-top: 0; margin-bottom: 8px;">API Credentials</h3>
-                    <p class="notice" style="margin-bottom: 16px;">Enter your API keys to enable automatic schedule syncing. Leave blank if syncing offline via QR codes.</p>
+                    <p class="notice" style="margin-bottom: 16px;">${credentialsDesc}</p>
                     
-                    <div class="field" style="margin-bottom: 16px;">
+                    <div class="field" style="${tbaKeyStyle}">
                         <label for="wizard-tba-key">The Blue Alliance Read Key</label>
                         <input id="wizard-tba-key" type="password" placeholder="TBA Read API Key" value="${localSettings.apiKeys.tbaKey || ''}" />
                     </div>
@@ -736,11 +747,11 @@
                     
                     <div class="split" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
                         <div class="field">
-                            <label for="wizard-first-user">FIRST API Username</label>
+                            <label for="wizard-first-user">${firstUsernameLabel}</label>
                             <input id="wizard-first-user" type="text" placeholder="FIRST Username" value="${localSettings.apiKeys.firstUsername || ''}" />
                         </div>
                         <div class="field">
-                            <label for="wizard-first-key">FIRST API Key</label>
+                            <label for="wizard-first-key">${firstKeyLabel}</label>
                             <input id="wizard-first-key" type="password" placeholder="FIRST API Secret Key" value="${localSettings.apiKeys.firstKey || ''}" />
                         </div>
                     </div>
@@ -1037,6 +1048,12 @@
         }
         const roleLabel = user.role === "SUPERADMIN" ? "Site Admin" : user.role.charAt(0) + user.role.slice(1).toLowerCase();
 
+        // Update brand to show program type
+        const brand = document.querySelector(".sidebar-brand");
+        if (brand && !brand.textContent.endsWith(user.program)) {
+            brand.textContent = `ObsidianScout ${user.program}`;
+        }
+
         // Build avatar element
         const initials = (user.username || "?").slice(0, 2).toUpperCase();
         // Pick a deterministic hue from the username
@@ -1056,7 +1073,7 @@
             <a class="nav-avatar-link" href="/config" aria-label="Edit profile picture">${avatarHtml}</a>
             <div class="nav-user-text">
                 <span class="nav-user-name" title="${user.username}">${user.username}</span>
-                <span class="nav-user-meta">Team ${user.teamNumber} • ${roleLabel}</span>
+                <span class="nav-user-meta">${user.program} Team ${user.teamNumber} • ${roleLabel}</span>
             </div>
         `;
     }
@@ -2083,13 +2100,13 @@
             return teamNumber !== undefined && teamNumber !== null ? String(teamNumber) : "";
         }
         
-        // Remove 'frc' prefix
-        const cleanKey = teamKey.replace(/^frc/, "");
+        // Remove 'frc' or 'ftc' prefix
+        const cleanKey = teamKey.replace(/^(frc|ftc)/, "");
         
         // Split if it's already a slash-merged format (e.g. 254b/9999 or frc254b/9999)
         const parts = cleanKey.split("/");
         const keyPart = parts[0];
-        const numPart = parts.length > 1 ? parts[1] : (teamNumber !== undefined && teamNumber !== null ? String(teamNumber).replace(/^frc/, "") : "");
+        const numPart = parts.length > 1 ? parts[1] : (teamNumber !== undefined && teamNumber !== null ? String(teamNumber).replace(/^(frc|ftc)/, "") : "");
         
         if (!numPart || keyPart === numPart) {
             return keyPart;
@@ -2807,7 +2824,28 @@
         initHapticDelegation();
     }
 
+    function getProgram() {
+        try {
+            const meText = safeGetItem("cache:/api/auth/me");
+            if (meText) {
+                const parsed = JSON.parse(meText);
+                if (parsed && parsed.user && parsed.user.program) {
+                    return parsed.user.program;
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to get program from cache:", e);
+        }
+        return "FRC";
+    }
+
+    function getProgramPrefix() {
+        return getProgram().toLowerCase();
+    }
+
     window.Obsidianscout = {
+        getProgram,
+        getProgramPrefix,
         request,
         getMe,
         checkLoginStatus,

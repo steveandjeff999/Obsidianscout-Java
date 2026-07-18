@@ -260,7 +260,7 @@ async function setupModal(defaultEventKey) {
 
         const payload = {
             eventKey: eventSelect.value,
-            teamKey: `frc${numberInput.value.trim()}`,
+            teamKey: `${Obsidianscout.getProgramPrefix()}${numberInput.value.trim()}`,
             teamNumber: parseInt(numberInput.value.trim()),
             nickname: teamName,
             name: teamName,

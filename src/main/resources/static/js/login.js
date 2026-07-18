@@ -40,6 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const username = document.getElementById("username").value.trim();
         const teamNumber = parseInt(document.getElementById("teamNumber").value, 10);
+        const program = document.getElementById("login-program").value;
         const password = document.getElementById("password").value;
         const keepMeLoggedIn = document.getElementById("keepMeLoggedIn").checked;
 
@@ -49,6 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 json: {
                     username,
                     teamNumber,
+                    program,
                     password,
                     keepMeLoggedIn
                 }
@@ -69,6 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const username = document.getElementById("reg-username").value.trim();
         const email = document.getElementById("reg-email").value.trim();
         const teamNumber = parseInt(document.getElementById("reg-team").value, 10);
+        const program = document.getElementById("reg-program").value;
         const password = document.getElementById("reg-password").value;
         const confirm = document.getElementById("reg-confirm").value;
         const role = document.getElementById("reg-role").value;
@@ -93,6 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     username,
                     email,
                     teamNumber,
+                    program,
                     password,
                     role,
                     keepMeLoggedIn

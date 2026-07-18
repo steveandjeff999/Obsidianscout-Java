@@ -6,6 +6,7 @@ import org.jetbrains.exposed.sql.javatime.timestamp
 object Users : UUIDTable("users") {
     val username = varchar("username", 64)
     val teamNumber = integer("team_number")
+    val program = varchar("program", 8).default("FRC")
     val passwordHash = varchar("password_hash", 255)
     val role = varchar("role", 16)
     val createdAt = timestamp("created_at")
@@ -15,42 +16,46 @@ object Users : UUIDTable("users") {
     val tourProgress = text("tour_progress").nullable()
 
     init {
-        uniqueIndex("ux_users_username_team", username, teamNumber)
+        uniqueIndex("ux_users_username_team_program", username, teamNumber, program)
     }
 }
 
 object ScoutingConfigs : UUIDTable("scouting_configs") {
     val teamNumber = integer("team_number").default(0)
+    val program = varchar("program", 8).default("FRC")
     val configJson = text("config_json")
     val updatedAt = timestamp("updated_at")
 
     init {
-        uniqueIndex("ux_scouting_configs_team", teamNumber)
+        uniqueIndex("ux_scouting_configs_team_program", teamNumber, program)
     }
 }
 
 object PitScoutingConfigs : UUIDTable("pit_scouting_configs") {
     val teamNumber = integer("team_number").default(0)
+    val program = varchar("program", 8).default("FRC")
     val configJson = text("config_json")
     val updatedAt = timestamp("updated_at")
 
     init {
-        uniqueIndex("ux_pit_scouting_configs_team", teamNumber)
+        uniqueIndex("ux_pit_scouting_configs_team_program", teamNumber, program)
     }
 }
 
 object QualitativeScoutingConfigs : UUIDTable("qualitative_scouting_configs") {
     val teamNumber = integer("team_number").default(0)
+    val program = varchar("program", 8).default("FRC")
     val configJson = text("config_json")
     val updatedAt = timestamp("updated_at")
 
     init {
-        uniqueIndex("ux_qualitative_scouting_configs_team", teamNumber)
+        uniqueIndex("ux_qualitative_scouting_configs_team_program", teamNumber, program)
     }
 }
 
 object ScoutingEntries : UUIDTable("scouting_entries") {
     val ownerTeamNumber = integer("owner_team_number")
+    val program = varchar("program", 8).default("FRC")
     val targetTeamNumber = integer("target_team_number").nullable()
     val eventKey = varchar("event_key", 64).nullable()
     val matchKey = varchar("match_key", 64).nullable()
@@ -65,6 +70,7 @@ object ScoutingEntries : UUIDTable("scouting_entries") {
 
 object PitScoutingEntries : UUIDTable("pit_scouting_entries") {
     val ownerTeamNumber = integer("owner_team_number")
+    val program = varchar("program", 8).default("FRC")
     val targetTeamNumber = integer("target_team_number").nullable()
     val eventKey = varchar("event_key", 64).nullable()
     val dataJson = text("data_json")
@@ -77,6 +83,7 @@ object PitScoutingEntries : UUIDTable("pit_scouting_entries") {
 
 object QualitativeScoutingEntries : UUIDTable("qualitative_scouting_entries") {
     val ownerTeamNumber = integer("owner_team_number")
+    val program = varchar("program", 8).default("FRC")
     val targetTeamNumber = integer("target_team_number").nullable()
     val eventKey = varchar("event_key", 64).nullable()
     val matchKey = varchar("match_key", 64).nullable()
@@ -91,11 +98,12 @@ object QualitativeScoutingEntries : UUIDTable("qualitative_scouting_entries") {
 
 object AppSettings : UUIDTable("app_settings") {
     val teamNumber = integer("team_number").default(0)
+    val program = varchar("program", 8).default("FRC")
     val settingsJson = text("settings_json")
     val updatedAt = timestamp("updated_at")
 
     init {
-        uniqueIndex("ux_app_settings_team", teamNumber)
+        uniqueIndex("ux_app_settings_team_program", teamNumber, program)
     }
 }
 
@@ -155,6 +163,7 @@ object ApiMatches : UUIDTable("api_matches") {
 object ScoutingAlliances : UUIDTable("scouting_alliances") {
     val name = varchar("name", 128)
     val ownerTeamNumber = integer("owner_team_number")
+    val program = varchar("program", 8).default("FRC")
     val eventKey = varchar("event_key", 64).nullable()
     val notes = text("notes").nullable()
     val createdAt = timestamp("created_at")
@@ -169,6 +178,7 @@ object ScoutingAlliances : UUIDTable("scouting_alliances") {
 object AllianceMemberships : UUIDTable("alliance_memberships") {
     val allianceId = reference("alliance_id", ScoutingAlliances)
     val teamNumber = integer("team_number")
+    val program = varchar("program", 8).default("FRC")
     /** ADMIN | INVITED | ACCEPTED | DECLINED */
     val status = varchar("status", 16)
     val invitedAt = timestamp("invited_at")
@@ -177,8 +187,8 @@ object AllianceMemberships : UUIDTable("alliance_memberships") {
     val active = bool("active").default(false)
 
     init {
-        uniqueIndex("ux_alliance_memberships_alliance_team", allianceId, teamNumber)
-        index("idx_alliance_memberships_team_active", false, teamNumber, active)
+        uniqueIndex("ux_alliance_memberships_alliance_team_program", allianceId, teamNumber, program)
+        index("idx_alliance_memberships_team_active_program", false, teamNumber, active, program)
     }
 }
 
@@ -218,6 +228,7 @@ object AllianceSelections : UUIDTable("alliance_selections") {
 
 object Banners : UUIDTable("banners") {
     val teamNumber = integer("team_number").default(0)
+    val program = varchar("program", 8).default("FRC")
     val message = text("message")
     val bannerType = varchar("banner_type", 32).default("info")
     val isDismissible = bool("is_dismissible").default(true)
@@ -230,6 +241,7 @@ object Banners : UUIDTable("banners") {
 
 object ChatMessages : UUIDTable("chat_messages") {
     val teamNumber = integer("team_number")
+    val program = varchar("program", 8).default("FRC")
     val groupName = varchar("group_name", 64)
     val userId = reference("user_id", Users)
     val username = varchar("username", 64)
@@ -238,7 +250,7 @@ object ChatMessages : UUIDTable("chat_messages") {
     val reactionsJson = text("reactions_json").default("{}")
 
     init {
-        index("idx_chat_messages_team_group", false, teamNumber, groupName)
+        index("idx_chat_messages_team_group_program", false, teamNumber, groupName, program)
     }
 }
 

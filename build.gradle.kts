@@ -84,7 +84,10 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
     group = "distribution"
     description = "Assembles a complete distribution bundle folder with the fat JAR, config files, and run scripts."
     
-    dependsOn("shadowJar", "regenerateConfigs")
+    dependsOn("shadowJar", "regenerateConfigs", "bumpVersion")
+    // bumpVersion must run after regenerateConfigs so it can overwrite the freshly-generated
+    // config with the bumped version before buildBundle copies it into the bundle folder.
+    mustRunAfter("bumpVersion")
     
     // Copy the fat jar
     from(tasks.named("shadowJar")) {
@@ -122,13 +125,55 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
     doLast {
         val bundleDir = rootProject.layout.buildDirectory.dir("bundle").get().asFile
 
-        // Windows run script
+        // Windows run script — loops and applies staged updates automatically
         val runBat = File(bundleDir, "run.bat")
-        runBat.writeText("@echo off\r\njava -jar obsidianscout-server.jar\r\npause\r\n")
+        runBat.writeText(
+            "@echo off\r\n" +
+            "setlocal enabledelayedexpansion\r\n" +
+            ":loop\r\n" +
+            "java -jar obsidianscout-server.jar\r\n" +
+            "if exist .update_result (\r\n" +
+            "    set /p SRC_ROOT=<.update_result\r\n" +
+            "    del /q .update_result\r\n" +
+            "    if exist \"!SRC_ROOT!\" (\r\n" +
+            "        echo [Updater] Applying update from !SRC_ROOT!...\r\n" +
+            "        copy /y \"!SRC_ROOT!\\obsidianscout-server.jar\" \".\" >nul\r\n" +
+            "        for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat) do (\r\n" +
+            "            if exist \"!SRC_ROOT!\\%%s\" copy /y \"!SRC_ROOT!\\%%s\" \".\" >nul\r\n" +
+            "        )\r\n" +
+            "        for %%i in (\"!SRC_ROOT!\\..\") do set TEMP_DIR=%%~fi\r\n" +
+            "        rd /s /q \"!TEMP_DIR!\"\r\n" +
+            "        echo [Updater] Update applied. Restarting...\r\n" +
+            "    )\r\n" +
+            ")\r\n" +
+            "goto loop\r\n"
+        )
 
-        // Unix run script
+        // Unix run script — loops and applies staged updates automatically
         val runSh = File(bundleDir, "run.sh")
-        runSh.writeText("#!/bin/sh\njava -jar obsidianscout-server.jar\n")
+        runSh.writeText(
+            "#!/bin/sh\n" +
+            "while true; do\n" +
+            "    java -jar obsidianscout-server.jar\n" +
+            "    if [ -f .update_result ]; then\n" +
+            "        SRC_ROOT=\$(cat .update_result)\n" +
+            "        rm -f .update_result\n" +
+            "        if [ -d \"\$SRC_ROOT\" ]; then\n" +
+            "            echo \"[Updater] Applying update from \$SRC_ROOT...\"\n" +
+            "            cp \"\$SRC_ROOT/obsidianscout-server.jar\" ./\n" +
+            "            for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat; do\n" +
+            "                if [ -f \"\$SRC_ROOT/\$script\" ]; then\n" +
+            "                    cp \"\$SRC_ROOT/\$script\" ./\n" +
+            "                    chmod +x \"./\$script\" 2>/dev/null || true\n" +
+            "                fi\n" +
+            "            done\n" +
+            "            TEMP_DIR=\$(dirname \"\$SRC_ROOT\")\n" +
+            "            rm -rf \"\$TEMP_DIR\"\n" +
+            "            echo \"[Updater] Update applied. Restarting...\"\n" +
+            "        fi\n" +
+            "    fi\n" +
+            "done\n"
+        )
         runSh.setExecutable(true, false)
 
         // Windows reset-superadmin script
@@ -199,10 +244,93 @@ tasks.register("buildjar") {
     }
 }
 
+/**
+ * Increments a 4-part version string (e.g. "0.2.4.7") by adding 1 to the last segment.
+ * Carry rolls left through all segments — the first segment increments normally and never caps.
+ *
+ * Examples:
+ *   0.2.4.9  -> 0.2.5.0
+ *   0.2.9.9  -> 0.3.0.0
+ *   0.9.9.9  -> 1.0.0.0
+ *   9.9.9.9  -> 10.0.0.0  (first segment goes above 9 — no further wrapping)
+ */
+fun incrementVersion(version: String): String {
+    val parts = version.split(".").mapNotNull { it.toIntOrNull() }.toMutableList()
+    while (parts.size < 4) parts.add(0)
+
+    var carry = 1
+    for (i in parts.size - 1 downTo 0) { // carry propagates through all segments, including index 0
+        val sum = parts[i] + carry
+        parts[i] = sum % 10
+        carry = sum / 10
+        if (carry == 0) break
+    }
+    // If carry still remains after index 0 (e.g. a single-segment "9" + 1), it is dropped
+    // since there is no 5th place — but in practice a 4-part version can never overflow here
+    // because 9.9.9.9 + 1 = 10.0.0.0 which is representable in the same 4 parts.
+    return parts.joinToString(".")
+}
+
+/**
+ * Bumps the current_version in config/app-config.json (and the outer workspace copy) and
+ * updates the default string literal in AppConfig.kt so future regenerateConfigs calls are
+ * in sync. Must run AFTER regenerateConfigs (which would otherwise overwrite the file with
+ * the stale default) and BEFORE buildBundle (which copies the config into the bundle).
+ */
+tasks.register("bumpVersion") {
+    group = "publishing"
+    description = "Auto-increments current_version in config/app-config.json and AppConfig.kt before bundling."
+    dependsOn("regenerateConfigs") // ensure regenerateConfigs has already written its output first
+    doLast {
+        val configFile = file("config/app-config.json")
+        val appConfigKt = file("src/main/kotlin/com/obsidianscout/config/AppConfig.kt")
+        val outerConfigFile = file("../config/app-config.json")
+
+        // ── Read & bump the version ───────────────────────────────────────────────
+        val versionRegex = Regex("\"current_version\"\\s*:\\s*\"([^\"]+)\"")
+        val configText = configFile.readText()
+        val match = versionRegex.find(configText)
+            ?: error("[bumpVersion] Could not find \"current_version\" in ${configFile.absolutePath}")
+
+        val oldVersion = match.groupValues[1]
+        val newVersion = incrementVersion(oldVersion)
+        println("[bumpVersion] $oldVersion -> $newVersion")
+
+        // ── Patch config/app-config.json ─────────────────────────────────────────
+        configFile.writeText(
+            configText.replace(match.value, "\"current_version\": \"$newVersion\"")
+        )
+        println("[bumpVersion] Updated ${configFile.absolutePath}")
+
+        // ── Patch outer workspace config if it exists ─────────────────────────────
+        if (outerConfigFile.exists()) {
+            val outerText = outerConfigFile.readText()
+            val outerMatch = versionRegex.find(outerText)
+            if (outerMatch != null) {
+                outerConfigFile.writeText(
+                    outerText.replace(outerMatch.value, "\"current_version\": \"$newVersion\"")
+                )
+                println("[bumpVersion] Updated ${outerConfigFile.absolutePath}")
+            }
+        }
+
+        // ── Patch AppConfig.kt default so regenerateConfigs stays in sync next time ─
+        val ktText = appConfigKt.readText()
+        val ktRegex = Regex("(val current_version: String = \")[^\"]+(\")")
+        val patchedKt = ktRegex.replace(ktText) { matchResult ->
+            matchResult.groupValues[1] + newVersion + matchResult.groupValues[2]
+        }
+        if (patchedKt != ktText) {
+            appConfigKt.writeText(patchedKt)
+            println("[bumpVersion] Updated default in ${appConfigKt.absolutePath}")
+        }
+    }
+}
+
 tasks.register("publish") {
     group = "publishing"
-    description = "Assembles the server fat jar and configuration bundle for publishing/shipping."
-    dependsOn("buildjar")
+    description = "Bumps the version, assembles the server fat jar and configuration bundle for publishing/shipping."
+    dependsOn("bumpVersion", "buildjar")
 }
 
 tasks.register<JavaExec>("verifyMobile") {

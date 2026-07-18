@@ -10,6 +10,7 @@ import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.DatabaseFactory
 import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.SyncScheduler
+import com.obsidianscout.utils.GistUpdateService
 import com.obsidianscout.routes.ErrorResponse
 import com.obsidianscout.routes.configureRoutes
 import com.obsidianscout.routes.configureMobileRoutes
@@ -302,6 +303,7 @@ fun Application.module(appConfig: AppConfig) {
 
                 SyncScheduler.start()
                 com.obsidianscout.scouting.DeduplicationScheduler.start()
+                GistUpdateService.start(appConfig)
                 println("[Database] Background database initialization completed successfully.")
                 
                 // Start failover checks and replication monitoring only after initial setup is fully complete and successful
@@ -321,6 +323,7 @@ fun Application.module(appConfig: AppConfig) {
 
     environment.monitor.subscribe(ApplicationStopped) {
         SyncScheduler.stop()
+        GistUpdateService.stop()
         com.obsidianscout.scouting.DeduplicationScheduler.stop()
         try {
             DatabaseFactory.close()

@@ -44,6 +44,7 @@ data class UserRecord(
     val id: String,
     val username: String,
     val teamNumber: Int,
+    val program: String,
     val role: UserRole,
     val createdAt: String,
     val email: String? = null,
@@ -82,11 +83,11 @@ object AuthService {
         }
     }
 
-    fun login(username: String, teamNumber: Int, password: String): UserRecord? {
+    fun login(username: String, teamNumber: Int, program: String = "FRC", password: String): UserRecord? {
         // Fetch the stored hash first (short transaction — just a DB read).
         val (hash, record) = transaction {
             val row = Users
-                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
+                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) and (Users.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?: return@transaction null
@@ -123,7 +124,7 @@ object AuthService {
     /**
      * Self-registration with a team role (admin, analytics, or scout).
      */
-    fun register(username: String, teamNumber: Int, password: String, role: UserRole = UserRole.SCOUT, email: String? = null): UserRecord {
+    fun register(username: String, teamNumber: Int, program: String = "FRC", password: String, role: UserRole = UserRole.SCOUT, email: String? = null): UserRecord {
         if (username.isBlank() || password.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Username and password are required")
         }
@@ -138,7 +139,7 @@ object AuthService {
         val hash = hashPassword(password)
         return transaction {
             val existing = Users
-                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
+                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) and (Users.program eq program) }
                 .limit(1)
                 .any()
             if (existing) {
@@ -147,6 +148,7 @@ object AuthService {
             val id = Users.insertAndGetId {
                 it[Users.username] = username
                 it[Users.teamNumber] = teamNumber
+                it[Users.program] = program
                 it[Users.passwordHash] = hash
                 it[Users.role] = role.name
                 it[Users.createdAt] = Instant.now()
@@ -168,10 +170,11 @@ object AuthService {
         search: String? = null,
         teamFilter: Int? = null,
         roleFilter: UserRole? = null,
+        programFilter: String? = null,
         limit: Int = 50,
         offset: Long = 0L
     ): List<UserRecord> {
-        println("listUsers: search=$search, teamFilter=$teamFilter, roleFilter=$roleFilter, limit=$limit, offset=$offset")
+        println("listUsers: search=$search, teamFilter=$teamFilter, roleFilter=$roleFilter, programFilter=$programFilter, limit=$limit, offset=$offset")
         return transaction {
             addLogger(StdOutSqlLogger)
             val query = when (callerSession.role) {
@@ -180,10 +183,13 @@ object AuthService {
                     if (teamFilter != null) {
                         q.andWhere { Users.teamNumber eq teamFilter }
                     }
+                    if (!programFilter.isNullOrBlank()) {
+                        q.andWhere { Users.program eq programFilter }
+                    }
                     q
                 }
                 UserRole.ADMIN -> {
-                    val q = Users.selectAll().where { (Users.teamNumber eq callerSession.teamNumber) and (Users.username neq "Deleted User") }
+                    val q = Users.selectAll().where { (Users.teamNumber eq callerSession.teamNumber) and (Users.program eq callerSession.program) and (Users.username neq "Deleted User") }
                     if (teamFilter != null && teamFilter != callerSession.teamNumber) {
                         q.andWhere { Users.teamNumber eq -1 }
                     }
@@ -218,6 +224,7 @@ object AuthService {
         callerSession: UserSession,
         username: String,
         teamNumber: Int,
+        program: String = callerSession.program,
         password: String,
         role: UserRole,
         email: String? = null
@@ -231,9 +238,9 @@ object AuthService {
             throw ApiException(HttpStatusCode.Forbidden, "Only a superadmin can create superadmin accounts")
         }
 
-        // ADMIN can only create users on their own team
-        if (callerSession.role == UserRole.ADMIN && teamNumber != callerSession.teamNumber) {
-            throw ApiException(HttpStatusCode.Forbidden, "Admins can only create users on their own team")
+        // ADMIN can only create users on their own team and program
+        if (callerSession.role == UserRole.ADMIN && (teamNumber != callerSession.teamNumber || program != callerSession.program)) {
+            throw ApiException(HttpStatusCode.Forbidden, "Admins can only create users on their own team and program")
         }
 
         // Hash the password BEFORE opening a transaction so the slow CPU work
@@ -241,7 +248,7 @@ object AuthService {
         val hash = hashPassword(password)
         return transaction {
             val existing = Users
-                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) }
+                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) and (Users.program eq program) }
                 .limit(1)
                 .any()
             if (existing) {
@@ -250,6 +257,7 @@ object AuthService {
             val id = Users.insertAndGetId {
                 it[Users.username] = username
                 it[Users.teamNumber] = teamNumber
+                it[Users.program] = program
                 it[Users.passwordHash] = hash
                 it[Users.role] = role.name
                 it[Users.createdAt] = Instant.now()
@@ -441,6 +449,7 @@ object AuthService {
             id = row[Users.id].value.toString(),
             username = row[Users.username],
             teamNumber = row[Users.teamNumber],
+            program = row[Users.program],
             role = try {
                 UserRole.valueOf(row[Users.role])
             } catch (_: IllegalArgumentException) {

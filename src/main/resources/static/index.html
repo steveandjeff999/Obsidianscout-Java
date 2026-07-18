@@ -54,6 +54,13 @@
                             <input id="teamNumber" name="teamNumber" type="number" required />
                         </div>
                         <div class="field">
+                            <label for="login-program" data-i18n="index.program">Program Type</label>
+                            <select id="login-program" name="program" required>
+                                <option value="FRC">FRC (FIRST Robotics Competition)</option>
+                                <option value="FTC">FTC (FIRST Tech Challenge)</option>
+                            </select>
+                        </div>
+                        <div class="field">
                             <label for="password" data-i18n="index.password">Password</label>
                             <input id="password" name="password" type="password" required />
                             <div class="mt-6" style="text-align: right;">
@@ -81,6 +88,13 @@
                         <div class="field">
                             <label for="reg-team" data-i18n="pitdata.csv.team_number">Team Number</label>
                             <input id="reg-team" type="number" required min="1" />
+                        </div>
+                        <div class="field">
+                            <label for="reg-program" data-i18n="index.program">Program Type</label>
+                            <select id="reg-program" required>
+                                <option value="FRC">FRC (FIRST Robotics Competition)</option>
+                                <option value="FTC">FTC (FIRST Tech Challenge)</option>
+                            </select>
                         </div>
                         <div class="field">
                             <label for="reg-password" data-i18n="index.password">Password</label>

@@ -351,7 +351,7 @@ function updateMatchOptions(matchSelect, matches, timezone, selectedTeam) {
     matchSelect.appendChild(matchPlaceholder);
 
     const teamNumber = selectedTeam ? Number(selectedTeam) : null;
-    const teamKey = teamNumber ? `frc${teamNumber}` : null;
+    const teamKey = teamNumber ? `${Obsidianscout.getProgramPrefix()}${teamNumber}` : null;
     let filtered = matches;
     if (teamKey) {
         filtered = matches.filter((match) =>
@@ -393,12 +393,13 @@ function formatTeamList(teamKeys) {
 
 function matchHasTeam(teams, teamKey) {
     if (!teams || !teamKey) return false;
+    const cleanTeam = teamKey.replace(/^(frc|ftc)/, "");
     return teams.some(key => {
-        if (key === teamKey) return true;
+        const cleanKey = key.replace(/^(frc|ftc)/, "");
+        if (cleanKey === cleanTeam) return true;
         const parts = key.split('/');
         return parts.some(part => {
-            const norm = part.startsWith('frc') ? part : `frc${part}`;
-            return norm === teamKey;
+            return part.replace(/^(frc|ftc)/, "") === cleanTeam;
         });
     });
 }

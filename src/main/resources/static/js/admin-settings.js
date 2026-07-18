@@ -311,6 +311,41 @@ document.addEventListener("DOMContentLoaded", async () => {
             setChecked("settings-epa", loadedSettings.useStatboticsEpa);
             setChecked("settings-opr", loadedSettings.useTbaOpr);
             setChecked("settings-chat", loadedSettings.chatEnabled);
+
+            const isFtc = me.program === "FTC";
+            if (isFtc) {
+                const tbaHeading = document.querySelector('h3[data-i18n="config.the_blue_alliance"]');
+                if (tbaHeading && tbaHeading.closest('.card.soft')) {
+                    tbaHeading.closest('.card.soft').style.display = "none";
+                }
+
+                const firstHeading = document.querySelector('h3[data-i18n="config.first_api"]');
+                if (firstHeading) {
+                    firstHeading.textContent = "FIRST FTC API";
+                }
+
+                const tbaOption = document.querySelector('#settings-source option[value="tba"]');
+                if (tbaOption) {
+                    tbaOption.textContent = "FTC Scout";
+                }
+                const firstOption = document.querySelector('#settings-source option[value="first"]');
+                if (firstOption) {
+                    firstOption.textContent = "FIRST FTC API";
+                }
+
+                const epaCheckbox = document.getElementById("settings-epa");
+                if (epaCheckbox && epaCheckbox.parentElement) {
+                    epaCheckbox.parentElement.style.display = "none";
+                }
+                const oprCheckbox = document.getElementById("settings-opr");
+                if (oprCheckbox && oprCheckbox.parentElement) {
+                    const textNode = Array.from(oprCheckbox.parentElement.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
+                    if (textNode) {
+                        textNode.textContent = " Use FTC Scout OPR";
+                    }
+                }
+            }
+
             if (loadedSettings.apiKeys) {
                 setVal("settings-tba-key", loadedSettings.apiKeys.tbaKey || "");
                 setVal("settings-first-user", loadedSettings.apiKeys.firstUsername || "");
