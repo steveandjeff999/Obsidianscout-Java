@@ -578,6 +578,7 @@
   "index.email": "Email",
   "index.confirm_password": "Confirm Password",
   "index.role": "Role",
+  "index.program": "Program Type",
   "index.admin": "Admin",
   "index.recover_password": "Recover Password",
   "index.username_team": "Username & Team",

@@ -1194,19 +1194,28 @@ object IntegrationService {
     }
 
     private suspend fun fetchMergedTeams(settings: ApiSettings, eventKey: String): List<TeamSyncRecord> = coroutineScope {
-        val tbaDeferred = if (hasTbaCredentials(settings)) async { fetchTbaTeams(settings, eventKey) } else null
-        val firstDeferred = if (hasFirstCredentials(settings)) async { fetchFirstTeams(settings, eventKey) } else null
+        val hasTba = hasTbaCredentials(settings)
+        val hasFirst = hasFirstCredentials(settings)
+        if (hasTba) log.info("FRC Team Sync: Fetching team roster for event $eventKey from The Blue Alliance API (thebluealliance.com)...")
+        if (hasFirst) log.info("FRC Team Sync: Fetching team roster for event $eventKey from FIRST Robotics API (firstinspires.org)...")
+
+        val tbaDeferred = if (hasTba) async { fetchTbaTeams(settings, eventKey) } else null
+        val firstDeferred = if (hasFirst) async { fetchFirstTeams(settings, eventKey) } else null
 
         val tbaTeams = tbaDeferred?.await() ?: emptyList()
         val firstTeams = firstDeferred?.await() ?: emptyList()
 
         val teams = (tbaTeams + firstTeams).toMutableList()
         if (teams.isEmpty()) {
-            val fallbackTeams = when (settings.preferredSource) {
+            val source = settings.preferredSource ?: "tba"
+            log.info("FRC Team Sync: No custom credentials. Fetching team roster for event $eventKey from preferred source '$source' fallback...")
+            val fallbackTeams = when (source) {
                 "first" -> fetchFirstTeams(settings, eventKey)
                 else -> fetchTbaTeams(settings, eventKey)
             }
             teams.addAll(fallbackTeams)
+        } else {
+            log.info("FRC Team Sync: Successfully fetched and merged FRC teams from active credentials (TBA count: ${tbaTeams.size}, FIRST count: ${firstTeams.size})")
         }
         teams
             .groupBy { "${it.eventKey.lowercase()}_${it.teamKey.lowercase()}" }
@@ -1214,19 +1223,28 @@ object IntegrationService {
     }
 
     private suspend fun fetchMergedMatches(settings: ApiSettings, eventKey: String): List<MatchSyncRecord> = coroutineScope {
-        val tbaDeferred = if (hasTbaCredentials(settings)) async { fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") } } else null
-        val firstDeferred = if (hasFirstCredentials(settings)) async { fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") } } else null
+        val hasTba = hasTbaCredentials(settings)
+        val hasFirst = hasFirstCredentials(settings)
+        if (hasTba) log.info("FRC Match Sync: Fetching match schedule for event $eventKey from The Blue Alliance API (thebluealliance.com)...")
+        if (hasFirst) log.info("FRC Match Sync: Fetching match schedule for event $eventKey from FIRST Robotics API (firstinspires.org)...")
+
+        val tbaDeferred = if (hasTba) async { fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") } } else null
+        val firstDeferred = if (hasFirst) async { fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") } } else null
 
         val tbaMatches = tbaDeferred?.await() ?: emptyList()
         val firstMatches = firstDeferred?.await() ?: emptyList()
 
         val matches = (tbaMatches + firstMatches).toMutableList()
         if (matches.isEmpty()) {
-            val fallbackMatches = when (settings.preferredSource) {
+            val source = settings.preferredSource ?: "tba"
+            log.info("FRC Match Sync: No custom credentials. Fetching match schedule for event $eventKey from preferred source '$source' fallback...")
+            val fallbackMatches = when (source) {
                 "first" -> fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") }
                 else -> fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") }
             }
             matches.addAll(fallbackMatches)
+        } else {
+            log.info("FRC Match Sync: Successfully fetched and merged FRC matches from active credentials (TBA count: ${tbaMatches.size}, FIRST count: ${firstMatches.size})")
         }
         MatchCanonical.mergeAll(matches)
     }

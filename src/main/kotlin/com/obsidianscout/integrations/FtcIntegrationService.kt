@@ -40,6 +40,9 @@ private data class GraphQLRequest(
     val variables: JsonObject = JsonObject(emptyMap())
 )
 
+private val JsonElement.safeJsonObject: JsonObject?
+    get() = this as? JsonObject
+
 object FtcIntegrationService {
     private val log = LoggerFactory.getLogger(FtcIntegrationService::class.java)
 
@@ -184,6 +187,7 @@ object FtcIntegrationService {
                 matches {
                   id
                   matchNum
+                  series
                   tournamentLevel
                   hasBeenPlayed
                   teams {
@@ -199,6 +203,7 @@ object FtcIntegrationService {
             }
         """.trimIndent()
 
+        log.info("FTC Sync: Querying event details, teams, and matches for event $eventKey from FTC Scout API (api.ftcscout.org)...")
         val response = try {
             client.post("https://api.ftcscout.org/graphql") {
                 contentType(ContentType.Application.Json)
@@ -216,7 +221,7 @@ object FtcIntegrationService {
 
         val bodyText = response.bodyAsText()
         val json = JsonSupport.json.parseToJsonElement(bodyText).jsonObject
-        val eventObj = json["data"]?.jsonObject?.get("eventByCode")?.jsonObject
+        val eventObj = json["data"]?.safeJsonObject?.get("eventByCode")?.safeJsonObject
 
         if (eventObj == null) {
             log.warn("FTC event not found on FTC Scout: $eventKey")
@@ -261,11 +266,11 @@ object FtcIntegrationService {
         val teamsArray = eventObj["teams"]?.jsonArray ?: JsonArray(emptyList())
         transaction {
             teamsArray.forEach { participation ->
-                val partObj = participation.jsonObject
+                val partObj = participation.safeJsonObject ?: return@forEach
                 val teamNumber = partObj["teamNumber"]?.jsonPrimitive?.intOrNull ?: return@forEach
-                val teamObj = partObj["team"]?.jsonObject ?: return@forEach
+                val teamObj = partObj["team"]?.safeJsonObject ?: return@forEach
                 val teamName = teamObj["name"]?.jsonPrimitive?.content ?: "Team $teamNumber"
-                val location = teamObj["location"]?.jsonObject
+                val location = teamObj["location"]?.safeJsonObject
                 val city = location?.get("city")?.jsonPrimitive?.content ?: ""
                 val state = location?.get("state")?.jsonPrimitive?.content ?: ""
                 val country = location?.get("country")?.jsonPrimitive?.content ?: ""
@@ -302,45 +307,117 @@ object FtcIntegrationService {
         }
 
         // Matches Sync
-        val matchesArray = eventObj["matches"]?.jsonArray ?: JsonArray(emptyList())
-        val compLevelMap = mapOf(
-            "QUALS" to "qm", "QUALIFIER" to "qm", "SEMIS" to "sf", "FINALS" to "f"
-        )
+        val matchesArray = eventObj["matches"]?.jsonArray?.toList() ?: emptyList()
+        val firstMatchesArray = fetchFirstFtcMatches(settings, code)
+        val combinedMatches = matchesArray + firstMatchesArray
+
+        // Find max series number for DoubleElim matches to identify finals transition
+        val maxDoubleElimSeries = combinedMatches.mapNotNull { 
+            val m = it.safeJsonObject
+            val level = m?.get("tournamentLevel")?.jsonPrimitive?.content?.uppercase() ?: ""
+            if (level == "DOUBLEELIM" || level == "PLAYOFF") {
+                m?.get("series")?.jsonPrimitive?.intOrNull
+            } else null
+        }.maxOrNull() ?: 0
+
+        val finalsBoundary = when {
+            maxDoubleElimSeries > 12 -> 14  // 8 alliances (finals at 14+)
+            maxDoubleElimSeries > 8  -> 10  // 6 alliances (finals at 10+)
+            else -> 6                       // 4 alliances (finals at 6+)
+        }
+
+        var qualsCount = 0
+        var semisCount = 0
+        var finalsCount = 0
+        var practiceCount = 0
+
         transaction {
             MatchCanonical.deduplicateDatabaseForEvent(eventKey)
-            matchesArray.forEach { match ->
-                val mObj = match.jsonObject
-                val matchNum = mObj["matchNum"]?.jsonPrimitive?.intOrNull ?: return@forEach
+            combinedMatches.forEach { match ->
+                val mObj = match.safeJsonObject ?: return@forEach
+                val matchNum = mObj["matchNum"]?.jsonPrimitive?.intOrNull 
+                    ?: mObj["matchNumber"]?.jsonPrimitive?.intOrNull 
+                    ?: return@forEach
                 val rawLevel = mObj["tournamentLevel"]?.jsonPrimitive?.content ?: "QUALS"
-                val compLevel = compLevelMap[rawLevel.uppercase()] ?: "qm"
+                val rawLevelUpper = rawLevel.uppercase()
+
+                val compLevel = when (rawLevelUpper) {
+                    "QUALS", "QUALIFIER", "QUALIFICATION" -> {
+                        qualsCount++
+                        "qm"
+                    }
+                    "SEMIS", "SEMIFINAL" -> {
+                        semisCount++
+                        "sf"
+                    }
+                    "FINALS", "FINAL" -> {
+                        finalsCount++
+                        "f"
+                    }
+                    "DOUBLEELIM", "PLAYOFF" -> {
+                        val series = mObj["series"]?.jsonPrimitive?.intOrNull ?: 1
+                        val isFinals = series >= finalsBoundary
+                        if (isFinals) {
+                            finalsCount++
+                            "f"
+                        } else {
+                            semisCount++
+                            "sf"
+                        }
+                    }
+                    "PRACTICE" -> {
+                        practiceCount++
+                        "practice"
+                    }
+                    else -> {
+                        qualsCount++
+                        "qm"
+                    }
+                }
+
+                val series = mObj["series"]?.jsonPrimitive?.intOrNull ?: 1
+                val mappedMatchNum = if (compLevel == "f" && (rawLevelUpper == "DOUBLEELIM" || rawLevelUpper == "PLAYOFF")) {
+                    series - finalsBoundary + matchNum
+                } else {
+                    matchNum
+                }
+
+                val setNum = when (compLevel) {
+                    "qm", "practice" -> 1
+                    "f" -> 1
+                    "sf" -> series
+                    else -> 1
+                }
 
                 val teamsList = mObj["teams"]?.jsonArray ?: JsonArray(emptyList())
                 val red = mutableListOf<String>()
                 val blue = mutableListOf<String>()
                 teamsList.forEach { part ->
-                    val pObj = part.jsonObject
+                    val pObj = part.safeJsonObject ?: return@forEach
                     val num = pObj["teamNumber"]?.jsonPrimitive?.intOrNull ?: return@forEach
-                    val alliance = pObj["alliance"]?.jsonPrimitive?.content ?: "Red"
-                    if (alliance.equals("red", ignoreCase = true)) {
+                    val alliance = pObj["alliance"]?.jsonPrimitive?.content
+                        ?: pObj["station"]?.jsonPrimitive?.content
+                        ?: "Red"
+                    if (alliance.startsWith("red", ignoreCase = true)) {
                         red.add("ftc$num")
                     } else {
                         blue.add("ftc$num")
                     }
                 }
 
-                val scores = mObj["scores"]?.jsonObject
-                val redScore = scores?.get("red")?.jsonObject?.get("totalPoints")?.jsonPrimitive?.intOrNull ?: 0
-                val blueScore = scores?.get("blue")?.jsonObject?.get("totalPoints")?.jsonPrimitive?.intOrNull ?: 0
+                val matchKey = when (compLevel) {
+                    "qm", "practice" -> "${eventKey}_${compLevel}$mappedMatchNum"
+                    else -> "${eventKey}_${compLevel}${setNum}m$mappedMatchNum"
+                }
 
-                val matchKey = "${eventKey}_${compLevel}_m$matchNum"
                 val existingMatch = ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKey }.limit(1).firstOrNull()
                 if (existingMatch == null) {
                     ApiMatches.insert {
                         it[ApiMatches.matchKey] = matchKey
                         it[ApiMatches.eventKey] = eventKey
                         it[ApiMatches.compLevel] = compLevel
-                        it[ApiMatches.setNumber] = 1
-                        it[ApiMatches.matchNumber] = matchNum
+                        it[ApiMatches.setNumber] = setNum
+                        it[ApiMatches.matchNumber] = mappedMatchNum
                         it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(red)
                         it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(blue)
                         it[ApiMatches.dataJson] = JsonSupport.json.encodeToString(match)
@@ -348,6 +425,8 @@ object FtcIntegrationService {
                     }
                 } else {
                     ApiMatches.update({ ApiMatches.id eq existingMatch[ApiMatches.id] }) {
+                        it[ApiMatches.setNumber] = setNum
+                        it[ApiMatches.matchNumber] = mappedMatchNum
                         it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(red)
                         it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(blue)
                         it[ApiMatches.dataJson] = JsonSupport.json.encodeToString(match)
@@ -356,6 +435,8 @@ object FtcIntegrationService {
                 }
             }
         }
+
+        log.info("FTC Match Sync complete: Qualifications=$qualsCount, Semifinals/Playoffs=$semisCount, Finals=$finalsCount, Practice=$practiceCount")
 
         // If credentials for FIRST FTC API are provided, fetch/overwrite with team list to fetch rookie year, website etc.
         if (hasFirstCredentials(settings)) {
@@ -366,7 +447,7 @@ object FtcIntegrationService {
             }
         }
 
-        return SyncCounts(teamsArray.size, matchesArray.size)
+        return SyncCounts(teamsArray.size, qualsCount + semisCount + finalsCount + practiceCount)
     }
 
     suspend fun syncStats(settings: ApiSettings, eventKey: String) {
@@ -406,10 +487,10 @@ object FtcIntegrationService {
 
                 if (response != null && response.status.isSuccess()) {
                     val bodyText = response.bodyAsText()
-                    val json = JsonSupport.json.parseToJsonElement(bodyText).jsonObject
-                    val teamObj = json["data"]?.jsonObject?.get("teamByNumber")?.jsonObject
-                    val quickStats = teamObj?.get("quickStats")?.jsonObject
-                    val opr = quickStats?.get("tot")?.jsonObject?.get("value")?.jsonPrimitive?.doubleOrNull ?: 0.0
+                    val json = JsonSupport.json.parseToJsonElement(bodyText).safeJsonObject
+                    val teamObj = json?.get("data")?.safeJsonObject?.get("teamByNumber")?.safeJsonObject
+                    val quickStats = teamObj?.get("quickStats")?.safeJsonObject
+                    val opr = quickStats?.get("tot")?.safeJsonObject?.get("value")?.jsonPrimitive?.doubleOrNull ?: 0.0
 
                     transaction {
                         ApiTeams.update({ (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamKey eq "ftc$teamNum") }) {
@@ -487,10 +568,10 @@ object FtcIntegrationService {
 
                 if (response != null && response.status.isSuccess()) {
                     val bodyText = response.bodyAsText()
-                    val json = JsonSupport.json.parseToJsonElement(bodyText).jsonObject
-                    val teamObj = json["data"]?.jsonObject?.get("teamByNumber")?.jsonObject
-                    val quickStats = teamObj?.get("quickStats")?.jsonObject
-                    val opr = quickStats?.get("tot")?.jsonObject?.get("value")?.jsonPrimitive?.doubleOrNull ?: 0.0
+                    val json = JsonSupport.json.parseToJsonElement(bodyText).safeJsonObject
+                    val teamObj = json?.get("data")?.safeJsonObject?.get("teamByNumber")?.safeJsonObject
+                    val quickStats = teamObj?.get("quickStats")?.safeJsonObject
+                    val opr = quickStats?.get("tot")?.safeJsonObject?.get("value")?.jsonPrimitive?.doubleOrNull ?: 0.0
                     oprs["ftc$teamNum"] = opr
                 }
             }
@@ -520,11 +601,12 @@ object FtcIntegrationService {
     }
 
     private suspend fun fetchAndMergeFirstFtcData(settings: ApiSettings, eventKey: String, eventCode: String, now: Instant) {
+        log.info("FTC Sync: Querying additional team details from FIRST FTC Events API (ftc-api.firstinspires.org)...")
         val user = settings.apiKeys.firstUsername
         val key = settings.apiKeys.firstKey
         val credentials = Base64.getEncoder().encodeToString("$user:$key".toByteArray())
 
-        val url = "https://ftc-api.firstinspires.org/v3.0/${settings.year}/teams?eventCode=$eventCode"
+        val url = "https://ftc-api.firstinspires.org/v2.0/${settings.year}/teams?eventCode=$eventCode"
         val response = try {
             client.get(url) {
                 header("Authorization", "Basic $credentials")
@@ -561,5 +643,31 @@ object FtcIntegrationService {
                 }
             }
         }
+    }
+
+    private suspend fun fetchFirstFtcMatches(settings: ApiSettings, eventCode: String): List<JsonElement> {
+        val user = settings.apiKeys.firstUsername
+        val key = settings.apiKeys.firstKey
+        if (user.isBlank() || key.isBlank()) return emptyList()
+        log.info("FTC Sync: Querying match schedule for event $eventCode from FIRST FTC Events API (ftc-api.firstinspires.org)...")
+        val credentials = Base64.getEncoder().encodeToString("$user:$key".toByteArray())
+        val url = "https://ftc-api.firstinspires.org/v2.0/${settings.year}/matches/$eventCode"
+        val response = try {
+            client.get(url) {
+                header("Authorization", "Basic $credentials")
+            }
+        } catch (e: Exception) {
+            log.warn("Failed to fetch matches from FIRST FTC API: ${e.message}")
+            return emptyList()
+        }
+
+        if (response.status != HttpStatusCode.OK) {
+            log.warn("FIRST FTC API matches query returned status: ${response.status}")
+            return emptyList()
+        }
+
+        val bodyText = response.bodyAsText()
+        val root = JsonSupport.json.parseToJsonElement(bodyText).safeJsonObject ?: return emptyList()
+        return root["matches"]?.jsonArray?.toList() ?: emptyList()
     }
 }

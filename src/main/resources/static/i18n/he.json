@@ -578,6 +578,7 @@
   "index.email": "אימייל",
   "index.confirm_password": "אשר סיסמה",
   "index.role": "תפקיד",
+  "index.program": "סוג תוכנית",
   "index.admin": "מנהל",
   "index.recover_password": "שחזר סיסמה",
   "index.username_team": "שם משתמש וקבוצה",

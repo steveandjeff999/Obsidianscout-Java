@@ -578,6 +578,7 @@
   "index.email": "E-posta",
   "index.confirm_password": "Şifreyi Onayla",
   "index.role": "Rol",
+  "index.program": "Program Türü",
   "index.admin": "Yönetici",
   "index.recover_password": "Şifreyi Kurtar",
   "index.username_team": "Kullanıcı Adı ve Takım",

@@ -276,7 +276,8 @@ object SyncScheduler {
                 status.lastSyncMatches = counts.matches
                 status.lastSyncTeamCount = 1
                 status.lastSyncFailedTeams = null
-                status.lastSyncSummary = "Auto-sync complete: ${counts.teams} teams, ${counts.matches} matches"
+                val sources = getSourcesLabel(settings)
+                status.lastSyncSummary = "Auto-sync complete from $sources: ${counts.teams} teams, ${counts.matches} matches"
             } catch (error: Exception) {
                 failures++
                 log.warn("Auto-sync failed for team $teamNumber ($program): ${error.message}")
@@ -343,14 +344,14 @@ object SyncScheduler {
                     log.warn("Custom event EPA/OPR history sync failed for team $teamNumber ($program): ${e.message}")
                 }
                 val status = getStatusForTeam(teamNumber, program)
-                status.lastSyncAt = Instant.now()
-                status.lastSyncSummary = "Custom event sync complete: $eventKey - ${counts.teams} teams, ${counts.matches} matches"
+                val sources = getSourcesLabel(settings)
+                status.lastSyncSummary = "Custom event sync complete from $sources: $eventKey - ${counts.teams} teams, ${counts.matches} matches"
                 status.lastSyncTeams = counts.teams
                 status.lastSyncMatches = counts.matches
                 status.lastSyncTeamCount = 1
                 status.lastSyncFailedTeams = null
                 status.lastSyncError = null
-                log.info("Custom event sync complete for team $teamNumber ($program): $eventKey - ${counts.teams} teams, ${counts.matches} matches")
+                log.info("Custom event sync complete from $sources for team $teamNumber ($program): $eventKey - ${counts.teams} teams, ${counts.matches} matches")
             } catch (error: Exception) {
                 recordFailure(teamNumber, program, "Custom event sync failed for $eventKey", error)
             } finally {
@@ -383,14 +384,14 @@ object SyncScheduler {
                     }
                 }
                 val status = getStatusForTeam(teamNumber, program)
-                status.lastSyncAt = Instant.now()
-                status.lastSyncSummary = "Manual full sync complete: $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats"
+                val sources = getSourcesLabel(settings)
+                status.lastSyncSummary = "Manual full sync complete from $sources: $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats"
                 status.lastSyncTeams = counts.teams
                 status.lastSyncMatches = counts.matches
                 status.lastSyncTeamCount = 1
                 status.lastSyncFailedTeams = null
                 status.lastSyncError = null
-                log.info("Manual full sync complete for team $teamNumber ($program): $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats")
+                log.info("Manual full sync complete from $sources for team $teamNumber ($program): $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats")
             } catch (error: Exception) {
                 recordFailure(teamNumber, program, "Manual full sync failed", error)
             } finally {
@@ -407,6 +408,21 @@ object SyncScheduler {
                 IntegrationService.syncEpaOprHistory(settings, eventKey)
             } catch (e: Exception) {
                 log.warn("Background OPR/EPA history sync failed for $eventKey: ${e.message}")
+            }
+        }
+    }
+
+    private fun getSourcesLabel(settings: ApiSettings): String {
+        val hasFirst = settings.apiKeys.firstUsername.isNotBlank() && settings.apiKeys.firstKey.isNotBlank()
+        return if (settings.program == "FTC") {
+            if (hasFirst) "FTC Scout & FIRST FTC API" else "FTC Scout API"
+        } else {
+            val hasTba = settings.apiKeys.tbaKey.isNotBlank()
+            when {
+                hasTba && hasFirst -> "TBA & FIRST Robotics API"
+                hasTba -> "The Blue Alliance API"
+                hasFirst -> "FIRST Robotics API"
+                else -> "preferred source fallback (${settings.preferredSource ?: "tba"})"
             }
         }
     }
