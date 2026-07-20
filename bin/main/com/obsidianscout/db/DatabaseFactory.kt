@@ -115,17 +115,106 @@ object DatabaseFactory {
                     conn.autoCommit = true
                     val existingTables = getExistingTables(conn)
                     conn.createStatement().use { stmt ->
-                        for (ddl in cockroachDdlList) {
-                            val tableNameExtract = ddl.trim().substringAfter("CREATE TABLE IF NOT EXISTS ").substringBefore(" (").trim().lowercase()
-                            if (tableNameExtract.isNotEmpty() && !ddl.trim().startsWith("CREATE INDEX") && ddl.contains("CREATE TABLE")) {
-                                if (!existingTables.contains(tableNameExtract)) {
-                                    println("[Database] Creating table $tableNameExtract...")
-                                    try {
-                                        stmt.executeUpdate(ddl)
-                                    } catch (e: Exception) {
-                                        println("[Database] Warning/Error executing DDL statement: ${e.message}")
+                        // 1. Auto-create any new tables in 'tables' list that do not exist yet
+                        for (table in tables) {
+                            val tableName = table.tableName.lowercase()
+                            if (!existingTables.contains(tableName)) {
+                                println("[Database] Table $tableName not found. Auto-creating using Exposed statements...")
+                                transaction {
+                                    val statements = SchemaUtils.createStatements(table)
+                                    dataSource.connection.use { conn2 ->
+                                        conn2.autoCommit = true
+                                        conn2.createStatement().use { stmt2 ->
+                                            for (sql in statements) {
+                                                try {
+                                                    stmt2.executeUpdate(sql)
+                                                } catch (e: Exception) {
+                                                    println("[Database] Error creating table $tableName with statement ($sql): ${e.message}")
+                                                }
+                                            }
+                                        }
                                     }
                                 }
+                            }
+                        }
+
+                        // 2. Auto-upgrade existing tables: check for missing columns and add them
+                        for (table in tables) {
+                            val tableName = table.tableName.lowercase()
+                            if (existingTables.contains(tableName)) {
+                                val dbColumns = mutableSetOf<String>()
+                                conn.metaData.getColumns(null, null, tableName, null).use { rs ->
+                                    while (rs.next()) {
+                                        dbColumns.add(rs.getString("COLUMN_NAME").lowercase())
+                                    }
+                                }
+                                for (column in table.columns) {
+                                    val columnName = column.name.lowercase()
+                                    if (!dbColumns.contains(columnName)) {
+                                        println("[Database] Adding missing column $columnName to table $tableName...")
+                                        // Generate column DDL description
+                                        val ddlType = when {
+                                            column.columnType is org.jetbrains.exposed.sql.UUIDColumnType -> "UUID"
+                                            column.columnType is org.jetbrains.exposed.sql.VarCharColumnType -> {
+                                                val len = (column.columnType as org.jetbrains.exposed.sql.VarCharColumnType).colLength
+                                                "VARCHAR($len)"
+                                            }
+                                            column.columnType is org.jetbrains.exposed.sql.IntegerColumnType -> "INT"
+                                            column.columnType is org.jetbrains.exposed.sql.LongColumnType -> "BIGINT"
+                                            column.columnType is org.jetbrains.exposed.sql.DoubleColumnType -> "DOUBLE PRECISION"
+                                            column.columnType is org.jetbrains.exposed.sql.TextColumnType -> "TEXT"
+                                            column.columnType is org.jetbrains.exposed.sql.BooleanColumnType -> "BOOL"
+                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaInstantColumnType || 
+                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaLocalDateTimeColumnType || 
+                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaOffsetDateTimeColumnType -> "TIMESTAMPTZ"
+                                            else -> "TEXT"
+                                        }
+                                        val defaultClause = when {
+                                            columnName == "program" -> " DEFAULT 'FRC' NOT NULL"
+                                            column.columnType is org.jetbrains.exposed.sql.BooleanColumnType -> " DEFAULT FALSE NOT NULL"
+                                            column.columnType.nullable -> " NULL"
+                                            else -> " NOT NULL"
+                                        }
+                                        val sql = "ALTER TABLE $tableName ADD COLUMN $columnName $ddlType$defaultClause"
+                                        try {
+                                            stmt.executeUpdate(sql)
+                                        } catch (e: Exception) {
+                                            println("[Database] Error adding column $columnName to $tableName: ${e.message}")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Drop old constraints and create new constraints/indexes
+                        val migrations = listOf(
+                            "ALTER TABLE users DROP CONSTRAINT IF EXISTS ux_users_username_team",
+                            "ALTER TABLE users ADD CONSTRAINT IF NOT EXISTS ux_users_username_team_program UNIQUE (username, team_number, program)",
+                            
+                            "ALTER TABLE scouting_configs DROP CONSTRAINT IF EXISTS ux_scouting_configs_team",
+                            "ALTER TABLE scouting_configs ADD CONSTRAINT IF NOT EXISTS ux_scouting_configs_team_program UNIQUE (team_number, program)",
+                            
+                            "ALTER TABLE pit_scouting_configs DROP CONSTRAINT IF EXISTS ux_pit_scouting_configs_team",
+                            "ALTER TABLE pit_scouting_configs ADD CONSTRAINT IF NOT EXISTS ux_pit_scouting_configs_team_program UNIQUE (team_number, program)",
+                            
+                            "ALTER TABLE qualitative_scouting_configs DROP CONSTRAINT IF EXISTS ux_qualitative_scouting_configs_team",
+                            "ALTER TABLE qualitative_scouting_configs ADD CONSTRAINT IF NOT EXISTS ux_qualitative_scouting_configs_team_program UNIQUE (team_number, program)",
+                            
+                            "ALTER TABLE app_settings DROP CONSTRAINT IF EXISTS ux_app_settings_team",
+                            "ALTER TABLE app_settings ADD CONSTRAINT IF NOT EXISTS ux_app_settings_team_program UNIQUE (team_number, program)",
+                            
+                            "ALTER TABLE alliance_memberships DROP CONSTRAINT IF EXISTS ux_alliance_memberships_alliance_team",
+                            "ALTER TABLE alliance_memberships ADD CONSTRAINT IF NOT EXISTS ux_alliance_memberships_alliance_team_program UNIQUE (alliance_id, team_number, program)",
+                            
+                            "DROP INDEX IF EXISTS alliance_memberships@idx_alliance_memberships_team_active",
+                            "CREATE INDEX IF NOT EXISTS idx_alliance_memberships_team_active_program ON alliance_memberships (team_number, active, program)"
+                        )
+
+                        for (sql in migrations) {
+                            try {
+                                stmt.executeUpdate(sql)
+                            } catch (e: Exception) {
+                                println("[Database] Note/Warning running Cockroach schema migration statement: ${e.message}")
                             }
                         }
                     }
@@ -1098,6 +1187,7 @@ object DatabaseFactory {
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             username VARCHAR(64) NOT NULL,
             team_number INT NOT NULL,
+            program VARCHAR(8) NOT NULL DEFAULT 'FRC',
             password_hash VARCHAR(255) NOT NULL,
             role VARCHAR(16) NOT NULL,
             created_at TIMESTAMPTZ NOT NULL,
@@ -1105,40 +1195,44 @@ object DatabaseFactory {
             profile_picture TEXT NULL,
             notification_preference VARCHAR(16) NOT NULL DEFAULT 'all',
             tour_progress TEXT NULL,
-            CONSTRAINT ux_users_username_team UNIQUE (username, team_number)
+            CONSTRAINT ux_users_username_team_program UNIQUE (username, team_number, program)
         )
         """.trimIndent(),
         """
         CREATE TABLE IF NOT EXISTS scouting_configs (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             team_number INT NOT NULL DEFAULT 0,
+            program VARCHAR(8) NOT NULL DEFAULT 'FRC',
             config_json TEXT NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
-            CONSTRAINT ux_scouting_configs_team UNIQUE (team_number)
+            CONSTRAINT ux_scouting_configs_team_program UNIQUE (team_number, program)
         )
         """.trimIndent(),
         """
         CREATE TABLE IF NOT EXISTS pit_scouting_configs (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             team_number INT NOT NULL DEFAULT 0,
+            program VARCHAR(8) NOT NULL DEFAULT 'FRC',
             config_json TEXT NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
-            CONSTRAINT ux_pit_scouting_configs_team UNIQUE (team_number)
+            CONSTRAINT ux_pit_scouting_configs_team_program UNIQUE (team_number, program)
         )
         """.trimIndent(),
         """
         CREATE TABLE IF NOT EXISTS qualitative_scouting_configs (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             team_number INT NOT NULL DEFAULT 0,
+            program VARCHAR(8) NOT NULL DEFAULT 'FRC',
             config_json TEXT NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
-            CONSTRAINT ux_qualitative_scouting_configs_team UNIQUE (team_number)
+            CONSTRAINT ux_qualitative_scouting_configs_team_program UNIQUE (team_number, program)
         )
         """.trimIndent(),
         """
         CREATE TABLE IF NOT EXISTS scouting_entries (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             owner_team_number INT NOT NULL,
+            program VARCHAR(8) NOT NULL DEFAULT 'FRC',
             target_team_number INT NULL,
             event_key VARCHAR(64) NULL,
             match_key VARCHAR(64) NULL,
@@ -1155,6 +1249,7 @@ object DatabaseFactory {
         CREATE TABLE IF NOT EXISTS pit_scouting_entries (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             owner_team_number INT NOT NULL,
+            program VARCHAR(8) NOT NULL DEFAULT 'FRC',
             target_team_number INT NULL,
             event_key VARCHAR(64) NULL,
             data_json TEXT NOT NULL,
@@ -1169,6 +1264,7 @@ object DatabaseFactory {
         CREATE TABLE IF NOT EXISTS qualitative_scouting_entries (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             owner_team_number INT NOT NULL,
+            program VARCHAR(8) NOT NULL DEFAULT 'FRC',
             target_team_number INT NULL,
             event_key VARCHAR(64) NULL,
             match_key VARCHAR(64) NULL,
@@ -1185,9 +1281,10 @@ object DatabaseFactory {
         CREATE TABLE IF NOT EXISTS app_settings (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             team_number INT NOT NULL DEFAULT 0,
+            program VARCHAR(8) NOT NULL DEFAULT 'FRC',
             settings_json TEXT NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
-            CONSTRAINT ux_app_settings_team UNIQUE (team_number)
+            CONSTRAINT ux_app_settings_team_program UNIQUE (team_number, program)
         )
         """.trimIndent(),
         """
@@ -1245,6 +1342,7 @@ object DatabaseFactory {
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             name VARCHAR(128) NOT NULL,
             owner_team_number INT NOT NULL,
+            program VARCHAR(8) NOT NULL DEFAULT 'FRC',
             event_key VARCHAR(64) NULL,
             notes TEXT NULL,
             created_at TIMESTAMPTZ NOT NULL,
@@ -1261,13 +1359,14 @@ object DatabaseFactory {
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             alliance_id UUID NOT NULL,
             team_number INT NOT NULL,
+            program VARCHAR(8) NOT NULL DEFAULT 'FRC',
             status VARCHAR(16) NOT NULL,
             invited_at TIMESTAMPTZ NOT NULL,
             responded_at TIMESTAMPTZ NULL,
             disabled BOOL NOT NULL DEFAULT FALSE,
             active BOOL NOT NULL DEFAULT FALSE,
-            CONSTRAINT ux_alliance_memberships_alliance_team UNIQUE (alliance_id, team_number),
-            INDEX idx_alliance_memberships_team_active (team_number, active)
+            CONSTRAINT ux_alliance_memberships_alliance_team_program UNIQUE (alliance_id, team_number, program),
+            INDEX idx_alliance_memberships_team_active_program (team_number, active, program)
         )
         """.trimIndent(),
         """

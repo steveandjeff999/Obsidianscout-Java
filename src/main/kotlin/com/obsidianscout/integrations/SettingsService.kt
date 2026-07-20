@@ -36,7 +36,7 @@ val DEFAULT_SCOUT_PAGES = listOf(
 )
 
 val DEFAULT_ANALYTICS_PAGES = listOf(
-    "dashboard", "scout", "pit-scout", "qual-scout", "qr-scanner",
+    "dashboard", "events", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "qual-data", "pit-data", "analytics", "graphs",
     "teams", "rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact"
@@ -45,9 +45,10 @@ val DEFAULT_ANALYTICS_PAGES = listOf(
 val DEFAULT_ADMIN_PAGES = listOf(
     "dashboard", "admin-settings", "users", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "qual-data", "pit-data", "analytics", "graphs",
-    "teams", "rankings", "qual-rankings", "matches", "predictor",
+    "events", "teams", "rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact"
 )
+
 
 @Serializable
 data class ThemeSettings(
@@ -188,10 +189,14 @@ object SettingsService {
             canonicalStoredEventKey(settings.year, settings.eventKey)
         }
         val normalizedScoutPages = if ("dashboard" !in settings.scoutPages) settings.scoutPages + "dashboard" else settings.scoutPages
-        val normalizedAnalyticsPages = if ("dashboard" !in settings.analyticsPages) settings.analyticsPages + "dashboard" else settings.analyticsPages
+        val normalizedAnalyticsPages = settings.analyticsPages.toMutableList().apply {
+            if ("dashboard" !in this) add("dashboard")
+            if ("events" !in this) add("events")
+        }
         val normalizedAdminPages = settings.adminPages.toMutableList().apply {
             if ("dashboard" !in this) add("dashboard")
             if ("admin-settings" !in this) add("admin-settings")
+            if ("events" !in this) add("events")
         }
         return settings.copy(
             eventCode = canonicalTbaEventCode(eventCode),

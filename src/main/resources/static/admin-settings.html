@@ -38,9 +38,7 @@
 
     <div class="app-shell">
 
-        <aside class="sidebar">
-            <!-- Sidebar will be replaced by Ktor with base.html -->
-        </aside>
+        <aside class="sidebar"></aside>
 
         <main class="main-content">
 
@@ -209,6 +207,8 @@
                             <label for="settings-year" data-i18n="config.season_year">Season year</label>
 
                             <input id="settings-year" type="number" />
+
+                            <p class="notice mt-6" id="settings-year-note" style="display: none;" data-i18n="config.season_year_ftc_note">The season year is typically the year the season started in (e.g. the 2025-2026 season DECODE presented by RTX is season 2025 in the API).</p>
 
                         </div>
 

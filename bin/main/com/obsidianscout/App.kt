@@ -265,6 +265,9 @@ fun Application.module(appConfig: AppConfig) {
     configureRoutes()
     configureMobileRoutes(appConfig)
 
+    // Start Gist update checking immediately so that faulty updates can be resolved even if the database fails to initialize
+    GistUpdateService.start(appConfig)
+
     // Run database orchestration and initialization in a background coroutine
     launch(Dispatchers.IO) {
         var initialized = false
@@ -303,7 +306,6 @@ fun Application.module(appConfig: AppConfig) {
 
                 SyncScheduler.start()
                 com.obsidianscout.scouting.DeduplicationScheduler.start()
-                GistUpdateService.start(appConfig)
                 println("[Database] Background database initialization completed successfully.")
                 
                 // Start failover checks and replication monitoring only after initial setup is fully complete and successful

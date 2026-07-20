@@ -929,7 +929,7 @@
         if (currentPage && settings && (me.role === "SCOUT" || me.role === "ANALYTICS" || me.role === "ADMIN")) {
             const allowedPages = me.role === "SCOUT" ? settings.scoutPages : (me.role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
             if (allowedPages && Array.isArray(allowedPages)) {
-                const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor"];
+                const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password"];
                 if (!bypassPages.includes(currentPage) && !allowedPages.includes(currentPage)) {
                     showToast("You do not have access to this page", "error");
                     const fallback = allowedPages.includes("dashboard") ? "/dashboard" : "/config";
@@ -1076,6 +1076,15 @@
                 <span class="nav-user-meta">${user.program} Team ${user.teamNumber} • ${roleLabel}</span>
             </div>
         `;
+
+        const apiAttribution = document.getElementById("api-attribution");
+        if (apiAttribution) {
+            if (user.program === "FTC") {
+                apiAttribution.innerHTML = `Match data provided by:<br><a href="https://ftc-events.firstinspires.org/services/API" target="_blank" rel="noopener noreferrer">FIRST FTC API</a> and <a href="https://ftcscout.org/api" target="_blank" rel="noopener noreferrer">FTC Scout API</a>`;
+            } else {
+                apiAttribution.innerHTML = `Match data provided by:<br><a href="https://frc-events.firstinspires.org/services/api" target="_blank" rel="noopener noreferrer">FIRST FRC API</a> and <a href="https://www.thebluealliance.com/apidocs" target="_blank" rel="noopener noreferrer">The Blue Alliance API</a>.<br>EPA provided by <a href="https://www.statbotics.io/docs/rest" target="_blank" rel="noopener noreferrer">Statbotics</a>.`;
+            }
+        }
     }
 
     /**
@@ -1168,7 +1177,7 @@
                     if (allowedPages && Array.isArray(allowedPages)) {
                         document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                             const page = link.dataset.page;
-                            const bypassPages = ["settings", "migration", "login", "index", "theme-editor"];
+                            const bypassPages = ["settings", "migration", "login", "index", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password"];
                             if (!bypassPages.includes(page) && !allowedPages.includes(page)) {
                                 link.style.display = "none";
                             }
@@ -1943,8 +1952,52 @@
         }
     }
 
+    async function ensureSidebarAndFooter(sidebar) {
+        if (!sidebar) return;
+        if (!sidebar.querySelector(".sidebar-nav")) {
+            let baseHtml = sessionStorage.getItem("obsidianscout:base_html");
+            if (!baseHtml) {
+                try {
+                    const res = await fetch("/base.html");
+                    if (res.ok) {
+                        baseHtml = await res.text();
+                        sessionStorage.setItem("obsidianscout:base_html", baseHtml);
+                    }
+                } catch (e) {
+                    console.warn("Failed to fetch sidebar base template:", e);
+                }
+            }
+
+            if (baseHtml) {
+                const tempDiv = document.createElement("div");
+                tempDiv.innerHTML = baseHtml;
+                const templateSidebar = tempDiv.querySelector(".sidebar");
+                if (templateSidebar) {
+                    sidebar.innerHTML = templateSidebar.innerHTML;
+                    
+                    // Re-apply user badge if cached user info is available
+                    try {
+                        const meText = safeGetItem("cache:/api/auth/me");
+                        if (meText) {
+                            const parsed = JSON.parse(meText);
+                            const user = parsed.user || parsed;
+                            if (user) {
+                                setUserBadge(user);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Failed to restore user badge on dynamic sidebar load", e);
+                    }
+                    
+                    // Restore active nav highlight
+                    setActiveNav();
+                }
+            }
+        }
+    }
+
     // Set up Service Worker and Global Connection Listeners
-    document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener("DOMContentLoaded", async () => {
         // Clean up legacy i18n caches in localStorage
         try {
             const keysToRemove = [];
@@ -2042,6 +2095,7 @@
 
         const sidebar = document.querySelector(".sidebar");
         if (sidebar) {
+            await ensureSidebarAndFooter(sidebar);
             injectConnectionWidget(sidebar);
             injectLanguageSelector(sidebar);
         }

@@ -503,6 +503,7 @@
   "config.directly_edit_the_scouting_for": "ערוך ישירות את ה-JSON של טופס הסקאוטינג. שימושי לגיבוי הגדרות או התאמות מתקדמות.",
   "config.set_season_event_code_and_api_": "הגדר עונה, קוד אירוע ומפתחות API. כאשר מפתחות TBA ו-FIRST מוגדרים שניהם, הסינכרון ימזג קבוצות ומשחקים (למשל QM 4 ו-Qualification 4 יאוחדו לשורה אחת).",
   "config.season_year": "שנת עונה",
+  "config.season_year_ftc_note": "שנת העונה היא בדרך כלל השנה בה החלה העונה (למשל עונת 2025-2026 DECODE המוצגת על ידי RTX היא עונת 2025 ב-API).",
   "config.event_code": "קוד אירוע",
   "config.event_key_is_year_code_eg_2026": "מפתח האירוע הוא שנה + קוד (למשל 2026 + okok ← 2026okok).",
   "config.preferred_source": "מקור מועדף",

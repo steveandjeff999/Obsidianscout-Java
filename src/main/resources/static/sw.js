@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obsidianscout-shell-v26';
+const CACHE_NAME = 'obsidianscout-shell-v27';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 // Application shell assets cached during install
@@ -120,18 +120,18 @@ self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
     // Skip non-GET requests, API calls, and non-http/https requests (like chrome-extension://)
-    if (event.request.method !== 'GET' || 
+    if (event.request.method !== 'GET' ||
         url.pathname.startsWith('/api') ||
         (url.protocol !== 'http:' && url.protocol !== 'https:')) {
         return;
     }
 
     // 1. Navigation / HTML pages: Network-First with Cache Fallback
-    if (event.request.mode === 'navigate' || 
-        url.pathname.endsWith('.html') || 
-        url.pathname === '/' || 
+    if (event.request.mode === 'navigate' ||
+        url.pathname.endsWith('.html') ||
+        url.pathname === '/' ||
         !url.pathname.includes('.')) {
-        
+
         event.respondWith(
             fetch(event.request)
                 .then((networkResponse) => {
@@ -217,12 +217,12 @@ self.addEventListener('push', (event) => {
 // Notification click listener: Open chat or focus tab and route group
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
-    
+
     let urlToOpen = '/chat';
     if (event.notification.data && event.notification.data.url) {
         urlToOpen = event.notification.data.url;
     }
-    
+
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
             // Check if there is already a window open with this URL

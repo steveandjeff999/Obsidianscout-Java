@@ -232,6 +232,29 @@ body.theme-dark .sidebar-toggle {
     gap: 12px;
 }
 
+.api-attribution {
+    font-size: 11px;
+    opacity: 0.8;
+    text-align: center;
+    margin-top: 8px;
+    line-height: 1.4;
+    color: var(--muted);
+}
+
+.api-attribution a {
+    color: var(--accent);
+    text-decoration: underline;
+    transition: opacity 0.2s ease;
+}
+
+.api-attribution a:hover {
+    opacity: 0.8;
+}
+
+.sidebar.collapsed .api-attribution {
+    display: none;
+}
+
 /* ── Sidebar user badge avatar ─────────────────────────────────────── */
 #nav-user {
     display: flex;

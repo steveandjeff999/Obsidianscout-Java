@@ -314,6 +314,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const isFtc = me.program === "FTC";
             if (isFtc) {
+                const yearNote = document.getElementById("settings-year-note");
+                if (yearNote) {
+                    yearNote.style.display = "block";
+                }
+
                 const tbaHeading = document.querySelector('h3[data-i18n="config.the_blue_alliance"]');
                 if (tbaHeading && tbaHeading.closest('.card.soft')) {
                     tbaHeading.closest('.card.soft').style.display = "none";

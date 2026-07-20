@@ -504,6 +504,7 @@
   "config.directly_edit_the_scouting_for": "Edite directamente el JSON del formulario de scouting. Útil para hacer copias de seguridad de las configuraciones o para personalizaciones avanzadas.",
   "config.set_season_event_code_and_api_": "Establezca la temporada, el código de evento y las claves de la API. Cuando se configuran las claves de TBA y de FIRST, la sincronización fusiona los equipos y los matches (p.ej. QM 4 y Qualification 4 se consolidan en una sola fila).",
   "config.season_year": "Año de la temporada",
+  "config.season_year_ftc_note": "El año de la temporada es típicamente el año en que comenzó la temporada (por ejemplo, la temporada 2025-2026 DECODE presentada por RTX es la temporada 2025 en la API).",
   "config.event_code": "Código del evento",
   "config.event_key_is_year_code_eg_2026": "La clave del evento es el año + código (p.ej. 2026 + okok → 2026okok).",
   "config.preferred_source": "Origen preferido",

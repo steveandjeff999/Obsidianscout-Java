@@ -503,6 +503,7 @@
   "config.directly_edit_the_scouting_for": "Directly edit the scouting form JSON. Useful for backing up configurations or advanced customizations.",
   "config.set_season_event_code_and_api_": "Set season, event code, and API keys. When event integration is set, sync merges teams and matches.",
   "config.season_year": "Season year",
+  "config.season_year_ftc_note": "The season year is typically the year the season started in (e.g. the 2025-2026 season DECODE presented by RTX is season 2025 in the API).",
   "config.event_code": "Event code",
   "config.event_key_is_year_code_eg_2026": "Event key is year + code (e.g. 2026 + okok → 2026okok).",
   "config.preferred_source": "Preferred source",

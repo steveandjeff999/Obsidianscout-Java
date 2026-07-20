@@ -503,6 +503,7 @@
   "config.directly_edit_the_scouting_for": "Scouting formu JSON'unu doğrudan düzenleyin. Konfigürasyonları yedeklemek veya gelişmiş özelleştirmeler için kullanışlıdır.",
   "config.set_season_event_code_and_api_": "Sezonu, etkinlik kodunu ve API anahtarlarını ayarlayın. Hem TBA hem de FIRST anahtarları ayarlandığında, senkronizasyon takımları ve maçları birleştirir (örn. QM 4 ve Eleme 4 tek satıra indirgenir).",
   "config.season_year": "Sezon yılı",
+  "config.season_year_ftc_note": "Sezon yılı genellikle sezonun başladığı yıldır (örneğin, RTX tarafından sunulan 2025-2026 DECODE sezonu API'de 2025 sezonudur).",
   "config.event_code": "Etkinlik kodu",
   "config.event_key_is_year_code_eg_2026": "Etkinlik anahtarı yıl + kod şeklindedir (örn. 2026 + okok → 2026okok).",
   "config.preferred_source": "Tercih edilen kaynak",
