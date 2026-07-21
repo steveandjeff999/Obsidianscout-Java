@@ -22,7 +22,14 @@ data class PeerStatus(val dbReady: Boolean, val isDbActive: Boolean, val leaderI
 class CockroachOrchestrator(private val appConfig: AppConfig) {
 
     private var process: Process? = null
-    private val rootDir = File(".cockroach")
+    private val rootDir: File = try {
+        val uri = CockroachOrchestrator::class.java.protectionDomain.codeSource.location.toURI()
+        val jarFile = File(uri)
+        val parent = if (jarFile.isFile) jarFile.parentFile else File(".")
+        File(parent, ".cockroach")
+    } catch (e: Exception) {
+        File(".cockroach")
+    }
     private val isWindows = System.getProperty("os.name").lowercase().contains("win")
     private val isArm = System.getProperty("os.arch").lowercase().let { it.contains("arm") || it.contains("aarch64") }
     private val binaryName = if (isWindows) "cockroach.exe" else "cockroach"

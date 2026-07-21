@@ -246,10 +246,28 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Check for existing session in background
-    Obsidianscout.checkLoginStatus().then((loggedIn) => {
+    // Check for existing session in background, validating program type match
+    const loginProgramSelect = document.getElementById("login-program");
+
+    async function verifySessionAndRedirect() {
+        const loggedIn = await Obsidianscout.checkLoginStatus();
         if (loggedIn) {
+            const user = await Obsidianscout.getMe();
+            const selectedProgram = loginProgramSelect ? loginProgramSelect.value : "FRC";
+            if (user && user.program && selectedProgram && user.program.toUpperCase() !== selectedProgram.toUpperCase()) {
+                // Active session program differs from selected program; do not redirect.
+                return;
+            }
             window.location.href = "/dashboard";
         }
-    });
+    }
+
+    verifySessionAndRedirect();
+
+    if (loginProgramSelect) {
+        loginProgramSelect.addEventListener("change", () => {
+            verifySessionAndRedirect();
+        });
+    }
 });
+
