@@ -2,13 +2,13 @@
     "server": {
         "host": "0.0.0.0",
         "port": 8080,
-        "sessionSecret": "change-me",
+        "sessionSecret": "0d0b9f3a5508db28cb3c209a51068c0c66ad423c5bee9f65df03b257c2c7b91e",
         "cookieSecure": false,
         "https": {
             "enabled": false,
             "port": 8443,
             "keystorePath": "config/obsidianscout.jks",
-            "keystorePassword": "change-me",
+            "keystorePassword": "4c1d4241d93edfb8ff02d5eaf1ae8500b5b82e16a00fd1010b1383f89ad9219c",
             "keyAlias": "obsidianscout"
         },
         "logging": false
@@ -33,8 +33,8 @@
         "adminPassword": "change-me"
     },
     "vapid": {
-        "publicKey": "",
-        "privateKey": "",
+        "publicKey": "BFj_B5u4fq1c6EcN0SVf-WBfEkXOtlUxNDCyJaEsW-TUWQ6u_sHWrRyV1FmxtEhLgIYV58dEwne37yUhCSzdF_0",
+        "privateKey": "6EbkueJ1yF-njL0F2mLMoZmCvYmK7LYT5kZ13RVef1g",
         "subject": "mailto:admin@obsidianscout.com"
     },
     "database_type": "sqlite",

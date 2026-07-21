@@ -121,8 +121,8 @@ fun Application.configureRoutes() {
                     val user = AuthService.login(
                         username = request.username,
                         teamNumber = request.teamNumber,
-                        program = request.program,
-                        password = request.password
+                        password = request.password,
+                        program = request.program
                     ) ?: throw com.obsidianscout.auth.ApiException(
                         HttpStatusCode.Unauthorized,
                         "Invalid credentials"
@@ -160,8 +160,8 @@ fun Application.configureRoutes() {
                     val user = AuthService.register(
                         username = request.username,
                         teamNumber = request.teamNumber,
-                        program = request.program,
                         password = request.password,
+                        program = request.program,
                         role = request.role,
                         email = request.email
                     )
@@ -1132,6 +1132,7 @@ fun Application.configureRoutes() {
                         username = request.username,
                         teamNumber = request.teamNumber,
                         password = request.password,
+                        program = request.program,
                         role = request.role,
                         email = request.email
                     )

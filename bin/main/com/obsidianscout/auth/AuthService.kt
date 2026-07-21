@@ -83,7 +83,7 @@ object AuthService {
         }
     }
 
-    fun login(username: String, teamNumber: Int, program: String = "FRC", password: String): UserRecord? {
+    fun login(username: String, teamNumber: Int, password: String, program: String = "FRC"): UserRecord? {
         // Fetch the stored hash first (short transaction — just a DB read).
         val (hash, record) = transaction {
             val row = Users
@@ -124,7 +124,7 @@ object AuthService {
     /**
      * Self-registration with a team role (admin, analytics, or scout).
      */
-    fun register(username: String, teamNumber: Int, program: String = "FRC", password: String, role: UserRole = UserRole.SCOUT, email: String? = null): UserRecord {
+    fun register(username: String, teamNumber: Int, password: String, program: String = "FRC", role: UserRole = UserRole.SCOUT, email: String? = null): UserRecord {
         if (username.isBlank() || password.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Username and password are required")
         }
@@ -224,8 +224,8 @@ object AuthService {
         callerSession: UserSession,
         username: String,
         teamNumber: Int,
-        program: String = callerSession.program,
         password: String,
+        program: String = callerSession.program,
         role: UserRole,
         email: String? = null
     ): UserRecord {

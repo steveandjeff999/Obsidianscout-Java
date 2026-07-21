@@ -66,6 +66,7 @@ data class CreateUserRequest(
     val username: String,
     val teamNumber: Int,
     val password: String,
+    val program: String = "FRC",
     val role: UserRole = UserRole.SCOUT,
     val email: String? = null
 )

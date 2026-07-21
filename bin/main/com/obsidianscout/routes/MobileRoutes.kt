@@ -214,6 +214,7 @@ data class MobileRegisterRequest(
     val password: String,
     @SerialName("confirm_password") val confirmPassword: String? = null,
     @SerialName("team_number") val teamNumber: Int,
+    val program: String = "FRC",
     val email: String? = null
 )
 
@@ -1007,16 +1008,32 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     val candidateUsers = transaction {
                         AuthService.listUsers(
                             callerSession = UserSession(userId = "", username = "system", teamNumber = req.teamNumber, role = UserRole.SUPERADMIN, program = req.program),
-                            teamFilter = req.teamNumber
+                            teamFilter = req.teamNumber,
+                            programFilter = req.program
                         )
                     }
                     candidateUsers.firstOrNull { candidate ->
-                        AuthService.login(candidate.username, req.teamNumber, req.password, req.program) != null
+                        AuthService.login(
+                            username = candidate.username,
+                            teamNumber = req.teamNumber,
+                            password = req.password,
+                            program = req.program
+                        ) != null
                     }?.let { matched ->
-                        AuthService.login(matched.username, req.teamNumber, req.password, req.program)
+                        AuthService.login(
+                            username = matched.username,
+                            teamNumber = req.teamNumber,
+                            password = req.password,
+                            program = req.program
+                        )
                     }
                 } else {
-                    AuthService.login(req.username, req.teamNumber, req.password, req.program)
+                    AuthService.login(
+                        username = req.username,
+                        teamNumber = req.teamNumber,
+                        password = req.password,
+                        program = req.program
+                    )
                 }
 
                 if (user == null) {
@@ -1027,6 +1044,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     userId = user.id,
                     username = user.username,
                     teamNumber = user.teamNumber,
+                    program = user.program,
                     role = user.role,
                     email = user.email
                 )
@@ -1058,6 +1076,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         username = req.username,
                         teamNumber = req.teamNumber,
                         password = req.password,
+                        program = req.program,
                         role = UserRole.SCOUT,
                         email = req.email
                     )
