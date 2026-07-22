@@ -1679,7 +1679,7 @@
         }
     }
 
-    async function compressAndChunkData(dataStr, chunkSize = 180) {
+    async function compressAndChunkData(dataStr, chunkSize = 450) {
         const compressed = await compressData(dataStr);
         if (compressed.length <= chunkSize) {
             return [compressed];
