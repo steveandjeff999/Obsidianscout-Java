@@ -3,6 +3,7 @@ package com.obsidianscout.config
 import com.obsidianscout.db.PitScoutingConfigs
 import com.obsidianscout.db.ScoutingConfigs
 import com.obsidianscout.db.QualitativeScoutingConfigs
+import com.obsidianscout.db.DefaultConfigs
 import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.scouting.AllianceService
 import kotlinx.serialization.Serializable
@@ -14,14 +15,29 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.Instant
+import java.util.UUID
+
+@Serializable
+data class DefaultConfigDTO(
+    val id: String? = null,
+    val name: String,
+    val program: String,
+    val configType: String,
+    val configJson: String,
+    val isDefault: Boolean = false,
+    val updatedAt: String? = null
+)
 
 @Serializable
 data class ScoutingConfig(
@@ -71,50 +87,287 @@ object ConfigService {
     private val defaultQualitativeConfigPath = Paths.get("config", "default-qualitative-scouting-config.json")
 
     fun ensureDefaultConfig() {
+        val defaultsDir = Paths.get("config", "defaults")
+        if (!Files.exists(defaultsDir)) {
+            try { Files.createDirectories(defaultsDir) } catch (_: Exception) {}
+        }
+
+        val presetFiles = listOf(
+            Triple("frc2026", "FRC", "match"),
+            Triple("frc2026", "FRC", "pit"),
+            Triple("frc2026", "FRC", "qualitative"),
+            Triple("frc2025", "FRC", "match"),
+            Triple("frc2025", "FRC", "pit"),
+            Triple("frc2025", "FRC", "qualitative"),
+            Triple("ftc2026", "FTC", "match"),
+            Triple("ftc2026", "FTC", "pit"),
+            Triple("ftc2026", "FTC", "qualitative"),
+            Triple("ftc2025", "FTC", "match"),
+            Triple("ftc2025", "FTC", "pit"),
+            Triple("ftc2025", "FTC", "qualitative")
+        )
+
         transaction {
+            SchemaUtils.createMissingTablesAndColumns(DefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs)
+
+            presetFiles.forEach { (presetName, prog, type) ->
+                val filePath = defaultsDir.resolve("$presetName-$type.json")
+                val jsonText = if (Files.exists(filePath)) {
+                    Files.readString(filePath)
+                } else null
+
+                if (jsonText != null) {
+                    val existing = DefaultConfigs
+                        .selectAll().where { (DefaultConfigs.name eq presetName) and (DefaultConfigs.configType eq type) }
+                        .firstOrNull()
+                    if (existing == null) {
+                        DefaultConfigs.insert {
+                            it[name] = presetName
+                            it[program] = prog
+                            it[configType] = type
+                            it[configJson] = jsonText
+                            it[isDefault] = presetName.endsWith("2026")
+                            it[updatedAt] = Instant.now()
+                        }
+                    }
+                }
+            }
+
             listOf("FRC", "FTC").forEach { prog ->
-                val existing = ScoutingConfigs
+                val defaultMatchJson = DefaultConfigs
+                    .selectAll().where { (DefaultConfigs.program eq prog) and (DefaultConfigs.configType eq "match") and (DefaultConfigs.isDefault eq true) }
+                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultConfigText()
+
+                val existingScouting = ScoutingConfigs
                     .selectAll().where { (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq prog) }
                     .limit(1)
                     .firstOrNull() != null
-                if (!existing) {
-                    val jsonText = loadDefaultConfigText()
+                if (!existingScouting) {
                     ScoutingConfigs.insert {
                         it[teamNumber] = 0
                         it[program] = prog
-                        it[configJson] = jsonText
+                        it[configJson] = defaultMatchJson
                         it[updatedAt] = Instant.now()
                     }
                 }
+
+                val defaultPitJson = DefaultConfigs
+                    .selectAll().where { (DefaultConfigs.program eq prog) and (DefaultConfigs.configType eq "pit") and (DefaultConfigs.isDefault eq true) }
+                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultPitConfigText()
 
                 val existingPit = PitScoutingConfigs
                     .selectAll().where { (PitScoutingConfigs.teamNumber eq 0) and (PitScoutingConfigs.program eq prog) }
                     .limit(1)
                     .firstOrNull() != null
                 if (!existingPit) {
-                    val jsonText = loadDefaultPitConfigText()
                     PitScoutingConfigs.insert {
                         it[teamNumber] = 0
                         it[program] = prog
-                        it[configJson] = jsonText
+                        it[configJson] = defaultPitJson
                         it[updatedAt] = Instant.now()
                     }
                 }
+
+                val defaultQualJson = DefaultConfigs
+                    .selectAll().where { (DefaultConfigs.program eq prog) and (DefaultConfigs.configType eq "qualitative") and (DefaultConfigs.isDefault eq true) }
+                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultQualitativeConfigText()
 
                 val existingQualitative = QualitativeScoutingConfigs
                     .selectAll().where { (QualitativeScoutingConfigs.teamNumber eq 0) and (QualitativeScoutingConfigs.program eq prog) }
                     .limit(1)
                     .firstOrNull() != null
                 if (!existingQualitative) {
-                    val jsonText = loadDefaultQualitativeConfigText()
                     QualitativeScoutingConfigs.insert {
                         it[teamNumber] = 0
                         it[program] = prog
-                        it[configJson] = jsonText
+                        it[configJson] = defaultQualJson
                         it[updatedAt] = Instant.now()
                     }
                 }
             }
+        }
+    }
+
+    fun getDefaultConfigs(program: String, configType: String? = null): List<DefaultConfigDTO> {
+        return transaction {
+            var query = DefaultConfigs.selectAll().where { DefaultConfigs.program eq program }
+            if (!configType.isNullOrBlank()) {
+                val filterType = if (configType.equals("game", ignoreCase = true)) "match" else if (configType.equals("qual", ignoreCase = true)) "qualitative" else configType.lowercase()
+                query = DefaultConfigs.selectAll().where { (DefaultConfigs.program eq program) and (DefaultConfigs.configType eq filterType) }
+            }
+            query.orderBy(DefaultConfigs.name to SortOrder.ASC).map { row ->
+                DefaultConfigDTO(
+                    id = row[DefaultConfigs.id].value.toString(),
+                    name = row[DefaultConfigs.name],
+                    program = row[DefaultConfigs.program],
+                    configType = row[DefaultConfigs.configType],
+                    configJson = row[DefaultConfigs.configJson],
+                    isDefault = row[DefaultConfigs.isDefault],
+                    updatedAt = row[DefaultConfigs.updatedAt].toString()
+                )
+            }
+        }
+    }
+
+    fun applyDefaultConfig(teamNumber: Int, program: String, configType: String, presetName: String): ScoutingConfig {
+        val targetType = when (configType.lowercase()) {
+            "game", "match" -> "match"
+            "qual", "qualitative" -> "qualitative"
+            else -> configType.lowercase()
+        }
+        val defaultRow = transaction {
+            DefaultConfigs
+                .selectAll().where { (DefaultConfigs.name eq presetName) and (DefaultConfigs.configType eq targetType) }
+                .firstOrNull()
+        } ?: throw IllegalArgumentException("Default configuration preset '$presetName' of type '$targetType' not found")
+
+        if (defaultRow[DefaultConfigs.program] != program) {
+            throw IllegalArgumentException("Cannot apply preset '$presetName' (${defaultRow[DefaultConfigs.program]}) to team in program $program")
+        }
+
+        val jsonContent = defaultRow[DefaultConfigs.configJson]
+
+        return when (targetType) {
+            "match" -> updateConfig(teamNumber, program, jsonContent)
+            "pit" -> updatePitConfig(teamNumber, program, jsonContent)
+            "qualitative" -> updateQualitativeConfig(teamNumber, program, jsonContent)
+            else -> throw IllegalArgumentException("Unknown config type: $configType")
+        }
+    }
+
+    fun resetToDefaultConfig(teamNumber: Int, program: String, configType: String): ScoutingConfig {
+        val targetType = when (configType.lowercase()) {
+            "game", "match" -> "match"
+            "qual", "qualitative" -> "qualitative"
+            else -> configType.lowercase()
+        }
+        val defaultJson = transaction {
+            DefaultConfigs
+                .selectAll().where { (DefaultConfigs.program eq program) and (DefaultConfigs.configType eq targetType) and (DefaultConfigs.isDefault eq true) }
+                .firstOrNull()?.get(DefaultConfigs.configJson)
+        } ?: when (targetType) {
+            "match" -> getConfigJson(0, program, local = true)
+            "pit" -> getPitConfigJson(0, program, local = true)
+            "qualitative" -> getQualitativeConfigJson(0, program, local = true)
+            else -> throw IllegalArgumentException("Unknown config type: $configType")
+        }
+
+        return when (targetType) {
+            "match" -> updateConfig(teamNumber, program, defaultJson)
+            "pit" -> updatePitConfig(teamNumber, program, defaultJson)
+            "qualitative" -> updateQualitativeConfig(teamNumber, program, defaultJson)
+            else -> throw IllegalArgumentException("Unknown config type: $configType")
+        }
+    }
+
+    fun getAllDefaultConfigs(): List<DefaultConfigDTO> {
+        return transaction {
+            DefaultConfigs.selectAll().orderBy(DefaultConfigs.program to SortOrder.ASC, DefaultConfigs.name to SortOrder.ASC).map { row ->
+                DefaultConfigDTO(
+                    id = row[DefaultConfigs.id].value.toString(),
+                    name = row[DefaultConfigs.name],
+                    program = row[DefaultConfigs.program],
+                    configType = row[DefaultConfigs.configType],
+                    configJson = row[DefaultConfigs.configJson],
+                    isDefault = row[DefaultConfigs.isDefault],
+                    updatedAt = row[DefaultConfigs.updatedAt].toString()
+                )
+            }
+        }
+    }
+
+    private fun savePresetFileOnDisk(name: String, configType: String, jsonText: String) {
+        try {
+            val defaultsDir = Paths.get("config", "defaults")
+            if (!Files.exists(defaultsDir)) {
+                Files.createDirectories(defaultsDir)
+            }
+            val targetType = when (configType.lowercase()) {
+                "game", "match" -> "match"
+                "qual", "qualitative" -> "qualitative"
+                else -> configType.lowercase()
+            }
+            val filePath = defaultsDir.resolve("$name-$targetType.json")
+            Files.writeString(filePath, jsonText + "\n")
+        } catch (e: Exception) {
+            println("Warning: Could not save preset file to disk: ${e.message}")
+        }
+    }
+
+    fun createDefaultConfig(dto: DefaultConfigDTO): DefaultConfigDTO {
+        val normalizedJson = normalizeConfigJson(dto.configJson)
+        val newId = transaction {
+            val existingConflict = DefaultConfigs.selectAll()
+                .where { (DefaultConfigs.name eq dto.name) and (DefaultConfigs.program eq dto.program) and (DefaultConfigs.configType eq dto.configType) }
+                .firstOrNull()
+            if (existingConflict != null) {
+                throw com.obsidianscout.auth.ApiException(
+                    io.ktor.http.HttpStatusCode.Conflict,
+                    "A default config preset named '${dto.name}' already exists for ${dto.program} ${dto.configType}"
+                )
+            }
+            if (dto.isDefault) {
+                DefaultConfigs.update({ (DefaultConfigs.program eq dto.program) and (DefaultConfigs.configType eq dto.configType) }) {
+                    it[isDefault] = false
+                }
+            }
+            DefaultConfigs.insert {
+                it[name] = dto.name
+                it[program] = dto.program
+                it[configType] = dto.configType
+                it[configJson] = normalizedJson
+                it[isDefault] = dto.isDefault
+                it[updatedAt] = Instant.now()
+            }[DefaultConfigs.id].value
+        }
+        savePresetFileOnDisk(dto.name, dto.configType, normalizedJson)
+        return dto.copy(id = newId.toString(), configJson = normalizedJson, updatedAt = Instant.now().toString())
+    }
+
+    fun updateDefaultConfig(id: String, dto: DefaultConfigDTO): DefaultConfigDTO {
+        val normalizedJson = normalizeConfigJson(dto.configJson)
+        val uuid = UUID.fromString(id)
+        transaction {
+            val existingConflict = DefaultConfigs.selectAll()
+                .where { (DefaultConfigs.name eq dto.name) and (DefaultConfigs.program eq dto.program) and (DefaultConfigs.configType eq dto.configType) and (DefaultConfigs.id neq uuid) }
+                .firstOrNull()
+            if (existingConflict != null) {
+                throw com.obsidianscout.auth.ApiException(
+                    io.ktor.http.HttpStatusCode.Conflict,
+                    "A default config preset named '${dto.name}' already exists for ${dto.program} ${dto.configType}"
+                )
+            }
+            if (dto.isDefault) {
+                DefaultConfigs.update({ (DefaultConfigs.program eq dto.program) and (DefaultConfigs.configType eq dto.configType) }) {
+                    it[isDefault] = false
+                }
+            }
+            DefaultConfigs.update({ DefaultConfigs.id eq uuid }) {
+                it[name] = dto.name
+                it[program] = dto.program
+                it[configType] = dto.configType
+                it[configJson] = normalizedJson
+                it[isDefault] = dto.isDefault
+                it[updatedAt] = Instant.now()
+            }
+        }
+        savePresetFileOnDisk(dto.name, dto.configType, normalizedJson)
+        return dto.copy(id = id, configJson = normalizedJson, updatedAt = Instant.now().toString())
+    }
+
+    fun deleteDefaultConfig(id: String): Boolean {
+        val uuid = UUID.fromString(id)
+        return transaction {
+            val existing = DefaultConfigs.selectAll().where { DefaultConfigs.id eq uuid }.firstOrNull()
+            if (existing != null) {
+                val name = existing[DefaultConfigs.name]
+                val type = existing[DefaultConfigs.configType]
+                try {
+                    val filePath = Paths.get("config", "defaults", "$name-$type.json")
+                    Files.deleteIfExists(filePath)
+                } catch (_: Exception) {}
+            }
+            DefaultConfigs.deleteWhere { DefaultConfigs.id eq uuid } > 0
         }
     }
 

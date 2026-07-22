@@ -41,6 +41,11 @@ data class MeResponse(
 )
 
 @Serializable
+data class VersionResponse(
+    val version: String
+)
+
+@Serializable
 data class LoginStatusResponse(
     val loggedIn: Boolean
 )
@@ -59,6 +64,17 @@ data class AuthProvidersResponse(
 @Serializable
 data class ConfigUpdateRequest(
     val configJson: String
+)
+
+@Serializable
+data class ApplyDefaultConfigRequest(
+    val presetName: String,
+    val configType: String = "match"
+)
+
+@Serializable
+data class ResetConfigRequest(
+    val configType: String = "match"
 )
 
 @Serializable

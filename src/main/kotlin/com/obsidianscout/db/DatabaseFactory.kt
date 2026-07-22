@@ -15,7 +15,7 @@ import java.util.UUID
 object DatabaseFactory {
     private val uuidMigratedTables = listOf(
         "users", "scouting_configs", "pit_scouting_configs",
-        "qualitative_scouting_configs", "scouting_entries",
+        "qualitative_scouting_configs", "default_configs", "scouting_entries",
         "pit_scouting_entries", "qualitative_scouting_entries",
         "app_settings", "api_events", "api_teams", "api_matches",
         "scouting_alliances", "alliance_memberships",
@@ -91,6 +91,7 @@ object DatabaseFactory {
                 ScoutingConfigs,
                 PitScoutingConfigs,
                 QualitativeScoutingConfigs,
+                DefaultConfigs,
                 ScoutingEntries,
                 PitScoutingEntries,
                 QualitativeScoutingEntries,
@@ -285,7 +286,8 @@ object DatabaseFactory {
             "ux_app_settings_team",
             "ux_alliance_memberships_alliance_team",
             "idx_alliance_memberships_team_active",
-            "idx_chat_messages_team_group"
+            "idx_chat_messages_team_group",
+            "ux_default_configs_name_type"
         )
         try {
             dataSource.connection.use { conn ->

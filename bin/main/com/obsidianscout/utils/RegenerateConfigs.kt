@@ -42,5 +42,11 @@ fun main() {
     Files.writeString(qualitativeConfigPath, qualitativeConfigJson + "\n")
     println("Generated default-qualitative-scouting-config: ${qualitativeConfigPath.toAbsolutePath()}")
 
+    val defaultsDir = Paths.get("config", "defaults")
+    if (!Files.exists(defaultsDir)) {
+        Files.createDirectories(defaultsDir)
+    }
+    println("Ensured defaults directory at: ${defaultsDir.toAbsolutePath()}")
+
     println("All default configurations successfully regenerated!")
 }

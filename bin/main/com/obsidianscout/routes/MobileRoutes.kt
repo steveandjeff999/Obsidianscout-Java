@@ -2109,6 +2109,29 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             post("/config/qualitative/team") { saveQualitativeConfigHandler(Unit) }
             put("/config/qualitative/team") { saveQualitativeConfigHandler(Unit) }
 
+            get("/config/defaults") {
+                val session = call.requireMobileSession(secret)
+                val type = call.request.queryParameters["type"]
+                val presets = ConfigService.getDefaultConfigs(session.program, type)
+                call.respond(presets)
+            }
+
+            post("/config/apply-default") {
+                call.requireMobileAdmin(secret)
+                val session = call.requireMobileSession(secret)
+                val req = call.receive<ApplyDefaultConfigRequest>()
+                val updated = ConfigService.applyDefaultConfig(session.teamNumber, session.program, req.configType, req.presetName)
+                call.respond(updated)
+            }
+
+            post("/config/reset") {
+                call.requireMobileAdmin(secret)
+                val session = call.requireMobileSession(secret)
+                val req = call.receive<ResetConfigRequest>()
+                val updated = ConfigService.resetToDefaultConfig(session.teamNumber, session.program, req.configType)
+                call.respond(updated)
+            }
+
             // Alliances
             get("/alliances") {
                 val session = call.requireMobileSession(secret)

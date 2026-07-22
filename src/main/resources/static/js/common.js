@@ -500,6 +500,32 @@
         }
     }
 
+    async function renderServerVersion(sidebar) {
+        try {
+            const sb = sidebar || document.querySelector(".sidebar");
+            if (!sb) return;
+            const versionEl = sb.querySelector("#server-version") || document.getElementById("server-version");
+            if (!versionEl) return;
+
+            const cachedVersion = safeGetItem("obsidianscout:server_version");
+            if (cachedVersion) {
+                const displayVer = cachedVersion.startsWith("v") ? cachedVersion : `v${cachedVersion}`;
+                versionEl.textContent = `Server ${displayVer}`;
+            }
+
+            if (navigator.onLine) {
+                const data = await request("/api/version");
+                if (data && data.version) {
+                    safeSetItem("obsidianscout:server_version", data.version);
+                    const displayVer = data.version.startsWith("v") ? data.version : `v${data.version}`;
+                    versionEl.textContent = `Server ${displayVer}`;
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to fetch server version:", e);
+        }
+    }
+
     function showSetupWizardModal(me, settings, forceOpen = false) {
         if (document.getElementById("setup-wizard-backdrop")) return;
 
@@ -1159,6 +1185,9 @@
             document.querySelectorAll('.sidebar-link[data-page="admin-settings"]').forEach((link) => {
                 link.style.display = "none";
             });
+            document.querySelectorAll('.sidebar-link[data-page="default-configs"]').forEach((link) => {
+                link.style.display = "none";
+            });
         }
 
         // Show Migration link only for SUPERADMIN
@@ -1650,6 +1679,22 @@
         }
     }
 
+    async function compressAndChunkData(dataStr, chunkSize = 180) {
+        const compressed = await compressData(dataStr);
+        if (compressed.length <= chunkSize) {
+            return [compressed];
+        }
+        const base64Payload = compressed.startsWith("OSC:") ? compressed.substring(4) : compressed;
+        const chunks = [];
+        const total = Math.ceil(base64Payload.length / chunkSize);
+        for (let i = 0; i < total; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, base64Payload.length);
+            chunks.push(`OSC:PART:${i + 1}:${total}:${base64Payload.substring(start, end)}`);
+        }
+        return chunks;
+    }
+
     async function showQrModal(payload, typeLabel, teamNum, matchKey) {
         if (typeof QRCode === 'undefined') {
             showToast("QR Library not loaded", "error");
@@ -1665,98 +1710,79 @@
         }
 
         const matchHtml = matchKey ? `<p><strong data-i18n="qr.match">Match:</strong> <span>${matchKey}</span></p>` : '';
+        const qrPayload = {
+            type: payload.type || typeLabel.toLowerCase().replace(/\s+/g, '-'),
+            data: payload
+        };
+        const qrString = JSON.stringify(qrPayload);
+        const qrChunks = await compressAndChunkData(qrString);
+
+        const isMulti = qrChunks.length > 1;
         
         backdrop.innerHTML = `
-            <div class="modal-container">
+            <div class="modal-container" style="max-width: ${isMulti ? '680px' : '480px'};">
                 <div class="modal-header">
-                    <h3 class="modal-title" data-i18n="qr.title">Scouting Entry Barcode</h3>
+                    <h3 class="modal-title" data-i18n="qr.title">Scouting Entry QR Code ${isMulti ? `(Grid of ${qrChunks.length} Parts)` : ''}</h3>
                     <button class="modal-close" id="qr-modal-close-btn">&times;</button>
                 </div>
                 <div class="modal-body qr-modal-body">
-                    <div class="tab-row mb-12" style="margin-bottom: 16px; display: flex; width: 100%;">
-                        <button type="button" class="tab active" id="qr-modal-tab-qr" style="flex: 1;">QR Code</button>
-                        <button type="button" class="tab" id="qr-modal-tab-jab" style="flex: 1;">JAB Code</button>
-                    </div>
-                    <div class="qr-code-wrapper" id="qr-code-canvas-container" style="min-height: 384px; display: flex; align-items: center; justify-content: center;"></div>
-                    <div class="qr-details">
+                    <div class="qr-code-wrapper" id="qr-code-canvas-container" style="min-height: 320px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: center; padding: 12px;"></div>
+                    <div class="qr-details" style="margin-top: 16px;">
                         <p><strong data-i18n="qr.type">Type:</strong> <span>${typeLabel}</span></p>
                         <p><strong data-i18n="qr.team">Team:</strong> <span>${teamNum}</span></p>
                         ${matchHtml}
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn secondary" id="qr-modal-download-btn" data-i18n="qr.download">Download Barcode</button>
                     <button class="btn ghost" id="qr-modal-close-footer-btn" data-i18n="qr.close">Close</button>
                 </div>
             </div>
         `;
 
         const container = document.getElementById("qr-code-canvas-container");
-        const qrPayload = {
-            type: payload.type || typeLabel.toLowerCase().replace(/\s+/g, '-'),
-            data: payload
-        };
-        const qrString = JSON.stringify(qrPayload);
-        const compressedString = await compressData(qrString);
+        container.innerHTML = "";
 
-        let activeTab = "qr";
-        let jabInterface = null;
+        qrChunks.forEach((chunkText, idx) => {
+            const qrCard = document.createElement("div");
+            qrCard.style.display = "flex";
+            qrCard.style.flexDirection = "column";
+            qrCard.style.alignItems = "center";
+            qrCard.style.background = "#ffffff";
+            qrCard.style.padding = "12px";
+            qrCard.style.borderRadius = "16px";
+            qrCard.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
 
-        const renderBarcode = async () => {
-            container.innerHTML = "";
-            if (activeTab === "qr") {
-                new QRCode(container, {
-                    text: compressedString,
-                    width: 384,
-                    height: 384,
-                    colorDark : "#000000",
-                    colorLight : "#ffffff",
-                    correctLevel : QRCode.CorrectLevel.M
-                });
-            } else {
-                if (typeof window.JabcodeJSInterface === "undefined") {
-                    container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 20px;">Loading JAB Code library...</div>`;
-                    for (let i = 0; i < 30; i++) {
-                        await new Promise(r => setTimeout(r, 100));
-                        if (typeof window.JabcodeJSInterface !== "undefined") {
-                            break;
-                        }
-                    }
-                    if (typeof window.JabcodeJSInterface === "undefined") {
-                        container.innerHTML = `<div style="color: #c84b31; text-align: center; padding: 20px;">Failed to load JAB Code library.</div>`;
-                        showToast("JAB Code library is not available offline or failed to load", "error");
-                        return;
-                    }
-                }
-                if (!jabInterface) {
-                    try {
-                        jabInterface = new window.JabcodeJSInterface();
-                    } catch (e) {
-                        console.error(e);
-                        container.innerHTML = `<div style="color: #c84b31; text-align: center; padding: 20px;">Failed to initialize JAB Code.</div>`;
-                        return;
-                    }
-                }
-                try {
-                    const base64Png = jabInterface.encode_message(compressedString);
-                    container.innerHTML = `<img src="${base64Png}" style="width: 384px; height: 384px; display: block; margin: 0 auto; object-fit: contain;" />`;
-                } catch (e) {
-                    console.error("JAB Code generation error:", e);
-                    container.innerHTML = `<div style="color: #c84b31; text-align: center; padding: 20px;">Failed to generate JAB Code.</div>`;
-                }
+            if (isMulti) {
+                const badge = document.createElement("div");
+                badge.style.background = "var(--primary-accent, #6366f1)";
+                badge.style.color = "#ffffff";
+                badge.style.fontSize = "11px";
+                badge.style.fontWeight = "bold";
+                badge.style.padding = "2px 8px";
+                badge.style.borderRadius = "6px";
+                badge.style.marginBottom = "8px";
+                badge.textContent = `Part ${idx + 1} of ${qrChunks.length}`;
+                qrCard.appendChild(badge);
             }
-        };
 
-        // Render QR Code initially
-        await renderBarcode();
+            const qrEl = document.createElement("div");
+            qrCard.appendChild(qrEl);
+            container.appendChild(qrCard);
+
+            new QRCode(qrEl, {
+                text: chunkText,
+                width: isMulti ? 200 : 320,
+                height: isMulti ? 200 : 320,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        });
 
         backdrop.classList.add("show");
 
         const closeBtn = document.getElementById("qr-modal-close-btn");
         const closeFooterBtn = document.getElementById("qr-modal-close-footer-btn");
-        const downloadBtn = document.getElementById("qr-modal-download-btn");
-        const tabQr = document.getElementById("qr-modal-tab-qr");
-        const tabJab = document.getElementById("qr-modal-tab-jab");
 
         const closeModal = () => {
             backdrop.classList.remove("show");
@@ -1764,43 +1790,6 @@
 
         closeBtn.addEventListener("click", closeModal);
         closeFooterBtn.addEventListener("click", closeModal);
-
-        tabQr.addEventListener("click", () => {
-            if (activeTab === "qr") return;
-            activeTab = "qr";
-            tabQr.classList.add("active");
-            tabJab.classList.remove("active");
-            renderBarcode();
-        });
-
-        tabJab.addEventListener("click", () => {
-            if (activeTab === "jab") return;
-            activeTab = "jab";
-            tabJab.classList.add("active");
-            tabQr.classList.remove("active");
-            renderBarcode();
-        });
-
-        downloadBtn.addEventListener("click", () => {
-            const img = container.querySelector("img");
-            const canvas = container.querySelector("canvas");
-            let src = "";
-            if (img && img.src) {
-                src = img.src;
-            } else if (canvas) {
-                src = canvas.toDataURL("image/png");
-            }
-            if (src) {
-                const a = document.createElement("a");
-                a.href = src;
-                a.download = `${activeTab}_${qrPayload.type}_${teamNum}${matchKey ? '_' + matchKey : ''}.png`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            } else {
-                showToast("Could not download barcode image yet", "error");
-            }
-        });
     }
     async function initChatUnreadPolling() {
         const page = document.body.dataset.page;
@@ -1917,7 +1906,9 @@
             }
             if (isAdminUser) {
                 endpoints.push("/api/admin/users");
-                endpoints.push("/api/admin/email-settings");
+                if (currentUser && currentUser.role === "SUPERADMIN") {
+                    endpoints.push("/api/admin/email-settings");
+                }
             }
 
             console.log("[Offline Cache] Starting background sync of " + endpoints.length + " endpoints...");
@@ -1991,6 +1982,7 @@
                     
                     // Restore active nav highlight
                     setActiveNav();
+                    renderServerVersion(sidebar);
                 }
             }
         }
@@ -2093,11 +2085,45 @@
                 .catch(err => console.error('[ServiceWorker] Registration failed:', err));
         }
 
+        function initGlobalSidebarAndUser(sidebarEl) {
+            if (!sidebarEl) return;
+
+            initTheme();
+            wireThemeToggle();
+            wireLogout();
+            setActiveNav();
+
+            try {
+                const meText = safeGetItem("cache:/api/auth/me");
+                if (meText) {
+                    const parsed = JSON.parse(meText);
+                    const user = parsed.user || parsed;
+                    if (user && user.username) {
+                        setUserBadge(user);
+                        adjustNavForRole(user);
+                    }
+                }
+            } catch (e) {
+                console.warn("[Sidebar] Failed to load cached user info:", e);
+            }
+
+            getMe().then((user) => {
+                if (user && user.username) {
+                    setUserBadge(user);
+                    adjustNavForRole(user);
+                }
+            }).catch((err) => {
+                console.warn("[Sidebar] getMe background update failed:", err);
+            });
+        }
+
         const sidebar = document.querySelector(".sidebar");
         if (sidebar) {
             await ensureSidebarAndFooter(sidebar);
             injectConnectionWidget(sidebar);
             injectLanguageSelector(sidebar);
+            renderServerVersion(sidebar);
+            initGlobalSidebarAndUser(sidebar);
         }
 
         wireSidebarToggle();
@@ -2412,7 +2438,7 @@
         const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor"];
         if (bypassPages.includes(page)) return true;
 
-        if (["users", "banners", "admin-settings"].includes(page) && !isAdmin(role)) {
+        if (["users", "banners", "admin-settings", "default-configs"].includes(page) && !isAdmin(role)) {
             return false;
         }
         if (page === "migration" && !isSuperAdmin(role)) {
@@ -2478,7 +2504,12 @@
                 btn.addEventListener('click', () => {
                     showTourLevelSelector(me);
                 });
-                footer.insertBefore(btn, footer.lastChild);
+                const apiAttr = footer.querySelector('#api-attribution');
+                if (apiAttr) {
+                    footer.insertBefore(btn, apiAttr);
+                } else {
+                    footer.appendChild(btn);
+                }
             }
         }
 

@@ -604,6 +604,8 @@ function initScanner() {
         return { x: dx, y: dy };
     }
 
+    let multiStepSession = null;
+
     function handleScanResult(result, sx, sy, scanSizeInVideo, processingSize) {
         isSuccessState = true;
         lastDetection = {
@@ -614,13 +616,104 @@ function initScanner() {
             processingSize: processingSize
         };
 
-        // Play the beep instantly
         playBeep();
 
-        // Wait 300ms to let the user see the green outline flash, then trigger completion
         setTimeout(() => {
             const data = result.data;
-            stopScanning();
+            onScanSuccess(data);
+        }, 300);
+    }
+
+    function renderMultiStepBanner() {
+        let bannerEl = document.getElementById("multi-step-progress-banner");
+        if (!multiStepSession) {
+            if (bannerEl) bannerEl.remove();
+            return;
+        }
+
+        if (!bannerEl) {
+            bannerEl = document.createElement("div");
+            bannerEl.id = "multi-step-progress-banner";
+            bannerEl.style.padding = "16px";
+            bannerEl.style.marginBottom = "16px";
+            bannerEl.style.border = "1px solid var(--primary-accent, #6366f1)";
+            bannerEl.style.borderRadius = "16px";
+            bannerEl.style.background = "rgba(18, 24, 38, 0.95)";
+            bannerEl.style.boxShadow = "0 8px 32px rgba(0, 0, 0, 0.4)";
+            
+            if (readerContainer && readerContainer.parentNode) {
+                readerContainer.parentNode.insertBefore(bannerEl, readerContainer);
+            }
+        }
+
+        const total = multiStepSession.total;
+        const scannedCount = Object.keys(multiStepSession.parts).length;
+        const isComplete = scannedCount === total;
+
+        let pillsHtml = "";
+        for (let i = 1; i <= total; i++) {
+            const isDone = !!multiStepSession.parts[i];
+            pillsHtml += `
+                <div style="
+                    padding: 6px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    background: ${isDone ? "rgba(46, 204, 113, 0.25)" : "rgba(255, 255, 255, 0.08)"};
+                    color: ${isDone ? "#2ecc71" : "rgba(255, 255, 255, 0.6)"};
+                    border: 1px solid ${isDone ? "#2ecc71" : "rgba(255, 255, 255, 0.15)"};
+                ">
+                    ${isDone ? "✔" : "⏳"} Part ${i} ${isDone ? "(Scanned)" : "(Pending)"}
+                </div>
+            `;
+        }
+
+        bannerEl.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+                <div>
+                    <h4 style="margin: 0; color: ${isComplete ? "#2ecc71" : "#ffffff"}; font-size: 15px; font-weight: 700;">
+                        ${isComplete ? "🎉 Multi-Part Entry Complete!" : `📦 Multi-Part Scan in Progress (${scannedCount} of ${total} Scanned)`}
+                    </h4>
+                    <p style="margin: 4px 0 0 0; color: rgba(255,255,255,0.6); font-size: 12px;">
+                        ${isComplete ? "Assembling and adding entry to queue..." : "Scan remaining parts in any order."}
+                    </p>
+                </div>
+                <button type="button" id="btn-cancel-multi-step" class="btn ghost btn-sm" style="color: #e74c3c; border-color: rgba(231, 76, 60, 0.4); padding: 4px 10px; font-size: 12px;">
+                    Cancel Scan
+                </button>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                ${pillsHtml}
+            </div>
+        `;
+
+        const cancelBtn = document.getElementById("btn-cancel-multi-step");
+        if (cancelBtn) {
+            cancelBtn.addEventListener("click", () => {
+                multiStepSession = null;
+                renderMultiStepBanner();
+                Obsidianscout.showToast("Multi-part scan cancelled", "info");
+            });
+        }
+    }
+
+    function handleScanResult(result, sx, sy, scanSizeInVideo, processingSize) {
+        isSuccessState = true;
+        lastDetection = {
+            cornerPoints: result.cornerPoints,
+            sx: sx,
+            sy: sy,
+            scanSizeInVideo: scanSizeInVideo,
+            processingSize: processingSize
+        };
+
+        playBeep();
+
+        setTimeout(() => {
+            const data = result.data;
             onScanSuccess(data);
         }, 300);
     }
@@ -631,12 +724,9 @@ function initScanner() {
             isJab: true
         };
 
-        // Play the beep instantly
         playBeep();
 
-        // Wait 300ms to let the user see the green outline flash, then trigger completion
         setTimeout(() => {
-            stopScanning();
             onScanSuccess(decodedText);
         }, 300);
     }
@@ -644,7 +734,53 @@ function initScanner() {
     // Decode success handler
     async function onScanSuccess(decodedText) {
         try {
-            const decompressedText = await Obsidianscout.decompressData(decodedText);
+            const trimmed = decodedText.trim();
+            let fullText = trimmed;
+
+            if (trimmed.startsWith("OSC:PART:")) {
+                const parts = trimmed.split(":");
+                if (parts.length >= 5) {
+                    const index = parseInt(parts[2], 10);
+                    const total = parseInt(parts[3], 10);
+                    const chunk = parts.slice(4).join(":");
+
+                    if (!multiStepSession || multiStepSession.total !== total) {
+                        multiStepSession = {
+                            total: total,
+                            parts: {},
+                            timestamp: Date.now()
+                        };
+                    }
+
+                    if (multiStepSession.parts[index]) {
+                        Obsidianscout.showToast(`Part ${index} already scanned. Scan remaining part(s).`, "info");
+                        setTimeout(() => { isSuccessState = false; }, 800);
+                        return;
+                    }
+
+                    multiStepSession.parts[index] = chunk;
+                    renderMultiStepBanner();
+
+                    const scannedCount = Object.keys(multiStepSession.parts).length;
+                    if (scannedCount < total) {
+                        Obsidianscout.showToast(`Scanned Part ${index} of ${total}! Scan remaining part(s).`, "warning");
+                        setTimeout(() => { isSuccessState = false; }, 800);
+                        return;
+                    }
+
+                    // All parts collected! Assemble payload
+                    const chunksArr = [];
+                    for (let i = 1; i <= total; i++) {
+                        chunksArr.push(multiStepSession.parts[i]);
+                    }
+                    fullText = "OSC:" + chunksArr.join("");
+                    multiStepSession = null;
+                    renderMultiStepBanner();
+                }
+            }
+
+            stopScanning();
+            const decompressedText = await Obsidianscout.decompressData(fullText);
             const entry = JSON.parse(decompressedText);
             if (!entry || !entry.type || !entry.data) {
                 throw new Error("Invalid scouting QR schema");
@@ -682,6 +818,8 @@ function initScanner() {
         } catch (err) {
             console.warn("Scan warning:", err.message);
             Obsidianscout.showToast("QR code is not a valid ObsidianScout entry", "error");
+        } finally {
+            setTimeout(() => { isSuccessState = false; }, 800);
         }
     }
 
@@ -775,15 +913,28 @@ function initScanner() {
     }
 
     function getEndpoint(type) {
-        switch (type) {
-            case "scout": return "/api/scouting";
-            case "pit-scout": return "/api/pit-scouting";
-            case "qual-scout": return "/api/qual-scouting";
-            case "prescout-scout": return "/api/prescout/scouting";
-            case "prescout-pit": return "/api/prescout/pit-scouting";
-            case "prescout-qual": return "/api/prescout/qual-scouting";
-            default: return null;
+        if (!type) return "/api/scouting";
+        const t = String(type).toLowerCase().replace(/_/g, '-');
+        
+        if (t === 'scout' || t === 'match-scout' || t === 'match-scouting' || t === 'match') {
+            return "/api/scouting";
         }
+        if (t === 'pit-scout' || t === 'pit-scouting' || t === 'pit') {
+            return "/api/pit-scouting";
+        }
+        if (t === 'qual-scout' || t === 'qual-scouting' || t === 'qualitative-scouting' || t === 'qual') {
+            return "/api/qual-scouting";
+        }
+        if (t === 'prescout-scout' || t === 'prescout-match') {
+            return "/api/prescout/scouting";
+        }
+        if (t === 'prescout-pit') {
+            return "/api/prescout/pit-scouting";
+        }
+        if (t === 'prescout-qual') {
+            return "/api/prescout/qual-scouting";
+        }
+        return "/api/scouting";
     }
 
     // Sync to Server
@@ -808,21 +959,19 @@ function initScanner() {
             if (item.status === "success") continue;
 
             const endpoint = getEndpoint(item.type);
-            if (!endpoint) {
-                item.status = "error";
-                item.errorMsg = "Unknown endpoint type";
-                failCount++;
-                continue;
-            }
 
             try {
                 item.status = "pending";
                 renderQueue();
 
+                const rawData = (item.data && typeof item.data === 'object' && item.data.data) 
+                    ? item.data.data 
+                    : (item.data ? item.data : item);
+
                 await Obsidianscout.request(endpoint, {
                     method: "POST",
                     json: {
-                        data: item.data
+                        data: rawData
                     }
                 });
 

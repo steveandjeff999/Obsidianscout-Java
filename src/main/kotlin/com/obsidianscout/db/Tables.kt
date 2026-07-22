@@ -53,6 +53,19 @@ object QualitativeScoutingConfigs : UUIDTable("qualitative_scouting_configs") {
     }
 }
 
+object DefaultConfigs : UUIDTable("default_configs") {
+    val name = varchar("name", 64)
+    val program = varchar("program", 8).default("FRC")
+    val configType = varchar("config_type", 16).default("match")
+    val configJson = text("config_json")
+    val isDefault = bool("is_default").default(false)
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_default_configs_name_program_type", name, program, configType)
+    }
+}
+
 object ScoutingEntries : UUIDTable("scouting_entries") {
     val ownerTeamNumber = integer("owner_team_number")
     val program = varchar("program", 8).default("FRC")

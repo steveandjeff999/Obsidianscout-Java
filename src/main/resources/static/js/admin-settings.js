@@ -283,6 +283,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             renderVisualFields();
             showVisualEditor();
+            await updateDefaultPresetsDropdown();
 
             // Helper functions to safely assign values/checked states
             const setVal = (id, val) => {
@@ -448,6 +449,46 @@ document.addEventListener("DOMContentLoaded", async () => {
                 };
                 reader.readAsText(file);
             });
+
+            // Reset to Default Preset logic
+            const btnApplyPreset = document.getElementById("btn-apply-preset");
+            if (btnApplyPreset) {
+                btnApplyPreset.addEventListener("click", async () => {
+                    const selector = document.getElementById("preset-selector");
+                    const presetName = selector ? selector.value : "";
+                    const targetType = activeConfigKind === "game" ? "match" : (activeConfigKind === "qual" ? "qualitative" : "pit");
+
+                    const label = presetName ? `preset '${presetName}'` : `active program default`;
+                    if (!confirm(`Are you sure you want to reset the current ${activeConfigKind} config editor to ${label}? Any unsaved changes will be overwritten.`)) {
+                        return;
+                    }
+
+                    try {
+                        let updatedConfigObj;
+                        if (presetName) {
+                            updatedConfigObj = await Obsidianscout.request("/api/config/apply-default", {
+                                method: "POST",
+                                json: { configType: targetType, presetName: presetName }
+                            });
+                        } else {
+                            updatedConfigObj = await Obsidianscout.request("/api/config/reset", {
+                                method: "POST",
+                                json: { configType: targetType }
+                            });
+                        }
+
+                        currentConfig = normalizeConfig(updatedConfigObj, mode.defaultTitle);
+                        editor.value = JSON.stringify(currentConfig, null, 2);
+                        if (configTitleInput) configTitleInput.value = currentConfig.title || "";
+                        if (configVersionInput) configVersionInput.value = currentConfig.version || 1;
+                        renderVisualFields();
+
+                        Obsidianscout.showToast(`Reset ${activeConfigKind} config editor to ${label} successfully!`, "success");
+                    } catch (err) {
+                        Obsidianscout.showToast(err.message || "Failed to reset config to default preset", "error");
+                    }
+                });
+            }
 
             // API settings save
             const settingsSaveBtn = document.getElementById("settings-save");
@@ -662,8 +703,32 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             renderVisualFields();
             showVisualEditor();
+            await updateDefaultPresetsDropdown();
         } catch (error) {
             Obsidianscout.showToast("Unable to load config", "error");
+        }
+    }
+
+    async function updateDefaultPresetsDropdown() {
+        const selector = document.getElementById("preset-selector");
+        if (!selector) return;
+
+        const targetType = activeConfigKind === "game" ? "match" : (activeConfigKind === "qual" ? "qualitative" : "pit");
+
+        try {
+            const presets = await Obsidianscout.request(`/api/config/defaults?type=${targetType}`);
+            selector.innerHTML = `<option value="">-- Reset to Active Default --</option>`;
+            if (presets && Array.isArray(presets)) {
+                presets.forEach(p => {
+                    const opt = document.createElement("option");
+                    opt.value = p.name;
+                    opt.textContent = `${p.name}${p.isDefault ? ' (Active Default)' : ''}`;
+                    if (p.isDefault) opt.selected = true;
+                    selector.appendChild(opt);
+                });
+            }
+        } catch (err) {
+            console.warn("Failed to load default presets list for admin editor:", err);
         }
     }
 

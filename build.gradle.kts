@@ -58,6 +58,10 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
+tasks.test {
+    useJUnit()
+}
+
 application {
     mainClass.set("com.obsidianscout.AppKt")
 }

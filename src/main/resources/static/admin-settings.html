@@ -178,19 +178,25 @@
 
                     </div>
 
-                    <div class="row gap-12 wrap mt-24">
+                    <div class="row gap-12 wrap mt-24 align-center" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
 
-                        <button id="config-save" class="btn" type="button" data-i18n="settings.save">Save config</button>
+                        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                            <button id="config-save" class="btn" type="button" data-i18n="settings.save">Save config</button>
 
-                        <button id="config-export" class="btn ghost" type="button" data-i18n="settings.export">Export</button>
+                            <button id="config-export" class="btn ghost" type="button" data-i18n="settings.export">Export</button>
 
-                        <label class="btn ghost btn-file">
+                            <label class="btn ghost btn-file">
+                                Import
+                                <input id="config-import" class="input-hidden" type="file" accept="application/json" />
+                            </label>
+                        </div>
 
-                            Import
-
-                            <input id="config-import" class="input-hidden" type="file" accept="application/json" />
-
-                        </label>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <select id="preset-selector" class="input" style="width: auto; min-width: 170px; padding: 6px 12px; font-size: 13px;">
+                                <option value="">-- Select Default Preset --</option>
+                            </select>
+                            <button id="btn-apply-preset" class="btn secondary" type="button" style="padding: 8px 16px; font-size: 13px;">Reset to Default</button>
+                        </div>
 
                     </div>
 

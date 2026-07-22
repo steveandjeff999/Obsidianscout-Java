@@ -255,6 +255,19 @@ body.theme-dark .sidebar-toggle {
     display: none;
 }
 
+.server-version {
+    font-size: 11px;
+    opacity: 0.75;
+    text-align: center;
+    margin-top: 4px;
+    line-height: 1.4;
+    color: var(--muted);
+}
+
+.sidebar.collapsed .server-version {
+    display: none;
+}
+
 /* ── Sidebar user badge avatar ─────────────────────────────────────── */
 #nav-user {
     display: flex;

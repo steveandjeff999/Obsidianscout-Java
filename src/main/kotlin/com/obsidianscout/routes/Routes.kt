@@ -97,6 +97,10 @@ fun Application.configureRoutes() {
                 call.response.headers.append(HttpHeaders.Pragma, "no-cache")
                 call.response.headers.append(HttpHeaders.Expires, "0")
             }
+            get("/version") {
+                val appConfig = AppConfigLoader.load()
+                call.respond(VersionResponse(appConfig.current_version))
+            }
             route("/cluster") {
                 get("/status") {
                     call.respond(
@@ -552,6 +556,24 @@ fun Application.configureRoutes() {
             }
 
             route("/config") {
+                get("/defaults") {
+                    val session = call.requireSession()
+                    val type = call.request.queryParameters["type"]
+                    val presets = ConfigService.getDefaultConfigs(session.program, type)
+                    call.respond(presets)
+                }
+                post("/apply-default") {
+                    val session = call.requireAdmin()
+                    val request = call.receive<ApplyDefaultConfigRequest>()
+                    val updated = ConfigService.applyDefaultConfig(session.teamNumber, session.program, request.configType, request.presetName)
+                    call.respond(updated)
+                }
+                post("/reset") {
+                    val session = call.requireAdmin()
+                    val request = call.receive<ResetConfigRequest>()
+                    val updated = ConfigService.resetToDefaultConfig(session.teamNumber, session.program, request.configType)
+                    call.respond(updated)
+                }
                 get {
                     val session = call.requireSession()
                     val local = call.request.queryParameters["local"]?.toBoolean() ?: false
@@ -1962,6 +1984,38 @@ fun Application.configureRoutes() {
                     call.respond(mapOf("success" to true))
                 }
             }
+
+            route("/admin") {
+                route("/default-configs") {
+                    get {
+                        call.requireAdmin()
+                        call.respond(ConfigService.getAllDefaultConfigs())
+                    }
+                    post {
+                        call.requireAdmin()
+                        val dto = call.receive<com.obsidianscout.config.DefaultConfigDTO>()
+                        val created = ConfigService.createDefaultConfig(dto)
+                        call.respond(HttpStatusCode.Created, created)
+                    }
+                    put("/{id}") {
+                        call.requireAdmin()
+                        val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing id parameter")
+                        val dto = call.receive<com.obsidianscout.config.DefaultConfigDTO>()
+                        val updated = ConfigService.updateDefaultConfig(id, dto)
+                        call.respond(updated)
+                    }
+                    delete("/{id}") {
+                        call.requireAdmin()
+                        val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing id parameter")
+                        val success = ConfigService.deleteDefaultConfig(id)
+                        if (success) {
+                            call.respond(HttpStatusCode.NoContent)
+                        } else {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Default config preset not found")
+                        }
+                    }
+                }
+            }
         }
 
         val pages = mapOf(
@@ -1994,6 +2048,7 @@ fun Application.configureRoutes() {
             "users" to "users.html",
             "config" to "config.html",
             "admin-settings" to "admin-settings.html",
+            "default-configs" to "default-configs.html",
             "backup" to "backup.html",
             "qr-scanner" to "qr-scanner.html",
             "cache-manager" to "cache-manager.html",
