@@ -223,8 +223,18 @@ object FcmService {
         // Chunk tokens in batches of 500 for Firebase Multicast
         deviceTokens.chunked(500).forEach { tokenBatch ->
             try {
+                val androidConfig = com.google.firebase.messaging.AndroidConfig.builder()
+                    .setNotification(
+                        com.google.firebase.messaging.AndroidNotification.builder()
+                            .setClickAction("FLUTTER_NOTIFICATION_CLICK")
+                            .setSound("default")
+                            .build()
+                    )
+                    .build()
+
                 val message = MulticastMessage.builder()
                     .addAllTokens(tokenBatch)
+                    .setAndroidConfig(androidConfig)
                     .setNotification(
                         Notification.builder()
                             .setTitle(title)
@@ -233,6 +243,7 @@ object FcmService {
                     )
                     .putData("groupName", groupName)
                     .putData("url", url)
+                    .putData("click_action", "FLUTTER_NOTIFICATION_CLICK")
                     .putData("title", title)
                     .putData("body", body)
                     .build()
@@ -274,14 +285,21 @@ object FcmService {
             return Pair(false, "Firebase Admin SDK is not initialized. Check your credentials.")
         }
 
-        val tokens = transaction {
+        var tokens = transaction {
             FcmDeviceTokens.selectAll()
                 .where { FcmDeviceTokens.userId eq adminUserId }
                 .map { it[FcmDeviceTokens.deviceToken] }
         }
 
         if (tokens.isEmpty()) {
-            return Pair(false, "No registered FCM device tokens found for your admin account. Ensure your device is registered.")
+            tokens = transaction {
+                FcmDeviceTokens.selectAll()
+                    .map { it[FcmDeviceTokens.deviceToken] }
+            }
+        }
+
+        if (tokens.isEmpty()) {
+            return Pair(false, "No devices have registered for FCM push notifications yet. Log into the mobile app to register your device token automatically.")
         }
 
         try {

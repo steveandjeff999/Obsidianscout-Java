@@ -128,7 +128,14 @@ object PushNotificationService {
                         title = defaultTitle,
                         body = defaultBody,
                         groupName = message.groupName,
-                        url = "/chat"
+                        url = "/chat?group=${message.groupName}"
+                    )
+                    NotificationWebSocketManager.broadcastChatNotification(
+                        targetUserIds = fcmTargetUserUuids.map { it.toString() },
+                        groupName = message.groupName,
+                        title = defaultTitle,
+                        body = defaultBody,
+                        senderUsername = message.username
                     )
                 }
 

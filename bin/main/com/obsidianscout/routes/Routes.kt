@@ -1617,6 +1617,20 @@ fun Application.configureRoutes() {
                 }
             }
 
+            webSocket("/ws/notifications") {
+                val session = call.sessions.get<UserSession>() ?: return@webSocket this.close(
+                    CloseReason(CloseReason.Codes.VIOLATED_POLICY, "No session")
+                )
+                com.obsidianscout.db.NotificationWebSocketManager.registerSession(session.userId, this)
+                try {
+                    for (frame in incoming) {
+                        // Keep-alive loop
+                    }
+                } finally {
+                    com.obsidianscout.db.NotificationWebSocketManager.unregisterSession(session.userId, this)
+                }
+            }
+
             route("/push") {
                 get("/public-key") {
                     val appConfig = AppConfigLoader.load()
