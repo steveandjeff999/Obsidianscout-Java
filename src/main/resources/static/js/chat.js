@@ -12,6 +12,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireThemeToggle();
 
     let currentGroup = "general";
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialGroupParam = urlParams.get("group");
+    if (initialGroupParam && initialGroupParam.trim() !== "") {
+        currentGroup = initialGroupParam.trim();
+    }
+
+    if (navigator.serviceWorker) {
+        navigator.serviceWorker.addEventListener("message", (event) => {
+            if (event.data && event.data.type === "SWITCH_GROUP" && event.data.groupName) {
+                switchGroup(event.data.groupName);
+            }
+        });
+    }
+
     let pollInterval = null;
     let knownGroups = ["general"];
     let isChatEnabled = true;
@@ -64,7 +78,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const groups = await Obsidianscout.request("/api/chat/groups");
             const combined = Array.from(new Set(["general", ...groups]));
             knownGroups = combined;
-            await loadGroupUnreads();
+            renderGroups();
+            loadGroupUnreads();
         } catch (e) {
             console.error("Failed to load groups", e);
         }
@@ -124,6 +139,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentGroup = group;
         currentGroupTitle.textContent = `# ${group}`;
         renderGroups();
+        lastMessagesHash = "";
         
         // Show loading state immediately & clear out old group's chat
         messageContainer.innerHTML = `<div style="text-align: center; color: var(--muted); margin-top: 40px; font-style: italic;">${Obsidianscout.t("chat.loading", "Loading...")}</div>`;
@@ -136,23 +152,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         chatActiveContainer.classList.add("show-chat");
     }
 
+    let lastMessagesHash = "";
+
     // Messages loader
     async function loadMessages() {
         if (!isChatEnabled) return;
         const targetGroup = currentGroup;
         try {
             const messages = await Obsidianscout.request(`/api/chat/messages?group=${encodeURIComponent(targetGroup)}`);
-            // Only render if the active group hasn't changed since request was made
             if (targetGroup === currentGroup) {
-                renderMessages(messages);
-                try {
-                    await Obsidianscout.request("/api/chat/read", {
-                        method: "POST",
-                        json: { groupName: targetGroup }
-                    });
-                    window.dispatchEvent(new CustomEvent("obsidianscout:chat-read", { detail: { groupName: targetGroup } }));
-                } catch (readErr) {
-                    console.error("Failed to mark group as read:", readErr);
+                const currentHash = JSON.stringify(messages);
+                if (currentHash !== lastMessagesHash) {
+                    lastMessagesHash = currentHash;
+                    renderMessages(messages);
+                    try {
+                        await Obsidianscout.request("/api/chat/read", {
+                            method: "POST",
+                            json: { groupName: targetGroup }
+                        });
+                        window.dispatchEvent(new CustomEvent("obsidianscout:chat-read", { detail: { groupName: targetGroup } }));
+                    } catch (readErr) {
+                        console.error("Failed to mark group as read:", readErr);
+                    }
                 }
             }
         } catch (e) {
@@ -503,7 +524,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // Create custom group
-    btnCreateGroup.addEventListener("click", () => {
+    btnCreateGroup.addEventListener("click", async () => {
         const promptText = Obsidianscout.t("chat.create_group_prompt", "Enter new group name (e.g. strategy, scouting):");
         const name = prompt(promptText);
         if (!name) return;
@@ -512,11 +533,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             alert(Obsidianscout.t("chat.create_group_invalid", "Invalid group name!"));
             return;
         }
-        if (knownGroups.includes(sanitized)) {
-            switchGroup(sanitized);
-            return;
+        try {
+            await Obsidianscout.request("/api/chat/groups", {
+                method: "POST",
+                json: { groupName: sanitized }
+            });
+        } catch (e) {
+            console.error("Failed to save group to server", e);
         }
-        knownGroups.push(sanitized);
+        if (!knownGroups.includes(sanitized)) {
+            knownGroups.push(sanitized);
+        }
         switchGroup(sanitized);
     });
 
@@ -539,14 +566,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Initialize
     const isEnabled = await checkChatSettings();
     if (isEnabled) {
-        await loadGroups();
+        await Promise.all([
+            loadGroups(),
+            loadMentionOptions()
+        ]);
         
         const urlParams = new URLSearchParams(window.location.search);
         const initialGroup = urlParams.get('group') || "general";
         const groupToSwitch = knownGroups.includes(initialGroup) ? initialGroup : "general";
         switchGroup(groupToSwitch);
-        
-        await loadMentionOptions();
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', (event) => {

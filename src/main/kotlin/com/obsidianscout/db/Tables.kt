@@ -264,6 +264,7 @@ object ChatMessages : UUIDTable("chat_messages") {
 
     init {
         index("idx_chat_messages_team_group_program", false, teamNumber, groupName, program)
+        index("idx_chat_messages_team_group_created", false, teamNumber, groupName, createdAt)
     }
 }
 
@@ -277,6 +278,18 @@ object UserChatLastRead : UUIDTable("user_chat_last_read") {
     }
 }
 
+object ChatGroups : UUIDTable("chat_groups") {
+    val teamNumber = integer("team_number")
+    val program = varchar("program", 8).default("FRC")
+    val groupName = varchar("group_name", 64)
+    val createdByUserId = reference("created_by_user_id", Users).nullable()
+    val createdAt = timestamp("created_at")
+
+    init {
+        uniqueIndex("ux_chat_groups_team_program_name", teamNumber, program, groupName)
+    }
+}
+
 object PushSubscriptions : UUIDTable("push_subscriptions") {
     val userId = reference("user_id", Users)
     val endpoint = text("endpoint")
@@ -286,6 +299,29 @@ object PushSubscriptions : UUIDTable("push_subscriptions") {
 
     init {
         uniqueIndex("ux_push_subscriptions_endpoint", endpoint)
+    }
+}
+
+object FcmConfigs : UUIDTable("fcm_config") {
+    val projectId = varchar("project_id", 128).default("")
+    val apiKey = varchar("api_key", 128).default("")
+    val appId = varchar("app_id", 128).default("")
+    val messagingSenderId = varchar("messaging_sender_id", 128).default("")
+    val serviceAccountJson = text("service_account_json").default("")
+    val vapidKey = varchar("vapid_key", 255).default("")
+    val enabled = bool("enabled").default(false)
+    val updatedAt = timestamp("updated_at")
+}
+
+object FcmDeviceTokens : UUIDTable("fcm_device_tokens") {
+    val userId = reference("user_id", Users)
+    val deviceToken = varchar("device_token", 512)
+    val platform = varchar("platform", 32).default("android")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_fcm_device_tokens_token", deviceToken)
+        index("idx_fcm_device_tokens_user", false, userId)
     }
 }
 

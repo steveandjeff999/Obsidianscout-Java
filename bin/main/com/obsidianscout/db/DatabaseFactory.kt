@@ -21,7 +21,8 @@ object DatabaseFactory {
         "scouting_alliances", "alliance_memberships",
         "epa_opr_history_cache", "password_reset_tokens",
         "alliance_selections", "banners", "chat_messages",
-        "user_chat_last_read", "push_subscriptions"
+        "user_chat_last_read", "chat_groups", "push_subscriptions",
+        "fcm_config", "fcm_device_tokens"
     )
 
     @Volatile
@@ -107,7 +108,10 @@ object DatabaseFactory {
                 Banners,
                 ChatMessages,
                 UserChatLastRead,
-                PushSubscriptions
+                ChatGroups,
+                PushSubscriptions,
+                FcmConfigs,
+                FcmDeviceTokens
             )
 
             if (isCockroach) {

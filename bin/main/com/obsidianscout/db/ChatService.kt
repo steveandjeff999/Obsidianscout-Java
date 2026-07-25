@@ -19,6 +19,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.innerJoin
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 import org.jetbrains.exposed.dao.id.EntityID
 import com.obsidianscout.routes.UnreadStatusDto
@@ -27,10 +28,22 @@ import com.obsidianscout.routes.GroupUnreadStatus
 
 object ChatService {
 
-    fun getMessages(teamNumber: Int, groupName: String): List<ChatMessageDto> = transaction {
-        (ChatMessages innerJoin Users).selectAll()
+    fun getMessages(teamNumber: Int, groupName: String, limit: Int = 200): List<ChatMessageDto> = transaction {
+        (ChatMessages innerJoin Users)
+            .select(
+                ChatMessages.id,
+                ChatMessages.teamNumber,
+                ChatMessages.groupName,
+                ChatMessages.userId,
+                ChatMessages.username,
+                ChatMessages.content,
+                ChatMessages.createdAt,
+                ChatMessages.reactionsJson,
+                Users.profilePicture
+            )
             .where { (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.groupName eq groupName) }
-            .orderBy(ChatMessages.createdAt to SortOrder.ASC)
+            .orderBy(ChatMessages.createdAt to SortOrder.DESC)
+            .limit(limit)
             .map { row ->
                 val reactionsJsonStr = row[ChatMessages.reactionsJson]
                 val parsedReactions: Map<String, List<String>> = try {
@@ -51,28 +64,67 @@ object ChatService {
                     profilePicture = row[Users.profilePicture]
                 )
             }
+            .reversed()
     }
 
     fun getGroups(teamNumber: Int): List<String> = transaction {
-        ChatMessages.selectAll()
-            .where { ChatMessages.teamNumber eq teamNumber }
-            .map { it[ChatMessages.groupName] }
+        val createdGroups = ChatGroups.select(ChatGroups.groupName)
+            .where { ChatGroups.teamNumber eq teamNumber }
+            .withDistinct()
+            .map { it[ChatGroups.groupName] }
+
+        val groups = if (createdGroups.isNotEmpty()) {
+            createdGroups
+        } else {
+            val messageGroups = ChatMessages.select(ChatMessages.groupName)
+                .where { ChatMessages.teamNumber eq teamNumber }
+                .withDistinct()
+                .map { it[ChatMessages.groupName] }
+            (messageGroups + createdGroups)
+        }
+
+        (groups + "general")
             .distinct()
             .sorted()
     }
 
+    fun createGroup(teamNumber: Int, groupName: String, userId: String? = null): Boolean = transaction {
+        val sanitized = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim()
+        if (sanitized.isEmpty()) return@transaction false
+        val userUuid = userId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+
+        val existing = ChatGroups.selectAll().where {
+            (ChatGroups.teamNumber eq teamNumber) and (ChatGroups.groupName eq sanitized)
+        }.firstOrNull()
+
+        if (existing == null) {
+            ChatGroups.insert {
+                it[ChatGroups.teamNumber] = teamNumber
+                it[ChatGroups.groupName] = sanitized
+                it[ChatGroups.createdByUserId] = userUuid?.let { u -> EntityID(u, Users) }
+                it[ChatGroups.createdAt] = Instant.now()
+            }
+        }
+        true
+    }
+
     fun sendMessage(teamNumber: Int, groupName: String, userId: String, username: String, content: String): ChatMessageDto = transaction {
         val userUuid = UUID.fromString(userId)
+
+        // Ensure group is persisted when posting a message
+        val sanitizedGroup = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim().ifEmpty { "general" }
+        createGroup(teamNumber, sanitizedGroup, userId)
+
         val id = ChatMessages.insertAndGetId {
             it[ChatMessages.teamNumber] = teamNumber
-            it[ChatMessages.groupName] = groupName
+            it[ChatMessages.groupName] = sanitizedGroup
             it[ChatMessages.userId] = EntityID(userUuid, Users)
             it[ChatMessages.username] = username
             it[ChatMessages.content] = content
             it[ChatMessages.createdAt] = Instant.now()
             it[ChatMessages.reactionsJson] = "{}"
         }
-        val user = Users.selectAll().where { Users.id eq userUuid }.firstOrNull()
+        val user = Users.select(Users.profilePicture).where { Users.id eq userUuid }.firstOrNull()
         val profilePic = user?.get(Users.profilePicture)
 
         val row = ChatMessages.selectAll().where { ChatMessages.id eq id }.first()
@@ -130,26 +182,39 @@ object ChatService {
             it[reactionsJson] = newReactionsJson
         }
 
-        (ChatMessages innerJoin Users).selectAll().where { ChatMessages.id eq msgUuid }.firstOrNull()?.let { r ->
-            val reactionsJsonStr = r[ChatMessages.reactionsJson]
-            val parsedReactions: Map<String, List<String>> = try {
-                JsonSupport.json.decodeFromString(reactionsJsonStr)
-            } catch (e: Exception) {
-                emptyMap()
-            }
-
-            ChatMessageDto(
-                id = r[ChatMessages.id].value.toString(),
-                teamNumber = r[ChatMessages.teamNumber],
-                groupName = r[ChatMessages.groupName],
-                userId = r[ChatMessages.userId].value.toString(),
-                username = r[ChatMessages.username],
-                content = r[ChatMessages.content],
-                createdAt = r[ChatMessages.createdAt].toString(),
-                reactions = parsedReactions,
-                profilePicture = r[Users.profilePicture]
+        (ChatMessages innerJoin Users)
+            .select(
+                ChatMessages.id,
+                ChatMessages.teamNumber,
+                ChatMessages.groupName,
+                ChatMessages.userId,
+                ChatMessages.username,
+                ChatMessages.content,
+                ChatMessages.createdAt,
+                ChatMessages.reactionsJson,
+                Users.profilePicture
             )
-        }
+            .where { ChatMessages.id eq msgUuid }
+            .firstOrNull()?.let { r ->
+                val reactionsJsonStr = r[ChatMessages.reactionsJson]
+                val parsedReactions: Map<String, List<String>> = try {
+                    JsonSupport.json.decodeFromString(reactionsJsonStr)
+                } catch (e: Exception) {
+                    emptyMap()
+                }
+
+                ChatMessageDto(
+                    id = r[ChatMessages.id].value.toString(),
+                    teamNumber = r[ChatMessages.teamNumber],
+                    groupName = r[ChatMessages.groupName],
+                    userId = r[ChatMessages.userId].value.toString(),
+                    username = r[ChatMessages.username],
+                    content = r[ChatMessages.content],
+                    createdAt = r[ChatMessages.createdAt].toString(),
+                    reactions = parsedReactions,
+                    profilePicture = r[Users.profilePicture]
+                )
+            }
     }
 
     fun updateLastRead(userId: String, groupName: String) = transaction {
@@ -176,42 +241,43 @@ object ChatService {
             .where { UserChatLastRead.userId eq userUuid }
             .associate { it[UserChatLastRead.groupName] to it[UserChatLastRead.lastReadAt] }
 
-        val dbGroups = ChatMessages.select(ChatMessages.groupName)
-            .where { ChatMessages.teamNumber eq teamNumber }
-            .withDistinct()
-            .map { it[ChatMessages.groupName] }
-        val groups = (dbGroups + "general").distinct()
+        val groups = getGroups(teamNumber)
+        val userMentionLower = "@${username.lowercase()}"
+        val sevenDaysAgo = Instant.now().minus(7, ChronoUnit.DAYS)
 
         var totalUnreadCount = 0
         var totalMentionCount = 0
 
-        val userMention = "@$username"
-        val userMentionLower = "%${userMention.lowercase()}%"
-
         val groupStatuses = groups.map { groupName ->
-            val lastRead = lastReads[groupName] ?: Instant.EPOCH
-
-            val unreadCount = ChatMessages.selectAll().where {
+            val lastRead = lastReads[groupName] ?: sevenDaysAgo
+            val groupUnreadCount = ChatMessages.selectAll().where {
                 (ChatMessages.teamNumber eq teamNumber) and
                 (ChatMessages.groupName eq groupName) and
                 (ChatMessages.userId neq userUuid) and
                 (ChatMessages.createdAt greater lastRead)
             }.count().toInt()
 
-            val mentionCount = ChatMessages.selectAll().where {
-                (ChatMessages.teamNumber eq teamNumber) and
-                (ChatMessages.groupName eq groupName) and
-                (ChatMessages.userId neq userUuid) and
-                (ChatMessages.createdAt greater lastRead) and
-                ((ChatMessages.content.lowerCase() like userMentionLower) or
-                 (ChatMessages.content.lowerCase() like "%@everyone%") or
-                 (ChatMessages.content.lowerCase() like "%@channel%"))
-            }.count().toInt()
+            var groupMentionCount = 0
+            if (groupUnreadCount > 0) {
+                val unreadContents = ChatMessages.select(ChatMessages.content).where {
+                    (ChatMessages.teamNumber eq teamNumber) and
+                    (ChatMessages.groupName eq groupName) and
+                    (ChatMessages.userId neq userUuid) and
+                    (ChatMessages.createdAt greater lastRead)
+                }.map { it[ChatMessages.content].lowercase() }
 
-            totalUnreadCount += unreadCount
-            totalMentionCount += mentionCount
+                for (contentLower in unreadContents) {
+                    if (contentLower.contains(userMentionLower) ||
+                        contentLower.contains("@everyone") ||
+                        contentLower.contains("@channel")) {
+                        groupMentionCount++
+                    }
+                }
+            }
 
-            GroupUnreadStatus(groupName, unreadCount, mentionCount)
+            totalUnreadCount += groupUnreadCount
+            totalMentionCount += groupMentionCount
+            GroupUnreadStatus(groupName, groupUnreadCount, groupMentionCount)
         }
 
         UnreadStatusDto(totalUnreadCount, totalMentionCount, groupStatuses)

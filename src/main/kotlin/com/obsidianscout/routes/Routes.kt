@@ -14,6 +14,7 @@ import com.obsidianscout.auth.EmailService
 import com.obsidianscout.db.PasswordResetTokens
 import com.obsidianscout.db.PushSubscriptions
 import com.obsidianscout.db.PushNotificationService
+import com.obsidianscout.db.FcmService
 import com.obsidianscout.config.AppConfigLoader
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.update
@@ -1584,6 +1585,15 @@ fun Application.configureRoutes() {
                     val groups = ChatService.getGroups(session.teamNumber)
                     call.respond(groups)
                 }
+                post("/groups") {
+                    val session = call.requireSession()
+                    val request = call.receive<CreateGroupRequest>()
+                    val success = ChatService.createGroup(session.teamNumber, request.groupName, session.userId)
+                    call.respond(buildJsonObject {
+                        put("success", success)
+                        put("groupName", request.groupName)
+                    })
+                }
                 get("/unread-status") {
                     val session = call.requireSession()
                     val status = ChatService.getUnreadStatus(session.userId, session.teamNumber, session.username)
@@ -1604,6 +1614,20 @@ fun Application.configureRoutes() {
                             .sorted()
                     }
                     call.respond(usernames)
+                }
+            }
+
+            webSocket("/ws/notifications") {
+                val session = call.sessions.get<UserSession>() ?: return@webSocket this.close(
+                    CloseReason(CloseReason.Codes.VIOLATED_POLICY, "No session")
+                )
+                com.obsidianscout.db.NotificationWebSocketManager.registerSession(session.userId, this)
+                try {
+                    for (frame in incoming) {
+                        // Keep-alive loop
+                    }
+                } finally {
+                    com.obsidianscout.db.NotificationWebSocketManager.unregisterSession(session.userId, this)
                 }
             }
 
@@ -1637,6 +1661,66 @@ fun Application.configureRoutes() {
                         }
                     }
                     call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                }
+            }
+
+            route("/config") {
+                get("/fcm-public") {
+                    call.respond(FcmService.getPublicConfig())
+                }
+            }
+
+            route("/fcm") {
+                get("/public-config") {
+                    call.respond(FcmService.getPublicConfig())
+                }
+                post("/token") {
+                    val session = call.requireSession()
+                    val req = call.receive<RegisterFcmTokenRequest>()
+                    FcmService.registerDeviceToken(
+                        userId = UUID.fromString(session.userId),
+                        deviceToken = req.deviceToken,
+                        platform = req.platform
+                    )
+                    call.respond(HttpStatusCode.OK, buildJsonObject { put("success", true) })
+                }
+                delete("/token") {
+                    val session = call.requireSession()
+                    val req = call.receive<UnregisterFcmTokenRequest>()
+                    FcmService.unregisterDeviceToken(
+                        userId = UUID.fromString(session.userId),
+                        deviceToken = req.deviceToken
+                    )
+                    call.respond(HttpStatusCode.OK, buildJsonObject { put("success", true) })
+                }
+            }
+
+            route("/admin/fcm") {
+                get {
+                    val session = call.requireAdmin()
+                    call.respond(FcmService.getAdminConfig())
+                }
+                post {
+                    val session = call.requireAdmin()
+                    val req = call.receive<SaveFcmConfigRequest>()
+                    val success = FcmService.saveConfig(
+                        enabled = req.enabled,
+                        projectId = req.projectId,
+                        apiKey = req.apiKey,
+                        appId = req.appId,
+                        messagingSenderId = req.messagingSenderId,
+                        serviceAccountJson = req.serviceAccountJson,
+                        vapidKey = req.vapidKey
+                    )
+                    call.respond(buildJsonObject { put("success", success) })
+                }
+                post("/test") {
+                    val session = call.requireAdmin()
+                    val result = FcmService.sendTestNotification(UUID.fromString(session.userId))
+                    call.respond(buildJsonObject {
+                        put("success", result.first)
+                        put("message", result.second)
+                    })
                 }
             }
 
@@ -2048,6 +2132,7 @@ fun Application.configureRoutes() {
             "users" to "users.html",
             "config" to "config.html",
             "admin-settings" to "admin-settings.html",
+            "fcm-settings" to "fcm-settings.html",
             "default-configs" to "default-configs.html",
             "backup" to "backup.html",
             "qr-scanner" to "qr-scanner.html",

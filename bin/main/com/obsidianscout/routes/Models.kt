@@ -425,6 +425,11 @@ data class SendMessageRequest(
 )
 
 @Serializable
+data class CreateGroupRequest(
+    val groupName: String
+)
+
+@Serializable
 data class ReactMessageRequest(
     val emoji: String
 )
@@ -483,6 +488,50 @@ data class ResetDatabaseRequest(
 @Serializable
 data class WipeTeamDataRequest(
     val password: String
+)
+
+@Serializable
+data class FcmPublicConfigDto(
+    val enabled: Boolean,
+    val projectId: String,
+    val apiKey: String,
+    val appId: String,
+    val messagingSenderId: String,
+    val vapidKey: String
+)
+
+@Serializable
+data class FcmAdminConfigDto(
+    val enabled: Boolean,
+    val projectId: String,
+    val apiKey: String,
+    val appId: String,
+    val messagingSenderId: String,
+    val vapidKey: String,
+    val hasServiceAccountJson: Boolean,
+    val isInitialized: Boolean
+)
+
+@Serializable
+data class SaveFcmConfigRequest(
+    val enabled: Boolean,
+    val projectId: String,
+    val apiKey: String = "",
+    val appId: String = "",
+    val messagingSenderId: String = "",
+    val serviceAccountJson: String = "",
+    val vapidKey: String = ""
+)
+
+@Serializable
+data class RegisterFcmTokenRequest(
+    val deviceToken: String,
+    val platform: String = "android"
+)
+
+@Serializable
+data class UnregisterFcmTokenRequest(
+    val deviceToken: String
 )
 
 

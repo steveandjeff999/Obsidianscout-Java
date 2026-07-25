@@ -93,6 +93,52 @@ object PushNotificationService {
                         }
                 }
 
+                // 2. Dispatch to FCM devices for team users
+                val fcmTargetUserUuids = transaction {
+                    val q = Users.selectAll()
+                    val filtered = if (senderUuid != null) {
+                        q.where { (Users.teamNumber eq message.teamNumber) and (Users.id neq senderUuid) }
+                    } else {
+                        q.where { Users.teamNumber eq message.teamNumber }
+                    }
+                    filtered.map { row ->
+                        val username = row[Users.username]
+                        val pref = row[Users.notificationPreference]
+                        val isMentioned = message.content.contains("@$username", ignoreCase = true) ||
+                                          message.content.contains("@everyone", ignoreCase = true) ||
+                                          message.content.contains("@channel", ignoreCase = true)
+                        if (pref == "none" || (pref == "mentions" && !isMentioned)) {
+                            null
+                        } else {
+                            row[Users.id].value
+                        }
+                    }.filterNotNull()
+                }
+
+                if (fcmTargetUserUuids.isNotEmpty()) {
+                    val truncatedContent = if (message.content.length > 100) {
+                        message.content.take(97) + "..."
+                    } else {
+                        message.content
+                    }
+                    val defaultTitle = "New message in #${message.groupName}"
+                    val defaultBody = "${message.username}: $truncatedContent"
+                    FcmService.sendNotificationToUsers(
+                        targetUserUuids = fcmTargetUserUuids,
+                        title = defaultTitle,
+                        body = defaultBody,
+                        groupName = message.groupName,
+                        url = "/chat?group=${message.groupName}"
+                    )
+                    NotificationWebSocketManager.broadcastChatNotification(
+                        targetUserIds = fcmTargetUserUuids.map { it.toString() },
+                        groupName = message.groupName,
+                        title = defaultTitle,
+                        body = defaultBody,
+                        senderUsername = message.username
+                    )
+                }
+
                 if (targetUsers.isEmpty()) return@launch
 
                 val pushService = getPushService()
