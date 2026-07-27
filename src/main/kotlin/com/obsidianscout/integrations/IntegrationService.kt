@@ -643,6 +643,14 @@ object IntegrationService {
 
     fun listMatches(eventKey: String): List<MatchRecord> {
         return transaction {
+            // Fetch the event venue timezone once so every MatchRecord can carry it.
+            // All scheduledTime/actualTime values stored in the DB are UTC epoch seconds.
+            val eventTimezone = ApiEvents.selectAll()
+                .where { ApiEvents.eventKey eq eventKey.lowercase() }
+                .limit(1)
+                .firstOrNull()
+                ?.get(ApiEvents.timezone)
+
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
             val bbotMappings = getBBotMappings(eventKey)
             
@@ -737,7 +745,8 @@ object IntegrationService {
                     actualTime = row[ApiMatches.actualTime],
                     redTeams = resolveTeams(row[ApiMatches.redTeams]),
                     blueTeams = resolveTeams(row[ApiMatches.blueTeams]),
-                    label = MatchCanonical.displayLabel(compLevel, setNumber, matchNumber)
+                    label = MatchCanonical.displayLabel(compLevel, setNumber, matchNumber),
+                    eventTimezone = eventTimezone
                 )
             }
         }

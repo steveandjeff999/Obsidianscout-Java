@@ -128,11 +128,15 @@ async function loadMatches(eventKey, timezone) {
             const row = document.createElement("tr");
             const red = match.redTeams.map(k => Obsidianscout.formatTeam(k)).join(", ");
             const blue = match.blueTeams.map(k => Obsidianscout.formatTeam(k)).join(", ");
-            const timeLabel = Obsidianscout.formatTimestamp(match.scheduledTime, timezone);
             const matchCell = document.createElement("td");
             matchCell.textContent = localize(match.label) || (match.compLevel.toUpperCase() + " " + (match.matchNumber || ""));
             const timeCell = document.createElement("td");
-            timeCell.textContent = timeLabel;
+            timeCell.className = "match-time-cell";
+            const timeEl = Obsidianscout.formatTimestampWithVenueTooltip(
+                match.scheduledTime,
+                match.eventTimezone
+            );
+            timeCell.appendChild(timeEl);
             const redCell = document.createElement("td");
             redCell.textContent = red;
             const blueCell = document.createElement("td");
@@ -296,7 +300,7 @@ async function setupModal(defaultEventKey, timezone) {
             return;
         }
 
-        const scheduledTime = timeInput.value ? Math.floor(new Date(timeInput.value).getTime() / 1000) : null;
+        const scheduledTime = Obsidianscout.localToUtcEpoch(timeInput.value);
 
         const payload = {
             matchKey: keyInput.value,
@@ -372,6 +376,11 @@ function openEditModal(match) {
     modal.classList.add("show");
 }
 
+/**
+ * Populates a datetime-local input from a UTC epoch seconds value.
+ * The browser's datetime-local input works in device local time, so
+ * new Date(ms) gives us the correct local representation automatically.
+ */
 function formatForDatetimeLocal(seconds) {
     if (!seconds) return "";
     const date = new Date(seconds * 1000);

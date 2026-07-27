@@ -214,7 +214,11 @@ data class MatchRecord(
     val redTeams: List<String> = emptyList(),
     val blueTeams: List<String> = emptyList(),
     /** Human-readable label, e.g. "QM 4" (same match from TBA and FIRST). */
-    val label: String = ""
+    val label: String = "",
+    /** IANA timezone name for the event venue (e.g. "America/New_York").
+     *  All scheduledTime/actualTime values are UTC epoch seconds — this field
+     *  is purely for display purposes so the browser can show a venue-time tooltip. */
+    val eventTimezone: String? = null
 )
 
 @Serializable

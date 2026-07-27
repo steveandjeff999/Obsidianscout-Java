@@ -2,13 +2,13 @@
     "server": {
         "host": "0.0.0.0",
         "port": 8080,
-        "sessionSecret": "ee3471f02dde66839c07cdf903c7da331170b107a9e0c73eb263e2b7c719ef77",
+        "sessionSecret": "ab0f397ddecd4ad47cbeb0928a35fa4e2fd51d48cb8681580620f9b4a326dbca",
         "cookieSecure": false,
         "https": {
-            "enabled": true,
+            "enabled": false,
             "port": 8443,
             "keystorePath": "config/obsidianscout.jks",
-            "keystorePassword": "53ae9a3a842f2197acbbce1ed0314d2ec3793aec40ab74b7bc3e23f61d1fb23b",
+            "keystorePassword": "beb309eb05219f68277e7ee6fa04ee5fbdd4f7522e39d6e3f1f3bc52b066e1ad",
             "keyAlias": "obsidianscout"
         },
         "logging": false
@@ -33,8 +33,8 @@
         "adminPassword": "change-me"
     },
     "vapid": {
-        "publicKey": "BLIiNDXbcgbPag1pwxvJAvlvOAt0LaQ3XhL9l7qFSPDnGIITC9xjUw97j9uyo7AetQJggCBAlIhbPkNAM-oBBu4",
-        "privateKey": "xNsXmkyS6p2ecvkuYTK_drUgC7lOnpMF4YOLxRKJkJo",
+        "publicKey": "BOQeODr3q0qNl5w8UxO35MYwCUcrk12EVp504tSWUZAu6NDT6qsY3ALiKNpPP_6D7CjhVWrec17JzbL3h43NtwA",
+        "privateKey": "cLiq1GOzaFoCusVmiZ6Vbf03ElaS-uGpIjV1-wmu6bY",
         "subject": "mailto:admin@obsidianscout.com"
     },
     "database_type": "sqlite",
@@ -43,7 +43,7 @@
     "google_sheet_url": "",
     "google_sheet_password": "",
     "cockroach_port": 26257,
-    "current_version": "0.2.6.3",
+    "current_version": "0.2.6.4",
     "gist_update": {
         "enabled": false,
         "gist_url": "https://gist.githubusercontent.com/steveandjeff999/41b76376d064a6893ff2644b04447d9f/raw/Public-Version.json",

@@ -3682,3 +3682,85 @@ body:not(.theme-dark) .wizard-card-preview {
 
 
 
+
+/* Venue Timezone Tooltip
+ * Shown next to match times when the event venue timezone differs from the
+ * user's device timezone. All stored times are UTC epoch seconds; the primary
+ * display is always in device-local time.
+ */
+
+.time-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.venue-tz-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78em;
+    cursor: default;
+    opacity: 0.65;
+    transition: opacity 0.15s ease;
+    line-height: 1;
+    user-select: none;
+}
+
+.venue-tz-badge:hover {
+    opacity: 1;
+}
+
+.venue-tz-badge::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 7px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--bg, #fff);
+    font-size: 0.82rem;
+    font-family: inherit;
+    white-space: nowrap;
+    padding: 5px 10px;
+    border-radius: 8px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    z-index: 9999;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.venue-tz-badge::before {
+    content: "";
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--ink);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    z-index: 9999;
+}
+
+.venue-tz-badge:hover::after,
+.venue-tz-badge:hover::before {
+    opacity: 1;
+}
+
+body.theme-dark .venue-tz-badge::after {
+    background: rgba(255, 255, 255, 0.92);
+    color: #1d1a17;
+}
+
+body.theme-dark .venue-tz-badge::before {
+    border-top-color: rgba(255, 255, 255, 0.92);
+}
+
+.match-time-cell {
+    white-space: nowrap;
+}
