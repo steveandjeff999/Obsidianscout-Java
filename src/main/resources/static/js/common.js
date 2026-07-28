@@ -1323,35 +1323,53 @@
         }
     }
 
-    function wireThemeToggle() {
+    function toggleThemeMode() {
+        console.log("[Theme] Toggle theme button clicked! Current theme-dark before toggle:", document.body.classList.contains("theme-dark"));
+        const isDark = document.body.classList.toggle("theme-dark");
+        const newThemeStr = isDark ? "dark" : "light";
+        safeSetItem("obsidian-theme", newThemeStr);
+        console.log("[Theme] Toggled theme to:", newThemeStr, "| body classList has theme-dark:", document.body.classList.contains("theme-dark"));
+        try {
+            const cachedTheme = safeGetItem("obsidian-custom-theme-config");
+            if (cachedTheme) {
+                applyCustomTheme(JSON.parse(cachedTheme));
+            } else {
+                const cachedText = safeGetItem("cache:/api/settings");
+                if (cachedText) {
+                    const parsed = JSON.parse(cachedText);
+                    applyCustomTheme(parsed.settings || parsed);
+                }
+            }
+        } catch (err) {
+            console.error("[Theme] Error in click toggle custom theme apply:", err);
+        }
+    }
+
+    function bindThemeToggleButtons(root = document) {
+        root.querySelectorAll("[data-action='toggle-theme']").forEach((button) => {
+            if (button.dataset.themeToggleBound === "true") return;
+            button.dataset.themeToggleBound = "true";
+            button.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleThemeMode();
+            });
+        });
+    }
+
+    function wireThemeToggle(root = document) {
+        bindThemeToggleButtons(root);
+
         if (window._themeToggleDelegated) return;
         window._themeToggleDelegated = true;
         console.log("[Theme] Registered global click handler for [data-action='toggle-theme']");
 
         document.addEventListener("click", (e) => {
             const toggle = e.target.closest("[data-action='toggle-theme']");
-            if (!toggle) return;
+            if (!toggle || toggle.dataset.themeToggleBound === "true") return;
 
             e.preventDefault();
-            console.log("[Theme] Toggle theme button clicked! Current theme-dark before toggle:", document.body.classList.contains("theme-dark"));
-            const isDark = document.body.classList.toggle("theme-dark");
-            const newThemeStr = isDark ? "dark" : "light";
-            safeSetItem("obsidian-theme", newThemeStr);
-            console.log("[Theme] Toggled theme to:", newThemeStr, "| body classList has theme-dark:", document.body.classList.contains("theme-dark"));
-            try {
-                const cachedTheme = safeGetItem("obsidian-custom-theme-config");
-                if (cachedTheme) {
-                    applyCustomTheme(JSON.parse(cachedTheme));
-                } else {
-                    const cachedText = safeGetItem("cache:/api/settings");
-                    if (cachedText) {
-                        const parsed = JSON.parse(cachedText);
-                        applyCustomTheme(parsed.settings || parsed);
-                    }
-                }
-            } catch (err) {
-                console.error("[Theme] Error in click toggle custom theme apply:", err);
-            }
+            toggleThemeMode();
         });
     }
 
@@ -2075,6 +2093,7 @@
                     
                     // Restore active nav highlight
                     setActiveNav();
+                    wireThemeToggle(sidebar);
                     renderServerVersion(sidebar);
                 }
             }
@@ -2606,6 +2625,7 @@
                 } else {
                     footer.appendChild(btn);
                 }
+                wireThemeToggle(footer);
             }
         }
 
@@ -2838,7 +2858,7 @@
             window.removeEventListener('scroll', activePopup._reposition);
         }
 
-        document.querySelectorAll('.tour-highlighted, [id^="tab-"], [data-config-kind], .sidebar-link, button').forEach(el => {
+        document.querySelectorAll('.tour-highlighted, [id^="tab-"], [data-config-kind], .sidebar-link').forEach(el => {
             if (el._tourAdvanceHandler) {
                 el.removeEventListener('click', el._tourAdvanceHandler);
                 delete el._tourAdvanceHandler;

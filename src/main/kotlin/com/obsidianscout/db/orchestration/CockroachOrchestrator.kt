@@ -589,11 +589,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             } else {
                 println("[Cockroach] Local binary execution check failed. Deleting stale binary to redownload with correct architecture...")
                 binaryFile.delete()
-                val dataDir = File(rootDir, "data")
-                if (dataDir.exists()) {
-                    println("[Cockroach] CockroachDB version changed. Wiping old data directory to prevent version incompatibility crashes...")
-                    dataDir.deleteRecursively()
-                }
+                println("[Cockroach] Preserving existing CockroachDB data directory so the node keeps its persisted identity.")
             }
         }
 
