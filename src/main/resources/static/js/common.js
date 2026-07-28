@@ -1,4 +1,5 @@
 (function () {
+    console.log("[CommonJS] Script initialized and loaded.");
     const toastRootId = "toast-root";
     const sidebarCollapseKey = "obsidian-sidebar-collapsed";
     const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
@@ -1245,6 +1246,7 @@
         }
         
         const isDark = document.body.classList.contains("theme-dark");
+        console.log("[Theme] Applying custom theme. Mode:", isDark ? "dark" : "light", "Custom theme object:", theme);
         const target = document.body;
         if (!target) return;
         
@@ -1302,7 +1304,9 @@
 
     function initTheme() {
         const saved = safeGetItem("obsidian-theme") || "light";
-        document.body.classList.toggle("theme-dark", saved === "dark");
+        const isDark = saved === "dark";
+        document.body.classList.toggle("theme-dark", isDark);
+        console.log("[Theme] Initialized theme:", saved, "| body classList has theme-dark:", document.body.classList.contains("theme-dark"));
         try {
             const cachedTheme = safeGetItem("obsidian-custom-theme-config");
             if (cachedTheme) {
@@ -1314,17 +1318,26 @@
                     applyCustomTheme(parsed.settings || parsed);
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.error("[Theme] Error in initTheme custom theme apply:", e);
+        }
     }
 
     function wireThemeToggle() {
-        const toggle = document.querySelector("[data-action='toggle-theme']");
-        if (!toggle) {
-            return;
-        }
-        toggle.addEventListener("click", () => {
+        if (window._themeToggleDelegated) return;
+        window._themeToggleDelegated = true;
+        console.log("[Theme] Registered global click handler for [data-action='toggle-theme']");
+
+        document.addEventListener("click", (e) => {
+            const toggle = e.target.closest("[data-action='toggle-theme']");
+            if (!toggle) return;
+
+            e.preventDefault();
+            console.log("[Theme] Toggle theme button clicked! Current theme-dark before toggle:", document.body.classList.contains("theme-dark"));
             const isDark = document.body.classList.toggle("theme-dark");
-            safeSetItem("obsidian-theme", isDark ? "dark" : "light");
+            const newThemeStr = isDark ? "dark" : "light";
+            safeSetItem("obsidian-theme", newThemeStr);
+            console.log("[Theme] Toggled theme to:", newThemeStr, "| body classList has theme-dark:", document.body.classList.contains("theme-dark"));
             try {
                 const cachedTheme = safeGetItem("obsidian-custom-theme-config");
                 if (cachedTheme) {
@@ -1336,7 +1349,9 @@
                         applyCustomTheme(parsed.settings || parsed);
                     }
                 }
-            } catch (e) {}
+            } catch (err) {
+                console.error("[Theme] Error in click toggle custom theme apply:", err);
+            }
         });
     }
 
@@ -2017,25 +2032,32 @@
     async function ensureSidebarAndFooter(sidebar) {
         if (!sidebar) return;
         if (!sidebar.querySelector(".sidebar-nav")) {
+            console.log("[Sidebar] Sidebar is empty, loading base template...");
             let baseHtml = sessionStorage.getItem("obsidianscout:base_html");
+            if (!baseHtml) {
+                baseHtml = safeGetItem("obsidianscout:base_html");
+            }
             if (!baseHtml) {
                 try {
                     const res = await fetch("/base.html");
                     if (res.ok) {
                         baseHtml = await res.text();
                         sessionStorage.setItem("obsidianscout:base_html", baseHtml);
+                        safeSetItem("obsidianscout:base_html", baseHtml);
                     }
                 } catch (e) {
-                    console.warn("Failed to fetch sidebar base template:", e);
+                    console.warn("[Sidebar] Failed to fetch sidebar base template:", e);
                 }
             }
 
             if (baseHtml) {
+                console.log("[Sidebar] Successfully acquired baseHtml template.");
                 const tempDiv = document.createElement("div");
                 tempDiv.innerHTML = baseHtml;
                 const templateSidebar = tempDiv.querySelector(".sidebar");
                 if (templateSidebar) {
                     sidebar.innerHTML = templateSidebar.innerHTML;
+                    console.log("[Sidebar] Injected base template innerHTML into sidebar.");
                     
                     // Re-apply user badge if cached user info is available
                     try {
@@ -2187,6 +2209,9 @@
                 console.warn("[Sidebar] getMe background update failed:", err);
             });
         }
+
+        initTheme();
+        wireThemeToggle();
 
         const sidebar = document.querySelector(".sidebar");
         if (sidebar) {
