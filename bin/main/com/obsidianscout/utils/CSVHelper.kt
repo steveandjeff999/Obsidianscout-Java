@@ -21,12 +21,14 @@ object CSVHelper {
     }
 
     fun parseCSV(csvContent: String): List<Map<String, String>> {
+        if (csvContent.isBlank()) return emptyList()
+
         val parsedRows = mutableListOf<List<String>>()
-        var curVal = StringBuilder()
+        val curVal = StringBuilder()
         var inQuotes = false
         var i = 0
         var curRow = mutableListOf<String>()
-        
+
         while (i < csvContent.length) {
             val c = csvContent[i]
             if (inQuotes) {
@@ -45,14 +47,16 @@ object CSVHelper {
                     inQuotes = true
                 } else if (c == ',') {
                     curRow.add(curVal.toString())
-                    curVal = StringBuilder()
+                    curVal.setLength(0)
                 } else if (c == '\n' || c == '\r') {
                     curRow.add(curVal.toString())
-                    curVal = StringBuilder()
-                    if (curRow.isNotEmpty() && (curRow.size > 1 || curRow[0].isNotEmpty())) {
+                    curVal.setLength(0)
+
+                    if (curRow.any { it.isNotBlank() }) {
                         parsedRows.add(curRow)
                     }
                     curRow = mutableListOf()
+
                     if (c == '\r' && i + 1 < csvContent.length && csvContent[i + 1] == '\n') {
                         i++
                     }
@@ -62,15 +66,19 @@ object CSVHelper {
             }
             i++
         }
+
         if (curVal.isNotEmpty() || curRow.isNotEmpty()) {
             curRow.add(curVal.toString())
-            parsedRows.add(curRow)
+            if (curRow.any { it.isNotBlank() }) {
+                parsedRows.add(curRow)
+            }
         }
-        
+
         if (parsedRows.isEmpty()) return emptyList()
-        
+
         val headers = parsedRows[0].map { it.trim() }
         val results = mutableListOf<Map<String, String>>()
+
         for (rowIdx in 1 until parsedRows.size) {
             val row = parsedRows[rowIdx]
             if (row.size == headers.size) {

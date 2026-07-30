@@ -1913,7 +1913,48 @@ fun Application.configureRoutes() {
             route("/banners") {
                 get {
                     val session = call.requireSession()
-                    val active = com.obsidianscout.db.BannerService.getActive(session.teamNumber)
+                    val active = com.obsidianscout.db.BannerService.getActive(session.teamNumber).toMutableList()
+                    val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
+
+                    val eventKey = settings.resolvedEventKey()
+                    if (eventKey.isBlank()) {
+                        active.add(
+                            0,
+                            com.obsidianscout.routes.BannerDto(
+                                id = "sys-no-event-key",
+                                teamNumber = session.teamNumber,
+                                message = "No Event Key is currently configured for your team. Please configure an Event Key in Settings.",
+                                bannerType = "warning",
+                                isDismissible = true,
+                                isExpandable = false,
+                                expandableMessage = "",
+                                isActive = true,
+                                createdAt = java.time.Instant.now().toString(),
+                                updatedAt = java.time.Instant.now().toString()
+                            )
+                        )
+                    }
+
+                    val keys = settings.apiKeys
+                    val hasApi = keys.tbaKey.isNotBlank() || (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
+                    if (!hasApi) {
+                        active.add(
+                            0,
+                            com.obsidianscout.routes.BannerDto(
+                                id = "sys-no-api-key",
+                                teamNumber = session.teamNumber,
+                                message = "No API Key is currently configured for your team. External data syncing (The Blue Alliance / FIRST) is disabled.",
+                                bannerType = "warning",
+                                isDismissible = true,
+                                isExpandable = false,
+                                expandableMessage = "",
+                                isActive = true,
+                                createdAt = java.time.Instant.now().toString(),
+                                updatedAt = java.time.Instant.now().toString()
+                            )
+                        )
+                    }
+
                     call.respond(active)
                 }
             }

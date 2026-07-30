@@ -48,19 +48,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             const legacyTheme = loadedSettings.theme || {};
             themes.push({
                 name: "Default",
-                lightAccent: legacyTheme.lightAccent || "#0b8f88",
-                lightAccent2: legacyTheme.lightAccent2 || "#f28b35",
-                lightAccent3: legacyTheme.lightAccent3 || "#255a9c",
-                lightInk: legacyTheme.lightInk || "#1d1a17",
-                lightMuted: legacyTheme.lightMuted || "#5f5b55",
-                lightBg: legacyTheme.lightBg || "",
-                darkAccent: legacyTheme.darkAccent || "#3ccfc0",
-                darkAccent2: legacyTheme.darkAccent2 || "#f2a353",
-                darkAccent3: legacyTheme.darkAccent3 || "#6aa2ff",
-                darkInk: legacyTheme.darkInk || "#f4f2ed",
-                darkMuted: legacyTheme.darkMuted || "#c3bfb8",
-                darkBg: legacyTheme.darkBg || "",
-                btnRadius: legacyTheme.btnRadius || "999px"
+                lightAccent: legacyTheme.lightAccent || "#18181b",
+                lightAccent2: legacyTheme.lightAccent2 || "#27272a",
+                lightAccent3: legacyTheme.lightAccent3 || "#3f3f46",
+                lightInk: legacyTheme.lightInk || "#09090b",
+                lightMuted: legacyTheme.lightMuted || "#71717a",
+                lightBg: legacyTheme.lightBg || "#ffffff",
+                darkAccent: legacyTheme.darkAccent || "#ffffff",
+                darkAccent2: legacyTheme.darkAccent2 || "#f4f4f5",
+                darkAccent3: legacyTheme.darkAccent3 || "#e4e4e7",
+                darkInk: legacyTheme.darkInk || "#ffffff",
+                darkMuted: legacyTheme.darkMuted || "#a1a1aa",
+                darkBg: legacyTheme.darkBg || "#09090b",
+                btnRadius: legacyTheme.btnRadius || "8px"
             });
             activeThemeName = "Default";
         }

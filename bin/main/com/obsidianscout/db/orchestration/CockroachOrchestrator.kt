@@ -850,18 +850,12 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
                     // ── Self-Healing: Local Process Crash ─────────────────────────────
                     // Runs every loop (10s). Detects if the local CockroachDB process
-                    // died unexpectedly (e.g., fatal Pebble/disk error on SD card).
-                    // If a fatal disk error is detected in the log, wipes the data
-                    // directory so the node rejoins with a clean snapshot from peers.
+                    // died unexpectedly. Restarts the CockroachDB process using its
+                    // existing persistent store identity so the node keeps its Node ID.
                     val localProcess = process
                     if (localProcess != null && !localProcess.isAlive) {
                         val exitCode = localProcess.exitValue()
-                        println("[ProcessMonitor] ⚠️ Local CockroachDB process has died (exit=$exitCode). Investigating...")
-                        val fatalDisk = checkForFatalDiskError()
-                        if (fatalDisk) {
-                            println("[ProcessMonitor] 💾 Fatal storage/disk error detected in log (likely SD card I/O failure). Wiping data directory for clean rejoin...")
-                            wipeDataDirectory()
-                        }
+                        println("[ProcessMonitor] ⚠️ Local CockroachDB process has died (exit=$exitCode). Preserving data directory and restarting...")
                         try {
                             val peers = try {
                                 GoogleSheetsManager.fetchPeers(appConfig.google_sheet_url, appConfig.google_sheet_password)
@@ -874,7 +868,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                             isDbActive = true
                             println("[ProcessMonitor] ✅ CockroachDB restarted. Waiting for port to open...")
                             waitForPort(tailscaleIp, port, 45)
-                            println("[ProcessMonitor] CockroachDB port open. Node rejoining cluster.")
+                            println("[ProcessMonitor] CockroachDB port open. Node rejoining cluster with preserved identity.")
                         } catch (e: Exception) {
                             println("[ProcessMonitor] Failed to restart CockroachDB: ${e.message}")
                         }
@@ -1006,16 +1000,18 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
      * indicate disk hardware failure (SD card I/O errors on Raspberry Pi).
      * Returns true if a disk-fatal log entry is found.
      */
-    private fun checkForFatalDiskError(): Boolean {
-        val logFile = File(rootDir, "cockroach.log")
-        if (!logFile.exists()) return false
+    internal fun checkForFatalDiskError(linesToScan: List<String>? = null): Boolean {
         return try {
-            val lastLines = logFile.readLines().takeLast(200)
-            lastLines.any { line ->
-                // Pebble fatal lines start with 'F' and reference storage/disk
-                (line.startsWith("F") || line.contains("fatal error") || line.contains("pebble")) &&
-                (line.contains("faulty hardware") || line.contains("storage/pebble") ||
-                 line.contains("I/O error") || line.contains("disk") || line.contains("terminating due to a fatal"))
+            val lines = linesToScan ?: run {
+                val logFile = File(rootDir, "cockroach.log")
+                if (!logFile.exists()) return false
+                logFile.readLines().takeLast(200)
+            }
+            lines.any { line ->
+                val isPebbleOrFatal = line.startsWith("F") || line.contains("fatal error") || line.contains("hard disk failure")
+                val isTransientSlowness = line.contains("disk_slowness_detected") || line.contains("disk slowness detected") ||
+                        line.contains("disk_slowness_cleared") || line.contains("slow heartbeat") || line.contains("disk write failed")
+                isPebbleOrFatal && !isTransientSlowness && (line.contains("faulty hardware") || line.contains("storage/pebble: fatal") || line.contains("terminating due to a fatal"))
             }
         } catch (e: Exception) {
             false

@@ -77,4 +77,24 @@ class DatabaseOrchestrationTest {
         val scriptUrl = "https://script.google.com/macros/s/123/exec"
         assertEquals(scriptUrl, GoogleSheetsManager.normalizeUrl(scriptUrl))
     }
+
+    @Test
+    fun testCheckForFatalDiskErrorIgnoresTransientDiskSlowness() {
+        val appConfig = com.obsidianscout.config.AppConfig()
+        val orchestrator = CockroachOrchestrator(appConfig)
+
+        val transientLogs = listOf(
+            "Jul 28, 2026 at 12:10:00 UTC INFO [n7,s7,pebble] disk slowness detected: syncdata on file /home/steve/obsidianscout/.cockroach/data/000003.log has been ongoing for 5.2s",
+            "Jul 28, 2026 at 12:10:00 UTC WARNING [n7] {\"Timestamp\":1785240600589051260,\"EventType\":\"disk_slowness_detected\",\"NodeID\":7,\"StoreID\":7}",
+            "Jul 28, 2026 at 12:10:21 UTC INFO [n7] {\"Timestamp\":1785240621184378538,\"EventType\":\"disk_slowness_cleared\",\"NodeID\":7,\"StoreID\":7}",
+            "Jul 28, 2026 at 12:10:27 UTC WARNING [n7,liveness-hb] slow heartbeat took 3.000868019s; err=disk write failed while updating node liveness: interrupted during singleflight engine sync:0: context deadline exceeded"
+        )
+        kotlin.test.assertFalse(orchestrator.checkForFatalDiskError(transientLogs), "Transient disk slowness logs must NOT trigger fatal disk error")
+
+        val fatalLogs = listOf(
+            "F260728 12:00:00.000000 1 storage/pebble: fatal faulty hardware disk failure terminating due to a fatal error"
+        )
+        kotlin.test.assertTrue(orchestrator.checkForFatalDiskError(fatalLogs), "Fatal hardware disk failure logs MUST be detected as fatal")
+    }
 }
+

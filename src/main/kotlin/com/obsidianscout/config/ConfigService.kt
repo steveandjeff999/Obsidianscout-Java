@@ -87,7 +87,11 @@ object ConfigService {
     private val defaultQualitativeConfigPath = Paths.get("config", "default-qualitative-scouting-config.json")
 
     fun ensureDefaultConfig() {
-        val defaultsDir = Paths.get("config", "defaults")
+        val defaultsDir = listOf(
+            Paths.get("config", "defaults"),
+            Paths.get("Obsidianscout", "config", "defaults"),
+            Paths.get("..", "config", "defaults")
+        ).firstOrNull { Files.exists(it) } ?: Paths.get("config", "defaults")
         if (!Files.exists(defaultsDir)) {
             try { Files.createDirectories(defaultsDir) } catch (_: Exception) {}
         }
@@ -109,26 +113,28 @@ object ConfigService {
 
         transaction {
             SchemaUtils.createMissingTablesAndColumns(DefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs)
-
             presetFiles.forEach { (presetName, prog, type) ->
                 val filePath = defaultsDir.resolve("$presetName-$type.json")
                 val jsonText = if (Files.exists(filePath)) {
                     Files.readString(filePath)
-                } else null
+                } else when (type) {
+                    "match" -> loadDefaultConfigText(prog)
+                    "pit" -> loadDefaultPitConfigText(prog)
+                    "qualitative" -> loadDefaultQualitativeConfigText(prog)
+                    else -> loadDefaultConfigText(prog)
+                }
 
-                if (jsonText != null) {
-                    val existing = DefaultConfigs
-                        .selectAll().where { (DefaultConfigs.name eq presetName) and (DefaultConfigs.configType eq type) }
-                        .firstOrNull()
-                    if (existing == null) {
-                        DefaultConfigs.insert {
-                            it[name] = presetName
-                            it[program] = prog
-                            it[configType] = type
-                            it[configJson] = jsonText
-                            it[isDefault] = presetName.endsWith("2026")
-                            it[updatedAt] = Instant.now()
-                        }
+                val existing = DefaultConfigs
+                    .selectAll().where { (DefaultConfigs.name eq presetName) and (DefaultConfigs.configType eq type) }
+                    .firstOrNull()
+                if (existing == null) {
+                    DefaultConfigs.insert {
+                        it[name] = presetName
+                        it[program] = prog
+                        it[configType] = type
+                        it[configJson] = jsonText
+                        it[isDefault] = presetName.endsWith("2026")
+                        it[updatedAt] = Instant.now()
                     }
                 }
             }
@@ -565,24 +571,30 @@ object ConfigService {
         return parsed
     }
 
-    private fun loadDefaultConfigText(): String {
-        return if (Files.exists(defaultConfigPath)) {
+    private fun loadDefaultConfigText(program: String = "FRC"): String {
+        return if (program == "FTC") {
+            JsonSupport.json.encodeToString(defaultConfig().copy(title = "FTC 2026 Into The Deep Scouting"))
+        } else if (Files.exists(defaultConfigPath)) {
             Files.readString(defaultConfigPath)
         } else {
             JsonSupport.json.encodeToString(defaultConfig())
         }
     }
 
-    private fun loadDefaultPitConfigText(): String {
-        return if (Files.exists(defaultPitConfigPath)) {
+    private fun loadDefaultPitConfigText(program: String = "FRC"): String {
+        return if (program == "FTC") {
+            JsonSupport.json.encodeToString(defaultPitConfig().copy(title = "FTC 2026 Into The Deep Pit Scouting"))
+        } else if (Files.exists(defaultPitConfigPath)) {
             Files.readString(defaultPitConfigPath)
         } else {
             JsonSupport.json.encodeToString(defaultPitConfig())
         }
     }
 
-    private fun loadDefaultQualitativeConfigText(): String {
-        return if (Files.exists(defaultQualitativeConfigPath)) {
+    private fun loadDefaultQualitativeConfigText(program: String = "FRC"): String {
+        return if (program == "FTC") {
+            JsonSupport.json.encodeToString(defaultQualitativeConfig().copy(title = "FTC 2026 Into The Deep Qualitative Scouting"))
+        } else if (Files.exists(defaultQualitativeConfigPath)) {
             Files.readString(defaultQualitativeConfigPath)
         } else {
             JsonSupport.json.encodeToString(defaultQualitativeConfig())

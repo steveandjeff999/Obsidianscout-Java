@@ -9,6 +9,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Files
+import java.time.Duration
 import java.util.Scanner
 import java.util.zip.ZipInputStream
 import kotlin.system.exitProcess
@@ -55,6 +56,7 @@ fun main() {
     val request = HttpRequest.newBuilder()
         .uri(URI.create("https://api.github.com/repos/steveandjeff999/Obsidianscout-Java/releases"))
         .header("Accept", "application/vnd.github.v3+json")
+        .timeout(Duration.ofSeconds(30))
         .build()
         
     val response = try {
@@ -162,7 +164,10 @@ fun main() {
     val zipFile = File(tempDir, "update.zip")
     println("\nDownloading update from: ${selectedRelease.url}")
     
-    val zipRequest = HttpRequest.newBuilder().uri(URI.create(selectedRelease.url)).build()
+    val zipRequest = HttpRequest.newBuilder()
+        .uri(URI.create(selectedRelease.url))
+        .timeout(Duration.ofSeconds(60))
+        .build()
     val zipResponse = try {
         client.send(zipRequest, HttpResponse.BodyHandlers.ofFile(zipFile.toPath()))
     } catch (e: Exception) {
@@ -276,11 +281,15 @@ private fun String.equalsIgnoreCase(other: String): Boolean = this.equals(other,
 
 private fun unzip(zipFile: File, destDir: File) {
     destDir.mkdirs()
+    val destCanonicalPath = destDir.canonicalPath
     ZipInputStream(zipFile.inputStream().buffered()).use { zip ->
         var entry = zip.nextEntry
         while (entry != null) {
             val entryName = entry.name.replace('\\', '/')
-            val file = File(destDir, entryName)
+            val file = File(destDir, entryName).canonicalFile
+            if (!file.path.startsWith(destCanonicalPath + File.separator) && file != destDir.canonicalFile) {
+                throw IllegalArgumentException("Zip entry is outside target directory: ${entry.name}")
+            }
             if (entry.isDirectory) {
                 file.mkdirs()
             } else {
@@ -295,17 +304,7 @@ private fun unzip(zipFile: File, destDir: File) {
     }
 }
 
-private fun File.walkFileTree(): List<File> {
-    val list = mutableListOf<File>()
-    fun walk(f: File) {
-        list.add(f)
-        if (f.isDirectory) {
-            f.listFiles()?.forEach { walk(it) }
-        }
-    }
-    walk(this)
-    return list
-}
+private fun File.walkFileTree(): List<File> = this.walkTopDown().toList()
 
 private fun deepMerge(user: JsonElement, default: JsonElement): JsonElement {
     if (user is JsonObject && default is JsonObject) {
