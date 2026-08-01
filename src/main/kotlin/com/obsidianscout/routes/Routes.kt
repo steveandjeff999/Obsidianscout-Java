@@ -108,7 +108,6 @@ fun Application.configureRoutes() {
                         buildJsonObject {
                             put("dbReady", com.obsidianscout.db.DatabaseFactory.isReady)
                             put("isDbActive", com.obsidianscout.db.orchestration.CockroachOrchestrator.isDbActive)
-                            put("leaderIp", com.obsidianscout.db.orchestration.CockroachOrchestrator.currentLeaderIp ?: "")
                         }
                     )
                 }
@@ -2140,6 +2139,57 @@ fun Application.configureRoutes() {
                         }
                     }
                 }
+                route("/cluster") {
+                    get("/nodes") {
+                        call.requireAdmin()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterNodes())
+                    }
+                    get("/nodes/{ip}/logs") {
+                        call.requireAdmin()
+                        val ip = call.parameters["ip"] ?: "local"
+                        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
+                        val filter = call.request.queryParameters["filter"]
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getNodeLogs(ip, limit, filter))
+                    }
+                    post("/nodes/{ip}/reboot") {
+                        call.requireAdmin()
+                        val ip = call.parameters["ip"] ?: "local"
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.rebootNode(ip))
+                    }
+                    post("/nodes/{ip}/reinstall-update") {
+                        call.requireAdmin()
+                        val ip = call.parameters["ip"] ?: "local"
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateNode(ip))
+                    }
+                    post("/reboot-all") {
+                        call.requireAdmin()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.rebootEntireCluster())
+                    }
+                    post("/reinstall-update-all") {
+                        call.requireAdmin()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateEntireCluster())
+                    }
+                    get("/logs-all") {
+                        call.requireAdmin()
+                        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
+                        val filter = call.request.queryParameters["filter"]
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getAllClusterLogs(limit, filter))
+                    }
+                    get("/nodes/local/logs") {
+                        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
+                        val filter = call.request.queryParameters["filter"]
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getNodeLogs(localIp, limit, filter))
+                    }
+                    post("/nodes/local/reboot") {
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.rebootNode(localIp))
+                    }
+                    post("/nodes/local/reinstall-update") {
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateNode(localIp))
+                    }
+                }
             }
         }
 
@@ -2173,6 +2223,7 @@ fun Application.configureRoutes() {
             "users" to "users.html",
             "config" to "config.html",
             "admin-settings" to "admin-settings.html",
+            "cluster-management" to "cluster-management.html",
             "fcm-settings" to "fcm-settings.html",
             "default-configs" to "default-configs.html",
             "backup" to "backup.html",

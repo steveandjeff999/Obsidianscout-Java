@@ -297,7 +297,7 @@ fun Application.module(appConfig: AppConfig) {
                 DatabaseFactory.orchestrator = cockroachOrchestrator
                 DatabaseFactory.init(
                     config = dbConfig!!,
-                    runMigration = (cockroachOrchestrator?.amILeader() ?: true),
+                    runMigration = true,
                     isCockroach = (appConfig.database_type.lowercase() == "cockroach")
                 )
                 ConfigService.ensureDefaultConfig()
@@ -308,8 +308,7 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.scouting.DeduplicationScheduler.start()
                 println("[Database] Background database initialization completed successfully.")
                 
-                // Start failover checks and replication monitoring only after initial setup is fully complete and successful
-                cockroachOrchestrator?.startFailoverLoop()
+                // Start replication monitoring only after initial setup is fully complete and successful
                 cockroachOrchestrator?.startReplicationMonitor()
                 initialized = true
             } catch (e: Exception) {

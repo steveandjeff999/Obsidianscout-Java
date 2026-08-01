@@ -229,40 +229,8 @@ object DatabaseFactory {
                     SchemaUtils.createMissingTablesAndColumns(*tables.toTypedArray())
                 }
             }
-        } else {
-            // For followers: verify that the database schema is already initialized by the leader.
-            // Loop and wait for the tables to be created by the leader instead of failing and restarting the pool.
-            val isPostgres = config.type.lowercase() == "postgres"
-            var schemaReady = false
-            val start = System.currentTimeMillis()
-            val maxWaitMs = 600_000 // Wait up to 10 minutes for CockroachDB cluster DDLs
-            
-            while (System.currentTimeMillis() - start < maxWaitMs) {
-                schemaReady = try {
-                    val orch = orchestrator
-                    if (orch != null) {
-                        orch.isLeaderSchemaReady()
-                    } else {
-                        dataSource!!.connection.use { conn ->
-                            conn.autoCommit = true
-                            val existing = getExistingTables(conn)
-                            existing.contains("users") && existing.contains("alliance_memberships")
-                        }
-                    }
-                } catch (e: Exception) {
-                    false
-                }
-                
-                if (schemaReady) break
-                println("[Database] Database schema is not initialized yet. Waiting for leader to complete migrations (elapsed: ${(System.currentTimeMillis() - start) / 1000}s)...")
-                Thread.sleep(5000)
-            }
-            
-            if (!schemaReady) {
-                throw IllegalStateException("Database schema initialization by leader timed out after 600s.")
-            }
         }
-        
+
         isReady = true
     }
 

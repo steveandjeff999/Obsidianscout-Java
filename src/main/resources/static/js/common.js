@@ -2010,7 +2010,7 @@
             }
             if (isAdminUser) {
                 endpoints.push("/api/admin/users");
-                if (currentUser && currentUser.role === "SUPERADMIN") {
+                if (user && user.role === "SUPERADMIN") {
                     endpoints.push("/api/admin/email-settings");
                 }
             }

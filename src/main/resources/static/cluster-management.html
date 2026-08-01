@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link class="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Server Management</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <style>
+        .server-table-card {
+            background: var(--surface-1, #121216);
+            border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .server-item {
+            background: var(--surface-2, rgba(255, 255, 255, 0.04));
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+
+        .server-item:hover {
+            border-color: var(--accent, #3b82f6);
+            background: rgba(59, 130, 246, 0.04);
+        }
+
+        .server-item.active-selected {
+            border-color: var(--accent, #3b82f6);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+        }
+
+        .server-info-col {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .server-ip-title {
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'Consolas', 'Courier New', monospace;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.online {
+            background: #22c55e;
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+        }
+
+        .status-dot.offline {
+            background: #ef4444;
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+        }
+
+        .node-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .node-badge.local {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .node-badge.remote {
+            background: rgba(156, 163, 175, 0.2);
+            color: #d1d5db;
+            border: 1px solid rgba(156, 163, 175, 0.3);
+        }
+
+        .server-actions-col {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-action {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s ease;
+        }
+
+        .btn-action.logs {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-action.logs:hover {
+            background: rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-action.reinstall {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-action.reinstall:hover {
+            background: rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-action.reboot {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-action.reboot:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        .log-console-card {
+            background: #090d16;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            margin-top: 24px;
+        }
+
+        .log-console-header {
+            background: #1e293b;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .log-console-title {
+            color: #f8fafc;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .log-terminal {
+            height: 440px;
+            overflow-y: auto;
+            padding: 16px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #e2e8f0;
+            background: #090d16;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .log-line {
+            display: flex;
+            gap: 10px;
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .log-time { color: #64748b; flex-shrink: 0; }
+        .log-level { font-weight: bold; flex-shrink: 0; width: 50px; }
+        .log-level.INFO { color: #38bdf8; }
+        .log-level.WARN { color: #fbbf24; }
+        .log-level.ERROR { color: #f87171; }
+    </style>
+</head>
+<body data-page="cluster-management">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div id="admin-locked" class="card hidden">
+                <h2>Admin Access Required</h2>
+                <p class="notice">You need server admin or superadmin privileges to access cluster server management.</p>
+            </div>
+
+            <div id="admin-panel" class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
+                    <div>
+                        <h1 style="margin: 0;">Server & Cluster Management</h1>
+                        <p class="notice" style="margin-top: 4px; margin-bottom: 0;">Monitor servers on the CockroachDB cluster and perform individual or cluster-wide actions.</p>
+                    </div>
+                    <button id="btn-refresh-nodes" class="btn" type="button">Refresh Server List</button>
+                </div>
+
+                <!-- Cluster-Wide Action Header Card -->
+                <div class="card soft mb-24" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3); padding: 18px; border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 16px; color: #c084fc;">🌐 Cluster-Wide Actions (All Servers)</h3>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #e9d5ff;">Perform maintenance or force updates across every node in the CockroachDB cluster at once.</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button id="btn-cluster-logs" class="btn-action logs" type="button" style="padding: 8px 14px;">View All Cluster Logs</button>
+                            <button id="btn-cluster-reinstall" class="btn-action reinstall" type="button" style="padding: 8px 14px;">Force Reinstall All</button>
+                            <button id="btn-cluster-reboot" class="btn-action reboot" type="button" style="padding: 8px 14px;">Reboot Entire Cluster</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Server List Table -->
+                <div class="server-table-card">
+                    <h2 style="font-size: 17px; margin-top: 0; margin-bottom: 16px;">Discovered Cluster Servers</h2>
+                    <div id="server-list-container">
+                        <div style="color: var(--text-muted); padding: 10px;">Loading cluster servers...</div>
+                    </div>
+                </div>
+
+                <!-- Log Console Section -->
+                <div class="log-console-card">
+                    <div class="log-console-header">
+                        <div class="log-console-title">
+                            <span>🖥️</span>
+                            <span id="selected-node-title">Server Log Console</span>
+                            <span id="log-count-badge" class="badge" style="margin-left: 8px; font-size: 11px;">0 entries</span>
+                        </div>
+                        <div class="log-console-controls" style="display: flex; gap: 10px; align-items: center;">
+                            <input type="text" id="log-search" style="background: #090d16; border: 1px solid #334155; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px;" placeholder="Filter logs..." />
+                            <select id="log-limit-select" style="background: #090d16; border: 1px solid #334155; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px;">
+                                <option value="200">Last 200 lines</option>
+                                <option value="500" selected>Last 500 lines</option>
+                                <option value="1000">Last 1,000 lines (Max)</option>
+                            </select>
+                            <label style="color: #cbd5e1; font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                <input type="checkbox" id="auto-refresh-toggle" checked /> Auto-refresh
+                            </label>
+                            <button id="btn-fetch-logs" class="btn small" type="button">Refresh Logs</button>
+                        </div>
+                    </div>
+                    <div id="log-terminal" class="log-terminal">
+                        <div style="color: #64748b; text-align: center; padding-top: 40px;">Select a server or cluster action to view live logs...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Reboot Modal — Uses app.css native modal system (.modal-backdrop + .show) -->
+    <div id="reboot-modal" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 class="modal-title" style="color: #ef4444;">⚠️ Confirm Server Reboot</h2>
+                <button type="button" class="modal-close" id="modal-reboot-cancel-x" aria-label="Close">&#x2715;</button>
+            </div>
+            <div style="padding: 20px;">
+                <p id="modal-reboot-text" style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink);">
+                    Are you sure you want to reboot?
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-reboot-cancel" class="btn ghost" type="button">Cancel</button>
+                <button id="modal-reboot-confirm" class="btn danger" type="button">Reboot Now</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Force Reinstall Modal — Uses app.css native modal system (.modal-backdrop + .show) -->
+    <div id="reinstall-modal" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 class="modal-title" style="color: #f59e0b;">🔄 Confirm Force Reinstall / Update</h2>
+                <button type="button" class="modal-close" id="modal-reinstall-cancel-x" aria-label="Close">&#x2715;</button>
+            </div>
+            <div style="padding: 20px;">
+                <p id="modal-reinstall-text" style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink);">
+                    Are you sure you want to force reinstall/update?
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-reinstall-cancel" class="btn ghost" type="button">Cancel</button>
+                <button id="modal-reinstall-confirm" class="btn secondary" style="background: #f59e0b; color: white;" type="button">Force Reinstall</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script src="/js/cluster-management.js"></script>
+</body>
+</html>

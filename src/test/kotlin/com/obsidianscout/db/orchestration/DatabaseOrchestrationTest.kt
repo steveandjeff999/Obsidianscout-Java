@@ -66,6 +66,83 @@ class DatabaseOrchestrationTest {
     }
 
     @Test
+    fun testParseGoogleSheetsCsvWithServerName() {
+        val csvData = """
+            name,ip,port
+            Server-Alpha,100.64.0.1,26257
+            Server-Beta,100.64.0.2,26258
+        """.trimIndent()
+
+        val details = GoogleSheetsManager.parsePeerDetails(csvData, "https://docs.google.com/spreadsheets/d/abc/pub?output=csv")
+        assertEquals(2, details.size)
+        assertEquals("Server-Alpha", details[0].name)
+        assertEquals("100.64.0.1", details[0].ip)
+        assertEquals(26257, details[0].port)
+
+        assertEquals("Server-Beta", details[1].name)
+        assertEquals("100.64.0.2", details[1].ip)
+        assertEquals(26258, details[1].port)
+    }
+
+    @Test
+    fun testParseGoogleSheetsCsvIpPortName() {
+        val csvData = """
+            IP,Port,Name
+            100.92.132.35,26257,WINDESK
+            100.72.252.9,26257,RPI5
+            100.119.201.60,26257,RPI4
+            100.67.49.120,26257,DellDebian
+        """.trimIndent()
+
+        val details = GoogleSheetsManager.parsePeerDetails(csvData, "https://docs.google.com/spreadsheets/d/abc/pub?output=csv")
+        assertEquals(4, details.size)
+        assertEquals("100.92.132.35", details[0].ip)
+        assertEquals(26257, details[0].port)
+        assertEquals("WINDESK", details[0].name)
+
+        assertEquals("100.72.252.9", details[1].ip)
+        assertEquals("RPI5", details[1].name)
+
+        assertEquals("100.119.201.60", details[2].ip)
+        assertEquals("RPI4", details[2].name)
+
+        assertEquals("100.67.49.120", details[3].ip)
+        assertEquals("DellDebian", details[3].name)
+    }
+
+    @Test
+    fun testParseGoogleSheetsCsvNoHeaderWithServerName() {
+        val csvData = """
+            Server-Gamma,100.64.0.3,26259
+        """.trimIndent()
+
+        val details = GoogleSheetsManager.parsePeerDetails(csvData, "https://docs.google.com/spreadsheets/d/abc/pub?output=csv")
+        assertEquals(1, details.size)
+        assertEquals("Server-Gamma", details[0].name)
+        assertEquals("100.64.0.3", details[0].ip)
+        assertEquals(26259, details[0].port)
+    }
+
+    @Test
+    fun testParseGoogleSheetsJsonWithServerName() {
+        val jsonData = """
+            [
+                {"name": "Node-1", "ip": "100.64.0.20", "port": 26257},
+                {"server_name": "Node-2", "ip": "100.64.0.21", "port": 26258}
+            ]
+        """.trimIndent()
+
+        val details = GoogleSheetsManager.parsePeerDetails(jsonData, "https://script.google.com/macros/s/123/exec")
+        assertEquals(2, details.size)
+        assertEquals("Node-1", details[0].name)
+        assertEquals("100.64.0.20", details[0].ip)
+        assertEquals(26257, details[0].port)
+        assertEquals("Node-2", details[1].name)
+        assertEquals("100.64.0.21", details[1].ip)
+        assertEquals(26258, details[1].port)
+    }
+
+    @Test
     fun testUrlNormalization() {
         val originalUrl = "https://docs.google.com/spreadsheets/d/1utbduIlY5h5T0sucyn5P1O1HX60SVmBN2zgXu_fIxTk/edit?usp=sharing"
         val expectedUrl = "https://docs.google.com/spreadsheets/d/1utbduIlY5h5T0sucyn5P1O1HX60SVmBN2zgXu_fIxTk/export?format=csv"
