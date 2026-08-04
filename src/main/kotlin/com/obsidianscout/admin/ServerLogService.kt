@@ -77,32 +77,47 @@ object ServerLogService {
         }
     }
 
+    /**
+     * Efficiently reads only the tail end of a log file in 8KB chunks.
+     * Prevents loading multi-megabyte log files into JVM heap memory.
+     */
     private fun readLastLines(file: File, maxLines: Int): List<String> {
+        val safeMax = maxLines.coerceIn(1, 1000)
+        val fileLength = file.length()
+        if (fileLength <= 0L) return emptyList()
+
         val lines = mutableListOf<String>()
+        val chunkSize = 8192
+        var pointer = fileLength
+
         RandomAccessFile(file, "r").use { raf ->
-            var fileLength = raf.length() - 1
-            if (fileLength < 0) return emptyList()
-
-            val sb = StringBuilder()
-            var lineCount = 0
-
-            for (pointer in fileLength downTo 0) {
+            val lineBuffer = java.io.ByteArrayOutputStream()
+            while (pointer > 0 && lines.size < safeMax) {
+                val readLen = Math.min(chunkSize.toLong(), pointer).toInt()
+                pointer -= readLen
                 raf.seek(pointer)
-                val c = raf.readByte().toInt().toChar()
-                if (c == '\n') {
-                    if (pointer < fileLength) {
-                        lines.add(0, sb.reverse().toString())
-                        sb.setLength(0)
-                        lineCount++
-                        if (lineCount >= maxLines) break
+                val chunk = ByteArray(readLen)
+                raf.readFully(chunk)
+
+                for (i in chunk.size - 1 downTo 0) {
+                    val b = chunk[i]
+                    if (b == '\n'.code.toByte()) {
+                        if (lineBuffer.size() > 0) {
+                            val lineBytes = lineBuffer.toByteArray()
+                            lineBytes.reverse()
+                            lines.add(0, String(lineBytes, Charsets.UTF_8).trimEnd('\r'))
+                            lineBuffer.reset()
+                            if (lines.size >= safeMax) break
+                        }
+                    } else if (b != '\r'.code.toByte()) {
+                        lineBuffer.write(b.toInt())
                     }
-                } else if (c != '\r') {
-                    sb.append(c)
                 }
             }
-
-            if (lineCount < maxLines && sb.isNotEmpty()) {
-                lines.add(0, sb.reverse().toString())
+            if (lines.size < safeMax && lineBuffer.size() > 0) {
+                val lineBytes = lineBuffer.toByteArray()
+                lineBytes.reverse()
+                lines.add(0, String(lineBytes, Charsets.UTF_8).trimEnd('\r'))
             }
         }
         return lines

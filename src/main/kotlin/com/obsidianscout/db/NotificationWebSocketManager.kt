@@ -49,12 +49,17 @@ object NotificationWebSocketManager {
         scope.launch {
             for (userId in targetUserIds) {
                 val sessions = activeSessions[userId] ?: continue
-                for (session in sessions) {
+                val iterator = sessions.iterator()
+                while (iterator.hasNext()) {
+                    val session = iterator.next()
                     try {
                         session.send(Frame.Text(jsonPayload))
                     } catch (e: Exception) {
-                        // Session disconnected or error
+                        iterator.remove()
                     }
+                }
+                if (sessions.isEmpty()) {
+                    activeSessions.remove(userId)
                 }
             }
         }

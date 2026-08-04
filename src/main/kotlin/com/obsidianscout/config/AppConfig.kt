@@ -21,7 +21,7 @@ data class AppConfig(
     val google_sheet_url: String = "",
     val google_sheet_password: String = "",
     val cockroach_port: Int = 26257,
-    val current_version: String = "0.2.8.3", // The version this server is running — update this on each release
+    val current_version: String = "0.2.9.5", // The version this server is running — update this on each release
     val gist_update: GistUpdateConfig = GistUpdateConfig()
 )
 
@@ -179,8 +179,36 @@ object AppConfigLoader {
         return updated
     }
 
+    /**
+     * Persists updated session secret and VAPID keys back to config/app-config.json on disk.
+     */
+    fun saveSecretUpdates(
+        sessionSecret: String,
+        vapidPublicKey: String,
+        vapidPrivateKey: String,
+        path: Path = defaultPath
+    ) {
+        try {
+            val current = if (Files.exists(path)) {
+                JsonSupport.json.decodeFromString<AppConfig>(Files.readString(path))
+            } else AppConfig()
+            val updated = current.copy(
+                server = current.server.copy(sessionSecret = sessionSecret),
+                vapid = current.vapid.copy(
+                    publicKey = vapidPublicKey,
+                    privateKey = vapidPrivateKey
+                )
+            )
+            val updatedText = JsonSupport.json.encodeToString(updated)
+            Files.writeString(path, updatedText)
+            println("[ObsidianScout] Synchronized updated cluster secrets (Session & VAPID) to ${path.toAbsolutePath()}")
+        } catch (e: Exception) {
+            println("[ObsidianScout] Warning: Failed to save cluster secrets to config file: ${e.message}")
+        }
+    }
+
     /** Generates a cryptographically secure 32-byte random hex string. */
-    private fun generateSecret(): String {
+    fun generateSecret(): String {
         val bytes = ByteArray(32)
         SecureRandom().nextBytes(bytes)
         return bytes.joinToString("") { "%02x".format(it) }

@@ -3,6 +3,7 @@
 
     let selectedNodeIp = "all";
     let pendingActionTargetIp = "all";
+    let pendingConfigTargetIp = "local";
     let autoRefreshInterval = null;
     let currentNodes = [];
 
@@ -61,6 +62,10 @@
     }
 
     function bindEvents() {
+        window.addEventListener("obsidianscout:languagechange", () => {
+            loadClusterNodes();
+        });
+
         document.getElementById("btn-refresh-nodes")?.addEventListener("click", () => {
             loadClusterNodes();
         });
@@ -89,8 +94,27 @@
         // Cluster-wide Action Button Handlers
         document.getElementById("btn-cluster-logs")?.addEventListener("click", () => {
             selectedNodeIp = "all";
-            updateSelectedNodeLabels();
             fetchNodeLogs();
+        });
+
+        document.getElementById("btn-cluster-keys")?.addEventListener("click", async () => {
+            const confirmMsg = window.Obsidianscout && typeof Obsidianscout.t === "function"
+                ? Obsidianscout.t("cluster.confirm_regen_keys", "Are you sure you want to regenerate all cluster keys (Session Secret & VAPID keys)?\n\nRotating session keys will require active users across all nodes to sign in again.")
+                : "Are you sure you want to regenerate all cluster keys (Session Secret & VAPID keys)?\n\nRotating session keys will require active users across all nodes to sign in again.";
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+            try {
+                showToastMsg("Regenerating cluster keys...", "info");
+                const res = await apiRequest("/api/admin/cluster/regenerate-keys", { method: "POST" });
+                if (res.success) {
+                    showToastMsg(res.message || "Cluster keys regenerated successfully!", "success");
+                } else {
+                    showToastMsg("Failed to regenerate cluster keys: " + (res.message || "Unknown error"), "error");
+                }
+            } catch (err) {
+                showToastMsg("Error regenerating cluster keys: " + err.message, "error");
+            }
         });
 
         document.getElementById("btn-cluster-reinstall")?.addEventListener("click", () => {
@@ -101,7 +125,12 @@
             openRebootModal("all");
         });
 
-        // Modal Action Button Handlers
+        // App Config Modal Handlers
+        document.getElementById("modal-config-cancel")?.addEventListener("click", closeAppConfigModal);
+        document.getElementById("modal-config-cancel-x")?.addEventListener("click", closeAppConfigModal);
+        document.getElementById("modal-config-save")?.addEventListener("click", saveAppConfig);
+
+        // Reboot & Reinstall Modal Handlers
         document.getElementById("modal-reboot-cancel")?.addEventListener("click", closeRebootModal);
         document.getElementById("modal-reboot-cancel-x")?.addEventListener("click", closeRebootModal);
         document.getElementById("modal-reboot-confirm")?.addEventListener("click", executeRebootNode);
@@ -154,8 +183,10 @@
         const container = document.getElementById("server-list-container");
         if (!container) return;
 
+        const t = (key, fallback) => (window.Obsidianscout && typeof Obsidianscout.t === "function") ? Obsidianscout.t(key, fallback) : fallback;
+
         if (nodes.length === 0) {
-            container.innerHTML = `<div style="color: var(--text-muted); padding: 12px;">No cluster servers discovered.</div>`;
+            container.innerHTML = `<div style="color: var(--text-muted); padding: 12px;">${t("cluster.no_servers", "No cluster servers discovered.")}</div>`;
             return;
         }
 
@@ -164,7 +195,7 @@
             const isSelected = (node.ip === selectedNodeIp);
             const statusClass = (node.status || "offline").toLowerCase();
             const badgeClass = node.isLocal ? "local" : "remote";
-            const badgeText = node.isLocal ? "Local Server" : "Peer Server";
+            const badgeText = node.isLocal ? t("cluster.badge_local", "Local Node") : t("cluster.badge_remote", "Remote Node");
 
             html += `
                 <div class="server-item ${isSelected ? "active-selected" : ""}" data-ip="${escapeHtml(node.ip)}">
@@ -182,6 +213,7 @@
                     </div>
                     <div class="server-actions-col">
                         <button class="btn-action logs btn-server-logs" data-ip="${escapeHtml(node.ip)}" type="button">🔍 View Logs</button>
+                        <button class="btn-action config btn-server-config" data-ip="${escapeHtml(node.ip)}" type="button">⚙️ Edit app-config.json</button>
                         <button class="btn-action reinstall btn-server-reinstall" data-ip="${escapeHtml(node.ip)}" type="button">🔄 Force Reinstall</button>
                         <button class="btn-action reboot btn-server-reboot" data-ip="${escapeHtml(node.ip)}" type="button">⚠️ Reboot</button>
                     </div>
@@ -200,6 +232,16 @@
                     selectedNodeIp = ip;
                     updateSelectedNodeLabels();
                     fetchNodeLogs();
+                }
+            });
+        });
+
+        container.querySelectorAll(".btn-server-config").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const ip = btn.getAttribute("data-ip");
+                if (ip) {
+                    openAppConfigModal(ip);
                 }
             });
         });
@@ -313,7 +355,89 @@
         }
     }
 
-    // Modal Confirmation Controls using Obsidianscout native modal class .show
+    // App Config Modal Controls
+    async function openAppConfigModal(targetIp) {
+        pendingConfigTargetIp = targetIp;
+        const modal = document.getElementById("app-config-modal");
+        const subtitle = document.getElementById("modal-config-subtitle");
+        const editor = document.getElementById("app-config-editor");
+        const errEl = document.getElementById("modal-config-error");
+
+        if (subtitle) {
+            subtitle.innerHTML = `Editing <strong>config/app-config.json</strong> for target server node: <strong style="font-family: monospace; color: #c084fc;">${escapeHtml(targetIp)}</strong>`;
+        }
+
+        if (errEl) errEl.style.display = "none";
+        if (editor) editor.value = "Loading configuration...";
+
+        if (modal) modal.classList.add("show");
+
+        try {
+            const resp = await apiRequest(`/api/admin/cluster/nodes/${encodeURIComponent(targetIp)}/app-config`);
+            if (editor) {
+                editor.value = resp.rawJson || JSON.stringify(resp.config, null, 4);
+            }
+        } catch (e) {
+            if (editor) editor.value = `// Failed to load app-config.json from server ${targetIp}\n// Error: ${e.message}`;
+            showToastMsg(`Failed to load app-config.json from ${targetIp}: ${e.message}`, "error");
+        }
+    }
+
+    function closeAppConfigModal() {
+        const modal = document.getElementById("app-config-modal");
+        if (modal) modal.classList.remove("show");
+    }
+
+    async function saveAppConfig() {
+        const editor = document.getElementById("app-config-editor");
+        const errEl = document.getElementById("modal-config-error");
+        if (!editor) return;
+
+        const rawJson = editor.value;
+
+        // Local JSON validation
+        try {
+            JSON.parse(rawJson);
+            if (errEl) errEl.style.display = "none";
+        } catch (e) {
+            if (errEl) {
+                errEl.textContent = `JSON Syntax Error: ${e.message}`;
+                errEl.style.display = "block";
+            }
+            showToastMsg("Invalid JSON format. Please fix syntax errors before saving.", "error");
+            return;
+        }
+
+        try {
+            showToastMsg(`Saving app-config.json to server ${pendingConfigTargetIp}...`, "info");
+            const endpoint = `/api/admin/cluster/nodes/${encodeURIComponent(pendingConfigTargetIp)}/app-config`;
+            
+            const resp = await apiRequest(endpoint, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: rawJson
+            });
+
+            if (resp.success) {
+                showToastMsg(resp.message || `app-config.json saved successfully for node ${pendingConfigTargetIp}.`, "success");
+                closeAppConfigModal();
+            } else {
+                if (errEl) {
+                    errEl.textContent = resp.message || "Failed to save configuration.";
+                    errEl.style.display = "block";
+                }
+                showToastMsg(`Failed to save config: ${resp.message}`, "error");
+            }
+        } catch (e) {
+            if (errEl) {
+                errEl.textContent = `Server Error: ${e.message}`;
+                errEl.style.display = "block";
+            }
+            showToastMsg(`Save request failed: ${e.message}`, "error");
+        }
+    }
+
+    // Reboot & Reinstall Modal Controls
     function openRebootModal(targetIp) {
         pendingActionTargetIp = targetIp || selectedNodeIp || "all";
         const modal = document.getElementById("reboot-modal");

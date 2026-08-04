@@ -1,20 +1,27 @@
 package com.obsidianscout.admin
 
+import com.obsidianscout.config.AppConfig
 import com.obsidianscout.config.AppConfigLoader
+import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.DatabaseFactory
 import com.obsidianscout.db.orchestration.GoogleSheetsManager
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.time.Duration
 import kotlin.system.exitProcess
 
@@ -45,16 +52,47 @@ data class ActionResultResponse(
     val targetIp: String
 )
 
+@Serializable
+data class AppConfigPayload(
+    val nodeIp: String,
+    val isLocal: Boolean,
+    val rawJson: String,
+    val config: AppConfig? = null
+)
+
 object ClusterManagementService {
 
-    private val httpClient: HttpClient by lazy {
-        HttpClient.newBuilder()
+    @Volatile
+    private var cachedHttpClient: HttpClient? = null
+
+    private val prettyJson = Json {
+        prettyPrint = true
+        ignoreUnknownKeys = true
+    }
+
+    private fun getHttpClient(): HttpClient {
+        var client = cachedHttpClient
+        if (client == null) {
+            client = buildNewHttpClient()
+            cachedHttpClient = client
+        }
+        return client
+    }
+
+    private fun buildNewHttpClient(): HttpClient {
+        return HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(4))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build()
     }
 
-    private val startTimeMillis = System.currentTimeMillis()
+    private fun resetHttpClient() {
+        try {
+            cachedHttpClient = buildNewHttpClient()
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
 
     fun getLocalTailscaleIp(): String {
         try {
@@ -164,9 +202,12 @@ object ClusterManagementService {
                 .timeout(Duration.ofSeconds(2))
                 .GET()
                 .build()
-            val resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+            val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
             resp.statusCode() == 200
         } catch (e: Exception) {
+            if (e.message?.contains("selector manager closed") == true) {
+                resetHttpClient()
+            }
             false
         }
     }
@@ -196,9 +237,9 @@ object ClusterManagementService {
                     .timeout(Duration.ofSeconds(5))
                     .GET()
                     .build()
-                val resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
                 if (resp.statusCode() == 200) {
-                    com.obsidianscout.config.JsonSupport.json.decodeFromString<ServerLogsPayload>(resp.body())
+                    JsonSupport.json.decodeFromString<ServerLogsPayload>(resp.body())
                 } else {
                     ServerLogsPayload(
                         nodeIp = targetIp,
@@ -207,14 +248,17 @@ object ClusterManagementService {
                         logs = listOf(
                             LogEntry(
                                 timestamp = "",
-                                level = "ERROR",
+                                level = "WARN",
                                 logger = "ClusterManagementService",
-                                message = "Remote log fetch failed from $targetIp (HTTP ${resp.statusCode()})"
+                                message = "Node $targetIp is currently offline or rebooting (HTTP ${resp.statusCode()})"
                             )
                         )
                     )
                 }
             } catch (e: Exception) {
+                if (e.message?.contains("selector manager closed") == true) {
+                    resetHttpClient()
+                }
                 ServerLogsPayload(
                     nodeIp = targetIp,
                     isLocal = false,
@@ -222,11 +266,139 @@ object ClusterManagementService {
                     logs = listOf(
                         LogEntry(
                             timestamp = "",
-                            level = "ERROR",
+                            level = "WARN",
                             logger = "ClusterManagementService",
-                            message = "Failed to reach remote node $targetIp for logs: ${e.message}"
+                            message = "Node $targetIp is currently rebooting or unreachable."
                         )
                     )
+                )
+            }
+        }
+    }
+
+    suspend fun getAppConfig(targetIp: String): AppConfigPayload = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        if (isLocal) {
+            try {
+                val loadedConfig = AppConfigLoader.load()
+                val prettyText = prettyJson.encodeToString(loadedConfig)
+                AppConfigPayload(
+                    nodeIp = localIp,
+                    isLocal = true,
+                    rawJson = prettyText,
+                    config = loadedConfig
+                )
+            } catch (e: Exception) {
+                val configPath = Paths.get("config", "app-config.json")
+                val text = if (Files.exists(configPath)) Files.readString(configPath) else "{}"
+                AppConfigPayload(
+                    nodeIp = localIp,
+                    isLocal = true,
+                    rawJson = text,
+                    config = null
+                )
+            }
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/app-config"
+            try {
+                val req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(5))
+                    .GET()
+                    .build()
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    JsonSupport.json.decodeFromString<AppConfigPayload>(resp.body())
+                } else {
+                    AppConfigPayload(
+                        nodeIp = targetIp,
+                        isLocal = false,
+                        rawJson = "// Failed to retrieve app-config.json from remote server $targetIp (HTTP ${resp.statusCode()})",
+                        config = null
+                    )
+                }
+            } catch (e: Exception) {
+                if (e.message?.contains("selector manager closed") == true) {
+                    resetHttpClient()
+                }
+                AppConfigPayload(
+                    nodeIp = targetIp,
+                    isLocal = false,
+                    rawJson = "// Remote server $targetIp is unreachable or offline: ${e.message}",
+                    config = null
+                )
+            }
+        }
+    }
+
+    suspend fun updateAppConfig(targetIp: String, rawJson: String): ActionResultResponse = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        // Validate JSON payload
+        val parsedConfig = try {
+            JsonSupport.json.decodeFromString<AppConfig>(rawJson)
+        } catch (e: Exception) {
+            return@withContext ActionResultResponse(
+                success = false,
+                message = "Invalid app-config.json format: ${e.message}",
+                targetIp = targetIp
+            )
+        }
+
+        if (isLocal) {
+            try {
+                val formattedJson = prettyJson.encodeToString(parsedConfig)
+                val configPath = Paths.get("config", "app-config.json")
+                configPath.parent?.let { Files.createDirectories(it) }
+                Files.writeString(configPath, formattedJson)
+
+                ServerLogService.appendLog("WARN", "ClusterManagementService", "AppConfig updated on local node $localIp.")
+                ActionResultResponse(
+                    success = true,
+                    message = "app-config.json successfully updated for server node $localIp.",
+                    targetIp = localIp
+                )
+            } catch (e: Exception) {
+                ActionResultResponse(
+                    success = false,
+                    message = "Failed to save app-config.json on local node: ${e.message}",
+                    targetIp = localIp
+                )
+            }
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/app-config"
+            try {
+                val req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("Content-Type", "application/json")
+                    .PUT(HttpRequest.BodyPublishers.ofString(rawJson))
+                    .build()
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    JsonSupport.json.decodeFromString<ActionResultResponse>(resp.body())
+                } else {
+                    ActionResultResponse(
+                        success = false,
+                        message = "Remote server $targetIp returned HTTP ${resp.statusCode()} while saving config.",
+                        targetIp = targetIp
+                    )
+                }
+            } catch (e: Exception) {
+                if (e.message?.contains("selector manager closed") == true) {
+                    resetHttpClient()
+                }
+                ActionResultResponse(
+                    success = false,
+                    message = "Failed to dispatch app-config.json update to remote server $targetIp: ${e.message}",
+                    targetIp = targetIp
                 )
             }
         }
@@ -237,15 +409,29 @@ object ClusterManagementService {
         val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
 
         if (isLocal) {
-            ServerLogService.appendLog("WARN", "ClusterManagementService", "Reboot command received for local server node. Scheduling restart...")
-            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                delay(1500)
-                ServerLogService.appendLog("INFO", "ClusterManagementService", "Shutting down application process for reboot...")
-                exitProcess(0)
+            ServerLogService.appendLog("WARN", "ClusterManagementService", "Reboot command received for local node $localIp. Restarting database & node services...")
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val orchestrator = DatabaseFactory.orchestrator
+                    if (orchestrator != null) {
+                        ServerLogService.appendLog("INFO", "ClusterManagementService", "Restarting CockroachDB process on $localIp...")
+                        orchestrator.stop()
+                        delay(2000)
+                        val dbConfig = orchestrator.orchestrate()
+                        DatabaseFactory.init(dbConfig, runMigration = false, isCockroach = true)
+                        ServerLogService.appendLog("INFO", "ClusterManagementService", "Local node CockroachDB process successfully rebooted and re-joined cluster.")
+                    } else {
+                        ServerLogService.appendLog("INFO", "ClusterManagementService", "Scheduling process restart...")
+                        delay(1000)
+                        exitProcess(0)
+                    }
+                } catch (e: Exception) {
+                    ServerLogService.appendLog("ERROR", "ClusterManagementService", "Local node reboot error: ${e.message}")
+                }
             }
             ActionResultResponse(
                 success = true,
-                message = "Local server reboot initiated. The server process will restart momentarily.",
+                message = "Local node reboot initiated. CockroachDB service is restarting.",
                 targetIp = localIp
             )
         } else {
@@ -258,13 +444,16 @@ object ClusterManagementService {
                     .timeout(Duration.ofSeconds(5))
                     .POST(HttpRequest.BodyPublishers.noBody())
                     .build()
-                val resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
                 if (resp.statusCode() == 200) {
                     ActionResultResponse(true, "Reboot command successfully dispatched to remote server $targetIp.", targetIp)
                 } else {
                     ActionResultResponse(false, "Remote server $targetIp returned status ${resp.statusCode()}.", targetIp)
                 }
             } catch (e: Exception) {
+                if (e.message?.contains("selector manager closed") == true) {
+                    resetHttpClient()
+                }
                 ActionResultResponse(false, "Failed to send reboot command to $targetIp: ${e.message}", targetIp)
             }
         }
@@ -275,8 +464,8 @@ object ClusterManagementService {
         val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
 
         if (isLocal) {
-            ServerLogService.appendLog("WARN", "ClusterManagementService", "Force reinstall / update command received for local node.")
-            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            ServerLogService.appendLog("WARN", "ClusterManagementService", "Force reinstall / update command received for local node $localIp.")
+            CoroutineScope(Dispatchers.IO).launch {
                 try {
                     ServerLogService.appendLog("INFO", "ClusterManagementService", "Initiating CockroachDB binary re-verification & update check...")
                     val appConfig = AppConfigLoader.load()
@@ -302,13 +491,16 @@ object ClusterManagementService {
                     .timeout(Duration.ofSeconds(5))
                     .POST(HttpRequest.BodyPublishers.noBody())
                     .build()
-                val resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
                 if (resp.statusCode() == 200) {
                     ActionResultResponse(true, "Force reinstall/update command successfully dispatched to remote server $targetIp.", targetIp)
                 } else {
                     ActionResultResponse(false, "Remote server $targetIp returned status ${resp.statusCode()}.", targetIp)
                 }
             } catch (e: Exception) {
+                if (e.message?.contains("selector manager closed") == true) {
+                    resetHttpClient()
+                }
                 ActionResultResponse(false, "Failed to send force reinstall command to $targetIp: ${e.message}", targetIp)
             }
         }
@@ -336,7 +528,7 @@ object ClusterManagementService {
         ServerLogService.appendLog("WARN", "ClusterManagementService", "Cluster-wide reboot executed. Dispatched to $successCount of ${cluster.nodes.size} nodes.")
         ActionResultResponse(
             success = successCount > 0,
-            message = "Reboot command dispatched to $successCount/${cluster.nodes.size} nodes on the cluster: " + results.joinToString("; "),
+            message = "Reboot command dispatched to $successCount/${cluster.nodes.size} nodes on the cluster.",
             targetIp = "all-nodes"
         )
     }
@@ -363,7 +555,7 @@ object ClusterManagementService {
         ServerLogService.appendLog("WARN", "ClusterManagementService", "Cluster-wide force reinstall/update executed. Dispatched to $successCount of ${cluster.nodes.size} nodes.")
         ActionResultResponse(
             success = successCount > 0,
-            message = "Force reinstall/update command dispatched to $successCount/${cluster.nodes.size} nodes on the cluster: " + results.joinToString("; "),
+            message = "Force reinstall/update command dispatched to $successCount/${cluster.nodes.size} nodes on the cluster.",
             targetIp = "all-nodes"
         )
     }

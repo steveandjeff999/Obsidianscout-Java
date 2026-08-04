@@ -45,9 +45,10 @@
 
                 <div id="login-panel">
                     <form id="login-form" class="form-grid" method="POST">
+                        <input type="hidden" name="csrf_token" value="" />
                         <div class="field">
                             <label for="username" data-i18n="index.username">Username</label>
-                            <input id="username" name="username" type="text" required />
+                            <input id="username" name="username" type="text" autocomplete="username" required />
                         </div>
                         <div class="field">
                             <label for="teamNumber" data-i18n="pitdata.csv.team_number">Team Number</label>
@@ -62,7 +63,7 @@
                         </div>
                         <div class="field">
                             <label for="password" data-i18n="index.password">Password</label>
-                            <input id="password" name="password" type="password" required />
+                            <input id="password" name="password" type="password" autocomplete="current-password" required />
                             <div class="mt-6" style="text-align: right;">
                                 <a href="#" id="forgot-password-link" style="font-size: 13px; color: var(--primary);" data-i18n="index.forgot_usernamepassword">Forgot username/password?</a>
                             </div>
@@ -77,13 +78,14 @@
 
                 <div id="register-panel" class="hidden" hidden>
                     <form id="register-form" class="form-grid" method="POST">
+                        <input type="hidden" name="csrf_token" value="" />
                         <div class="field">
                             <label for="reg-username" data-i18n="index.username">Username</label>
-                            <input id="reg-username" type="text" required />
+                            <input id="reg-username" type="text" autocomplete="username" required />
                         </div>
                         <div class="field">
                             <label for="reg-email" data-i18n="index.email">Email</label>
-                            <input id="reg-email" type="email" data-i18n-placeholder="config.placeholder_scoutexamplecom" placeholder="scout@example.com" />
+                            <input id="reg-email" type="email" autocomplete="email" data-i18n-placeholder="config.placeholder_scoutexamplecom" placeholder="scout@example.com" />
                         </div>
                         <div class="field">
                             <label for="reg-team" data-i18n="pitdata.csv.team_number">Team Number</label>
@@ -98,11 +100,11 @@
                         </div>
                         <div class="field">
                             <label for="reg-password" data-i18n="index.password">Password</label>
-                            <input id="reg-password" type="password" required minlength="4" />
+                            <input id="reg-password" type="password" autocomplete="new-password" required minlength="4" />
                         </div>
                         <div class="field">
                             <label for="reg-confirm" data-i18n="index.confirm_password">Confirm Password</label>
-                            <input id="reg-confirm" type="password" required minlength="4" />
+                            <input id="reg-confirm" type="password" autocomplete="new-password" required minlength="4" />
                         </div>
                         <div class="field">
                             <label for="reg-role" data-i18n="index.role">Role</label>
@@ -131,6 +133,7 @@
                         <strong data-i18n="index.disclaimer">Disclaimer:</strong> Your account must have a registered email address set in order to recover or reset credentials.
                     </div>
                     <form id="forgot-password-form" class="form-grid" method="POST">
+                        <input type="hidden" name="csrf_token" value="" />
                         <div id="forgot-email-field" class="field">
                             <label for="forgot-email" data-i18n="config.email_address">Email Address</label>
                             <input id="forgot-email" type="email" data-i18n-placeholder="config.placeholder_scoutexamplecom" placeholder="scout@example.com" required />

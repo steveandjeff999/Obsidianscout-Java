@@ -84,6 +84,8 @@
 
                     <button class="tab hidden" data-tab="email" id="tab-email" type="button" data-i18n="config.email_settings">Email settings</button>
 
+                    <button class="tab hidden" data-tab="cloudflared" id="tab-cloudflared" type="button" data-i18n="config.cloudflared_settings">Cloudflare Tunnel</button>
+
                     <button class="tab" data-tab="permissions" id="tab-permissions" type="button" data-i18n="settings.permissions">Permissions</button>
                 </div>
 
@@ -404,6 +406,57 @@
 
                 </div>
 
+                <div data-panel="cloudflared" class="hidden">
+
+                    <p class="notice" data-i18n="config.cloudflared_notice">Configure Cloudflare Tunnel (cloudflared) to securely expose your ObsidianScout instance to the web without port forwarding.</p>
+
+                    <!-- Status Display Card -->
+                    <div class="card soft mb-20" style="background: var(--surface-2); padding: 18px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                            <div>
+                                <h3 style="margin: 0; font-size: 16px;" data-i18n="config.cloudflared_status">Tunnel Status</h3>
+                                <p id="cloudflared-status-text" class="notice mt-4" style="margin: 4px 0 0 0; font-weight: 600; font-size: 14px;">Checking status...</p>
+                            </div>
+                            <button id="cloudflared-restart-btn" class="btn secondary" type="button" style="padding: 8px 16px; font-size: 13px;">Restart Tunnel</button>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+
+                        <div class="field" style="grid-column: 1 / -1;">
+                            <label class="checkbox-label" style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; cursor: pointer;">
+                                <input id="settings-cloudflared-enabled" type="checkbox" style="width: 18px; height: 18px;" />
+                                <span data-i18n="config.enable_cloudflared">Enable Cloudflare Tunnel</span>
+                            </label>
+                            <p class="notice mt-4" style="margin-top: 4px;">Disabled by default. Check this box and enter your Tunnel ID or Token to launch cloudflared.</p>
+                        </div>
+
+                        <div class="field">
+                            <label for="settings-cloudflared-tunnel-id" data-i18n="config.tunnel_id">Tunnel ID</label>
+                            <input id="settings-cloudflared-tunnel-id" type="text" placeholder="e.g. 12345678-abcd-1234-abcd-1234567890ab" />
+                            <p class="notice mt-4">Your Cloudflare Tunnel ID uuid.</p>
+                        </div>
+
+                        <div class="field">
+                            <label for="settings-cloudflared-tunnel-token" data-i18n="config.tunnel_token">Tunnel Token (Optional)</label>
+                            <input id="settings-cloudflared-tunnel-token" type="password" placeholder="••••••••" />
+                            <p class="notice mt-4">Optional Tunnel Token if using Cloudflare managed connector.</p>
+                        </div>
+
+                        <div class="field">
+                            <label for="settings-cloudflared-target-url" data-i18n="config.target_url">Target Local URL</label>
+                            <input id="settings-cloudflared-target-url" type="text" placeholder="http://localhost:8080" />
+                            <p class="notice mt-4">Local HTTP server URL to forward traffic to (defaults to http://localhost:8080).</p>
+                        </div>
+
+                    </div>
+
+                    <div class="row gap-12 wrap mt-20">
+                        <button id="settings-cloudflared-save" class="btn" type="button" data-i18n="config.save_cloudflared_settings">Save Cloudflare Tunnel settings</button>
+                    </div>
+
+                </div>
+
                 <div data-panel="permissions" class="hidden">
 
                     <p class="notice" data-i18n="config.configure_role_page_access">Configure which pages each user role (Scout and Analytics) can access and see in the sidebar.</p>
@@ -460,6 +513,21 @@
 
                     </div>
 
+                </div>
+
+                <!-- Cluster Security Card -->
+                <div id="cluster-keys-card" class="card soft mt-24" style="border: 1px solid var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.03); padding: 20px; border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">
+                                <span>🔑</span> Cluster Key Management (Session & VAPID Keys)
+                            </h2>
+                            <p class="notice" style="margin-top: 6px; margin-bottom: 0;">
+                                Database-backed secret synchronization for CockroachDB clusters. Regenerating keys updates all nodes, syncs offline instances upon reconnection, and persists keys to <code>config/app-config.json</code>.
+                            </p>
+                        </div>
+                        <button id="btn-regenerate-cluster-keys" class="btn warning" type="button" style="padding: 10px 20px; font-size: 14px;">Regenerate Cluster Keys</button>
+                    </div>
                 </div>
 
                 <!-- Danger Zone: Wipe Team Scouting Data -->

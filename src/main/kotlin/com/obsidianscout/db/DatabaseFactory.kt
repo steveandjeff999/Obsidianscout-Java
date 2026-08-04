@@ -111,7 +111,8 @@ object DatabaseFactory {
                 ChatGroups,
                 PushSubscriptions,
                 FcmConfigs,
-                FcmDeviceTokens
+                FcmDeviceTokens,
+                ClusterSecrets
             )
 
             if (isCockroach) {

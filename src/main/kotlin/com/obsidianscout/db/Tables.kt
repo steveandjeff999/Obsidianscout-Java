@@ -325,6 +325,17 @@ object FcmDeviceTokens : UUIDTable("fcm_device_tokens") {
     }
 }
 
+object ClusterSecrets : UUIDTable("cluster_secrets") {
+    val keyName = varchar("key_name", 64)
+    val keyValue = text("key_value")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_cluster_secrets_key_name", keyName)
+    }
+}
+
+
 
 
 

@@ -65,6 +65,7 @@ tasks.test {
 
 application {
     mainClass.set("com.obsidianscout.AppKt")
+    applicationDefaultJvmArgs = listOf("-XX:MaxRAMPercentage=75.0", "-XX:InitialRAMPercentage=25.0", "-XX:MinRAMPercentage=50.0")
 }
 
 java {
@@ -135,8 +136,9 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
         runBat.writeText(
             "@echo off\r\n" +
             "setlocal enabledelayedexpansion\r\n" +
+            "if \"%JAVA_OPTS%\"==\"\" set JAVA_OPTS=-XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=25.0 -XX:MinRAMPercentage=50.0\r\n" +
             ":loop\r\n" +
-            "java -jar obsidianscout-server.jar\r\n" +
+            "java %JAVA_OPTS% -jar obsidianscout-server.jar\r\n" +
             "if exist .update_result (\r\n" +
             "    set /p SRC_ROOT=<.update_result\r\n" +
             "    del /q .update_result\r\n" +
@@ -158,8 +160,9 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
         val runSh = File(bundleDir, "run.sh")
         runSh.writeText(
             "#!/bin/sh\n" +
+            "JAVA_OPTS=\"\${JAVA_OPTS:--XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=25.0 -XX:MinRAMPercentage=50.0}\"\n" +
             "while true; do\n" +
-            "    java -jar obsidianscout-server.jar\n" +
+            "    java \$JAVA_OPTS -jar obsidianscout-server.jar\n" +
             "    if [ -f .update_result ]; then\n" +
             "        SRC_ROOT=\$(cat .update_result)\n" +
             "        rm -f .update_result\n" +

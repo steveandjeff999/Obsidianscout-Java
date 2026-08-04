@@ -40,6 +40,8 @@ import com.obsidianscout.integrations.IntegrationService
 import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.SyncScheduler
 import com.obsidianscout.integrations.SmtpSettings
+import com.obsidianscout.integrations.CloudflaredSettings
+import com.obsidianscout.admin.CloudflaredService
 import com.obsidianscout.scouting.PitScoutingService
 import com.obsidianscout.scouting.QualitativeScoutingService
 import com.obsidianscout.scouting.ScoutingService
@@ -58,6 +60,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
+import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
@@ -1207,6 +1210,56 @@ fun Application.configureRoutes() {
                     call.respond(saved.copy(passwordPlain = if (saved.passwordPlain.isNotBlank()) "********" else ""))
                 }
 
+                get("/cloudflared") {
+                    call.requireSuperAdmin()
+                    try {
+                        val settings = SettingsService.getCloudflaredSettings()
+                        val status = CloudflaredService.getStatus()
+                        val safeSettings = settings.copy(tunnelToken = if (settings.tunnelToken.isNotBlank()) "********" else "")
+                        call.respond(com.obsidianscout.admin.CloudflaredResponse(safeSettings, status))
+                    } catch (e: com.obsidianscout.auth.ApiException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        call.application.environment.log.error("Failed to get Cloudflare status", e)
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.InternalServerError, "Failed to get Cloudflare status: ${e.message}")
+                    }
+                }
+
+                put("/cloudflared") {
+                    call.requireSuperAdmin()
+                    try {
+                        val newSettings = call.receive<CloudflaredSettings>()
+                        val existing = SettingsService.getCloudflaredSettings()
+                        val merged = if (newSettings.tunnelToken == "********") {
+                            newSettings.copy(tunnelToken = existing.tunnelToken)
+                        } else {
+                            newSettings
+                        }
+                        val status = CloudflaredService.updateSettingsAndApply(merged)
+                        val saved = SettingsService.getCloudflaredSettings()
+                        val safeSettings = saved.copy(tunnelToken = if (saved.tunnelToken.isNotBlank()) "********" else "")
+                        call.respond(com.obsidianscout.admin.CloudflaredResponse(safeSettings, status))
+                    } catch (e: com.obsidianscout.auth.ApiException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        call.application.environment.log.error("Failed to update Cloudflare settings", e)
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.InternalServerError, "Failed to update Cloudflare settings: ${e.message}")
+                    }
+                }
+
+                post("/cloudflared/restart") {
+                    call.requireSuperAdmin()
+                    try {
+                        val status = CloudflaredService.startTunnel()
+                        call.respond(com.obsidianscout.admin.CloudflaredRestartResponse(true, status))
+                    } catch (e: com.obsidianscout.auth.ApiException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        call.application.environment.log.error("Failed to restart Cloudflare tunnel", e)
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.InternalServerError, "Failed to restart Cloudflare tunnel: ${e.message}")
+                    }
+                }
+
                 get("/migration/status") {
                     call.requireSuperAdmin()
                     call.respond(com.obsidianscout.db.MigrationService.getStatus())
@@ -2151,6 +2204,17 @@ fun Application.configureRoutes() {
                         val filter = call.request.queryParameters["filter"]
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getNodeLogs(ip, limit, filter))
                     }
+                    get("/nodes/{ip}/app-config") {
+                        call.requireAdmin()
+                        val ip = call.parameters["ip"] ?: "local"
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getAppConfig(ip))
+                    }
+                    put("/nodes/{ip}/app-config") {
+                        call.requireAdmin()
+                        val ip = call.parameters["ip"] ?: "local"
+                        val rawJson = call.receiveText()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.updateAppConfig(ip, rawJson))
+                    }
                     post("/nodes/{ip}/reboot") {
                         call.requireAdmin()
                         val ip = call.parameters["ip"] ?: "local"
@@ -2169,6 +2233,12 @@ fun Application.configureRoutes() {
                         call.requireAdmin()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateEntireCluster())
                     }
+                    post("/regenerate-keys") {
+                        call.requireSuperAdmin()
+                        val appConfig = AppConfigLoader.load()
+                        val result = com.obsidianscout.auth.ClusterSecretService.regenerateClusterKeys(appConfig)
+                        call.respond(result)
+                    }
                     get("/logs-all") {
                         call.requireAdmin()
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
@@ -2180,6 +2250,15 @@ fun Application.configureRoutes() {
                         val filter = call.request.queryParameters["filter"]
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getNodeLogs(localIp, limit, filter))
+                    }
+                    get("/nodes/local/app-config") {
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getAppConfig(localIp))
+                    }
+                    put("/nodes/local/app-config") {
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        val rawJson = call.receiveText()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.updateAppConfig(localIp, rawJson))
                     }
                     post("/nodes/local/reboot") {
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()

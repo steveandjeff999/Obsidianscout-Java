@@ -83,18 +83,25 @@ object GistUpdateService {
         scope = null
     }
 
+    // Reusable single HttpClient instance to avoid thread & memory leaks from repeated instantiation
+    private val sharedClient: HttpClient by lazy {
+        HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(15))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build()
+    }
+
     private fun checkGist(appConfig: AppConfig) {
         log.info("[GistUpdate] Polling gist...")
 
-        val client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build()
         val request = HttpRequest.newBuilder()
             .uri(URI.create(appConfig.gist_update.gist_url))
             .header("Cache-Control", "no-cache")
+            .header("User-Agent", "ObsidianScout-GistUpdater")
+            .timeout(java.time.Duration.ofSeconds(15))
             .build()
         val response = try {
-            client.send(request, HttpResponse.BodyHandlers.ofString())
+            sharedClient.send(request, HttpResponse.BodyHandlers.ofString())
         } catch (e: Exception) {
             log.warn("[GistUpdate] Failed to reach gist URL: ${e.message}")
             return
@@ -121,7 +128,7 @@ object GistUpdateService {
             val current = appConfig.current_version
             if (isNewerVersion(latestVersion, current)) {
                 log.info("[GistUpdate] Update available: $current -> $latestVersion. Starting download...")
-                applyUpdate(latestVersion, client)
+                applyUpdate(latestVersion, sharedClient)
                 return // applyUpdate calls exit() on success
             } else {
                 log.info("[GistUpdate] Server is up to date (version $current, latest $latestVersion).")

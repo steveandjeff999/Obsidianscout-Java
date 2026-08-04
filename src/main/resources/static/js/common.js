@@ -132,6 +132,18 @@
         }
     }
 
+    function getCsrfToken() {
+        try {
+            if (typeof document === 'undefined') return null;
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            if (meta && meta.content) return meta.content;
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; XSRF-TOKEN=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        } catch (e) {}
+        return null;
+    }
+
     async function request(path, options = {}) {
         const method = options.method || "GET";
         let isLoginPage = false;
@@ -168,6 +180,12 @@
             credentials: "same-origin",
             signal: controller.signal
         };
+        opts.headers["X-Requested-With"] = "XMLHttpRequest";
+        const csrfToken = getCsrfToken();
+        if (csrfToken) {
+            opts.headers["X-CSRF-Token"] = csrfToken;
+        }
+
         if (method === "GET") {
             opts.cache = "no-cache";
         }

@@ -121,6 +121,16 @@
             background: rgba(59, 130, 246, 0.3);
         }
 
+        .btn-action.config {
+            background: rgba(168, 85, 247, 0.15);
+            color: #c084fc;
+            border-color: rgba(168, 85, 247, 0.3);
+        }
+
+        .btn-action.config:hover {
+            background: rgba(168, 85, 247, 0.3);
+        }
+
         .btn-action.reinstall {
             background: rgba(245, 158, 11, 0.15);
             color: #fbbf24;
@@ -220,39 +230,40 @@
 
         <main class="main-content">
             <div id="admin-locked" class="card hidden">
-                <h2>Admin Access Required</h2>
-                <p class="notice">You need server admin or superadmin privileges to access cluster server management.</p>
+                <h2 data-i18n="cluster.locked_title">Admin Access Required</h2>
+                <p class="notice" data-i18n="cluster.locked_notice">You need server admin or superadmin privileges to access cluster server management.</p>
             </div>
 
             <div id="admin-panel" class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
                     <div>
-                        <h1 style="margin: 0;">Server & Cluster Management</h1>
-                        <p class="notice" style="margin-top: 4px; margin-bottom: 0;">Monitor servers on the CockroachDB cluster and perform individual or cluster-wide actions.</p>
+                        <h1 style="margin: 0;" data-i18n="cluster.title">Server & Cluster Management</h1>
+                        <p class="notice" style="margin-top: 4px; margin-bottom: 0;" data-i18n="cluster.notice">Monitor servers on the CockroachDB cluster and edit individual node configurations.</p>
                     </div>
-                    <button id="btn-refresh-nodes" class="btn" type="button">Refresh Server List</button>
+                    <button id="btn-refresh-nodes" class="btn" type="button" data-i18n="cluster.btn_refresh">Refresh Server List</button>
                 </div>
 
                 <!-- Cluster-Wide Action Header Card -->
                 <div class="card soft mb-24" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3); padding: 18px; border-radius: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div>
-                            <h3 style="margin: 0; font-size: 16px; color: #c084fc;">🌐 Cluster-Wide Actions (All Servers)</h3>
-                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #e9d5ff;">Perform maintenance or force updates across every node in the CockroachDB cluster at once.</p>
+                            <h3 style="margin: 0; font-size: 16px; color: #c084fc;" data-i18n="cluster.wide_actions_title">🌐 Cluster-Wide Actions (All Servers)</h3>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #e9d5ff;" data-i18n="cluster.wide_actions_notice">Perform maintenance or force updates across every node in the CockroachDB cluster at once.</p>
                         </div>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <button id="btn-cluster-logs" class="btn-action logs" type="button" style="padding: 8px 14px;">View All Cluster Logs</button>
-                            <button id="btn-cluster-reinstall" class="btn-action reinstall" type="button" style="padding: 8px 14px;">Force Reinstall All</button>
-                            <button id="btn-cluster-reboot" class="btn-action reboot" type="button" style="padding: 8px 14px;">Reboot Entire Cluster</button>
+                            <button id="btn-cluster-logs" class="btn-action logs" type="button" style="padding: 8px 14px;" data-i18n="cluster.btn_view_logs">View All Cluster Logs</button>
+                            <button id="btn-cluster-keys" class="btn-action config" type="button" style="padding: 8px 14px;" data-i18n="cluster.btn_regen_keys">Regenerate Cluster Keys</button>
+                            <button id="btn-cluster-reinstall" class="btn-action reinstall" type="button" style="padding: 8px 14px;" data-i18n="cluster.btn_force_reinstall">Force Reinstall All</button>
+                            <button id="btn-cluster-reboot" class="btn-action reboot" type="button" style="padding: 8px 14px;" data-i18n="cluster.btn_reboot_all">Reboot Entire Cluster</button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Server List Table -->
                 <div class="server-table-card">
-                    <h2 style="font-size: 17px; margin-top: 0; margin-bottom: 16px;">Discovered Cluster Servers</h2>
+                    <h2 style="font-size: 17px; margin-top: 0; margin-bottom: 16px;" data-i18n="cluster.servers_title">Discovered Cluster Servers</h2>
                     <div id="server-list-container">
-                        <div style="color: var(--text-muted); padding: 10px;">Loading cluster servers...</div>
+                        <div style="color: var(--text-muted); padding: 10px;" data-i18n="cluster.loading_servers">Loading cluster servers...</div>
                     </div>
                 </div>
 
@@ -261,45 +272,68 @@
                     <div class="log-console-header">
                         <div class="log-console-title">
                             <span>🖥️</span>
-                            <span id="selected-node-title">Server Log Console</span>
+                            <span id="selected-node-title" data-i18n="cluster.logs_title">Server Log Console</span>
                             <span id="log-count-badge" class="badge" style="margin-left: 8px; font-size: 11px;">0 entries</span>
                         </div>
                         <div class="log-console-controls" style="display: flex; gap: 10px; align-items: center;">
-                            <input type="text" id="log-search" style="background: #090d16; border: 1px solid #334155; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px;" placeholder="Filter logs..." />
+                            <input type="text" id="log-search" style="background: #090d16; border: 1px solid #334155; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px;" data-i18n-placeholder="cluster.filter_placeholder" placeholder="Filter logs..." />
                             <select id="log-limit-select" style="background: #090d16; border: 1px solid #334155; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px;">
-                                <option value="200">Last 200 lines</option>
-                                <option value="500" selected>Last 500 lines</option>
-                                <option value="1000">Last 1,000 lines (Max)</option>
+                                <option value="200" data-i18n="cluster.last_200">Last 200 lines</option>
+                                <option value="500" selected data-i18n="cluster.last_500">Last 500 lines</option>
+                                <option value="1000" data-i18n="cluster.last_1000">Last 1,000 lines (Max)</option>
                             </select>
                             <label style="color: #cbd5e1; font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                                <input type="checkbox" id="auto-refresh-toggle" checked /> Auto-refresh
+                                <input type="checkbox" id="auto-refresh-toggle" checked /> <span data-i18n="cluster.auto_refresh">Auto-refresh</span>
                             </label>
-                            <button id="btn-fetch-logs" class="btn small" type="button">Refresh Logs</button>
+                            <button id="btn-fetch-logs" class="btn small" type="button" data-i18n="cluster.btn_refresh_logs">Refresh Logs</button>
                         </div>
                     </div>
                     <div id="log-terminal" class="log-terminal">
-                        <div style="color: #64748b; text-align: center; padding-top: 40px;">Select a server or cluster action to view live logs...</div>
+                        <div style="color: #64748b; text-align: center; padding-top: 40px;" data-i18n="cluster.log_placeholder">Select a server or cluster action to view live logs...</div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
 
+    <!-- Edit app-config.json Modal — Uses app.css native modal system (.modal-backdrop + .show) -->
+    <div id="app-config-modal" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container" style="max-width: 720px; width: 90%;">
+            <div class="modal-header">
+                <h2 class="modal-title" style="color: #c084fc;" data-i18n="cluster.modal_config_title">⚙️ Edit app-config.json</h2>
+                <button type="button" class="modal-close" id="modal-config-cancel-x" aria-label="Close">&#x2715;</button>
+            </div>
+            <div style="padding: 20px;">
+                <p id="modal-config-subtitle" style="margin: 0 0 12px 0; font-size: 13px; color: var(--text-muted, #94a3b8);" data-i18n="cluster.modal_config_subtitle">
+                    Editing <strong>config/app-config.json</strong> for target server node.
+                </p>
+                <div style="margin-bottom: 12px;">
+                    <textarea id="app-config-editor" spellcheck="false" style="width: 100%; height: 380px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 1.5; background: #090d16; color: #38bdf8; border: 1px solid #334155; padding: 14px; border-radius: 8px; resize: vertical; box-sizing: border-box;"></textarea>
+                </div>
+                <p id="modal-config-error" style="color: #ef4444; font-size: 12px; margin: 0; display: none;"></p>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-config-cancel" class="btn ghost" type="button" data-i18n="btn.cancel">Cancel</button>
+                <button id="modal-config-save" class="btn secondary" style="background: #a855f7; color: white;" type="button" data-i18n="cluster.modal_config_save">Save App Config</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Reboot Modal — Uses app.css native modal system (.modal-backdrop + .show) -->
     <div id="reboot-modal" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container">
             <div class="modal-header">
-                <h2 class="modal-title" style="color: #ef4444;">⚠️ Confirm Server Reboot</h2>
+                <h2 class="modal-title" style="color: #ef4444;" data-i18n="cluster.modal_reboot_title">⚠️ Confirm Server Reboot</h2>
                 <button type="button" class="modal-close" id="modal-reboot-cancel-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px;">
-                <p id="modal-reboot-text" style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink);">
+                <p id="modal-reboot-text" style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink);" data-i18n="cluster.modal_reboot_text">
                     Are you sure you want to reboot?
                 </p>
             </div>
             <div class="modal-footer">
-                <button id="modal-reboot-cancel" class="btn ghost" type="button">Cancel</button>
-                <button id="modal-reboot-confirm" class="btn danger" type="button">Reboot Now</button>
+                <button id="modal-reboot-cancel" class="btn ghost" type="button" data-i18n="btn.cancel">Cancel</button>
+                <button id="modal-reboot-confirm" class="btn danger" type="button" data-i18n="cluster.modal_reboot_confirm">Reboot Now</button>
             </div>
         </div>
     </div>
@@ -308,17 +342,17 @@
     <div id="reinstall-modal" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container">
             <div class="modal-header">
-                <h2 class="modal-title" style="color: #f59e0b;">🔄 Confirm Force Reinstall / Update</h2>
+                <h2 class="modal-title" style="color: #f59e0b;" data-i18n="cluster.modal_reinstall_title">🔄 Confirm Force Reinstall / Update</h2>
                 <button type="button" class="modal-close" id="modal-reinstall-cancel-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px;">
-                <p id="modal-reinstall-text" style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink);">
+                <p id="modal-reinstall-text" style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink);" data-i18n="cluster.modal_reinstall_text">
                     Are you sure you want to force reinstall/update?
                 </p>
             </div>
             <div class="modal-footer">
-                <button id="modal-reinstall-cancel" class="btn ghost" type="button">Cancel</button>
-                <button id="modal-reinstall-confirm" class="btn secondary" style="background: #f59e0b; color: white;" type="button">Force Reinstall</button>
+                <button id="modal-reinstall-cancel" class="btn ghost" type="button" data-i18n="btn.cancel">Cancel</button>
+                <button id="modal-reinstall-confirm" class="btn secondary" style="background: #f59e0b; color: white;" type="button" data-i18n="cluster.modal_reinstall_confirm">Force Reinstall</button>
             </div>
         </div>
     </div>

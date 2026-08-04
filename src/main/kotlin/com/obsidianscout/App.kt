@@ -94,8 +94,18 @@ fun main() {
 
 fun Application.module(appConfig: AppConfig) {
 
+    com.obsidianscout.auth.ClusterSecretService.initFromConfig(appConfig)
+
     install(com.obsidianscout.utils.ServerTimingPlugin)
-    install(DefaultHeaders)
+    install(DefaultHeaders) {
+        header("X-Frame-Options", "DENY")
+        header("X-Content-Type-Options", "nosniff")
+        header("X-XSS-Protection", "1; mode=block")
+        header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';")
+        header("Referrer-Policy", "strict-origin-when-cross-origin")
+        header("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)")
+    }
     install(WebSockets) {
         pingPeriod = java.time.Duration.ofSeconds(15)
         timeout = java.time.Duration.ofSeconds(15)
@@ -118,9 +128,9 @@ fun Application.module(appConfig: AppConfig) {
         options { call, _ ->
             val path = call.request.path()
             if (path.contains("/vendor/") || path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) {
-                CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 3600 * 24 * 30)) // 30 days
+                CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 3600 * 24 * 30, visibility = CacheControl.Visibility.Public))
             } else {
-                CachingOptions(CacheControl.NoCache(CacheControl.Visibility.Public))
+                CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
             }
         }
     }
@@ -128,6 +138,65 @@ fun Application.module(appConfig: AppConfig) {
         filter { call -> 
             if (appConfig.server.logging) true 
             else call.request.path().startsWith("/api") 
+        }
+    }
+
+    // Pipeline Interceptor for Security Headers, Anti-CSRF Token, and Cache Controls
+    intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
+        val path = call.request.path()
+        val method = call.request.local.method.value.uppercase()
+        val isAsset = path.contains("/vendor/") || path.contains("/css/") || path.contains("/js/") ||
+                path.contains("/assets/") || path.endsWith(".js") || path.endsWith(".css") ||
+                path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")
+
+        if (!isAsset) {
+            call.response.headers.append("Cache-Control", "no-store, no-cache, must-revalidate, private")
+            call.response.headers.append("Pragma", "no-cache")
+            call.response.headers.append("Expires", "0")
+        }
+
+        if (call.request.cookies["XSRF-TOKEN"] == null) {
+            val csrfToken = java.util.UUID.randomUUID().toString()
+            call.response.cookies.append(
+                io.ktor.http.Cookie(
+                    name = "XSRF-TOKEN",
+                    value = csrfToken,
+                    path = "/",
+                    httpOnly = false,
+                    extensions = mapOf("SameSite" to "Lax"),
+                    secure = appConfig.server.cookieSecure
+                )
+            )
+        }
+
+        if (method in listOf("POST", "PUT", "DELETE", "PATCH")) {
+            val isExcludedPath = path.startsWith("/api/push") || path.startsWith("/api/mobile") || path.startsWith("/api/cluster")
+            if (!isExcludedPath) {
+                val origin = call.request.headers["Origin"]
+                val referer = call.request.headers["Referer"]
+                val host = call.request.headers["Host"]
+                val csrfHeader = call.request.headers["X-CSRF-Token"] ?: call.request.headers["X-XSRF-TOKEN"]
+                val requestedWith = call.request.headers["X-Requested-With"]
+                val cookieToken = call.request.cookies["XSRF-TOKEN"]
+
+                var valid = false
+                if (!csrfHeader.isNullOrBlank() && cookieToken != null && csrfHeader == cookieToken) {
+                    valid = true
+                } else if (requestedWith.equals("XMLHttpRequest", ignoreCase = true)) {
+                    valid = true
+                } else if (host != null && ((origin != null && origin.contains(host)) || (referer != null && referer.contains(host)))) {
+                    valid = true
+                }
+
+                if (!valid) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        ErrorResponse("CSRF validation failed")
+                    )
+                    finish()
+                    return@intercept
+                }
+            }
         }
     }
     
@@ -186,7 +255,7 @@ fun Application.module(appConfig: AppConfig) {
             cookie.maxAgeInSeconds = 60 * 60 * 12
             cookie.extensions["SameSite"] = "Lax"
             cookie.secure = appConfig.server.cookieSecure
-            transform(SessionTransportTransformerMessageAuthentication(appConfig.server.sessionSecret.toByteArray()))
+            transform(com.obsidianscout.auth.ClusterSessionTransformer { com.obsidianscout.auth.ClusterSecretService.getSessionSecret() })
         }
 
         // Wrap the registered provider's transport to dynamically support Keep Me Logged In
@@ -304,8 +373,12 @@ fun Application.module(appConfig: AppConfig) {
                 SettingsService.ensureDefaultSettings()
                 AuthService.ensureSeedSuperAdmin(appConfig.seed)
 
+                com.obsidianscout.auth.ClusterSecretService.syncSecrets(appConfig)
+                com.obsidianscout.auth.ClusterSecretService.startBackgroundSync(appConfig)
+
                 SyncScheduler.start()
                 com.obsidianscout.scouting.DeduplicationScheduler.start()
+                com.obsidianscout.admin.CloudflaredService.initOnStartup()
                 println("[Database] Background database initialization completed successfully.")
                 
                 // Start replication monitoring only after initial setup is fully complete and successful
@@ -323,9 +396,11 @@ fun Application.module(appConfig: AppConfig) {
     }
 
     environment.monitor.subscribe(ApplicationStopped) {
+        com.obsidianscout.auth.ClusterSecretService.stopBackgroundSync()
         SyncScheduler.stop()
         GistUpdateService.stop()
         com.obsidianscout.scouting.DeduplicationScheduler.stop()
+        com.obsidianscout.admin.CloudflaredService.stopTunnel()
         try {
             DatabaseFactory.close()
         } catch (closeEx: Exception) {

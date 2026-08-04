@@ -179,10 +179,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         try {
             const mode = configModes[activeConfigKind];
-            const [configResponse, settingsResponse, emailResponse] = await Promise.all([
+            const [configResponse, settingsResponse, emailResponse, cloudflaredResponse] = await Promise.all([
                 Obsidianscout.request(mode.apiPath + "?local=true"),
                 Obsidianscout.request("/api/settings?local=true"),
-                isUserSuperAdmin ? Obsidianscout.request("/api/admin/email-settings") : Promise.resolve(null)
+                isUserSuperAdmin ? Obsidianscout.request("/api/admin/email-settings").catch(err => { console.warn("Failed to load email settings:", err); return null; }) : Promise.resolve(null),
+                isUserSuperAdmin ? Obsidianscout.request("/api/admin/cloudflared").catch(err => { console.warn("Failed to load cloudflared settings:", err); return null; }) : Promise.resolve(null)
             ]);
 
             adminPanelWrapper.innerHTML = originalAdminPanelHTML;
@@ -623,6 +624,78 @@ document.addEventListener("DOMContentLoaded", async () => {
                             Obsidianscout.showToast("Test email sent successfully", "success");
                         } catch (err) {
                             Obsidianscout.showToast(err.message || "Failed to send test email", "error");
+                        }
+                    });
+                }
+            }
+
+            // Populate Cloudflare Tunnel settings if superadmin
+            if (isUserSuperAdmin && cloudflaredResponse) {
+                const tabCloudflared = document.getElementById("tab-cloudflared");
+                if (tabCloudflared) tabCloudflared.classList.remove("hidden");
+
+                const cfSettings = cloudflaredResponse.settings || {};
+                const cfStatus = cloudflaredResponse.status || {};
+
+                const enabledCb = document.getElementById("settings-cloudflared-enabled");
+                if (enabledCb) enabledCb.checked = !!cfSettings.enabled;
+
+                setVal("settings-cloudflared-tunnel-id", cfSettings.tunnelId || "");
+                setVal("settings-cloudflared-tunnel-token", cfSettings.tunnelToken || "");
+                setVal("settings-cloudflared-target-url", cfSettings.targetUrl || "http://localhost:8080");
+
+                const updateStatusUI = (status) => {
+                    const statusText = document.getElementById("cloudflared-status-text");
+                    if (statusText) {
+                        statusText.textContent = status.statusMessage || "Unknown";
+                        if (status.isRunning) {
+                            statusText.style.color = "#10b981"; // green
+                        } else if (status.enabled) {
+                            statusText.style.color = "#f59e0b"; // yellow/orange
+                        } else {
+                            statusText.style.color = "var(--muted)";
+                        }
+                    }
+                };
+
+                updateStatusUI(cfStatus);
+
+                // Save Cloudflared settings listener
+                const cfSaveBtn = document.getElementById("settings-cloudflared-save");
+                if (cfSaveBtn) {
+                    cfSaveBtn.addEventListener("click", async () => {
+                        const payload = {
+                            enabled: !!(document.getElementById("settings-cloudflared-enabled")?.checked),
+                            tunnelId: getVal("settings-cloudflared-tunnel-id").trim(),
+                            tunnelToken: getVal("settings-cloudflared-tunnel-token").trim(),
+                            targetUrl: getVal("settings-cloudflared-target-url").trim() || "http://localhost:8080"
+                        };
+                        try {
+                            const res = await Obsidianscout.request("/api/admin/cloudflared", {
+                                method: "PUT",
+                                json: payload
+                            });
+                            updateStatusUI(res.status || {});
+                            Obsidianscout.showToast("Cloudflare Tunnel settings saved", "success");
+                        } catch (err) {
+                            Obsidianscout.showToast(err.message || "Failed to save Cloudflare Tunnel settings", "error");
+                        }
+                    });
+                }
+
+                // Restart Cloudflared tunnel listener
+                const cfRestartBtn = document.getElementById("cloudflared-restart-btn");
+                if (cfRestartBtn) {
+                    cfRestartBtn.addEventListener("click", async () => {
+                        Obsidianscout.showToast("Restarting Cloudflare Tunnel...", "info");
+                        try {
+                            const res = await Obsidianscout.request("/api/admin/cloudflared/restart", {
+                                method: "POST"
+                            });
+                            updateStatusUI(res.status || {});
+                            Obsidianscout.showToast("Cloudflare Tunnel restarted", "success");
+                        } catch (err) {
+                            Obsidianscout.showToast(err.message || "Failed to restart Cloudflare Tunnel", "error");
                         }
                     });
                 }
@@ -1498,3 +1571,34 @@ function isValidJson(text) {
         return false;
     }
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+    const btnRegen = document.getElementById("btn-regenerate-cluster-keys");
+    if (btnRegen) {
+        btnRegen.addEventListener("click", async () => {
+            if (!confirm("Are you sure you want to regenerate all cluster keys (Session Secret & VAPID keys)?\n\nRotating session keys will require active users across all nodes to sign in again.")) {
+                return;
+            }
+            btnRegen.disabled = true;
+            btnRegen.textContent = "Regenerating...";
+            try {
+                const resp = await fetch("/api/admin/cluster/regenerate-keys", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" }
+                });
+                const data = await resp.json();
+                if (resp.ok && data.success) {
+                    alert(data.message || "Cluster keys successfully regenerated!");
+                } else {
+                    alert("Failed to regenerate cluster keys: " + (data.error || data.message || "Unknown error"));
+                }
+            } catch (err) {
+                alert("Error regenerating cluster keys: " + err.message);
+            } finally {
+                btnRegen.disabled = false;
+                btnRegen.textContent = "Regenerate Cluster Keys";
+            }
+        });
+    }
+});
+

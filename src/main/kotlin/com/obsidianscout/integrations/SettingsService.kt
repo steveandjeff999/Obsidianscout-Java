@@ -31,6 +31,15 @@ data class SmtpSettings(
     val encryption: String = "STARTTLS" // SSL_TLS, STARTTLS, NONE
 )
 
+@Serializable
+data class CloudflaredSettings(
+    val enabled: Boolean = false,
+    val tunnelId: String = "",
+    val tunnelToken: String = "",
+    val targetUrl: String = "http://localhost:8080",
+    val customHostname: String = ""
+)
+
 val DEFAULT_SCOUT_PAGES = listOf(
     "dashboard", "chat", "scout", "pit-scout", "qual-scout", "qr-scanner", "contact"
 )
@@ -267,6 +276,52 @@ object SettingsService {
             if (row == null) {
                 AppSettings.insert {
                     it[AppSettings.teamNumber] = -1
+                    it[settingsJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            } else {
+                AppSettings.update({ AppSettings.id eq row[AppSettings.id] }) {
+                    it[settingsJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            }
+        }
+        return settings
+    }
+
+    fun getCloudflaredSettings(): CloudflaredSettings {
+        val jsonText = try {
+            transaction {
+                AppSettings
+                    .selectAll().where { AppSettings.teamNumber eq -2 }
+                    .limit(1)
+                    .firstOrNull()
+                    ?.get(AppSettings.settingsJson)
+            }
+        } catch (e: Throwable) {
+            null
+        }
+        return if (jsonText.isNullOrBlank()) {
+            CloudflaredSettings()
+        } else {
+            try {
+                JsonSupport.json.decodeFromString(CloudflaredSettings.serializer(), jsonText)
+            } catch (e: Throwable) {
+                CloudflaredSettings()
+            }
+        }
+    }
+
+    fun updateCloudflaredSettings(settings: CloudflaredSettings): CloudflaredSettings {
+        val jsonText = JsonSupport.json.encodeToString(CloudflaredSettings.serializer(), settings)
+        transaction {
+            val row = AppSettings
+                .selectAll().where { AppSettings.teamNumber eq -2 }
+                .limit(1)
+                .firstOrNull()
+            if (row == null) {
+                AppSettings.insert {
+                    it[AppSettings.teamNumber] = -2
                     it[settingsJson] = jsonText
                     it[updatedAt] = Instant.now()
                 }

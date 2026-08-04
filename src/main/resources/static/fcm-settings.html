@@ -76,20 +76,20 @@
 
         <main class="main-content">
             <div id="admin-locked" class="card hidden">
-                <h2>Admin Only</h2>
-                <p class="notice">You need admin access to edit FCM Push Notification settings.</p>
+                <h2 data-i18n="fcm.locked_title">Admin Only</h2>
+                <p class="notice" data-i18n="fcm.locked_notice">You need admin access to edit FCM Push Notification settings.</p>
             </div>
 
             <div id="fcm-panel" class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 24px;">
                     <div>
-                        <h1 style="margin: 0;">🔥 Firebase Push Notifications (FCM)</h1>
-                        <p style="color: var(--muted); margin-top: 4px; font-size: 14px;">
+                        <h1 style="margin: 0;" data-i18n="fcm.title">🔥 Firebase Push Notifications (FCM)</h1>
+                        <p style="color: var(--muted); margin-top: 4px; font-size: 14px;" data-i18n="fcm.notice">
                             Configure Google Firebase Cloud Messaging credentials for real-time mobile & browser chat alerts. Saved to database for cluster-wide synchronization.
                         </p>
                     </div>
                     <div id="fcm-status-badge" class="status-badge inactive">
-                        <span id="fcm-status-dot">●</span> <span id="fcm-status-text">FCM Disabled</span>
+                        <span id="fcm-status-dot">●</span> <span id="fcm-status-text" data-i18n="fcm.status_disabled">FCM Disabled</span>
                     </div>
                 </div>
 
@@ -97,8 +97,8 @@
                     <!-- Enable Toggle -->
                     <div class="card soft" style="background: var(--surface-2); padding: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between;">
                         <div>
-                            <strong style="font-size: 16px;">Enable Firebase Push Notifications</strong>
-                            <p style="margin: 2px 0 0 0; color: var(--muted); font-size: 13px;">
+                            <strong style="font-size: 16px;" data-i18n="fcm.enable_label">Enable Firebase Push Notifications</strong>
+                            <p style="margin: 2px 0 0 0; color: var(--muted); font-size: 13px;" data-i18n="fcm.enable_subtext">
                                 Allow the server to push real-time alerts to Flutter mobile apps and web devices.
                             </p>
                         </div>
@@ -110,20 +110,20 @@
 
                     <!-- Service Account Upload Zone -->
                     <div class="card soft" style="background: var(--surface-2); padding: 20px; border-radius: 12px;">
-                        <h3 style="margin: 0 0 8px 0; font-size: 16px;">1. Service Account Credentials (JSON)</h3>
-                        <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 16px;" data-i18n="fcm.section_service_account">1. Service Account Credentials (JSON)</h3>
+                        <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;" data-i18n="fcm.service_account_subtext">
                             Download your <code>service-account.json</code> file from Firebase Console -> Project Settings -> Service Accounts -> Generate New Private Key.
                         </p>
 
                         <div class="dropzone" id="json-dropzone">
                             <span style="font-size: 28px;">📄</span>
-                            <p style="margin: 8px 0 4px 0; font-weight: 600;">Click or drag & drop <code>service-account.json</code> here</p>
-                            <span style="color: var(--muted); font-size: 12px;">Private Key file generated in Firebase Console -> Project Settings -> Service Accounts.</span>
+                            <p style="margin: 8px 0 4px 0; font-weight: 600;" data-i18n="fcm.dropzone_title">Click or drag & drop <code>service-account.json</code> here</p>
+                            <span style="color: var(--muted); font-size: 12px;" data-i18n="fcm.dropzone_subtext">Private Key file generated in Firebase Console -> Project Settings -> Service Accounts.</span>
                             <input type="file" id="json-file-input" accept=".json" style="display: none;" />
                         </div>
 
                         <div style="margin-top: 12px;">
-                            <label style="font-size: 13px; font-weight: 600;">Or Paste Service Account JSON:</label>
+                            <label style="font-size: 13px; font-weight: 600;" data-i18n="fcm.paste_label">Or Paste Service Account JSON:</label>
                             <textarea id="json-textarea" rows="4" placeholder="{ &#34;type&#34;: &#34;service_account&#34;, &#34;project_id&#34;: &#34;your-project-id&#34;, ... }" style="width: 100%; font-family: monospace; font-size: 12px; margin-top: 6px; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); color: var(--fg); border: 1px solid rgba(255,255,255,0.1);"></textarea>
                         </div>
                     </div>
@@ -132,38 +132,38 @@
                     <div class="card soft" style="background: var(--surface-2); padding: 20px; border-radius: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
                             <div>
-                                <h3 style="margin: 0 0 4px 0; font-size: 16px;">2. Public Firebase Client Settings</h3>
-                                <p style="color: var(--muted); font-size: 13px; margin: 0;">
+                                <h3 style="margin: 0 0 4px 0; font-size: 16px;" data-i18n="fcm.section_public">2. Public Firebase Client Settings</h3>
+                                <p style="color: var(--muted); font-size: 13px; margin: 0;" data-i18n="fcm.public_subtext">
                                     Served via <code>/api/config/fcm-public</code> so Flutter apps connect dynamically without rebuilding app binaries.
                                 </p>
                             </div>
                             <button type="button" id="btn-upload-google-services" class="btn secondary" style="font-size: 12px; padding: 6px 12px;">
-                                <span>📱 Upload google-services.json</span>
+                                <span data-i18n="fcm.btn_upload_google_services">📱 Upload google-services.json</span>
                             </button>
                             <input type="file" id="google-services-file-input" accept=".json" style="display: none;" />
                         </div>
 
                         <div class="fcm-grid">
                             <div>
-                                <label style="font-size: 13px; font-weight: 600;">Project ID:</label>
+                                <label style="font-size: 13px; font-weight: 600;" data-i18n="fcm.project_id_label">Project ID:</label>
                                 <input type="text" id="fcm-project-id" placeholder="e.g. obsidianscout" style="width: 100%; margin-top: 4px;" />
                             </div>
                             <div>
-                                <label style="font-size: 13px; font-weight: 600;">API Key (apiKey):</label>
+                                <label style="font-size: 13px; font-weight: 600;" data-i18n="fcm.api_key_label">API Key (apiKey):</label>
                                 <input type="text" id="fcm-api-key" placeholder="AIzaSy..." style="width: 100%; margin-top: 4px;" />
                             </div>
                             <div>
-                                <label style="font-size: 13px; font-weight: 600;">App ID (appId):</label>
+                                <label style="font-size: 13px; font-weight: 600;" data-i18n="fcm.app_id_label">App ID (appId):</label>
                                 <input type="text" id="fcm-app-id" placeholder="1:123456789:android:abcdef" style="width: 100%; margin-top: 4px;" />
                             </div>
                             <div>
-                                <label style="font-size: 13px; font-weight: 600;">Messaging Sender ID:</label>
+                                <label style="font-size: 13px; font-weight: 600;" data-i18n="fcm.sender_id_label">Messaging Sender ID:</label>
                                 <input type="text" id="fcm-sender-id" placeholder="123456789012" style="width: 100%; margin-top: 4px;" />
                             </div>
                         </div>
 
                         <div style="margin-top: 16px;">
-                            <label style="font-size: 13px; font-weight: 600;">VAPID Web Key (Optional for Web Push):</label>
+                            <label style="font-size: 13px; font-weight: 600;" data-i18n="fcm.vapid_key_label">VAPID Web Key (Optional for Web Push):</label>
                             <input type="text" id="fcm-vapid-key" placeholder="BEl62i..." style="width: 100%; margin-top: 4px;" />
                         </div>
                     </div>
@@ -171,10 +171,10 @@
                     <!-- Action Buttons -->
                     <div style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;">
                         <button type="button" id="btn-test-fcm" class="btn secondary" style="display: inline-flex; align-items: center; gap: 6px;">
-                            <span>🔔</span> Send Test Notification
+                            <span>🔔</span> <span data-i18n="fcm.btn_test">Send Test Notification</span>
                         </button>
                         <button type="submit" id="btn-save-fcm" class="btn primary" style="display: inline-flex; align-items: center; gap: 6px;">
-                            <span>💾</span> Save to Database
+                            <span>💾</span> <span data-i18n="fcm.btn_save">Save to Database</span>
                         </button>
                     </div>
                 </form>
@@ -204,6 +204,11 @@
             const statusBadge = document.getElementById("fcm-status-badge");
             const statusText = document.getElementById("fcm-status-text");
 
+            let currentEnabled = false;
+            let currentIsInit = false;
+
+            const t = (key, fallback) => (window.Obsidianscout && typeof Obsidianscout.t === "function") ? Obsidianscout.t(key, fallback) : fallback;
+
             function showAlert(msg, isError = false) {
                 fcmAlert.textContent = msg;
                 fcmAlert.className = isError ? "notice error" : "notice success";
@@ -211,17 +216,23 @@
             }
 
             function updateBadge(enabled, isInitialized) {
+                currentEnabled = enabled;
+                currentIsInit = isInitialized;
                 if (enabled && isInitialized) {
                     statusBadge.className = "status-badge active";
-                    statusText.textContent = "FCM Active & Ready";
+                    statusText.textContent = t("fcm.status_active", "FCM Active & Ready");
                 } else if (enabled && !isInitialized) {
                     statusBadge.className = "status-badge inactive";
-                    statusText.textContent = "Enabled (Uninitialized / Check JSON)";
+                    statusText.textContent = t("fcm.status_uninit", "Enabled (Uninitialized / Check JSON)");
                 } else {
                     statusBadge.className = "status-badge inactive";
-                    statusText.textContent = "FCM Disabled";
+                    statusText.textContent = t("fcm.status_disabled", "FCM Disabled");
                 }
             }
+
+            window.addEventListener("obsidianscout:languagechange", () => {
+                updateBadge(currentEnabled, currentIsInit);
+            });
 
             // Load existing admin config
             try {
@@ -233,7 +244,7 @@
                 senderIdInput.value = cfg.messagingSenderId || "";
                 vapidKeyInput.value = cfg.vapidKey || "";
                 if (cfg.hasServiceAccountJson) {
-                    jsonTextarea.placeholder = "(Service Account JSON stored in database. Paste new JSON here to update)";
+                    jsonTextarea.placeholder = t("fcm.placeholder_stored", "(Service Account JSON stored in database. Paste new JSON here to update)");
                 }
                 updateBadge(cfg.enabled, cfg.isInitialized);
             } catch (e) {
@@ -250,17 +261,17 @@
                 try {
                     const parsed = JSON.parse(text);
 
-                    // 1. Service Account JSON (Private Key)
+                    // 1. Service Account JSON
                     if (parsed.type === "service_account" || parsed.private_key) {
                         jsonTextarea.value = text;
                         if (parsed.project_id) {
                             projectIdInput.value = parsed.project_id;
                         }
-                        showAlert("Service Account JSON (Private Key) loaded and Project ID extracted!", false);
+                        showAlert(t("fcm.service_account_loaded", "Service Account JSON loaded and Project ID extracted!"), false);
                         return;
                     }
 
-                    // 2. Web firebaseConfig JSON (apiKey, appId, messagingSenderId)
+                    // 2. Web firebaseConfig JSON
                     if (parsed.apiKey) apiKeyInput.value = parsed.apiKey;
                     if (parsed.appId) appIdInput.value = parsed.appId;
                     if (parsed.messagingSenderId) senderIdInput.value = parsed.messagingSenderId;
@@ -284,9 +295,9 @@
                     }
 
                     if (isServiceAccount) {
-                        showAlert("Client config loaded! API Key, App ID, and Messaging Sender ID extracted. (Ensure service-account.json is uploaded into Section 1 for backend private key setup)", false);
+                        showAlert(t("fcm.client_config_loaded", "Client config loaded! API Key, App ID, and Messaging Sender ID extracted."), false);
                     } else {
-                        showAlert("Public client keys (API Key, App ID, Messaging Sender ID) extracted successfully!", false);
+                        showAlert(t("fcm.public_keys_extracted", "Public client keys (API Key, App ID, Messaging Sender ID) extracted successfully!"), false);
                     }
                 } catch (e) {
                     console.error("JSON parse error", e);
@@ -335,7 +346,7 @@
                         }
                     });
                     if (res.success) {
-                        showAlert("FCM Settings saved to database successfully!", false);
+                        showAlert(t("fcm.save_success", "FCM Settings saved to database successfully!"), false);
                         const updated = await Obsidianscout.request("/api/admin/fcm");
                         updateBadge(updated.enabled, updated.isInitialized);
                     } else {

@@ -915,9 +915,20 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
                     println("[Cockroach] Upgrading cluster replication factor (default, system, database) to $replicas...")
-                    stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = $replicas")
-                    stmt.execute("ALTER RANGE system CONFIGURE ZONE USING num_replicas = $replicas")
-                    stmt.execute("ALTER DATABASE \"$dbName\" CONFIGURE ZONE USING num_replicas = $replicas")
+                    try { stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = $replicas") } catch (e: Exception) {}
+                    try { stmt.execute("ALTER RANGE system CONFIGURE ZONE USING num_replicas = $replicas") } catch (e: Exception) {}
+                    try {
+                        stmt.execute("CREATE DATABASE IF NOT EXISTS \"$dbName\"")
+                        stmt.execute("ALTER DATABASE \"$dbName\" CONFIGURE ZONE USING num_replicas = $replicas")
+                    } catch (e: Exception) {
+                        println("[Cockroach] Note configuring zone for $dbName: ${e.message}")
+                    }
+                    if (dbName != "obsidianscoutjava") {
+                        try {
+                            stmt.execute("CREATE DATABASE IF NOT EXISTS \"obsidianscoutjava\"")
+                            stmt.execute("ALTER DATABASE \"obsidianscoutjava\" CONFIGURE ZONE USING num_replicas = $replicas")
+                        } catch (e: Exception) {}
+                    }
                 }
             }
             return true

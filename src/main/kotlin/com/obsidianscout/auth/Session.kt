@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
 import io.ktor.server.sessions.SessionTransport
 import io.ktor.server.sessions.CookieConfiguration
 import io.ktor.server.sessions.SessionTransportTransformer
+import io.ktor.server.sessions.SessionTransportTransformerMessageAuthentication
 import io.ktor.server.sessions.transformRead
 import io.ktor.server.sessions.transformWrite
 import io.ktor.http.Cookie
@@ -121,3 +122,20 @@ class KeepMeLoggedInSessionTransport(
         delegate.clear(call)
     }
 }
+
+class ClusterSessionTransformer(
+    private val secretSupplier: () -> String
+) : SessionTransportTransformer {
+    override fun transformRead(transportValue: String): String? {
+        val secret = secretSupplier()
+        val transformer = SessionTransportTransformerMessageAuthentication(secret.toByteArray())
+        return transformer.transformRead(transportValue)
+    }
+
+    override fun transformWrite(transportValue: String): String {
+        val secret = secretSupplier()
+        val transformer = SessionTransportTransformerMessageAuthentication(secret.toByteArray())
+        return transformer.transformWrite(transportValue)
+    }
+}
+
