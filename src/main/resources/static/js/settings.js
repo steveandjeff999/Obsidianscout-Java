@@ -181,6 +181,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalNavLayoutWidget() {
+        const personalNavLayoutSelect = document.getElementById("personal-nav-layout");
+        if (!personalNavLayoutSelect) return;
+
+        let savedVal = Obsidianscout.safeGetItem("obsidianscout:nav_layout") || "sidebar-left";
+        if (savedVal === "sidebar") savedVal = "sidebar-left";
+        if (savedVal === "topbar") savedVal = "topbar-top";
+        personalNavLayoutSelect.value = savedVal;
+
+        personalNavLayoutSelect.addEventListener("change", (e) => {
+            const val = e.target.value;
+            Obsidianscout.safeSetItem("obsidianscout:nav_layout", val);
+            if (typeof Obsidianscout.applyNavLayout === "function") {
+                Obsidianscout.applyNavLayout(val);
+            }
+            Obsidianscout.showToast("Personal settings saved", "success");
+        });
+    }
+
     // Initialize personal setting dropdown
     const personalDisplaySelect = document.getElementById("personal-team-display");
     if (personalDisplaySelect) {
@@ -197,4 +216,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalNotificationPrefWidget(me);
     wirePersonalDeleteAccountWidget(me);
     wirePersonalHapticPrefWidget();
+    wirePersonalNavLayoutWidget();
 });
