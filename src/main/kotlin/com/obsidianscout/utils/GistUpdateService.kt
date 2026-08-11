@@ -62,7 +62,14 @@ object GistUpdateService {
             return
         }
         log.info("[GistUpdate] Starting — will poll every ${appConfig.gist_update.check_interval_minutes} min. Current version: ${appConfig.current_version}")
-        val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        val handler = kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
+            if (throwable is OutOfMemoryError || throwable.cause is OutOfMemoryError) {
+                log.warn("[GistUpdate] OutOfMemoryError in coroutine. Resetting HttpClient & System.gc()", throwable)
+                resetHttpClient()
+                System.gc()
+            }
+        }
+        val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + handler)
         scope = newScope
         newScope.launch {
             // Slight delay on first check to let the server fully start up.
@@ -70,8 +77,14 @@ object GistUpdateService {
             while (isActive) {
                 try {
                     checkGist(appConfig)
-                } catch (e: Exception) {
-                    log.warn("[GistUpdate] Check failed: ${e.message}")
+                } catch (e: Throwable) {
+                    if (e is OutOfMemoryError || e.cause is OutOfMemoryError) {
+                        log.warn("[GistUpdate] OutOfMemoryError during check. Resetting HttpClient & System.gc()", e)
+                        resetHttpClient()
+                        System.gc()
+                    } else {
+                        log.warn("[GistUpdate] Check failed: ${e.message}")
+                    }
                 }
                 delay(appConfig.gist_update.check_interval_minutes * 60_000L)
             }
@@ -83,12 +96,38 @@ object GistUpdateService {
         scope = null
     }
 
-    // Reusable single HttpClient instance to avoid thread & memory leaks from repeated instantiation
-    private val sharedClient: HttpClient by lazy {
-        HttpClient.newBuilder()
+    @Volatile
+    private var cachedHttpClient: HttpClient? = null
+
+    internal fun getHttpClient(): HttpClient {
+        var client = cachedHttpClient
+        if (client == null) {
+            synchronized(this) {
+                client = cachedHttpClient
+                if (client == null) {
+                    client = buildNewHttpClient()
+                    cachedHttpClient = client
+                }
+            }
+        }
+        return client!!
+    }
+
+    private fun buildNewHttpClient(): HttpClient {
+        return HttpClient.newBuilder()
             .connectTimeout(java.time.Duration.ofSeconds(15))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build()
+    }
+
+    internal fun resetHttpClient() {
+        try {
+            synchronized(this) {
+                cachedHttpClient = buildNewHttpClient()
+            }
+        } catch (e: Exception) {
+            log.warn("[GistUpdate] Failed to recreate HttpClient: ${e.message}")
+        }
     }
 
     private fun checkGist(appConfig: AppConfig) {
@@ -101,9 +140,12 @@ object GistUpdateService {
             .timeout(java.time.Duration.ofSeconds(15))
             .build()
         val response = try {
-            sharedClient.send(request, HttpResponse.BodyHandlers.ofString())
+            getHttpClient().send(request, HttpResponse.BodyHandlers.ofString())
         } catch (e: Exception) {
             log.warn("[GistUpdate] Failed to reach gist URL: ${e.message}")
+            if (e.message?.contains("selector manager closed") == true || e is java.io.IOException) {
+                resetHttpClient()
+            }
             return
         }
 
@@ -123,12 +165,15 @@ object GistUpdateService {
         val updateBlock = json["update"]?.jsonObject
         val updateRequired = updateBlock?.get("required")?.jsonPrimitive?.boolean ?: false
         val latestVersion = updateBlock?.get("latest_version")?.jsonPrimitive?.content ?: ""
+        val expectedSha256 = updateBlock?.get("sha256")?.jsonPrimitive?.content ?: ""
 
         if (updateRequired && latestVersion.isNotBlank()) {
             val current = appConfig.current_version
-            if (isNewerVersion(latestVersion, current)) {
+            if (UpdateValidator.isBlacklistedVersion(latestVersion)) {
+                log.warn("[GistUpdate] Version $latestVersion is blacklisted due to previous boot failures. Skipping update.")
+            } else if (isNewerVersion(latestVersion, current)) {
                 log.info("[GistUpdate] Update available: $current -> $latestVersion. Starting download...")
-                applyUpdate(latestVersion, sharedClient)
+                applyUpdate(latestVersion, current, expectedSha256, getHttpClient())
                 return // applyUpdate calls exit() on success
             } else {
                 log.info("[GistUpdate] Server is up to date (version $current, latest $latestVersion).")
@@ -170,18 +215,22 @@ object GistUpdateService {
 
     /**
      * Queries the GitHub Releases API to find the zip asset URL for [version], then
-     * downloads, extracts, merges config files, and writes .update_result for the
+     * downloads, validates, extracts, merges config files, and writes .update_result for the
      * run script to pick up.
      */
-    private fun applyUpdate(version: String, httpClient: HttpClient) {
+    private fun applyUpdate(version: String, currentVersion: String, expectedSha256: String, httpClient: HttpClient) {
         val zipUrl = resolveZipUrl(version, httpClient)
         if (zipUrl == null) {
             log.error("[GistUpdate] Could not resolve a downloadable zip for version $version. Update aborted.")
             return
         }
 
+        val baseTmpDir = File(".update_tmp")
+        if (!baseTmpDir.exists()) {
+            baseTmpDir.mkdirs()
+        }
         val tempDir = try {
-            Files.createTempDirectory("obsidianscout-update-").toFile()
+            Files.createTempDirectory(baseTmpDir.toPath(), "obsidianscout-update-").toFile()
         } catch (e: Exception) {
             log.error("[GistUpdate] Failed to create temp directory: ${e.message}")
             return
@@ -195,6 +244,9 @@ object GistUpdateService {
             httpClient.send(zipRequest, HttpResponse.BodyHandlers.ofFile(zipFile.toPath()))
         } catch (e: Exception) {
             log.error("[GistUpdate] Download failed: ${e.message}")
+            if (e.message?.contains("selector manager closed") == true || e is java.io.IOException) {
+                resetHttpClient()
+            }
             tempDir.deleteRecursively()
             return
         }
@@ -203,6 +255,23 @@ object GistUpdateService {
             log.error("[GistUpdate] Download returned HTTP ${zipResponse.statusCode()}")
             tempDir.deleteRecursively()
             return
+        }
+
+        // ── Validation: Zip Integrity & SHA-256 Checksum ──────────────────────────────
+        val zipIntegrity = UpdateValidator.validateZipIntegrity(zipFile)
+        if (zipIntegrity is UpdateValidator.ValidationResult.Error) {
+            log.error("[GistUpdate] Downloaded file failed integrity check: ${zipIntegrity.message}")
+            tempDir.deleteRecursively()
+            return
+        }
+
+        if (expectedSha256.isNotBlank()) {
+            val checksumCheck = UpdateValidator.validateChecksum(zipFile, expectedSha256)
+            if (checksumCheck is UpdateValidator.ValidationResult.Error) {
+                log.error("[GistUpdate] Downloaded file failed SHA-256 validation: ${checksumCheck.message}")
+                tempDir.deleteRecursively()
+                return
+            }
         }
 
         log.info("[GistUpdate] Extracting bundle...")
@@ -224,6 +293,17 @@ object GistUpdateService {
             tempDir.deleteRecursively()
             return
         }
+
+        // ── Validation: Extracted Bundle & Executable JAR ─────────────────────────────
+        val bundleCheck = UpdateValidator.validateExtractedBundle(srcRoot)
+        if (bundleCheck is UpdateValidator.ValidationResult.Error) {
+            log.error("[GistUpdate] Extracted update bundle failed validation: ${bundleCheck.message}")
+            tempDir.deleteRecursively()
+            return
+        }
+
+        // ── Recovery Staging: Backup working installation before merging configs ──
+        UpdateRecoveryManager.createBackup(currentVersion)
 
         mergeConfigs(srcRoot)
 
@@ -275,6 +355,9 @@ object GistUpdateService {
             zipUrl
         } catch (e: Exception) {
             log.warn("[GistUpdate] Could not resolve zip URL from GitHub API: ${e.message}")
+            if (e.message?.contains("selector manager closed") == true || e is java.io.IOException) {
+                resetHttpClient()
+            }
             null
         }
     }
@@ -335,6 +418,9 @@ object GistUpdateService {
             var entry = zip.nextEntry
             while (entry != null) {
                 val entryName = entry.name.replace('\\', '/')
+                if (!UpdateValidator.isSafeZipPath(destDir, entryName)) {
+                    throw IllegalArgumentException("Zip entry is outside target directory: $entryName")
+                }
                 val file = File(destDir, entryName)
                 if (entry.isDirectory) {
                     file.mkdirs()

@@ -15,6 +15,17 @@ if [ -f .update_result ]; then
     if [ -d "$SRC_ROOT" ]; then
         echo "Finalizing update (copying new files)..."
         
+        # Create backup of current files
+        mkdir -p .backup
+        if [ -f obsidianscout-server.jar ]; then
+            cp obsidianscout-server.jar .backup/
+        fi
+        for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat; do
+            if [ -f "$script" ]; then
+                cp "$script" .backup/
+            fi
+        done
+
         # Copy JAR
         cp "$SRC_ROOT/obsidianscout-server.jar" ./
         
@@ -31,6 +42,7 @@ if [ -f .update_result ]; then
         # Clean up temp folder (parent of SRC_ROOT since it was extracted inside temp directory)
         TEMP_DIR=$(dirname "$SRC_ROOT")
         rm -rf "$TEMP_DIR"
+        rm -rf .update_tmp 2>/dev/null || true
         
         echo "Update completed successfully!"
     else
@@ -42,4 +54,4 @@ if [ -f .update_result ]; then
 fi
 
 echo "Press enter to exit..."
-read dummy
+read -r dummy || true

@@ -173,5 +173,17 @@ class DatabaseOrchestrationTest {
         )
         kotlin.test.assertTrue(orchestrator.checkForFatalDiskError(fatalLogs), "Fatal hardware disk failure logs MUST be detected as fatal")
     }
+
+    @Test
+    fun testIsQuorumLossExceptionDetection() {
+        val quorumError = java.sql.SQLException("org.postgresql.util.PSQLException: ERROR: result set closed or lost quorum: 2 of 3 replicas unavailable")
+        assertTrue(CockroachOrchestrator.isQuorumLossException(quorumError), "SQLException with lost quorum must be detected")
+
+        val replicaError = RuntimeException("Transaction failed: range unavailable for descriptor")
+        assertTrue(CockroachOrchestrator.isQuorumLossException(replicaError), "Exception with range unavailable must be detected")
+
+        val normalError = java.sql.SQLException("ERROR: duplicate key value violates unique constraint \"users_pkey\"")
+        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossException(normalError), "Normal constraint error must NOT be detected as quorum loss")
+    }
 }
 

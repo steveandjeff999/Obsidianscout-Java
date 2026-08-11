@@ -62,20 +62,25 @@ object DatabaseFactory {
             } else {
                 "org.sqlite.JDBC"
             }
+            val isLowMem = System.getenv("LOW_RAM") == "1" || System.getenv("LOW_MEM") == "1"
             if (type == "postgres") {
-                maximumPoolSize = 20
-                minimumIdle = 2
+                maximumPoolSize = if (isLowMem) 4 else 8
+                minimumIdle = 1
+                idleTimeout = 30_000L
+                maxLifetime = 300_000L
                 isAutoCommit = true
                 username = config.postgres.user
                 password = config.postgres.password
                 transactionIsolation = if (isCockroach) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
             } else {
-                maximumPoolSize = 16
-                minimumIdle = 2
+                maximumPoolSize = if (isLowMem) 4 else 8
+                minimumIdle = 1
+                idleTimeout = 30_000L
+                maxLifetime = 300_000L
                 isAutoCommit = true
             }
             connectionTimeout = 10_000  // fail fast after 10s instead of the 30s default
-            leakDetectionThreshold = 60000L
+            leakDetectionThreshold = 30000L
         }
 
         val dataSource = HikariDataSource(hikariConfig)
@@ -112,7 +117,8 @@ object DatabaseFactory {
                 PushSubscriptions,
                 FcmConfigs,
                 FcmDeviceTokens,
-                ClusterSecrets
+                ClusterSecrets,
+                ClusterNotificationLocks
             )
 
             if (isCockroach) {
@@ -126,19 +132,12 @@ object DatabaseFactory {
                             val tableName = table.tableName.lowercase()
                             if (!existingTables.contains(tableName)) {
                                 println("[Database] Table $tableName not found. Auto-creating using Exposed statements...")
-                                transaction {
-                                    val statements = SchemaUtils.createStatements(table)
-                                    dataSource.connection.use { conn2 ->
-                                        conn2.autoCommit = true
-                                        conn2.createStatement().use { stmt2 ->
-                                            for (sql in statements) {
-                                                try {
-                                                    stmt2.executeUpdate(sql)
-                                                } catch (e: Exception) {
-                                                    println("[Database] Error creating table $tableName with statement ($sql): ${e.message}")
-                                                }
-                                            }
-                                        }
+                                val statements = transaction { SchemaUtils.createStatements(table) }
+                                for (sql in statements) {
+                                    try {
+                                        stmt.executeUpdate(sql)
+                                    } catch (e: Exception) {
+                                        println("[Database] Error creating table $tableName with statement ($sql): ${e.message}")
                                     }
                                 }
                             }

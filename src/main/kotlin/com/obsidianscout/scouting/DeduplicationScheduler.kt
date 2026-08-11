@@ -18,7 +18,13 @@ object DeduplicationScheduler {
     
     fun start() {
         if (scope != null) return
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val handler = CoroutineExceptionHandler { _, throwable ->
+            if (throwable is OutOfMemoryError || throwable.cause is OutOfMemoryError) {
+                log.error("[DeduplicationScheduler] OutOfMemoryError in coroutine. Triggering System.gc()", throwable)
+                System.gc()
+            }
+        }
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + handler)
         scope?.launch {
             log.info("Background deduplication scheduler started")
             // Delay 1 minute after startup before running the first cleanup
@@ -26,8 +32,14 @@ object DeduplicationScheduler {
             while (isActive) {
                 try {
                     runCleanup()
-                } catch (e: Exception) {
-                    log.error("Failed to run background deduplication cleanup: ${e.message}", e)
+                } catch (e: Throwable) {
+                    if (e is OutOfMemoryError || e.cause is OutOfMemoryError) {
+                        log.error("[DeduplicationScheduler] OutOfMemoryError during cleanup. Triggering System.gc()", e)
+                        System.gc()
+                        delay(15_000L)
+                    } else {
+                        log.error("Failed to run background deduplication cleanup: ${e.message}", e)
+                    }
                 }
                 // Run every 30 minutes
                 delay(1_800_000L)

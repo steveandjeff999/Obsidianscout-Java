@@ -102,7 +102,20 @@ data class UpdateUserRequest(
     val email: String? = null,
     val profilePicture: String? = null,
     val clearProfilePicture: Boolean = false,
-    val notificationPreference: String? = null
+    val notificationPreference: String? = null,
+    val nodeAlertsEnabled: Boolean? = null
+)
+
+@Serializable
+data class NodeAlertsEnrollmentRequest(
+    val enrolled: Boolean
+)
+
+@Serializable
+data class NodeAlertsEnrollmentResponse(
+    val success: Boolean,
+    val enrolled: Boolean,
+    val message: String
 )
 
 @Serializable

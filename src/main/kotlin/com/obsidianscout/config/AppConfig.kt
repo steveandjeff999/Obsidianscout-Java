@@ -21,7 +21,7 @@ data class AppConfig(
     val google_sheet_url: String = "",
     val google_sheet_password: String = "",
     val cockroach_port: Int = 26257,
-    val current_version: String = "0.2.9.5", // The version this server is running — update this on each release
+    val current_version: String = "0.3.5.6", // The version this server is running — update this on each release
     val gist_update: GistUpdateConfig = GistUpdateConfig()
 )
 
@@ -93,25 +93,43 @@ object AppConfigLoader {
     /** Values that indicate a secret has never been changed from its shipped placeholder. */
     private val DEFAULT_SECRET_VALUES = setOf("change-me", "changeme")
 
-    fun load(path: Path = defaultPath): AppConfig {
-        if (!Files.exists(path)) {
-            path.parent?.let { Files.createDirectories(it) }
-            val defaultText = JsonSupport.json.encodeToString(AppConfig())
-            Files.writeString(path, defaultText)
+    @Volatile
+    private var cachedConfig: AppConfig? = null
+
+    fun load(path: Path = defaultPath, forceReload: Boolean = false): AppConfig {
+        if (!forceReload && path == defaultPath && cachedConfig != null) {
+            return cachedConfig!!
         }
-        val text = Files.readString(path)
-        var config = JsonSupport.json.decodeFromString<AppConfig>(text)
+        return synchronized(this) {
+            if (!forceReload && path == defaultPath && cachedConfig != null) {
+                return@synchronized cachedConfig!!
+            }
+            if (!Files.exists(path)) {
+                path.parent?.let { Files.createDirectories(it) }
+                val defaultText = JsonSupport.json.encodeToString(AppConfig())
+                Files.writeString(path, defaultText)
+            }
+            val text = Files.readString(path)
+            var config = JsonSupport.json.decodeFromString<AppConfig>(text)
 
-        // If the configuration file is missing the new fields, write them back to disk.
-        if (!text.contains("database_type")) {
-            val updatedText = JsonSupport.json.encodeToString(config)
-            Files.writeString(path, updatedText)
+            // If the configuration file is missing the new fields, write them back to disk.
+            if (!text.contains("database_type")) {
+                val updatedText = JsonSupport.json.encodeToString(config)
+                Files.writeString(path, updatedText)
+            }
+
+            // Auto-rotate any secrets that are still at their shipped default values.
+            config = autoRotateSecrets(config, path)
+
+            if (path == defaultPath) {
+                cachedConfig = config
+            }
+            config
         }
+    }
 
-        // Auto-rotate any secrets that are still at their shipped default values.
-        config = autoRotateSecrets(config, path)
-
-        return config
+    fun updateCache(config: AppConfig) {
+        cachedConfig = config
     }
 
     /**
@@ -189,9 +207,7 @@ object AppConfigLoader {
         path: Path = defaultPath
     ) {
         try {
-            val current = if (Files.exists(path)) {
-                JsonSupport.json.decodeFromString<AppConfig>(Files.readString(path))
-            } else AppConfig()
+            val current = load(path)
             val updated = current.copy(
                 server = current.server.copy(sessionSecret = sessionSecret),
                 vapid = current.vapid.copy(
@@ -201,6 +217,9 @@ object AppConfigLoader {
             )
             val updatedText = JsonSupport.json.encodeToString(updated)
             Files.writeString(path, updatedText)
+            if (path == defaultPath) {
+                cachedConfig = updated
+            }
             println("[ObsidianScout] Synchronized updated cluster secrets (Session & VAPID) to ${path.toAbsolutePath()}")
         } catch (e: Exception) {
             println("[ObsidianScout] Warning: Failed to save cluster secrets to config file: ${e.message}")

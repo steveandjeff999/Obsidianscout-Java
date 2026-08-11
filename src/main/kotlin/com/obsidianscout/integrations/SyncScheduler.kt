@@ -103,13 +103,32 @@ object SyncScheduler {
         if (scope != null) {
             return
         }
+        val handler = kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
+            if (throwable is OutOfMemoryError || throwable.cause is OutOfMemoryError) {
+                log.error("[SyncScheduler] OutOfMemoryError in background coroutine. Clearing GC and recovering...", throwable)
+                System.gc()
+            } else {
+                log.error("[SyncScheduler] Uncaught coroutine exception", throwable)
+            }
+        }
         val job = SupervisorJob()
-        scope = CoroutineScope(job + Dispatchers.IO)
+        scope = CoroutineScope(job + Dispatchers.IO + handler)
         scope?.launch {
-            log.info("Auto-sync scheduler started (every ${INTERVAL_MS / 60_000.0} minutes)")
-            delay(30_000)
+            log.info("Auto-sync scheduler initialized (will start first sync in 2 minutes, repeating every ${INTERVAL_MS / 60_000.0} minutes)")
+            delay(120_000)
             while (isActive) {
-                runScheduledSync()
+                try {
+                    runScheduledSync()
+                    System.gc()
+                } catch (e: Throwable) {
+                    if (e is OutOfMemoryError || e.cause is OutOfMemoryError) {
+                        log.error("[SyncScheduler] OutOfMemoryError during scheduled sync. Triggering System.gc() and pausing...", e)
+                        System.gc()
+                        delay(30_000)
+                    } else {
+                        log.error("[SyncScheduler] Unhandled error during scheduled sync", e)
+                    }
+                }
                 delay(INTERVAL_MS)
             }
         }

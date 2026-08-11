@@ -28,6 +28,7 @@ data class ServerLogsPayload(
 object ServerLogService {
     private const val MAX_LOG_ENTRIES = 1000
     private val buffer = ConcurrentLinkedQueue<LogEntry>()
+    private val sizeCount = java.util.concurrent.atomic.AtomicInteger(0)
     private val dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault())
 
     init {
@@ -42,8 +43,10 @@ object ServerLogService {
             message = message
         )
         buffer.add(entry)
-        while (buffer.size > MAX_LOG_ENTRIES) {
-            buffer.poll()
+        if (sizeCount.incrementAndGet() > MAX_LOG_ENTRIES) {
+            if (buffer.poll() != null) {
+                sizeCount.decrementAndGet()
+            }
         }
     }
 
@@ -51,11 +54,11 @@ object ServerLogService {
         val safeLimit = limit.coerceIn(1, MAX_LOG_ENTRIES)
         val allLogs = buffer.toList()
         val filtered = if (!filter.isNullOrBlank()) {
-            val q = filter.lowercase()
+            val q = filter.trim()
             allLogs.filter { 
-                it.message.lowercase().contains(q) || 
-                it.logger.lowercase().contains(q) || 
-                it.level.lowercase().contains(q) 
+                it.message.contains(q, ignoreCase = true) || 
+                it.logger.contains(q, ignoreCase = true) || 
+                it.level.contains(q, ignoreCase = true) 
             }
         } else {
             allLogs
@@ -105,7 +108,7 @@ object ServerLogService {
                         if (lineBuffer.size() > 0) {
                             val lineBytes = lineBuffer.toByteArray()
                             lineBytes.reverse()
-                            lines.add(0, String(lineBytes, Charsets.UTF_8).trimEnd('\r'))
+                            lines.add(String(lineBytes, Charsets.UTF_8).trimEnd('\r'))
                             lineBuffer.reset()
                             if (lines.size >= safeMax) break
                         }
@@ -117,9 +120,9 @@ object ServerLogService {
             if (lines.size < safeMax && lineBuffer.size() > 0) {
                 val lineBytes = lineBuffer.toByteArray()
                 lineBytes.reverse()
-                lines.add(0, String(lineBytes, Charsets.UTF_8).trimEnd('\r'))
+                lines.add(String(lineBytes, Charsets.UTF_8).trimEnd('\r'))
             }
         }
-        return lines
+        return lines.asReversed()
     }
 }

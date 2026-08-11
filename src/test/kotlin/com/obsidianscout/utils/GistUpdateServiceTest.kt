@@ -12,6 +12,18 @@ class GistUpdateServiceTest {
     fun testDefaultGistConfig() {
         val config = AppConfig()
         assertTrue(config.gist_update.gist_url.contains("raw"), "Gist URL should point to raw endpoint")
-        assertEquals(1, config.gist_update.check_interval_minutes, "Default check interval should be 1 minute")
+        assertEquals(10L, config.gist_update.check_interval_minutes, "Default check interval should be 10 minutes")
+    }
+
+    @Test
+    fun testHttpClientResetAndRecovery() {
+        val client1 = GistUpdateService.getHttpClient()
+        kotlin.test.assertNotNull(client1, "Initial HttpClient should not be null")
+
+        // Reset should create a new HttpClient instance
+        GistUpdateService.resetHttpClient()
+        val client2 = GistUpdateService.getHttpClient()
+        kotlin.test.assertNotNull(client2, "Recreated HttpClient should not be null")
+        kotlin.test.assertNotSame(client1, client2, "resetHttpClient should produce a new HttpClient instance")
     }
 }

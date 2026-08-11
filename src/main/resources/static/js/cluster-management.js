@@ -59,6 +59,72 @@
     function initClusterManagement() {
         bindEvents();
         loadClusterNodes();
+        loadNodeAlertEnrollment();
+        bindNodeAlertEvents();
+    }
+
+    async function loadNodeAlertEnrollment() {
+        const alertsCard = document.getElementById("node-alerts-card");
+        const toggle = document.getElementById("node-alerts-enroll-toggle");
+        if (!alertsCard || !toggle) return;
+
+        try {
+            const data = await apiRequest("/api/admin/cluster/notifications/enrollment");
+            if (data && data.success !== undefined) {
+                alertsCard.classList.remove("hidden");
+                toggle.checked = !!data.enrolled;
+            }
+        } catch (e) {
+            // Endpoint returns 403 Forbidden if not superadmin
+            alertsCard.classList.add("hidden");
+        }
+    }
+
+    function bindNodeAlertEvents() {
+        const toggle = document.getElementById("node-alerts-enroll-toggle");
+        const testBtn = document.getElementById("btn-test-node-alert");
+        const statusMsg = document.getElementById("node-alerts-status-msg");
+
+        toggle?.addEventListener("change", async (e) => {
+            const enrolled = e.target.checked;
+            try {
+                const res = await apiRequest("/api/admin/cluster/notifications/enrollment", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enrolled: enrolled })
+                });
+                try { localStorage.removeItem("cache:/api/auth/me"); } catch (e) {}
+                showToastMsg(res.message || (enrolled ? "Enrolled in node alerts" : "Unsubscribed from node alerts"), "success");
+            } catch (err) {
+                showToastMsg("Failed to update node alert enrollment: " + err.message, "error");
+                toggle.checked = !enrolled;
+            }
+        });
+
+        testBtn?.addEventListener("click", async () => {
+            testBtn.disabled = true;
+            if (statusMsg) {
+                statusMsg.style.display = "block";
+                statusMsg.style.color = "#cbd5e1";
+                statusMsg.textContent = "Dispatching test node down alert (FCM & Email)...";
+            }
+            try {
+                const res = await apiRequest("/api/admin/cluster/notifications/test", { method: "POST" });
+                if (statusMsg) {
+                    statusMsg.style.color = res.success ? "#4ade80" : "#f87171";
+                    statusMsg.textContent = res.message;
+                }
+                showToastMsg(res.message, res.success ? "success" : "error");
+            } catch (err) {
+                if (statusMsg) {
+                    statusMsg.style.color = "#f87171";
+                    statusMsg.textContent = "Failed to dispatch test alert: " + err.message;
+                }
+                showToastMsg("Failed to dispatch test alert: " + err.message, "error");
+            } finally {
+                testBtn.disabled = false;
+            }
+        });
     }
 
     function bindEvents() {
@@ -145,10 +211,11 @@
     function startAutoRefresh() {
         stopAutoRefresh();
         autoRefreshInterval = setInterval(() => {
+            if (document.hidden) return;
             if (selectedNodeIp) {
                 fetchNodeLogs(true);
             }
-        }, 3500);
+        }, 5000);
     }
 
     function stopAutoRefresh() {
@@ -196,6 +263,7 @@
             const statusClass = (node.status || "offline").toLowerCase();
             const badgeClass = node.isLocal ? "local" : "remote";
             const badgeText = node.isLocal ? t("cluster.badge_local", "Local Node") : t("cluster.badge_remote", "Remote Node");
+            const versionStr = node.serverVersion ? (node.serverVersion.startsWith("v") ? node.serverVersion : `v${node.serverVersion}`) : "vUnknown";
 
             html += `
                 <div class="server-item ${isSelected ? "active-selected" : ""}" data-ip="${escapeHtml(node.ip)}">
@@ -205,9 +273,10 @@
                             <div class="server-ip-title">
                                 ${escapeHtml(node.ip)}
                                 <span class="node-badge ${badgeClass}">${badgeText}</span>
+                                <span class="node-badge" style="background: rgba(59, 130, 246, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">${escapeHtml(versionStr)}</span>
                             </div>
                             <div style="font-size: 12px; color: var(--text-muted, #94a3b8); margin-top: 2px;">
-                                App Port: <strong>${node.appPort}</strong> | Cockroach DB Port: <strong>${node.dbPort}</strong> | Role: ${escapeHtml(node.role || "Gateway")}
+                                Server Version: <strong style="color: #38bdf8;">${escapeHtml(versionStr)}</strong> | App Port: <strong>${node.appPort}</strong> | Cockroach DB Port: <strong>${node.dbPort}</strong> | Role: ${escapeHtml(node.role || "Gateway")}
                             </div>
                         </div>
                     </div>

@@ -2,6 +2,8 @@ package com.obsidianscout.auth
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.request.httpMethod
+import io.ktor.server.request.uri
 import io.ktor.server.sessions.get
 import io.ktor.server.sessions.clear
 import io.ktor.server.sessions.sessions
@@ -29,7 +31,8 @@ data class UserSession(
     val email: String? = null,
     val profilePicture: String? = null,
     val notificationPreference: String = "all",
-    val tourProgress: String? = null
+    val tourProgress: String? = null,
+    val nodeAlertsEnabled: Boolean = false
 )
 
 class ApiException(val status: HttpStatusCode, override val message: String) : RuntimeException(message)
@@ -57,6 +60,31 @@ suspend fun ApplicationCall.requireAdmin(): UserSession {
         throw ApiException(HttpStatusCode.Forbidden, "Admin access required")
     }
     return session
+}
+
+/**
+ * Requires ADMIN / SUPERADMIN role OR valid HMAC signed inter-node cluster request.
+ */
+suspend fun ApplicationCall.requireAdminOrClusterAuth(): Boolean {
+    val timestampStr = request.headers["X-Cluster-Timestamp"]
+    val signature = request.headers["X-Cluster-Signature"]
+
+    if (!timestampStr.isNullOrBlank() && !signature.isNullOrBlank()) {
+        val timestamp = timestampStr.toLongOrNull() ?: 0L
+        val now = System.currentTimeMillis()
+        if (Math.abs(now - timestamp) <= 300_000L) { // 5-minute replay guard
+            val method = request.httpMethod.value
+            val uriPath = request.uri
+            val secret = ClusterSecretService.getSessionSecret()
+            val dataToSign = "$timestamp:$method:$uriPath"
+            if (ClusterCryptoUtils.verifyHmac(dataToSign, signature, secret)) {
+                return true
+            }
+        }
+    }
+
+    requireAdmin()
+    return true
 }
 
 /**

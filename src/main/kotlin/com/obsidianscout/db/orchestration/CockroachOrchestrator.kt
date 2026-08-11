@@ -109,6 +109,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             throw IllegalStateException("CockroachDB failed to bind to $tailscaleIp:$port within timeout. Last logs:\n$logSnippet")
         }
         println("[Cockroach] CockroachDB is listening on $tailscaleIp:$port")
+        println("[Cockroach] Admin Web UI is active at http://$tailscaleIp:${port + 1}")
 
         // 7. Execute cluster initialization (safe on all nodes; CockroachDB handles idempotent initialization)
         println("[Cockroach] Initializing cluster...")
@@ -116,7 +117,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
         // 8. Wait for local SQL engine to be fully ready
         println("[Cockroach] Waiting for SQL engine to be ready...")
-        val sqlReady = waitForSqlReady(tailscaleIp, port, isInsecure, 60)
+        var sqlReady = waitForSqlReady(tailscaleIp, port, isInsecure, 60)
         if (!sqlReady) {
             val isAlive = process?.isAlive ?: false
             if (!isAlive) {
@@ -124,10 +125,16 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                 val logSnippet = if (logFile.exists()) logFile.readLines().takeLast(500).joinToString("\n") else "No logs found."
                 throw IllegalStateException("CockroachDB process crashed during startup (exit code: ${process?.exitValue()}). Last logs:\n$logSnippet")
             } else {
-                println("[Cockroach] WARNING: SQL engine did not become ready in time (waiting for cluster quorum). Proceeding...")
+                println("[Cockroach] WARNING: SQL engine pending readiness (cluster Raft leader catch-up or node join in progress)...")
+                sqlReady = waitForSqlReady(tailscaleIp, port, isInsecure, 30)
             }
-        } else {
+        }
+
+        if (sqlReady) {
             println("[Cockroach] SQL engine is ready.")
+            configureClusterReplication(tailscaleIp, port, isInsecure)
+        } else {
+            println("[Cockroach] WARNING: Cluster quorum recovery pending. Proceeding in degraded mode...")
             configureClusterReplication(tailscaleIp, port, isInsecure)
         }
 
@@ -489,13 +496,14 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         replicationJob?.cancel()
 
         replicationJob = CoroutineScope(Dispatchers.IO).launch {
-            var currentReplicas = 1
+            var currentReplicas = getReplicationFactorFromDb().let { if (it > 0) it else 1 }
+            var nodesBelowThreeStart = 0L
             var lastDiagnosticsTime = 0L
             var lastLeaseHealTime = 0L
             var lastQueueHealTime = 0L
             var lastClockSyncTime = 0L
             var consecutiveInvalidLeaseRounds = 0
-            println("[Cockroach] Starting background replication monitor with self-healing...")
+            println("[Cockroach] Starting background replication monitor (current replication factor: $currentReplicas)...")
             while (isActive) {
                 try {
                     val now = System.currentTimeMillis()
@@ -523,16 +531,33 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                         }
                     }
 
+                    checkQuorumStatus()
+
                     val activeNodes = getActiveNodesCount()
-                    if (activeNodes >= 2 && currentReplicas == 1) {
-                        println("[Cockroach] $activeNodes active nodes detected. Upgrading cluster replication factor to 3...")
-                        if (setReplicationFactor(3)) {
-                            currentReplicas = 3
-                            println("[Cockroach] Replication factor successfully set to 3.")
-                            applySnapshotRateLimits()
+                    if (activeNodes >= 3) {
+                        nodesBelowThreeStart = 0L
+                        if (currentReplicas < 3) {
+                            println("[Cockroach] $activeNodes active nodes detected. Upgrading cluster replication factor to 3...")
+                            if (setReplicationFactor(3)) {
+                                currentReplicas = 3
+                                println("[Cockroach] Replication factor successfully set to 3.")
+                                applySnapshotRateLimits()
+                            }
                         }
-                    } else if (activeNodes < 2 && currentReplicas == 3) {
-                        println("[Cockroach] WARNING: Active nodes fell to $activeNodes. Cluster is under-quorum.")
+                    } else if (activeNodes < 3) {
+                        if (nodesBelowThreeStart == 0L) {
+                            nodesBelowThreeStart = now
+                        }
+                        val belowDuration = now - nodesBelowThreeStart
+                        if (belowDuration > 120_000 && currentReplicas > 1) { // Sustained 2 minutes below 3 nodes
+                            println("[Cockroach] WARNING: Active nodes fell to $activeNodes for ${belowDuration / 1000}s. Downscaling cluster replication factor to 1...")
+                            if (setReplicationFactor(1)) {
+                                currentReplicas = 1
+                                isQuorumLost = false
+                                quorumLossDetails = null
+                                println("[Cockroach] Replication factor successfully downscaled to 1.")
+                            }
+                        }
                     }
 
                     // ── Self-Healing: Invalid Leases ──────────────────────────────────
@@ -646,26 +671,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                         println("[LeaseHealer] Could not set snapshot rates: ${e.message}")
                     }
 
-                    try {
-                        stmt.execute("SET CLUSTER SETTING kv.allocator.load_based_lease_rebalancing.enabled = false")
-                        Thread.sleep(2000)
-                        stmt.execute("SET CLUSTER SETTING kv.allocator.load_based_lease_rebalancing.enabled = true")
-                        println("[LeaseHealer] Toggled load-based lease rebalancing to force re-evaluation")
-                    } catch (e: Exception) {
-                        println("[LeaseHealer] Could not toggle lease rebalancing: ${e.message}")
-                    }
-
-                    try {
-                        val dbName = appConfig.database.postgres.database.lowercase()
-                        stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = 3")
-                        stmt.execute("ALTER RANGE system  CONFIGURE ZONE USING num_replicas = 3")
-                        stmt.execute("ALTER DATABASE \"$dbName\" CONFIGURE ZONE USING num_replicas = 3")
-                        println("[LeaseHealer] Re-applied zone configs to wake allocator")
-                    } catch (e: Exception) {
-                        println("[LeaseHealer] Could not re-apply zone configs: ${e.message}")
-                    }
-
-                    println("[LeaseHealer] Lease healing actions complete.")
+                    println("[LeaseHealer] Lease healing check complete.")
                 }
             }
         } catch (e: Exception) {
@@ -681,24 +687,14 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     stmt.execute("SET allow_unsafe_internals = true")
 
                     try {
-                        stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '16 MiB'")
-                        stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate  = '16 MiB'")
-                        println("[QueueHealer] Set snapshot rates to 16 MiB to unblock sender")
+                        stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '32 MiB'")
+                        stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate  = '32 MiB'")
+                        println("[QueueHealer] Set snapshot rates to 32 MiB to maintain transfer speed")
                     } catch (e: Exception) {
                         println("[QueueHealer] Could not set snapshot rates: ${e.message}")
                     }
 
-                    try {
-                        val dbName = appConfig.database.postgres.database.lowercase()
-                        stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = 3")
-                        stmt.execute("ALTER RANGE system  CONFIGURE ZONE USING num_replicas = 3")
-                        stmt.execute("ALTER DATABASE \"$dbName\" CONFIGURE ZONE USING num_replicas = 3")
-                        println("[QueueHealer] Re-applied zone config to force replication re-enqueue")
-                    } catch (e: Exception) {
-                        println("[QueueHealer] Could not re-apply zone config: ${e.message}")
-                    }
-
-                    println("[QueueHealer] Queue heal actions complete.")
+                    println("[QueueHealer] Queue heal check complete.")
                 }
             }
         } catch (e: Exception) {
@@ -887,15 +883,39 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
-                    stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '8 MiB'")
-                    stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate = '8 MiB'")
+                    stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '32 MiB'")
+                    stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate = '32 MiB'")
                     stmt.execute("SET CLUSTER SETTING kv.replication_reports.interval = '30s'")
-                    println("[Cockroach] Snapshot rate limits applied: 8 MiB/s max (Pi4 SSD safe)")
+                    try { stmt.execute("SET CLUSTER SETTING kv.liveness.heartbeat_interval = '4s'") } catch (_: Exception) {}
+                    try { stmt.execute("SET CLUSTER SETTING kv.liveness.lease_duration = '12s'") } catch (_: Exception) {}
+                    println("[Cockroach] Snapshot rate limits and Tailscale VPN liveness thresholds applied (32 MiB/s max, 12s lease duration)")
                 }
             }
         } catch (e: Exception) {
             println("[Cockroach] Warning: could not apply snapshot rate limits: ${e.message}")
         }
+    }
+
+    private fun getReplicationFactorFromDb(): Int {
+        try {
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return 0
+            ds.connection.use { conn ->
+                conn.createStatement().use { stmt ->
+                    stmt.executeQuery("SHOW ZONE CONFIG FOR RANGE default").use { rs ->
+                        if (rs.next()) {
+                            val raw = rs.getString("raw_config_sql") ?: ""
+                            val match = Regex("""num_replicas\s*=\s*(\d+)""").find(raw)
+                            if (match != null) {
+                                return match.groupValues[1].toInt()
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // ignore
+        }
+        return 0
     }
 
     fun isClusterHealthy(): Boolean {
@@ -911,10 +931,14 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     private fun setReplicationFactor(replicas: Int): Boolean {
         try {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return false
+            val current = getReplicationFactorFromDb()
+            if (current == replicas) {
+                return true
+            }
             val dbName = appConfig.database.postgres.database.lowercase()
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
-                    println("[Cockroach] Upgrading cluster replication factor (default, system, database) to $replicas...")
+                    println("[Cockroach] Upgrading cluster replication factor (default, system, database) to $replicas (was $current)...")
                     try { stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = $replicas") } catch (e: Exception) {}
                     try { stmt.execute("ALTER RANGE system CONFIGURE ZONE USING num_replicas = $replicas") } catch (e: Exception) {}
                     try {
@@ -944,15 +968,13 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         isInsecure: Boolean
     ) {
         try {
-            runSqlViaJdbc(tailscaleIp, port, isInsecure) { conn ->
-                conn.createStatement().use { stmt ->
-                    stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = 1")
-                    stmt.execute("ALTER RANGE system CONFIGURE ZONE USING num_replicas = 1")
-                }
+            val current = getReplicationFactorFromDb()
+            println("[Cockroach] Initial cluster replication factor check: currently at $current replicas.")
+            if (current == 0) {
+                setReplicationFactor(1)
             }
-            println("[Cockroach] Set cluster replication factor to 1 via JDBC")
         } catch (e: Exception) {
-            println("[Cockroach] Failed to set replication factor to 1: ${e.message}")
+            println("[Cockroach] Failed checking cluster replication factor: ${e.message}")
         }
     }
 
@@ -973,6 +995,34 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             println("[Cockroach] User SQL setup completed via JDBC")
         } catch (e: Exception) {
             println("[Cockroach] Failed database user setup: ${e.message}")
+        }
+    }
+
+    private fun healQuorumLossCli(tailscaleIp: String, port: Int, isInsecure: Boolean) {
+        try {
+            println("[Cockroach] Attempting CLI zone check/reset...")
+            val cmd = mutableListOf(
+                binaryFile.absolutePath,
+                "sql",
+                "--host=$tailscaleIp:$port",
+                "-e",
+                "ALTER RANGE default CONFIGURE ZONE USING num_replicas = 1; ALTER RANGE system CONFIGURE ZONE USING num_replicas = 1;"
+            )
+            if (isInsecure) {
+                cmd.add("--insecure")
+            } else {
+                val certsDir = File(rootDir, "certs")
+                cmd.add("--certs-dir=${certsDir.absolutePath}")
+            }
+            val p = ProcessBuilder(cmd).directory(rootDir).start()
+            val exited = p.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)
+            if (exited && p.exitValue() == 0) {
+                println("[Cockroach] ✅ Quorum check/reset complete via CLI.")
+            } else {
+                println("[Cockroach] CLI zone reset timed out or skipped. Waiting for cluster nodes to establish Raft consensus...")
+            }
+        } catch (e: Exception) {
+            println("[Cockroach] Error during quorum recovery CLI: ${e.message}")
         }
     }
 
@@ -1039,8 +1089,64 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         return false
     }
 
+    fun checkQuorumStatus() {
+        try {
+            val unavailable = getMetricValue("ranges.unavailable") ?: 0L
+            if (unavailable > 0L) {
+                isQuorumLost = true
+                quorumLossDetails = "$unavailable range(s) unavailable due to cluster quorum loss."
+                return
+            }
+
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource
+            if (ds != null) {
+                ds.connection.use { conn ->
+                    conn.createStatement().use { stmt ->
+                        stmt.executeQuery("SELECT 1").use { rs ->
+                            if (rs.next()) {
+                                isQuorumLost = false
+                                quorumLossDetails = null
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            if (isQuorumLossException(e)) {
+                isQuorumLost = true
+                quorumLossDetails = e.message ?: "Database cluster quorum lost."
+            }
+        }
+    }
+
     companion object {
         @Volatile
         var isDbActive = false
+
+        @Volatile
+        var isQuorumLost: Boolean = false
+
+        @Volatile
+        var quorumLossDetails: String? = null
+
+        fun isQuorumLossException(e: Throwable): Boolean {
+            var curr: Throwable? = e
+            while (curr != null) {
+                val msg = curr.message?.lowercase() ?: ""
+                if (msg.contains("lost quorum") ||
+                    msg.contains("range unavailable") ||
+                    msg.contains("under-quorum") ||
+                    msg.contains("poisoned latch") ||
+                    msg.contains("cannot write because range") ||
+                    msg.contains("leaderless for") ||
+                    msg.contains("transactionretrywithtoughluck") ||
+                    (msg.contains("replica unavailable") && (msg.contains("quorum") || msg.contains("range") || msg.contains("unable to serve")))
+                ) {
+                    return true
+                }
+                curr = curr.cause
+            }
+            return false
+        }
     }
 }

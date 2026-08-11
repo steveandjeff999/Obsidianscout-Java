@@ -187,10 +187,10 @@ object IntegrationService {
                 if (removed > 0) {
                     log.info("Cleaned $removed duplicate match row(s) before sync for $eventKey")
                 }
+                val existingTeamsMap = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }
+                    .associateBy { it[ApiTeams.teamKey] }
                 teams.forEach { team ->
-                    val existing = ApiTeams.selectAll().where {
-                        (ApiTeams.eventKey eq team.eventKey) and (ApiTeams.teamKey eq team.teamKey)
-                    }.limit(1).firstOrNull()
+                    val existing = existingTeamsMap[team.teamKey]
                     if (existing == null) {
                         ApiTeams.insert {
                             it[ApiTeams.eventKey] = team.eventKey
@@ -226,9 +226,11 @@ object IntegrationService {
                     }
                 }
 
+                val existingMatchesMap = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }
+                    .associateBy { it[ApiMatches.matchKey] }
                 matches.forEach { match ->
                     val canonical = MatchCanonical.canonicalize(match)
-                    val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
+                    val existing = existingMatchesMap[canonical.matchKey]
                     if (existing == null) {
                         ApiMatches.insert {
                             it[ApiMatches.matchKey] = canonical.matchKey
@@ -306,10 +308,10 @@ object IntegrationService {
                 if (removed > 0) {
                     log.info("Cleaned $removed duplicate match row(s) before sync for $key")
                 }
+                val existingTeamsMap = ApiTeams.selectAll().where { ApiTeams.eventKey eq key }
+                    .associateBy { it[ApiTeams.teamKey] }
                 teams.forEach { team ->
-                    val existing = ApiTeams.selectAll().where {
-                        (ApiTeams.eventKey eq team.eventKey) and (ApiTeams.teamKey eq team.teamKey)
-                    }.limit(1).firstOrNull()
+                    val existing = existingTeamsMap[team.teamKey]
                     if (existing == null) {
                         ApiTeams.insert {
                             it[ApiTeams.eventKey] = team.eventKey
@@ -345,9 +347,11 @@ object IntegrationService {
                     }
                 }
 
+                val existingMatchesMap = ApiMatches.selectAll().where { ApiMatches.eventKey eq key }
+                    .associateBy { it[ApiMatches.matchKey] }
                 matches.forEach { match ->
                     val canonical = MatchCanonical.canonicalize(match)
-                    val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq canonical.matchKey }.limit(1).firstOrNull()
+                    val existing = existingMatchesMap[canonical.matchKey]
                     if (existing == null) {
                         ApiMatches.insert {
                             it[ApiMatches.matchKey] = canonical.matchKey

@@ -192,6 +192,8 @@
         if (options.json !== undefined) {
             opts.headers["Content-Type"] = "application/json";
             opts.body = JSON.stringify(options.json);
+        } else if (options.body !== undefined) {
+            opts.body = options.body;
         }
 
         try {
@@ -2772,8 +2774,46 @@
             const page = document.body.dataset.page;
             if (page === "login" || page === "reset-password") return;
 
-            const banners = await request("/api/banners");
-            if (!banners || banners.length === 0) return;
+            let banners = [];
+            let isQuorumLostError = false;
+            try {
+                banners = await request("/api/banners");
+            } catch (err) {
+                if (err.status === 503) {
+                    isQuorumLostError = true;
+                    banners = [{
+                        id: "sys-db-quorum-lost",
+                        teamNumber: 0,
+                        message: "🚨 Database Quorum Lost: CockroachDB cluster has lost quorum (majority of nodes offline). Database read/write operations are temporarily restricted until quorum is restored.",
+                        bannerType: "danger",
+                        isDismissible: false,
+                        isExpandable: true,
+                        expandableMessage: err.message || "CockroachDB requires a majority consensus of nodes to execute database transactions safely. The cluster is currently under-quorum. Full operation will resume automatically when peer nodes reconnect.",
+                        isActive: true
+                    }];
+                } else {
+                    console.error("Failed to load banners:", err);
+                    return;
+                }
+            }
+
+            const hasQuorumBanner = Array.isArray(banners) && banners.some(b => b.id === "sys-db-quorum-lost");
+            if (hasQuorumBanner || isQuorumLostError) {
+                if (!window._quorumBannerCheckTimer) {
+                    window._quorumBannerCheckTimer = setInterval(() => {
+                        loadAndRenderBanners();
+                    }, 15000);
+                }
+            } else if (window._quorumBannerCheckTimer) {
+                clearInterval(window._quorumBannerCheckTimer);
+                window._quorumBannerCheckTimer = null;
+            }
+
+            let container = document.querySelector(".banner-container");
+            if (!banners || banners.length === 0) {
+                if (container) container.remove();
+                return;
+            }
 
             let dismissed = [];
             try {
@@ -2783,7 +2823,6 @@
                 console.warn("Failed to load dismissed banners", e);
             }
 
-            let container = document.querySelector(".banner-container");
             if (!container) {
                 container = document.createElement("div");
                 container.className = "banner-container";

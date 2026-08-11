@@ -211,9 +211,40 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalNodeAlertsWidget(currentMe) {
+        const container = document.getElementById("personal-node-alerts-container");
+        const toggle = document.getElementById("personal-node-alerts-toggle");
+        if (!container || !toggle) return;
+
+        if (currentMe.role === "SUPERADMIN") {
+            container.classList.remove("hidden");
+            toggle.checked = !!currentMe.nodeAlertsEnabled;
+
+            toggle.addEventListener("change", async (e) => {
+                const enrolled = e.target.checked;
+                try {
+                    const updated = await Obsidianscout.request("/api/user/profile-picture", {
+                        method: "PUT",
+                        json: { nodeAlertsEnabled: enrolled }
+                    });
+                    currentMe.nodeAlertsEnabled = updated.nodeAlertsEnabled;
+                    toggle.checked = !!updated.nodeAlertsEnabled;
+                    try { localStorage.removeItem("cache:/api/auth/me"); } catch (e) {}
+                    Obsidianscout.showToast(enrolled ? "Enrolled in node health alerts" : "Unsubscribed from node health alerts", "success");
+                } catch (err) {
+                    toggle.checked = !enrolled;
+                    Obsidianscout.showToast(err.message || "Failed to update node alert settings", "error");
+                }
+            });
+        } else {
+            container.classList.add("hidden");
+        }
+    }
+
     wirePersonalAvatarWidget(me);
     wirePersonalEmailWidget(me);
     wirePersonalNotificationPrefWidget(me);
+    wirePersonalNodeAlertsWidget(me);
     wirePersonalDeleteAccountWidget(me);
     wirePersonalHapticPrefWidget();
     wirePersonalNavLayoutWidget();

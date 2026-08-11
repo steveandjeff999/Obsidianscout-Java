@@ -265,6 +265,7 @@ object FtcIntegrationService {
         // Teams Sync
         val teamsArray = eventObj["teams"]?.jsonArray ?: JsonArray(emptyList())
         transaction {
+            val existingTeamsMap = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.associateBy { it[ApiTeams.teamKey] }
             teamsArray.forEach { participation ->
                 val partObj = participation.safeJsonObject ?: return@forEach
                 val teamNumber = partObj["teamNumber"]?.jsonPrimitive?.intOrNull ?: return@forEach
@@ -276,7 +277,7 @@ object FtcIntegrationService {
                 val country = location?.get("country")?.jsonPrimitive?.content ?: ""
 
                 val teamKey = "ftc$teamNumber"
-                val existingTeam = ApiTeams.selectAll().where { (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamKey eq teamKey) }.limit(1).firstOrNull()
+                val existingTeam = existingTeamsMap[teamKey]
                 if (existingTeam == null) {
                     ApiTeams.insert {
                         it[ApiTeams.eventKey] = eventKey
@@ -333,6 +334,7 @@ object FtcIntegrationService {
 
         transaction {
             MatchCanonical.deduplicateDatabaseForEvent(eventKey)
+            val existingMatchesMap = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }.associateBy { it[ApiMatches.matchKey] }
             combinedMatches.forEach { match ->
                 val mObj = match.safeJsonObject ?: return@forEach
                 val matchNum = mObj["matchNum"]?.jsonPrimitive?.intOrNull 
@@ -410,7 +412,7 @@ object FtcIntegrationService {
                     else -> "${eventKey}_${compLevel}${setNum}m$mappedMatchNum"
                 }
 
-                val existingMatch = ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKey }.limit(1).firstOrNull()
+                val existingMatch = existingMatchesMap[matchKey]
                 if (existingMatch == null) {
                     ApiMatches.insert {
                         it[ApiMatches.matchKey] = matchKey

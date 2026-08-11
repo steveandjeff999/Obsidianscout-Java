@@ -14,6 +14,7 @@ object Users : UUIDTable("users") {
     val profilePicture = text("profile_picture").nullable()
     val notificationPreference = varchar("notification_preference", 16).default("all")
     val tourProgress = text("tour_progress").nullable()
+    val nodeAlertsEnabled = bool("node_alerts_enabled").default(false)
 
     init {
         uniqueIndex("ux_users_username_team_program", username, teamNumber, program)
@@ -332,6 +333,17 @@ object ClusterSecrets : UUIDTable("cluster_secrets") {
 
     init {
         uniqueIndex("ux_cluster_secrets_key_name", keyName)
+    }
+}
+
+object ClusterNotificationLocks : UUIDTable("cluster_notification_locks") {
+    val lockKey = varchar("lock_key", 128)
+    val claimedByNode = varchar("claimed_by_node", 64)
+    val claimedAt = timestamp("claimed_at")
+    val expiresAt = timestamp("expires_at")
+
+    init {
+        uniqueIndex("ux_cluster_notification_locks_key", lockKey)
     }
 }
 

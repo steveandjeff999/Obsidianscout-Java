@@ -153,9 +153,13 @@ fun main() {
         exitProcess(0)
     }
     
-    // Create temp directory
+    // Create temp directory in main working directory drive (.update_tmp) to avoid filling up OS temp drives
+    val baseTmpDir = File(".update_tmp")
+    if (!baseTmpDir.exists()) {
+        baseTmpDir.mkdirs()
+    }
     val tempDir = try {
-        Files.createTempDirectory("obsidianscout-update-").toFile()
+        Files.createTempDirectory(baseTmpDir.toPath(), "obsidianscout-update-").toFile()
     } catch (e: Exception) {
         System.err.println("Failed to create temporary directory: ${e.message}")
         exitProcess(1)
@@ -182,6 +186,14 @@ fun main() {
         exitProcess(1)
     }
     
+    // Validate Zip Integrity
+    val zipCheck = UpdateValidator.validateZipIntegrity(zipFile)
+    if (zipCheck is UpdateValidator.ValidationResult.Error) {
+        System.err.println("Error: Downloaded update zip failed validation: ${zipCheck.message}")
+        tempDir.deleteRecursively()
+        exitProcess(1)
+    }
+    
     println("Extracting bundle...")
     val extractDir = File(tempDir, "extracted")
     try {
@@ -201,6 +213,17 @@ fun main() {
         tempDir.deleteRecursively()
         exitProcess(1)
     }
+    
+    // Validate Extracted Bundle Structure & Executable JAR
+    val bundleCheck = UpdateValidator.validateExtractedBundle(srcRoot)
+    if (bundleCheck is UpdateValidator.ValidationResult.Error) {
+        System.err.println("Error: Extracted update bundle failed validation: ${bundleCheck.message}")
+        tempDir.deleteRecursively()
+        exitProcess(1)
+    }
+    
+    // Create backup of working state before merging configs or overwriting files
+    UpdateRecoveryManager.createBackup()
     
     println("Merging configurations...")
     val srcConfig = File(srcRoot, "config")

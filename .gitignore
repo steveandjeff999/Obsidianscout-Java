@@ -6,3 +6,9 @@ out/
 *.log
 data/
 .cockroach/cockroach.exe
+.update_tmp/
+obsidianscout-update-*/
+.backup/
+.update_pending
+.update_result
+.update_failed_versions

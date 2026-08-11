@@ -29,10 +29,39 @@ data class PeerDetails(
 )
 
 object GoogleSheetsManager {
-    private val client = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .followRedirects(HttpClient.Redirect.ALWAYS)
-        .build()
+    @Volatile
+    private var cachedHttpClient: HttpClient? = null
+
+    internal fun getHttpClient(): HttpClient {
+        var c = cachedHttpClient
+        if (c == null) {
+            synchronized(this) {
+                c = cachedHttpClient
+                if (c == null) {
+                    c = buildNewHttpClient()
+                    cachedHttpClient = c
+                }
+            }
+        }
+        return c!!
+    }
+
+    private fun buildNewHttpClient(): HttpClient {
+        return HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.ALWAYS)
+            .build()
+    }
+
+    internal fun resetHttpClient() {
+        try {
+            synchronized(this) {
+                cachedHttpClient = buildNewHttpClient()
+            }
+        } catch (e: Exception) {
+            println("[GoogleSheets] Failed to recreate HttpClient: ${e.message}")
+        }
+    }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -82,7 +111,7 @@ object GoogleSheetsManager {
                 requestBuilder.header("X-Sheet-Password", password)
             }
 
-            val response = client.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+            val response = getHttpClient().send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() != 200) {
                 println("[GoogleSheets] Failed to fetch peers. Status code: ${response.statusCode()}")
                 return emptyList()
@@ -92,6 +121,9 @@ object GoogleSheetsManager {
             return parsePeerDetails(body, sheetUrl)
         } catch (e: Exception) {
             println("[GoogleSheets] Error fetching peers: ${e.message}")
+            if (e.message?.contains("selector manager closed") == true || e is java.io.IOException) {
+                resetHttpClient()
+            }
             return emptyList()
         }
     }
@@ -120,7 +152,7 @@ object GoogleSheetsManager {
                 requestBuilder.header("X-Sheet-Password", password)
             }
 
-            val response = client.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+            val response = getHttpClient().send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() in 200..299) {
                 println("[GoogleSheets] Successfully registered self to Google Sheet: $localIp:$port")
             } else {
@@ -128,6 +160,9 @@ object GoogleSheetsManager {
             }
         } catch (e: Exception) {
             println("[GoogleSheets] Error registering self: ${e.message}")
+            if (e.message?.contains("selector manager closed") == true || e is java.io.IOException) {
+                resetHttpClient()
+            }
         }
     }
 

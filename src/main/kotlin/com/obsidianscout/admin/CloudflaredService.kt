@@ -40,6 +40,46 @@ object CloudflaredService {
     @Volatile
     private var lastStatusMessage: String = "Stopped"
 
+    init {
+        try {
+            Runtime.getRuntime().addShutdownHook(Thread {
+                stopTunnel()
+            })
+        } catch (_: Throwable) {}
+    }
+
+    private fun getHostLabel(): String {
+        return runCatching {
+            val netHost = java.net.InetAddress.getLocalHost().hostName
+            if (netHost.isNotBlank() && netHost != "localhost") netHost else null
+        }.getOrNull()
+            ?: System.getenv("COMPUTERNAME")
+            ?: System.getenv("HOSTNAME")
+            ?: "ObsidianScoutNode"
+    }
+
+    private fun killExistingProcesses() {
+        val isWindows = System.getProperty("os.name").lowercase().contains("win")
+        try {
+            if (isWindows) {
+                val pb = ProcessBuilder("taskkill", "/F", "/IM", "cloudflared.exe")
+                pb.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                pb.redirectError(ProcessBuilder.Redirect.DISCARD)
+                val p = pb.start()
+                p.waitFor(3, TimeUnit.SECONDS)
+            } else {
+                val pb = ProcessBuilder("pkill", "-9", "-f", "cloudflared")
+                pb.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                pb.redirectError(ProcessBuilder.Redirect.DISCARD)
+                val p = pb.start()
+                p.waitFor(3, TimeUnit.SECONDS)
+            }
+            println("[CloudflaredService] Cleaned up existing cloudflared background processes.")
+        } catch (e: Throwable) {
+            // Ignore if no process was running
+        }
+    }
+
     private fun getLocalBinaryFile(): File {
         val isWindows = System.getProperty("os.name").lowercase().contains("win")
         val fileName = if (isWindows) "cloudflared.exe" else "cloudflared"
@@ -211,30 +251,42 @@ object CloudflaredService {
             return getStatus()
         }
 
-        if (process?.isAlive == true) {
-            stopTunnel()
-        }
+        // Always clean up existing / orphaned processes first before starting a fresh tunnel
+        stopTunnel()
+        killExistingProcesses()
 
         val isWindows = System.getProperty("os.name").lowercase().contains("win")
+        val hostLabel = getHostLabel()
         val command = mutableListOf<String>()
 
+        val baseArgs = listOf(
+            execPath,
+            "--label", hostLabel
+        )
+
         if (settings.tunnelToken.isNotBlank()) {
-            command.addAll(listOf(execPath, "tunnel", "run", "--token", settings.tunnelToken.trim()))
+            command.addAll(baseArgs)
+            command.addAll(listOf("tunnel", "run", "--protocol", "http2", "--token", settings.tunnelToken.trim()))
         } else if (settings.tunnelId.isNotBlank()) {
             val targetUrl = settings.targetUrl.ifBlank { "http://localhost:8080" }
-            command.addAll(listOf(execPath, "tunnel", "--url", targetUrl, "run", settings.tunnelId.trim()))
+            command.addAll(baseArgs)
+            command.addAll(listOf("tunnel", "--url", targetUrl, "run", "--protocol", "http2", settings.tunnelId.trim()))
         } else {
             lastStatusMessage = "Error: Tunnel ID or Tunnel Token must be configured"
             return getStatus()
         }
 
         try {
+            val logFile = File(getLocalBinaryFile().parentFile ?: File(".cloudflared"), "cloudflared.log")
+            logFile.parentFile?.mkdirs()
+
             val pb = if (isWindows && !execPath.endsWith(".exe") && !execPath.contains("\\") && !execPath.contains("/")) {
                 ProcessBuilder(listOf("cmd.exe", "/c") + command)
             } else {
                 ProcessBuilder(command)
             }
-            pb.redirectErrorStream(true)
+            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
+            pb.redirectError(ProcessBuilder.Redirect.appendTo(logFile))
             val p = pb.start()
             process = p
             lastStatusMessage = "Tunnel process launched (PID ${p.pid()})"
@@ -264,6 +316,7 @@ object CloudflaredService {
             }
         }
         process = null
+        killExistingProcesses()
         lastStatusMessage = "Stopped"
         return getStatus()
     }

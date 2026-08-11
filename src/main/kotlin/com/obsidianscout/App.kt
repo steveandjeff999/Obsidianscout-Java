@@ -67,6 +67,28 @@ data class DbInitResponse(val status: String, val message: String)
 
 
 fun main() {
+    Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+        var isOom = false
+        var curr: Throwable? = throwable
+        while (curr != null) {
+            if (curr is OutOfMemoryError) {
+                isOom = true
+                break
+            }
+            curr = curr.cause
+        }
+        if (isOom) {
+            System.err.println("[OOM-Guard] CRITICAL: OutOfMemoryError caught in thread '${thread.name}'. Triggering automatic process exit with heap escalation...")
+            try {
+                File(".oom_occurred").writeText("1")
+            } catch (e: Exception) { /* ignore */ }
+            Runtime.getRuntime().halt(137)
+        } else {
+            System.err.println("[UncaughtException] Thread '${thread.name}' threw exception: ${throwable.message}")
+            throwable.printStackTrace()
+        }
+    }
+
     Security.addProvider(BouncyCastleProvider())
     val appConfig = AppConfigLoader.load()
     
@@ -170,7 +192,11 @@ fun Application.module(appConfig: AppConfig) {
         }
 
         if (method in listOf("POST", "PUT", "DELETE", "PATCH")) {
-            val isExcludedPath = path.startsWith("/api/push") || path.startsWith("/api/mobile") || path.startsWith("/api/cluster")
+            val isExcludedPath = path.startsWith("/api/push") ||
+                    path.startsWith("/api/mobile") ||
+                    path.startsWith("/api/cluster") ||
+                    path.startsWith("/api/admin/cluster") ||
+                    call.request.headers["X-Cluster-Signature"] != null
             if (!isExcludedPath) {
                 val origin = call.request.headers["Origin"]
                 val referer = call.request.headers["Referer"]
@@ -205,6 +231,8 @@ fun Application.module(appConfig: AppConfig) {
         val path = call.request.path()
         // Exclude cluster status endpoints and static/vendor assets from the blocking interceptor
         val isExcluded = path.startsWith("/api/cluster/") ||
+                path.startsWith("/api/admin/cluster/") ||
+                path.startsWith("/api/banners") ||
                 path.contains("/vendor/") ||
                 path.contains("/css/") ||
                 path.contains("/js/") ||
@@ -318,6 +346,34 @@ fun Application.module(appConfig: AppConfig) {
             ) {
                 return@exception
             }
+
+            val isQuorumLoss = CockroachOrchestrator.isQuorumLossException(cause) ||
+                    (CockroachOrchestrator.isQuorumLost && cause.toString().lowercase().let { 
+                        it.contains("sql") || it.contains("exposed") || it.contains("transaction") || it.contains("connection")
+                    })
+
+            if (isQuorumLoss) {
+                CockroachOrchestrator.isQuorumLost = true
+                if (CockroachOrchestrator.quorumLossDetails.isNullOrBlank()) {
+                    CockroachOrchestrator.quorumLossDetails = cause.message ?: "CockroachDB cluster quorum lost."
+                }
+                call.application.environment.log.warn("Database quorum loss encountered on request ${call.request.path()}: ${cause.message}")
+                try {
+                    if (call.request.path().startsWith("/api")) {
+                        call.respond(
+                            HttpStatusCode.ServiceUnavailable,
+                            DbInitResponse(
+                                status = "quorum_lost",
+                                message = "Database quorum lost: CockroachDB cluster majority is offline. Operations requiring database access are temporarily suspended."
+                            )
+                        )
+                    } else {
+                        call.respondStaticHtml("503.html", HttpStatusCode.ServiceUnavailable)
+                    }
+                } catch (_: Throwable) {}
+                return@exception
+            }
+
             call.application.environment.log.error("Unhandled error", cause)
             try {
                 if (call.request.path().startsWith("/api")) {
@@ -379,8 +435,12 @@ fun Application.module(appConfig: AppConfig) {
                 SyncScheduler.start()
                 com.obsidianscout.scouting.DeduplicationScheduler.start()
                 com.obsidianscout.admin.CloudflaredService.initOnStartup()
+                com.obsidianscout.admin.NodeMonitoringService.start()
                 println("[Database] Background database initialization completed successfully.")
                 
+                // Mark update boot successful once startup completes
+                com.obsidianscout.utils.UpdateRecoveryManager.markBootSuccessful()
+
                 // Start replication monitoring only after initial setup is fully complete and successful
                 cockroachOrchestrator?.startReplicationMonitor()
                 initialized = true
@@ -396,6 +456,7 @@ fun Application.module(appConfig: AppConfig) {
     }
 
     environment.monitor.subscribe(ApplicationStopped) {
+        com.obsidianscout.admin.NodeMonitoringService.stop()
         com.obsidianscout.auth.ClusterSecretService.stopBackgroundSync()
         SyncScheduler.stop()
         GistUpdateService.stop()

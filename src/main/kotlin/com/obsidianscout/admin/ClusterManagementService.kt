@@ -7,6 +7,9 @@ import com.obsidianscout.db.DatabaseFactory
 import com.obsidianscout.db.orchestration.GoogleSheetsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -14,6 +17,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.URI
@@ -35,7 +40,8 @@ data class ClusterNodeInfo(
     val status: String,
     val role: String = "Cockroach Gateway Node",
     val cockroachVersion: String = "v26.2.3",
-    val isDbActive: Boolean = true
+    val isDbActive: Boolean = true,
+    val serverVersion: String = "Unknown"
 )
 
 @Serializable
@@ -133,7 +139,8 @@ object ClusterManagementService {
                 appPort = appPort,
                 isLocal = true,
                 status = if (DatabaseFactory.isReady) "online" else "booting",
-                isDbActive = com.obsidianscout.db.orchestration.CockroachOrchestrator.isDbActive
+                isDbActive = com.obsidianscout.db.orchestration.CockroachOrchestrator.isDbActive,
+                serverVersion = appConfig.current_version
             )
         )
 
@@ -172,21 +179,25 @@ object ClusterManagementService {
             // sheet fetch fallback
         }
 
-        // Ping / probe remote peer nodes
-        for (remoteIp in gossipIps) {
-            val isOnline = isNodeResponsive(remoteIp, appPort)
-            nodesList.add(
-                ClusterNodeInfo(
-                    nodeId = "node-peer-$remoteIp",
-                    ip = remoteIp,
-                    dbPort = dbPort,
-                    appPort = appPort,
-                    isLocal = false,
-                    status = if (isOnline) "online" else "offline",
-                    isDbActive = isOnline
-                )
-            )
+        // Ping / probe remote peer nodes concurrently
+        val peerResults = coroutineScope {
+            gossipIps.map { remoteIp ->
+                async {
+                    val (isOnline, remoteVersion) = fetchNodeStatusAndVersion(remoteIp, appPort, dbPort)
+                    ClusterNodeInfo(
+                        nodeId = "node-peer-$remoteIp",
+                        ip = remoteIp,
+                        dbPort = dbPort,
+                        appPort = appPort,
+                        isLocal = false,
+                        status = if (isOnline) "online" else "offline",
+                        isDbActive = isOnline,
+                        serverVersion = remoteVersion
+                    )
+                }
+            }.awaitAll()
         }
+        nodesList.addAll(peerResults)
 
         ClusterNodesResponse(
             localNodeIp = localIp,
@@ -195,21 +206,99 @@ object ClusterManagementService {
         )
     }
 
-    private fun isNodeResponsive(ip: String, appPort: Int): Boolean {
-        return try {
+    private fun fetchNodeStatusAndVersion(ip: String, appPort: Int, dbPort: Int = 26257): Pair<Boolean, String> {
+        // 1. HTTP Probe to ObsidianScout server port
+        try {
             val req = HttpRequest.newBuilder()
                 .uri(URI.create("http://$ip:$appPort/api/cluster/status"))
-                .timeout(Duration.ofSeconds(2))
+                .timeout(Duration.ofSeconds(4))
                 .GET()
                 .build()
             val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
-            resp.statusCode() == 200
+            if (resp.statusCode() == 200) {
+                val body = resp.body()
+                val jsonElem = runCatching { Json.parseToJsonElement(body).jsonObject }.getOrNull()
+                val ver = jsonElem?.get("serverVersion")?.let {
+                    runCatching { it.jsonPrimitive.content }.getOrNull()
+                } ?: fetchNodeVersionFromEndpoint(ip, appPort) ?: "Unknown"
+                return Pair(true, ver)
+            }
         } catch (e: Exception) {
             if (e.message?.contains("selector manager closed") == true) {
                 resetHttpClient()
             }
+        }
+
+        // 2. Fallback: TCP Socket probe to CockroachDB port
+        val isTcpAlive = try {
+            java.net.Socket().use { socket ->
+                socket.connect(java.net.InetSocketAddress(ip, dbPort), 3000)
+                true
+            }
+        } catch (e: Exception) {
             false
         }
+
+        return if (isTcpAlive) Pair(true, "Unknown") else Pair(false, "Offline")
+    }
+
+    private fun fetchNodeVersionFromEndpoint(ip: String, appPort: Int): String? {
+        return try {
+            val req = HttpRequest.newBuilder()
+                .uri(URI.create("http://$ip:$appPort/api/version"))
+                .timeout(Duration.ofSeconds(3))
+                .GET()
+                .build()
+            val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+            if (resp.statusCode() == 200) {
+                val jsonElem = runCatching { Json.parseToJsonElement(resp.body()).jsonObject }.getOrNull()
+                jsonElem?.get("version")?.let { runCatching { it.jsonPrimitive.content }.getOrNull() }
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun isNodeResponsive(ip: String, appPort: Int, dbPort: Int = 26257): Boolean {
+        return fetchNodeStatusAndVersion(ip, appPort, dbPort).first
+    }
+
+    fun probeNodeFromPeer(targetIp: String, appPort: Int, dbPort: Int): Boolean {
+        return isNodeResponsive(targetIp, appPort, dbPort)
+    }
+
+    fun checkNodeResponsiveFromPeerNode(peerIp: String, targetIp: String, appPort: Int, dbPort: Int): Boolean? {
+        return try {
+            val req = HttpRequest.newBuilder()
+                .uri(URI.create("http://$peerIp:$appPort/api/cluster/probe-node?targetIp=$targetIp&appPort=$appPort&dbPort=$dbPort"))
+                .timeout(Duration.ofSeconds(4))
+                .GET()
+                .build()
+            val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+            if (resp.statusCode() == 200) {
+                val body = resp.body()
+                body.contains("\"isOnline\":true") || body.contains("\"isOnline\": true")
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun buildSignedClusterRequest(urlStr: String, method: String): HttpRequest.Builder {
+        val secret = com.obsidianscout.auth.ClusterSecretService.getSessionSecret()
+        val timestamp = System.currentTimeMillis().toString()
+        val uri = URI.create(urlStr)
+        val path = uri.rawPath + (if (uri.rawQuery != null) "?${uri.rawQuery}" else "")
+        val dataToSign = "$timestamp:$method:$path"
+        val signature = com.obsidianscout.auth.ClusterCryptoUtils.hmacSha256(dataToSign, secret)
+
+        return HttpRequest.newBuilder()
+            .uri(uri)
+            .header("X-Cluster-Timestamp", timestamp)
+            .header("X-Cluster-Signature", signature)
+            .header("X-Requested-With", "XMLHttpRequest")
     }
 
     suspend fun getNodeLogs(targetIp: String, limit: Int = 500, filter: String? = null): ServerLogsPayload = withContext(Dispatchers.IO) {
@@ -232,8 +321,7 @@ object ClusterManagementService {
             val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/logs$queryStr"
             
             try {
-                val req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
+                val req = buildSignedClusterRequest(url, "GET")
                     .timeout(Duration.ofSeconds(5))
                     .GET()
                     .build()
@@ -276,7 +364,7 @@ object ClusterManagementService {
         }
     }
 
-    suspend fun getAppConfig(targetIp: String): AppConfigPayload = withContext(Dispatchers.IO) {
+    suspend fun getAppConfig(targetIp: String, isInterNodeCall: Boolean = false): AppConfigPayload = withContext(Dispatchers.IO) {
         val localIp = getLocalTailscaleIp()
         val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
 
@@ -284,19 +372,31 @@ object ClusterManagementService {
             try {
                 val loadedConfig = AppConfigLoader.load()
                 val prettyText = prettyJson.encodeToString(loadedConfig)
+                val responseJson = if (isInterNodeCall) {
+                    val secret = com.obsidianscout.auth.ClusterSecretService.getSessionSecret()
+                    com.obsidianscout.auth.ClusterCryptoUtils.encrypt(prettyText, secret)
+                } else {
+                    prettyText
+                }
                 AppConfigPayload(
                     nodeIp = localIp,
                     isLocal = true,
-                    rawJson = prettyText,
-                    config = loadedConfig
+                    rawJson = responseJson,
+                    config = if (isInterNodeCall) null else loadedConfig
                 )
             } catch (e: Exception) {
                 val configPath = Paths.get("config", "app-config.json")
                 val text = if (Files.exists(configPath)) Files.readString(configPath) else "{}"
+                val responseJson = if (isInterNodeCall) {
+                    val secret = com.obsidianscout.auth.ClusterSecretService.getSessionSecret()
+                    com.obsidianscout.auth.ClusterCryptoUtils.encrypt(text, secret)
+                } else {
+                    text
+                }
                 AppConfigPayload(
                     nodeIp = localIp,
                     isLocal = true,
-                    rawJson = text,
+                    rawJson = responseJson,
                     config = null
                 )
             }
@@ -305,14 +405,26 @@ object ClusterManagementService {
             val appPort = appConfig.server.port
             val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/app-config"
             try {
-                val req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
+                val req = buildSignedClusterRequest(url, "GET")
                     .timeout(Duration.ofSeconds(5))
                     .GET()
                     .build()
                 val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
                 if (resp.statusCode() == 200) {
-                    JsonSupport.json.decodeFromString<AppConfigPayload>(resp.body())
+                    val payload = JsonSupport.json.decodeFromString<AppConfigPayload>(resp.body())
+                    val secret = com.obsidianscout.auth.ClusterSecretService.getSessionSecret()
+                    val decryptedRaw = try {
+                        com.obsidianscout.auth.ClusterCryptoUtils.decrypt(payload.rawJson, secret)
+                    } catch (e: Exception) {
+                        payload.rawJson
+                    }
+                    val parsedConfig = runCatching { JsonSupport.json.decodeFromString<AppConfig>(decryptedRaw) }.getOrNull()
+                    AppConfigPayload(
+                        nodeIp = targetIp,
+                        isLocal = false,
+                        rawJson = decryptedRaw,
+                        config = parsedConfig
+                    )
                 } else {
                     AppConfigPayload(
                         nodeIp = targetIp,
@@ -335,13 +447,24 @@ object ClusterManagementService {
         }
     }
 
-    suspend fun updateAppConfig(targetIp: String, rawJson: String): ActionResultResponse = withContext(Dispatchers.IO) {
+    suspend fun updateAppConfig(targetIp: String, rawJson: String, isInterNodeCall: Boolean = false): ActionResultResponse = withContext(Dispatchers.IO) {
         val localIp = getLocalTailscaleIp()
         val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+        val secret = com.obsidianscout.auth.ClusterSecretService.getSessionSecret()
+
+        val jsonToSave = if (isLocal && isInterNodeCall) {
+            try {
+                com.obsidianscout.auth.ClusterCryptoUtils.decrypt(rawJson, secret)
+            } catch (e: Exception) {
+                rawJson
+            }
+        } else {
+            rawJson
+        }
 
         // Validate JSON payload
         val parsedConfig = try {
-            JsonSupport.json.decodeFromString<AppConfig>(rawJson)
+            JsonSupport.json.decodeFromString<AppConfig>(jsonToSave)
         } catch (e: Exception) {
             return@withContext ActionResultResponse(
                 success = false,
@@ -356,6 +479,7 @@ object ClusterManagementService {
                 val configPath = Paths.get("config", "app-config.json")
                 configPath.parent?.let { Files.createDirectories(it) }
                 Files.writeString(configPath, formattedJson)
+                AppConfigLoader.updateCache(parsedConfig)
 
                 ServerLogService.appendLog("WARN", "ClusterManagementService", "AppConfig updated on local node $localIp.")
                 ActionResultResponse(
@@ -375,11 +499,12 @@ object ClusterManagementService {
             val appPort = appConfig.server.port
             val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/app-config"
             try {
-                val req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
+                val formattedJson = prettyJson.encodeToString(parsedConfig)
+                val encryptedBody = com.obsidianscout.auth.ClusterCryptoUtils.encrypt(formattedJson, secret)
+                val req = buildSignedClusterRequest(url, "PUT")
                     .timeout(Duration.ofSeconds(5))
-                    .header("Content-Type", "application/json")
-                    .PUT(HttpRequest.BodyPublishers.ofString(rawJson))
+                    .header("Content-Type", "text/plain")
+                    .PUT(HttpRequest.BodyPublishers.ofString(encryptedBody))
                     .build()
                 val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
                 if (resp.statusCode() == 200) {
@@ -439,8 +564,7 @@ object ClusterManagementService {
             val appPort = appConfig.server.port
             val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/reboot"
             try {
-                val req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
+                val req = buildSignedClusterRequest(url, "POST")
                     .timeout(Duration.ofSeconds(5))
                     .POST(HttpRequest.BodyPublishers.noBody())
                     .build()
@@ -486,8 +610,7 @@ object ClusterManagementService {
             val appPort = appConfig.server.port
             val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/reinstall-update"
             try {
-                val req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
+                val req = buildSignedClusterRequest(url, "POST")
                     .timeout(Duration.ofSeconds(5))
                     .POST(HttpRequest.BodyPublishers.noBody())
                     .build()
@@ -562,10 +685,16 @@ object ClusterManagementService {
 
     suspend fun getAllClusterLogs(limit: Int = 500, filter: String? = null): ServerLogsPayload = withContext(Dispatchers.IO) {
         val cluster = getClusterNodes()
-        val aggregatedLogs = mutableListOf<LogEntry>()
+        val nodePayloads = coroutineScope {
+            cluster.nodes.map { node ->
+                async {
+                    Pair(node, getNodeLogs(node.ip, limit = limit, filter = filter))
+                }
+            }.awaitAll()
+        }
 
-        for (node in cluster.nodes) {
-            val nodePayload = getNodeLogs(node.ip, limit = limit, filter = filter)
+        val aggregatedLogs = mutableListOf<LogEntry>()
+        for ((node, nodePayload) in nodePayloads) {
             val taggedLogs = nodePayload.logs.map { entry ->
                 LogEntry(
                     timestamp = entry.timestamp,

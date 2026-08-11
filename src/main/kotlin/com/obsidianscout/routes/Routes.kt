@@ -7,6 +7,7 @@ import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.requireAdmin
+import com.obsidianscout.auth.requireAdminOrClusterAuth
 import com.obsidianscout.auth.requireAnalyticsOrAbove
 import com.obsidianscout.auth.requireSession
 import com.obsidianscout.auth.requireSuperAdmin
@@ -107,10 +108,14 @@ fun Application.configureRoutes() {
             }
             route("/cluster") {
                 get("/status") {
+                    val appConfig = AppConfigLoader.load()
                     call.respond(
                         buildJsonObject {
                             put("dbReady", com.obsidianscout.db.DatabaseFactory.isReady)
                             put("isDbActive", com.obsidianscout.db.orchestration.CockroachOrchestrator.isDbActive)
+                            put("isQuorumLost", com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost)
+                            put("quorumDetails", com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails ?: "")
+                            put("serverVersion", appConfig.current_version)
                         }
                     )
                 }
@@ -118,6 +123,24 @@ fun Application.configureRoutes() {
                     call.respond(
                         buildJsonObject {
                             put("currentTimeMillis", System.currentTimeMillis())
+                        }
+                    )
+                }
+                get("/probe-node") {
+                    val targetIp = call.request.queryParameters["targetIp"] ?: ""
+                    val appPort = call.request.queryParameters["appPort"]?.toIntOrNull() ?: 8080
+                    val dbPort = call.request.queryParameters["dbPort"]?.toIntOrNull() ?: 26257
+
+                    if (targetIp.isBlank()) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing targetIp parameter")
+                    }
+
+                    val isOnline = com.obsidianscout.admin.ClusterManagementService.probeNodeFromPeer(targetIp, appPort, dbPort)
+                    call.respond(
+                        buildJsonObject {
+                            put("targetIp", targetIp)
+                            put("isOnline", isOnline)
+                            put("probedBy", com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp())
                         }
                     )
                 }
@@ -144,7 +167,8 @@ fun Application.configureRoutes() {
                         email = user.email,
                         profilePicture = null,
                         notificationPreference = user.notificationPreference,
-                        tourProgress = user.tourProgress
+                        tourProgress = user.tourProgress,
+                        nodeAlertsEnabled = user.nodeAlertsEnabled
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
@@ -158,7 +182,8 @@ fun Application.configureRoutes() {
                         email = user.email,
                         profilePicture = user.profilePicture,
                         notificationPreference = user.notificationPreference,
-                        tourProgress = user.tourProgress
+                        tourProgress = user.tourProgress,
+                        nodeAlertsEnabled = user.nodeAlertsEnabled
                     )
                     call.respond(LoginResponse(responseSession))
                 }
@@ -181,7 +206,8 @@ fun Application.configureRoutes() {
                         email = user.email,
                         profilePicture = null,
                         notificationPreference = user.notificationPreference,
-                        tourProgress = user.tourProgress
+                        tourProgress = user.tourProgress,
+                        nodeAlertsEnabled = user.nodeAlertsEnabled
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
@@ -195,7 +221,8 @@ fun Application.configureRoutes() {
                         email = user.email,
                         profilePicture = user.profilePicture,
                         notificationPreference = user.notificationPreference,
-                        tourProgress = user.tourProgress
+                        tourProgress = user.tourProgress,
+                        nodeAlertsEnabled = user.nodeAlertsEnabled
                     )
                     call.respond(LoginResponse(responseSession))
                 }
@@ -218,7 +245,8 @@ fun Application.configureRoutes() {
                         email = user.email,
                         profilePicture = user.profilePicture,
                         notificationPreference = user.notificationPreference,
-                        tourProgress = user.tourProgress
+                        tourProgress = user.tourProgress,
+                        nodeAlertsEnabled = user.nodeAlertsEnabled
                     )
                     call.respond(MeResponse(responseSession))
                 }
@@ -1538,14 +1566,16 @@ fun Application.configureRoutes() {
                     newEmail = request.email,
                     newProfilePicture = request.profilePicture,
                     clearProfilePicture = request.clearProfilePicture,
-                    newNotificationPreference = request.notificationPreference
+                    newNotificationPreference = request.notificationPreference,
+                    newNodeAlertsEnabled = if (session.role == UserRole.SUPERADMIN) request.nodeAlertsEnabled else null
                 )
                 // Refresh the session so /api/auth/me returns the updated details
                 val updatedSession = session.copy(
                     profilePicture = null,
                     email = updated.email,
                     notificationPreference = updated.notificationPreference,
-                    tourProgress = updated.tourProgress
+                    tourProgress = updated.tourProgress,
+                    nodeAlertsEnabled = updated.nodeAlertsEnabled
                 )
                 call.sessions.set(updatedSession)
                 call.respond(updated)
@@ -1965,21 +1995,19 @@ fun Application.configureRoutes() {
             route("/banners") {
                 get {
                     val session = call.requireSession()
-                    val active = com.obsidianscout.db.BannerService.getActive(session.teamNumber).toMutableList()
-                    val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
+                    val active = mutableListOf<BannerDto>()
+                    val orchestrator = com.obsidianscout.db.orchestration.CockroachOrchestrator
 
-                    val eventKey = settings.resolvedEventKey()
-                    if (eventKey.isBlank()) {
+                    if (orchestrator.isQuorumLost) {
                         active.add(
-                            0,
-                            com.obsidianscout.routes.BannerDto(
-                                id = "sys-no-event-key",
+                            BannerDto(
+                                id = "sys-db-quorum-lost",
                                 teamNumber = session.teamNumber,
-                                message = "No Event Key is currently configured for your team. Please configure an Event Key in Settings.",
-                                bannerType = "warning",
-                                isDismissible = true,
-                                isExpandable = false,
-                                expandableMessage = "",
+                                message = "🚨 Database Quorum Lost: CockroachDB cluster has lost quorum (majority of nodes offline). Database read/write operations are temporarily restricted until quorum is restored.",
+                                bannerType = "danger",
+                                isDismissible = false,
+                                isExpandable = true,
+                                expandableMessage = orchestrator.quorumLossDetails ?: "CockroachDB requires a majority consensus of nodes to execute database transactions safely. The cluster is currently under-quorum. Full operation will resume automatically when peer nodes reconnect.",
                                 isActive = true,
                                 createdAt = java.time.Instant.now().toString(),
                                 updatedAt = java.time.Instant.now().toString()
@@ -1987,24 +2015,70 @@ fun Application.configureRoutes() {
                         )
                     }
 
-                    val keys = settings.apiKeys
-                    val hasApi = keys.tbaKey.isNotBlank() || (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
-                    if (!hasApi) {
-                        active.add(
-                            0,
-                            com.obsidianscout.routes.BannerDto(
-                                id = "sys-no-api-key",
-                                teamNumber = session.teamNumber,
-                                message = "No API Key is currently configured for your team. External data syncing (The Blue Alliance / FIRST) is disabled.",
-                                bannerType = "warning",
-                                isDismissible = true,
-                                isExpandable = false,
-                                expandableMessage = "",
-                                isActive = true,
-                                createdAt = java.time.Instant.now().toString(),
-                                updatedAt = java.time.Instant.now().toString()
+                    try {
+                        val dbBanners = com.obsidianscout.db.BannerService.getActive(session.teamNumber)
+                        active.addAll(dbBanners)
+
+                        val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
+                        val eventKey = settings.resolvedEventKey()
+                        if (eventKey.isBlank()) {
+                            active.add(
+                                0,
+                                com.obsidianscout.routes.BannerDto(
+                                    id = "sys-no-event-key",
+                                    teamNumber = session.teamNumber,
+                                    message = "No Event Key is currently configured for your team. Please configure an Event Key in Settings.",
+                                    bannerType = "warning",
+                                    isDismissible = true,
+                                    isExpandable = false,
+                                    expandableMessage = "",
+                                    isActive = true,
+                                    createdAt = java.time.Instant.now().toString(),
+                                    updatedAt = java.time.Instant.now().toString()
+                                )
                             )
-                        )
+                        }
+
+                        val keys = settings.apiKeys
+                        val hasApi = keys.tbaKey.isNotBlank() || (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
+                        if (!hasApi) {
+                            active.add(
+                                0,
+                                com.obsidianscout.routes.BannerDto(
+                                    id = "sys-no-api-key",
+                                    teamNumber = session.teamNumber,
+                                    message = "No API Key is currently configured for your team. External data syncing (The Blue Alliance / FIRST) is disabled.",
+                                    bannerType = "warning",
+                                    isDismissible = true,
+                                    isExpandable = false,
+                                    expandableMessage = "",
+                                    isActive = true,
+                                    createdAt = java.time.Instant.now().toString(),
+                                    updatedAt = java.time.Instant.now().toString()
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        if (orchestrator.isQuorumLossException(e)) {
+                            orchestrator.isQuorumLost = true
+                            if (!active.any { it.id == "sys-db-quorum-lost" }) {
+                                active.add(
+                                    0,
+                                    BannerDto(
+                                        id = "sys-db-quorum-lost",
+                                        teamNumber = session.teamNumber,
+                                        message = "🚨 Database Quorum Lost: CockroachDB cluster has lost quorum (majority of nodes offline). Database read/write operations are temporarily restricted until quorum is restored.",
+                                        bannerType = "danger",
+                                        isDismissible = false,
+                                        isExpandable = true,
+                                        expandableMessage = e.message ?: "CockroachDB requires a majority consensus of nodes to execute database transactions safely. The cluster is currently under-quorum. Full operation will resume automatically when peer nodes reconnect.",
+                                        isActive = true,
+                                        createdAt = java.time.Instant.now().toString(),
+                                        updatedAt = java.time.Instant.now().toString()
+                                    )
+                                )
+                            }
+                        }
                     }
 
                     call.respond(active)
@@ -2194,43 +2268,71 @@ fun Application.configureRoutes() {
                 }
                 route("/cluster") {
                     get("/nodes") {
-                        call.requireAdmin()
+                        call.requireAdminOrClusterAuth()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterNodes())
                     }
+                    get("/nodes/local/logs") {
+                        call.requireAdminOrClusterAuth()
+                        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
+                        val filter = call.request.queryParameters["filter"]
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getNodeLogs(localIp, limit, filter))
+                    }
+                    get("/nodes/local/app-config") {
+                        call.requireAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getAppConfig(localIp, isInterNodeCall = true))
+                    }
+                    put("/nodes/local/app-config") {
+                        call.requireAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        val rawJson = call.receiveText()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.updateAppConfig(localIp, rawJson, isInterNodeCall = true))
+                    }
+                    post("/nodes/local/reboot") {
+                        call.requireAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.rebootNode(localIp))
+                    }
+                    post("/nodes/local/reinstall-update") {
+                        call.requireAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateNode(localIp))
+                    }
                     get("/nodes/{ip}/logs") {
-                        call.requireAdmin()
+                        call.requireAdminOrClusterAuth()
                         val ip = call.parameters["ip"] ?: "local"
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
                         val filter = call.request.queryParameters["filter"]
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getNodeLogs(ip, limit, filter))
                     }
                     get("/nodes/{ip}/app-config") {
-                        call.requireAdmin()
+                        call.requireAdminOrClusterAuth()
                         val ip = call.parameters["ip"] ?: "local"
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAppConfig(ip))
                     }
                     put("/nodes/{ip}/app-config") {
-                        call.requireAdmin()
+                        call.requireAdminOrClusterAuth()
                         val ip = call.parameters["ip"] ?: "local"
                         val rawJson = call.receiveText()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.updateAppConfig(ip, rawJson))
                     }
                     post("/nodes/{ip}/reboot") {
-                        call.requireAdmin()
+                        call.requireAdminOrClusterAuth()
                         val ip = call.parameters["ip"] ?: "local"
                         call.respond(com.obsidianscout.admin.ClusterManagementService.rebootNode(ip))
                     }
                     post("/nodes/{ip}/reinstall-update") {
-                        call.requireAdmin()
+                        call.requireAdminOrClusterAuth()
                         val ip = call.parameters["ip"] ?: "local"
                         call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateNode(ip))
                     }
                     post("/reboot-all") {
-                        call.requireAdmin()
+                        call.requireAdminOrClusterAuth()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.rebootEntireCluster())
                     }
                     post("/reinstall-update-all") {
-                        call.requireAdmin()
+                        call.requireAdminOrClusterAuth()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateEntireCluster())
                     }
                     post("/regenerate-keys") {
@@ -2239,34 +2341,58 @@ fun Application.configureRoutes() {
                         val result = com.obsidianscout.auth.ClusterSecretService.regenerateClusterKeys(appConfig)
                         call.respond(result)
                     }
+                    get("/notifications/enrollment") {
+                        val session = call.requireSuperAdmin()
+                        val user = AuthService.getUserById(session.userId)
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "User not found")
+                        call.respond(
+                            NodeAlertsEnrollmentResponse(
+                                success = true,
+                                enrolled = user.nodeAlertsEnabled,
+                                message = if (user.nodeAlertsEnabled) "Enrolled in node down alerts." else "Not enrolled in node down alerts."
+                            )
+                        )
+                    }
+                    put("/notifications/enrollment") {
+                        val session = call.requireSuperAdmin()
+                        val request = call.receive<NodeAlertsEnrollmentRequest>()
+                        val updated = AuthService.updateUser(
+                            callerSession = session,
+                            targetUserId = session.userId,
+                            newUsername = null,
+                            newPassword = null,
+                            newRole = null,
+                            newNodeAlertsEnabled = request.enrolled
+                        )
+                        val updatedSession = session.copy(
+                            nodeAlertsEnabled = updated.nodeAlertsEnabled
+                        )
+                        call.sessions.set(updatedSession)
+                        call.respond(
+                            NodeAlertsEnrollmentResponse(
+                                success = true,
+                                enrolled = updated.nodeAlertsEnabled,
+                                message = if (updated.nodeAlertsEnabled) "Successfully enrolled in node down FCM & Email alerts." else "Successfully unsubscribed from node down alerts."
+                            )
+                        )
+                    }
+                    post("/notifications/test") {
+                        val session = call.requireSuperAdmin()
+                        val uuid = runCatching { java.util.UUID.fromString(session.userId) }.getOrNull()
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid user ID")
+                        val (success, msg) = com.obsidianscout.admin.NodeMonitoringService.sendTestNodeDownAlert(uuid)
+                        call.respond(
+                            buildJsonObject {
+                                put("success", success)
+                                put("message", msg)
+                            }
+                        )
+                    }
                     get("/logs-all") {
-                        call.requireAdmin()
+                        call.requireAdminOrClusterAuth()
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
                         val filter = call.request.queryParameters["filter"]
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAllClusterLogs(limit, filter))
-                    }
-                    get("/nodes/local/logs") {
-                        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
-                        val filter = call.request.queryParameters["filter"]
-                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
-                        call.respond(com.obsidianscout.admin.ClusterManagementService.getNodeLogs(localIp, limit, filter))
-                    }
-                    get("/nodes/local/app-config") {
-                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
-                        call.respond(com.obsidianscout.admin.ClusterManagementService.getAppConfig(localIp))
-                    }
-                    put("/nodes/local/app-config") {
-                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
-                        val rawJson = call.receiveText()
-                        call.respond(com.obsidianscout.admin.ClusterManagementService.updateAppConfig(localIp, rawJson))
-                    }
-                    post("/nodes/local/reboot") {
-                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
-                        call.respond(com.obsidianscout.admin.ClusterManagementService.rebootNode(localIp))
-                    }
-                    post("/nodes/local/reinstall-update") {
-                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
-                        call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateNode(localIp))
                     }
                 }
             }

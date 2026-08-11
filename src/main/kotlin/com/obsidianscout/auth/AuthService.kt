@@ -50,7 +50,8 @@ data class UserRecord(
     val email: String? = null,
     val profilePicture: String? = null,
     val notificationPreference: String = "all",
-    val tourProgress: String? = null
+    val tourProgress: String? = null,
+    val nodeAlertsEnabled: Boolean = false
 )
 
 object AuthService {
@@ -285,7 +286,8 @@ object AuthService {
         newProfilePicture: String? = null,
         clearProfilePicture: Boolean = false,
         newNotificationPreference: String? = null,
-        newTourProgress: String? = null
+        newTourProgress: String? = null,
+        newNodeAlertsEnabled: Boolean? = null
     ): UserRecord {
         val targetUuid = runCatching { UUID.fromString(targetUserId) }.getOrElse {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
@@ -341,6 +343,7 @@ object AuthService {
                 if (newRole != null)             stmt[role] = newRole.name
                 if (newEmail != null)            stmt[email] = newEmail.takeIf { it.isNotBlank() }
                 if (newNotificationPreference != null) stmt[notificationPreference] = newNotificationPreference
+                if (newNodeAlertsEnabled != null) stmt[nodeAlertsEnabled] = newNodeAlertsEnabled
                 if (newTeamNumber != null && callerSession.role == UserRole.SUPERADMIN) {
                     stmt[teamNumber] = newTeamNumber
                 }
@@ -459,7 +462,8 @@ object AuthService {
             email = row[Users.email],
             profilePicture = row[Users.profilePicture],
             notificationPreference = row[Users.notificationPreference],
-            tourProgress = row[Users.tourProgress]
+            tourProgress = row[Users.tourProgress],
+            nodeAlertsEnabled = row.getOrNull(Users.nodeAlertsEnabled) ?: false
         )
     }
 
