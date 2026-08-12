@@ -1,0 +1,195 @@
+name: ObsidianScout Multi-Platform CI & Release
+
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    name: Bump Version & Recommit
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag_name: ${{ steps.bump.outputs.tag_name }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up GraalVM JDK 21
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'gradle'
+
+      - name: Grant Execute Permission to Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Bump Version Number
+        run: ./gradlew bumpVersion
+
+      - name: Extract Bumped Version & Re-commit
+        id: bump
+        run: |
+          VER=$(grep '"current_version"' config/app-config.json | head -n 1 | sed -E 's/.*"current_version"\s*:\s*"([^"]+)".*/\1/')
+          if [ -z "$VER" ]; then VER="0.1.0"; fi
+          TAG="v$VER"
+
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG" >> $GITHUB_OUTPUT
+          echo "Bumped version: $TAG"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add config/app-config.json Obsidianscout/config/app-config.json Obsidianscout/src/main/kotlin/com/obsidianscout/config/AppConfig.kt
+          
+          if git diff --staged --quiet; then
+            echo "No version changes detected."
+          else
+            git commit -m "chore: bump version to $TAG [skip ci]"
+            git push
+            git tag "$TAG" || true
+            git push origin "$TAG" || true
+          fi
+
+  build-matrix:
+    name: Build (${{ matrix.name }})
+    needs: bump-version
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x86_64 Native
+            os: windows-latest
+            arch_key: windows-x86_64
+            build_cmd: ./gradlew publishnative -PwithNativeImage -PskipBump
+            bundle_glob: build/bundle-native/obsidianscout-v*-x86_64
+            archive_ext: zip
+
+          - name: Linux x86_64 Native
+            os: ubuntu-latest
+            arch_key: linux-x86_64
+            build_cmd: ./gradlew publishnative -PwithNativeImage -PskipBump
+            bundle_glob: build/bundle-native/obsidianscout-v*-x86_64
+            archive_ext: tar.gz
+
+          - name: macOS ARM64 Native
+            os: macos-14
+            arch_key: macos-arm64
+            build_cmd: ./gradlew publishnative -PwithNativeImage -PskipBump
+            bundle_glob: build/bundle-native/obsidianscout-v*-arm64
+            archive_ext: tar.gz
+
+          - name: Linux ARM64 Native
+            os: ubuntu-24.04-arm
+            arch_key: linux-arm64
+            build_cmd: ./gradlew publishnative -PwithNativeImage -PskipBump
+            bundle_glob: build/bundle-native/obsidianscout-v*-arm64
+            archive_ext: tar.gz
+
+          - name: Cross-Platform Fat-JAR Bundle
+            os: ubuntu-latest
+            arch_key: fatjar
+            build_cmd: ./gradlew publish -PskipBump
+            bundle_glob: build/bundle
+            archive_ext: zip
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump-version.outputs.tag_name }}
+
+      - name: Set up GraalVM JDK 21
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'gradle'
+
+      - name: Grant Execute Permission to Gradle Wrapper
+        if: runner.os != 'Windows'
+        run: chmod +x gradlew
+
+      - name: Build Platform Bundle
+        run: ${{ matrix.build_cmd }}
+
+      - name: Archive Bundle (Zip for Windows/FatJAR)
+        if: matrix.archive_ext == 'zip'
+        shell: pwsh
+        run: |
+          $ver = "${{ needs.bump-version.outputs.version }}"
+          $archKey = "${{ matrix.arch_key }}"
+          $archiveName = "obsidianscout-v${ver}-${archKey}.zip"
+          $bundlePath = Get-Item ${{ matrix.bundle_glob }} | Select-Object -First 1
+          Write-Host "Zipping $bundlePath to $archiveName..."
+          Compress-Archive -Path "$($bundlePath.FullName)\*" -DestinationPath "$archiveName" -Force
+          echo "ARCHIVE_FILE=$archiveName" >> $env:GITHUB_ENV
+
+      - name: Archive Bundle (Tar.gz for Linux/macOS)
+        if: matrix.archive_ext == 'tar.gz'
+        shell: bash
+        run: |
+          VER="${{ needs.bump-version.outputs.version }}"
+          ARCH_KEY="${{ matrix.arch_key }}"
+          ARCHIVE_NAME="obsidianscout-v${VER}-${ARCH_KEY}.tar.gz"
+          BUNDLE_DIR=$(ls -d ${{ matrix.bundle_glob }} | head -n 1)
+          echo "Compressing $BUNDLE_DIR to $ARCHIVE_NAME..."
+          tar -czf "$ARCHIVE_NAME" -C "$BUNDLE_DIR" .
+          echo "ARCHIVE_FILE=$ARCHIVE_NAME" >> $GITHUB_ENV
+
+      - name: Upload Build Artifact to Workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.arch_key }}
+          path: ${{ env.ARCHIVE_FILE }}
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [bump-version, build-matrix]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump-version.outputs.tag_name }}
+
+      - name: Download All Platform Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Display Release Assets
+        run: |
+          echo "Successfully assembled release assets for ${{ needs.bump-version.outputs.tag_name }}:"
+          ls -la release-artifacts/
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.bump-version.outputs.tag_name }}
+          name: Release ${{ needs.bump-version.outputs.tag_name }}
+          files: release-artifacts/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
