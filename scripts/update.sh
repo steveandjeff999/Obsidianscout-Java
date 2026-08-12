@@ -1,11 +1,34 @@
 #!/bin/sh
 set -e
 
+GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-21/bin/java"
+if [ ! -x "$GRAAL_JAVA" ] && [ -n "$GRAALVM_HOME" ] && [ -x "$GRAALVM_HOME/bin/java" ]; then
+    GRAAL_JAVA="$GRAALVM_HOME/bin/java"
+fi
+
+if [ ! -x "$GRAAL_JAVA" ]; then
+    echo "[ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for maximum performance..."
+    if [ -x ./install-graal.sh ]; then
+        ./install-graal.sh
+    elif [ -x ./scripts/install-graal.sh ]; then
+        ./scripts/install-graal.sh
+    fi
+    if [ -x "$HOME/.graalvm/graalvm-jdk-21/bin/java" ]; then
+        GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-21/bin/java"
+    fi
+fi
+
+if [ -x "$GRAAL_JAVA" ]; then
+    JAVA_EXEC="$GRAAL_JAVA"
+else
+    JAVA_EXEC="java"
+fi
+
 # Clear any previous update state
 rm -f .update_result
 
 # Run the interactive Java update utility
-java -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt
+"$JAVA_EXEC" -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt
 
 # If the helper completed successfully and wrote the path of the new files
 if [ -f .update_result ]; then
@@ -20,7 +43,7 @@ if [ -f .update_result ]; then
         if [ -f obsidianscout-server.jar ]; then
             cp obsidianscout-server.jar .backup/
         fi
-        for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat; do
+        for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1; do
             if [ -f "$script" ]; then
                 cp "$script" .backup/
             fi
@@ -30,7 +53,7 @@ if [ -f .update_result ]; then
         cp "$SRC_ROOT/obsidianscout-server.jar" ./
         
         # Copy scripts
-        for script in run.sh run.bat reset-superadmin.sh reset-superadmin.bat update.sh update.bat; do
+        for script in run.sh run.bat reset-superadmin.sh reset-superadmin.bat update.sh update.bat install-graal.sh install-graal.bat install-graal.ps1; do
             if [ -f "$SRC_ROOT/$script" ]; then
                 cp "$SRC_ROOT/$script" ./
                 if [ "${script##*.}" = "sh" ]; then
@@ -55,3 +78,4 @@ fi
 
 echo "Press enter to exit..."
 read -r dummy || true
+

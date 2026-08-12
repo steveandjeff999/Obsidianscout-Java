@@ -16,6 +16,7 @@ import io.ktor.server.sessions.transformRead
 import io.ktor.server.sessions.transformWrite
 import io.ktor.http.Cookie
 import io.ktor.util.AttributeKey
+import com.obsidianscout.db.DatabaseFactory
 import com.obsidianscout.db.Users
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -40,9 +41,15 @@ class ApiException(val status: HttpStatusCode, override val message: String) : R
 suspend fun ApplicationCall.requireSession(): UserSession {
     val session = sessions.get<UserSession>()
         ?: throw ApiException(HttpStatusCode.Unauthorized, "Not signed in")
-    val exists = transaction {
-        val uuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
-        if (uuid == null) false else Users.selectAll().where { Users.id eq uuid }.any()
+    val exists = if (DatabaseFactory.isReady) {
+        runCatching {
+            transaction {
+                val uuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
+                if (uuid == null) false else Users.selectAll().where { Users.id eq uuid }.any()
+            }
+        }.getOrDefault(true)
+    } else {
+        true
     }
     if (!exists) {
         sessions.clear<UserSession>()

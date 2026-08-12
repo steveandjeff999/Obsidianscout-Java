@@ -3,8 +3,8 @@ plugins {
     kotlin("plugin.serialization") version "2.1.0"
     application
     id("com.gradleup.shadow") version "9.3.0"
+    id("org.graalvm.buildtools.native") version "0.10.4"
 }
-
 
 group = "com.obsidianscout"
 version = "0.1.0"
@@ -82,9 +82,13 @@ application {
 }
 
 java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
 }
+
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {
@@ -104,43 +108,30 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
     description = "Assembles a complete distribution bundle folder with the fat JAR, config files, and run scripts."
     
     dependsOn("shadowJar", "regenerateConfigs", "bumpVersion")
-    // bumpVersion must run after regenerateConfigs so it can overwrite the freshly-generated
-    // config with the bumped version before buildBundle copies it into the bundle folder.
     mustRunAfter("bumpVersion")
     
-    // Copy the fat jar
     from(tasks.named("shadowJar")) {
         into(".")
     }
     
-    // Copy the config folder
     from(file("config")) {
         into("config")
     }
     
-    // Copy the docs folder
     from(file("../docs")) {
         into("docs")
     }
 
-    // Copy the update scripts
-    from(file("scripts/update.sh")) {
-        into(".")
-    }
-    from(file("scripts/update.bat")) {
-        into(".")
-    }
-    from(file("scripts/configure_ntp.sh")) {
-        into(".")
-    }
-    from(file("scripts/configure_ntp.ps1")) {
-        into(".")
-    }
-    
-    // Set destination directory
+    from(file("scripts/update.sh")) { into(".") }
+    from(file("scripts/update.bat")) { into(".") }
+    from(file("scripts/configure_ntp.sh")) { into(".") }
+    from(file("scripts/configure_ntp.ps1")) { into(".") }
+    from(file("scripts/install-graal.sh")) { into(".") }
+    from(file("scripts/install-graal.bat")) { into(".") }
+    from(file("scripts/install-graal.ps1")) { into(".") }
+
     into(rootProject.layout.buildDirectory.dir("bundle"))
     
-    // Generate run scripts in the destination directory
     doLast {
         val bundleDir = rootProject.layout.buildDirectory.dir("bundle").get().asFile
 
@@ -180,7 +171,21 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        set JAVA_OPTS=-Djava.awt.headless=true -Xms512m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapWastePercent=5 -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\r\n" +
             "    )\r\n" +
             ")\r\n" +
-            "java %JAVA_OPTS% -jar obsidianscout-server.jar\r\n" +
+            "set JAVA_EXEC=java\r\n" +
+            "set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
+            "if not exist \"!GRAAL_JAVA!\" (\r\n" +
+            "    if defined GRAALVM_HOME if exist \"%GRAALVM_HOME%\\bin\\java.exe\" set GRAAL_JAVA=%GRAALVM_HOME%\\bin\\java.exe\r\n" +
+            ")\r\n" +
+            "if not exist \"!GRAAL_JAVA!\" (\r\n" +
+            "    echo [ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for high-performance execution...\r\n" +
+            "    if exist install-graal.bat call install-graal.bat\r\n" +
+            "    if exist \"%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\" set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
+            ")\r\n" +
+            "if exist \"!GRAAL_JAVA!\" (\r\n" +
+            "    echo [ObsidianScout] Using GraalVM High-Performance JVM: !GRAAL_JAVA!\r\n" +
+            "    set JAVA_EXEC=\"!GRAAL_JAVA!\"\r\n" +
+            ")\r\n" +
+            "%JAVA_EXEC% %JAVA_OPTS% -jar obsidianscout-server.jar\r\n" +
             "set EXIT_CODE=%ERRORLEVEL%\r\n" +
             "if \"%EXIT_CODE%\"==\"3\" echo 1 > .oom_occurred\r\n" +
             "if \"%EXIT_CODE%\"==\"137\" echo 1 > .oom_occurred\r\n" +
@@ -194,7 +199,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            if not exist config mkdir config\r\n" +
             "            copy /y \".backup\\config\\app-config.json\" \"config\\\" >nul\r\n" +
             "        )\r\n" +
-            "        for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat) do (\r\n" +
+            "        for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1) do (\r\n" +
             "            if exist \".backup\\%%s\" copy /y \".backup\\%%s\" \".\" >nul\r\n" +
             "        )\r\n" +
             "        echo [Updater] Rollback successful. Restored previous working version from .backup.\r\n" +
@@ -216,12 +221,12 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            if not exist .backup\\config mkdir .backup\\config\r\n" +
             "            copy /y \"config\\app-config.json\" \".backup\\config\\\" >nul\r\n" +
             "        )\r\n" +
-            "        for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat) do (\r\n" +
+            "        for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1) do (\r\n" +
             "            if exist \"%%s\" copy /y \"%%s\" \".backup\\\" >nul\r\n" +
             "        )\r\n" +
             "        echo [Updater] Applying update from !SRC_ROOT!...\r\n" +
             "        copy /y \"!SRC_ROOT!\\obsidianscout-server.jar\" \".\" >nul\r\n" +
-            "        for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat) do (\r\n" +
+            "        for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1) do (\r\n" +
             "            if exist \"!SRC_ROOT!\\%%s\" copy /y \"!SRC_ROOT!\\%%s\" \".\" >nul\r\n" +
             "        )\r\n" +
             "        for %%i in (\"!SRC_ROOT!\\..\") do set TEMP_DIR=%%~fi\r\n" +
@@ -284,35 +289,34 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            JAVA_OPTS=\"-Djava.awt.headless=true -Xms512m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapWastePercent=5 -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\"\n" +
             "        fi\n" +
             "    fi\n" +
-            "    java \$JAVA_OPTS -jar obsidianscout-server.jar\n" +
+            "    GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
+            "    if [ ! -x \"\$GRAAL_JAVA\" ] && [ -n \"\$GRAALVM_HOME\" ] && [ -x \"\$GRAALVM_HOME/bin/java\" ]; then\n" +
+            "        GRAAL_JAVA=\"\$GRAALVM_HOME/bin/java\"\n" +
+            "    fi\n" +
+            "    if [ ! -x \"\$GRAAL_JAVA\" ]; then\n" +
+            "        echo \"[ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for high-performance execution...\"\n" +
+            "        if [ -x ./install-graal.sh ]; then\n" +
+            "            ./install-graal.sh\n" +
+            "        elif [ -x ./scripts/install-graal.sh ]; then\n" +
+            "            ./scripts/install-graal.sh\n" +
+            "        fi\n" +
+            "        if [ -x \"\$HOME/.graalvm/graalvm-jdk-21/bin/java\" ]; then\n" +
+            "            GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
+            "        fi\n" +
+            "    fi\n" +
+            "    if [ -x \"\$GRAAL_JAVA\" ]; then\n" +
+            "        echo \"[ObsidianScout] Using GraalVM High-Performance JVM: \$GRAAL_JAVA\"\n" +
+            "        JAVA_EXEC=\"\$GRAAL_JAVA\"\n" +
+            "    else\n" +
+            "        echo \"[ObsidianScout] Falling back to system default Java...\"\n" +
+            "        JAVA_EXEC=\"java\"\n" +
+            "    fi\n" +
+            "    \"\$JAVA_EXEC\" \$JAVA_OPTS -jar obsidianscout-server.jar\n" +
             "    EXIT_CODE=\$?\n" +
             "    if [ \$EXIT_CODE -eq 3 ] || [ \$EXIT_CODE -eq 137 ]; then\n" +
             "        touch .oom_occurred\n" +
             "    fi\n" +
-            "    sleep 3\n"
-        )
-        
-        val setupZram = File(bundleDir, "setup-zram.sh")
-        setupZram.writeText(
-            "#!/bin/sh\n" +
-            "if [ \"\$(id -u)\" -ne 0 ]; then\n" +
-            "    echo \"[zRAM] Please run with sudo: sudo ./setup-zram.sh\"\n" +
-            "    exit 1\n" +
-            "fi\n" +
-            "echo \"[zRAM] Configuring fast compressed RAM swap device...\"\n" +
-            "if command -v zramctl >/dev/null 2>&1; then\n" +
-            "    modprobe zram num_devices=1 2>/dev/null || true\n" +
-            "    zramctl --find --size 1024M --algorithm lz4 2>/dev/null || zramctl /dev/zram0 --size 1024M 2>/dev/null || true\n" +
-            "    mkswap /dev/zram0 >/dev/null 2>&1 || true\n" +
-            "    swapon -p 100 /dev/zram0 >/dev/null 2>&1 || true\n" +
-            "    echo \"[zRAM] 1024MB compressed zRAM device successfully activated at priority 100!\"\n" +
-            "else\n" +
-            "    apt-get update -qq && apt-get install -y -qq zram-tools 2>/dev/null || true\n" +
-            "    systemctl restart zramswap 2>/dev/null || systemctl restart zram-tools 2>/dev/null || true\n" +
-            "    echo \"[zRAM] zRAM tools installed and service activated!\"\n" +
-            "fi\n"
-        )
-        runSh.appendText(
+            "    sleep 3\n" +
             "    if [ -f .update_pending ]; then\n" +
             "        echo \"[Updater] FAULTY INSTALLATION DETECTED! Server exited with code \$EXIT_CODE while update was pending testing.\"\n" +
             "        echo \"[Updater] Initiating automatic rollback to previous working version...\"\n" +
@@ -322,7 +326,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "                mkdir -p config\n" +
             "                cp .backup/config/app-config.json config/\n" +
             "            fi\n" +
-            "            for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat; do\n" +
+            "            for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1; do\n" +
             "                if [ -f \".backup/\$script\" ]; then\n" +
             "                    cp \".backup/\$script\" ./\n" +
             "                    chmod +x \"./\$script\" 2>/dev/null || true\n" +
@@ -347,14 +351,14 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            if [ -f config/app-config.json ]; then\n" +
             "                cp config/app-config.json .backup/config/\n" +
             "            fi\n" +
-            "            for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat; do\n" +
+            "            for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1; do\n" +
             "                if [ -f \"\$script\" ]; then\n" +
             "                    cp \"\$script\" .backup/\n" +
             "                fi\n" +
             "            done\n" +
             "            echo \"[Updater] Applying update from \$SRC_ROOT...\"\n" +
             "            cp \"\$SRC_ROOT/obsidianscout-server.jar\" ./\n" +
-            "            for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat; do\n" +
+            "            for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1; do\n" +
             "                if [ -f \"\$SRC_ROOT/\$script\" ]; then\n" +
             "                    cp \"\$SRC_ROOT/\$script\" ./\n" +
             "                    chmod +x \"./\$script\" 2>/dev/null || true\n" +
@@ -371,7 +375,6 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
         )
         runSh.setExecutable(true, false)
 
-        // Windows reset-superadmin script
         val resetBat = File(bundleDir, "reset-superadmin.bat")
         resetBat.writeText(
             "@echo off\r\n" +
@@ -379,43 +382,32 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "pause\r\n"
         )
 
-        // Unix reset-superadmin script
         val resetSh = File(bundleDir, "reset-superadmin.sh")
         resetSh.writeText("#!/bin/sh\njava -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n")
         resetSh.setExecutable(true, false)
 
-        // Unix update script
         val updateSh = File(bundleDir, "update.sh")
         if (updateSh.exists()) {
             updateSh.setExecutable(true, false)
         }
 
-
-        // Sanitize secrets in the copied config — reset every known secret field
-        // to "changeme" so the bundle ships with clear, consistent placeholders.
-        // The server auto-generates real random secrets on first startup (except
-        // adminPassword and postgres password, which must be set manually).
         val configFile = File(bundleDir, "config/app-config.json")
         if (configFile.exists()) {
             var text = configFile.readText()
-            // Each replacement targets a specific JSON key so unrelated values are
-            // never accidentally clobbered.
             val secretFields = listOf(
                 "sessionSecret",
                 "keystorePassword",
                 "adminPassword",
-                "password",   // covers database.postgres.password
+                "password",
                 "db_password",
                 "google_sheet_password"
             )
             for (field in secretFields) {
-                // Matches: "fieldName": "<any value>" and replaces the value with "changeme"
                 text = text.replace(
                     Regex("(\"$field\"\\s*:\\s*)\"[^\"]*\""),
                     "\$1\"changeme\""
                 )
             }
-            // Set database type to sqlite
             text = text.replace(
                 Regex("(\"type\"\\s*:\\s*)\"[^\"]*\""),
                 "\$1\"sqlite\""
@@ -439,49 +431,30 @@ tasks.register("buildjar") {
     }
 }
 
-/**
- * Increments a 4-part version string (e.g. "0.2.4.7") by adding 1 to the last segment.
- * Carry rolls left through all segments — the first segment increments normally and never caps.
- *
- * Examples:
- *   0.2.4.9  -> 0.2.5.0
- *   0.2.9.9  -> 0.3.0.0
- *   0.9.9.9  -> 1.0.0.0
- *   9.9.9.9  -> 10.0.0.0  (first segment goes above 9 — no further wrapping)
- */
 fun incrementVersion(version: String): String {
     val parts = version.split(".").mapNotNull { it.toIntOrNull() }.toMutableList()
     while (parts.size < 4) parts.add(0)
 
     var carry = 1
-    for (i in parts.size - 1 downTo 0) { // carry propagates through all segments, including index 0
+    for (i in parts.size - 1 downTo 0) {
         val sum = parts[i] + carry
         parts[i] = sum % 10
         carry = sum / 10
         if (carry == 0) break
     }
-    // If carry still remains after index 0 (e.g. a single-segment "9" + 1), it is dropped
-    // since there is no 5th place — but in practice a 4-part version can never overflow here
-    // because 9.9.9.9 + 1 = 10.0.0.0 which is representable in the same 4 parts.
     return parts.joinToString(".")
 }
 
-/**
- * Bumps the current_version in config/app-config.json (and the outer workspace copy) and
- * updates the default string literal in AppConfig.kt so future regenerateConfigs calls are
- * in sync. Must run AFTER regenerateConfigs (which would otherwise overwrite the file with
- * the stale default) and BEFORE buildBundle (which copies the config into the bundle).
- */
 tasks.register("bumpVersion") {
     group = "publishing"
     description = "Auto-increments current_version in config/app-config.json and AppConfig.kt before bundling."
-    dependsOn("regenerateConfigs") // ensure regenerateConfigs has already written its output first
+    dependsOn("regenerateConfigs")
+    onlyIf { !project.hasProperty("skipBump") }
     doLast {
         val configFile = file("config/app-config.json")
         val appConfigKt = file("src/main/kotlin/com/obsidianscout/config/AppConfig.kt")
         val outerConfigFile = file("../config/app-config.json")
 
-        // ── Read & bump the version ───────────────────────────────────────────────
         val versionRegex = Regex("\"current_version\"\\s*:\\s*\"([^\"]+)\"")
         val configText = configFile.readText()
         val match = versionRegex.find(configText)
@@ -491,13 +464,11 @@ tasks.register("bumpVersion") {
         val newVersion = incrementVersion(oldVersion)
         println("[bumpVersion] $oldVersion -> $newVersion")
 
-        // ── Patch config/app-config.json ─────────────────────────────────────────
         configFile.writeText(
             configText.replace(match.value, "\"current_version\": \"$newVersion\"")
         )
         println("[bumpVersion] Updated ${configFile.absolutePath}")
 
-        // ── Patch outer workspace config if it exists ─────────────────────────────
         if (outerConfigFile.exists()) {
             val outerText = outerConfigFile.readText()
             val outerMatch = versionRegex.find(outerText)
@@ -509,7 +480,6 @@ tasks.register("bumpVersion") {
             }
         }
 
-        // ── Patch AppConfig.kt default so regenerateConfigs stays in sync next time ─
         val ktText = appConfigKt.readText()
         val ktRegex = Regex("(val current_version: String = \")[^\"]+(\")")
         val patchedKt = ktRegex.replace(ktText) { matchResult ->
@@ -549,7 +519,285 @@ tasks.register<JavaExec>("regenerateConfigs") {
     mainClass.set("com.obsidianscout.utils.RegenerateConfigsKt")
 }
 
+val javaToolchains = project.extensions.getByType<JavaToolchainService>()
+
+graalvmNative {
+    toolchainDetection.set(true)
+    binaries {
+        named("main") {
+            imageName.set("obsidianscout-server-native")
+            mainClass.set("com.obsidianscout.AppKt")
+            javaLauncher.set(
+                javaToolchains.launcherFor {
+                    languageVersion.set(JavaLanguageVersion.of(21))
+                }
+            )
+            buildArgs.addAll(
+                "-H:+UnlockExperimentalVMOptions",
+                "-H:+ReportExceptionStackTraces",
+                "-H:EnableURLProtocols=http,https",
+                "--no-fallback",
+                "-Djava.awt.headless=true",
+                "--initialize-at-build-time=kotlin.",
+                "--initialize-at-build-time=kotlin.reflect.",
+                "--initialize-at-build-time=org.jetbrains.exposed."
+            )
+        }
+    }
+}
 
 
 
+val nativeArchs = listOf("arm64", "arm32", "x86", "x86_64", "riscv64", "ppc64le", "s390x")
 
+val nativeBundleTasks = nativeArchs.map { arch ->
+    val taskName = "buildNativeBundle${arch.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }}"
+    tasks.register<Copy>(taskName) {
+        group = "distribution"
+        description = "Assembles native binary distribution bundle folder for architecture: $arch"
+
+        dependsOn("shadowJar", "regenerateConfigs", "bumpVersion")
+        if (project.hasProperty("withNativeImage") || System.getenv("GRAALVM_HOME") != null) {
+            tasks.findByName("nativeCompile")?.let { dependsOn(it) }
+        }
+        mustRunAfter("bumpVersion")
+
+        from(layout.buildDirectory.dir("native/nativeCompile")) {
+            into(".")
+        }
+
+        from(tasks.named("shadowJar")) {
+            into(".")
+        }
+
+        from(file("config")) {
+            into("config")
+        }
+
+        from(file("../docs")) {
+            into("docs")
+        }
+
+        from(file("scripts/update.sh")) { into(".") }
+        from(file("scripts/update.bat")) { into(".") }
+        from(file("scripts/configure_ntp.sh")) { into(".") }
+        from(file("scripts/configure_ntp.ps1")) { into(".") }
+        from(file("scripts/install-graal.sh")) { into(".") }
+        from(file("scripts/install-graal.bat")) { into(".") }
+        from(file("scripts/install-graal.ps1")) { into(".") }
+
+        into(rootProject.layout.buildDirectory.dir("bundle-native/$arch"))
+
+        doLast {
+            val bundleDir = rootProject.layout.buildDirectory.dir("bundle-native/$arch").get().asFile
+
+            val nativeWin = File(bundleDir, "obsidianscout-server-native.exe")
+            val nativeUnix = File(bundleDir, "obsidianscout-server-native")
+            if (nativeWin.exists()) {
+                val archWin = File(bundleDir, "obsidianscout-server-native-$arch.exe")
+                if (!archWin.exists()) nativeWin.copyTo(archWin, overwrite = true)
+            }
+            if (nativeUnix.exists()) {
+                val archUnix = File(bundleDir, "obsidianscout-server-native-$arch")
+                if (!archUnix.exists()) nativeUnix.copyTo(archUnix, overwrite = true)
+                archUnix.setExecutable(true, false)
+            }
+
+            val runBat = File(bundleDir, "run.bat")
+            runBat.writeText(
+                "@echo off\r\n" +
+                "setlocal enabledelayedexpansion\r\n" +
+                "set BINARY_NAME=obsidianscout-server-native-$arch.exe\r\n" +
+                "if exist \"!BINARY_NAME!\" (\r\n" +
+                "    set EXEC_CMD=!BINARY_NAME!\r\n" +
+                ") else if exist obsidianscout-server-native.exe (\r\n" +
+                "    set EXEC_CMD=obsidianscout-server-native.exe\r\n" +
+                ") else if exist obsidianscout-server-native-$arch (\r\n" +
+                "    set EXEC_CMD=obsidianscout-server-native-$arch\r\n" +
+                ") else (\r\n" +
+                "    echo [ObsidianScout Native] Native binary not found, checking GraalVM JDK for high-performance JVM execution...\r\n" +
+                "    set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
+                "    if not exist \"!GRAAL_JAVA!\" (\r\n" +
+                "        if defined GRAALVM_HOME if exist \"%GRAALVM_HOME%\\bin\\java.exe\" set GRAAL_JAVA=%GRAALVM_HOME%\\bin\\java.exe\r\n" +
+                "    )\r\n" +
+                "    if not exist \"!GRAAL_JAVA!\" (\r\n" +
+                "        echo [ObsidianScout] Auto-installing GraalVM JDK 21 for high-performance execution...\r\n" +
+                "        if exist install-graal.bat call install-graal.bat\r\n" +
+                "        if exist \"%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\" set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
+                "    )\r\n" +
+                "    if exist \"!GRAAL_JAVA!\" (\r\n" +
+                "        echo [ObsidianScout] Using GraalVM High-Performance JVM: !GRAAL_JAVA!\r\n" +
+                "        set EXEC_CMD=\"!GRAAL_JAVA!\" -Djava.awt.headless=true -Xms256m -Xmx1024m -jar obsidianscout-server.jar\r\n" +
+                "    ) else (\r\n" +
+                "        set EXEC_CMD=java -Djava.awt.headless=true -Xms256m -Xmx1024m -jar obsidianscout-server.jar\r\n" +
+                "    )\r\n" +
+                ")\r\n" +
+                ":loop\r\n" +
+                "echo [ObsidianScout Native] Starting server ($arch native binary)...\r\n" +
+                "%EXEC_CMD%\r\n" +
+                "set EXIT_CODE=%ERRORLEVEL%\r\n" +
+                "timeout /t 3 >nul 2>&1\r\n" +
+                "if exist .update_pending (\r\n" +
+                "    echo [Updater] Faulty installation detected! Server exited with code !EXIT_CODE! while update was pending testing.\r\n" +
+                "    echo [Updater] Initiating automatic rollback...\r\n" +
+                "    if exist .backup\\obsidianscout-server-native-$arch (\r\n" +
+                "        copy /y \".backup\\obsidianscout-server-native-$arch\" \".\" >nul\r\n" +
+                "    ) else if exist .backup\\obsidianscout-server.jar (\r\n" +
+                "        copy /y \".backup\\obsidianscout-server.jar\" \".\" >nul\r\n" +
+                "    )\r\n" +
+                "    del /q .update_pending >nul 2>&1\r\n" +
+                "    del /q .update_result >nul 2>&1\r\n" +
+                "    goto loop\r\n" +
+                ")\r\n" +
+                "if exist .update_result (\r\n" +
+                "    set /p SRC_ROOT=<.update_result\r\n" +
+                "    del /q .update_result\r\n" +
+                "    if exist \"!SRC_ROOT!\" (\r\n" +
+                "        echo [Updater] Backing up current native installation...\r\n" +
+                "        if not exist .backup mkdir .backup\r\n" +
+                "        if exist obsidianscout-server-native-$arch copy /y \"obsidianscout-server-native-$arch\" \".backup\\\" >nul\r\n" +
+                "        if exist obsidianscout-server.jar copy /y \"obsidianscout-server.jar\" \".backup\\\" >nul\r\n" +
+                "        echo [Updater] Applying native update from !SRC_ROOT!...\r\n" +
+                "        copy /y \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
+                "        echo pending > .update_pending\r\n" +
+                "        echo [Updater] Update applied. Restarting native server...\r\n" +
+                "    )\r\n" +
+                ")\r\n" +
+                "goto loop\r\n"
+            )
+
+            val runSh = File(bundleDir, "run.sh")
+            runSh.writeText(
+                "#!/bin/sh\n" +
+                "BINARY_NAME=\"obsidianscout-server-native-$arch\"\n" +
+                "if [ -f \"./\$BINARY_NAME\" ]; then\n" +
+                "    EXEC_CMD=\"./\$BINARY_NAME\"\n" +
+                "elif [ -f \"./obsidianscout-server-native\" ]; then\n" +
+                "    EXEC_CMD=\"./obsidianscout-server-native\"\n" +
+                "else\n" +
+                "    echo \"[ObsidianScout Native] Native binary not found, checking GraalVM JDK for high-performance JVM execution...\"\n" +
+                "    GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
+                "    if [ ! -x \"\$GRAAL_JAVA\" ] && [ -n \"\$GRAALVM_HOME\" ] && [ -x \"\$GRAALVM_HOME/bin/java\" ]; then\n" +
+                "        GRAAL_JAVA=\"\$GRAALVM_HOME/bin/java\"\n" +
+                "    fi\n" +
+                "    if [ ! -x \"\$GRAAL_JAVA\" ]; then\n" +
+                "        echo \"[ObsidianScout] Auto-installing GraalVM JDK 21 for high-performance execution...\"\n" +
+                "        if [ -x ./install-graal.sh ]; then\n" +
+                "            ./install-graal.sh\n" +
+                "        fi\n" +
+                "        if [ -x \"\$HOME/.graalvm/graalvm-jdk-21/bin/java\" ]; then\n" +
+                "            GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
+                "        fi\n" +
+                "    fi\n" +
+                "    if [ -x \"\$GRAAL_JAVA\" ]; then\n" +
+                "        echo \"[ObsidianScout] Using GraalVM High-Performance JVM: \$GRAAL_JAVA\"\n" +
+                "        EXEC_CMD=\"\\\"\$GRAAL_JAVA\\\" -Djava.awt.headless=true -Xms256m -Xmx1024m -jar obsidianscout-server.jar\"\n" +
+                "    else\n" +
+                "        EXEC_CMD=\"java -Djava.awt.headless=true -Xms256m -Xmx1024m -jar obsidianscout-server.jar\"\n" +
+                "    fi\n" +
+                "fi\n" +
+                "while true; do\n" +
+                "    echo \"[ObsidianScout Native] Starting server ($arch native binary)...\"\n" +
+                "    \$EXEC_CMD\n" +
+                "    EXIT_CODE=\$?\n" +
+                "    sleep 3\n" +
+                "    if [ -f .update_pending ]; then\n" +
+                "        echo \"[Updater] Faulty installation detected! Exited code \$EXIT_CODE while update was pending.\"\n" +
+                "        echo \"[Updater] Restoring backup...\"\n" +
+                "        if [ -f .backup/\$BINARY_NAME ]; then\n" +
+                "            cp .backup/\$BINARY_NAME ./\n" +
+                "        elif [ -f .backup/obsidianscout-server.jar ]; then\n" +
+                "            cp .backup/obsidianscout-server.jar ./\n" +
+                "        fi\n" +
+                "        rm -f .update_pending .update_result\n" +
+                "        continue\n" +
+                "    fi\n" +
+                "    if [ -f .update_result ]; then\n" +
+                "        SRC_ROOT=\$(cat .update_result)\n" +
+                "        rm -f .update_result\n" +
+                "        if [ -d \"\$SRC_ROOT\" ]; then\n" +
+                "            echo \"[Updater] Applying update from \$SRC_ROOT...\"\n" +
+                "            cp -R \"\$SRC_ROOT\"/* ./\n" +
+                "            echo pending > .update_pending\n" +
+                "        fi\n" +
+                "    fi\n" +
+                "done\n"
+            )
+            runSh.setExecutable(true, false)
+
+            val resetBat = File(bundleDir, "reset-superadmin.bat")
+            resetBat.writeText(
+                "@echo off\r\n" +
+                "java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt %*\r\n" +
+                "pause\r\n"
+            )
+
+            val resetSh = File(bundleDir, "reset-superadmin.sh")
+            resetSh.writeText("#!/bin/sh\njava -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n")
+            resetSh.setExecutable(true, false)
+
+            val configFile = File(bundleDir, "config/app-config.json")
+            var currentVer = ""
+            if (configFile.exists()) {
+                var text = configFile.readText()
+                val verMatch = Regex("\"current_version\"\\s*:\\s*\"([^\"]+)\"").find(text)
+                if (verMatch != null) currentVer = verMatch.groupValues[1]
+
+                val secretFields = listOf(
+                    "sessionSecret",
+                    "keystorePassword",
+                    "adminPassword",
+                    "password",
+                    "db_password",
+                    "google_sheet_password"
+                )
+                for (field in secretFields) {
+                    text = text.replace(
+                        Regex("(\"$field\"\\s*:\\s*)\"[^\"]*\""),
+                        "\$1\"changeme\""
+                    )
+                }
+                text = text.replace(
+                    Regex("(\"type\"\\s*:\\s*)\"[^\"]*\""),
+                    "\$1\"sqlite\""
+                )
+                configFile.writeText(text)
+            }
+
+            if (currentVer.isNotEmpty()) {
+                val versionedDir = rootProject.layout.buildDirectory.dir("bundle-native/obsidianscout-v$currentVer-$arch").get().asFile
+                bundleDir.copyRecursively(versionedDir, overwrite = true)
+                println("[publishnative] Created versioned bundle folder: ${versionedDir.absolutePath}")
+            }
+        }
+    }
+}
+
+val buildNativeBundles = tasks.register("buildNativeBundles") {
+    group = "distribution"
+    description = "Assembles native binary distribution bundles for all architectures (" + nativeArchs.joinToString(", ") + ")."
+    dependsOn(nativeBundleTasks)
+}
+
+tasks.register("publishnative") {
+    group = "publishing"
+    description = "Bumps version and builds native binary distribution bundles for target architectures."
+    dependsOn("bumpVersion", buildNativeBundles)
+    doLast {
+        val configFile = file("config/app-config.json")
+        val verMatch = if (configFile.exists()) Regex("\"current_version\"\\s*:\\s*\"([^\"]+)\"").find(configFile.readText()) else null
+        val verStr = verMatch?.groupValues?.get(1) ?: ""
+
+        println("=========================================================================")
+        println("NATIVE PUBLISH SUCCESSFUL")
+        if (verStr.isNotEmpty()) {
+            println("Version: v$verStr")
+        }
+        println("Native binary distribution bundles assembled for target architectures:")
+        nativeArchs.forEach { arch ->
+            val folderName = if (verStr.isNotEmpty()) "obsidianscout-v$verStr-$arch" else arch
+            println("  - %-8s: %s".format(arch, rootProject.layout.buildDirectory.dir("bundle-native/$folderName").get().asFile.absolutePath))
+        }
+        println("=========================================================================")
+    }
+}
