@@ -583,6 +583,10 @@ val nativeBundleTasks = nativeArchs.map { arch ->
             into("docs")
         }
 
+        from(file("src/main/resources/static")) {
+            into("static")
+        }
+
         from(file("scripts/update.sh")) { into(".") }
         from(file("scripts/update.bat")) { into(".") }
         from(file("scripts/configure_ntp.sh")) { into(".") }

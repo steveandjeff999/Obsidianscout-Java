@@ -76,6 +76,8 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.http.content.staticResources
+import io.ktor.server.http.content.staticFiles
+import java.io.File
 import io.ktor.server.sessions.clear
 import io.ktor.server.sessions.sessions
 import io.ktor.server.sessions.set
@@ -2456,8 +2458,17 @@ fun Application.configureRoutes() {
             }
         }
 
-        staticResources("/", "static") {
-            default("index.html")
+        // Prefer filesystem static/ folder (native binary deployment) for correct MIME types.
+        // Fall back to classpath resources for fat-JAR deployment.
+        val staticDir = File("static")
+        if (staticDir.exists() && staticDir.isDirectory) {
+            staticFiles("/", staticDir) {
+                default("index.html")
+            }
+        } else {
+            staticResources("/", "static") {
+                default("index.html")
+            }
         }
     }
 }
@@ -2465,12 +2476,13 @@ fun Application.configureRoutes() {
 internal suspend fun ApplicationCall.respondStaticHtml(fileName: String, status: HttpStatusCode = HttpStatusCode.OK) {
     val (html, sidebar) = measureSuspend("load-html", "Load HTML from Resource") {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val resource = Thread.currentThread().contextClassLoader.getResource("static/$fileName")
-            val htmlContent = resource?.readText()
-            val sidebarContent = Thread.currentThread().contextClassLoader
-                .getResource("static/base.html")
-                ?.readText()
-                ?.trim()
+            // Try filesystem first (native binary bundle with static/ folder next to binary)
+            val fsFile = File("static/$fileName")
+            val fsBase = File("static/base.html")
+            val htmlContent = if (fsFile.exists()) fsFile.readText()
+                else Thread.currentThread().contextClassLoader.getResource("static/$fileName")?.readText()
+            val sidebarContent = if (fsBase.exists()) fsBase.readText().trim()
+                else Thread.currentThread().contextClassLoader.getResource("static/base.html")?.readText()?.trim()
             htmlContent to sidebarContent
         }
     }
