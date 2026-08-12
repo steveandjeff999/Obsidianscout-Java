@@ -540,7 +540,9 @@ graalvmNative {
                 "-Djava.awt.headless=true",
                 "--initialize-at-build-time=kotlin.",
                 "--initialize-at-build-time=kotlin.reflect.",
-                "--initialize-at-build-time=org.jetbrains.exposed."
+                "--initialize-at-build-time=org.jetbrains.exposed.",
+                "--initialize-at-build-time=ch.qos.logback.",
+                "--initialize-at-build-time=org.slf4j."
             )
         }
     }
