@@ -537,6 +537,7 @@ graalvmNative {
                 "-H:+ReportExceptionStackTraces",
                 "-H:EnableURLProtocols=http,https",
                 "-H:ReflectionConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/com.obsidianscout/obsidianscout-server/reflect-config.json",
+                "-H:ResourceConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/com.obsidianscout/obsidianscout-server/resource-config.json",
                 "--no-fallback",
                 "-Djava.awt.headless=true",
                 // Build-time initialization for libraries with safe static initializers only
