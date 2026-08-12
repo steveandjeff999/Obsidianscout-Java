@@ -539,12 +539,27 @@ graalvmNative {
                 "-H:ReflectionConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/com.obsidianscout/obsidianscout-server/reflect-config.json",
                 "--no-fallback",
                 "-Djava.awt.headless=true",
+                // Build-time initialization for libraries with safe static initializers
                 "--initialize-at-build-time=kotlin.",
                 "--initialize-at-build-time=kotlin.reflect.",
                 "--initialize-at-build-time=org.jetbrains.exposed.",
                 "--initialize-at-build-time=ch.qos.logback.",
                 "--initialize-at-build-time=org.slf4j.",
-                "--initialize-at-build-time=com.obsidianscout."
+                // Initialize app classes at build time so Kotlin reflection metadata is preserved
+                "--initialize-at-build-time=com.obsidianscout.",
+                // Explicitly push back packages that get transitively pulled to build time
+                // via com.obsidianscout. but must remain runtime-initialized
+                "--initialize-at-run-time=kotlinx.coroutines.",
+                "--initialize-at-run-time=kotlinx.serialization.json.",
+                "--initialize-at-run-time=kotlinx.serialization.internal.",
+                "--initialize-at-run-time=kotlinx.serialization.modules.",
+                "--initialize-at-run-time=io.ktor.client.",
+                "--initialize-at-run-time=io.ktor.http.",
+                "--initialize-at-run-time=io.ktor.util.collections.",
+                "--initialize-at-run-time=io.ktor.util.pipeline.",
+                "--initialize-at-run-time=io.ktor.serialization.",
+                "--initialize-at-run-time=io.ktor.utils.io.charsets.",
+                "--initialize-at-run-time=org.bouncycastle."
             )
         }
     }
