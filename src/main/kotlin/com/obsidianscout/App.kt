@@ -393,6 +393,9 @@ fun Application.module(appConfig: AppConfig) {
     // Start Gist update checking immediately so that faulty updates can be resolved even if the database fails to initialize
     GistUpdateService.start(appConfig)
 
+    // Mark update boot successful as soon as web engine & routes start
+    com.obsidianscout.utils.UpdateRecoveryManager.markBootSuccessful()
+
     // Run database orchestration and initialization in a background coroutine
     launch(Dispatchers.IO) {
         var initialized = false

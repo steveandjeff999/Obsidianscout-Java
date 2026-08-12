@@ -157,47 +157,29 @@ object UpdateValidator {
         return ValidationResult.Success
     }
 
-    // ── Version Blacklist Management ──────────────────────────────────────────────────
+    // ── Version Blacklist Management (Disabled) ───────────────────────────────────────
 
     /**
      * Checks whether [version] is in the failed versions blacklist.
+     * Always returns false (version blacklisting disabled).
      */
     fun isBlacklistedVersion(version: String): Boolean {
-        val clean = version.trim().lowercase().removePrefix("v")
-        if (clean.isBlank()) return false
-        val blacklisted = getBlacklistedVersions()
-        return blacklisted.contains(clean)
+        return false
     }
 
     /**
      * Records [version] into the failed versions blacklist file.
+     * No-op (version blacklisting disabled).
      */
     fun blacklistVersion(version: String, reason: String = "Boot failure") {
-        val clean = version.trim().lowercase().removePrefix("v")
-        if (clean.isBlank()) return
-        try {
-            val existing = getBlacklistedVersions().toMutableSet()
-            existing.add(clean)
-            blacklistFile.writeText(existing.joinToString("\n") + "\n")
-            log.warn("[UpdateValidator] Blacklisted version $clean. Reason: $reason")
-        } catch (e: Exception) {
-            log.error("[UpdateValidator] Failed to write version blacklist: ${e.message}")
-        }
+        // No-op
     }
 
     /**
      * Reads all blacklisted version strings from disk.
      */
     fun getBlacklistedVersions(): Set<String> {
-        if (!blacklistFile.exists()) return emptySet()
-        return try {
-            blacklistFile.readLines()
-                .map { it.trim().lowercase().removePrefix("v") }
-                .filter { it.isNotBlank() }
-                .toSet()
-        } catch (e: Exception) {
-            emptySet()
-        }
+        return emptySet()
     }
 
     sealed class ValidationResult {

@@ -125,8 +125,8 @@ object UpdateRecoveryManager {
             UpdateValidator.blacklistVersion(targetFailedVersion, "Faulty installation startup crash")
         }
 
-        if (!backupDir.exists() || !File(backupDir, "obsidianscout-server.jar").exists()) {
-            log.error("[UpdateRecovery] Rollback failed: Backup directory .backup/ missing or incomplete!")
+        if (!backupDir.exists()) {
+            log.error("[UpdateRecovery] Rollback failed: Backup directory .backup/ missing!")
             if (pendingFile.exists()) pendingFile.delete()
             if (resultFile.exists()) resultFile.delete()
             return false
@@ -134,7 +134,14 @@ object UpdateRecoveryManager {
 
         return try {
             val backupJar = File(backupDir, "obsidianscout-server.jar")
-            backupJar.copyTo(File("obsidianscout-server.jar"), overwrite = true)
+            if (backupJar.exists()) {
+                backupJar.copyTo(File("obsidianscout-server.jar"), overwrite = true)
+            }
+
+            val backupNativeFiles = backupDir.listFiles { _, name -> name.startsWith("obsidianscout-server-native", ignoreCase = true) } ?: emptyArray()
+            for (bf in backupNativeFiles) {
+                bf.copyTo(File(bf.name), overwrite = true)
+            }
 
             val backupConfig = File(backupDir, "config/app-config.json")
             if (backupConfig.exists()) {

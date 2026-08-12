@@ -325,27 +325,36 @@ private data class ReleaseInfo(val tag: String, val isPrerelease: Boolean, val u
 
 private fun String.equalsIgnoreCase(other: String): Boolean = this.equals(other, ignoreCase = true)
 
-private fun unzip(zipFile: File, destDir: File) {
+private fun unzip(archiveFile: File, destDir: File) {
     destDir.mkdirs()
-    val destCanonicalPath = destDir.canonicalPath
-    ZipInputStream(zipFile.inputStream().buffered()).use { zip ->
-        var entry = zip.nextEntry
-        while (entry != null) {
-            val entryName = entry.name.replace('\\', '/')
-            val file = File(destDir, entryName).canonicalFile
-            if (!file.path.startsWith(destCanonicalPath + File.separator) && file != destDir.canonicalFile) {
-                throw IllegalArgumentException("Zip entry is outside target directory: ${entry.name}")
-            }
-            if (entry.isDirectory) {
-                file.mkdirs()
-            } else {
-                file.parentFile?.mkdirs()
-                FileOutputStream(file).use { out ->
-                    zip.copyTo(out)
+    if (archiveFile.name.endsWith(".tar.gz") || archiveFile.name.endsWith(".tgz")) {
+        val pb = ProcessBuilder("tar", "-xzf", archiveFile.absolutePath, "-C", destDir.absolutePath)
+        val proc = pb.start()
+        val exitCode = proc.waitFor()
+        if (exitCode != 0) {
+            throw IllegalStateException("tar extraction command failed with exit code $exitCode")
+        }
+    } else {
+        val destCanonicalPath = destDir.canonicalPath
+        ZipInputStream(archiveFile.inputStream().buffered()).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                val entryName = entry.name.replace('\\', '/')
+                val file = File(destDir, entryName).canonicalFile
+                if (!file.path.startsWith(destCanonicalPath + File.separator) && file != destDir.canonicalFile) {
+                    throw IllegalArgumentException("Zip entry is outside target directory: ${entry.name}")
                 }
+                if (entry.isDirectory) {
+                    file.mkdirs()
+                } else {
+                    file.parentFile?.mkdirs()
+                    FileOutputStream(file).use { out ->
+                        zip.copyTo(out)
+                    }
+                }
+                zip.closeEntry()
+                entry = zip.nextEntry
             }
-            zip.closeEntry()
-            entry = zip.nextEntry
         }
     }
 }

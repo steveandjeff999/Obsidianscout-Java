@@ -651,8 +651,14 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    echo [Updater] Initiating automatic rollback...\r\n" +
                 "    if exist .backup\\obsidianscout-server-native-$arch (\r\n" +
                 "        copy /y \".backup\\obsidianscout-server-native-$arch\" \".\" >nul\r\n" +
+                "    ) else if exist .backup\\obsidianscout-server-native.exe (\r\n" +
+                "        copy /y \".backup\\obsidianscout-server-native.exe\" \".\" >nul\r\n" +
                 "    ) else if exist .backup\\obsidianscout-server.jar (\r\n" +
                 "        copy /y \".backup\\obsidianscout-server.jar\" \".\" >nul\r\n" +
+                "    )\r\n" +
+                "    if exist .backup\\config\\app-config.json (\r\n" +
+                "        if not exist config mkdir config\r\n" +
+                "        copy /y \".backup\\config\\app-config.json\" \"config\\\" >nul\r\n" +
                 "    )\r\n" +
                 "    del /q .update_pending >nul 2>&1\r\n" +
                 "    del /q .update_result >nul 2>&1\r\n" +
@@ -721,8 +727,14 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "        echo \"[Updater] Restoring backup...\"\n" +
                 "        if [ -f .backup/\$BINARY_NAME ]; then\n" +
                 "            cp .backup/\$BINARY_NAME ./\n" +
+                "        elif [ -f .backup/obsidianscout-server-native ]; then\n" +
+                "            cp .backup/obsidianscout-server-native ./\n" +
                 "        elif [ -f .backup/obsidianscout-server.jar ]; then\n" +
                 "            cp .backup/obsidianscout-server.jar ./\n" +
+                "        fi\n" +
+                "        if [ -f .backup/config/app-config.json ]; then\n" +
+                "            mkdir -p config\n" +
+                "            cp .backup/config/app-config.json config/\n" +
                 "        fi\n" +
                 "        rm -f .update_pending .update_result\n" +
                 "        continue\n" +
