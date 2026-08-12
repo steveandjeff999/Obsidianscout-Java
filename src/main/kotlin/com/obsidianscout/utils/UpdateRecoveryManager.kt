@@ -35,6 +35,18 @@ object UpdateRecoveryManager {
                 }
             }
 
+            // Backup native executables
+            val nativeFiles = File(".").listFiles { _, name -> name.startsWith("obsidianscout-server-native", ignoreCase = true) } ?: emptyArray()
+            for (nf in nativeFiles) {
+                if (nf.isFile) nf.copyTo(File(backupDir, nf.name), overwrite = true)
+            }
+
+            // Backup dynamic libraries (.dll, .so, .dylib)
+            val nativeLibs = File(".").listFiles { _, name -> name.endsWith(".dll", ignoreCase = true) || name.endsWith(".so", ignoreCase = true) || name.endsWith(".dylib", ignoreCase = true) } ?: emptyArray()
+            for (nl in nativeLibs) {
+                if (nl.isFile) nl.copyTo(File(backupDir, nl.name), overwrite = true)
+            }
+
             // Backup configuration files
             val currentConfig = File("config/app-config.json")
             if (currentConfig.exists()) {
@@ -140,7 +152,12 @@ object UpdateRecoveryManager {
 
             val backupNativeFiles = backupDir.listFiles { _, name -> name.startsWith("obsidianscout-server-native", ignoreCase = true) } ?: emptyArray()
             for (bf in backupNativeFiles) {
-                bf.copyTo(File(bf.name), overwrite = true)
+                if (bf.isFile) bf.copyTo(File(bf.name), overwrite = true)
+            }
+
+            val backupLibs = backupDir.listFiles { _, name -> name.endsWith(".dll", ignoreCase = true) || name.endsWith(".so", ignoreCase = true) || name.endsWith(".dylib", ignoreCase = true) } ?: emptyArray()
+            for (bl in backupLibs) {
+                if (bl.isFile) bl.copyTo(File(bl.name), overwrite = true)
             }
 
             val backupConfig = File(backupDir, "config/app-config.json")

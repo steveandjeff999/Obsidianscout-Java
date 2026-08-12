@@ -193,19 +193,17 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "if exist .update_pending (\r\n" +
             "    echo [Updater] FAULTY INSTALLATION DETECTED! Server exited with code !EXIT_CODE! while update was pending testing.\r\n" +
             "    echo [Updater] Initiating automatic rollback to previous working version...\r\n" +
-            "    if exist .backup\\obsidianscout-server.jar (\r\n" +
-            "        copy /y \".backup\\obsidianscout-server.jar\" \".\" >nul\r\n" +
-            "        if exist .backup\\config\\app-config.json (\r\n" +
-            "            if not exist config mkdir config\r\n" +
-            "            copy /y \".backup\\config\\app-config.json\" \"config\\\" >nul\r\n" +
-            "        )\r\n" +
-            "        for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1) do (\r\n" +
-            "            if exist \".backup\\%%s\" copy /y \".backup\\%%s\" \".\" >nul\r\n" +
-            "        )\r\n" +
-            "        echo [Updater] Rollback successful. Restored previous working version from .backup.\r\n" +
-            "    ) else (\r\n" +
-            "        echo [Updater] ERROR: Backup directory .backup is missing!\r\n" +
+            "    if exist .backup\\obsidianscout-server.jar copy /y \".backup\\obsidianscout-server.jar\" \".\" >nul\r\n" +
+            "    if exist .backup\\obsidianscout-server-native* copy /y \".backup\\obsidianscout-server-native*\" \".\" >nul\r\n" +
+            "    if exist .backup\\*.dll copy /y \".backup\\*.dll\" \".\" >nul 2>&1\r\n" +
+            "    if exist .backup\\config\\app-config.json (\r\n" +
+            "        if not exist config mkdir config\r\n" +
+            "        copy /y \".backup\\config\\app-config.json\" \"config\\\" >nul\r\n" +
             "    )\r\n" +
+            "    for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1) do (\r\n" +
+            "        if exist \".backup\\%%s\" copy /y \".backup\\%%s\" \".\" >nul\r\n" +
+            "    )\r\n" +
+            "    echo [Updater] Rollback successful. Restored previous working version from .backup.\r\n" +
             "    del /q .update_pending >nul 2>&1\r\n" +
             "    del /q .update_result >nul 2>&1\r\n" +
             "    goto loop\r\n" +
@@ -217,6 +215,8 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        echo [Updater] Backing up current installation before applying update...\r\n" +
             "        if not exist .backup mkdir .backup\r\n" +
             "        if exist obsidianscout-server.jar copy /y \"obsidianscout-server.jar\" \".backup\\\" >nul\r\n" +
+            "        if exist obsidianscout-server-native* copy /y \"obsidianscout-server-native*\" \".backup\\\" >nul\r\n" +
+            "        if exist *.dll copy /y \"*.dll\" \".backup\\\" >nul 2>&1\r\n" +
             "        if exist config\\app-config.json (\r\n" +
             "            if not exist .backup\\config mkdir .backup\\config\r\n" +
             "            copy /y \"config\\app-config.json\" \".backup\\config\\\" >nul\r\n" +
@@ -225,10 +225,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            if exist \"%%s\" copy /y \"%%s\" \".backup\\\" >nul\r\n" +
             "        )\r\n" +
             "        echo [Updater] Applying update from !SRC_ROOT!...\r\n" +
-            "        copy /y \"!SRC_ROOT!\\obsidianscout-server.jar\" \".\" >nul\r\n" +
-            "        for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1) do (\r\n" +
-            "            if exist \"!SRC_ROOT!\\%%s\" copy /y \"!SRC_ROOT!\\%%s\" \".\" >nul\r\n" +
-            "        )\r\n" +
+            "        copy /y \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
             "        for %%i in (\"!SRC_ROOT!\\..\") do set TEMP_DIR=%%~fi\r\n" +
             "        rd /s /q \"!TEMP_DIR!\"\r\n" +
             "        if exist .update_tmp rd /s /q .update_tmp >nul 2>&1\r\n" +
@@ -322,22 +319,22 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    if [ -f .update_pending ]; then\n" +
             "        echo \"[Updater] FAULTY INSTALLATION DETECTED! Server exited with code \$EXIT_CODE while update was pending testing.\"\n" +
             "        echo \"[Updater] Initiating automatic rollback to previous working version...\"\n" +
-            "        if [ -f .backup/obsidianscout-server.jar ]; then\n" +
-            "            cp .backup/obsidianscout-server.jar ./\n" +
-            "            if [ -f .backup/config/app-config.json ]; then\n" +
-            "                mkdir -p config\n" +
-            "                cp .backup/config/app-config.json config/\n" +
-            "            fi\n" +
-            "            for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1; do\n" +
-            "                if [ -f \".backup/\$script\" ]; then\n" +
-            "                    cp \".backup/\$script\" ./\n" +
-            "                    chmod +x \"./\$script\" 2>/dev/null || true\n" +
-            "                fi\n" +
-            "            done\n" +
-            "            echo \"[Updater] Rollback successful. Restored previous working version from .backup.\"\n" +
-            "        else\n" +
-            "            echo \"[Updater] ERROR: Backup directory .backup is missing!\"\n" +
+            "        if [ -f .backup/obsidianscout-server.jar ]; then cp .backup/obsidianscout-server.jar ./; fi\n" +
+            "        for nfile in .backup/obsidianscout-server-native*;\n" +
+            "        do if [ -f \"\$nfile\" ]; then cp \"\$nfile\" ./; fi; done\n" +
+            "        for lib in .backup/*.so .backup/*.dylib .backup/*.dll;\n" +
+            "        do if [ -f \"\$lib\" ]; then cp \"\$lib\" ./; fi; done\n" +
+            "        if [ -f .backup/config/app-config.json ]; then\n" +
+            "            mkdir -p config\n" +
+            "            cp .backup/config/app-config.json config/\n" +
             "        fi\n" +
+            "        for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1; do\n" +
+            "            if [ -f \".backup/\$script\" ]; then\n" +
+            "                cp \".backup/\$script\" ./\n" +
+            "                chmod +x \"./\$script\" 2>/dev/null || true\n" +
+            "            fi\n" +
+            "        done\n" +
+            "        echo \"[Updater] Rollback successful. Restored previous working version from .backup.\"\n" +
             "        rm -f .update_pending .update_result\n" +
             "        continue\n" +
             "    fi\n" +
@@ -347,25 +344,18 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        if [ -d \"\$SRC_ROOT\" ]; then\n" +
             "            echo \"[Updater] Backing up current installation before applying update...\"\n" +
             "            mkdir -p .backup .backup/config\n" +
-            "            if [ -f obsidianscout-server.jar ]; then\n" +
-            "                cp obsidianscout-server.jar .backup/\n" +
-            "            fi\n" +
-            "            if [ -f config/app-config.json ]; then\n" +
-            "                cp config/app-config.json .backup/config/\n" +
-            "            fi\n" +
+            "            if [ -f obsidianscout-server.jar ]; then cp obsidianscout-server.jar .backup/; fi\n" +
+            "            for nfile in obsidianscout-server-native*;\n" +
+            "            do if [ -f \"\$nfile\" ]; then cp \"\$nfile\" .backup/; fi; done\n" +
+            "            for lib in *.so *.dylib *.dll;\n" +
+            "            do if [ -f \"\$lib\" ]; then cp \"\$lib\" .backup/; fi; done\n" +
+            "            if [ -f config/app-config.json ]; then cp config/app-config.json .backup/config/; fi\n" +
             "            for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1; do\n" +
-            "                if [ -f \"\$script\" ]; then\n" +
-            "                    cp \"\$script\" .backup/\n" +
-            "                fi\n" +
+            "                if [ -f \"\$script\" ]; then cp \"\$script\" .backup/; fi\n" +
             "            done\n" +
             "            echo \"[Updater] Applying update from \$SRC_ROOT...\"\n" +
-            "            cp \"\$SRC_ROOT/obsidianscout-server.jar\" ./\n" +
-            "            for script in run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1; do\n" +
-            "                if [ -f \"\$SRC_ROOT/\$script\" ]; then\n" +
-            "                    cp \"\$SRC_ROOT/\$script\" ./\n" +
-            "                    chmod +x \"./\$script\" 2>/dev/null || true\n" +
-            "                fi\n" +
-            "            done\n" +
+            "            cp -R \"\$SRC_ROOT\"/* ./\n" +
+            "            chmod +x ./*.sh 2>/dev/null || true\n" +
             "            TEMP_DIR=\$(dirname \"\$SRC_ROOT\")\n" +
             "            rm -rf \"\$TEMP_DIR\"\n" +
             "            rm -rf .update_tmp 2>/dev/null || true\n" +
