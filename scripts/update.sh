@@ -59,13 +59,18 @@ if [ -f .update_result ]; then
             cp "$SRC_ROOT/obsidianscout-server.jar" ./
         fi
 
-        # Copy Native Executables if present
-        for native_bin in "$SRC_ROOT"/obsidianscout-server-native*; do
-            if [ -f "$native_bin" ]; then
-                cp "$native_bin" ./
-                chmod +x "./$(basename "$native_bin")"
-            fi
-        done
+        # Copy Native Executables if present (or remove old native binaries if incoming release is JAR-only)
+        HAS_NATIVE=$(find "$SRC_ROOT" -maxdepth 1 -name "obsidianscout-server-native*" | head -n 1)
+        if [ -z "$HAS_NATIVE" ]; then
+            rm -f obsidianscout-server-native*
+        else
+            for native_bin in "$SRC_ROOT"/obsidianscout-server-native*; do
+                if [ -f "$native_bin" ]; then
+                    cp "$native_bin" ./
+                    chmod +x "./$(basename "$native_bin")"
+                fi
+            done
+        fi
         for lib in "$SRC_ROOT"/*.so; do
             if [ -f "$lib" ]; then
                 cp "$lib" ./

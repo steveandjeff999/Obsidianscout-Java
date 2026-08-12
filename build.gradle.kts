@@ -665,11 +665,17 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "        echo [Updater] Backing up current native installation...\r\n" +
                 "        if not exist .backup mkdir .backup\r\n" +
                 "        if exist obsidianscout-server-native-$arch copy /y \"obsidianscout-server-native-$arch\" \".backup\\\" >nul\r\n" +
+                "        if exist obsidianscout-server-native.exe copy /y \"obsidianscout-server-native.exe\" \".backup\\\" >nul\r\n" +
                 "        if exist obsidianscout-server.jar copy /y \"obsidianscout-server.jar\" \".backup\\\" >nul\r\n" +
-                "        echo [Updater] Applying native update from !SRC_ROOT!...\r\n" +
+                "        echo [Updater] Applying update from !SRC_ROOT!...\r\n" +
+                "        dir /b \"!SRC_ROOT!\\obsidianscout-server-native*\" >nul 2>&1\r\n" +
+                "        if errorlevel 1 (\r\n" +
+                "            if exist obsidianscout-server-native-$arch del /q \"obsidianscout-server-native-$arch\" >nul 2>&1\r\n" +
+                "            if exist obsidianscout-server-native.exe del /q \"obsidianscout-server-native.exe\" >nul 2>&1\r\n" +
+                "        )\r\n" +
                 "        copy /y \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
                 "        echo pending > .update_pending\r\n" +
-                "        echo [Updater] Update applied. Restarting native server...\r\n" +
+                "        echo [Updater] Update applied. Restarting server...\r\n" +
                 "    )\r\n" +
                 ")\r\n" +
                 "goto loop\r\n"
@@ -726,6 +732,10 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "        rm -f .update_result\n" +
                 "        if [ -d \"\$SRC_ROOT\" ]; then\n" +
                 "            echo \"[Updater] Applying update from \$SRC_ROOT...\"\n" +
+                "            HAS_NATIVE=\$(find \"\$SRC_ROOT\" -maxdepth 1 -name \"obsidianscout-server-native*\" | head -n 1)\n" +
+                "            if [ -z \"\$HAS_NATIVE\" ]; then\n" +
+                "                rm -f obsidianscout-server-native*\n" +
+                "            fi\n" +
                 "            cp -R \"\$SRC_ROOT\"/* ./\n" +
                 "            echo pending > .update_pending\n" +
                 "        fi\n" +

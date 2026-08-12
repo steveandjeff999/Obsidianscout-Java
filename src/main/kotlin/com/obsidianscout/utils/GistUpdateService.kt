@@ -285,7 +285,7 @@ object GistUpdateService {
         }
 
         val srcRoot = extractDir.walkTopDown()
-            .firstOrNull { it.isFile && it.name.equals("obsidianscout-server.jar", ignoreCase = true) }
+            .firstOrNull { it.isFile && (it.name.equals("obsidianscout-server.jar", ignoreCase = true) || it.name.startsWith("obsidianscout-server-native", ignoreCase = true)) }
             ?.parentFile
 
         if (srcRoot == null) {

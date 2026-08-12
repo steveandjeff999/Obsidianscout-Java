@@ -59,9 +59,14 @@ for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-supera
 :: Copy JAR if present
 if exist "!SRC_ROOT!\obsidianscout-server.jar" copy /y "!SRC_ROOT!\obsidianscout-server.jar" "." >nul
 
-:: Copy Native Executables and DLLs if present
-for %%f in ("!SRC_ROOT!\obsidianscout-server-native*.exe") do (
-    if exist "%%f" copy /y "%%f" "." >nul
+:: Copy Native Executables and DLLs if present (or remove old native binaries if incoming release is JAR-only)
+dir /b "!SRC_ROOT!\obsidianscout-server-native*" >nul 2>&1
+if errorlevel 1 (
+    del /q obsidianscout-server-native* >nul 2>&1
+) else (
+    for %%f in ("!SRC_ROOT!\obsidianscout-server-native*.exe") do (
+        if exist "%%f" copy /y "%%f" "." >nul
+    )
 )
 for %%d in ("!SRC_ROOT!\*.dll") do (
     if exist "%%d" copy /y "%%d" "." >nul
