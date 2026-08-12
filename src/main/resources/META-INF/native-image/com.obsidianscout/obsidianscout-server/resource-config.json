@@ -3,7 +3,9 @@
     "includes": [
       { "pattern": "static/.*" },
       { "pattern": "logback\\.xml" },
-      { "pattern": "META-INF/native-image/.*" }
+      { "pattern": "META-INF/native-image/.*" },
+      { "pattern": "META-INF/services/.*" },
+      { "pattern": "META-INF/kotlinx-serialization.*" }
     ],
     "excludes": []
   },

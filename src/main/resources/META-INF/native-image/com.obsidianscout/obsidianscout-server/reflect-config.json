@@ -1,1499 +1,3956 @@
 [
   {
     "name": "org.jetbrains.exposed.sql.UUIDColumnType",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
-    "allDeclaredFields": true, "allPublicFields": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "org.jetbrains.exposed.sql.ColumnType",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.sql.Table",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.sql.Column",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.dao.id.UUIDTable",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.dao.id.IdTable",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.dao.id.EntityID",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.sql.VarCharColumnType",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.sql.IntegerColumnType",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.sql.LongColumnType",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.sql.BooleanColumnType",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.sql.TextColumnType",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.sql.DoubleColumnType",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "org.jetbrains.exposed.sql.javatime.JavaTimestampColumnType",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.Users",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.ScoutingEntries",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.PitScoutingEntries",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.QualitativeScoutingEntries",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.ScoutingConfigs",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.PitScoutingConfigs",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.QualitativeScoutingConfigs",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.DefaultConfigs",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.AppSettings",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.ApiEvents",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.ApiTeams",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.ApiMatches",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.ScoutingAlliances",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.AllianceMemberships",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.EpaOprHistoryCache",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.PasswordResetTokens",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.AllianceSelections",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.Banners",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.ChatMessages",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.UserChatLastRead",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.ChatGroups",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.PushSubscriptions",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.FcmConfigs",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.FcmDeviceTokens",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.ClusterSecrets",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.db.ClusterNotificationLocks",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
   },
   {
     "name": "com.obsidianscout.DbInitResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.DbInitResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ErrorResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ErrorResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.LoginRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.LoginRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.RegisterRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.RegisterRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.LoginResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.LoginResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MeResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MeResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.VersionResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.VersionResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.LoginStatusResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.LoginStatusResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.AuthProviderInfo",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.AuthProviderInfo$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.AuthProvidersResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.AuthProvidersResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ConfigUpdateRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ConfigUpdateRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ApplyDefaultConfigRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ApplyDefaultConfigRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ResetConfigRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ResetConfigRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.CreateUserRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.CreateUserRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.TourProgress",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.TourProgress$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.UpdateUserRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.UpdateUserRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.NodeAlertsEnrollmentRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.NodeAlertsEnrollmentRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.NodeAlertsEnrollmentResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.NodeAlertsEnrollmentResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ScoutingEntryRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ScoutingEntryRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ApiKeysPayload",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ApiKeysPayload$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ApiSettingsPayload",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ApiSettingsPayload$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.SettingsResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.SettingsResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.SyncResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.SyncResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.SyncStatusResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.SyncStatusResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.EventRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.EventRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.EventRenameRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.EventRenameRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.TeamRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.TeamRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MatchRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MatchRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.SummaryResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.SummaryResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MatchTeamPrediction",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MatchTeamPrediction$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.AlliancePrediction",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.AlliancePrediction$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MatchPredictionResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MatchPredictionResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.CreateAllianceRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.CreateAllianceRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.UpdateAllianceRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.UpdateAllianceRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.InviteTeamRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.InviteTeamRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.RespondInviteRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.RespondInviteRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.InviteCountResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.InviteCountResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.AllianceImportDataRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.AllianceImportDataRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.AllianceImportDataResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.AllianceImportDataResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.AllianceImportSourceRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.AllianceImportSourceRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ToggleAllianceDisableRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ToggleAllianceDisableRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ToggleAllianceActiveRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ToggleAllianceActiveRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ForgotPasswordRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ForgotPasswordRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.AccountInfo",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.AccountInfo$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.VerifyResetTokenResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.VerifyResetTokenResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ResetPasswordRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ResetPasswordRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.SmtpTestConnectionRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.SmtpTestConnectionRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.BannerDto",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.BannerDto$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.BannerCreateRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.BannerCreateRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.BannerUpdateRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.BannerUpdateRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ChatMessageDto",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ChatMessageDto$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.SendMessageRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.SendMessageRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.CreateGroupRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.CreateGroupRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ReactMessageRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ReactMessageRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.GroupUnreadStatus",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.GroupUnreadStatus$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.UnreadStatusDto",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.UnreadStatusDto$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ReadChatGroupRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ReadChatGroupRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.PushSubscriptionDto",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.PushSubscriptionDto$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.PushKeysDto",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.PushKeysDto$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ContactRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ContactRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MigrationRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MigrationRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ResetDatabaseRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ResetDatabaseRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.WipeTeamDataRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.WipeTeamDataRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.FcmPublicConfigDto",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.FcmPublicConfigDto$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.FcmAdminConfigDto",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.FcmAdminConfigDto$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.SaveFcmConfigRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.SaveFcmConfigRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.RegisterFcmTokenRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.RegisterFcmTokenRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.UnregisterFcmTokenRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.UnregisterFcmTokenRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileAdminUsersResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileAdminUsersResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileAdminUserResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileAdminUserResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileAdminCreateUserRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileAdminCreateUserRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileAdminUpdateUserRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileAdminUpdateUserRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileNotificationsScheduledResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileNotificationsScheduledResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileNotificationsUnreadResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileNotificationsUnreadResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileSyncStatusResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileSyncStatusResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.SyncSubStatus",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.SyncSubStatus$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.SyncAllianceSubStatus",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.SyncAllianceSubStatus$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileSyncResults",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileSyncResults$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileSyncTriggerResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileSyncTriggerResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileGraphRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileGraphRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.PlotlyTrace",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.PlotlyTrace$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.PlotlyLayout",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.PlotlyLayout$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.FallbackPlotlyJson",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.FallbackPlotlyJson$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileGraphResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileGraphResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileErrorResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileErrorResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileLoginRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileLoginRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileLoginResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileLoginResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileRegisterRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileRegisterRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileVerifyResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileVerifyResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileHealthResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileHealthResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileProfileMe",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileProfileMe$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileConfigResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileConfigResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileSaveConfigResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileSaveConfigResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileTeam",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileTeam$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileTeamResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileTeamResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileTeamsResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileTeamsResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileEvent",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileEvent$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileEventShort",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileEventShort$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileEventsResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileEventsResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileMatch",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileMatch$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileMatchesResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileMatchesResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileMatchEpa",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileMatchEpa$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileEpaBreakdown",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileEpaBreakdown$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileOprData",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileOprData$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileEpaOprTeam",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileEpaOprTeam$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileEpaOprHistoryRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileEpaOprHistoryRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileEpaOprHistoryResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileEpaOprHistoryResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileScoutingSubmitRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileScoutingSubmitRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileScoutingSubmitResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileScoutingSubmitResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileScoutingHistoryEntry",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileScoutingHistoryEntry$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileScoutingHistoryResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileScoutingHistoryResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobilePitSubmitRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobilePitSubmitRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobilePitSubmitResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobilePitSubmitResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileBulkEntry",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileBulkEntry$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileBulkResult",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileBulkResult$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileBulkSubmitRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileBulkSubmitRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileBulkSubmitResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileBulkSubmitResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileAllianceDetail",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileAllianceDetail$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileAlliancesResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileAlliancesResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileCreateAllianceRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileCreateAllianceRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileCreateAllianceResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileCreateAllianceResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileInviteRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileInviteRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileInviteResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileInviteResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobilePendingInvite",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobilePendingInvite$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileSentInvite",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileSentInvite$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileRespondInviteRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileRespondInviteRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileRespondInviteResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileRespondInviteResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileLeaveAllianceRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileLeaveAllianceRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileLeaveAllianceResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileLeaveAllianceResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileToggleAllianceRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileToggleAllianceRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileToggleAllianceResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileToggleAllianceResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileDataModeResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileDataModeResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileDataModeTeam",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileDataModeTeam$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileDataModeMatchPoint",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileDataModeMatchPoint$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileCurrentDataModeRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileCurrentDataModeRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileCurrentDataModeResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileCurrentDataModeResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileChatMessagesResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileChatMessagesResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileChatSendRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileChatSendRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileChatSendResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileChatSendResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileChatReadRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileChatReadRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileChatReadResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileChatReadResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileChatStateResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileChatStateResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileChatMember",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileChatMember$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileChatMembersResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileChatMembersResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileConversation",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileConversation$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileConversationsResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileConversationsResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileGroup",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileGroup$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileGroupDetail",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileGroupDetail$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileGroupsResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileGroupsResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileGroupMembersResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileGroupMembersResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileCreateGroupRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileCreateGroupRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileCreateGroupResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileCreateGroupResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileManageGroupMembersRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileManageGroupMembersRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileReactMessageRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileReactMessageRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileReactMessageResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileReactMessageResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileEditMessageRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileEditMessageRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileEditMessageResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileEditMessageResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileDeleteMessageRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileDeleteMessageRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileDeleteMessageResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileDeleteMessageResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileUser",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileUser$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileUserWithUrl",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileUserWithUrl$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileAdminUser",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileAdminUser$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileAdminRole",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileAdminRole$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MobileAdminRolesResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MobileAdminRolesResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ChatMessage",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ChatMessage$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ChatState",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ChatState$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ChatStatePointer",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ChatStatePointer$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.MessageReaction",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.MessageReaction$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.routes.ReactionSummary",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ReactionSummary$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.scouting.AllianceSelectionResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.AllianceSelectionResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.scouting.AllianceSelectionUpdateRequest",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.AllianceSelectionUpdateRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.scouting.AllianceSelectionUpdateResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.AllianceSelectionUpdateResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.scouting.AllianceMemberRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.AllianceMemberRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.scouting.AllianceRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.AllianceRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.scouting.AllianceImportResult",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.AllianceImportResult$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.scouting.AllianceImportSourceRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.AllianceImportSourceRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.scouting.ScoutingEntryRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.ScoutingEntryRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.scouting.PitScoutingEntryRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.PitScoutingEntryRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.scouting.QualitativeScoutingEntryRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.QualitativeScoutingEntryRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.admin.ActionResultResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.admin.ActionResultResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.admin.AppConfigPayload",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.admin.AppConfigPayload$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.admin.CloudflaredResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.admin.CloudflaredResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.admin.CloudflaredRestartResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.admin.CloudflaredRestartResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.admin.CloudflaredStatus",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.admin.CloudflaredStatus$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.admin.ClusterNodeInfo",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.admin.ClusterNodeInfo$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.admin.ClusterNodesResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.admin.ClusterNodesResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.admin.LogEntry",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.admin.LogEntry$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.admin.ServerLogsPayload",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.admin.ServerLogsPayload$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.analytics.AnalyticsResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.analytics.AnalyticsResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.analytics.AnalyticsSeriesPoint",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.analytics.AnalyticsSeriesPoint$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.analytics.AnalyticsWidgetResult",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.analytics.AnalyticsWidgetResult$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.auth.KeyRegenerationResponse",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.auth.KeyRegenerationResponse$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.auth.UserRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.auth.UserRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.auth.UserSession",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.auth.UserSession$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.AppConfig",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.AppConfig$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.ServerConfig",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.ServerConfig$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.DatabaseConfig",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.DatabaseConfig$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.SqliteConfig",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.SqliteConfig$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.PostgresConfig",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.PostgresConfig$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.VapidConfig",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.VapidConfig$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.HttpsConfig",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.HttpsConfig$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.GistUpdateConfig",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.GistUpdateConfig$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.SeedConfig",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.SeedConfig$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.ScoutingConfig",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.ScoutingConfig$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.ScoutingField",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.ScoutingField$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.ScoutingOption",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.ScoutingOption$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.AnalyticsWidget",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.AnalyticsWidget$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.config.DefaultConfigDTO",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.config.DefaultConfigDTO$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.integrations.ApiKeys",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.integrations.ApiKeys$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.integrations.ApiSettings",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.integrations.ApiSettings$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.integrations.CloudflaredSettings",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.integrations.CloudflaredSettings$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.integrations.MatchSyncRecord",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.integrations.MatchSyncRecord$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.integrations.SmtpSettings",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.integrations.SmtpSettings$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.integrations.SyncCounts",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.integrations.SyncCounts$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   },
   {
     "name": "com.obsidianscout.integrations.ThemeSettings",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
   },
   {
+    "name": "com.obsidianscout.integrations.ThemeSettings$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
     "name": "com.obsidianscout.utils.ServerTimingMetric",
-    "allDeclaredConstructors": true, "allPublicConstructors": true,
-    "allDeclaredMethods": true, "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
     "allDeclaredFields": true
+  },
+  {
+    "name": "com.obsidianscout.utils.ServerTimingMetric$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
   }
 ]
