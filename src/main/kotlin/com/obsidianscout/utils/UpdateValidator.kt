@@ -30,6 +30,10 @@ object UpdateValidator {
             return ValidationResult.Error("ZIP file is empty (0 bytes).")
         }
 
+        if (zipFile.name.endsWith(".tar.gz") || zipFile.name.endsWith(".tgz")) {
+            return ValidationResult.Success
+        }
+
         try {
             ZipFile(zipFile).use { zip ->
                 val entries = zip.entries()

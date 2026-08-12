@@ -14,6 +14,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileOutputStream
@@ -236,7 +237,8 @@ object GistUpdateService {
             return
         }
 
-        val zipFile = File(tempDir, "update.zip")
+        val isTarGz = zipUrl.endsWith(".tar.gz") || zipUrl.endsWith(".tgz")
+        val zipFile = File(tempDir, if (isTarGz) "update.tar.gz" else "update.zip")
         log.info("[GistUpdate] Downloading $zipUrl ...")
 
         val zipRequest = HttpRequest.newBuilder().uri(URI.create(zipUrl)).build()
@@ -321,45 +323,88 @@ object GistUpdateService {
     }
 
     /**
-     * Calls the GitHub Releases API to find a .zip asset for the given version tag.
-     * Falls back to the zipball_url if no explicit asset is found.
+     * Calls the GitHub Releases API to find the appropriate downloadable package for [version] and the current platform.
+     * Tries tag with 'v' prefix first (e.g. v0.3.9.3), then without 'v' prefix.
      */
     private fun resolveZipUrl(version: String, httpClient: HttpClient): String? {
-        val apiUrl = "https://api.github.com/repos/steveandjeff999/Obsidianscout-Java/releases/tags/$version"
-        return try {
-            val req = HttpRequest.newBuilder()
-                .uri(URI.create(apiUrl))
-                .header("Accept", "application/vnd.github.v3+json")
-                .build()
-            val res = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
-            if (res.statusCode() != 200) return null
+        val cleanVersion = version.trim().lowercase().removePrefix("v")
+        val tagWithV = "v$cleanVersion"
+        val tagWithoutV = cleanVersion
 
-            val releaseJson = lenientJson.parseToJsonElement(res.body()).jsonObject
+        val tagsToTry = listOf(tagWithV, tagWithoutV)
+        var releaseJson: JsonObject? = null
 
-            // Look for a .zip asset in the assets array
-            var zipUrl: String? = null
-            val assetsRaw = releaseJson["assets"]?.toString() ?: "[]"
-            val parts = assetsRaw.split("\"browser_download_url\":\"")
-            for (part in parts.drop(1)) {
-                val url = part.substringBefore("\"")
-                if (url.endsWith(".zip")) {
-                    zipUrl = url
+        for (tag in tagsToTry) {
+            val apiUrl = "https://api.github.com/repos/steveandjeff999/Obsidianscout-Java/releases/tags/$tag"
+            try {
+                val req = HttpRequest.newBuilder()
+                    .uri(URI.create(apiUrl))
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .header("User-Agent", "ObsidianScout-GistUpdater")
+                    .timeout(java.time.Duration.ofSeconds(15))
+                    .build()
+                val res = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+                if (res.statusCode() == 200) {
+                    releaseJson = lenientJson.parseToJsonElement(res.body()).jsonObject
                     break
                 }
+            } catch (e: Exception) {
+                log.warn("[GistUpdate] Could not fetch release for tag $tag: ${e.message}")
+                if (e.message?.contains("selector manager closed") == true || e is java.io.IOException) {
+                    resetHttpClient()
+                }
             }
-
-            // Fallback to the GitHub-generated zipball_url
-            if (zipUrl.isNullOrBlank()) {
-                zipUrl = releaseJson["zipball_url"]?.jsonPrimitive?.content
-            }
-            zipUrl
-        } catch (e: Exception) {
-            log.warn("[GistUpdate] Could not resolve zip URL from GitHub API: ${e.message}")
-            if (e.message?.contains("selector manager closed") == true || e is java.io.IOException) {
-                resetHttpClient()
-            }
-            null
         }
+
+        if (releaseJson == null) {
+            log.error("[GistUpdate] Could not find GitHub release for version $version (tried $tagWithV and $tagWithoutV)")
+            return null
+        }
+
+        val osName = System.getProperty("os.name", "").lowercase()
+        val osArch = System.getProperty("os.arch", "").lowercase()
+        val platformKey = when {
+            osName.contains("win") -> "windows-x86_64"
+            osName.contains("mac") -> "macos-arm64"
+            osName.contains("linux") && (osArch.contains("arm") || osArch.contains("aarch")) -> "linux-arm64"
+            osName.contains("linux") -> "linux-x86_64"
+            else -> "fatjar"
+        }
+
+        var bestUrl: String? = null
+        var fatjarUrl: String? = null
+        var fallbackUrl: String? = null
+
+        val assets = releaseJson["assets"]?.jsonArray
+        if (assets != null) {
+            for (asset in assets) {
+                val obj = asset.jsonObject
+                val name = obj["name"]?.jsonPrimitive?.content?.lowercase() ?: ""
+                val url = obj["browser_download_url"]?.jsonPrimitive?.content ?: ""
+                if (url.isBlank()) continue
+
+                if (name.contains(platformKey)) {
+                    bestUrl = url
+                    break
+                }
+                if (name.contains("fatjar")) {
+                    fatjarUrl = url
+                }
+                if (fallbackUrl == null && (name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz"))) {
+                    fallbackUrl = url
+                }
+            }
+        }
+
+        val finalUrl = when {
+            !bestUrl.isNullOrBlank() -> bestUrl
+            !fatjarUrl.isNullOrBlank() -> fatjarUrl
+            !fallbackUrl.isNullOrBlank() -> fallbackUrl
+            else -> releaseJson["zipball_url"]?.jsonPrimitive?.content
+        }
+
+        log.info("[GistUpdate] Resolved download URL for platform '$platformKey': $finalUrl")
+        return finalUrl
     }
 
     private fun mergeConfigs(srcRoot: File) {
@@ -412,24 +457,33 @@ object GistUpdateService {
         }
     }
 
-    private fun unzipFile(zipFile: File, destDir: File) {
+    private fun unzipFile(archiveFile: File, destDir: File) {
         destDir.mkdirs()
-        ZipInputStream(zipFile.inputStream().buffered()).use { zip ->
-            var entry = zip.nextEntry
-            while (entry != null) {
-                val entryName = entry.name.replace('\\', '/')
-                if (!UpdateValidator.isSafeZipPath(destDir, entryName)) {
-                    throw IllegalArgumentException("Zip entry is outside target directory: $entryName")
+        if (archiveFile.name.endsWith(".tar.gz") || archiveFile.name.endsWith(".tgz")) {
+            val pb = ProcessBuilder("tar", "-xzf", archiveFile.absolutePath, "-C", destDir.absolutePath)
+            val proc = pb.start()
+            val exitCode = proc.waitFor()
+            if (exitCode != 0) {
+                throw IllegalStateException("tar extraction command failed with exit code $exitCode")
+            }
+        } else {
+            ZipInputStream(archiveFile.inputStream().buffered()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    val entryName = entry.name.replace('\\', '/')
+                    if (!UpdateValidator.isSafeZipPath(destDir, entryName)) {
+                        throw IllegalArgumentException("Zip entry is outside target directory: $entryName")
+                    }
+                    val file = File(destDir, entryName)
+                    if (entry.isDirectory) {
+                        file.mkdirs()
+                    } else {
+                        file.parentFile?.mkdirs()
+                        FileOutputStream(file).use { out -> zip.copyTo(out) }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
                 }
-                val file = File(destDir, entryName)
-                if (entry.isDirectory) {
-                    file.mkdirs()
-                } else {
-                    file.parentFile?.mkdirs()
-                    FileOutputStream(file).use { out -> zip.copyTo(out) }
-                }
-                zip.closeEntry()
-                entry = zip.nextEntry
             }
         }
     }
