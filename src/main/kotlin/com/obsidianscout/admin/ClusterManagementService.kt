@@ -66,6 +66,14 @@ data class AppConfigPayload(
     val config: AppConfig? = null
 )
 
+@Serializable
+data class ClusterStatusResponse(
+    val status: String = "online",
+    val serverVersion: String = "Unknown",
+    val nodeIp: String = "",
+    val dbActive: Boolean = true
+)
+
 object ClusterManagementService {
 
     @Volatile

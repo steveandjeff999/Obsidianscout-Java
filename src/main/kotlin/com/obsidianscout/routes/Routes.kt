@@ -2269,6 +2269,19 @@ fun Application.configureRoutes() {
                     }
                 }
                 route("/cluster") {
+                    get("/status") {
+                        call.requireAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        val appConfig = AppConfigLoader.load()
+                        call.respond(
+                            com.obsidianscout.admin.ClusterStatusResponse(
+                                status = "online",
+                                serverVersion = appConfig.current_version,
+                                nodeIp = localIp,
+                                dbActive = true
+                            )
+                        )
+                    }
                     get("/nodes") {
                         call.requireAdminOrClusterAuth()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterNodes())
@@ -2396,6 +2409,21 @@ fun Application.configureRoutes() {
                         val filter = call.request.queryParameters["filter"]
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAllClusterLogs(limit, filter))
                     }
+                }
+            }
+
+            route("/cluster") {
+                get("/status") {
+                    val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                    val appConfig = AppConfigLoader.load()
+                    call.respond(
+                        com.obsidianscout.admin.ClusterStatusResponse(
+                            status = "online",
+                            serverVersion = appConfig.current_version,
+                            nodeIp = localIp,
+                            dbActive = true
+                        )
+                    )
                 }
             }
         }
