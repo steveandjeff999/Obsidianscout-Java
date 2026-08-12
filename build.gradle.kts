@@ -536,6 +536,7 @@ graalvmNative {
                 "-H:+UnlockExperimentalVMOptions",
                 "-H:+ReportExceptionStackTraces",
                 "-H:EnableURLProtocols=http,https",
+                "-H:ReflectionConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/com.obsidianscout/obsidianscout-server/reflect-config.json",
                 "--no-fallback",
                 "-Djava.awt.headless=true",
                 "--initialize-at-build-time=kotlin.",

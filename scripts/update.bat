@@ -49,12 +49,23 @@ echo Finalizing update (copying new files)...
 :: Create backup of current files
 if not exist .backup mkdir .backup
 if exist obsidianscout-server.jar copy /y "obsidianscout-server.jar" ".backup\" >nul
+for %%f in (obsidianscout-server-native*.exe) do (
+    if exist "%%f" copy /y "%%f" ".backup\" >nul
+)
 for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-superadmin.bat install-graal.sh install-graal.bat install-graal.ps1) do (
     if exist "%%s" copy /y "%%s" ".backup\" >nul
 )
 
-:: Copy JAR
-copy /y "!SRC_ROOT!\obsidianscout-server.jar" "." >nul
+:: Copy JAR if present
+if exist "!SRC_ROOT!\obsidianscout-server.jar" copy /y "!SRC_ROOT!\obsidianscout-server.jar" "." >nul
+
+:: Copy Native Executables and DLLs if present
+for %%f in ("!SRC_ROOT!\obsidianscout-server-native*.exe") do (
+    if exist "%%f" copy /y "%%f" "." >nul
+)
+for %%d in ("!SRC_ROOT!\*.dll") do (
+    if exist "%%d" copy /y "%%d" "." >nul
+)
 
 :: Copy scripts
 if exist "!SRC_ROOT!\run.sh" copy /y "!SRC_ROOT!\run.sh" "." >nul

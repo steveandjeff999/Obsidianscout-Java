@@ -80,30 +80,53 @@ fun main() {
         exitProcess(1)
     }
     
+    val osName = System.getProperty("os.name", "").lowercase()
+    val osArch = System.getProperty("os.arch", "").lowercase()
+    val platformKey = when {
+        osName.contains("win") -> "windows-x86_64"
+        osName.contains("mac") -> "macos-arm64"
+        osName.contains("linux") && (osArch.contains("arm") || osArch.contains("aarch")) -> "linux-arm64"
+        osName.contains("linux") -> "linux-x86_64"
+        else -> "fatjar"
+    }
+
     val releases = mutableListOf<ReleaseInfo>()
     for (element in jsonArray) {
         val obj = element.jsonObject
         val tag = obj["tag_name"]?.jsonPrimitive?.content ?: continue
         val isPrerelease = obj["prerelease"]?.jsonPrimitive?.boolean ?: false
         
-        // Find zip asset download URL
-        var zipUrl = ""
+        var bestUrl = ""
+        var fatjarUrl = ""
+        var fallbackUrl = ""
         val assets = obj["assets"]?.jsonArray
         if (assets != null) {
             for (asset in assets) {
-                val name = asset.jsonObject["name"]?.jsonPrimitive?.content ?: ""
-                if (name.endsWith(".zip")) {
-                    zipUrl = asset.jsonObject["browser_download_url"]?.jsonPrimitive?.content ?: ""
+                val name = asset.jsonObject["name"]?.jsonPrimitive?.content?.lowercase() ?: ""
+                val url = asset.jsonObject["browser_download_url"]?.jsonPrimitive?.content ?: ""
+                if (url.isEmpty()) continue
+
+                if (name.contains(platformKey) && (name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz"))) {
+                    bestUrl = url
                     break
+                }
+                if (name.contains("fatjar") && (name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz"))) {
+                    fatjarUrl = url
+                }
+                if ((name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz")) && fallbackUrl.isEmpty()) {
+                    fallbackUrl = url
                 }
             }
         }
-        if (zipUrl.isEmpty()) {
-            zipUrl = obj["zipball_url"]?.jsonPrimitive?.content ?: ""
+        val finalUrl = when {
+            bestUrl.isNotEmpty() -> bestUrl
+            fatjarUrl.isNotEmpty() -> fatjarUrl
+            fallbackUrl.isNotEmpty() -> fallbackUrl
+            else -> obj["zipball_url"]?.jsonPrimitive?.content ?: ""
         }
         
-        if (zipUrl.isNotEmpty()) {
-            releases.add(ReleaseInfo(tag, isPrerelease, zipUrl))
+        if (finalUrl.isNotEmpty()) {
+            releases.add(ReleaseInfo(tag, isPrerelease, finalUrl))
         }
     }
     
@@ -205,11 +228,11 @@ fun main() {
     }
     
     val srcRoot = extractDir.walkTopDown()
-        .firstOrNull { it.isFile && it.name.equals("obsidianscout-server.jar", ignoreCase = true) }
+        .firstOrNull { it.isFile && (it.name.equals("obsidianscout-server.jar", ignoreCase = true) || it.name.startsWith("obsidianscout-server-native", ignoreCase = true)) }
         ?.parentFile
         
     if (srcRoot == null) {
-        System.err.println("Error: Could not find obsidianscout-server.jar in the extracted update bundle.")
+        System.err.println("Error: Could not find obsidianscout-server.jar or native executable in the extracted update bundle.")
         tempDir.deleteRecursively()
         exitProcess(1)
     }

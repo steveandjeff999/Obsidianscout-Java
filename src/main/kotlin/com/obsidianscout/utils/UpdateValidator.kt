@@ -137,13 +137,17 @@ object UpdateValidator {
         }
 
         val serverJar = File(srcRoot, "obsidianscout-server.jar")
-        if (!serverJar.exists()) {
-            return ValidationResult.Error("obsidianscout-server.jar missing from extracted update bundle.")
+        val nativeFiles = srcRoot.listFiles { _, name -> name.startsWith("obsidianscout-server-native", ignoreCase = true) } ?: emptyArray()
+
+        if (!serverJar.exists() && nativeFiles.isEmpty()) {
+            return ValidationResult.Error("Neither obsidianscout-server.jar nor native executable found in extracted update bundle.")
         }
 
-        val jarCheck = validateJarStructure(serverJar)
-        if (jarCheck is ValidationResult.Error) {
-            return jarCheck
+        if (serverJar.exists()) {
+            val jarCheck = validateJarStructure(serverJar)
+            if (jarCheck is ValidationResult.Error && nativeFiles.isEmpty()) {
+                return jarCheck
+            }
         }
 
         return ValidationResult.Success
