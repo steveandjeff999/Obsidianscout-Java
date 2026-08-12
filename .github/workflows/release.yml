@@ -42,7 +42,10 @@ jobs:
       - name: Extract Bumped Version & Re-commit
         id: bump
         run: |
-          VER=$(grep '"current_version"' config/app-config.json | head -n 1 | sed -E 's/.*"current_version"\s*:\s*"([^"]+)".*/\1/')
+          VER=$(grep '"current_version"' config/app-config.json 2>/dev/null | head -n 1 | sed -E 's/.*"current_version"\s*:\s*"([^"]+)".*/\1/')
+          if [ -z "$VER" ]; then
+            VER=$(grep '"current_version"' Obsidianscout/config/app-config.json 2>/dev/null | head -n 1 | sed -E 's/.*"current_version"\s*:\s*"([^"]+)".*/\1/')
+          fi
           if [ -z "$VER" ]; then VER="0.1.0"; fi
           TAG="v$VER"
 
@@ -53,7 +56,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add config/app-config.json Obsidianscout/config/app-config.json Obsidianscout/src/main/kotlin/com/obsidianscout/config/AppConfig.kt
+          git add -u
           
           if git diff --staged --quiet; then
             echo "No version changes detected."
