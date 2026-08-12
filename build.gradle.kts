@@ -171,21 +171,29 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        set JAVA_OPTS=-Djava.awt.headless=true -Xms512m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapWastePercent=5 -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\r\n" +
             "    )\r\n" +
             ")\r\n" +
-            "set JAVA_EXEC=java\r\n" +
-            "set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
-            "if not exist \"!GRAAL_JAVA!\" (\r\n" +
-            "    if defined GRAALVM_HOME if exist \"%GRAALVM_HOME%\\bin\\java.exe\" set GRAAL_JAVA=%GRAALVM_HOME%\\bin\\java.exe\r\n" +
+            "set EXEC_CMD=\r\n" +
+            "if exist obsidianscout-server-native-windows-x86_64.exe set EXEC_CMD=obsidianscout-server-native-windows-x86_64.exe -Xmx1536m\r\n" +
+            "if exist obsidianscout-server-native.exe set EXEC_CMD=obsidianscout-server-native.exe -Xmx1536m\r\n" +
+            "if defined EXEC_CMD (\r\n" +
+            "    echo [ObsidianScout] Native executable detected, running native binary: !EXEC_CMD!\r\n" +
+            "    !EXEC_CMD!\r\n" +
+            ") else (\r\n" +
+            "    set JAVA_EXEC=java\r\n" +
+            "    set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
+            "    if not exist \"!GRAAL_JAVA!\" (\r\n" +
+            "        if defined GRAALVM_HOME if exist \"%GRAALVM_HOME%\\bin\\java.exe\" set GRAAL_JAVA=%GRAALVM_HOME%\\bin\\java.exe\r\n" +
+            "    )\r\n" +
+            "    if not exist \"!GRAAL_JAVA!\" (\r\n" +
+            "        echo [ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for high-performance execution...\r\n" +
+            "        if exist install-graal.bat call install-graal.bat\r\n" +
+            "        if exist \"%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\" set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
+            "    )\r\n" +
+            "    if exist \"!GRAAL_JAVA!\" (\r\n" +
+            "        echo [ObsidianScout] Using GraalVM High-Performance JVM: !GRAAL_JAVA!\r\n" +
+            "        set JAVA_EXEC=\"!GRAAL_JAVA!\"\r\n" +
+            "    )\r\n" +
+            "    !JAVA_EXEC! !JAVA_OPTS! -jar obsidianscout-server.jar\r\n" +
             ")\r\n" +
-            "if not exist \"!GRAAL_JAVA!\" (\r\n" +
-            "    echo [ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for high-performance execution...\r\n" +
-            "    if exist install-graal.bat call install-graal.bat\r\n" +
-            "    if exist \"%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\" set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
-            ")\r\n" +
-            "if exist \"!GRAAL_JAVA!\" (\r\n" +
-            "    echo [ObsidianScout] Using GraalVM High-Performance JVM: !GRAAL_JAVA!\r\n" +
-            "    set JAVA_EXEC=\"!GRAAL_JAVA!\"\r\n" +
-            ")\r\n" +
-            "%JAVA_EXEC% %JAVA_OPTS% -jar obsidianscout-server.jar\r\n" +
             "set EXIT_CODE=%ERRORLEVEL%\r\n" +
             "if \"%EXIT_CODE%\"==\"3\" echo 1 > .oom_occurred\r\n" +
             "if \"%EXIT_CODE%\"==\"137\" echo 1 > .oom_occurred\r\n" +
@@ -288,30 +296,44 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            JAVA_OPTS=\"-Djava.awt.headless=true -Xms512m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapWastePercent=5 -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\"\n" +
             "        fi\n" +
             "    fi\n" +
-            "    GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
-            "    if [ ! -x \"\$GRAAL_JAVA\" ] && [ -n \"\$GRAALVM_HOME\" ] && [ -x \"\$GRAALVM_HOME/bin/java\" ]; then\n" +
-            "        GRAAL_JAVA=\"\$GRAALVM_HOME/bin/java\"\n" +
+            "    EXEC_CMD=\"\"\n" +
+            "    if [ -x ./obsidianscout-server-native-linux-x86_64 ]; then\n" +
+            "        EXEC_CMD=\"./obsidianscout-server-native-linux-x86_64 -Xmx1536m\"\n" +
+            "    elif [ -x ./obsidianscout-server-native-linux-arm64 ]; then\n" +
+            "        EXEC_CMD=\"./obsidianscout-server-native-linux-arm64 -Xmx1536m\"\n" +
+            "    elif [ -x ./obsidianscout-server-native ]; then\n" +
+            "        EXEC_CMD=\"./obsidianscout-server-native -Xmx1536m\"\n" +
             "    fi\n" +
-            "    if [ ! -x \"\$GRAAL_JAVA\" ]; then\n" +
-            "        echo \"[ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for high-performance execution...\"\n" +
-            "        if [ -x ./install-graal.sh ]; then\n" +
-            "            ./install-graal.sh\n" +
-            "        elif [ -x ./scripts/install-graal.sh ]; then\n" +
-            "            ./scripts/install-graal.sh\n" +
-            "        fi\n" +
-            "        if [ -x \"\$HOME/.graalvm/graalvm-jdk-21/bin/java\" ]; then\n" +
-            "            GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
-            "        fi\n" +
-            "    fi\n" +
-            "    if [ -x \"\$GRAAL_JAVA\" ]; then\n" +
-            "        echo \"[ObsidianScout] Using GraalVM High-Performance JVM: \$GRAAL_JAVA\"\n" +
-            "        JAVA_EXEC=\"\$GRAAL_JAVA\"\n" +
+            "    if [ -n \"\$EXEC_CMD\" ]; then\n" +
+            "        echo \"[ObsidianScout] Native executable detected, running native binary: \$EXEC_CMD\"\n" +
+            "        \$EXEC_CMD\n" +
+            "        EXIT_CODE=\$?\n" +
             "    else\n" +
-            "        echo \"[ObsidianScout] Falling back to system default Java...\"\n" +
-            "        JAVA_EXEC=\"java\"\n" +
+            "        GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
+            "        if [ ! -x \"\$GRAAL_JAVA\" ] && [ -n \"\$GRAALVM_HOME\" ] && [ -x \"\$GRAALVM_HOME/bin/java\" ]; then\n" +
+            "            GRAAL_JAVA=\"\$GRAALVM_HOME/bin/java\"\n" +
+            "        fi\n" +
+            "        if [ ! -x \"\$GRAAL_JAVA\" ]; then\n" +
+            "            echo \"[ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for high-performance execution...\"\n" +
+            "            if [ -x ./install-graal.sh ]; then\n" +
+            "                ./install-graal.sh\n" +
+            "            elif [ -x ./scripts/install-graal.sh ]; then\n" +
+            "                ./scripts/install-graal.sh\n" +
+            "            fi\n" +
+            "            if [ -x \"\$HOME/.graalvm/graalvm-jdk-21/bin/java\" ]; then\n" +
+            "                GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
+            "            fi\n" +
+            "        fi\n" +
+            "        if [ -x \"\$GRAAL_JAVA\" ]; then\n" +
+            "            echo \"[ObsidianScout] Using GraalVM High-Performance JVM: \$GRAAL_JAVA\"\n" +
+            "            JAVA_EXEC=\"\$GRAAL_JAVA\"\n" +
+            "        else\n" +
+            "            echo \"[ObsidianScout] Falling back to system default Java...\"\n" +
+            "            JAVA_EXEC=\"java\"\n" +
+            "        fi\n" +
+            "        \"\$JAVA_EXEC\" \$JAVA_OPTS -jar obsidianscout-server.jar\n" +
+            "        EXIT_CODE=\$?\n" +
             "    fi\n" +
-            "    \"\$JAVA_EXEC\" \$JAVA_OPTS -jar obsidianscout-server.jar\n" +
-            "    EXIT_CODE=\$?\n" +
             "    if [ \$EXIT_CODE -eq 3 ] || [ \$EXIT_CODE -eq 137 ]; then\n" +
             "        touch .oom_occurred\n" +
             "    fi\n" +
