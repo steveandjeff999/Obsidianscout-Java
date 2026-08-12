@@ -543,7 +543,8 @@ graalvmNative {
                 "--initialize-at-build-time=kotlin.reflect.",
                 "--initialize-at-build-time=org.jetbrains.exposed.",
                 "--initialize-at-build-time=ch.qos.logback.",
-                "--initialize-at-build-time=org.slf4j."
+                "--initialize-at-build-time=org.slf4j.",
+                "--initialize-at-build-time=com.obsidianscout."
             )
         }
     }
