@@ -400,7 +400,7 @@ object GistUpdateService {
             !bestUrl.isNullOrBlank() -> bestUrl
             !fatjarUrl.isNullOrBlank() -> fatjarUrl
             !fallbackUrl.isNullOrBlank() -> fallbackUrl
-            else -> releaseJson["zipball_url"]?.jsonPrimitive?.content
+            else -> null
         }
 
         log.info("[GistUpdate] Resolved download URL for platform '$platformKey': $finalUrl")

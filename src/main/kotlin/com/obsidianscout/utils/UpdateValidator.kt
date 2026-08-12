@@ -30,8 +30,23 @@ object UpdateValidator {
             return ValidationResult.Error("ZIP file is empty (0 bytes).")
         }
 
-        if (zipFile.name.endsWith(".tar.gz") || zipFile.name.endsWith(".tgz")) {
-            return ValidationResult.Success
+        val header = ByteArray(2)
+        try {
+            zipFile.inputStream().use { it.read(header) }
+        } catch (_: Exception) {}
+
+        val isGzip = (header.size >= 2 && header[0] == 0x1F.toByte() && header[1] == 0x8B.toByte())
+
+        if (zipFile.name.endsWith(".tar.gz") || zipFile.name.endsWith(".tgz") || isGzip) {
+            return try {
+                java.util.zip.GZIPInputStream(zipFile.inputStream()).use { gz ->
+                    val buf = ByteArray(64)
+                    gz.read(buf)
+                }
+                ValidationResult.Success
+            } catch (e: Exception) {
+                ValidationResult.Error("TAR.GZ integrity check failed: ${e.message}")
+            }
         }
 
         try {

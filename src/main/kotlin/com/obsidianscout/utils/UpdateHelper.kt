@@ -188,7 +188,8 @@ fun main() {
         exitProcess(1)
     }
     
-    val zipFile = File(tempDir, "update.zip")
+    val isTarGz = selectedRelease.url.endsWith(".tar.gz") || selectedRelease.url.endsWith(".tgz")
+    val zipFile = File(tempDir, if (isTarGz) "update.tar.gz" else "update.zip")
     println("\nDownloading update from: ${selectedRelease.url}")
     
     val zipRequest = HttpRequest.newBuilder()

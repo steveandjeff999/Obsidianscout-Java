@@ -234,6 +234,8 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        if exist .update_tmp rd /s /q .update_tmp >nul 2>&1\r\n" +
             "        echo pending > .update_pending\r\n" +
             "        echo [Updater] Update applied. Restarting to test boot...\r\n" +
+            "        cmd /c \"%~f0\" %*\r\n" +
+            "        exit /b 0\r\n" +
             "    )\r\n" +
             ")\r\n" +
             "goto loop\r\n"
@@ -386,10 +388,13 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
         resetSh.writeText("#!/bin/sh\njava -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n")
         resetSh.setExecutable(true, false)
 
-        val updateSh = File(bundleDir, "update.sh")
-        if (updateSh.exists()) {
-            updateSh.setExecutable(true, false)
-        }
+        bundleDir.walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".sh") }
+            .forEach { shFile ->
+                val text = shFile.readText().replace("\r\n", "\n")
+                shFile.writeText(text)
+                shFile.setExecutable(true, false)
+            }
 
         val configFile = File(bundleDir, "config/app-config.json")
         if (configFile.exists()) {
@@ -682,6 +687,8 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "        copy /y \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
                 "        echo pending > .update_pending\r\n" +
                 "        echo [Updater] Update applied. Restarting server...\r\n" +
+                "        cmd /c \"%~f0\" %*\r\n" +
+                "        exit /b 0\r\n" +
                 "    )\r\n" +
                 ")\r\n" +
                 "goto loop\r\n"
@@ -750,6 +757,8 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "            fi\n" +
                 "            cp -R \"\$SRC_ROOT\"/* ./\n" +
                 "            echo pending > .update_pending\n" +
+                "            echo \"[Updater] Update applied. Restarting server...\"\n" +
+                "            exec \"\$0\" \"\$@\"\n" +
                 "        fi\n" +
                 "    fi\n" +
                 "done\n"
@@ -766,6 +775,14 @@ val nativeBundleTasks = nativeArchs.map { arch ->
             val resetSh = File(bundleDir, "reset-superadmin.sh")
             resetSh.writeText("#!/bin/sh\njava -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n")
             resetSh.setExecutable(true, false)
+
+            bundleDir.walkTopDown()
+                .filter { it.isFile && it.name.endsWith(".sh") }
+                .forEach { shFile ->
+                    val text = shFile.readText().replace("\r\n", "\n")
+                    shFile.writeText(text)
+                    shFile.setExecutable(true, false)
+                }
 
             val configFile = File(bundleDir, "config/app-config.json")
             var currentVer = ""
