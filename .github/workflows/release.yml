@@ -90,13 +90,6 @@ jobs:
             bundle_glob: build/bundle-native/obsidianscout-v*-x86_64
             archive_ext: tar.gz
 
-          - name: macOS ARM64 Native
-            os: macos-14
-            arch_key: macos-arm64
-            build_cmd: ./gradlew publishnative -PwithNativeImage -PskipBump
-            bundle_glob: build/bundle-native/obsidianscout-v*-arm64
-            archive_ext: tar.gz
-
           - name: Linux ARM64 Native
             os: ubuntu-24.04-arm
             arch_key: linux-arm64
