@@ -21,7 +21,7 @@ data class AppConfig(
     val google_sheet_url: String = "",
     val google_sheet_password: String = "",
     val cockroach_port: Int = 26257,
-    val current_version: String = "0.4.1.0", // The version this server is running — update this on each release
+    val current_version: String = "0.4.1.1", // The version this server is running — update this on each release
     val gist_update: GistUpdateConfig = GistUpdateConfig()
 )
 
