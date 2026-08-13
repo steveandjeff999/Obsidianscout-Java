@@ -235,9 +235,10 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        echo [Updater] Applying update from !SRC_ROOT!...\r\n" +
             "        if exist config\\app-config.json (\r\n" +
             "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
-            "            copy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
+            "            xcopy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
             "        )\r\n" +
-            "        copy /y \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
+            "        timeout /t 2 >nul 2>&1\r\n" +
+            "        xcopy /e /y /h /i \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
             "        if exist .update_tmp_cfg\\app-config.json (\r\n" +
             "            if not exist config mkdir config\r\n" +
             "            copy /y \".update_tmp_cfg\\app-config.json\" \"config\\app-config.json\" >nul\r\n" +
@@ -410,12 +411,34 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
         val resetBat = File(bundleDir, "reset-superadmin.bat")
         resetBat.writeText(
             "@echo off\r\n" +
+            "setlocal enabledelayedexpansion\r\n" +
+            "set NATIVE_EXEC=\r\n" +
+            "for %%f in (obsidianscout-server-native*.exe obsidianscout-server-native*) do (\r\n" +
+            "    if exist \"%%f\" set NATIVE_EXEC=%%f\r\n" +
+            ")\r\n" +
+            "if defined NATIVE_EXEC (\r\n" +
+            "    !NATIVE_EXEC! --reset-superadmin %*\r\n" +
+            "    exit /b %ERRORLEVEL%\r\n" +
+            ")\r\n" +
             "java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt %*\r\n" +
             "pause\r\n"
         )
 
         val resetSh = File(bundleDir, "reset-superadmin.sh")
-        resetSh.writeText("#!/bin/sh\njava -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n")
+        resetSh.writeText(
+            "#!/bin/sh\n" +
+            "HAS_LOCAL_NATIVE=\"\"\n" +
+            "for native_bin in ./obsidianscout-server-native*; do\n" +
+            "    if [ -x \"\$native_bin\" ] && [ -f \"\$native_bin\" ]; then\n" +
+            "        HAS_LOCAL_NATIVE=\"\$native_bin\"\n" +
+            "        break\n" +
+            "    fi\n" +
+            "done\n" +
+            "if [ -n \"\$HAS_LOCAL_NATIVE\" ]; then\n" +
+            "    exec \"\$HAS_LOCAL_NATIVE\" --reset-superadmin \"\$@\"\n" +
+            "fi\n" +
+            "java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n"
+        )
         resetSh.setExecutable(true, false)
 
         bundleDir.walkTopDown()
@@ -718,7 +741,8 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
                 "            copy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
                 "        )\r\n" +
-                "        copy /y \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
+                "        timeout /t 2 >nul 2>&1\r\n" +
+                "        xcopy /e /y /h /i \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
                 "        if exist .update_tmp_cfg\\app-config.json (\r\n" +
                 "            if not exist config mkdir config\r\n" +
                 "            copy /y \".update_tmp_cfg\\app-config.json\" \"config\\app-config.json\" >nul\r\n" +
@@ -816,12 +840,34 @@ val nativeBundleTasks = nativeArchs.map { arch ->
             val resetBat = File(bundleDir, "reset-superadmin.bat")
             resetBat.writeText(
                 "@echo off\r\n" +
+                "setlocal enabledelayedexpansion\r\n" +
+                "set NATIVE_EXEC=\r\n" +
+                "for %%f in (obsidianscout-server-native*.exe obsidianscout-server-native*) do (\r\n" +
+                "    if exist \"%%f\" set NATIVE_EXEC=%%f\r\n" +
+                ")\r\n" +
+                "if defined NATIVE_EXEC (\r\n" +
+                "    !NATIVE_EXEC! --reset-superadmin %*\r\n" +
+                "    exit /b %ERRORLEVEL%\r\n" +
+                ")\r\n" +
                 "java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt %*\r\n" +
                 "pause\r\n"
             )
 
             val resetSh = File(bundleDir, "reset-superadmin.sh")
-            resetSh.writeText("#!/bin/sh\njava -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n")
+            resetSh.writeText(
+                "#!/bin/sh\n" +
+                "HAS_LOCAL_NATIVE=\"\"\n" +
+                "for native_bin in ./obsidianscout-server-native*; do\n" +
+                "    if [ -x \"\$native_bin\" ] && [ -f \"\$native_bin\" ]; then\n" +
+                "        HAS_LOCAL_NATIVE=\"\$native_bin\"\n" +
+                "        break\n" +
+                "    fi\n" +
+                "done\n" +
+                "if [ -n \"\$HAS_LOCAL_NATIVE\" ]; then\n" +
+                "    exec \"\$HAS_LOCAL_NATIVE\" --reset-superadmin \"\$@\"\n" +
+                "fi\n" +
+                "java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n"
+            )
             resetSh.setExecutable(true, false)
 
             bundleDir.walkTopDown()

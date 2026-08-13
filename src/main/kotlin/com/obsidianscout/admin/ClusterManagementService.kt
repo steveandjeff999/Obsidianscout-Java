@@ -78,6 +78,8 @@ data class ClusterStatusResponse(
 
 object ClusterManagementService {
 
+    fun getLocalExecutionMode(): String = if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) "Native" else "Jar"
+
     @Volatile
     private var cachedHttpClient: HttpClient? = null
 

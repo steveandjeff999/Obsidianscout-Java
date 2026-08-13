@@ -22,7 +22,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
  * Handles fetching releases, user interaction, downloading, extraction,
  * and configuration merging in a cross-platform manner.
  */
-fun main() {
+fun runUpdateHelper() {
     val scanner = Scanner(System.`in`)
     
     println("=================================================================")
@@ -82,13 +82,21 @@ fun main() {
     
     val osName = System.getProperty("os.name", "").lowercase()
     val osArch = System.getProperty("os.arch", "").lowercase()
-    val platformKey = when {
-        osName.contains("win") -> "windows-x86_64"
-        osName.contains("mac") -> "macos-arm64"
-        osName.contains("linux") && (osArch.contains("arm") || osArch.contains("aarch")) -> "linux-arm64"
-        osName.contains("linux") -> "linux-x86_64"
-        else -> "fatjar"
+    val isNativeRuntime = System.getProperty("org.graalvm.nativeimage.imagecode") != null ||
+            (File(".").listFiles { _, name -> name.startsWith("obsidianscout-server-native", ignoreCase = true) }?.isNotEmpty() == true)
+
+    val normArch = when {
+        osArch.contains("arm64") || osArch.contains("aarch64") -> "arm64"
+        osArch.contains("arm") || osArch.contains("aarch") -> "arm32"
+        osArch.contains("64") -> "x86_64"
+        else -> "x86"
     }
+    val normOs = when {
+        osName.contains("win") -> "windows"
+        osName.contains("mac") || osName.contains("darwin") -> "macos"
+        else -> "linux"
+    }
+    val platformKey = "$normOs-$normArch"
 
     val releases = mutableListOf<ReleaseInfo>()
     for (element in jsonArray) {
@@ -105,15 +113,21 @@ fun main() {
                 val name = asset.jsonObject["name"]?.jsonPrimitive?.content?.lowercase() ?: ""
                 val url = asset.jsonObject["browser_download_url"]?.jsonPrimitive?.content ?: ""
                 if (url.isEmpty()) continue
+                val isArchive = name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz")
+                if (!isArchive) continue
 
-                if (name.contains(platformKey) && (name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz"))) {
+                val matchesOs = name.contains(normOs) || (normOs == "windows" && name.contains("win")) || (normOs == "macos" && name.contains("mac"))
+                val matchesArch = name.contains(normArch)
+                val isExactPlatformMatch = name.contains(platformKey) || (matchesOs && matchesArch)
+
+                if (isExactPlatformMatch) {
                     bestUrl = url
                     break
                 }
-                if (name.contains("fatjar") && (name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz"))) {
+                if (!isNativeRuntime && name.contains("fatjar")) {
                     fatjarUrl = url
                 }
-                if ((name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz")) && fallbackUrl.isEmpty()) {
+                if ((matchesArch || matchesOs) && fallbackUrl.isEmpty()) {
                     fallbackUrl = url
                 }
             }
@@ -388,3 +402,5 @@ private fun deepMerge(user: JsonElement, default: JsonElement): JsonElement {
     // If either is not an object (e.g. primitives, arrays), preserve the user value
     return user
 }
+
+fun main() = runUpdateHelper()

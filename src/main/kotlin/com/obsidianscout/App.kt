@@ -66,7 +66,19 @@ private var cockroachOrchestrator: CockroachOrchestrator? = null
 data class DbInitResponse(val status: String, val message: String)
 
 
-fun main() {
+fun main(args: Array<String>) {
+    if (args.isNotEmpty()) {
+        val firstArg = args[0].lowercase()
+        if (firstArg == "--update" || firstArg == "-update" || firstArg == "update" || firstArg == "-u") {
+            com.obsidianscout.utils.runUpdateHelper()
+            return
+        }
+        if (firstArg == "--reset-superadmin" || firstArg == "-reset-superadmin" || firstArg == "reset-superadmin") {
+            com.obsidianscout.utils.runResetSuperAdmin(args.drop(1).toTypedArray())
+            return
+        }
+    }
+
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
         var isOom = false
         var curr: Throwable? = throwable

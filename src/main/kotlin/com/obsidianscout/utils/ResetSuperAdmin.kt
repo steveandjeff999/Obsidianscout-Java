@@ -23,7 +23,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
  *
  * If no password argument is supplied, the password is reset to "changeme".
  */
-fun main(args: Array<String>) {
+fun runResetSuperAdmin(args: Array<String>) {
     val newPassword = args.firstOrNull()?.takeIf { it.isNotBlank() } ?: "changeme"
 
     println("========================================================================")
@@ -90,3 +90,6 @@ fun main(args: Array<String>) {
     }
     println("========================================================================")
 }
+
+fun main(args: Array<String>) = runResetSuperAdmin(args)
+

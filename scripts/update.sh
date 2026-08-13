@@ -1,6 +1,19 @@
 #!/bin/sh
 set -e
 
+HAS_LOCAL_NATIVE=""
+for native_bin in ./obsidianscout-server-native*; do
+    if [ -x "$native_bin" ] && [ -f "$native_bin" ]; then
+        HAS_LOCAL_NATIVE="$native_bin"
+        break
+    fi
+done
+
+if [ -n "$HAS_LOCAL_NATIVE" ]; then
+    echo "[ObsidianScout Native] Running native update utility: $HAS_LOCAL_NATIVE --update"
+    exec "$HAS_LOCAL_NATIVE" --update "$@"
+fi
+
 GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-21/bin/java"
 if [ ! -x "$GRAAL_JAVA" ] && [ -n "$GRAALVM_HOME" ] && [ -x "$GRAALVM_HOME/bin/java" ]; then
     GRAAL_JAVA="$GRAALVM_HOME/bin/java"
@@ -28,7 +41,7 @@ fi
 rm -f .update_result
 
 # Run the interactive Java update utility
-"$JAVA_EXEC" -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt
+"$JAVA_EXEC" -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt "$@"
 
 # If the helper completed successfully and wrote the path of the new files
 if [ -f .update_result ]; then

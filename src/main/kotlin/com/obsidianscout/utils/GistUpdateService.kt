@@ -363,13 +363,21 @@ object GistUpdateService {
 
         val osName = System.getProperty("os.name", "").lowercase()
         val osArch = System.getProperty("os.arch", "").lowercase()
-        val platformKey = when {
-            osName.contains("win") -> "windows-x86_64"
-            osName.contains("mac") -> "macos-arm64"
-            osName.contains("linux") && (osArch.contains("arm") || osArch.contains("aarch")) -> "linux-arm64"
-            osName.contains("linux") -> "linux-x86_64"
-            else -> "fatjar"
+        val isNativeRuntime = System.getProperty("org.graalvm.nativeimage.imagecode") != null ||
+                (File(".").listFiles { _, name -> name.startsWith("obsidianscout-server-native", ignoreCase = true) }?.isNotEmpty() == true)
+
+        val normArch = when {
+            osArch.contains("arm64") || osArch.contains("aarch64") -> "arm64"
+            osArch.contains("arm") || osArch.contains("aarch") -> "arm32"
+            osArch.contains("64") -> "x86_64"
+            else -> "x86"
         }
+        val normOs = when {
+            osName.contains("win") -> "windows"
+            osName.contains("mac") || osName.contains("darwin") -> "macos"
+            else -> "linux"
+        }
+        val platformKey = "$normOs-$normArch"
 
         var bestUrl: String? = null
         var fatjarUrl: String? = null
@@ -382,15 +390,21 @@ object GistUpdateService {
                 val name = obj["name"]?.jsonPrimitive?.content?.lowercase() ?: ""
                 val url = obj["browser_download_url"]?.jsonPrimitive?.content ?: ""
                 if (url.isBlank()) continue
+                val isArchive = name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz")
+                if (!isArchive) continue
 
-                if (name.contains(platformKey)) {
+                val matchesOs = name.contains(normOs) || (normOs == "windows" && name.contains("win")) || (normOs == "macos" && name.contains("mac"))
+                val matchesArch = name.contains(normArch)
+                val isExactPlatformMatch = name.contains(platformKey) || (matchesOs && matchesArch)
+
+                if (isExactPlatformMatch) {
                     bestUrl = url
                     break
                 }
-                if (name.contains("fatjar")) {
+                if (!isNativeRuntime && name.contains("fatjar")) {
                     fatjarUrl = url
                 }
-                if (fallbackUrl == null && (name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz"))) {
+                if (fallbackUrl == null && (matchesArch || matchesOs)) {
                     fallbackUrl = url
                 }
             }

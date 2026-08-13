@@ -2270,7 +2270,6 @@ fun Application.configureRoutes() {
                 }
                 route("/cluster") {
                     get("/status") {
-                        call.requireAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         val appConfig = AppConfigLoader.load()
                         call.respond(
@@ -2278,7 +2277,8 @@ fun Application.configureRoutes() {
                                 status = "online",
                                 serverVersion = appConfig.current_version,
                                 nodeIp = localIp,
-                                dbActive = true
+                                dbActive = true,
+                                executionMode = com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode()
                             )
                         )
                     }
@@ -2421,7 +2421,8 @@ fun Application.configureRoutes() {
                             status = "online",
                             serverVersion = appConfig.current_version,
                             nodeIp = localIp,
-                            dbActive = true
+                            dbActive = true,
+                            executionMode = com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode()
                         )
                     )
                 }
