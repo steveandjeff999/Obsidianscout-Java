@@ -241,10 +241,10 @@ object ClusterManagementService {
                 val jsonElem = runCatching { Json.parseToJsonElement(body).jsonObject }.getOrNull()
                 val ver = jsonElem?.get("serverVersion")?.let {
                     runCatching { it.jsonPrimitive.content }.getOrNull()
-                } ?: fetchNodeVersionFromEndpoint(ip, appPort) ?: "Unknown"
+                } ?: fetchNodeVersionFromEndpoint(ip, appPort)?.first ?: "Unknown"
                 val mode = jsonElem?.get("executionMode")?.let {
                     runCatching { it.jsonPrimitive.content }.getOrNull()
-                } ?: "Unknown"
+                } ?: fetchNodeVersionFromEndpoint(ip, appPort)?.second ?: "Unknown"
                 return NodeProbeDetails(isOnline = true, version = ver, executionMode = mode)
             }
         } catch (e: Exception) {
@@ -266,7 +266,7 @@ object ClusterManagementService {
         return if (isTcpAlive) NodeProbeDetails(isOnline = true, version = "Unknown", executionMode = "Unknown") else NodeProbeDetails(isOnline = false, version = "Offline", executionMode = "Offline")
     }
 
-    private fun fetchNodeVersionFromEndpoint(ip: String, appPort: Int): String? {
+    private fun fetchNodeVersionFromEndpoint(ip: String, appPort: Int): Pair<String, String>? {
         return try {
             val req = HttpRequest.newBuilder()
                 .uri(URI.create("http://$ip:$appPort/api/version"))
@@ -276,7 +276,9 @@ object ClusterManagementService {
             val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
             if (resp.statusCode() == 200) {
                 val jsonElem = runCatching { Json.parseToJsonElement(resp.body()).jsonObject }.getOrNull()
-                jsonElem?.get("version")?.let { runCatching { it.jsonPrimitive.content }.getOrNull() }
+                val ver = jsonElem?.get("version")?.let { runCatching { it.jsonPrimitive.content }.getOrNull() } ?: "Unknown"
+                val mode = jsonElem?.get("executionMode")?.let { runCatching { it.jsonPrimitive.content }.getOrNull() } ?: "Unknown"
+                Pair(ver, mode)
             } else null
         } catch (e: Exception) {
             null

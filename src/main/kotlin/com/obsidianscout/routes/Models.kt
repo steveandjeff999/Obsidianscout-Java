@@ -42,7 +42,8 @@ data class MeResponse(
 
 @Serializable
 data class VersionResponse(
-    val version: String
+    val version: String,
+    val executionMode: String = "Unknown"
 )
 
 @Serializable

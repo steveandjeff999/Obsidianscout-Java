@@ -106,18 +106,21 @@ fun Application.configureRoutes() {
             }
             get("/version") {
                 val appConfig = AppConfigLoader.load()
-                call.respond(VersionResponse(appConfig.current_version))
+                call.respond(VersionResponse(appConfig.current_version, com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode()))
             }
             route("/cluster") {
                 get("/status") {
                     val appConfig = AppConfigLoader.load()
                     call.respond(
                         buildJsonObject {
+                            put("status", if (com.obsidianscout.db.DatabaseFactory.isReady) "online" else "booting")
                             put("dbReady", com.obsidianscout.db.DatabaseFactory.isReady)
                             put("isDbActive", com.obsidianscout.db.orchestration.CockroachOrchestrator.isDbActive)
                             put("isQuorumLost", com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost)
                             put("quorumDetails", com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails ?: "")
                             put("serverVersion", appConfig.current_version)
+                            put("executionMode", com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode())
+                            put("nodeIp", com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp())
                         }
                     )
                 }
