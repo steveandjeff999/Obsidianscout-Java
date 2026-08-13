@@ -577,9 +577,7 @@
 
         if (!name) { showToast('Alliance name is required.', 'error'); return; }
 
-        saveBtn.disabled = true;
-        const originalText = saveBtn.textContent;
-        saveBtn.textContent = 'Saving…';
+        window.Obsidianscout.setButtonLoading(saveBtn, true, "Saving...");
 
         try {
             if (editId) {
@@ -605,8 +603,7 @@
         } catch (err) {
             showToast('Failed: ' + err.message, 'error');
         } finally {
-            saveBtn.disabled = false;
-            saveBtn.textContent = originalText;
+            window.Obsidianscout.setButtonLoading(saveBtn, false);
         }
     }
 
@@ -617,8 +614,7 @@
 
         if (!teamNumber || teamNumber <= 0) { showToast('Please enter a valid team number.', 'error'); return; }
 
-        sendBtn.disabled = true;
-        sendBtn.textContent = 'Sending…';
+        window.Obsidianscout.setButtonLoading(sendBtn, true, "Sending...");
 
         try {
             await request(`/api/alliances/${allianceId}/invite`, {
@@ -631,8 +627,7 @@
         } catch (err) {
             showToast('Failed: ' + err.message, 'error');
         } finally {
-            sendBtn.disabled = false;
-            sendBtn.textContent = 'Send Invite';
+            window.Obsidianscout.setButtonLoading(sendBtn, false);
         }
     }
 
@@ -656,9 +651,7 @@
             return;
         }
 
-        btn.disabled = true;
-        const originalText = btn.textContent;
-        btn.textContent = 'Importing...';
+        window.Obsidianscout.setButtonLoading(btn, true, "Importing...");
 
         try {
             const response = await request(`/api/alliances/${allianceId}/import`, {
@@ -684,8 +677,7 @@
         } catch (err) {
             showToast('Import failed: ' + err.message, 'error');
         } finally {
-            btn.disabled = false;
-            btn.textContent = originalText;
+            window.Obsidianscout.setButtonLoading(btn, false);
         }
     }
 

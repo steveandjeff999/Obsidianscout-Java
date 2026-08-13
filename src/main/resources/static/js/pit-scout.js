@@ -148,17 +148,17 @@ async function loadPitScoutPageData(me) {
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
-            submitButton.disabled = true;
+            Obsidianscout.setButtonLoading(submitButton, true, t('scout.saving', 'Saving entry...'));
 
             if (!teamSelect.value) {
                 Obsidianscout.showToast("Select a team", "error");
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
                 return;
             }
 
             const payload = buildPayload(config.fields, form);
             if (!payload) {
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
                 return;
             }
 
@@ -191,7 +191,7 @@ async function loadPitScoutPageData(me) {
                     Obsidianscout.showToast(error.message || "Failed to save", "error");
                 }
             } finally {
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
             }
         });
 

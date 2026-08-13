@@ -11,6 +11,7 @@ import com.obsidianscout.auth.requireAdminOrClusterAuth
 import com.obsidianscout.auth.requireAnalyticsOrAbove
 import com.obsidianscout.auth.requireSession
 import com.obsidianscout.auth.requireSuperAdmin
+import com.obsidianscout.auth.requireSuperAdminOrClusterAuth
 import com.obsidianscout.auth.EmailService
 import com.obsidianscout.db.PasswordResetTokens
 import com.obsidianscout.db.PushSubscriptions
@@ -1784,11 +1785,11 @@ fun Application.configureRoutes() {
 
             route("/admin/fcm") {
                 get {
-                    val session = call.requireAdmin()
+                    val session = call.requireSuperAdmin()
                     call.respond(FcmService.getAdminConfig())
                 }
                 post {
-                    val session = call.requireAdmin()
+                    val session = call.requireSuperAdmin()
                     val req = call.receive<SaveFcmConfigRequest>()
                     val success = FcmService.saveConfig(
                         enabled = req.enabled,
@@ -1802,7 +1803,7 @@ fun Application.configureRoutes() {
                     call.respond(buildJsonObject { put("success", success) })
                 }
                 post("/test") {
-                    val session = call.requireAdmin()
+                    val session = call.requireSuperAdmin()
                     val result = FcmService.sendTestNotification(UUID.fromString(session.userId))
                     call.respond(buildJsonObject {
                         put("success", result.first)
@@ -1998,6 +1999,10 @@ fun Application.configureRoutes() {
             }
 
             route("/banners") {
+                get("/login") {
+                    val loginBanners = com.obsidianscout.db.BannerService.getLoginBanners()
+                    call.respond(loginBanners)
+                }
                 get {
                     val session = call.requireSession()
                     val active = mutableListOf<BannerDto>()
@@ -2302,18 +2307,18 @@ fun Application.configureRoutes() {
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAppConfig(localIp, isInterNodeCall = true))
                     }
                     put("/nodes/local/app-config") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         val rawJson = call.receiveText()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.updateAppConfig(localIp, rawJson, isInterNodeCall = true))
                     }
                     post("/nodes/local/reboot") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.rebootNode(localIp))
                     }
                     post("/nodes/local/reinstall-update") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateNode(localIp))
                     }
@@ -2330,31 +2335,31 @@ fun Application.configureRoutes() {
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAppConfig(ip))
                     }
                     put("/nodes/{ip}/app-config") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val ip = call.parameters["ip"] ?: "local"
                         val rawJson = call.receiveText()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.updateAppConfig(ip, rawJson))
                     }
                     post("/nodes/{ip}/reboot") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val ip = call.parameters["ip"] ?: "local"
                         call.respond(com.obsidianscout.admin.ClusterManagementService.rebootNode(ip))
                     }
                     post("/nodes/{ip}/reinstall-update") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val ip = call.parameters["ip"] ?: "local"
                         call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateNode(ip))
                     }
                     post("/reboot-all") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.rebootEntireCluster())
                     }
                     post("/reinstall-update-all") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateEntireCluster())
                     }
                     post("/regenerate-keys") {
-                        call.requireSuperAdmin()
+                        call.requireSuperAdminOrClusterAuth()
                         val appConfig = AppConfigLoader.load()
                         val result = com.obsidianscout.auth.ClusterSecretService.regenerateClusterKeys(appConfig)
                         call.respond(result)

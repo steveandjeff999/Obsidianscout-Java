@@ -248,6 +248,7 @@ object Banners : UUIDTable("banners") {
     val isDismissible = bool("is_dismissible").default(true)
     val isExpandable = bool("is_expandable").default(false)
     val expandableMessage = text("expandable_message").default("")
+    val showOnLogin = bool("show_on_login").default(false)
     val isActive = bool("is_active").default(true)
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")

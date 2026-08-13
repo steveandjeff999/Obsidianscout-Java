@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function startStatusPolling() {
         document.getElementById("migration-idle").classList.add("hidden");
         document.getElementById("migration-active").classList.remove("hidden");
-        btnStart.disabled = true;
+        Obsidianscout.setButtonLoading(btnStart, true, "Migrating...");
 
         if (pollInterval) clearInterval(pollInterval);
 
@@ -76,7 +76,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 if (!status.running) {
                     clearInterval(pollInterval);
-                    btnStart.disabled = false;
+                    Obsidianscout.setButtonLoading(btnStart, false);
                     if (status.success) {
                         alert(Obsidianscout.t("migration.status.success", "Migration completed successfully!"));
                     } else {
@@ -133,7 +133,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             };
         }
 
-        btnStart.disabled = true;
+        Obsidianscout.setButtonLoading(btnStart, true, "Starting...");
         try {
             const res = await Obsidianscout.request("/api/admin/migration/run", {
                 method: "POST",
@@ -143,11 +143,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 startStatusPolling();
             } else {
                 alert(Obsidianscout.t("migration.failed_start", "Failed to start migration: ") + (res.error || "Unknown error"));
-                btnStart.disabled = false;
+                Obsidianscout.setButtonLoading(btnStart, false);
             }
         } catch (e) {
             alert("Error: " + e.message);
-            btnStart.disabled = false;
+            Obsidianscout.setButtonLoading(btnStart, false);
         }
     });
 

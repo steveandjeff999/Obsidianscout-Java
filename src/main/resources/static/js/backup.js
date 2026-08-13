@@ -42,8 +42,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const type = exportTypeSelect.value;
         const format = exportFormatSelect.value;
         const scope = isSuperAdmin ? (document.getElementById("export-scope")?.value || "team") : "team";
-        btnExport.disabled = true;
-        btnExport.textContent = "Generating export...";
+        Obsidianscout.setButtonLoading(btnExport, true, "Generating export...");
 
         const url = `/api/admin/export?type=${type}&format=${format}&scope=${scope}`;
         
@@ -57,8 +56,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.body.removeChild(a);
 
         setTimeout(() => {
-            btnExport.disabled = false;
-            btnExport.textContent = "Export and Download";
+            Obsidianscout.setButtonLoading(btnExport, false);
             Obsidianscout.showToast("Export download started", "success");
         }, 1500);
     });
@@ -111,8 +109,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const file = fileInput.files[0];
         if (!file) return;
 
-        btnImport.disabled = true;
-        btnImport.textContent = "Uploading & Importing...";
+        Obsidianscout.setButtonLoading(btnImport, true, "Uploading & Importing...");
         reportCard.classList.add("hidden");
 
         const formData = new FormData();
@@ -144,8 +141,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.error(err);
             Obsidianscout.showToast(err.message || "Import failed", "error");
         } finally {
-            btnImport.disabled = false;
-            btnImport.textContent = "Import Data";
+            Obsidianscout.setButtonLoading(btnImport, false);
             fileInput.value = "";
             handleFileSelected();
         }

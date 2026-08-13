@@ -400,7 +400,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                         method: "PUT",
                         json: {
                             configJson: text
-                        }
+                        },
+                        button: saveButton
                     });
                     Obsidianscout.showToast("Config saved", "success");
                 } catch (error) {
@@ -469,12 +470,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                         if (presetName) {
                             updatedConfigObj = await Obsidianscout.request("/api/config/apply-default", {
                                 method: "POST",
-                                json: { configType: targetType, presetName: presetName }
+                                json: { configType: targetType, presetName: presetName },
+                                button: btnApplyPreset
                             });
                         } else {
                             updatedConfigObj = await Obsidianscout.request("/api/config/reset", {
                                 method: "POST",
-                                json: { configType: targetType }
+                                json: { configType: targetType },
+                                button: btnApplyPreset
                             });
                         }
 
@@ -511,7 +514,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     try {
                         const response = await Obsidianscout.request("/api/settings", {
                             method: "PUT",
-                            json: loadedSettings
+                            json: loadedSettings,
+                            button: settingsSaveBtn
                         });
                         loadedSettings = response.settings;
                         Obsidianscout.showToast("API settings saved", "success");
@@ -552,7 +556,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     try {
                         const response = await Obsidianscout.request("/api/settings", {
                             method: "PUT",
-                            json: loadedSettings
+                            json: loadedSettings,
+                            button: permissionsSaveBtn
                         });
                         loadedSettings = response.settings;
                         Obsidianscout.showToast("Permissions saved successfully", "success");
@@ -589,7 +594,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                         try {
                             await Obsidianscout.request("/api/admin/email-settings", {
                                 method: "PUT",
-                                json: payload
+                                json: payload,
+                                button: emailSaveBtn
                             });
                             Obsidianscout.showToast("Email settings saved", "success");
                         } catch (err) {
@@ -619,7 +625,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                                     fromAddress: getVal("settings-email-from").trim(),
                                     encryption: getVal("settings-email-encryption"),
                                     testEmail: testEmail
-                                }
+                                },
+                                button: emailTestBtn
                             });
                             Obsidianscout.showToast("Test email sent successfully", "success");
                         } catch (err) {
@@ -673,7 +680,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                         try {
                             const res = await Obsidianscout.request("/api/admin/cloudflared", {
                                 method: "PUT",
-                                json: payload
+                                json: payload,
+                                button: cfSaveBtn
                             });
                             updateStatusUI(res.status || {});
                             Obsidianscout.showToast("Cloudflare Tunnel settings saved", "success");
@@ -690,7 +698,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                         Obsidianscout.showToast("Restarting Cloudflare Tunnel...", "info");
                         try {
                             const res = await Obsidianscout.request("/api/admin/cloudflared/restart", {
-                                method: "POST"
+                                method: "POST",
+                                button: cfRestartBtn
                             });
                             updateStatusUI(res.status || {});
                             Obsidianscout.showToast("Cloudflare Tunnel restarted", "success");
@@ -716,7 +725,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         return;
                     }
 
-                    btnWipeTeamData.disabled = true;
+                    Obsidianscout.setButtonLoading(btnWipeTeamData, true, "Wiping Data...");
                     try {
                         const res = await Obsidianscout.request("/api/admin/wipe-team-data", {
                             method: "POST",
@@ -731,13 +740,46 @@ document.addEventListener("DOMContentLoaded", async () => {
                             }, 1000);
                         } else {
                             Obsidianscout.showToast("Failed to wipe team data: " + (res.error || "Unknown error"), "error");
-                            btnWipeTeamData.disabled = false;
+                            Obsidianscout.setButtonLoading(btnWipeTeamData, false);
                         }
                     } catch (e) {
                         Obsidianscout.showToast("Error wiping team data: " + e.message, "error");
-                        btnWipeTeamData.disabled = false;
+                        Obsidianscout.setButtonLoading(btnWipeTeamData, false);
                     }
                 });
+            }
+
+            // Cluster Security Keys card (Site Admin / SuperAdmin only)
+            const clusterKeysCard = document.getElementById("cluster-keys-card");
+            if (clusterKeysCard) {
+                if (isUserSuperAdmin) {
+                    clusterKeysCard.style.display = "block";
+                    const btnRegen = document.getElementById("btn-regenerate-cluster-keys");
+                    if (btnRegen) {
+                        btnRegen.addEventListener("click", async () => {
+                            if (!confirm("Are you sure you want to regenerate all cluster keys (Session Secret & VAPID keys)?\n\nRotating session keys will require active users across all nodes to sign in again.")) {
+                                return;
+                            }
+                            Obsidianscout.setButtonLoading(btnRegen, true, "Regenerating...");
+                            try {
+                                const resp = await Obsidianscout.request("/api/admin/cluster/regenerate-keys", {
+                                    method: "POST"
+                                });
+                                if (resp && resp.success) {
+                                    Obsidianscout.showToast(resp.message || "Cluster keys successfully regenerated!", "success");
+                                } else {
+                                    Obsidianscout.showToast("Failed to regenerate cluster keys: " + ((resp && (resp.error || resp.message)) || "Unknown error"), "error");
+                                }
+                            } catch (err) {
+                                Obsidianscout.showToast("Error regenerating cluster keys: " + err.message, "error");
+                            } finally {
+                                Obsidianscout.setButtonLoading(btnRegen, false);
+                            }
+                        });
+                    }
+                } else {
+                    clusterKeysCard.style.display = "none";
+                }
             }
 
         } catch (error) {
@@ -1572,33 +1614,5 @@ function isValidJson(text) {
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    const btnRegen = document.getElementById("btn-regenerate-cluster-keys");
-    if (btnRegen) {
-        btnRegen.addEventListener("click", async () => {
-            if (!confirm("Are you sure you want to regenerate all cluster keys (Session Secret & VAPID keys)?\n\nRotating session keys will require active users across all nodes to sign in again.")) {
-                return;
-            }
-            btnRegen.disabled = true;
-            btnRegen.textContent = "Regenerating...";
-            try {
-                const resp = await fetch("/api/admin/cluster/regenerate-keys", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" }
-                });
-                const data = await resp.json();
-                if (resp.ok && data.success) {
-                    alert(data.message || "Cluster keys successfully regenerated!");
-                } else {
-                    alert("Failed to regenerate cluster keys: " + (data.error || data.message || "Unknown error"));
-                }
-            } catch (err) {
-                alert("Error regenerating cluster keys: " + err.message);
-            } finally {
-                btnRegen.disabled = false;
-                btnRegen.textContent = "Regenerate Cluster Keys";
-            }
-        });
-    }
-});
+
 

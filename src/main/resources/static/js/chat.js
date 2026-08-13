@@ -491,6 +491,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const text = chatMessageInput.value.trim();
         if (!text) return;
 
+        Obsidianscout.setButtonLoading(btnSendMessage, true);
         chatMessageInput.value = "";
         try {
             await Obsidianscout.request("/api/chat/messages", {
@@ -504,6 +505,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (e) {
             console.error("Failed to send message", e);
             Obsidianscout.showToast(Obsidianscout.t("chat.error_send", "Failed to send message"), "error");
+        } finally {
+            Obsidianscout.setButtonLoading(btnSendMessage, false);
         }
     }
 

@@ -102,7 +102,7 @@
         });
 
         testBtn?.addEventListener("click", async () => {
-            testBtn.disabled = true;
+            Obsidianscout.setButtonLoading(testBtn, true, "Dispatching alert...");
             if (statusMsg) {
                 statusMsg.style.display = "block";
                 statusMsg.style.color = "#cbd5e1";
@@ -122,7 +122,7 @@
                 }
                 showToastMsg("Failed to dispatch test alert: " + err.message, "error");
             } finally {
-                testBtn.disabled = false;
+                Obsidianscout.setButtonLoading(testBtn, false);
             }
         });
     }
@@ -163,15 +163,16 @@
             fetchNodeLogs();
         });
 
-        document.getElementById("btn-cluster-keys")?.addEventListener("click", async () => {
+        const btnClusterKeys = document.getElementById("btn-cluster-keys");
+        btnClusterKeys?.addEventListener("click", async () => {
             const confirmMsg = window.Obsidianscout && typeof Obsidianscout.t === "function"
                 ? Obsidianscout.t("cluster.confirm_regen_keys", "Are you sure you want to regenerate all cluster keys (Session Secret & VAPID keys)?\n\nRotating session keys will require active users across all nodes to sign in again.")
                 : "Are you sure you want to regenerate all cluster keys (Session Secret & VAPID keys)?\n\nRotating session keys will require active users across all nodes to sign in again.";
             if (!confirm(confirmMsg)) {
                 return;
             }
+            Obsidianscout.setButtonLoading(btnClusterKeys, true, "Regenerating...");
             try {
-                showToastMsg("Regenerating cluster keys...", "info");
                 const res = await apiRequest("/api/admin/cluster/regenerate-keys", { method: "POST" });
                 if (res.success) {
                     showToastMsg(res.message || "Cluster keys regenerated successfully!", "success");
@@ -180,6 +181,8 @@
                 }
             } catch (err) {
                 showToastMsg("Error regenerating cluster keys: " + err.message, "error");
+            } finally {
+                Obsidianscout.setButtonLoading(btnClusterKeys, false);
             }
         });
 

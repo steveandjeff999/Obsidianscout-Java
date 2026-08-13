@@ -32,6 +32,12 @@ object BannerService {
         }.map { it.toDto() }
     }
 
+    fun getLoginBanners(): List<BannerDto> = transaction {
+        Banners.selectAll().where { 
+            (Banners.isActive eq true) and (Banners.showOnLogin eq true)
+        }.map { it.toDto() }
+    }
+
     fun getById(id: String): BannerDto? = transaction {
         val uuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction null
         Banners.selectAll().where { Banners.id eq uuid }.firstOrNull()?.toDto()
@@ -45,6 +51,7 @@ object BannerService {
             it[isDismissible] = dto.isDismissible ?: true
             it[isExpandable] = dto.isExpandable ?: false
             it[expandableMessage] = dto.expandableMessage ?: ""
+            it[showOnLogin] = dto.showOnLogin ?: false
             it[isActive] = dto.isActive ?: true
             it[createdAt] = Instant.now()
             it[updatedAt] = Instant.now()
@@ -61,6 +68,7 @@ object BannerService {
             dto.isDismissible?.let { v -> it[isDismissible] = v }
             dto.isExpandable?.let { v -> it[isExpandable] = v }
             dto.expandableMessage?.let { v -> it[expandableMessage] = v }
+            dto.showOnLogin?.let { v -> it[showOnLogin] = v }
             dto.isActive?.let { v -> it[isActive] = v }
             it[updatedAt] = Instant.now()
         }
@@ -84,6 +92,7 @@ object BannerService {
         isDismissible = this[Banners.isDismissible],
         isExpandable = this[Banners.isExpandable],
         expandableMessage = this[Banners.expandableMessage],
+        showOnLogin = this[Banners.showOnLogin],
         isActive = this[Banners.isActive],
         createdAt = this[Banners.createdAt].toString(),
         updatedAt = this[Banners.updatedAt].toString()

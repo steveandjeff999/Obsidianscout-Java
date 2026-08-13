@@ -36,7 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Login
     loginForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        loginButton.disabled = true;
+        Obsidianscout.setButtonLoading(loginButton, true, t('login.signing_in', 'Signing in...'));
 
         const username = document.getElementById("username").value.trim();
         const teamNumber = parseInt(document.getElementById("teamNumber").value, 10);
@@ -58,15 +58,14 @@ document.addEventListener("DOMContentLoaded", () => {
             window.location.href = "/dashboard";
         } catch (error) {
             Obsidianscout.showToast(error.message || "Sign in failed", "error");
-        } finally {
-            loginButton.disabled = false;
+            Obsidianscout.setButtonLoading(loginButton, false);
         }
     });
 
     // Register
     registerForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        registerButton.disabled = true;
+        Obsidianscout.setButtonLoading(registerButton, true, t('login.registering', 'Registering...'));
 
         const username = document.getElementById("reg-username").value.trim();
         const email = document.getElementById("reg-email").value.trim();
@@ -79,13 +78,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (password !== confirm) {
             Obsidianscout.showToast("Passwords do not match", "error");
-            registerButton.disabled = false;
+            Obsidianscout.setButtonLoading(registerButton, false);
             return;
         }
 
         if (teamNumber <= 0 || isNaN(teamNumber)) {
             Obsidianscout.showToast("Enter a valid team number", "error");
-            registerButton.disabled = false;
+            Obsidianscout.setButtonLoading(registerButton, false);
             return;
         }
 
@@ -106,8 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.location.href = "/dashboard";
         } catch (error) {
             Obsidianscout.showToast(error.message || "Registration failed", "error");
-        } finally {
-            registerButton.disabled = false;
+            Obsidianscout.setButtonLoading(registerButton, false);
         }
     });
 

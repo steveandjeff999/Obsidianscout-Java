@@ -255,8 +255,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        btnSyncAll.disabled = true;
-        btnSyncAll.textContent = "Uploading...";
+        Obsidianscout.setButtonLoading(btnSyncAll, true, "Uploading...");
 
         try {
             await Obsidianscout.syncOfflineEntries();
@@ -264,8 +263,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (error) {
             console.error(error);
         } finally {
-            btnSyncAll.disabled = false;
-            btnSyncAll.textContent = "Upload All Caches";
+            Obsidianscout.setButtonLoading(btnSyncAll, false);
         }
     });
 

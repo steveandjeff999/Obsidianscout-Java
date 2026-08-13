@@ -155,18 +155,14 @@ async function initPrescoutScout(me) {
         loadEventBtn.addEventListener("click", async () => {
             const rawCode = eventCodeInput.value.trim().toLowerCase();
             if (!rawCode) {
-                Obsidianscout.showToast("Enter a valid event code", "error");
+                Obsidianscout.showToast("Enter an event code", "error");
                 return;
             }
 
-            loadEventBtn.disabled = true;
+            Obsidianscout.setButtonLoading(loadEventBtn, true, "Loading Event...");
             eventCodeInput.disabled = true;
-            teamSelect.disabled = true;
-            matchSelect.disabled = true;
-            Obsidianscout.showToast("Syncing event data from API...", "info");
 
             try {
-                // Determine eventKey (usually year + eventCode)
                 let key = rawCode;
                 if (!/^\d{4}/.test(rawCode)) {
                     key = `${settings.year}${rawCode}`;
@@ -191,7 +187,7 @@ async function initPrescoutScout(me) {
                 console.error(err);
                 Obsidianscout.showToast("Failed to load event: " + err.message, "error");
             } finally {
-                loadEventBtn.disabled = false;
+                Obsidianscout.setButtonLoading(loadEventBtn, false);
                 eventCodeInput.disabled = false;
             }
         });
@@ -262,17 +258,17 @@ async function initPrescoutScout(me) {
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
-            submitButton.disabled = true;
+            Obsidianscout.setButtonLoading(submitButton, true, t('scout.saving', 'Saving entry...'));
 
             if (!teamSelect.value || !matchSelect.value || !currentEventKey) {
                 Obsidianscout.showToast("Select both a team and a match", "error");
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
                 return;
             }
 
             const payload = buildPayload(config.fields, form);
             if (!payload) {
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
                 return;
             }
 
@@ -307,10 +303,10 @@ async function initPrescoutScout(me) {
                     updatePointsPreview(fields, form, pointsPreview);
                     handleSelectionChange();
                 } else {
-                    Obsidianscout.showToast(error.message || "Failed to save entry", "error");
+                    Obsidianscout.showToast(error.message || "Failed to save", "error");
                 }
             } finally {
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
             }
         });
 

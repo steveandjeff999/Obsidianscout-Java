@@ -113,6 +113,46 @@ document.addEventListener("DOMContentLoaded", async () => {
             loadingToken.classList.add("hidden");
             loadingToken.hidden = true;
         }
+                            usernameInput.value = matched.username;
+                        }
+                    });
+                }
+                
+                if (resetWelcome) {
+                    resetWelcome.textContent = t('reset_password.reset_welcome', "Reset credentials for your email recovery link");
+                }
+            } else {
+                // Only one account
+                if (accountSelectField) {
+                    accountSelectField.classList.add("hidden");
+                    accountSelectField.hidden = true;
+                }
+                
+                selectedUserId = accounts[0].userId;
+                if (usernameInput) {
+                    usernameInput.value = accounts[0].username;
+                }
+
+                if (resetWelcome) {
+                    resetWelcome.textContent = `Reset credentials for ${accounts[0].username} (Team ${accounts[0].teamNumber})`;
+                }
+            }
+
+            if (resetFormPanel) {
+                resetFormPanel.classList.remove("hidden");
+                resetFormPanel.hidden = false;
+            }
+        } else {
+            if (invalidTokenPanel) {
+                invalidTokenPanel.classList.remove("hidden");
+                invalidTokenPanel.hidden = false;
+            }
+        }
+    } catch (error) {
+        if (loadingToken) {
+            loadingToken.classList.add("hidden");
+            loadingToken.hidden = true;
+        }
         if (invalidTokenPanel) {
             invalidTokenPanel.classList.remove("hidden");
             invalidTokenPanel.hidden = false;
@@ -122,7 +162,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (resetForm && resetSubmit) {
         resetForm.addEventListener("submit", async (e) => {
             e.preventDefault();
-            resetSubmit.disabled = true;
+            Obsidianscout.setButtonLoading(resetSubmit, true, t('reset_password.resetting', 'Resetting...'));
 
             const newPassword = document.getElementById("new-password").value;
             const confirmPassword = document.getElementById("confirm-password").value;
@@ -130,13 +170,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (!newUsername) {
                 Obsidianscout.showToast("Username is required", "error");
-                resetSubmit.disabled = false;
+                Obsidianscout.setButtonLoading(resetSubmit, false);
                 return;
             }
 
             if (newPassword !== confirmPassword) {
                 Obsidianscout.showToast("Passwords do not match", "error");
-                resetSubmit.disabled = false;
+                Obsidianscout.setButtonLoading(resetSubmit, false);
                 return;
             }
 
@@ -156,7 +196,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }, 2000);
             } catch (error) {
                 Obsidianscout.showToast(error.message || "Failed to reset password", "error");
-                resetSubmit.disabled = false;
+                Obsidianscout.setButtonLoading(resetSubmit, false);
             }
         });
     }

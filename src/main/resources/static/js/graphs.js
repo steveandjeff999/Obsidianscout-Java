@@ -304,9 +304,7 @@ function initTeamSelection(state) {
 function initGraphTypeControls(state) {
     const checkboxes = document.querySelectorAll(".graph-type-checkbox");
     const countBadge = document.getElementById("graph-type-selected-count");
-    const basicBtn = document.getElementById("select-basic-graphs");
-    const distBtn = document.getElementById("select-distribution-graphs");
-    const advBtn = document.getElementById("select-advanced-graphs");
+    const selectAllBtn = document.getElementById("select-all-graph-types");
     const clearBtn = document.getElementById("clear-graph-types");
 
     checkboxes.forEach((checkbox) => {
@@ -320,14 +318,11 @@ function initGraphTypeControls(state) {
         });
     });
 
-    if (basicBtn) {
-        basicBtn.addEventListener("click", () => setGraphTypes(state, ["bar", "line", "scatter", "area"], countBadge));
-    }
-    if (distBtn) {
-        distBtn.addEventListener("click", () => setGraphTypes(state, ["box", "violin", "histogram"], countBadge));
-    }
-    if (advBtn) {
-        advBtn.addEventListener("click", () => setGraphTypes(state, ["scatter", "area", "line"], countBadge));
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener("click", () => {
+            const allTypes = GRAPH_TYPES.map((g) => g.id);
+            setGraphTypes(state, allTypes, countBadge);
+        });
     }
     if (clearBtn) {
         clearBtn.addEventListener("click", () => setGraphTypes(state, [], countBadge));

@@ -199,7 +199,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // ── Save button ───────────────────────────────────────────────────────
-    document.getElementById("edit-save-btn").addEventListener("click", async () => {
+    const editSaveBtn = document.getElementById("edit-save-btn");
+    editSaveBtn.addEventListener("click", async () => {
         const userId   = document.getElementById("edit-user-id").value;
         const username = document.getElementById("edit-username").value.trim();
         const email    = document.getElementById("edit-email").value.trim();
@@ -227,7 +228,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             await Obsidianscout.request(`/api/admin/users/${userId}`, {
                 method: "PUT",
-                json: payload
+                json: payload,
+                button: editSaveBtn
             });
             Obsidianscout.showToast("User updated", "success");
             closeModal();
@@ -238,8 +240,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // ── Create user form ──────────────────────────────────────────────────────
-    document.getElementById("user-form").addEventListener("submit", async (event) => {
+    const userForm = document.getElementById("user-form");
+    userForm.addEventListener("submit", async (event) => {
         event.preventDefault();
+        const submitBtn = userForm.querySelector('button[type="submit"]');
         const username   = document.getElementById("user-username").value.trim();
         const email      = document.getElementById("user-email").value.trim();
         const teamNumber = parseInt(document.getElementById("user-team").value, 10);
@@ -249,7 +253,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             await Obsidianscout.request("/api/admin/users", {
                 method: "POST",
-                json: { username, email, teamNumber, password, role }
+                json: { username, email, teamNumber, password, role },
+                button: submitBtn
             });
             Obsidianscout.showToast("User created", "success");
             event.target.reset();

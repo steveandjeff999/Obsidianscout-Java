@@ -144,9 +144,92 @@
         return null;
     }
 
+    function setButtonLoading(button, isLoading, loadingTextOrOptions = null) {
+        if (!button) return;
+        const btn = typeof button === 'string' ? document.getElementById(button) || document.querySelector(button) : button;
+        if (!btn) return;
+
+        let loadingText = null;
+        let useDots = false;
+
+        if (typeof loadingTextOrOptions === 'string') {
+            loadingText = loadingTextOrOptions;
+        } else if (loadingTextOrOptions && typeof loadingTextOrOptions === 'object') {
+            loadingText = loadingTextOrOptions.text || null;
+            useDots = !!loadingTextOrOptions.dots;
+        }
+
+        if (isLoading) {
+            if (btn.dataset.loading === "true") return;
+
+            if (btn.dataset.originalHtml === undefined) {
+                btn.dataset.originalHtml = btn.innerHTML;
+            }
+            if (btn.dataset.originalDisabled === undefined) {
+                btn.dataset.originalDisabled = btn.disabled ? "true" : "false";
+            }
+
+            const currentWidth = btn.getBoundingClientRect().width;
+            if (currentWidth > 0 && !btn.style.minWidth) {
+                btn.dataset.originalMinWidth = btn.style.minWidth || "";
+                btn.style.minWidth = `${currentWidth}px`;
+            }
+
+            btn.disabled = true;
+            btn.setAttribute("data-loading", "true");
+            btn.classList.add("is-loading");
+
+            const indicatorHtml = useDots
+                ? `<span class="btn-dots" aria-hidden="true"><span></span><span></span><span></span></span>`
+                : `<span class="btn-spinner" aria-hidden="true"></span>`;
+
+            if (loadingText) {
+                btn.innerHTML = `${indicatorHtml}<span>${loadingText}</span>`;
+            } else {
+                btn.innerHTML = `${indicatorHtml}${btn.dataset.originalHtml}`;
+            }
+        } else {
+            if (btn.dataset.loading !== "true" && btn.dataset.originalHtml === undefined) return;
+
+            if (btn.dataset.originalHtml !== undefined) {
+                btn.innerHTML = btn.dataset.originalHtml;
+                delete btn.dataset.originalHtml;
+            }
+
+            if (btn.dataset.originalDisabled !== undefined) {
+                btn.disabled = btn.dataset.originalDisabled === "true";
+                delete btn.dataset.originalDisabled;
+            } else {
+                btn.disabled = false;
+            }
+
+            if (btn.dataset.originalMinWidth !== undefined) {
+                btn.style.minWidth = btn.dataset.originalMinWidth;
+                delete btn.dataset.originalMinWidth;
+            }
+
+            btn.removeAttribute("data-loading");
+            btn.classList.remove("is-loading");
+        }
+    }
+
+    async function withButtonLoading(button, asyncFn, loadingTextOrOptions = null) {
+        setButtonLoading(button, true, loadingTextOrOptions);
+        try {
+            return await asyncFn();
+        } finally {
+            setButtonLoading(button, false);
+        }
+    }
+
     async function request(path, options = {}) {
         const method = options.method || "GET";
         let isLoginPage = false;
+
+        if (options.button) {
+            setButtonLoading(options.button, true, options.loadingText);
+        }
+
         try {
             isLoginPage = typeof document !== 'undefined' && document.body && document.body.getAttribute("data-page") === "login";
         } catch (e) {}
@@ -259,6 +342,9 @@
             throw error;
         } finally {
             window.clearTimeout(timeout);
+            if (options.button) {
+                setButtonLoading(options.button, false);
+            }
         }
     }
 
@@ -2621,6 +2707,21 @@
         restoreScrollPositions();
         initChatUnreadPolling();
 
+        // Global form submit listener to automatically show button loading indicators
+        document.addEventListener("submit", (e) => {
+            const form = e.target;
+            if (!form || form.getAttribute("data-no-loading") === "true") return;
+            const submitter = e.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+            if (submitter && submitter.getAttribute("data-no-loading") !== "true") {
+                setButtonLoading(submitter, true);
+                setTimeout(() => {
+                    if (form.checkValidity && !form.checkValidity()) {
+                        setButtonLoading(submitter, false);
+                    }
+                }, 400);
+            }
+        });
+
         // Run background cache synchronization every 5 minutes
         setInterval(syncOfflineCache, 300000);
     });
@@ -2767,17 +2868,21 @@
     }
 
     async function loadAndRenderBanners() {
-        const mainContent = document.querySelector(".main-content");
+        const mainContent = document.querySelector(".main-content") || document.querySelector(".login-shell") || document.querySelector(".shell");
         if (!mainContent) return;
 
         try {
             const page = document.body.dataset.page;
-            if (page === "login" || page === "reset-password") return;
+            if (page === "reset-password") return;
 
             let banners = [];
             let isQuorumLostError = false;
             try {
-                banners = await request("/api/banners");
+                if (page === "login") {
+                    banners = await request("/api/banners/login");
+                } else {
+                    banners = await request("/api/banners");
+                }
             } catch (err) {
                 if (err.status === 503) {
                     isQuorumLostError = true;
@@ -3487,5 +3592,7 @@
         ,endTour
         ,showTourLevelSelector
         ,showSetupWizardModal
+        ,setButtonLoading
+        ,withButtonLoading
     };
 })();

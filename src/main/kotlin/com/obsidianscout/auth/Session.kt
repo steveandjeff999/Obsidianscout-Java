@@ -106,6 +106,31 @@ suspend fun ApplicationCall.requireSuperAdmin(): UserSession {
 }
 
 /**
+ * Requires SUPERADMIN role OR valid HMAC signed inter-node cluster request.
+ */
+suspend fun ApplicationCall.requireSuperAdminOrClusterAuth(): Boolean {
+    val timestampStr = request.headers["X-Cluster-Timestamp"]
+    val signature = request.headers["X-Cluster-Signature"]
+
+    if (!timestampStr.isNullOrBlank() && !signature.isNullOrBlank()) {
+        val timestamp = timestampStr.toLongOrNull() ?: 0L
+        val now = System.currentTimeMillis()
+        if (Math.abs(now - timestamp) <= 300_000L) { // 5-minute replay guard
+            val method = request.httpMethod.value
+            val uriPath = request.uri
+            val secret = ClusterSecretService.getSessionSecret()
+            val dataToSign = "$timestamp:$method:$uriPath"
+            if (ClusterCryptoUtils.verifyHmac(dataToSign, signature, secret)) {
+                return true
+            }
+        }
+    }
+
+    requireSuperAdmin()
+    return true
+}
+
+/**
  * Requires ANALYTICS, ADMIN, or SUPERADMIN role.
  */
 suspend fun ApplicationCall.requireAnalyticsOrAbove(): UserSession {

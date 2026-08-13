@@ -153,6 +153,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const props = [];
                 if (!banner.isDismissible) props.push(t("banners.prop_immutable", "Immutable"));
                 if (banner.isExpandable) props.push(t("banners.prop_expandable", "Expandable"));
+                if (banner.showOnLogin) props.push(t("banners.prop_show_on_login", "Login Page"));
                 tdProps.textContent = props.join(", ") || t("banners.prop_standard", "Standard");
                 tr.appendChild(tdProps);
 
@@ -206,9 +207,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const isDismissible = !document.getElementById("banner-immutable").checked;
         const isExpandable = document.getElementById("banner-expandable").checked;
         const expandableMessage = isExpandable ? document.getElementById("banner-expandable-message").value : "";
+        const showOnLogin = document.getElementById("banner-show-on-login").checked;
         const isActive = document.getElementById("banner-active").checked;
 
         try {
+            const submitBtn = creationForm.querySelector('button[type="submit"]');
             await Obsidianscout.request("/api/admin/banners", {
                 method: "POST",
                 json: {
@@ -218,8 +221,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                     isDismissible,
                     isExpandable,
                     expandableMessage,
+                    showOnLogin,
                     isActive
-                }
+                },
+                button: submitBtn
             });
 
             Obsidianscout.showToast(t("banners.toast_created", "Banner created successfully!"), "success");
@@ -242,6 +247,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("edit-banner-immutable").checked = !banner.isDismissible;
         document.getElementById("edit-banner-expandable").checked = banner.isExpandable;
         document.getElementById("edit-banner-expandable-message").value = banner.expandableMessage || "";
+        document.getElementById("edit-banner-show-on-login").checked = banner.showOnLogin || false;
         document.getElementById("edit-banner-active").checked = banner.isActive;
 
         if (banner.teamNumber === 0) {
@@ -279,9 +285,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const isDismissible = !document.getElementById("edit-banner-immutable").checked;
         const isExpandable = document.getElementById("edit-banner-expandable").checked;
         const expandableMessage = isExpandable ? document.getElementById("edit-banner-expandable-message").value : "";
+        const showOnLogin = document.getElementById("edit-banner-show-on-login").checked;
         const isActive = document.getElementById("edit-banner-active").checked;
 
         try {
+            const editSaveBtn = editForm.querySelector('button[type="submit"]');
             await Obsidianscout.request(`/api/admin/banners/${id}`, {
                 method: "PUT",
                 json: {
@@ -291,8 +299,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                     isDismissible,
                     isExpandable,
                     expandableMessage,
+                    showOnLogin,
                     isActive
-                }
+                },
+                button: editSaveBtn
             });
 
             Obsidianscout.showToast(t("banners.toast_updated", "Banner updated successfully!"), "success");

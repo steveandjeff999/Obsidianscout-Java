@@ -119,10 +119,9 @@ async function initPrescoutPit(me) {
                 return;
             }
 
-            loadEventBtn.disabled = true;
+            Obsidianscout.setButtonLoading(loadEventBtn, true, "Syncing Event...");
             eventCodeInput.disabled = true;
             teamSelect.disabled = true;
-            Obsidianscout.showToast("Syncing event teams...", "info");
 
             try {
                 let key = rawCode;
@@ -146,7 +145,7 @@ async function initPrescoutPit(me) {
                 console.error(err);
                 Obsidianscout.showToast("Failed to load event: " + err.message, "error");
             } finally {
-                loadEventBtn.disabled = false;
+                Obsidianscout.setButtonLoading(loadEventBtn, false);
                 eventCodeInput.disabled = false;
             }
         });
@@ -199,17 +198,17 @@ async function initPrescoutPit(me) {
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
-            submitButton.disabled = true;
+            Obsidianscout.setButtonLoading(submitButton, true, t('scout.saving', 'Saving entry...'));
 
             if (!teamSelect.value || !currentEventKey) {
                 Obsidianscout.showToast("Select a team", "error");
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
                 return;
             }
 
             const payload = buildPayload(config.fields, form);
             if (!payload) {
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
                 return;
             }
 
@@ -242,7 +241,7 @@ async function initPrescoutPit(me) {
                     Obsidianscout.showToast(error.message || "Failed to save entry", "error");
                 }
             } finally {
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
             }
         });
 

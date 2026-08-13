@@ -129,11 +129,10 @@ async function initPrescoutQual(me) {
                 return;
             }
 
-            loadEventBtn.disabled = true;
+            Obsidianscout.setButtonLoading(loadEventBtn, true, "Syncing Event...");
             eventCodeInput.disabled = true;
             teamSelect.disabled = true;
             matchSelect.disabled = true;
-            Obsidianscout.showToast("Syncing event data...", "info");
 
             try {
                 let key = rawCode;
@@ -160,7 +159,7 @@ async function initPrescoutQual(me) {
                 console.error(err);
                 Obsidianscout.showToast("Failed to load event: " + err.message, "error");
             } finally {
-                loadEventBtn.disabled = false;
+                Obsidianscout.setButtonLoading(loadEventBtn, false);
                 eventCodeInput.disabled = false;
             }
         });
@@ -227,17 +226,17 @@ async function initPrescoutQual(me) {
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
-            submitButton.disabled = true;
+            Obsidianscout.setButtonLoading(submitButton, true, t('scout.saving', 'Saving entry...'));
 
             if (!teamSelect.value || !matchSelect.value || !currentEventKey) {
                 Obsidianscout.showToast("Select both a team and a match", "error");
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
                 return;
             }
 
             const payload = buildPayload(config.fields, form);
             if (!payload) {
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
                 return;
             }
 
@@ -274,7 +273,7 @@ async function initPrescoutQual(me) {
                     Obsidianscout.showToast(error.message || "Failed to save entry", "error");
                 }
             } finally {
-                submitButton.disabled = false;
+                Obsidianscout.setButtonLoading(submitButton, false);
             }
         });
 

@@ -4677,3 +4677,70 @@ body.theme-dark .venue-tz-badge::before {
 .match-time-cell {
     white-space: nowrap;
 }
+
+/* ─── Button Loading Indicators (Spinner & Dots) ───────────────────── */
+button.is-loading,
+button[data-loading="true"],
+.btn.is-loading,
+.btn[data-loading="true"] {
+    position: relative;
+    pointer-events: none !important;
+    opacity: 0.85;
+    cursor: wait !important;
+}
+
+.btn-spinner {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    min-width: 14px;
+    min-height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent !important;
+    border-radius: 50%;
+    animation: btn-spin 0.65s linear infinite;
+    vertical-align: text-bottom;
+    margin-right: 0.45em;
+    flex-shrink: 0;
+}
+
+@keyframes btn-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.btn-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 0.45em;
+    vertical-align: middle;
+}
+
+.btn-dots span {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: currentColor;
+    animation: btn-dot-pulse 1.2s infinite ease-in-out;
+}
+
+.btn-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.btn-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes btn-dot-pulse {
+    0%, 80%, 100% {
+        opacity: 0.3;
+        transform: scale(0.8);
+    }
+    40% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+

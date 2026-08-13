@@ -396,6 +396,7 @@ data class BannerDto(
     val isDismissible: Boolean,
     val isExpandable: Boolean,
     val expandableMessage: String,
+    val showOnLogin: Boolean = false,
     val isActive: Boolean,
     val createdAt: String,
     val updatedAt: String
@@ -409,6 +410,7 @@ data class BannerCreateRequest(
     val isDismissible: Boolean? = true,
     val isExpandable: Boolean? = false,
     val expandableMessage: String? = "",
+    val showOnLogin: Boolean? = false,
     val isActive: Boolean? = true
 )
 
@@ -420,6 +422,7 @@ data class BannerUpdateRequest(
     val isDismissible: Boolean? = null,
     val isExpandable: Boolean? = null,
     val expandableMessage: String? = null,
+    val showOnLogin: Boolean? = null,
     val isActive: Boolean? = null
 )
 

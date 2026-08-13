@@ -467,7 +467,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             try {
                 await Obsidianscout.request("/api/settings", {
                     method: "PUT",
-                    json: loadedSettings
+                    json: loadedSettings,
+                    ...(silent ? {} : { button: document.getElementById("theme-save-all") })
                 });
                 
                 if (activeTheme) {

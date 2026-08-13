@@ -213,7 +213,7 @@
             const notes = allianceNotesInput.value.trim() || null;
 
             if (!name) return;
-            btnSaveDetails.disabled = true;
+            window.Obsidianscout.setButtonLoading(btnSaveDetails, true, "Saving...");
 
             try {
                 await request(`/api/alliances/${allianceId}`, {
@@ -225,7 +225,7 @@
             } catch (err) {
                 showToast('Failed to save details: ' + err.message, 'error');
             } finally {
-                btnSaveDetails.disabled = false;
+                window.Obsidianscout.setButtonLoading(btnSaveDetails, false);
             }
         });
 
@@ -236,7 +236,7 @@
             if (!teamNumber || teamNumber <= 0) return;
 
             const sendBtn = document.getElementById('btn-send-invite');
-            sendBtn.disabled = true;
+            window.Obsidianscout.setButtonLoading(sendBtn, true, "Sending...");
 
             try {
                 await request(`/api/alliances/${allianceId}/invite`, {
@@ -249,7 +249,7 @@
             } catch (err) {
                 showToast('Failed to send invite: ' + err.message, 'error');
             } finally {
-                sendBtn.disabled = false;
+                window.Obsidianscout.setButtonLoading(sendBtn, false);
             }
         });
 
