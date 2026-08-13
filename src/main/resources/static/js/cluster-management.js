@@ -265,6 +265,18 @@
             const badgeText = node.isLocal ? t("cluster.badge_local", "Local Node") : t("cluster.badge_remote", "Remote Node");
             const versionStr = node.serverVersion ? (node.serverVersion.startsWith("v") ? node.serverVersion : `v${node.serverVersion}`) : "vUnknown";
 
+            const rawMode = (node.executionMode || "Unknown").trim();
+            let modeBadgeHtml = "";
+            if (rawMode.toLowerCase() === "native") {
+                modeBadgeHtml = `<span class="node-badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4);" title="Execution Mode: GraalVM Native Binary Executable">⚡ Native</span>`;
+            } else if (rawMode.toLowerCase() === "jar") {
+                modeBadgeHtml = `<span class="node-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);" title="Execution Mode: JVM Fat-JAR">☕ Jar</span>`;
+            } else {
+                modeBadgeHtml = `<span class="node-badge" style="background: rgba(156, 163, 175, 0.2); color: #9ca3af; border: 1px solid rgba(156, 163, 175, 0.4);">${escapeHtml(rawMode)}</span>`;
+            }
+
+            const modeLabelColor = rawMode.toLowerCase() === "native" ? "#c084fc" : (rawMode.toLowerCase() === "jar" ? "#fbbf24" : "#9ca3af");
+
             html += `
                 <div class="server-item ${isSelected ? "active-selected" : ""}" data-ip="${escapeHtml(node.ip)}">
                     <div class="server-info-col">
@@ -274,9 +286,10 @@
                                 ${escapeHtml(node.ip)}
                                 <span class="node-badge ${badgeClass}">${badgeText}</span>
                                 <span class="node-badge" style="background: rgba(59, 130, 246, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">${escapeHtml(versionStr)}</span>
+                                ${modeBadgeHtml}
                             </div>
                             <div style="font-size: 12px; color: var(--text-muted, #94a3b8); margin-top: 2px;">
-                                Server Version: <strong style="color: #38bdf8;">${escapeHtml(versionStr)}</strong> | App Port: <strong>${node.appPort}</strong> | Cockroach DB Port: <strong>${node.dbPort}</strong> | Role: ${escapeHtml(node.role || "Gateway")}
+                                Server Version: <strong style="color: #38bdf8;">${escapeHtml(versionStr)}</strong> | Mode: <strong style="color: ${modeLabelColor};">${escapeHtml(rawMode)}</strong> | App Port: <strong>${node.appPort}</strong> | Cockroach DB Port: <strong>${node.dbPort}</strong> | Role: ${escapeHtml(node.role || "Gateway")}
                             </div>
                         </div>
                     </div>

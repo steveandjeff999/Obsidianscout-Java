@@ -41,7 +41,8 @@ data class ClusterNodeInfo(
     val role: String = "Cockroach Gateway Node",
     val cockroachVersion: String = "v26.2.3",
     val isDbActive: Boolean = true,
-    val serverVersion: String = "Unknown"
+    val serverVersion: String = "Unknown",
+    val executionMode: String = "Unknown"
 )
 
 @Serializable
@@ -71,7 +72,8 @@ data class ClusterStatusResponse(
     val status: String = "online",
     val serverVersion: String = "Unknown",
     val nodeIp: String = "",
-    val dbActive: Boolean = true
+    val dbActive: Boolean = true,
+    val executionMode: String = if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) "Native" else "Jar"
 )
 
 object ClusterManagementService {
@@ -139,6 +141,7 @@ object ClusterManagementService {
         val nodesList = mutableListOf<ClusterNodeInfo>()
 
         // Add Local Node
+        val localMode = if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) "Native" else "Jar"
         nodesList.add(
             ClusterNodeInfo(
                 nodeId = "node-local-$localIp",
@@ -148,7 +151,8 @@ object ClusterManagementService {
                 isLocal = true,
                 status = if (DatabaseFactory.isReady) "online" else "booting",
                 isDbActive = com.obsidianscout.db.orchestration.CockroachOrchestrator.isDbActive,
-                serverVersion = appConfig.current_version
+                serverVersion = appConfig.current_version,
+                executionMode = localMode
             )
         )
 
@@ -191,16 +195,17 @@ object ClusterManagementService {
         val peerResults = coroutineScope {
             gossipIps.map { remoteIp ->
                 async {
-                    val (isOnline, remoteVersion) = fetchNodeStatusAndVersion(remoteIp, appPort, dbPort)
+                    val probeResult = fetchNodeStatusAndVersion(remoteIp, appPort, dbPort)
                     ClusterNodeInfo(
                         nodeId = "node-peer-$remoteIp",
                         ip = remoteIp,
                         dbPort = dbPort,
                         appPort = appPort,
                         isLocal = false,
-                        status = if (isOnline) "online" else "offline",
-                        isDbActive = isOnline,
-                        serverVersion = remoteVersion
+                        status = if (probeResult.isOnline) "online" else "offline",
+                        isDbActive = probeResult.isOnline,
+                        serverVersion = probeResult.version,
+                        executionMode = probeResult.executionMode
                     )
                 }
             }.awaitAll()
@@ -214,7 +219,13 @@ object ClusterManagementService {
         )
     }
 
-    private fun fetchNodeStatusAndVersion(ip: String, appPort: Int, dbPort: Int = 26257): Pair<Boolean, String> {
+    private data class NodeProbeDetails(
+        val isOnline: Boolean,
+        val version: String,
+        val executionMode: String
+    )
+
+    private fun fetchNodeStatusAndVersion(ip: String, appPort: Int, dbPort: Int = 26257): NodeProbeDetails {
         // 1. HTTP Probe to ObsidianScout server port
         try {
             val req = HttpRequest.newBuilder()
@@ -229,7 +240,10 @@ object ClusterManagementService {
                 val ver = jsonElem?.get("serverVersion")?.let {
                     runCatching { it.jsonPrimitive.content }.getOrNull()
                 } ?: fetchNodeVersionFromEndpoint(ip, appPort) ?: "Unknown"
-                return Pair(true, ver)
+                val mode = jsonElem?.get("executionMode")?.let {
+                    runCatching { it.jsonPrimitive.content }.getOrNull()
+                } ?: "Unknown"
+                return NodeProbeDetails(isOnline = true, version = ver, executionMode = mode)
             }
         } catch (e: Exception) {
             if (e.message?.contains("selector manager closed") == true) {
@@ -247,7 +261,7 @@ object ClusterManagementService {
             false
         }
 
-        return if (isTcpAlive) Pair(true, "Unknown") else Pair(false, "Offline")
+        return if (isTcpAlive) NodeProbeDetails(isOnline = true, version = "Unknown", executionMode = "Unknown") else NodeProbeDetails(isOnline = false, version = "Offline", executionMode = "Offline")
     }
 
     private fun fetchNodeVersionFromEndpoint(ip: String, appPort: Int): String? {
@@ -268,7 +282,7 @@ object ClusterManagementService {
     }
 
     private fun isNodeResponsive(ip: String, appPort: Int, dbPort: Int = 26257): Boolean {
-        return fetchNodeStatusAndVersion(ip, appPort, dbPort).first
+        return fetchNodeStatusAndVersion(ip, appPort, dbPort).isOnline
     }
 
     fun probeNodeFromPeer(targetIp: String, appPort: Int, dbPort: Int): Boolean {
