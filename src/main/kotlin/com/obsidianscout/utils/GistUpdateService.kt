@@ -435,9 +435,9 @@ object GistUpdateService {
                             }
                         }
 
-                        userFile.writeText(
-                            prettyJson.encodeToString(JsonElement.serializer(), merged) + "\n"
-                        )
+                        val mergedText = prettyJson.encodeToString(JsonElement.serializer(), merged) + "\n"
+                        userFile.writeText(mergedText)
+                        runCatching { srcFile.writeText(mergedText) }
                         log.info("[GistUpdate] Merged config/$relPath")
                     } catch (e: Exception) {
                         log.warn("[GistUpdate] Failed to merge config/$relPath, overwriting with default.")

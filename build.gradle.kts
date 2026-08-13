@@ -233,7 +233,16 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            if exist \"%%s\" copy /y \"%%s\" \".backup\\\" >nul\r\n" +
             "        )\r\n" +
             "        echo [Updater] Applying update from !SRC_ROOT!...\r\n" +
+            "        if exist config\\app-config.json (\r\n" +
+            "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
+            "            copy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
+            "        )\r\n" +
             "        copy /y \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
+            "        if exist .update_tmp_cfg\\app-config.json (\r\n" +
+            "            if not exist config mkdir config\r\n" +
+            "            copy /y \".update_tmp_cfg\\app-config.json\" \"config\\app-config.json\" >nul\r\n" +
+            "            rd /s /q .update_tmp_cfg >nul 2>&1\r\n" +
+            "        )\r\n" +
             "        for %%i in (\"!SRC_ROOT!\\..\") do set TEMP_DIR=%%~fi\r\n" +
             "        rd /s /q \"!TEMP_DIR!\"\r\n" +
             "        if exist .update_tmp rd /s /q .update_tmp >nul 2>&1\r\n" +
@@ -376,7 +385,16 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "                if [ -f \"\$script\" ]; then cp \"\$script\" .backup/; fi\n" +
             "            done\n" +
             "            echo \"[Updater] Applying update from \$SRC_ROOT...\"\n" +
+            "            if [ -f config/app-config.json ]; then\n" +
+            "                mkdir -p .update_tmp_cfg\n" +
+            "                cp config/app-config.json .update_tmp_cfg/app-config.json\n" +
+            "            fi\n" +
             "            cp -R \"\$SRC_ROOT\"/* ./\n" +
+            "            if [ -f .update_tmp_cfg/app-config.json ]; then\n" +
+            "                mkdir -p config\n" +
+            "                cp .update_tmp_cfg/app-config.json config/app-config.json\n" +
+            "                rm -rf .update_tmp_cfg\n" +
+            "            fi\n" +
             "            chmod +x ./*.sh 2>/dev/null || true\n" +
             "            TEMP_DIR=\$(dirname \"\$SRC_ROOT\")\n" +
             "            rm -rf \"\$TEMP_DIR\"\n" +
@@ -696,7 +714,16 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "            if exist obsidianscout-server-native-$arch del /q \"obsidianscout-server-native-$arch\" >nul 2>&1\r\n" +
                 "            if exist obsidianscout-server-native.exe del /q \"obsidianscout-server-native.exe\" >nul 2>&1\r\n" +
                 "        )\r\n" +
+                "        if exist config\\app-config.json (\r\n" +
+                "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
+                "            copy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
+                "        )\r\n" +
                 "        copy /y \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
+                "        if exist .update_tmp_cfg\\app-config.json (\r\n" +
+                "            if not exist config mkdir config\r\n" +
+                "            copy /y \".update_tmp_cfg\\app-config.json\" \"config\\app-config.json\" >nul\r\n" +
+                "            rd /s /q .update_tmp_cfg >nul 2>&1\r\n" +
+                "        )\r\n" +
                 "        echo pending > .update_pending\r\n" +
                 "        echo [Updater] Update applied. Restarting server...\r\n" +
                 "        cmd /c \"%~f0\" %*\r\n" +
@@ -767,7 +794,16 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "            if [ -z \"\$HAS_NATIVE\" ]; then\n" +
                 "                rm -f obsidianscout-server-native*\n" +
                 "            fi\n" +
+                "            if [ -f config/app-config.json ]; then\n" +
+                "                mkdir -p .update_tmp_cfg\n" +
+                "                cp config/app-config.json .update_tmp_cfg/app-config.json\n" +
+                "            fi\n" +
                 "            cp -R \"\$SRC_ROOT\"/* ./\n" +
+                "            if [ -f .update_tmp_cfg/app-config.json ]; then\n" +
+                "                mkdir -p config\n" +
+                "                cp .update_tmp_cfg/app-config.json config/app-config.json\n" +
+                "                rm -rf .update_tmp_cfg\n" +
+                "            fi\n" +
                 "            echo pending > .update_pending\n" +
                 "            echo \"[Updater] Update applied. Restarting server...\"\n" +
                 "            exec \"\$0\" \"\$@\"\n" +
