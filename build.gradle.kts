@@ -306,12 +306,15 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            JAVA_OPTS=\"-Djava.awt.headless=true -Xms512m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapWastePercent=5 -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\"\n" +
             "        fi\n" +
             "    fi\n" +
+            "    chmod +x ./*native* ./*.sh 2>/dev/null || true\n" +
             "    EXEC_CMD=\"\"\n" +
-            "    if [ -x ./obsidianscout-server-native-linux-x86_64 ]; then\n" +
+            "    if [ -f ./obsidianscout-server-native-linux-x86_64 ]; then\n" +
             "        EXEC_CMD=\"./obsidianscout-server-native-linux-x86_64 -Xmx1536m\"\n" +
-            "    elif [ -x ./obsidianscout-server-native-linux-arm64 ]; then\n" +
+            "    elif [ -f ./obsidianscout-server-native-linux-arm64 ]; then\n" +
             "        EXEC_CMD=\"./obsidianscout-server-native-linux-arm64 -Xmx1536m\"\n" +
-            "    elif [ -x ./obsidianscout-server-native ]; then\n" +
+            "    elif [ -f ./obsidianscout-server-native-arm64 ]; then\n" +
+            "        EXEC_CMD=\"./obsidianscout-server-native-arm64 -Xmx1536m\"\n" +
+            "    elif [ -f ./obsidianscout-server-native ]; then\n" +
             "        EXEC_CMD=\"./obsidianscout-server-native -Xmx1536m\"\n" +
             "    fi\n" +
             "    if [ -n \"\$EXEC_CMD\" ]; then\n" +
@@ -760,10 +763,13 @@ val nativeBundleTasks = nativeArchs.map { arch ->
             val runSh = File(bundleDir, "run.sh")
             runSh.writeText(
                 "#!/bin/sh\n" +
+                "chmod +x ./*native* ./*.sh 2>/dev/null || true\n" +
                 "BINARY_NAME=\"obsidianscout-server-native-$arch\"\n" +
                 "if [ -f \"./\$BINARY_NAME\" ]; then\n" +
+                "    chmod +x \"./\$BINARY_NAME\" 2>/dev/null || true\n" +
                 "    EXEC_CMD=\"./\$BINARY_NAME\"\n" +
                 "elif [ -f \"./obsidianscout-server-native\" ]; then\n" +
+                "    chmod +x \"./obsidianscout-server-native\" 2>/dev/null || true\n" +
                 "    EXEC_CMD=\"./obsidianscout-server-native\"\n" +
                 "else\n" +
                 "    echo \"[ObsidianScout Native] Native binary not found, checking GraalVM JDK for high-performance JVM execution...\"\n" +

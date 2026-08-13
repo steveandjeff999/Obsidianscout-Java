@@ -638,12 +638,48 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         }
     }
 
+    internal fun readTailLines(file: File, maxLines: Int): List<String> {
+        if (!file.exists() || file.length() == 0L) return emptyList()
+        return try {
+            val fileLength = file.length()
+            val maxBytesToRead = (maxLines * 300L).coerceAtMost(2_000_000L)
+            val buffer = ArrayDeque<String>(maxLines)
+
+            if (fileLength > maxBytesToRead) {
+                java.io.RandomAccessFile(file, "r").use { raf ->
+                    raf.seek(fileLength - maxBytesToRead)
+                    raf.readLine() // Discard first line since seek might start mid-line
+                    var line: String? = raf.readLine()
+                    while (line != null) {
+                        if (buffer.size >= maxLines) {
+                            buffer.removeFirst()
+                        }
+                        buffer.addLast(line)
+                        line = raf.readLine()
+                    }
+                }
+            } else {
+                file.useLines { lineSequence ->
+                    for (line in lineSequence) {
+                        if (buffer.size >= maxLines) {
+                            buffer.removeFirst()
+                        }
+                        buffer.addLast(line)
+                    }
+                }
+            }
+            buffer.toList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     internal fun checkForFatalDiskError(linesToScan: List<String>? = null): Boolean {
         return try {
             val lines = linesToScan ?: run {
                 val logFile = File(rootDir, "cockroach.log")
                 if (!logFile.exists()) return false
-                logFile.readLines().takeLast(200)
+                readTailLines(logFile, 200)
             }
             lines.any { line ->
                 val isPebbleOrFatal = line.startsWith("F") || line.contains("fatal error") || line.contains("hard disk failure")
@@ -737,11 +773,10 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         val recentLogLines = try {
             val logFile = File(rootDir, "cockroach.log")
             if (logFile.exists()) {
-                val allLines = logFile.readLines()
+                val allLines = readTailLines(logFile, 3000)
                 val matchedLines = mutableListOf<String>()
                 val maxLines = allLines.size
-                val scanStart = (maxLines - 3000).coerceAtLeast(0)
-                var i = scanStart
+                var i = 0
                 while (i < maxLines) {
                     val line = allLines[i]
                     if (line.contains("new range lease") || line.contains("replica_proposal.go")) { i++; continue }
