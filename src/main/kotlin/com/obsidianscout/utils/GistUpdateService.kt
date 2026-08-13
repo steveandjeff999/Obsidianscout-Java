@@ -381,7 +381,7 @@ object GistUpdateService {
 
         var bestUrl: String? = null
         var fatjarUrl: String? = null
-        var fallbackUrl: String? = null
+        var firstArchiveAssetUrl: String? = null
 
         val assets = releaseJson["assets"]?.jsonArray
         if (assets != null) {
@@ -393,6 +393,10 @@ object GistUpdateService {
                 val isArchive = name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz")
                 if (!isArchive) continue
 
+                if (firstArchiveAssetUrl == null) {
+                    firstArchiveAssetUrl = url
+                }
+
                 val matchesOs = name.contains(normOs) || (normOs == "windows" && name.contains("win")) || (normOs == "macos" && name.contains("mac"))
                 val matchesArch = name.contains(normArch)
                 val isExactPlatformMatch = name.contains(platformKey) || (matchesOs && matchesArch)
@@ -401,11 +405,8 @@ object GistUpdateService {
                     bestUrl = url
                     break
                 }
-                if (!isNativeRuntime && name.contains("fatjar")) {
+                if (!isNativeRuntime && (name.contains("fatjar") || name.contains("jar"))) {
                     fatjarUrl = url
-                }
-                if (fallbackUrl == null && (matchesArch || matchesOs)) {
-                    fallbackUrl = url
                 }
             }
         }
@@ -413,7 +414,7 @@ object GistUpdateService {
         val finalUrl = when {
             !bestUrl.isNullOrBlank() -> bestUrl
             !fatjarUrl.isNullOrBlank() -> fatjarUrl
-            !fallbackUrl.isNullOrBlank() -> fallbackUrl
+            !firstArchiveAssetUrl.isNullOrBlank() -> firstArchiveAssetUrl
             else -> null
         }
 

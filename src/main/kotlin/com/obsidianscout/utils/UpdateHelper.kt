@@ -106,7 +106,7 @@ fun runUpdateHelper() {
         
         var bestUrl = ""
         var fatjarUrl = ""
-        var fallbackUrl = ""
+        var firstArchiveAssetUrl = ""
         val assets = obj["assets"]?.jsonArray
         if (assets != null) {
             for (asset in assets) {
@@ -116,6 +116,10 @@ fun runUpdateHelper() {
                 val isArchive = name.endsWith(".zip") || name.endsWith(".tar.gz") || name.endsWith(".tgz")
                 if (!isArchive) continue
 
+                if (firstArchiveAssetUrl.isEmpty()) {
+                    firstArchiveAssetUrl = url
+                }
+
                 val matchesOs = name.contains(normOs) || (normOs == "windows" && name.contains("win")) || (normOs == "macos" && name.contains("mac"))
                 val matchesArch = name.contains(normArch)
                 val isExactPlatformMatch = name.contains(platformKey) || (matchesOs && matchesArch)
@@ -124,18 +128,15 @@ fun runUpdateHelper() {
                     bestUrl = url
                     break
                 }
-                if (!isNativeRuntime && name.contains("fatjar")) {
+                if (!isNativeRuntime && (name.contains("fatjar") || name.contains("jar"))) {
                     fatjarUrl = url
-                }
-                if ((matchesArch || matchesOs) && fallbackUrl.isEmpty()) {
-                    fallbackUrl = url
                 }
             }
         }
         val finalUrl = when {
             bestUrl.isNotEmpty() -> bestUrl
             fatjarUrl.isNotEmpty() -> fatjarUrl
-            fallbackUrl.isNotEmpty() -> fallbackUrl
+            firstArchiveAssetUrl.isNotEmpty() -> firstArchiveAssetUrl
             else -> obj["zipball_url"]?.jsonPrimitive?.content ?: ""
         }
         
