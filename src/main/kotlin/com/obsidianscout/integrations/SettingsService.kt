@@ -131,7 +131,7 @@ object SettingsService {
     }
 
     fun getSettings(teamNumber: Int, program: String = "FRC"): ApiSettings {
-        val jsonText = transaction {
+        val (jsonText, isTeamSpecific) = transaction {
             // Try team-specific settings first
             val teamSettings = AppSettings
                 .selectAll().where { (AppSettings.teamNumber eq teamNumber) and (AppSettings.program eq program) }
@@ -140,22 +140,29 @@ object SettingsService {
                 ?.get(AppSettings.settingsJson)
 
             if (teamSettings != null) {
-                return@transaction teamSettings
+                return@transaction Pair(teamSettings, true)
             }
 
             // Fall back to team 0 (global default)
-            AppSettings
+            val defaultSettings = AppSettings
                 .selectAll().where { (AppSettings.teamNumber eq 0) and (AppSettings.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(AppSettings.settingsJson)
+
+            Pair(defaultSettings, false)
         }
         val parsed = if (jsonText.isNullOrBlank()) {
             ApiSettings(program = program)
         } else {
             JsonSupport.json.decodeFromString(ApiSettings.serializer(), jsonText)
         }
-        return normalize(parsed)
+        val normalized = normalize(parsed)
+        return if (teamNumber != 0 && !isTeamSpecific) {
+            normalized.copy(eventCode = "", eventKey = "")
+        } else {
+            normalized
+        }
     }
 
     fun updateSettings(teamNumber: Int, settings: ApiSettings): ApiSettings {
@@ -233,8 +240,12 @@ object SettingsService {
                         return@mapNotNull null
                     }
                     val keys = settings.apiKeys
-                    val hasApi = keys.tbaKey.isNotBlank() ||
-                        (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
+                    val isFtc = program.equals("FTC", ignoreCase = true)
+                    val hasApi = if (isFtc) {
+                        true
+                    } else {
+                        keys.tbaKey.isNotBlank() || (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
+                    }
                     if (!hasApi) {
                         return@mapNotNull null
                     }

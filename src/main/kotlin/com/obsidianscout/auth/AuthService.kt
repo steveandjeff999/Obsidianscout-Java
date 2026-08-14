@@ -20,6 +20,10 @@ import org.jetbrains.exposed.sql.StdOutSqlLogger
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
+import com.obsidianscout.db.AppSettings
+import com.obsidianscout.integrations.ApiSettings
+import com.obsidianscout.config.JsonSupport
+import org.jetbrains.exposed.sql.insert
 import com.obsidianscout.db.PasswordResetTokens
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.PitScoutingEntries
@@ -155,6 +159,21 @@ object AuthService {
                 it[Users.createdAt] = Instant.now()
                 it[Users.email] = email?.takeIf { it.isNotBlank() }
             }
+
+            val existingTeamSettings = AppSettings
+                .selectAll().where { (AppSettings.teamNumber eq teamNumber) and (AppSettings.program eq program) }
+                .limit(1)
+                .any()
+            if (!existingTeamSettings) {
+                val jsonText = JsonSupport.json.encodeToString(ApiSettings.serializer(), ApiSettings(program = program, eventCode = "", eventKey = ""))
+                AppSettings.insert {
+                    it[AppSettings.teamNumber] = teamNumber
+                    it[AppSettings.program] = program
+                    it[settingsJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            }
+
             val row = Users.selectAll().where { Users.id eq id }.first()
             rowToUser(row)
         }

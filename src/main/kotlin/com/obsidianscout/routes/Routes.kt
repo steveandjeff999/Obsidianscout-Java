@@ -781,6 +781,12 @@ fun Application.configureRoutes() {
                     val updated = SettingsService.updateSettings(session.teamNumber, payload.toSettings())
                     call.respond(SettingsResponse(updated.toPayload()))
                 }
+                post("/test-api") {
+                    val session = call.requireAdmin()
+                    val request = call.receive<TestApiRequest>()
+                    val response = IntegrationService.testApiKey(session, request)
+                    call.respond(response)
+                }
             }
 
             route("/scouting") {
@@ -988,7 +994,7 @@ fun Application.configureRoutes() {
                     val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val activeKey = settings.resolvedEventKey()
 
-                    val events = IntegrationService.listEvents(year, cachedOnly, activeKey, settings)
+                    val events = IntegrationService.listEvents(year, cachedOnly, activeKey, settings, session = session)
                     call.respond(events)
                 }
                 post {
@@ -2050,7 +2056,12 @@ fun Application.configureRoutes() {
                         }
 
                         val keys = settings.apiKeys
-                        val hasApi = keys.tbaKey.isNotBlank() || (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
+                        val isFtc = session.program.equals("FTC", ignoreCase = true)
+                        val hasApi = if (isFtc) {
+                            true
+                        } else {
+                            keys.tbaKey.isNotBlank() || (keys.firstUsername.isNotBlank() && keys.firstKey.isNotBlank())
+                        }
                         if (!hasApi) {
                             active.add(
                                 0,

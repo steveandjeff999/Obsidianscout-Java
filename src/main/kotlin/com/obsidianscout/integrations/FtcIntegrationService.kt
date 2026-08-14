@@ -266,6 +266,7 @@ object FtcIntegrationService {
         val teamsArray = eventObj["teams"]?.jsonArray ?: JsonArray(emptyList())
         transaction {
             val existingTeamsMap = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.associateBy { it[ApiTeams.teamKey] }
+            val processedTeamKeys = mutableSetOf<String>()
             teamsArray.forEach { participation ->
                 val partObj = participation.safeJsonObject ?: return@forEach
                 val teamNumber = partObj["teamNumber"]?.jsonPrimitive?.intOrNull ?: return@forEach
@@ -278,7 +279,7 @@ object FtcIntegrationService {
 
                 val teamKey = "ftc$teamNumber"
                 val existingTeam = existingTeamsMap[teamKey]
-                if (existingTeam == null) {
+                if (existingTeam == null && !processedTeamKeys.contains(teamKey)) {
                     ApiTeams.insert {
                         it[ApiTeams.eventKey] = eventKey
                         it[ApiTeams.teamKey] = teamKey
@@ -293,8 +294,9 @@ object FtcIntegrationService {
                         it[ApiTeams.dataJson] = JsonSupport.json.encodeToString(teamObj)
                         it[ApiTeams.updatedAt] = now
                     }
+                    processedTeamKeys.add(teamKey)
                 } else {
-                    ApiTeams.update({ ApiTeams.id eq existingTeam[ApiTeams.id] }) {
+                    ApiTeams.update({ (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamKey eq teamKey) }) {
                         it[ApiTeams.name] = teamName
                         it[ApiTeams.nickname] = teamName
                         it[ApiTeams.city] = city
@@ -303,6 +305,7 @@ object FtcIntegrationService {
                         it[ApiTeams.dataJson] = JsonSupport.json.encodeToString(teamObj)
                         it[ApiTeams.updatedAt] = now
                     }
+                    processedTeamKeys.add(teamKey)
                 }
             }
         }
@@ -335,6 +338,7 @@ object FtcIntegrationService {
         transaction {
             MatchCanonical.deduplicateDatabaseForEvent(eventKey)
             val existingMatchesMap = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }.associateBy { it[ApiMatches.matchKey] }
+            val processedMatchKeys = mutableSetOf<String>()
             combinedMatches.forEach { match ->
                 val mObj = match.safeJsonObject ?: return@forEach
                 val matchNum = mObj["matchNum"]?.jsonPrimitive?.intOrNull 
@@ -413,7 +417,7 @@ object FtcIntegrationService {
                 }
 
                 val existingMatch = existingMatchesMap[matchKey]
-                if (existingMatch == null) {
+                if (existingMatch == null && !processedMatchKeys.contains(matchKey)) {
                     ApiMatches.insert {
                         it[ApiMatches.matchKey] = matchKey
                         it[ApiMatches.eventKey] = eventKey
@@ -425,8 +429,9 @@ object FtcIntegrationService {
                         it[ApiMatches.dataJson] = JsonSupport.json.encodeToString(match)
                         it[ApiMatches.updatedAt] = now
                     }
+                    processedMatchKeys.add(matchKey)
                 } else {
-                    ApiMatches.update({ ApiMatches.id eq existingMatch[ApiMatches.id] }) {
+                    ApiMatches.update({ ApiMatches.matchKey eq matchKey }) {
                         it[ApiMatches.setNumber] = setNum
                         it[ApiMatches.matchNumber] = mappedMatchNum
                         it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(red)
@@ -434,6 +439,7 @@ object FtcIntegrationService {
                         it[ApiMatches.dataJson] = JsonSupport.json.encodeToString(match)
                         it[ApiMatches.updatedAt] = now
                     }
+                    processedMatchKeys.add(matchKey)
                 }
             }
         }

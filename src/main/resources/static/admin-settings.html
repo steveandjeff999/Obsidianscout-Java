@@ -274,13 +274,17 @@
 
                             <h3 id="settings-tba-heading" data-i18n="config.the_blue_alliance">The Blue Alliance</h3>
 
-                            <div class="field">
+                            <div class="field" id="settings-tba-field">
 
                                 <label for="settings-tba-key" id="settings-tba-label" data-i18n="config.tba_key">TBA key</label>
 
                                 <input id="settings-tba-key" type="password" />
 
                             </div>
+
+                            <p id="settings-tba-notice" class="notice mt-6" style="display: none;">FTC Scout is a public API that provides event, team, match, and OPR data. No API key required.</p>
+
+                            <button id="settings-tba-test" class="btn secondary mt-12" type="button">Test Connection</button>
 
                         </div>
 
@@ -304,6 +308,8 @@
 
                             </div>
 
+                            <button id="settings-first-test" class="btn secondary mt-12" type="button">Test FIRST API</button>
+
                         </div>
 
                         <div class="card soft" id="settings-statbotics-card">
@@ -317,6 +323,8 @@
                                 <input id="settings-statbotics-url" type="text" placeholder="https://api.statbotics.io" />
 
                             </div>
+
+                            <button id="settings-statbotics-test" class="btn secondary mt-12" type="button">Test Statbotics API</button>
 
                         </div>
 

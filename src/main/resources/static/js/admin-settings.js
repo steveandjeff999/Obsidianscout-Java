@@ -325,15 +325,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             const tbaHeading = document.getElementById("settings-tba-heading") || document.querySelector('h3[data-i18n="config.the_blue_alliance"]');
             const tbaLabel = document.getElementById("settings-tba-label");
             const tbaOption = document.querySelector('#settings-source option[value="tba"]');
-            
+            const tbaField = document.getElementById("settings-tba-field");
+            const tbaNotice = document.getElementById("settings-tba-notice");
+            const tbaTestBtnEl = document.getElementById("settings-tba-test");
+
             const firstHeading = document.getElementById("settings-first-heading") || document.querySelector('h3[data-i18n="config.first_api"]');
             const firstOption = document.querySelector('#settings-source option[value="first"]');
 
             if (isFtc) {
                 if (tbaCard) tbaCard.style.display = "";
                 if (tbaHeading) tbaHeading.textContent = "FTC Scout";
-                if (tbaLabel) tbaLabel.textContent = "FTC Scout key";
                 if (tbaOption) tbaOption.textContent = "FTC Scout";
+                if (tbaField) tbaField.style.display = "none";
+                if (tbaNotice) tbaNotice.style.display = "block";
+                if (tbaTestBtnEl) tbaTestBtnEl.textContent = "Test FTC Scout API";
 
                 if (firstHeading) firstHeading.textContent = "FIRST FTC API";
                 if (firstOption) firstOption.textContent = "FIRST FTC API";
@@ -358,6 +363,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (tbaHeading) tbaHeading.textContent = "The Blue Alliance";
                 if (tbaLabel) tbaLabel.textContent = "TBA key";
                 if (tbaOption) tbaOption.textContent = "The Blue Alliance";
+                if (tbaField) tbaField.style.display = "";
+                if (tbaNotice) tbaNotice.style.display = "none";
+                if (tbaTestBtnEl) tbaTestBtnEl.textContent = "Test Connection";
 
                 if (firstHeading) firstHeading.textContent = "FIRST API";
                 if (firstOption) firstOption.textContent = "FIRST API";
@@ -548,6 +556,86 @@ document.addEventListener("DOMContentLoaded", async () => {
                         Obsidianscout.showToast("API settings saved", "success");
                     } catch (error) {
                         Obsidianscout.showToast(error.message || "Save failed", "error");
+                    }
+                });
+            }
+
+            // Wire API key test buttons
+            const tbaTestBtn = document.getElementById("settings-tba-test");
+            if (tbaTestBtn) {
+                tbaTestBtn.addEventListener("click", async () => {
+                    const isFtc = me.program === "FTC";
+                    const apiTarget = isFtc ? "ftcscout" : "tba";
+                    const label = isFtc ? "FTC Scout API" : "TBA Key";
+                    Obsidianscout.setButtonLoading(tbaTestBtn, true, "Testing...");
+                    try {
+                        const res = await Obsidianscout.request("/api/settings/test-api", {
+                            method: "POST",
+                            json: {
+                                api: apiTarget,
+                                tbaKey: getVal("settings-tba-key").trim()
+                            }
+                        });
+                        if (res && res.success) {
+                            Obsidianscout.showToast(res.message || `${label} tested successfully!`, "success");
+                        } else {
+                            Obsidianscout.showToast((res && res.message) || `${label} test failed.`, "error");
+                        }
+                    } catch (err) {
+                        Obsidianscout.showToast(err.message || `${label} test failed.`, "error");
+                    } finally {
+                        Obsidianscout.setButtonLoading(tbaTestBtn, false);
+                    }
+                });
+            }
+
+            const firstTestBtn = document.getElementById("settings-first-test");
+            if (firstTestBtn) {
+                firstTestBtn.addEventListener("click", async () => {
+                    Obsidianscout.setButtonLoading(firstTestBtn, true, "Testing...");
+                    try {
+                        const res = await Obsidianscout.request("/api/settings/test-api", {
+                            method: "POST",
+                            json: {
+                                api: "first",
+                                firstUsername: getVal("settings-first-user").trim(),
+                                firstKey: getVal("settings-first-key").trim()
+                            }
+                        });
+                        if (res && res.success) {
+                            Obsidianscout.showToast(res.message || "FIRST API credentials are valid!", "success");
+                        } else {
+                            Obsidianscout.showToast((res && res.message) || "FIRST API test failed.", "error");
+                        }
+                    } catch (err) {
+                        Obsidianscout.showToast(err.message || "FIRST API test failed.", "error");
+                    } finally {
+                        Obsidianscout.setButtonLoading(firstTestBtn, false);
+                    }
+                });
+            }
+
+            const statboticsTestBtn = document.getElementById("settings-statbotics-test");
+            if (statboticsTestBtn) {
+                statboticsTestBtn.addEventListener("click", async () => {
+                    Obsidianscout.setButtonLoading(statboticsTestBtn, true, "Testing...");
+                    try {
+                        const res = await Obsidianscout.request("/api/settings/test-api", {
+                            method: "POST",
+                            json: {
+                                api: "statbotics",
+                                statboticsBaseUrl: getVal("settings-statbotics-url").trim()
+                            }
+                        });
+                        if (res && res.success) {
+                            Obsidianscout.showToast(res.message || "Statbotics API connection successful!", "success");
+                        } else {
+                            Obsidianscout.showToast((res && res.message) || "Statbotics API test failed.", "error");
+                        }
+                    } catch (err) {
+                        Obsidianscout.showToast(err.message || "Statbotics API test failed.", "error");
+                    } finally {
+                        Obsidianscout.setButtonLoading(statboticsTestBtn, false);
                     }
                 });
             }

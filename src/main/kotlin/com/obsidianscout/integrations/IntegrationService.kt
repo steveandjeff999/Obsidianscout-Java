@@ -26,9 +26,14 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
+import io.ktor.client.request.post
 import io.ktor.client.request.header
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.decodeFromString
@@ -445,7 +450,8 @@ object IntegrationService {
         year: Int?,
         cachedOnly: Boolean = false,
         activeKey: String? = null,
-        activeSettings: ApiSettings? = null
+        activeSettings: ApiSettings? = null,
+        session: UserSession? = null
     ): List<EventRecord> {
         return transaction {
             val normalizedActiveKey = activeKey?.lowercase()?.trim() ?: ""
@@ -535,10 +541,48 @@ object IntegrationService {
                 }
             }
 
-            if (cachedOnly) {
+            val resultEvents = if (cachedOnly) {
                 events.filter { requiredKeys.contains(it.eventKey) }
             } else {
                 events
+            }
+
+            if (session != null && session.role != UserRole.SUPERADMIN) {
+                val teamNumber = session.teamNumber
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(teamNumber)
+                val visibleTeams = partnerTeams + teamNumber
+
+                val teamAllowedKeys = mutableSetOf<String>()
+                if (normalizedActiveKey.isNotBlank()) {
+                    teamAllowedKeys.add(normalizedActiveKey)
+                }
+
+                val participatingKeys = ApiTeams.select(ApiTeams.eventKey).where {
+                    (ApiTeams.teamNumber eq teamNumber) or
+                    (ApiTeams.teamKey inList listOf("$teamNumber", "frc$teamNumber", "ftc$teamNumber"))
+                }.map { it[ApiTeams.eventKey].lowercase().trim() }
+                teamAllowedKeys.addAll(participatingKeys)
+
+                val scoutedMatchKeys = ScoutingEntries.select(ScoutingEntries.eventKey)
+                    .where { ScoutingEntries.ownerTeamNumber inList visibleTeams }
+                    .mapNotNull { it[ScoutingEntries.eventKey]?.lowercase()?.trim() }
+                val scoutedPitKeys = PitScoutingEntries.select(PitScoutingEntries.eventKey)
+                    .where { PitScoutingEntries.ownerTeamNumber inList visibleTeams }
+                    .mapNotNull { it[PitScoutingEntries.eventKey]?.lowercase()?.trim() }
+                val scoutedQualKeys = QualitativeScoutingEntries.select(QualitativeScoutingEntries.eventKey)
+                    .where { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
+                    .mapNotNull { it[QualitativeScoutingEntries.eventKey]?.lowercase()?.trim() }
+                teamAllowedKeys.addAll(scoutedMatchKeys)
+                teamAllowedKeys.addAll(scoutedPitKeys)
+                teamAllowedKeys.addAll(scoutedQualKeys)
+
+                val allianceEvents = AllianceService.listAlliances(session)
+                    .mapNotNull { it.eventKey?.lowercase()?.trim() }
+                teamAllowedKeys.addAll(allianceEvents)
+
+                resultEvents.filter { teamAllowedKeys.contains(it.eventKey.lowercase().trim()) }
+            } else {
+                resultEvents
             }
         }
     }
@@ -1739,6 +1783,100 @@ object IntegrationService {
         } catch (e: Exception) {
             log.warn("FIRST API request failed for $path: ${e.message}")
             return JsonArray(emptyList())
+        }
+    }
+
+    suspend fun testApiKey(session: UserSession, request: com.obsidianscout.routes.TestApiRequest): com.obsidianscout.routes.TestApiResponse {
+        val currentSettings = SettingsService.getSettings(session.teamNumber, session.program)
+        return when (request.api.lowercase().trim()) {
+            "tba" -> {
+                val keyInput = request.tbaKey?.trim()
+                val effectiveKey = if (keyInput.isNullOrBlank() || keyInput == "********") {
+                    currentSettings.apiKeys.tbaKey
+                } else {
+                    keyInput
+                }
+                if (effectiveKey.isBlank()) {
+                    return com.obsidianscout.routes.TestApiResponse(false, "TBA Key is empty. Please enter a key.")
+                }
+                try {
+                    val response = client.get("https://www.thebluealliance.com/api/v3/status") {
+                        header("X-TBA-Auth-Key", effectiveKey)
+                    }
+                    if (response.status.isSuccess()) {
+                        com.obsidianscout.routes.TestApiResponse(true, "The Blue Alliance API key is valid!")
+                    } else if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                        com.obsidianscout.routes.TestApiResponse(false, "Invalid TBA API Key (${response.status.value} ${response.status.description}).")
+                    } else {
+                        com.obsidianscout.routes.TestApiResponse(false, "TBA API returned HTTP ${response.status.value}.")
+                    }
+                } catch (e: Exception) {
+                    com.obsidianscout.routes.TestApiResponse(false, "Failed to connect to TBA API: ${e.message}")
+                }
+            }
+            "ftcscout" -> {
+                try {
+                    val response = client.post("https://api.ftcscout.org/graphql") {
+                        contentType(ContentType.Application.Json)
+                        setBody("""{"query":"query { eventsSearch(season: 2025, limit: 1) { code } }"}""")
+                    }
+                    if (response.status.isSuccess()) {
+                        com.obsidianscout.routes.TestApiResponse(true, "FTC Scout API connection successful! (No API key required)")
+                    } else {
+                        com.obsidianscout.routes.TestApiResponse(false, "FTC Scout API returned HTTP ${response.status.value}.")
+                    }
+                } catch (e: Exception) {
+                    com.obsidianscout.routes.TestApiResponse(false, "Failed to connect to FTC Scout API: ${e.message}")
+                }
+            }
+            "first" -> {
+                val userInput = request.firstUsername?.trim()
+                val keyInput = request.firstKey?.trim()
+                val effectiveUser = if (userInput.isNullOrBlank()) currentSettings.apiKeys.firstUsername else userInput
+                val effectiveKey = if (keyInput.isNullOrBlank() || keyInput == "********") currentSettings.apiKeys.firstKey else keyInput
+
+                if (effectiveUser.isBlank() || effectiveKey.isBlank()) {
+                    return com.obsidianscout.routes.TestApiResponse(false, "FIRST Username and FIRST Key are required.")
+                }
+
+                val credentials = Base64.getEncoder().encodeToString("$effectiveUser:$effectiveKey".toByteArray())
+                val isFtc = session.program.equals("FTC", ignoreCase = true)
+                val testUrl = if (isFtc) {
+                    "https://ftc-api.firstinspires.org/v2.0/2025/events"
+                } else {
+                    "https://frc-api.firstinspires.org/v2.0/2025/events"
+                }
+
+                try {
+                    val response = client.get(testUrl) {
+                        header(HttpHeaders.Authorization, "Basic $credentials")
+                    }
+                    if (response.status.isSuccess()) {
+                        com.obsidianscout.routes.TestApiResponse(true, "FIRST API credentials are valid!")
+                    } else if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                        com.obsidianscout.routes.TestApiResponse(false, "Invalid FIRST API credentials (${response.status.value} ${response.status.description}).")
+                    } else {
+                        com.obsidianscout.routes.TestApiResponse(false, "FIRST API returned HTTP ${response.status.value}.")
+                    }
+                } catch (e: Exception) {
+                    com.obsidianscout.routes.TestApiResponse(false, "Failed to connect to FIRST API: ${e.message}")
+                }
+            }
+            "statbotics" -> {
+                val rawUrl = request.statboticsBaseUrl?.trim() ?: currentSettings.statboticsBaseUrl
+                val baseUrl = (if (rawUrl.isBlank()) "https://api.statbotics.io" else rawUrl).removeSuffix("/")
+                try {
+                    val response = client.get("$baseUrl/v3/status")
+                    if (response.status.isSuccess()) {
+                        com.obsidianscout.routes.TestApiResponse(true, "Statbotics API connection successful!")
+                    } else {
+                        com.obsidianscout.routes.TestApiResponse(false, "Statbotics API returned HTTP ${response.status.value}.")
+                    }
+                } catch (e: Exception) {
+                    com.obsidianscout.routes.TestApiResponse(false, "Failed to connect to Statbotics API: ${e.message}")
+                }
+            }
+            else -> com.obsidianscout.routes.TestApiResponse(false, "Unknown API specified: ${request.api}")
         }
     }
 }

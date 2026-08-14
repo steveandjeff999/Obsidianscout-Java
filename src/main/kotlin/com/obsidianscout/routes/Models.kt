@@ -555,6 +555,22 @@ data class UnregisterFcmTokenRequest(
     val deviceToken: String
 )
 
+@Serializable
+data class TestApiRequest(
+    val api: String = "",
+    val tbaKey: String? = null,
+    val firstUsername: String? = null,
+    val firstKey: String? = null,
+    val statboticsBaseUrl: String? = null
+)
+
+@Serializable
+data class TestApiResponse(
+    val success: Boolean,
+    val message: String
+)
+
+
 
 
 
