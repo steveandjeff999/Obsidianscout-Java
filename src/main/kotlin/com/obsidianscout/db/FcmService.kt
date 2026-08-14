@@ -70,6 +70,7 @@ object FcmService {
             val options = FirebaseOptions.builder()
                 .setCredentials(credentials)
                 .setHttpTransport(com.google.api.client.http.javanet.NetHttpTransport())
+                .setJsonFactory(com.google.api.client.json.gson.GsonFactory.getDefaultInstance())
                 .setProjectId(configRow[FcmConfigs.projectId].ifBlank { null })
                 .build()
 
