@@ -322,7 +322,9 @@ object FcmService {
                 Pair(false, "Test notification failed to deliver. ${response.failureCount} failed.")
             }
         } catch (e: Throwable) {
-            return Pair(false, "Failed to send test notification: ${e.message}")
+            println("[FCM] Error sending test notification: ${e.message}")
+            e.printStackTrace()
+            return Pair(false, "Failed to send test notification: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 }
