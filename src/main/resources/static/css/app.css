@@ -1578,6 +1578,73 @@ body.theme-dark .card.soft {
 
 /* Mobile / small-screen improvements */
 @media (max-width: 900px) {
+    .nav-layout-field {
+        display: none !important;
+    }
+
+    body.nav-layout-topbar .mobile-topbar {
+        display: flex !important;
+    }
+
+    body.nav-layout-topbar .app-shell,
+    body.nav-layout-sidebar-right .app-shell,
+    body.nav-layout-topbar-left .app-shell,
+    body.nav-layout-topbar-right .app-shell {
+        flex-direction: column !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+
+    body.nav-layout-topbar .sidebar,
+    body.nav-layout-sidebar-right .sidebar,
+    body.nav-layout-topbar-left .sidebar,
+    body.nav-layout-topbar-right .sidebar {
+        position: fixed !important;
+        left: 12px !important;
+        right: 12px !important;
+        top: 72px !important;
+        height: calc(100vh - 88px) !important;
+        min-height: auto !important;
+        max-height: none !important;
+        width: auto !important;
+        z-index: 1000 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 20px !important;
+        border-radius: 20px !important;
+        border-right: none !important;
+        border-bottom: none !important;
+        box-shadow: 0 16px 40px rgba(0,0,0,0.18) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        transform: translateY(-115%);
+        transition: transform 0.25s ease, visibility 0.25s ease !important;
+    }
+
+    body.nav-layout-topbar .sidebar.mobile-open,
+    body.nav-layout-sidebar-right .sidebar.mobile-open,
+    body.nav-layout-topbar-left .sidebar.mobile-open,
+    body.nav-layout-topbar-right .sidebar.mobile-open {
+        transform: translateY(0) !important;
+    }
+
+    body.nav-layout-topbar .sidebar-nav,
+    body.nav-layout-topbar-left .sidebar-nav,
+    body.nav-layout-topbar-right .sidebar-nav {
+        display: grid !important;
+        flex-direction: column !important;
+        flex: none !important;
+    }
+
+    body.nav-layout-topbar .sidebar-toggle,
+    body.nav-layout-topbar-left .sidebar-toggle,
+    body.nav-layout-topbar-right .sidebar-toggle {
+        display: none !important;
+    }
+
+    body.nav-layout-topbar .sidebar-section-title {
+        display: block !important;
+    }
     :root {
         --bg: #f3f4f6; /* Clean, soft light gray background */
     }

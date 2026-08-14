@@ -1728,6 +1728,9 @@
 
     function applyNavLayout(layout) {
         let pref = layout || safeGetItem("obsidianscout:nav_layout") || "sidebar-left";
+        if (window.innerWidth < 900) {
+            pref = "sidebar-left";
+        }
         if (pref === "sidebar") pref = "sidebar-left";
         if (pref === "topbar") pref = "topbar-top";
 
@@ -1761,6 +1764,17 @@
                 restoreSidebarLayout(sidebar);
             }
         }
+    }
+
+    if (!window._navLayoutResizeListenerAdded) {
+        window._navLayoutResizeListenerAdded = true;
+        window.addEventListener("resize", () => {
+            const isMobile = window.innerWidth < 900;
+            if (isMobile !== window._lastWasMobile) {
+                window._lastWasMobile = isMobile;
+                applyNavLayout();
+            }
+        });
     }
 
     function toggleThemeMode() {

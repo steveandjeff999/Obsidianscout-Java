@@ -322,9 +322,17 @@ object FcmService {
                 Pair(false, "Test notification failed to deliver. ${response.failureCount} failed.")
             }
         } catch (e: Throwable) {
-            println("[FCM] Error sending test notification: ${e.message}")
+            val cause = e.cause
+            val causeMsg = cause?.message ?: cause?.toString()
+            println("[FCM] Error sending test notification: ${e.message} (Cause: $causeMsg)")
             e.printStackTrace()
-            return Pair(false, "Failed to send test notification: ${e.message ?: e.javaClass.simpleName}")
+            cause?.printStackTrace()
+            val detailMsg = if (!causeMsg.isNullOrBlank() && causeMsg != e.message) {
+                "${e.message} (Root Cause: $causeMsg)"
+            } else {
+                e.message ?: e.javaClass.simpleName
+            }
+            return Pair(false, "Failed to send test notification: $detailMsg")
         }
     }
 }
