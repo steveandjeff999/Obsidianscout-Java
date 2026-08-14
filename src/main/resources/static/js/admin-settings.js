@@ -316,30 +316,27 @@ document.addEventListener("DOMContentLoaded", async () => {
             setChecked("settings-chat", loadedSettings.chatEnabled);
 
             const isFtc = me.program === "FTC";
+            const yearNote = document.getElementById("settings-year-note");
+            if (yearNote) {
+                yearNote.style.display = isFtc ? "block" : "none";
+            }
+
+            const tbaCard = document.getElementById("settings-tba-card");
+            const tbaHeading = document.getElementById("settings-tba-heading") || document.querySelector('h3[data-i18n="config.the_blue_alliance"]');
+            const tbaLabel = document.getElementById("settings-tba-label");
+            const tbaOption = document.querySelector('#settings-source option[value="tba"]');
+            
+            const firstHeading = document.getElementById("settings-first-heading") || document.querySelector('h3[data-i18n="config.first_api"]');
+            const firstOption = document.querySelector('#settings-source option[value="first"]');
+
             if (isFtc) {
-                const yearNote = document.getElementById("settings-year-note");
-                if (yearNote) {
-                    yearNote.style.display = "block";
-                }
+                if (tbaCard) tbaCard.style.display = "";
+                if (tbaHeading) tbaHeading.textContent = "FTC Scout";
+                if (tbaLabel) tbaLabel.textContent = "FTC Scout key";
+                if (tbaOption) tbaOption.textContent = "FTC Scout";
 
-                const tbaHeading = document.querySelector('h3[data-i18n="config.the_blue_alliance"]');
-                if (tbaHeading && tbaHeading.closest('.card.soft')) {
-                    tbaHeading.closest('.card.soft').style.display = "none";
-                }
-
-                const firstHeading = document.querySelector('h3[data-i18n="config.first_api"]');
-                if (firstHeading) {
-                    firstHeading.textContent = "FIRST FTC API";
-                }
-
-                const tbaOption = document.querySelector('#settings-source option[value="tba"]');
-                if (tbaOption) {
-                    tbaOption.textContent = "FTC Scout";
-                }
-                const firstOption = document.querySelector('#settings-source option[value="first"]');
-                if (firstOption) {
-                    firstOption.textContent = "FIRST FTC API";
-                }
+                if (firstHeading) firstHeading.textContent = "FIRST FTC API";
+                if (firstOption) firstOption.textContent = "FIRST FTC API";
 
                 const epaCheckbox = document.getElementById("settings-epa");
                 if (epaCheckbox && epaCheckbox.parentElement) {
@@ -355,6 +352,30 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const statboticsCard = document.getElementById("settings-statbotics-card");
                 if (statboticsCard) {
                     statboticsCard.style.display = "none";
+                }
+            } else {
+                if (tbaCard) tbaCard.style.display = "";
+                if (tbaHeading) tbaHeading.textContent = "The Blue Alliance";
+                if (tbaLabel) tbaLabel.textContent = "TBA key";
+                if (tbaOption) tbaOption.textContent = "The Blue Alliance";
+
+                if (firstHeading) firstHeading.textContent = "FIRST API";
+                if (firstOption) firstOption.textContent = "FIRST API";
+
+                const epaCheckbox = document.getElementById("settings-epa");
+                if (epaCheckbox && epaCheckbox.parentElement) {
+                    epaCheckbox.parentElement.style.display = "";
+                }
+                const oprCheckbox = document.getElementById("settings-opr");
+                if (oprCheckbox && oprCheckbox.parentElement) {
+                    const textNode = Array.from(oprCheckbox.parentElement.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
+                    if (textNode) {
+                        textNode.textContent = " Use TBA OPR";
+                    }
+                }
+                const statboticsCard = document.getElementById("settings-statbotics-card");
+                if (statboticsCard) {
+                    statboticsCard.style.display = "";
                 }
             }
 
