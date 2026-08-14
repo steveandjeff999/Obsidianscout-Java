@@ -56,22 +56,27 @@ object FcmService {
                 return
             }
 
-            val credentials = GoogleCredentials.fromStream(ByteArrayInputStream(jsonStr.toByteArray(Charsets.UTF_8)))
+            val rawCredentials = GoogleCredentials.fromStream(ByteArrayInputStream(jsonStr.toByteArray(Charsets.UTF_8)))
+            val fcmScopes = listOf(
+                "https://www.googleapis.com/auth/firebase.messaging",
+                "https://www.googleapis.com/auth/cloud-platform"
+            )
+            val credentials = if (rawCredentials.createScopedRequired()) {
+                rawCredentials.createScoped(fcmScopes)
+            } else {
+                rawCredentials
+            }
+
             val options = FirebaseOptions.builder()
                 .setCredentials(credentials)
                 .setProjectId(configRow[FcmConfigs.projectId].ifBlank { null })
                 .build()
 
             FirebaseApp.initializeApp(options)
-            try {
-                credentials.refreshIfExpired()
-            } catch (e: Throwable) {
-                val root = getRootCause(e)
-                println("[FCM] Warning: Proactive credential refresh failed during startup: ${e.message} (Root Cause: ${root.javaClass.name}: ${root.message})")
-            }
+            credentials.refreshIfExpired()
             isInitialized = true
             lastLoadedTimestamp = configRow[FcmConfigs.updatedAt]
-            println("[FCM] Firebase Admin SDK successfully initialized for project: ${configRow[FcmConfigs.projectId]}")
+            println("[FCM] Firebase Admin SDK successfully initialized and OAuth2 authenticated for project: ${configRow[FcmConfigs.projectId]}")
         } catch (e: Throwable) {
             val root = getRootCause(e)
             isInitialized = false
