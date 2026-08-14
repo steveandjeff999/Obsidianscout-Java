@@ -20,7 +20,7 @@
                 Obsidianscout.wireLogout();
                 Obsidianscout.wireThemeToggle();
 
-                if (!Obsidianscout.isAdmin(me.role)) {
+                if (!Obsidianscout.isSuperAdmin(me.role)) {
                     document.getElementById("admin-locked")?.classList.remove("hidden");
                     document.getElementById("admin-panel")?.classList.add("hidden");
                     return;

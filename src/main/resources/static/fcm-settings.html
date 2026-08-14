@@ -189,6 +189,24 @@
         document.addEventListener("DOMContentLoaded", async () => {
             const adminLocked = document.getElementById("admin-locked");
             const fcmPanel = document.getElementById("fcm-panel");
+
+            if (window.Obsidianscout) {
+                Obsidianscout.initTheme();
+                const me = await Obsidianscout.requireAuth();
+                if (!me) return;
+
+                Obsidianscout.setUserBadge(me);
+                Obsidianscout.setActiveNav();
+                Obsidianscout.adjustNavForRole(me);
+                Obsidianscout.wireLogout();
+                Obsidianscout.wireThemeToggle();
+
+                if (!Obsidianscout.isSuperAdmin(me.role)) {
+                    adminLocked?.classList.remove("hidden");
+                    fcmPanel?.classList.add("hidden");
+                    return;
+                }
+            }
             const fcmEnabled = document.getElementById("fcm-enabled");
             const jsonDropzone = document.getElementById("json-dropzone");
             const jsonFileInput = document.getElementById("json-file-input");
