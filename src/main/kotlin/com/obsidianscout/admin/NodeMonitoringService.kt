@@ -65,9 +65,9 @@ object NodeMonitoringService {
     fun hasEnrolledSuperadmins(): Boolean {
         return try {
             transaction {
-                Users.selectAll()
+                !Users.selectAll()
                     .where { (Users.role eq UserRole.SUPERADMIN.name) and (Users.nodeAlertsEnabled eq true) }
-                    .any()
+                    .empty()
             }
         } catch (e: Exception) {
             false

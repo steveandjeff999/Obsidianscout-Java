@@ -1,6 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
 
+if "%~1"=="--finish-update" goto finish_update
+
 :: Check for native executable first to execute update without JVM dependency
 set NATIVE_EXEC=
 for %%f in (obsidianscout-server-native*.exe obsidianscout-server-native*) do (
@@ -94,8 +96,14 @@ for %%i in ("!SRC_ROOT!\..") do set TEMP_DIR=%%~fi
 rd /s /q "!TEMP_DIR!" >nul 2>&1
 if exist .update_tmp rd /s /q .update_tmp >nul 2>&1
 
+cmd /c "%~f0" --finish-update
+exit /b 0
+
+:finish_update
+echo.
 echo Update completed successfully!
 pause
+exit /b 0
 
 
 

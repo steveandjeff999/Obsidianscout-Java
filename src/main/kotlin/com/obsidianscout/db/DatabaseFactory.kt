@@ -80,7 +80,8 @@ object DatabaseFactory {
                 isAutoCommit = true
             }
             connectionTimeout = 10_000  // fail fast after 10s instead of the 30s default
-            leakDetectionThreshold = 30000L
+            leakDetectionThreshold = 60000L // 60s threshold to avoid false connection leak warnings during transient CockroachDB leader elections
+            validationTimeout = 5000L
         }
 
         val dataSource = HikariDataSource(hikariConfig)
@@ -1093,7 +1094,7 @@ object DatabaseFactory {
         val hostPart = if (pg.host.contains(",") || pg.host.contains(":")) pg.host else "${pg.host}:${pg.port}"
         val base = "jdbc:postgresql://$hostPart/${pg.database}"
         val ssl = if (pg.ssl) "sslmode=require" else "sslmode=disable"
-        return "$base?$ssl&reWriteBatchedInserts=true"
+        return "$base?$ssl&reWriteBatchedInserts=true&connectTimeout=10&socketTimeout=30&tcpKeepAlive=true"
     }
 
     /**
