@@ -64,9 +64,13 @@ object DatabaseFactory {
             }
             val isLowMem = System.getenv("LOW_RAM") == "1" || System.getenv("LOW_MEM") == "1"
             if (type == "postgres") {
-                maximumPoolSize = if (isLowMem) 4 else 8
-                minimumIdle = 1
-                idleTimeout = 30_000L
+                // 20 connections gives enough headroom for concurrent startup bursts:
+                // ClusterSecretService (30s poll) + SyncScheduler + multiple auth checks
+                // + admin page loads all fire simultaneously after each update restart.
+                // CockroachDB handles 20 concurrent SERIALIZABLE connections comfortably.
+                maximumPoolSize = if (isLowMem) 6 else 20
+                minimumIdle = 2
+                idleTimeout = 60_000L
                 maxLifetime = 300_000L
                 isAutoCommit = true
                 username = config.postgres.user
@@ -79,7 +83,7 @@ object DatabaseFactory {
                 maxLifetime = 300_000L
                 isAutoCommit = true
             }
-            connectionTimeout = 10_000  // fail fast after 10s instead of the 30s default
+            connectionTimeout = 5_000  // fail fast — 5s keeps queued waiters from piling up
             leakDetectionThreshold = 60000L // 60s threshold to avoid false connection leak warnings during transient CockroachDB leader elections
             validationTimeout = 5000L
         }
