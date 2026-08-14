@@ -63,12 +63,19 @@ object FcmService {
                 .build()
 
             FirebaseApp.initializeApp(options)
+            try {
+                credentials.refreshIfExpired()
+            } catch (e: Throwable) {
+                val root = getRootCause(e)
+                println("[FCM] Warning: Proactive credential refresh failed during startup: ${e.message} (Root Cause: ${root.javaClass.name}: ${root.message})")
+            }
             isInitialized = true
             lastLoadedTimestamp = configRow[FcmConfigs.updatedAt]
             println("[FCM] Firebase Admin SDK successfully initialized for project: ${configRow[FcmConfigs.projectId]}")
         } catch (e: Throwable) {
+            val root = getRootCause(e)
             isInitialized = false
-            println("[FCM] Failed to initialize Firebase Admin SDK: ${e.message}")
+            println("[FCM] Failed to initialize Firebase Admin SDK: ${e.message} (Root Cause: ${root.javaClass.name}: ${root.message})")
             e.printStackTrace()
         }
     }
