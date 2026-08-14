@@ -2380,9 +2380,9 @@
                     <button class="modal-close" id="qr-modal-close-btn">&times;</button>
                 </div>
                 <div class="modal-body qr-modal-body">
-                    <div class="qr-size-controls" style="margin-bottom: 16px; padding: 10px 14px; background: rgba(0,0,0,0.03); border-radius: var(--radius-md, 10px); border: 1px solid var(--border-color, rgba(255,255,255,0.1)); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
-                        <label for="qr-max-size-select" style="font-weight: 600; font-size: 13px; margin: 0; display: flex; align-items: center; gap: 6px;" data-i18n="qr.max_size_label">Max QR Code Size:</label>
-                        <select id="qr-max-size-select" class="qr-size-select" style="padding: 6px 10px; border-radius: 8px; font-size: 13px; background: var(--bg-card, #ffffff); color: var(--ink, inherit); border: 1px solid var(--border, #ccc); cursor: pointer;">
+                    <div class="qr-size-controls">
+                        <label for="qr-max-size-select" data-i18n="qr.max_size_label">Max QR Code Size:</label>
+                        <select id="qr-max-size-select" class="qr-size-select">
                             <option value="150" ${currentChunkSize === 150 ? 'selected' : ''} data-i18n="qr.size_150">150 chars (Small - Easiest Scan)</option>
                             <option value="250" ${currentChunkSize === 250 ? 'selected' : ''} data-i18n="qr.size_250">250 chars (Medium-Low)</option>
                             <option value="350" ${currentChunkSize === 350 ? 'selected' : ''} data-i18n="qr.size_350">350 chars (Medium)</option>

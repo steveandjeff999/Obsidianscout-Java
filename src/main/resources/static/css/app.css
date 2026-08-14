@@ -2990,6 +2990,69 @@ body.theme-dark .retry-container {
     gap: 16px;
 }
 
+.qr-size-controls {
+    width: 100%;
+    margin-bottom: 4px;
+    padding: 12px 16px;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+body.theme-dark .qr-size-controls {
+    background: var(--surface-3);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.qr-size-controls label {
+    font-weight: 600;
+    font-size: 13.5px;
+    margin: 0;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.qr-size-select {
+    padding: 8px 12px;
+    border-radius: var(--radius-sm, 10px);
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+body.theme-dark .qr-size-select {
+    background: var(--surface-2);
+    color: var(--ink);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.qr-size-select option {
+    background: var(--surface);
+    color: var(--ink);
+}
+
+body.theme-dark .qr-size-select option {
+    background: var(--surface-2);
+    color: var(--ink);
+}
+
+.qr-size-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
 .qr-code-wrapper {
     display: flex;
     justify-content: center;
