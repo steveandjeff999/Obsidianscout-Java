@@ -7,6 +7,9 @@
       { "pattern": "META-INF/kotlinx-serialization.*" },
       { "pattern": ".*\\.properties" },
       { "pattern": ".*\\.json" },
+      { "pattern": ".*\\.jks" },
+      { "pattern": ".*\\.crt" },
+      { "pattern": ".*\\.pem" },
       { "pattern": "com/google/.*" },
       { "pattern": "google/.*" }
     ],
