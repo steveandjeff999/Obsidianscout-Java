@@ -76,15 +76,26 @@ if errorlevel 1 (
     del /q obsidianscout-server-native* >nul 2>&1
 )
 
-:: Recursively copy all updated files and subdirectories
-xcopy /e /y /h /i "!SRC_ROOT!\*" "." >nul
+:: Recursively copy all updated files and subdirectories with retries and stdin redirection
+timeout /t 3 >nul 2>&1
+set COPY_ATTEMPTS=0
+:copy_loop_upd
+set /a COPY_ATTEMPTS+=1
+xcopy /e /y /h /i /r /k /c "!SRC_ROOT!\*" "." <nul >nul
+if errorlevel 1 (
+    if !COPY_ATTEMPTS! LSS 5 (
+        timeout /t 2 >nul 2>&1
+        goto copy_loop_upd
+    )
+)
 
 :: Clean up temp folder
 for %%i in ("!SRC_ROOT!\..") do set TEMP_DIR=%%~fi
-rd /s /q "!TEMP_DIR!"
+rd /s /q "!TEMP_DIR!" >nul 2>&1
 if exist .update_tmp rd /s /q .update_tmp >nul 2>&1
 
 echo Update completed successfully!
 pause
+
 
 

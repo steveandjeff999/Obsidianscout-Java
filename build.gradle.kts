@@ -237,15 +237,24 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
             "            xcopy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
             "        )\r\n" +
-            "        timeout /t 2 >nul 2>&1\r\n" +
-            "        xcopy /e /y /h /i \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
+            "        timeout /t 3 >nul 2>&1\r\n" +
+            "        set COPY_ATTEMPTS=0\r\n" +
+            "        :copy_loop_std\r\n" +
+            "        set /a COPY_ATTEMPTS+=1\r\n" +
+            "        xcopy /e /y /h /i /r /k /c \"!SRC_ROOT!\\*\" \".\" <nul >nul\r\n" +
+            "        if errorlevel 1 (\r\n" +
+            "            if !COPY_ATTEMPTS! LSS 5 (\r\n" +
+            "                timeout /t 2 >nul 2>&1\r\n" +
+            "                goto copy_loop_std\r\n" +
+            "            )\r\n" +
+            "        )\r\n" +
             "        if exist .update_tmp_cfg\\app-config.json (\r\n" +
             "            if not exist config mkdir config\r\n" +
             "            copy /y \".update_tmp_cfg\\app-config.json\" \"config\\app-config.json\" >nul\r\n" +
             "            rd /s /q .update_tmp_cfg >nul 2>&1\r\n" +
             "        )\r\n" +
             "        for %%i in (\"!SRC_ROOT!\\..\") do set TEMP_DIR=%%~fi\r\n" +
-            "        rd /s /q \"!TEMP_DIR!\"\r\n" +
+            "        rd /s /q \"!TEMP_DIR!\" >nul 2>&1\r\n" +
             "        if exist .update_tmp rd /s /q .update_tmp >nul 2>&1\r\n" +
             "        echo pending > .update_pending\r\n" +
             "        echo [Updater] Update applied. Restarting to test boot...\r\n" +
@@ -735,25 +744,40 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "        echo [Updater] Backing up current native installation...\r\n" +
                 "        if not exist .backup mkdir .backup\r\n" +
                 "        if exist obsidianscout-server-native-$arch copy /y \"obsidianscout-server-native-$arch\" \".backup\\\" >nul\r\n" +
+                "        if exist obsidianscout-server-native-$arch.exe copy /y \"obsidianscout-server-native-$arch.exe\" \".backup\\\" >nul\r\n" +
                 "        if exist obsidianscout-server-native.exe copy /y \"obsidianscout-server-native.exe\" \".backup\\\" >nul\r\n" +
                 "        if exist obsidianscout-server.jar copy /y \"obsidianscout-server.jar\" \".backup\\\" >nul\r\n" +
+                "        if exist *.dll copy /y \"*.dll\" \".backup\\\" >nul 2>&1\r\n" +
                 "        echo [Updater] Applying update from !SRC_ROOT!...\r\n" +
                 "        dir /b \"!SRC_ROOT!\\obsidianscout-server-native*\" >nul 2>&1\r\n" +
                 "        if errorlevel 1 (\r\n" +
                 "            if exist obsidianscout-server-native-$arch del /q \"obsidianscout-server-native-$arch\" >nul 2>&1\r\n" +
+                "            if exist obsidianscout-server-native-$arch.exe del /q \"obsidianscout-server-native-$arch.exe\" >nul 2>&1\r\n" +
                 "            if exist obsidianscout-server-native.exe del /q \"obsidianscout-server-native.exe\" >nul 2>&1\r\n" +
                 "        )\r\n" +
                 "        if exist config\\app-config.json (\r\n" +
                 "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
                 "            copy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
                 "        )\r\n" +
-                "        timeout /t 2 >nul 2>&1\r\n" +
-                "        xcopy /e /y /h /i \"!SRC_ROOT!\\*\" \".\" >nul\r\n" +
+                "        timeout /t 3 >nul 2>&1\r\n" +
+                "        set COPY_ATTEMPTS=0\r\n" +
+                "        :copy_loop_native\r\n" +
+                "        set /a COPY_ATTEMPTS+=1\r\n" +
+                "        xcopy /e /y /h /i /r /k /c \"!SRC_ROOT!\\*\" \".\" <nul >nul\r\n" +
+                "        if errorlevel 1 (\r\n" +
+                "            if !COPY_ATTEMPTS! LSS 5 (\r\n" +
+                "                timeout /t 2 >nul 2>&1\r\n" +
+                "                goto copy_loop_native\r\n" +
+                "            )\r\n" +
+                "        )\r\n" +
                 "        if exist .update_tmp_cfg\\app-config.json (\r\n" +
                 "            if not exist config mkdir config\r\n" +
                 "            copy /y \".update_tmp_cfg\\app-config.json\" \"config\\app-config.json\" >nul\r\n" +
                 "            rd /s /q .update_tmp_cfg >nul 2>&1\r\n" +
                 "        )\r\n" +
+                "        for %%i in (\"!SRC_ROOT!\") do set TEMP_DIR=%%~fi\\..\r\n" +
+                "        rd /s /q \"!TEMP_DIR!\" >nul 2>&1\r\n" +
+                "        if exist .update_tmp rd /s /q .update_tmp >nul 2>&1\r\n" +
                 "        echo pending > .update_pending\r\n" +
                 "        echo [Updater] Update applied. Restarting server...\r\n" +
                 "        cmd /c \"%~f0\" %*\r\n" +
