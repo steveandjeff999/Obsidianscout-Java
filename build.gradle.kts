@@ -597,7 +597,7 @@ graalvmNative {
                 "-H:+UnlockExperimentalVMOptions",
                 "-H:+ReportExceptionStackTraces",
                 "-H:EnableURLProtocols=http,https",
-                "-H:EnableAllSecurityServices=true",
+                "-H:+EnableAllSecurityServices",
                 "--enable-https",
                 "--enable-http",
                 "-H:ReflectionConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/com.obsidianscout/obsidianscout-server/reflect-config.json",
