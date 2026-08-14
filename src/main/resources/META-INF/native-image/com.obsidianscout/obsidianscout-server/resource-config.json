@@ -4,9 +4,14 @@
       { "pattern": "logback\\.xml" },
       { "pattern": "META-INF/native-image/.*" },
       { "pattern": "META-INF/services/.*" },
-      { "pattern": "META-INF/kotlinx-serialization.*" }
+      { "pattern": "META-INF/kotlinx-serialization.*" },
+      { "pattern": ".*\\.properties" },
+      { "pattern": ".*\\.json" },
+      { "pattern": "com/google/.*" },
+      { "pattern": "google/.*" }
     ],
     "excludes": []
   },
   "bundles": []
 }
+

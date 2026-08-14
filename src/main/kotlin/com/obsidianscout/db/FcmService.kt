@@ -66,7 +66,7 @@ object FcmService {
             isInitialized = true
             lastLoadedTimestamp = configRow[FcmConfigs.updatedAt]
             println("[FCM] Firebase Admin SDK successfully initialized for project: ${configRow[FcmConfigs.projectId]}")
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             isInitialized = false
             println("[FCM] Failed to initialize Firebase Admin SDK: ${e.message}")
             e.printStackTrace()
@@ -272,7 +272,7 @@ object FcmService {
                         }
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 println("[FCM] Error sending multicast notification batch: ${e.message}")
             }
         }
@@ -321,7 +321,7 @@ object FcmService {
             } else {
                 Pair(false, "Test notification failed to deliver. ${response.failureCount} failed.")
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             return Pair(false, "Failed to send test notification: ${e.message}")
         }
     }
