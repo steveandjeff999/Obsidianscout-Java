@@ -43,7 +43,7 @@
     "google_sheet_url": "",
     "google_sheet_password": "",
     "cockroach_port": 26257,
-    "current_version": "0.4.1.4",
+    "current_version": "0.4.1.5",
     "gist_update": {
         "enabled": false,
         "gist_url": "https://gist.githubusercontent.com/steveandjeff999/41b76376d064a6893ff2644b04447d9f/raw/Public-Version.json",
