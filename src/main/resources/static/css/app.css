@@ -149,6 +149,13 @@ body.theme-dark .sidebar::-webkit-scrollbar-thumb:hover {
     margin-bottom: 24px;
 }
 
+.sidebar-brand img,
+.topbar-brand-icon {
+    max-height: 36px;
+    max-width: 100%;
+    object-fit: contain;
+}
+
 .sidebar-section-title {
     font-size: 10px;
     text-transform: uppercase;
@@ -558,6 +565,18 @@ body.nav-layout-topbar .sidebar-brand {
     margin-bottom: 0;
     flex-shrink: 0;
     white-space: nowrap;
+    display: flex !important;
+    align-items: center !important;
+}
+
+body.nav-layout-topbar .topbar-brand-icon,
+body.nav-layout-topbar .sidebar-brand img {
+    width: 32px !important;
+    height: 32px !important;
+    max-width: 32px !important;
+    max-height: 32px !important;
+    object-fit: contain !important;
+    display: block !important;
 }
 
 body.nav-layout-topbar .sidebar-header {
