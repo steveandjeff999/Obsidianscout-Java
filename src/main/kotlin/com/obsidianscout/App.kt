@@ -208,7 +208,9 @@ fun Application.module(appConfig: AppConfig) {
                     path.startsWith("/api/mobile") ||
                     path.startsWith("/api/cluster") ||
                     path.startsWith("/api/admin/cluster") ||
-                    call.request.headers["X-Cluster-Signature"] != null
+                    path.startsWith("/api/auth/") ||
+                    call.request.headers["X-Cluster-Signature"] != null ||
+                    call.request.headers["X-Mobile-App"] != null
             if (!isExcludedPath) {
                 val origin = call.request.headers["Origin"]
                 val referer = call.request.headers["Referer"]
