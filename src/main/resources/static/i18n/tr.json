@@ -587,6 +587,8 @@
   "config.tba_key": "TBA anahtarı",
   "config.first_username": "FIRST kullanıcı adı",
   "config.first_key": "FIRST anahtarı",
+  "config.statbotics_api": "Statbotics",
+  "config.statbotics_base_url": "Statbotics Üst API Adresi",
   "config.configure_personal_settings_fo": "Bu cihaz için kişisel ayarları yapılandırın.",
   "config.profile_picture": "Profil Resmi",
   "config.upload_photo": "📷 Fotoğraf yükle",

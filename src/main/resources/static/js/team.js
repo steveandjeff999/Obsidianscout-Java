@@ -73,6 +73,7 @@ async function loadTeamProfile() {
         // Fetch Settings & Event Key
         const settingsResponse = await Obsidianscout.request("/api/settings");
         const settings = settingsResponse.settings;
+        state.settings = settings;
         timezone = settings.timezone;
 
         if (!currentEventKey) {
@@ -249,12 +250,20 @@ function renderStats() {
     const t = state.team;
     
     // EPA
+    const cardEpa = document.getElementById("card-stat-epa");
+    if (cardEpa) {
+        cardEpa.style.display = (state.settings && state.settings.useStatboticsEpa) ? "" : "none";
+    }
     const epaEl = document.getElementById("stat-epa");
-    epaEl.textContent = t.epa !== null && t.epa !== undefined ? t.epa.toFixed(2) : "--";
+    if (epaEl) epaEl.textContent = t.epa !== null && t.epa !== undefined ? t.epa.toFixed(2) : "--";
 
     // OPR
+    const cardOpr = document.getElementById("card-stat-opr");
+    if (cardOpr) {
+        cardOpr.style.display = (state.settings && state.settings.useTbaOpr) ? "" : "none";
+    }
     const oprEl = document.getElementById("stat-opr");
-    oprEl.textContent = t.opr !== null && t.opr !== undefined ? t.opr.toFixed(2) : "--";
+    if (oprEl) oprEl.textContent = t.opr !== null && t.opr !== undefined ? t.opr.toFixed(2) : "--";
 
     // Avg Points
     const avgEl = document.getElementById("stat-avg-points");

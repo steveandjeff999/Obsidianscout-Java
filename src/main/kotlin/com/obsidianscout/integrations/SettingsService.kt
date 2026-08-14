@@ -96,7 +96,8 @@ data class ApiSettings(
     val themes: List<ThemeSettings> = emptyList(),
     val activeThemeName: String = "",
     val setupWizardCompleted: Boolean = false,
-    val program: String = "FRC"
+    val program: String = "FRC",
+    val statboticsBaseUrl: String = "https://api.statbotics.io"
 ) {
     fun resolvedEventKey(): String {
         val code = eventCode.trim()
@@ -207,6 +208,8 @@ object SettingsService {
             if ("admin-settings" !in this) add("admin-settings")
             if ("events" !in this) add("events")
         }
+        val rawStatboticsUrl = settings.statboticsBaseUrl.trim()
+        val statboticsUrl = (if (rawStatboticsUrl.isBlank()) "https://api.statbotics.io" else rawStatboticsUrl).removeSuffix("/")
         return settings.copy(
             eventCode = canonicalTbaEventCode(eventCode),
             eventKey = resolvedKey,
@@ -214,7 +217,8 @@ object SettingsService {
             preferredSource = settings.preferredSource.lowercase(),
             scoutPages = normalizedScoutPages,
             analyticsPages = normalizedAnalyticsPages,
-            adminPages = normalizedAdminPages
+            adminPages = normalizedAdminPages,
+            statboticsBaseUrl = statboticsUrl
         )
     }
 

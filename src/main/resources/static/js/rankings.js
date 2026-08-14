@@ -31,16 +31,41 @@ document.addEventListener("DOMContentLoaded", async () => {
     await initRankingsPage();
 });
 
+let appSettings = null;
+
 async function initRankingsPage() {
     Obsidianscout.showLoadingSpinner(card, "Loading rankings...");
 
     try {
         const settingsResponse = await Obsidianscout.request("/api/settings");
         const settings = settingsResponse.settings;
+        appSettings = settings;
         currentEventKey = Obsidianscout.resolveEventKey(settings);
 
         // Restore HTML
         card.innerHTML = originalCardHTML;
+
+        // Metric selector options filtering based on team settings
+        const metricSelect = document.getElementById("metric-select");
+        if (!settings.useStatboticsEpa) {
+            const optEpa = metricSelect.querySelector('option[value="epa"]');
+            if (optEpa) optEpa.remove();
+        }
+        if (!settings.useTbaOpr) {
+            const optOpr = metricSelect.querySelector('option[value="opr"]');
+            if (optOpr) optOpr.remove();
+        }
+        if (!settings.useStatboticsEpa || !settings.useTbaOpr) {
+            const optAll = metricSelect.querySelector('option[value="all"]');
+            if (optAll) optAll.remove();
+        }
+        if ((currentMetric === "epa" && !settings.useStatboticsEpa) ||
+            (currentMetric === "opr" && !settings.useTbaOpr) ||
+            (currentMetric === "all" && (!settings.useStatboticsEpa || !settings.useTbaOpr))) {
+            currentMetric = "scouted";
+            activeSortMetric = "scouted";
+        }
+        metricSelect.value = currentMetric;
 
         // Populate event filter select dropdown
         const eventFilter = document.getElementById("event-filter");
@@ -61,8 +86,7 @@ async function initRankingsPage() {
             await loadRankings();
         });
 
-        // Metric selector
-        const metricSelect = document.getElementById("metric-select");
+        // Metric selector listener
         metricSelect.addEventListener("change", () => {
             currentMetric = metricSelect.value;
             if (currentMetric !== "all") {
@@ -75,12 +99,18 @@ async function initRankingsPage() {
         document.getElementById("header-scouted").addEventListener("click", () => {
             sortByColumn("scouted");
         });
-        document.getElementById("header-opr").addEventListener("click", () => {
-            sortByColumn("opr");
-        });
-        document.getElementById("header-epa").addEventListener("click", () => {
-            sortByColumn("epa");
-        });
+        const headerOprEl = document.getElementById("header-opr");
+        if (headerOprEl) {
+            headerOprEl.addEventListener("click", () => {
+                if (appSettings && appSettings.useTbaOpr) sortByColumn("opr");
+            });
+        }
+        const headerEpaEl = document.getElementById("header-epa");
+        if (headerEpaEl) {
+            headerEpaEl.addEventListener("click", () => {
+                if (appSettings && appSettings.useStatboticsEpa) sortByColumn("epa");
+            });
+        }
 
         await loadRankings();
 
@@ -166,7 +196,7 @@ function renderTable() {
         if (indicator) indicator.remove();
     });
 
-    // Show/hide columns based on currentMetric selection
+    // Show/hide columns based on currentMetric selection and appSettings
     if (currentMetric === "scouted") {
         headerScouted.style.display = "";
         headerOpr.style.display = "none";
@@ -184,6 +214,13 @@ function renderTable() {
         headerScouted.style.display = "";
         headerOpr.style.display = "";
         headerEpa.style.display = "";
+    }
+
+    if (appSettings && !appSettings.useTbaOpr) {
+        headerOpr.style.display = "none";
+    }
+    if (appSettings && !appSettings.useStatboticsEpa) {
+        headerEpa.style.display = "none";
     }
 
     // Highlight active sorting column
@@ -214,6 +251,13 @@ function renderTable() {
             oprCell = "";
         } else if (currentMetric === "opr") {
             scoutedCell = "";
+            epaCell = "";
+        }
+
+        if (appSettings && !appSettings.useTbaOpr) {
+            oprCell = "";
+        }
+        if (appSettings && !appSettings.useStatboticsEpa) {
             epaCell = "";
         }
 

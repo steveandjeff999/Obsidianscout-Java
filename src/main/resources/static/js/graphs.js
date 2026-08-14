@@ -693,7 +693,9 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
     });
 
     // 2. Sort the data based on state.sort
-    const sortField = state.datasource === "all" ? "epa" : state.datasource;
+    const sortField = state.datasource === "all" 
+        ? (state.settings?.useStatboticsEpa ? "epa" : (state.settings?.useTbaOpr ? "opr" : "scouted")) 
+        : state.datasource;
 
     data.sort((a, b) => {
         if (state.sort === "team_asc") return a.teamNumber - b.teamNumber;

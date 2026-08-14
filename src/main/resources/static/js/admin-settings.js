@@ -310,6 +310,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             setVal("settings-event-code", loadedSettings.eventCode || "");
             setVal("settings-timezone", loadedSettings.timezone || "America/New_York");
             setVal("settings-source", loadedSettings.preferredSource || "tba");
+            setVal("settings-statbotics-url", loadedSettings.statboticsBaseUrl || "https://api.statbotics.io");
             setChecked("settings-epa", loadedSettings.useStatboticsEpa);
             setChecked("settings-opr", loadedSettings.useTbaOpr);
             setChecked("settings-chat", loadedSettings.chatEnabled);
@@ -350,6 +351,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (textNode) {
                         textNode.textContent = " Use FTC Scout OPR";
                     }
+                }
+                const statboticsCard = document.getElementById("settings-statbotics-card");
+                if (statboticsCard) {
+                    statboticsCard.style.display = "none";
                 }
             }
 
@@ -505,6 +510,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.useStatboticsEpa = getChecked("settings-epa");
                     loadedSettings.useTbaOpr = getChecked("settings-opr");
                     loadedSettings.chatEnabled = getChecked("settings-chat");
+                    loadedSettings.statboticsBaseUrl = getVal("settings-statbotics-url").trim() || "https://api.statbotics.io";
                     loadedSettings.apiKeys = {
                         tbaKey: getVal("settings-tba-key").trim(),
                         firstUsername: getVal("settings-first-user").trim(),

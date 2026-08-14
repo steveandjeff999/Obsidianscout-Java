@@ -587,6 +587,8 @@
   "config.tba_key": "TBA key",
   "config.first_username": "FIRST username",
   "config.first_key": "FIRST key",
+  "config.statbotics_api": "Statbotics",
+  "config.statbotics_base_url": "Statbotics Base URL",
   "config.configure_personal_settings_fo": "Configure personal settings for this device.",
   "config.profile_picture": "Profile Picture",
   "config.upload_photo": "📷 Upload photo",

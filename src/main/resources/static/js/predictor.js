@@ -244,10 +244,20 @@ function renderPrediction(data) {
     if (selectedSource === "all") {
         scoutedComp.classList.remove("hidden");
         scoutedCard.classList.remove("hidden");
-        epaComp.classList.remove("hidden");
-        epaCard.classList.remove("hidden");
-        oprComp.classList.remove("hidden");
-        oprCard.classList.remove("hidden");
+        if (currentSettings && currentSettings.useStatboticsEpa) {
+            epaComp.classList.remove("hidden");
+            epaCard.classList.remove("hidden");
+        } else {
+            epaComp.classList.add("hidden");
+            epaCard.classList.add("hidden");
+        }
+        if (currentSettings && currentSettings.useTbaOpr) {
+            oprComp.classList.remove("hidden");
+            oprCard.classList.remove("hidden");
+        } else {
+            oprComp.classList.add("hidden");
+            oprCard.classList.add("hidden");
+        }
 
         document.getElementById("red-total-scouted").textContent = `${redScouted.toFixed(1)} pts`;
         document.getElementById("blue-total-scouted").textContent = `${blueScouted.toFixed(1)} pts`;
@@ -264,8 +274,13 @@ function renderPrediction(data) {
     } else if (selectedSource === "epa") {
         scoutedComp.classList.add("hidden");
         scoutedCard.classList.add("hidden");
-        epaComp.classList.remove("hidden");
-        epaCard.classList.remove("hidden");
+        if (currentSettings && currentSettings.useStatboticsEpa) {
+            epaComp.classList.remove("hidden");
+            epaCard.classList.remove("hidden");
+        } else {
+            epaComp.classList.add("hidden");
+            epaCard.classList.add("hidden");
+        }
         oprComp.classList.add("hidden");
         oprCard.classList.add("hidden");
 
@@ -276,8 +291,13 @@ function renderPrediction(data) {
         scoutedCard.classList.add("hidden");
         epaComp.classList.add("hidden");
         epaCard.classList.add("hidden");
-        oprComp.classList.remove("hidden");
-        oprCard.classList.remove("hidden");
+        if (currentSettings && currentSettings.useTbaOpr) {
+            oprComp.classList.remove("hidden");
+            oprCard.classList.remove("hidden");
+        } else {
+            oprComp.classList.add("hidden");
+            oprCard.classList.add("hidden");
+        }
 
         document.getElementById("red-total-scouted").textContent = `${redOpr.toFixed(1)} OPR`;
         document.getElementById("blue-total-scouted").textContent = `${blueOpr.toFixed(1)} OPR`;
@@ -349,10 +369,10 @@ function renderTeamList(listId, teams, selectedSource) {
                 : "No scouted data";
             
             metricsHtml += `<span class="metric-pill">${t.scoutedMatchesCount} matches</span>`;
-            if (t.epa !== null) {
+            if (t.epa !== null && currentSettings && currentSettings.useStatboticsEpa) {
                 metricsHtml += `<span class="metric-pill">EPA: ${t.epa.toFixed(1)}</span>`;
             }
-            if (t.opr !== null) {
+            if (t.opr !== null && currentSettings && currentSettings.useTbaOpr) {
                 metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
             }
         } else if (selectedSource === "epa") {
@@ -364,7 +384,7 @@ function renderTeamList(listId, teams, selectedSource) {
             if (t.averageScoutedScore !== null) {
                 metricsHtml += `<span class="metric-pill">Scouted: ${t.averageScoutedScore.toFixed(1)} pts</span>`;
             }
-            if (t.opr !== null) {
+            if (t.opr !== null && currentSettings && currentSettings.useTbaOpr) {
                 metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
             }
         } else if (selectedSource === "opr") {
@@ -376,7 +396,7 @@ function renderTeamList(listId, teams, selectedSource) {
             if (t.averageScoutedScore !== null) {
                 metricsHtml += `<span class="metric-pill">Scouted: ${t.averageScoutedScore.toFixed(1)} pts</span>`;
             }
-            if (t.epa !== null) {
+            if (t.epa !== null && currentSettings && currentSettings.useStatboticsEpa) {
                 metricsHtml += `<span class="metric-pill">EPA: ${t.epa.toFixed(1)}</span>`;
             }
         }

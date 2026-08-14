@@ -62,7 +62,26 @@
         try {
             const settingsResponse = await Obsidianscout.request("/api/settings");
             const settings = settingsResponse.settings;
+            state.settings = settings;
             currentEventKey = Obsidianscout.resolveEventKey(settings);
+
+            // Filter metric selector options
+            const metricSelect = document.getElementById("metric-select");
+            if (metricSelect) {
+                if (!settings.useStatboticsEpa) {
+                    const optEpa = metricSelect.querySelector('option[value="epa"]');
+                    if (optEpa) optEpa.remove();
+                }
+                if (!settings.useTbaOpr) {
+                    const optOpr = metricSelect.querySelector('option[value="opr"]');
+                    if (optOpr) optOpr.remove();
+                }
+                if ((selectedMetric === "epa" && !settings.useStatboticsEpa) ||
+                    (selectedMetric === "opr" && !settings.useTbaOpr)) {
+                    selectedMetric = "weighted";
+                    metricSelect.value = "weighted";
+                }
+            }
 
             // Populate event filter select dropdown
             const eventFilter = document.getElementById("event-filter");
@@ -290,11 +309,11 @@
             num += team.averagePoints * 1.0;
             den += 1.0;
         }
-        if (team.epa !== null && team.epa !== undefined) {
+        if (state.settings?.useStatboticsEpa && team.epa !== null && team.epa !== undefined) {
             num += team.epa * 0.8;
             den += 0.8;
         }
-        if (team.opr !== null && team.opr !== undefined) {
+        if (state.settings?.useTbaOpr && team.opr !== null && team.opr !== undefined) {
             num += team.opr * 0.6;
             den += 0.6;
         }
@@ -592,10 +611,19 @@
                     <span>${team.teamNumber}</span>
                     <span class="selector-nickname" title="${team.nickname || team.name || ""}">${team.nickname || team.name || ""}</span>
                 </div>
+            const epaSpan = state.settings?.useStatboticsEpa ? `<span>EPA: ${epa}</span>` : "";
+            const oprSpan = state.settings?.useTbaOpr ? `<span>OPR: ${opr}</span>` : "";
+
+            item.innerHTML = `
+                <div class="selector-team">
+                    <span class="rec-rank" style="min-width: 28px; text-align: left;">#${rank}</span>
+                    <span>${team.teamNumber}</span>
+                    <span class="selector-nickname" title="${team.nickname || team.name || ""}">${team.nickname || team.name || ""}</span>
+                </div>
                 <div class="selector-metrics">
                     <span>Scouted: ${points}</span>
-                    <span>EPA: ${epa}</span>
-                    <span>OPR: ${opr}</span>
+                    ${epaSpan}
+                    ${oprSpan}
                 </div>
             `;
             container.appendChild(item);
@@ -632,6 +660,12 @@
             const allTeamsInMatch = (m.redTeams || []).concat(m.blueTeams || []);
             return allTeamsInMatch.some(k => k.replace(/^(frc|ftc)/, "") === String(teamNumber));
         });
+
+        const cardEpa = document.getElementById("breakdown-card-epa");
+        if (cardEpa) cardEpa.style.display = state.settings?.useStatboticsEpa ? "" : "none";
+
+        const cardOpr = document.getElementById("breakdown-card-opr");
+        if (cardOpr) cardOpr.style.display = state.settings?.useTbaOpr ? "" : "none";
 
         document.getElementById("breakdown-stat-scouted").textContent = calculatedAvg;
         document.getElementById("breakdown-stat-epa").textContent = epa;

@@ -587,6 +587,8 @@
   "config.tba_key": "מפתח TBA",
   "config.first_username": "שם משתמש FIRST",
   "config.first_key": "מפתח FIRST",
+  "config.statbotics_api": "Statbotics",
+  "config.statbotics_base_url": "כתובת ה-API הבסיסית של Statbotics",
   "config.configure_personal_settings_fo": "הגדר הגדרות אישיות עבור מכשיר זה.",
   "config.profile_picture": "תמונת פרופיל",
   "config.upload_photo": "📷 העלה תמונה",

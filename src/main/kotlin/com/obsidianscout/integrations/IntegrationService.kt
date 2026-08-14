@@ -407,7 +407,7 @@ object IntegrationService {
         
         val (oprs, epas) = coroutineScope {
             val oprsDeferred = if (tbaEnabled) async { fetchTbaOprs(settings, eventKey) } else null
-            val epasDeferred = if (statboticsEnabled) async { fetchStatboticsEpas(eventKey) } else null
+            val epasDeferred = if (statboticsEnabled) async { fetchStatboticsEpas(settings, eventKey) } else null
             oprsDeferred?.await() to epasDeferred?.await()
         }
 
@@ -1463,8 +1463,9 @@ object IntegrationService {
         }
     }
 
-    private suspend fun fetchStatboticsEpas(eventKey: String): Map<String, Double> {
-        val url = "https://api.statbotics.io/v3/team_events?event=${eventKey}&limit=1000"
+    private suspend fun fetchStatboticsEpas(settings: ApiSettings, eventKey: String): Map<String, Double> {
+        val baseUrl = settings.statboticsBaseUrl.ifBlank { "https://api.statbotics.io" }.trimEnd('/')
+        val url = "$baseUrl/v3/team_events?event=${eventKey}&limit=1000"
         val response = try {
             client.get(url)
         } catch (error: Exception) {
@@ -1505,7 +1506,7 @@ object IntegrationService {
         if (normalizedKey.isBlank()) return
         
         val oprs = fetchTbaOprs(settings, normalizedKey)
-        val epaHistory = fetchStatboticsMatchEpaHistory(normalizedKey)
+        val epaHistory = fetchStatboticsMatchEpaHistory(settings, normalizedKey)
         
         val oprsJson = JsonSupport.json.encodeToString(oprs)
         val epaHistoryJson = JsonSupport.json.encodeToString(epaHistory)
@@ -1565,8 +1566,9 @@ object IntegrationService {
         }
     }
 
-    private suspend fun fetchStatboticsMatchEpaHistory(eventKey: String): List<JsonElement> {
-        val url = "https://api.statbotics.io/v3/team_matches?event=${eventKey}&limit=1000"
+    private suspend fun fetchStatboticsMatchEpaHistory(settings: ApiSettings, eventKey: String): List<JsonElement> {
+        val baseUrl = settings.statboticsBaseUrl.ifBlank { "https://api.statbotics.io" }.trimEnd('/')
+        val url = "$baseUrl/v3/team_matches?event=${eventKey}&limit=1000"
         return try {
             val response = client.get(url)
             if (!response.status.isSuccess()) {

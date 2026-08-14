@@ -1,5 +1,6 @@
 let currentPredictions = [];
 let currentUser = null;
+let appSettings = null;
 
 function t(key, fallback) {
     return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
@@ -42,6 +43,25 @@ async function loadEvents() {
     if (!eventSelect) return;
 
     try {
+        const settingsResponse = await Obsidianscout.request("/api/settings");
+        appSettings = settingsResponse.settings;
+
+        const datasourceSelect = document.getElementById("datasource-select");
+        if (datasourceSelect) {
+            if (!appSettings.useStatboticsEpa) {
+                const optEpa = datasourceSelect.querySelector('option[value="epa"]');
+                if (optEpa) optEpa.remove();
+            }
+            if (!appSettings.useTbaOpr) {
+                const optOpr = datasourceSelect.querySelector('option[value="opr"]');
+                if (optOpr) optOpr.remove();
+            }
+            if (!appSettings.useStatboticsEpa || !appSettings.useTbaOpr) {
+                const optAll = datasourceSelect.querySelector('option[value="all"]');
+                if (optAll) optAll.remove();
+            }
+        }
+
         const events = await Obsidianscout.request("/api/events?cached=1");
         
         eventSelect.innerHTML = '<option value="">-- Select an Event --</option>';
@@ -351,21 +371,39 @@ function renderModalPrediction(data) {
     updateModalBar("modal-bar-scouted-red", "modal-bar-scouted-blue", redScouted, blueScouted);
     renderModalSpotlight("modal-spotlight-scouted-winner", "modal-spotlight-scouted-subtext", redScouted, blueScouted, "Scouted");
 
-    // EPA Comparison Bar
-    const redEpa = red.totalEpa;
-    const blueEpa = blue.totalEpa;
-    document.getElementById("modal-lbl-epa-red").textContent = `Red: ${redEpa.toFixed(1)}`;
-    document.getElementById("modal-lbl-epa-blue").textContent = `Blue: ${blueEpa.toFixed(1)}`;
-    updateModalBar("modal-bar-epa-red", "modal-bar-epa-blue", redEpa, blueEpa);
-    renderModalSpotlight("modal-spotlight-epa-winner", "modal-spotlight-epa-subtext", redEpa, blueEpa, "EPA");
+    // EPA Comparison Bar & Card
+    const epaComp = document.getElementById("modal-epa-comparison");
+    const epaCard = document.getElementById("modal-spotlight-epa-card");
+    if (appSettings && !appSettings.useStatboticsEpa) {
+        if (epaComp) epaComp.style.display = "none";
+        if (epaCard) epaCard.style.display = "none";
+    } else {
+        if (epaComp) epaComp.style.display = "";
+        if (epaCard) epaCard.style.display = "";
+        const redEpa = red.totalEpa;
+        const blueEpa = blue.totalEpa;
+        document.getElementById("modal-lbl-epa-red").textContent = `Red: ${redEpa.toFixed(1)}`;
+        document.getElementById("modal-lbl-epa-blue").textContent = `Blue: ${blueEpa.toFixed(1)}`;
+        updateModalBar("modal-bar-epa-red", "modal-bar-epa-blue", redEpa, blueEpa);
+        renderModalSpotlight("modal-spotlight-epa-winner", "modal-spotlight-epa-subtext", redEpa, blueEpa, "EPA");
+    }
 
-    // OPR Comparison Bar
-    const redOpr = red.totalOpr;
-    const blueOpr = blue.totalOpr;
-    document.getElementById("modal-lbl-opr-red").textContent = `Red: ${redOpr.toFixed(1)}`;
-    document.getElementById("modal-lbl-opr-blue").textContent = `Blue: ${blueOpr.toFixed(1)}`;
-    updateModalBar("modal-bar-opr-red", "modal-bar-opr-blue", redOpr, blueOpr);
-    renderModalSpotlight("modal-spotlight-opr-winner", "modal-spotlight-opr-subtext", redOpr, blueOpr, "OPR");
+    // OPR Comparison Bar & Card
+    const oprComp = document.getElementById("modal-opr-comparison");
+    const oprCard = document.getElementById("modal-spotlight-opr-card");
+    if (appSettings && !appSettings.useTbaOpr) {
+        if (oprComp) oprComp.style.display = "none";
+        if (oprCard) oprCard.style.display = "none";
+    } else {
+        if (oprComp) oprComp.style.display = "";
+        if (oprCard) oprCard.style.display = "";
+        const redOpr = red.totalOpr;
+        const blueOpr = blue.totalOpr;
+        document.getElementById("modal-lbl-opr-red").textContent = `Red: ${redOpr.toFixed(1)}`;
+        document.getElementById("modal-lbl-opr-blue").textContent = `Blue: ${blueOpr.toFixed(1)}`;
+        updateModalBar("modal-bar-opr-red", "modal-bar-opr-blue", redOpr, blueOpr);
+        renderModalSpotlight("modal-spotlight-opr-winner", "modal-spotlight-opr-subtext", redOpr, blueOpr, "OPR");
+    }
 
     // Red/Blue Alliance totals
     document.getElementById("modal-red-total-scouted").textContent = `${redScouted.toFixed(1)} pts`;
@@ -438,10 +476,10 @@ function renderModalTeamList(listId, teams) {
             : "No scouted data";
         
         let metricsHtml = `<span class="metric-pill">${t.scoutedMatchesCount} matches</span>`;
-        if (t.epa !== null) {
+        if (t.epa !== null && appSettings && appSettings.useStatboticsEpa) {
             metricsHtml += `<span class="metric-pill">EPA: ${t.epa.toFixed(1)}</span>`;
         }
-        if (t.opr !== null) {
+        if (t.opr !== null && appSettings && appSettings.useTbaOpr) {
             metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
         }
 

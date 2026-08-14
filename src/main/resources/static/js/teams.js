@@ -6,6 +6,7 @@ function t(key, fallback) {
 let currentTeams = [];
 let currentUser = null;
 let currentEventKey = "";
+let currentSettings = null;
 
 let originalTableCardHTML = "";
 let tableCard = null;
@@ -37,12 +38,24 @@ async function initTeamsPage() {
     try {
         const settingsResponse = await Obsidianscout.request("/api/settings");
         const settings = settingsResponse.settings;
+        currentSettings = settings;
         currentEventKey = Obsidianscout.resolveEventKey(settings);
 
         const isAdmin = Obsidianscout.isAdmin(currentUser.role);
 
         // Restore HTML
         tableCard.innerHTML = originalTableCardHTML;
+
+        // Apply visibility for OPR/EPA headers and modal fields
+        const thOpr = document.getElementById("th-team-opr");
+        const thEpa = document.getElementById("th-team-epa");
+        if (thOpr) thOpr.style.display = settings.useTbaOpr ? "" : "none";
+        if (thEpa) thEpa.style.display = settings.useStatboticsEpa ? "" : "none";
+
+        const fieldOpr = document.getElementById("field-team-opr");
+        const fieldEpa = document.getElementById("field-team-epa");
+        if (fieldOpr) fieldOpr.style.display = settings.useTbaOpr ? "" : "none";
+        if (fieldEpa) fieldEpa.style.display = settings.useStatboticsEpa ? "" : "none";
 
         // Populate event filter select dropdown
         const eventFilter = document.getElementById("event-filter");
@@ -131,13 +144,15 @@ async function loadTeams(eventKey) {
                 </td>`;
             }
             const displayNum = Obsidianscout.formatTeam(team.teamKey, team.teamNumber);
+            const oprCell = (currentSettings && currentSettings.useTbaOpr) ? `<td>${team.opr !== null ? team.opr.toFixed(2) : ""}</td>` : "";
+            const epaCell = (currentSettings && currentSettings.useStatboticsEpa) ? `<td>${team.epa !== null ? team.epa.toFixed(2) : ""}</td>` : "";
             row.innerHTML = `
                 <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${displayNum}</a></td>
                 <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${team.nickname || team.name || ""}</a></td>
                 <td>${location}</td>
                 <td>${team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : ""}</td>
-                <td>${team.opr !== null ? team.opr.toFixed(2) : ""}</td>
-                <td>${team.epa !== null ? team.epa.toFixed(2) : ""}</td>
+                ${oprCell}
+                ${epaCell}
                 ${actionHtml}
             `;
             body.appendChild(row);
