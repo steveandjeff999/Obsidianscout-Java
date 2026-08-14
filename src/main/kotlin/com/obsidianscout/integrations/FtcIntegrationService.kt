@@ -180,8 +180,15 @@ object FtcIntegrationService {
                   teamNumber
                   team {
                     name
+                    schoolName
+                    sponsors
                     rookieYear
                     website
+                    location {
+                      city
+                      state
+                      country
+                    }
                   }
                 }
                 matches {
@@ -632,7 +639,7 @@ object FtcIntegrationService {
                 teamsArray.forEach { teamItem ->
                     val obj = teamItem.jsonObject
                     val teamNumber = obj["teamNumber"]?.jsonPrimitive?.intOrNull ?: return@forEach
-                    val name = obj["nameOnTablet"]?.jsonPrimitive?.content ?: obj["nameFull"]?.jsonPrimitive?.content ?: ""
+                    val name = obj["nameShort"]?.jsonPrimitive?.content ?: obj["nameOnTablet"]?.jsonPrimitive?.content ?: obj["nameFull"]?.jsonPrimitive?.content ?: ""
                     val city = obj["city"]?.jsonPrimitive?.content ?: ""
                     val state = obj["stateProv"]?.jsonPrimitive?.content ?: ""
                     val country = obj["country"]?.jsonPrimitive?.content ?: ""

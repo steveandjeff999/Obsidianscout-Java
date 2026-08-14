@@ -809,6 +809,11 @@ object IntegrationService {
     fun getBBotMappings(eventKey: String): List<BBotMapping> {
         return transaction {
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
+            val isFtcEvent = eventKey.contains("ftc", ignoreCase = true) ||
+                allTeams.any { it[ApiTeams.teamKey].startsWith("ftc", ignoreCase = true) }
+            if (isFtcEvent) {
+                return@transaction emptyList()
+            }
             val allMatches = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
 
             val bbotKeysInMatches = mutableSetOf<String>()
