@@ -322,17 +322,20 @@ object FcmService {
                 Pair(false, "Test notification failed to deliver. ${response.failureCount} failed.")
             }
         } catch (e: Throwable) {
-            val cause = e.cause
-            val causeMsg = cause?.message ?: cause?.toString()
-            println("[FCM] Error sending test notification: ${e.message} (Cause: $causeMsg)")
-            e.printStackTrace()
-            cause?.printStackTrace()
-            val detailMsg = if (!causeMsg.isNullOrBlank() && causeMsg != e.message) {
-                "${e.message} (Root Cause: $causeMsg)"
-            } else {
-                e.message ?: e.javaClass.simpleName
-            }
-            return Pair(false, "Failed to send test notification: $detailMsg")
+            val root = getRootCause(e)
+            val fullTrace = e.stackTraceToString()
+            println("[FCM] Error sending test notification: ${e.message} | Root Cause: ${root.javaClass.name}: ${root.message}")
+            println(fullTrace)
+            val rootDesc = "${root.javaClass.simpleName}: ${root.message ?: "No detail message"}"
+            return Pair(false, "Failed to send test notification: $rootDesc")
         }
+    }
+
+    private fun getRootCause(throwable: Throwable): Throwable {
+        var root = throwable
+        while (root.cause != null && root.cause != root) {
+            root = root.cause!!
+        }
+        return root
     }
 }
