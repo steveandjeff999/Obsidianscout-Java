@@ -1,3 +1,7 @@
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+}
+
 let originalMainContentHTML = "";
 let mainContentWrapper = null;
 let mainContent = null;
@@ -201,14 +205,30 @@ async function loadQualScoutPageData(me) {
             payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
 
             try {
-                await Obsidianscout.request("/api/qual-scouting", {
+                const response = await Obsidianscout.request("/api/qual-scouting", {
                     method: "POST",
                     json: {
                         data: payload
                     }
                 });
                 Obsidianscout.showToast("Entry saved", "success");
-                entryCache = await loadEntryCache();
+                
+                const newEntry = (response && response.entry) ? response.entry : {
+                    eventKey: payload.eventKey,
+                    targetTeamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    data: payload,
+                    scoutName: me ? me.username : null,
+                    updatedAt: new Date().toISOString()
+                };
+                const existingIdx = entryCache.findIndex(e => e.eventKey === newEntry.eventKey && e.targetTeamNumber === newEntry.targetTeamNumber && e.matchKey === newEntry.matchKey);
+                if (existingIdx >= 0) {
+                    entryCache[existingIdx] = newEntry;
+                } else {
+                    entryCache.push(newEntry);
+                }
+                Obsidianscout.safeSetItem("cache:/api/qual-scouting", JSON.stringify(entryCache));
                 window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
             } catch (error) {
                 if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {

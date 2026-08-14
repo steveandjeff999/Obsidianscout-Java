@@ -280,14 +280,30 @@ async function initPrescoutScout(me) {
             payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
 
             try {
-                await Obsidianscout.request("/api/prescout/scouting", {
+                const response = await Obsidianscout.request("/api/prescout/scouting", {
                     method: "POST",
                     json: {
                         data: payload
                     }
                 });
                 Obsidianscout.showToast("Prescout entry saved", "success");
-                entryCache = await loadEntryCache();
+                
+                const newEntry = (response && response.entry) ? response.entry : {
+                    eventKey: payload.eventKey,
+                    targetTeamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    data: payload,
+                    scoutName: me ? me.username : null,
+                    updatedAt: new Date().toISOString()
+                };
+                const existingIdx = entryCache.findIndex(e => e.eventKey === newEntry.eventKey && e.targetTeamNumber === newEntry.targetTeamNumber && e.matchKey === newEntry.matchKey);
+                if (existingIdx >= 0) {
+                    entryCache[existingIdx] = newEntry;
+                } else {
+                    entryCache.push(newEntry);
+                }
+                Obsidianscout.safeSetItem("cache:/api/prescout/scouting", JSON.stringify(entryCache));
             } catch (error) {
                 if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
                     const pending = JSON.parse(Obsidianscout.safeGetItem("pending_prescout_scouting_entries") || "[]");

@@ -166,14 +166,28 @@ async function loadPitScoutPageData(me) {
             payload.targetTeamNumber = Number(teamSelect.value);
 
             try {
-                await Obsidianscout.request("/api/pit-scouting", {
+                const response = await Obsidianscout.request("/api/pit-scouting", {
                     method: "POST",
                     json: {
                         data: payload
                     }
                 });
                 Obsidianscout.showToast("Pit entry saved", "success");
-                entryCache = await loadEntryCache();
+                
+                const newEntry = (response && response.entry) ? response.entry : {
+                    eventKey: payload.eventKey,
+                    targetTeamNumber: payload.targetTeamNumber,
+                    data: payload,
+                    scoutName: me ? me.username : null,
+                    updatedAt: new Date().toISOString()
+                };
+                const existingIdx = entryCache.findIndex(e => e.eventKey === newEntry.eventKey && e.targetTeamNumber === newEntry.targetTeamNumber);
+                if (existingIdx >= 0) {
+                    entryCache[existingIdx] = newEntry;
+                } else {
+                    entryCache.push(newEntry);
+                }
+                Obsidianscout.safeSetItem("cache:/api/pit-scouting", JSON.stringify(entryCache));
             } catch (error) {
                 if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
                     const pending = JSON.parse(Obsidianscout.safeGetItem("pending_pit_scouting_entries") || "[]");

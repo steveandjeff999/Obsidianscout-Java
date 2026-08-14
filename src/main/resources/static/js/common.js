@@ -72,8 +72,18 @@
     }
 
     function clearAllCaches() {
-        // Trigger background sync with instructions to clear old/stale keys only after successful downloads
-        syncOfflineCache(true);
+        try {
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith("cache:") && key !== "cache:/api/auth/me") {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(k => safeRemoveItem(k));
+        } catch (e) {
+            console.warn("[Storage] Failed to clear caches:", e);
+        }
     }
 
     function saveScrollPositions() {
@@ -319,7 +329,12 @@
                     }
                 }
             } else {
-                clearAllCaches();
+                safeRemoveItem("cache:" + path);
+                const basePath = path.split("?")[0];
+                safeRemoveItem("cache:" + basePath);
+                if (basePath.includes("scouting")) {
+                    safeRemoveItem("cache:/api/summary");
+                }
             }
 
             return data;
@@ -2382,8 +2397,8 @@
             }
         }
 
-        // Poll every 10 seconds
-        const pollInterval = setInterval(fetchUnreadStatus, 10000);
+        // Poll every 30 seconds
+        const pollInterval = setInterval(fetchUnreadStatus, 30000);
 
         // Initial fetch
         fetchUnreadStatus();

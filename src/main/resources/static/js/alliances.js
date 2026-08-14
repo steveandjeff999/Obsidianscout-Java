@@ -2,7 +2,11 @@
     'use strict';
 
     const { request, requireAuth, showToast, setUserBadge, setActiveNav,
-            adjustNavForRole, wireLogout, initTheme, wireThemeToggle, isAdmin, t } = window.Obsidianscout;
+            adjustNavForRole, wireLogout, initTheme, wireThemeToggle, isAdmin } = window.Obsidianscout;
+
+    function t(key, fallback) {
+        return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
+    }
 
     let currentUser = null;
     let alliances = [];
