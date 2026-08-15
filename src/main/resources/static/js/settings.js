@@ -149,6 +149,39 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalPasswordWidget() {
+        const passwordInput = document.getElementById("personal-password");
+        const confirmInput = document.getElementById("personal-confirm-password");
+        const savePasswordBtn = document.getElementById("personal-save-password");
+        if (!passwordInput || !confirmInput || !savePasswordBtn) return;
+
+        savePasswordBtn.addEventListener("click", async () => {
+            const password = passwordInput.value;
+            const confirm = confirmInput.value;
+
+            if (!password) {
+                Obsidianscout.showToast("Please enter a new password", "error");
+                return;
+            }
+            if (password !== confirm) {
+                Obsidianscout.showToast("Passwords do not match", "error");
+                return;
+            }
+
+            try {
+                await Obsidianscout.request("/api/user/profile-picture", {
+                    method: "PUT",
+                    json: { password: password }
+                });
+                passwordInput.value = "";
+                confirmInput.value = "";
+                Obsidianscout.showToast("Password updated successfully", "success");
+            } catch (err) {
+                Obsidianscout.showToast(err.message || "Failed to update password", "error");
+            }
+        });
+    }
+
     function wirePersonalEmailWidget(currentMe) {
         const personalEmail = document.getElementById("personal-email");
         const personalSaveEmail = document.getElementById("personal-save-email");
@@ -292,6 +325,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     wirePersonalAvatarWidget(me);
     wirePersonalUsernameWidget(me);
+    wirePersonalPasswordWidget();
     wirePersonalEmailWidget(me);
     wirePersonalNotificationPrefWidget(me);
     wirePersonalNodeAlertsWidget(me);

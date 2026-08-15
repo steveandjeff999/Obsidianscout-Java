@@ -143,6 +143,56 @@ class AuthServiceTest {
     }
 
     @Test
+    fun testSelfServicePasswordReset() {
+        val user = AuthService.register(
+            username = "pw_scout",
+            teamNumber = 4321,
+            password = "OldPassword123!",
+            program = "FRC",
+            role = UserRole.SCOUT
+        )
+        assertNotNull(user)
+
+        val session = UserSession(
+            userId = user.id,
+            username = user.username,
+            teamNumber = user.teamNumber,
+            program = user.program,
+            role = user.role
+        )
+
+        // Update password
+        AuthService.updateUser(
+            callerSession = session,
+            targetUserId = user.id,
+            newUsername = null,
+            newPassword = "NewPassword456!",
+            newRole = null
+        )
+
+        // Login with old password must fail
+        val oldLogin = AuthService.login("pw_scout", 4321, "OldPassword123!", "FRC")
+        assertNull(oldLogin)
+
+        // Login with new password must succeed
+        val newLogin = AuthService.login("pw_scout", 4321, "NewPassword456!", "FRC")
+        assertNotNull(newLogin)
+        assertEquals("pw_scout", newLogin.username)
+
+        // Blank password throws BadRequest
+        val blankEx = assertFailsWith<ApiException> {
+            AuthService.updateUser(
+                callerSession = session,
+                targetUserId = user.id,
+                newUsername = null,
+                newPassword = "   ",
+                newRole = null
+            )
+        }
+        assertEquals(HttpStatusCode.BadRequest, blankEx.status)
+    }
+
+    @Test
     fun testSelfServiceUsernameDuplicateConflict() {
         val user1 = AuthService.register(
             username = "user_one",

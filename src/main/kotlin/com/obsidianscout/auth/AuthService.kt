@@ -312,6 +312,10 @@ object AuthService {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
         }
 
+        if (newPassword != null && newPassword.isBlank()) {
+            throw ApiException(HttpStatusCode.BadRequest, "Password cannot be blank")
+        }
+
         // Hash outside the transaction if needed
         val newHash = newPassword?.takeIf { it.isNotBlank() }
             ?.let { hashPassword(it) }
