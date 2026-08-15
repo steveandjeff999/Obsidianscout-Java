@@ -605,12 +605,6 @@
             const opr = team.opr !== null && team.opr !== undefined ? team.opr.toFixed(1) : "-";
             const rank = teamRanks[team.teamNumber];
 
-            item.innerHTML = `
-                <div class="selector-team">
-                    <span class="rec-rank" style="min-width: 28px; text-align: left;">#${rank}</span>
-                    <span>${team.teamNumber}</span>
-                    <span class="selector-nickname" title="${team.nickname || team.name || ""}">${team.nickname || team.name || ""}</span>
-                </div>
             const epaSpan = state.settings?.useStatboticsEpa ? `<span>EPA: ${epa}</span>` : "";
             const oprSpan = state.settings?.useTbaOpr ? `<span>OPR: ${opr}</span>` : "";
 

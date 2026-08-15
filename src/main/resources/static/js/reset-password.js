@@ -1,4 +1,3 @@
-
 function t(key, fallback) {
     return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
 }
@@ -73,46 +72,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                         selectedUserId = accountSelect.value;
                         const matched = accounts.find(a => a.userId === selectedUserId);
                         if (matched && usernameInput) {
-                            usernameInput.value = matched.username;
-                        }
-                    });
-                }
-                
-                if (resetWelcome) {
-                    resetWelcome.textContent = t('reset_password.reset_welcome', "Reset credentials for your email recovery link");
-                }
-            } else {
-                // Only one account
-                if (accountSelectField) {
-                    accountSelectField.classList.add("hidden");
-                    accountSelectField.hidden = true;
-                }
-                
-                selectedUserId = accounts[0].userId;
-                if (usernameInput) {
-                    usernameInput.value = accounts[0].username;
-                }
-
-                if (resetWelcome) {
-                    resetWelcome.textContent = `Reset credentials for ${accounts[0].username} (Team ${accounts[0].teamNumber})`;
-                }
-            }
-
-            if (resetFormPanel) {
-                resetFormPanel.classList.remove("hidden");
-                resetFormPanel.hidden = false;
-            }
-        } else {
-            if (invalidTokenPanel) {
-                invalidTokenPanel.classList.remove("hidden");
-                invalidTokenPanel.hidden = false;
-            }
-        }
-    } catch (error) {
-        if (loadingToken) {
-            loadingToken.classList.add("hidden");
-            loadingToken.hidden = true;
-        }
                             usernameInput.value = matched.username;
                         }
                     });
