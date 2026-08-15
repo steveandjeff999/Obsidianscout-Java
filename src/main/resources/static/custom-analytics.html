@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Custom Analytics</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <style>
+        .bi-studio-page {
+            max-width: 100% !important;
+            padding-bottom: 80px;
+        }
+
+        /* Studio Toolbar */
+        .bi-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        .bi-toolbar-left {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .bi-toolbar-right {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .bi-report-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .bi-report-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+            color: var(--ink);
+            cursor: pointer;
+            border-bottom: 1px dashed var(--muted);
+            padding-bottom: 2px;
+        }
+
+        .bi-report-title:hover {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .bi-category-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: var(--surface-3);
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Slicer Bar */
+        .bi-slicers-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .bi-slicers-card.collapsed {
+            display: none;
+        }
+
+        .bi-slicer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 14px;
+            align-items: flex-end;
+        }
+
+        .bi-slicer-field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .bi-team-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 80px;
+            overflow-y: auto;
+            margin-top: 8px;
+            padding: 4px 0;
+        }
+
+        .bi-team-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            background: var(--surface-3);
+            border: 1px solid var(--border);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--ink);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .bi-team-pill.active {
+            background: var(--accent);
+            color: #ffffff;
+            border-color: var(--accent);
+        }
+
+        /* Canvas Grid */
+        .bi-canvas-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 20px;
+            min-height: 400px;
+        }
+
+        .bi-widget-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transition: box-shadow 0.2s, transform 0.2s;
+            min-height: 320px;
+        }
+
+        .bi-widget-card:hover {
+            box-shadow: 0 10px 25px -4px rgba(0, 0, 0, 0.12);
+        }
+
+        .bi-widget-card.col-3 { grid-column: span 3; }
+        .bi-widget-card.col-4 { grid-column: span 4; }
+        .bi-widget-card.col-6 { grid-column: span 6; }
+        .bi-widget-card.col-8 { grid-column: span 8; }
+        .bi-widget-card.col-12 { grid-column: span 12; }
+
+        @media (max-width: 1200px) {
+            .bi-widget-card.col-3 { grid-column: span 6; }
+            .bi-widget-card.col-4 { grid-column: span 6; }
+        }
+
+        @media (max-width: 768px) {
+            .bi-widget-card.col-3,
+            .bi-widget-card.col-4,
+            .bi-widget-card.col-6,
+            .bi-widget-card.col-8,
+            .bi-widget-card.col-12 {
+                grid-column: span 12;
+            }
+        }
+
+        .bi-widget-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            gap: 8px;
+        }
+
+        .bi-widget-title-area {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .bi-widget-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin: 0;
+            color: var(--ink);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .bi-widget-subtitle {
+            font-size: 12px;
+            color: var(--muted);
+            margin: 2px 0 0 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .bi-widget-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .bi-widget-card:hover .bi-widget-actions {
+            opacity: 1;
+        }
+
+        .bi-widget-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: var(--muted);
+            transition: all 0.15s;
+        }
+
+        .bi-widget-btn:hover {
+            background: var(--surface-3);
+            color: var(--ink);
+        }
+
+        .bi-drag-handle {
+            cursor: grab;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--muted);
+            font-size: 14px;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .bi-drag-handle:hover {
+            background: var(--surface-3);
+            color: var(--accent);
+        }
+
+        .bi-drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .bi-widget-card.dragging {
+            opacity: 0.4;
+            border: 2px dashed var(--accent);
+            transform: scale(0.98);
+        }
+
+        .bi-widget-card.drag-over {
+            border: 2px solid var(--accent);
+            box-shadow: 0 0 16px rgba(37, 99, 235, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .bi-quick-width {
+            padding: 2px 6px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 6px;
+            background: var(--surface-3);
+            border: 1px solid var(--border);
+            color: var(--ink);
+            cursor: pointer;
+            outline: none;
+        }
+
+        .bi-quick-width:hover {
+            border-color: var(--accent);
+        }
+
+        .bi-widget-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 240px;
+            position: relative;
+        }
+
+        .bi-plot-container {
+            width: 100%;
+            height: 100%;
+            min-height: 240px;
+            flex: 1;
+        }
+
+        /* KPI Card Styling */
+        .bi-kpi-wrapper {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            height: 100%;
+            padding: 16px 0;
+        }
+
+        .bi-kpi-metric-val {
+            font-size: 42px;
+            font-weight: 800;
+            color: var(--accent);
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+
+        .bi-kpi-subtext {
+            font-size: 13px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .bi-kpi-delta {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: 8px;
+        }
+
+        .bi-kpi-delta.positive {
+            background: rgba(34, 197, 94, 0.15);
+            color: #16a34a;
+        }
+
+        .bi-kpi-delta.negative {
+            background: rgba(239, 68, 68, 0.15);
+            color: #dc2626;
+        }
+
+        /* Matrix / Pivot Table */
+        .bi-table-wrapper {
+            width: 100%;
+            height: 100%;
+            max-height: 340px;
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+
+        .bi-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .bi-table th {
+            position: sticky;
+            top: 0;
+            background: var(--surface-2);
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 700;
+            color: var(--muted);
+            border-bottom: 2px solid var(--border);
+            white-space: nowrap;
+            cursor: pointer;
+            z-index: 1;
+        }
+
+        .bi-table th:hover {
+            color: var(--ink);
+        }
+
+        .bi-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border);
+            color: var(--ink);
+            white-space: nowrap;
+        }
+
+        .bi-table tr:hover td {
+            background: var(--surface-2);
+        }
+
+        .bi-heat-cell {
+            font-weight: 600;
+            border-radius: 4px;
+            padding: 4px 8px;
+        }
+
+        /* Empty State */
+        .bi-empty-canvas {
+            grid-column: span 12;
+            text-align: center;
+            padding: 60px 20px;
+            background: var(--surface);
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+        }
+
+        .bi-empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.8;
+        }
+
+        .bi-template-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+            text-align: left;
+        }
+
+        .bi-template-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .bi-template-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .bi-template-card h4 {
+            margin: 0 0 6px 0;
+            font-size: 15px;
+            color: var(--ink);
+        }
+
+        .bi-template-card p {
+            margin: 0;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+
+        /* Modal Field Well Tabs */
+        .bi-field-well {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .bi-well-section {
+            background: var(--surface-2);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            padding: 14px;
+        }
+
+        .bi-well-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Visual Type Selector Grid */
+        .bi-visual-types-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .bi-visual-type-btn {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 6px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--muted);
+            transition: all 0.15s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .bi-visual-type-btn svg {
+            color: var(--muted);
+            transition: color 0.15s ease, transform 0.15s ease;
+        }
+
+        .bi-visual-type-btn:hover {
+            border-color: var(--accent);
+            color: var(--ink);
+            background: var(--surface-3);
+        }
+
+        .bi-visual-type-btn:hover svg {
+            color: var(--accent);
+            transform: scale(1.08);
+        }
+
+        .bi-visual-type-btn.active {
+            background: var(--accent);
+            color: #ffffff;
+            border-color: var(--accent);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+        }
+
+        .bi-visual-type-btn.active svg {
+            color: #ffffff;
+        }
+
+        /* Kiosk Mode Fullscreen */
+        body.bi-kiosk-mode .sidebar {
+            display: none !important;
+        }
+
+        body.bi-kiosk-mode .app-shell {
+            padding: 0;
+        }
+
+        body.bi-kiosk-mode .main-content {
+            padding: 16px !important;
+            max-width: 100% !important;
+        }
+
+        body.bi-kiosk-mode .bi-toolbar-left .btn,
+        body.bi-kiosk-mode #btn-open-slicers,
+        body.bi-kiosk-mode #btn-add-widget,
+        body.bi-kiosk-mode #btn-save-report,
+        body.bi-kiosk-mode #btn-report-library {
+            display: none !important;
+        }
+
+        .bi-kiosk-pulse {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+            animation: biPulse 2s infinite;
+            margin-right: 6px;
+        }
+
+        @keyframes biPulse {
+            0% { transform: scale(0.95); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.7; }
+        }
+    </style>
+</head>
+
+<body data-page="custom-analytics">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content bi-studio-page">
+            <!-- Studio Header Toolbar -->
+            <div class="bi-toolbar">
+                <div class="bi-toolbar-left">
+                    <div class="bi-report-title-wrap">
+                        <h1 class="bi-report-title" id="report-title-display" title="Click to rename report">Default Scouting Overview</h1>
+                        <span class="bi-category-badge" id="report-category-display">Overview</span>
+                    </div>
+                    <button class="btn ghost" id="btn-report-library" type="button">
+                        <span data-i18n="bi.reports">Reports</span>
+                    </button>
+                    <button class="btn ghost" id="btn-open-templates" type="button">
+                        <span data-i18n="bi.templates">Templates</span>
+                    </button>
+                </div>
+
+                <div class="bi-toolbar-right">
+                    <button class="btn ghost" id="btn-toggle-slicers" type="button">
+                        <span data-i18n="bi.filters">Filters</span>
+                    </button>
+                    <button class="btn ghost" id="btn-calc-metric" type="button">
+                        <span data-i18n="bi.calculated_measure">New Metric</span>
+                    </button>
+                    <button class="btn secondary" id="btn-add-widget" type="button">
+                        <span data-i18n="bi.add_visual">Add Visual</span>
+                    </button>
+                    <button class="btn" id="btn-save-report" type="button">
+                        <span data-i18n="bi.save">Save</span>
+                    </button>
+                    <div class="row gap-6">
+                        <button class="btn ghost" id="btn-export-dropdown" type="button" title="Export Dashboard">
+                            <span data-i18n="bi.export">Export</span> ▾
+                        </button>
+                        <button class="btn ghost" id="btn-kiosk-mode" type="button" title="Presentation / Kiosk Mode">
+                            <span data-i18n="bi.kiosk">Kiosk</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Slicers & Filter Ribbon -->
+            <div class="bi-slicers-card" id="bi-slicers-card">
+                <div class="bi-slicer-grid">
+                    <div class="bi-slicer-field">
+                        <label data-i18n="graphs.event_filter">Event Filter</label>
+                        <select id="slicer-event"></select>
+                    </div>
+
+                    <div class="bi-slicer-field">
+                        <label data-i18n="bi.match_type">Match Scope</label>
+                        <div class="row gap-10 mt-4 wrap">
+                            <label style="font-size: 13px; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="slicer-practice" checked style="width: auto; margin: 0;" /> Practice
+                            </label>
+                            <label style="font-size: 13px; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="slicer-quals" checked style="width: auto; margin: 0;" /> Quals
+                            </label>
+                            <label style="font-size: 13px; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="slicer-playoffs" checked style="width: auto; margin: 0;" /> Playoffs
+                            </label>
+                            <label style="font-size: 13px; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="slicer-prescout" checked style="width: auto; margin: 0;" /> Include Prescout
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="bi-slicer-field" style="grid-column: span 2;">
+                        <div class="row justify-between items-center">
+                            <label data-i18n="graphs.team_selection">Team Filter</label>
+                            <div class="row gap-6">
+                                <button class="btn ghost btn-sm" id="slicer-team-all" type="button" style="padding: 2px 8px; font-size: 11px;">All</button>
+                                <button class="btn ghost btn-sm" id="slicer-team-top8" type="button" style="padding: 2px 8px; font-size: 11px;">Top 8</button>
+                                <button class="btn ghost btn-sm" id="slicer-team-clear" type="button" style="padding: 2px 8px; font-size: 11px;">Clear</button>
+                            </div>
+                        </div>
+                        <input id="slicer-team-search" type="text" placeholder="Filter teams (e.g. 254, 1678)..." style="margin-top: 4px;" />
+                        <div class="bi-team-pills" id="slicer-team-pills"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Cross-Filter Indicator Banner -->
+            <div id="cross-filter-banner" class="notice mb-16 row justify-between items-center" style="display: none; background: rgba(37,99,235,0.1); border: 1px solid var(--accent); padding: 8px 14px; border-radius: 8px;">
+                <span id="cross-filter-text" style="font-weight: 600; color: var(--accent);">Interactive Filter: Team 254</span>
+                <button class="btn ghost btn-sm" id="btn-clear-cross-filter" type="button" style="padding: 2px 8px; font-size: 11px;">Clear Filter</button>
+            </div>
+
+            <!-- Main Canvas Grid -->
+            <div class="bi-canvas-grid" id="bi-canvas-grid">
+                <!-- Visual Cards rendered dynamically via JS -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Visual Editor Modal -->
+    <div class="modal-backdrop" id="modal-widget-editor">
+        <div class="modal-container" style="width: min(850px, 95vw); max-height: 90vh;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modal-widget-editor-title">Configure Visual</h2>
+                <button class="modal-close" id="btn-close-widget-editor">&times;</button>
+            </div>
+
+            <div class="modal-body" style="overflow-y: auto; max-height: 65vh; padding-right: 6px;">
+                <!-- Visual Type Selector -->
+                <label style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Visual Type</label>
+                <div class="bi-visual-types-grid mt-6" id="editor-visual-types">
+                    <div class="bi-visual-type-btn active" data-type="bar" title="Bar Chart">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                        <span>Bar / Col</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="stacked_bar" title="Stacked Bar">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="14" width="6" height="6"/><rect x="4" y="4" width="6" height="8"/><rect x="14" y="10" width="6" height="10"/><rect x="14" y="4" width="6" height="4"/></svg>
+                        <span>Stacked Bar</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="line" title="Line Trend">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/></svg>
+                        <span>Line / Trend</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="scatter" title="Scatter Plot">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="11.5" r="2.5"/><circle cx="10.5" cy="16.5" r="2.5"/></svg>
+                        <span>Scatter</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="box" title="Box Plot">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="7"/><rect x="7" y="7" width="10" height="10"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="12" y1="17" x2="12" y2="22"/></svg>
+                        <span>Box Plot</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="violin" title="Violin Distribution">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2c-3 4-3 7 0 10 3 3 3 6 0 10M12 2c3 4 3 7 0 10-3 3-3 6 0 10"/></svg>
+                        <span>Violin</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="radar" title="Radar Chart">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 18 20 6 20 2 8.5"/><polygon points="12 6 18 10 16 17 8 17 6 10"/></svg>
+                        <span>Radar</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="donut" title="Donut Chart">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>
+                        <span>Donut</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="kpi" title="KPI Metric Card">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 14l3-3 3 3 4-5"/></svg>
+                        <span>KPI Card</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="matrix" title="Matrix Table">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+                        <span>Matrix</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="heatmap" title="Heatmap Density">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
+                        <span>Heatmap</span>
+                    </div>
+                    <div class="bi-visual-type-btn" data-type="histogram" title="Histogram Frequency">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="8"/><rect x="9" y="6" width="4" height="14"/><rect x="15" y="10" width="4" height="10"/><rect x="21" y="16" width="4" height="4"/></svg>
+                        <span>Histogram</span>
+                    </div>
+                </div>
+
+                <!-- General Title and Width -->
+                <div class="form-grid mt-12">
+                    <div class="field">
+                        <label for="editor-title">Visual Title</label>
+                        <input id="editor-title" type="text" placeholder="e.g. Average Points by Team" />
+                    </div>
+                    <div class="field">
+                        <label for="editor-subtitle">Subtitle (Optional)</label>
+                        <input id="editor-subtitle" type="text" placeholder="e.g. Quals matches only" />
+                    </div>
+                    <div class="field">
+                        <label for="editor-width">Card Width Span</label>
+                        <select id="editor-width">
+                            <option value="col-3">Quarter Width (3 / 12)</option>
+                            <option value="col-4">One-Third Width (4 / 12)</option>
+                            <option value="col-6" selected>Half Width (6 / 12)</option>
+                            <option value="col-8">Two-Thirds Width (8 / 12)</option>
+                            <option value="col-12">Full Width (12 / 12)</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="editor-palette">Color Palette</label>
+                        <select id="editor-palette">
+                            <option value="obsidian">Obsidian Blue (Default)</option>
+                            <option value="emerald">Emerald & Teal</option>
+                            <option value="sunset">Sunset Orange & Pink</option>
+                            <option value="cyberpunk">Cyberpunk Neon</option>
+                            <option value="alliance">Alliance Red & Blue</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Field Wells -->
+                <div class="bi-field-well">
+                    <!-- Dimension Section (X-Axis / Category) -->
+                    <div class="bi-well-section" id="well-dimension-section">
+                        <div class="bi-well-title">
+                            <span>Axis / Dimension (X)</span>
+                        </div>
+                        <div class="field mb-8">
+                            <select id="editor-dimension">
+                                <option value="teamNumber">Team Number</option>
+                                <option value="matchNumber">Match Number</option>
+                                <option value="eventKey">Event Key</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="editor-sort">Sort Order</label>
+                            <select id="editor-sort">
+                                <option value="val_desc">Measure: High → Low</option>
+                                <option value="val_asc">Measure: Low → High</option>
+                                <option value="dim_asc">Dimension: Low → High</option>
+                                <option value="dim_desc">Dimension: High → Low</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Primary Measure Section (Y-Axis) -->
+                    <div class="bi-well-section" id="well-measure-section">
+                        <div class="bi-well-title">
+                            <span>Primary Measure (Y)</span>
+                        </div>
+                        <div class="field mb-8">
+                            <select id="editor-measure"></select>
+                        </div>
+                        <div class="field">
+                            <label for="editor-aggregation">Aggregation Function</label>
+                            <select id="editor-aggregation">
+                                <option value="avg">Mean / Average (AVG)</option>
+                                <option value="sum">Sum / Total (SUM)</option>
+                                <option value="median">Median</option>
+                                <option value="max">Maximum (MAX)</option>
+                                <option value="min">Minimum (MIN)</option>
+                                <option value="count">Count of Entries</option>
+                                <option value="stdev">Standard Deviation</option>
+                                <option value="p75">75th Percentile</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Secondary Breakdown / Stacking Measures Section -->
+                    <div class="bi-well-section" id="well-secondary-section">
+                        <div class="bi-well-title">
+                            <span>Secondary Measures / Stacks</span>
+                        </div>
+                        <p class="notice" style="font-size: 11px; margin-bottom: 8px;">Select additional measures for stacked bars, multi-line trends, or radar dimensions:</p>
+                        <div id="editor-secondary-measures-list" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
+                    </div>
+                </div>
+
+                <!-- Top N and Goal Line options -->
+                <div class="form-grid mt-16">
+                    <div class="field">
+                        <label for="editor-top-n">Top N Items (0 = All)</label>
+                        <input id="editor-top-n" type="number" min="0" max="100" value="0" />
+                    </div>
+                    <div class="field">
+                        <label for="editor-target-line">Benchmark Target Line (Optional)</label>
+                        <input id="editor-target-line" type="number" placeholder="e.g. 25" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn ghost" id="btn-cancel-widget-editor" type="button">Cancel</button>
+                <button class="btn" id="btn-save-widget" type="button">Apply Visual</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calculated Measure Builder Modal -->
+    <div class="modal-backdrop" id="modal-calc-measure">
+        <div class="modal-container" style="width: min(600px, 95vw);">
+            <div class="modal-header">
+                <h2 class="modal-title">Create Calculated Metric</h2>
+                <button class="modal-close" id="btn-close-calc-measure">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="notice">Write mathematical expressions referencing fields with square brackets. E.g.: <code>[match_auto_notes] * 2 + [match_teleop_notes] * 3 + [calc_teleop_score]</code></p>
+                <div class="form-grid mt-12">
+                    <div class="field">
+                        <label for="calc-metric-name">Metric Display Name</label>
+                        <input id="calc-metric-name" type="text" placeholder="e.g. Weighted Offense Power" />
+                    </div>
+                    <div class="field">
+                        <label for="calc-metric-id">Metric ID (alphanumeric)</label>
+                        <input id="calc-metric-id" type="text" placeholder="e.g. calc_custom_offense" />
+                    </div>
+                    <div class="field" style="grid-column: span 2;">
+                        <label for="calc-metric-formula">Formula Expression</label>
+                        <textarea id="calc-metric-formula" rows="3" placeholder="[calc_auto_score] * 1.5 + [calc_teleop_score]"></textarea>
+                    </div>
+                    <div class="field" style="grid-column: span 2;">
+                        <label>Insert Available Fields</label>
+                        <div id="calc-available-fields-pills" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 100px; overflow-y: auto; padding: 4px 0;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn ghost" id="btn-cancel-calc-measure" type="button">Cancel</button>
+                <button class="btn" id="btn-save-calc-measure" type="button">Save Metric</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Library & Save Modal -->
+    <div class="modal-backdrop" id="modal-report-library">
+        <div class="modal-container" style="width: min(750px, 95vw); max-height: 90vh;">
+            <div class="modal-header">
+                <h2 class="modal-title">Saved Report Dashboards</h2>
+                <button class="modal-close" id="btn-close-report-library">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y: auto; max-height: 65vh;">
+                <!-- Save Current Report Section -->
+                <div class="bi-well-section mb-16">
+                    <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 8px;">Save Current Dashboard</h3>
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="save-report-title">Report Title</label>
+                            <input id="save-report-title" type="text" placeholder="e.g. Playoff Match Strategy" />
+                        </div>
+                        <div class="field">
+                            <label for="save-report-category">Category</label>
+                            <select id="save-report-category">
+                                <option value="Strategy">Strategy</option>
+                                <option value="Pick List">Pick List</option>
+                                <option value="Driver Analysis">Driver Analysis</option>
+                                <option value="Scoring Breakdown">Scoring Breakdown</option>
+                                <option value="Alliance Partner">Alliance Partner</option>
+                                <option value="General">General</option>
+                            </select>
+                        </div>
+                        <div class="field" style="grid-column: span 2;">
+                            <label for="save-report-desc">Description (Optional)</label>
+                            <input id="save-report-desc" type="text" placeholder="Short summary of this dashboard..." />
+                        </div>
+                        <div class="row gap-16" style="grid-column: span 2; align-items: center;">
+                            <label style="font-size: 13px; cursor: pointer;">
+                                <input type="checkbox" id="save-report-shared" style="width: auto; margin: 0;" /> Share with Team
+                            </label>
+                            <label style="font-size: 13px; cursor: pointer;">
+                                <input type="checkbox" id="save-report-default" style="width: auto; margin: 0;" /> Set as My Default
+                            </label>
+                            <button class="btn secondary ml-auto" id="btn-execute-save-report" type="button">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Existing Reports List -->
+                <h3 style="font-size: 15px; margin-bottom: 8px;">Your Team's Saved Reports</h3>
+                <div id="reports-list-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn ghost" id="btn-export-json-config" type="button">Export Config JSON</button>
+                <label class="btn ghost" style="margin: 0; cursor: pointer;">
+                    Import Config JSON
+                    <input type="file" id="input-import-json-config" accept=".json" style="display: none;" />
+                </label>
+                <button class="btn ghost" id="btn-close-report-library-footer" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Starter Modal -->
+    <div class="modal-backdrop" id="modal-templates">
+        <div class="modal-container" style="width: min(700px, 95vw);">
+            <div class="modal-header">
+                <h2 class="modal-title">Dashboard Templates</h2>
+                <button class="modal-close" id="btn-close-templates">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="notice">Select a template to instantly generate a tailored analytical workspace:</p>
+                <div class="bi-template-cards">
+                    <div class="bi-template-card" data-template="blank">
+                        <h4>Blank Dashboard</h4>
+                        <p>Start with a clean slate to build your own custom visuals from scratch.</p>
+                    </div>
+                    <div class="bi-template-card" data-template="match_strategy">
+                        <h4>Match Strategy & Offense</h4>
+                        <p>Auto vs Teleop points, stacked phase contributions, consistency box plots, and ranking matrix.</p>
+                    </div>
+                    <div class="bi-template-card" data-template="pick_list">
+                        <h4>Pick List & Capability</h4>
+                        <p>Multi-dimensional team radar profiles, EPA correlation scatter, driver ratings, and scoring breakdown.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn ghost" id="btn-close-templates-footer" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drill-Down Raw Match Entries Modal -->
+    <div class="modal-backdrop" id="modal-drill-down">
+        <div class="modal-container" style="width: min(850px, 95vw); max-height: 90vh;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="drill-down-title">Team Match Breakdown</h2>
+                <button class="modal-close" id="btn-close-drill-down">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y: auto; max-height: 65vh;">
+                <div id="drill-down-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn ghost" id="btn-close-drill-down-footer" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Menu Dropdown (Hidden floating menu) -->
+    <div id="export-dropdown-menu" style="display: none; position: absolute; z-index: 1000; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); padding: 6px; width: 180px;">
+        <button class="btn ghost" id="btn-export-csv" style="width: 100%; text-align: left; justify-content: flex-start; margin-bottom: 4px;">📊 Export CSV Data</button>
+        <button class="btn ghost" id="btn-export-json" style="width: 100%; text-align: left; justify-content: flex-start;">📄 Export Report JSON</button>
+    </div>
+
+    <script defer src="/js/common.js"></script>
+    <script defer src="/vendor/plotly-2.32.0.min.js"></script>
+    <script defer src="/js/custom-analytics.js"></script>
+</body>
+</html>

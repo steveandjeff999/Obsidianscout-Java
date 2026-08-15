@@ -68,6 +68,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         { id: "qual-data", label: "Qual Data" },
         { id: "pit-data", label: "Pit Data" },
         { id: "analytics", label: "Analytics" },
+        { id: "custom-analytics", label: "Custom Analytics" },
         { id: "graphs", label: "Graphs" },
         { id: "teams", label: "Teams" },
         { id: "rankings", label: "Rankings" },

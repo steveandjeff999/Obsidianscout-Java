@@ -1089,9 +1089,10 @@
 
         if (currentPage && settings && (me.role === "SCOUT" || me.role === "ANALYTICS" || me.role === "ADMIN")) {
             const allowedPages = me.role === "SCOUT" ? settings.scoutPages : (me.role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
+            const isCustomAnalyticsAllowed = (currentPage === "custom-analytics" && (me.role === "ADMIN" || me.role === "ANALYTICS" || me.role === "SUPERADMIN"));
             if (allowedPages && Array.isArray(allowedPages)) {
-                const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password", "docs", "contact"];
-                if (!bypassPages.includes(currentPage) && !superAdminPages.includes(currentPage) && !allowedPages.includes(currentPage)) {
+                const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password", "docs", "contact", "custom-analytics"];
+                if (!isCustomAnalyticsAllowed && !bypassPages.includes(currentPage) && !superAdminPages.includes(currentPage) && !allowedPages.includes(currentPage)) {
                     showToast("You do not have access to this page", "error");
                     const fallback = allowedPages.includes("dashboard") ? "/dashboard" : "/config";
                     setTimeout(() => {
@@ -1377,8 +1378,9 @@
                     if (allowedPages && Array.isArray(allowedPages)) {
                         document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                             const page = link.dataset.page;
-                            const bypassPages = ["settings", "login", "index", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password", "docs", "contact"];
-                            if (!bypassPages.includes(page) && !superAdminPages.includes(page) && !allowedPages.includes(page)) {
+                            const bypassPages = ["settings", "login", "index", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password", "docs", "contact", "custom-analytics"];
+                            const isAllowedRolePage = (page === "custom-analytics" && (role === "ADMIN" || role === "ANALYTICS" || role === "SUPERADMIN"));
+                            if (!isAllowedRolePage && !bypassPages.includes(page) && !superAdminPages.includes(page) && !allowedPages.includes(page)) {
                                 link.style.display = "none";
                             }
                         });
@@ -2531,7 +2533,9 @@
                 "/api/alliances",
                 "/api/alliances/invites",
                 "/api/alliances/invites/count",
-                "/api/alliances/import-sources"
+                "/api/alliances/import-sources",
+                "/api/custom-analytics/reports",
+                "/api/custom-analytics/dataset"
             ];
 
             if (settings.year) {

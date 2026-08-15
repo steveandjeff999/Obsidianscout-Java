@@ -348,7 +348,21 @@ object ClusterNotificationLocks : UUIDTable("cluster_notification_locks") {
     }
 }
 
+object AnalyticsReports : UUIDTable("analytics_reports") {
+    val ownerTeamNumber = integer("owner_team_number")
+    val program = varchar("program", 8).default("FRC")
+    val userId = reference("user_id", Users)
+    val title = varchar("title", 128)
+    val category = varchar("category", 64).default("General")
+    val description = text("description").nullable()
+    val configJson = text("config_json")
+    val isShared = bool("is_shared").default(false)
+    val isDefault = bool("is_default").default(false)
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
 
-
-
-
+    init {
+        index("idx_analytics_reports_team_program", false, ownerTeamNumber, program)
+        index("idx_analytics_reports_user", false, userId)
+    }
+}

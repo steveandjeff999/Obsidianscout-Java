@@ -967,6 +967,60 @@ fun Application.configureRoutes() {
                 }
             }
 
+            route("/custom-analytics") {
+                route("/reports") {
+                    get {
+                        val session = call.requireSession()
+                        call.respond(com.obsidianscout.analytics.AnalyticsReportService.listReports(session))
+                    }
+                    get("/{id}") {
+                        val session = call.requireSession()
+                        val id = call.parameters["id"]
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing report ID")
+                        call.respond(com.obsidianscout.analytics.AnalyticsReportService.getReport(id, session))
+                    }
+                    post {
+                        val session = call.requireSession()
+                        val req = call.receive<com.obsidianscout.analytics.CreateReportRequest>()
+                        val created = com.obsidianscout.analytics.AnalyticsReportService.createReport(session, req)
+                        call.respond(HttpStatusCode.Created, created)
+                    }
+                    put("/{id}") {
+                        val session = call.requireSession()
+                        val id = call.parameters["id"]
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing report ID")
+                        val req = call.receive<com.obsidianscout.analytics.UpdateReportRequest>()
+                        val updated = com.obsidianscout.analytics.AnalyticsReportService.updateReport(id, session, req)
+                        call.respond(updated)
+                    }
+                    delete("/{id}") {
+                        val session = call.requireSession()
+                        val id = call.parameters["id"]
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing report ID")
+                        val deleted = com.obsidianscout.analytics.AnalyticsReportService.deleteReport(id, session)
+                        call.respond(mapOf("success" to deleted))
+                    }
+                    post("/{id}/duplicate") {
+                        val session = call.requireSession()
+                        val id = call.parameters["id"]
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing report ID")
+                        val duplicated = com.obsidianscout.analytics.AnalyticsReportService.duplicateReport(id, session)
+                        call.respond(HttpStatusCode.Created, duplicated)
+                    }
+                }
+                get("/dataset") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                    val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: true
+                    val dataset = com.obsidianscout.analytics.AnalyticsReportService.generateDataset(
+                        session = session,
+                        eventKeyFilter = eventKey,
+                        includePrescout = includePrescout
+                    )
+                    call.respond(dataset)
+                }
+            }
+
             route("/alliance-selection") {
                 get {
                     val session = call.requireSession()
@@ -2463,6 +2517,7 @@ fun Application.configureRoutes() {
             "pit-data" to "pit-data.html",
             "all-data" to "all-data.html",
             "analytics" to "analytics.html",
+            "custom-analytics" to "custom-analytics.html",
             "graphs" to "graphs.html",
             "events" to "events.html",
             "teams" to "teams.html",
