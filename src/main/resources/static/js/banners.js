@@ -196,12 +196,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     creationForm.addEventListener("submit", async (e) => {
         e.preventDefault();
 
+        const submitBtn = creationForm.querySelector('button[type="submit"]');
         const message = document.getElementById("banner-message").value;
         const bannerType = document.getElementById("banner-type").value;
         const teamNumber = parseInt(document.getElementById("banner-team-number").value, 10);
 
         if (teamSelect.value === "custom" && (isNaN(teamNumber) || teamNumber < 1)) {
             Obsidianscout.showToast(t("banners.err_invalid_custom_team", "Please enter a valid team number for the custom target scope."), "error");
+            Obsidianscout.setButtonLoading(submitBtn, false);
             return;
         }
         const isDismissible = !document.getElementById("banner-immutable").checked;
@@ -211,7 +213,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         const isActive = document.getElementById("banner-active").checked;
 
         try {
-            const submitBtn = creationForm.querySelector('button[type="submit"]');
             await Obsidianscout.request("/api/admin/banners", {
                 method: "POST",
                 json: {
@@ -236,6 +237,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             await loadBanners();
         } catch (error) {
             Obsidianscout.showToast(t("banners.err_create", "Failed to create banner: ") + error.message, "error");
+        } finally {
+            Obsidianscout.setButtonLoading(submitBtn, false);
         }
     });
 
@@ -272,6 +275,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     editForm.addEventListener("submit", async (e) => {
         e.preventDefault();
 
+        const editSaveBtn = editForm.querySelector('button[type="submit"]');
         const id = document.getElementById("edit-banner-id").value;
         const message = document.getElementById("edit-banner-message").value;
         const bannerType = document.getElementById("edit-banner-type").value;
@@ -279,6 +283,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (editTeamSelect.value === "custom" && (isNaN(teamNumber) || teamNumber < 1)) {
             Obsidianscout.showToast(t("banners.err_invalid_custom_team", "Please enter a valid team number for the custom target scope."), "error");
+            Obsidianscout.setButtonLoading(editSaveBtn, false);
             return;
         }
 
@@ -289,7 +294,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         const isActive = document.getElementById("edit-banner-active").checked;
 
         try {
-            const editSaveBtn = editForm.querySelector('button[type="submit"]');
             await Obsidianscout.request(`/api/admin/banners/${id}`, {
                 method: "PUT",
                 json: {
@@ -310,6 +314,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             await loadBanners();
         } catch (error) {
             Obsidianscout.showToast(t("banners.err_update", "Failed to update banner: ") + error.message, "error");
+        } finally {
+            Obsidianscout.setButtonLoading(editSaveBtn, false);
         }
     });
 

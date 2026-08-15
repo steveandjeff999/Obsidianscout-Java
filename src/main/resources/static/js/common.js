@@ -199,8 +199,6 @@
                 btn.innerHTML = `${indicatorHtml}${btn.dataset.originalHtml}`;
             }
         } else {
-            if (btn.dataset.loading !== "true" && btn.dataset.originalHtml === undefined) return;
-
             if (btn.dataset.originalHtml !== undefined) {
                 btn.innerHTML = btn.dataset.originalHtml;
                 delete btn.dataset.originalHtml;
@@ -1198,8 +1196,18 @@
             triggerHaptic("success");
         } else if (tone === "error") {
             triggerHaptic("error");
+            try {
+                document.querySelectorAll('button[data-loading="true"], button.is-loading, input[type="submit"][data-loading="true"]').forEach((btn) => {
+                    setButtonLoading(btn, false);
+                });
+            } catch (e) {}
         } else if (tone === "warning") {
             triggerHaptic("warning");
+            try {
+                document.querySelectorAll('button[data-loading="true"], button.is-loading, input[type="submit"][data-loading="true"]').forEach((btn) => {
+                    setButtonLoading(btn, false);
+                });
+            } catch (e) {}
         }
     }
 
@@ -2818,11 +2826,36 @@
             const submitter = e.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
             if (submitter && submitter.getAttribute("data-no-loading") !== "true") {
                 setButtonLoading(submitter, true);
-                setTimeout(() => {
-                    if (form.checkValidity && !form.checkValidity()) {
-                        setButtonLoading(submitter, false);
-                    }
-                }, 400);
+                if (form.checkValidity && !form.checkValidity()) {
+                    setButtonLoading(submitter, false);
+                }
+            }
+        });
+
+        // If native form validation fails (invalid event fires), instantly restore submit button
+        document.addEventListener("invalid", (e) => {
+            const form = e.target.form;
+            if (form) {
+                const submitter = form.querySelector('button[type="submit"], input[type="submit"]');
+                if (submitter) setButtonLoading(submitter, false);
+            }
+        }, true);
+
+        // When a user interacts with or edits a form after an error, reset any stuck loading state on that form's submit buttons
+        document.addEventListener("input", (e) => {
+            const form = e.target.form;
+            if (form) {
+                form.querySelectorAll('button[data-loading="true"], button.is-loading, input[type="submit"][data-loading="true"]').forEach((btn) => {
+                    setButtonLoading(btn, false);
+                });
+            }
+        });
+        document.addEventListener("change", (e) => {
+            const form = e.target.form;
+            if (form) {
+                form.querySelectorAll('button[data-loading="true"], button.is-loading, input[type="submit"][data-loading="true"]').forEach((btn) => {
+                    setButtonLoading(btn, false);
+                });
             }
         });
 

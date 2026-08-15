@@ -579,9 +579,13 @@
         const eventCode = document.getElementById('alliance-event-code').value.trim() || null;
         const notes = document.getElementById('alliance-notes').value.trim() || null;
 
-        if (!name) { showToast('Alliance name is required.', 'error'); return; }
+        if (!name) {
+            showToast('Alliance name is required.', 'error');
+            window.Obsidianscout?.setButtonLoading(saveBtn, false);
+            return;
+        }
 
-        window.Obsidianscout.setButtonLoading(saveBtn, true, "Saving...");
+        window.Obsidianscout?.setButtonLoading(saveBtn, true, "Saving...");
 
         try {
             if (editId) {
@@ -607,7 +611,7 @@
         } catch (err) {
             showToast('Failed: ' + err.message, 'error');
         } finally {
-            window.Obsidianscout.setButtonLoading(saveBtn, false);
+            window.Obsidianscout?.setButtonLoading(saveBtn, false);
         }
     }
 
@@ -616,9 +620,13 @@
         const allianceId = document.getElementById('invite-alliance-id').value;
         const teamNumber = parseInt(document.getElementById('invite-team-number').value);
 
-        if (!teamNumber || teamNumber <= 0) { showToast('Please enter a valid team number.', 'error'); return; }
+        if (!teamNumber || teamNumber <= 0) {
+            showToast('Please enter a valid team number.', 'error');
+            window.Obsidianscout?.setButtonLoading(sendBtn, false);
+            return;
+        }
 
-        window.Obsidianscout.setButtonLoading(sendBtn, true, "Sending...");
+        window.Obsidianscout?.setButtonLoading(sendBtn, true, "Sending...");
 
         try {
             await request(`/api/alliances/${allianceId}/invite`, {
@@ -631,7 +639,7 @@
         } catch (err) {
             showToast('Failed: ' + err.message, 'error');
         } finally {
-            window.Obsidianscout.setButtonLoading(sendBtn, false);
+            window.Obsidianscout?.setButtonLoading(sendBtn, false);
         }
     }
 
@@ -647,15 +655,17 @@
 
         if (!sourceTeamRaw || Number(sourceTeamRaw) <= 0) {
             showToast('Enter a valid source team number.', 'error');
+            window.Obsidianscout?.setButtonLoading(btn, false);
             return;
         }
 
         if (!includeMatchScouting && !includePitScouting && !includeQualitativeScouting) {
             showToast('Select at least one data type to import.', 'error');
+            window.Obsidianscout?.setButtonLoading(btn, false);
             return;
         }
 
-        window.Obsidianscout.setButtonLoading(btn, true, "Importing...");
+        window.Obsidianscout?.setButtonLoading(btn, true, "Importing...");
 
         try {
             const response = await request(`/api/alliances/${allianceId}/import`, {
@@ -681,7 +691,7 @@
         } catch (err) {
             showToast('Import failed: ' + err.message, 'error');
         } finally {
-            window.Obsidianscout.setButtonLoading(btn, false);
+            window.Obsidianscout?.setButtonLoading(btn, false);
         }
     }
 

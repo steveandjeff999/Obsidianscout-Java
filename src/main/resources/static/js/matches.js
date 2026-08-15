@@ -283,6 +283,7 @@ async function setupModal(defaultEventKey, timezone) {
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
+        const submitBtn = form.querySelector('button[type="submit"]');
         const redTeams = [
             redTeam1.value.trim(),
             redTeam2.value.trim(),
@@ -297,6 +298,7 @@ async function setupModal(defaultEventKey, timezone) {
 
         if (redTeams.length !== 3 || blueTeams.length !== 3) {
             Obsidianscout.showToast(t("matches.alliances_invalid", "Alliances must have exactly 3 teams each"), "error");
+            Obsidianscout.setButtonLoading(submitBtn, false);
             return;
         }
 
@@ -316,7 +318,8 @@ async function setupModal(defaultEventKey, timezone) {
         try {
             await Obsidianscout.request("/api/matches", {
                 method: "POST",
-                json: payload
+                json: payload,
+                button: submitBtn
             });
             Obsidianscout.showToast(t("matches.saved_success", "Match saved successfully"), "success");
             closeModal();
@@ -329,6 +332,8 @@ async function setupModal(defaultEventKey, timezone) {
             await loadMatches(activeEvent, timezone);
         } catch (error) {
             Obsidianscout.showToast(error.message || t("matches.save_failed", "Failed to save match"), "error");
+        } finally {
+            Obsidianscout.setButtonLoading(submitBtn, false);
         }
     });
 }

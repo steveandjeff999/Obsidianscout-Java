@@ -99,6 +99,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const path = document.getElementById("sqlite-path").value.trim();
             if (!path) {
                 alert(Obsidianscout.t("migration.sqlite_path_required", "Please enter the folder path"));
+                Obsidianscout.setButtonLoading(btnStart, false);
                 return;
             }
             payload.sqliteInstancePath = path;
@@ -116,6 +117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (!host || !user || !database) {
                 alert(Obsidianscout.t("migration.pg_fields_required", "Host, Username, and Main Database are required."));
+                Obsidianscout.setButtonLoading(btnStart, false);
                 return;
             }
 
@@ -160,6 +162,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const password = resetPasswordConfirm.value;
             if (!password) {
                 alert("Please enter your password to confirm database reset.");
+                Obsidianscout.setButtonLoading(btnResetDatabase, false);
                 return;
             }
 
@@ -167,7 +170,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            btnResetDatabase.disabled = true;
+            Obsidianscout.setButtonLoading(btnResetDatabase, true, "Resetting...");
             try {
                 const res = await Obsidianscout.request("/api/admin/reset-database", {
                     method: "POST",
@@ -179,11 +182,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                     window.location.reload();
                 } else {
                     alert("Failed to reset database: " + (res.error || "Unknown error"));
-                    btnResetDatabase.disabled = false;
                 }
             } catch (e) {
                 alert("Error resetting database: " + e.message);
-                btnResetDatabase.disabled = false;
+            } finally {
+                Obsidianscout.setButtonLoading(btnResetDatabase, false);
             }
         });
     }

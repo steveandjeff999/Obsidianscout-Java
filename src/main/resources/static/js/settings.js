@@ -100,6 +100,55 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalUsernameWidget(currentMe) {
+        const personalUsername = document.getElementById("personal-username");
+        const personalSaveUsername = document.getElementById("personal-save-username");
+        if (!personalUsername || !personalSaveUsername) return;
+
+        personalUsername.value = currentMe.username || "";
+
+        personalSaveUsername.addEventListener("click", async () => {
+            const usernameVal = personalUsername.value.trim();
+            if (!usernameVal) {
+                Obsidianscout.showToast("Username cannot be blank", "error");
+                return;
+            }
+            if (usernameVal === currentMe.username) {
+                Obsidianscout.showToast("Username is already set to this", "info");
+                return;
+            }
+            try {
+                const updated = await Obsidianscout.request("/api/user/profile-picture", {
+                    method: "PUT",
+                    json: { username: usernameVal }
+                });
+                currentMe.username = updated.username;
+                personalUsername.value = updated.username || "";
+                try {
+                    localStorage.removeItem("cache:/api/auth/me");
+                } catch (e) {}
+                Obsidianscout.setUserBadge(currentMe);
+
+                // Update avatar initials placeholder if custom photo is not set
+                const avatarImg = document.getElementById("personal-avatar-img");
+                const avatarPlaceholder = document.getElementById("personal-avatar-placeholder");
+                if (avatarPlaceholder && (!avatarImg || avatarImg.style.display === "none")) {
+                    const initials = (currentMe.username || "?").slice(0, 2).toUpperCase();
+                    let hue = 0;
+                    for (let i = 0; i < (currentMe.username || "").length; i++) {
+                        hue = (hue + currentMe.username.charCodeAt(i) * 37) % 360;
+                    }
+                    avatarPlaceholder.textContent = initials;
+                    avatarPlaceholder.style.setProperty("--avatar-hue", hue + "deg");
+                }
+
+                Obsidianscout.showToast("Username updated successfully", "success");
+            } catch (err) {
+                Obsidianscout.showToast(err.message || "Failed to update username", "error");
+            }
+        });
+    }
+
     function wirePersonalEmailWidget(currentMe) {
         const personalEmail = document.getElementById("personal-email");
         const personalSaveEmail = document.getElementById("personal-save-email");
@@ -242,6 +291,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     wirePersonalAvatarWidget(me);
+    wirePersonalUsernameWidget(me);
     wirePersonalEmailWidget(me);
     wirePersonalNotificationPrefWidget(me);
     wirePersonalNodeAlertsWidget(me);

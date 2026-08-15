@@ -1619,14 +1619,14 @@ fun Application.configureRoutes() {
                 }
             } // end /admin route
 
-            // Self-service profile picture endpoint (any authenticated user)
+            // Self-service profile and settings endpoint (any authenticated user)
             put("/user/profile-picture") {
                 val session = call.requireSession()
                 val request = call.receive<UpdateUserRequest>()
                 val updated = AuthService.updateUser(
                     callerSession = session,
                     targetUserId = session.userId,
-                    newUsername = null,
+                    newUsername = request.username?.trim()?.takeIf { it.isNotBlank() },
                     newPassword = null,
                     newRole = null,
                     newEmail = request.email,
@@ -1637,6 +1637,35 @@ fun Application.configureRoutes() {
                 )
                 // Refresh the session so /api/auth/me returns the updated details
                 val updatedSession = session.copy(
+                    username = updated.username,
+                    profilePicture = null,
+                    email = updated.email,
+                    notificationPreference = updated.notificationPreference,
+                    tourProgress = updated.tourProgress,
+                    nodeAlertsEnabled = updated.nodeAlertsEnabled
+                )
+                call.sessions.set(updatedSession)
+                call.respond(updated)
+            }
+
+            put("/user") {
+                val session = call.requireSession()
+                val request = call.receive<UpdateUserRequest>()
+                val updated = AuthService.updateUser(
+                    callerSession = session,
+                    targetUserId = session.userId,
+                    newUsername = request.username?.trim()?.takeIf { it.isNotBlank() },
+                    newPassword = null,
+                    newRole = null,
+                    newEmail = request.email,
+                    newProfilePicture = request.profilePicture,
+                    clearProfilePicture = request.clearProfilePicture,
+                    newNotificationPreference = request.notificationPreference,
+                    newNodeAlertsEnabled = if (session.role == UserRole.SUPERADMIN) request.nodeAlertsEnabled else null
+                )
+                // Refresh the session so /api/auth/me returns the updated details
+                val updatedSession = session.copy(
+                    username = updated.username,
                     profilePicture = null,
                     email = updated.email,
                     notificationPreference = updated.notificationPreference,

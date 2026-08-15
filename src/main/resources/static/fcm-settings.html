@@ -349,6 +349,7 @@
             // Form Submit (Save)
             fcmForm.addEventListener("submit", async (e) => {
                 e.preventDefault();
+                const saveBtn = document.getElementById("btn-save-fcm");
                 fcmAlert.classList.add("hidden");
                 try {
                     const res = await Obsidianscout.request("/api/admin/fcm", {
@@ -361,7 +362,8 @@
                             messagingSenderId: senderIdInput.value.trim(),
                             serviceAccountJson: jsonTextarea.value.trim(),
                             vapidKey: vapidKeyInput.value.trim()
-                        }
+                        },
+                        button: saveBtn
                     });
                     if (res.success) {
                         showAlert(t("fcm.save_success", "FCM Settings saved to database successfully!"), false);
@@ -373,6 +375,8 @@
                     }
                 } catch (err) {
                     showAlert("Failed to save FCM settings: " + (err.message || err), true);
+                } finally {
+                    Obsidianscout.setButtonLoading(saveBtn, false);
                 }
             });
 
@@ -381,11 +385,14 @@
                 fcmAlert.classList.add("hidden");
                 try {
                     const res = await Obsidianscout.request("/api/admin/fcm/test", {
-                        method: "POST"
+                        method: "POST",
+                        button: btnTestFcm
                     });
                     showAlert(res.message, !res.success);
                 } catch (err) {
                     showAlert("Test FCM failed: " + (err.message || err), true);
+                } finally {
+                    Obsidianscout.setButtonLoading(btnTestFcm, false);
                 }
             });
         });

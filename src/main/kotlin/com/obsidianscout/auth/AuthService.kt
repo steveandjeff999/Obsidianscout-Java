@@ -323,9 +323,26 @@ object AuthService {
 
             val targetRole = try { UserRole.valueOf(targetRow[Users.role]) } catch (_: Exception) { UserRole.SCOUT }
             val targetTeam = targetRow[Users.teamNumber]
+            val targetProgram = targetRow[Users.program]
+            val isSelfUpdate = callerSession.userId == targetUserId
 
-            // ADMIN restrictions
-            if (callerSession.role == UserRole.ADMIN) {
+            // Non-admin callers cannot edit other users
+            if (!isSelfUpdate && !callerSession.role.isAtLeast(UserRole.ADMIN)) {
+                throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to edit this user")
+            }
+
+            // Self-service restrictions for non-superadmins: cannot change role or team number
+            if (isSelfUpdate && callerSession.role != UserRole.SUPERADMIN) {
+                if (newRole != null && newRole != targetRole) {
+                    throw ApiException(HttpStatusCode.Forbidden, "You cannot change your own role")
+                }
+                if (newTeamNumber != null && newTeamNumber != targetTeam) {
+                    throw ApiException(HttpStatusCode.Forbidden, "You cannot change your own team number")
+                }
+            }
+
+            // ADMIN restrictions when editing other users
+            if (callerSession.role == UserRole.ADMIN && !isSelfUpdate) {
                 if (targetTeam != callerSession.teamNumber) {
                     throw ApiException(HttpStatusCode.Forbidden, "Admins can only edit users on their own team")
                 }
@@ -339,16 +356,27 @@ object AuthService {
                     throw ApiException(HttpStatusCode.Forbidden, "Only superadmins can change team numbers")
                 }
                 if (!newUsername.isNullOrBlank() && newUsername != targetRow[Users.username]) {
-                    throw ApiException(HttpStatusCode.Forbidden, "Only superadmins can change usernames")
+                    throw ApiException(HttpStatusCode.Forbidden, "Only superadmins can change other users' usernames")
                 }
             }
 
             val targetTeamFinal = newTeamNumber ?: targetTeam
-            val checkUsername = newUsername ?: targetRow[Users.username]
+            val checkUsername = newUsername?.trim() ?: targetRow[Users.username]
+
+            if (newUsername != null) {
+                if (checkUsername.isBlank()) {
+                    throw ApiException(HttpStatusCode.BadRequest, "Username cannot be blank")
+                }
+                if (checkUsername.equals("Deleted User", ignoreCase = true)) {
+                    throw ApiException(HttpStatusCode.BadRequest, "Invalid username")
+                }
+            }
+
             if (newUsername != null || newTeamNumber != null) {
                 val exists = Users.selectAll().where { 
                     (Users.username eq checkUsername) and 
                     (Users.teamNumber eq targetTeamFinal) and 
+                    (Users.program eq targetProgram) and
                     (Users.id neq targetUuid) 
                 }.any()
                 if (exists) {
@@ -357,7 +385,7 @@ object AuthService {
             }
 
             Users.update({ Users.id eq targetUuid }) { stmt ->
-                if (!newUsername.isNullOrBlank()) stmt[username] = newUsername
+                if (!newUsername.isNullOrBlank()) stmt[username] = newUsername.trim()
                 if (newHash != null)             stmt[passwordHash] = newHash
                 if (newRole != null)             stmt[role] = newRole.name
                 if (newEmail != null)            stmt[email] = newEmail.takeIf { it.isNotBlank() }

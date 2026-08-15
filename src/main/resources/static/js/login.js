@@ -58,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.location.href = "/dashboard";
         } catch (error) {
             Obsidianscout.showToast(error.message || "Sign in failed", "error");
+        } finally {
             Obsidianscout.setButtonLoading(loginButton, false);
         }
     });
@@ -105,6 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.location.href = "/dashboard";
         } catch (error) {
             Obsidianscout.showToast(error.message || "Registration failed", "error");
+        } finally {
             Obsidianscout.setButtonLoading(registerButton, false);
         }
     });
@@ -197,14 +199,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (forgotForm && forgotSubmit) {
         forgotForm.addEventListener("submit", async (e) => {
             e.preventDefault();
-            forgotSubmit.disabled = true;
+            Obsidianscout.setButtonLoading(forgotSubmit, true, "Sending...");
 
             const payload = {};
             if (activeForgotTab === "email") {
                 const email = forgotEmailInput.value.trim();
                 if (!email) {
                     Obsidianscout.showToast("Email address is required", "error");
-                    forgotSubmit.disabled = false;
+                    Obsidianscout.setButtonLoading(forgotSubmit, false);
                     return;
                 }
                 payload.email = email;
@@ -213,7 +215,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const teamNumber = parseInt(forgotTeamInput.value, 10);
                 if (!username || isNaN(teamNumber)) {
                     Obsidianscout.showToast("Username and team number are required", "error");
-                    forgotSubmit.disabled = false;
+                    Obsidianscout.setButtonLoading(forgotSubmit, false);
                     return;
                 }
                 payload.username = username;
@@ -239,7 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
             } catch (error) {
                 Obsidianscout.showToast(error.message || "Failed to send reset link", "error");
             } finally {
-                forgotSubmit.disabled = false;
+                Obsidianscout.setButtonLoading(forgotSubmit, false);
             }
         });
     }

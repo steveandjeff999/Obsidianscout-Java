@@ -3822,35 +3822,41 @@ input:checked + .slider:before {
 }
 
 /* Dark Theme Banners */
+body.theme-dark .banner-item {
+    background: rgba(30, 41, 59, 0.8);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #f8fafc;
+}
+
 body.theme-dark .banner-item.banner-info {
-    background: rgba(12, 74, 110, 0.6);
+    background: rgba(12, 74, 110, 0.7);
     border-color: #38bdf8;
     color: #e0f2fe;
-    border: 1px solid rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.25);
     border-left-width: 5px;
 }
 
 body.theme-dark .banner-item.banner-warning {
-    background: rgba(120, 53, 4, 0.6);
+    background: rgba(120, 53, 4, 0.7);
     border-color: #fbbf24;
     color: #fef3c7;
-    border: 1px solid rgba(251, 191, 36, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.25);
     border-left-width: 5px;
 }
 
 body.theme-dark .banner-item.banner-success {
-    background: rgba(6, 78, 59, 0.6);
+    background: rgba(6, 78, 59, 0.7);
     border-color: #34d399;
     color: #d1fae5;
-    border: 1px solid rgba(52, 211, 153, 0.15);
+    border: 1px solid rgba(52, 211, 153, 0.25);
     border-left-width: 5px;
 }
 
 body.theme-dark .banner-item.banner-danger {
-    background: rgba(127, 29, 29, 0.6);
+    background: rgba(127, 29, 29, 0.7);
     border-color: #f87171;
     color: #fee2e2;
-    border: 1px solid rgba(248, 113, 113, 0.15);
+    border: 1px solid rgba(248, 113, 113, 0.25);
     border-left-width: 5px;
 }
 

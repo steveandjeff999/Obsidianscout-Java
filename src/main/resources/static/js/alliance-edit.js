@@ -212,8 +212,12 @@
             const eventCode = allianceEventCodeInput.value.trim() || null;
             const notes = allianceNotesInput.value.trim() || null;
 
-            if (!name) return;
-            window.Obsidianscout.setButtonLoading(btnSaveDetails, true, "Saving...");
+            if (!name) {
+                showToast("Alliance name is required", "error");
+                window.Obsidianscout?.setButtonLoading(btnSaveDetails, false);
+                return;
+            }
+            window.Obsidianscout?.setButtonLoading(btnSaveDetails, true, "Saving...");
 
             try {
                 await request(`/api/alliances/${allianceId}`, {
@@ -225,7 +229,7 @@
             } catch (err) {
                 showToast('Failed to save details: ' + err.message, 'error');
             } finally {
-                window.Obsidianscout.setButtonLoading(btnSaveDetails, false);
+                window.Obsidianscout?.setButtonLoading(btnSaveDetails, false);
             }
         });
 
@@ -233,10 +237,14 @@
         formInviteTeam?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const teamNumber = parseInt(inviteTeamNumberInput.value);
-            if (!teamNumber || teamNumber <= 0) return;
-
             const sendBtn = document.getElementById('btn-send-invite');
-            window.Obsidianscout.setButtonLoading(sendBtn, true, "Sending...");
+            if (!teamNumber || teamNumber <= 0) {
+                showToast("Please enter a valid team number", "error");
+                window.Obsidianscout?.setButtonLoading(sendBtn, false);
+                return;
+            }
+
+            window.Obsidianscout?.setButtonLoading(sendBtn, true, "Sending...");
 
             try {
                 await request(`/api/alliances/${allianceId}/invite`, {
@@ -249,7 +257,7 @@
             } catch (err) {
                 showToast('Failed to send invite: ' + err.message, 'error');
             } finally {
-                window.Obsidianscout.setButtonLoading(sendBtn, false);
+                window.Obsidianscout?.setButtonLoading(sendBtn, false);
             }
         });
 
@@ -1385,16 +1393,24 @@
         // Bind form submit (Save Changes)
         formEditSharedEntry?.addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!selectedSharedEntry) return;
+            const saveBtn = formEditSharedEntry.querySelector('button[type="submit"]');
+            if (!selectedSharedEntry) {
+                window.Obsidianscout?.setButtonLoading(saveBtn, false);
+                return;
+            }
 
             const config = sharedConfigs[activeDataTab];
             if (!config) {
                 showToast("Configuration not loaded, cannot save changes", "error");
+                window.Obsidianscout?.setButtonLoading(saveBtn, false);
                 return;
             }
 
             const payload = buildSharedPayload(config.fields, formEditSharedEntry);
-            if (!payload) return;
+            if (!payload) {
+                window.Obsidianscout?.setButtonLoading(saveBtn, false);
+                return;
+            }
 
             // Preserve eventKey, matchKey, matchNumber, targetTeamNumber
             payload.eventKey = selectedSharedEntry.eventKey;
@@ -1403,6 +1419,8 @@
                 payload.matchKey = selectedSharedEntry.matchKey;
                 payload.matchNumber = selectedSharedEntry.matchNumber;
             }
+
+            window.Obsidianscout?.setButtonLoading(saveBtn, true, "Saving...");
 
             try {
                 let endpoint = `/api/scouting/${selectedSharedEntry.id}`;
@@ -1426,6 +1444,8 @@
                 renderSharedEntriesList();
             } catch (err) {
                 showToast("Failed to save entry: " + err.message, "error");
+            } finally {
+                window.Obsidianscout?.setButtonLoading(saveBtn, false);
             }
         });
 

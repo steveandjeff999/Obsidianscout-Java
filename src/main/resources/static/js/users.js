@@ -222,6 +222,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (Object.keys(payload).length === 0) {
             Obsidianscout.showToast("Nothing to update", "info");
+            Obsidianscout.setButtonLoading(editSaveBtn, false);
             return;
         }
 
@@ -236,6 +237,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             await loadUsers(me, openModal);
         } catch (err) {
             Obsidianscout.showToast(err.message || "Update failed", "error");
+        } finally {
+            Obsidianscout.setButtonLoading(editSaveBtn, false);
         }
     });
 

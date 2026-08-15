@@ -271,6 +271,7 @@ async function setupModal(defaultEventKey) {
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
+        const submitBtn = form.querySelector('button[type="submit"]');
         const teamName = nameInput.value.trim() || null;
 
         const payload = {
@@ -289,7 +290,8 @@ async function setupModal(defaultEventKey) {
         try {
             await Obsidianscout.request("/api/teams", {
                 method: "POST",
-                json: payload
+                json: payload,
+                button: submitBtn
             });
             Obsidianscout.showToast("Team saved successfully", "success");
             closeModal();
@@ -302,6 +304,8 @@ async function setupModal(defaultEventKey) {
             await loadTeams(activeEvent);
         } catch (error) {
             Obsidianscout.showToast(error.message || "Failed to save team", "error");
+        } finally {
+            Obsidianscout.setButtonLoading(submitBtn, false);
         }
     });
 }

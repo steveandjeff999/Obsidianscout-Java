@@ -155,6 +155,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }, 2000);
             } catch (error) {
                 Obsidianscout.showToast(error.message || "Failed to reset password", "error");
+            } finally {
                 Obsidianscout.setButtonLoading(resetSubmit, false);
             }
         });

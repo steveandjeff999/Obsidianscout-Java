@@ -28,9 +28,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             e.preventDefault();
 
             // Set loading state
-            submitBtn.disabled = true;
-            submitSpinner.style.display = "block";
-            btnText.textContent = Obsidianscout.t("contact.btn.sending", "Sending...");
+            if (submitBtn) submitBtn.disabled = true;
+            if (submitSpinner) submitSpinner.style.display = "block";
+            if (btnText) btnText.textContent = Obsidianscout.t("contact.btn.sending", "Sending...");
             
             const name = nameInput ? nameInput.value.trim() : "";
             const replyToEmail = emailInput ? emailInput.value.trim() : "";
@@ -72,9 +72,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 Obsidianscout.showToast(errorMsg, "error");
             } finally {
                 // Restore state
-                submitBtn.disabled = false;
-                submitSpinner.style.display = "none";
-                btnText.textContent = Obsidianscout.t("contact.btn.send", "Send Message");
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    Obsidianscout.setButtonLoading(submitBtn, false);
+                }
+                if (submitSpinner) submitSpinner.style.display = "none";
+                if (btnText) btnText.textContent = Obsidianscout.t("contact.btn.send", "Send Message");
             }
         });
     }

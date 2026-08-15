@@ -54,11 +54,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 lightInk: legacyTheme.lightInk || "#09090b",
                 lightMuted: legacyTheme.lightMuted || "#71717a",
                 lightBg: legacyTheme.lightBg || "#ffffff",
-                darkAccent: legacyTheme.darkAccent || "#ffffff",
-                darkAccent2: legacyTheme.darkAccent2 || "#f4f4f5",
-                darkAccent3: legacyTheme.darkAccent3 || "#e4e4e7",
-                darkInk: legacyTheme.darkInk || "#ffffff",
-                darkMuted: legacyTheme.darkMuted || "#a1a1aa",
+                darkAccent: legacyTheme.darkAccent || "#3b82f6",
+                darkAccent2: legacyTheme.darkAccent2 || "#38bdf8",
+                darkAccent3: legacyTheme.darkAccent3 || "#a855f7",
+                darkInk: legacyTheme.darkInk || "#f8fafc",
+                darkMuted: legacyTheme.darkMuted || "#94a3b8",
                 darkBg: legacyTheme.darkBg || "#09090b",
                 btnRadius: legacyTheme.btnRadius || "8px"
             });

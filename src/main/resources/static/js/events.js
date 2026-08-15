@@ -240,6 +240,7 @@ function setupModal(defaultYear) {
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
+        const submitBtn = form.querySelector('button[type="submit"]');
         const newKey = keyInput.value.trim().toLowerCase();
         const payload = {
             eventKey: newKey,
@@ -257,13 +258,15 @@ function setupModal(defaultYear) {
                 // can rename all dependent records atomically.
                 await Obsidianscout.request("/api/events", {
                     method: "PUT",
-                    json: { oldKey: editingOldKey, event: payload }
+                    json: { oldKey: editingOldKey, event: payload },
+                    button: submitBtn
                 });
             } else {
                 // Creating a new event
                 await Obsidianscout.request("/api/events", {
                     method: "POST",
-                    json: payload
+                    json: payload,
+                    button: submitBtn
                 });
             }
             Obsidianscout.showToast(t("events.saved_success", "Event saved successfully"), "success");
@@ -271,6 +274,8 @@ function setupModal(defaultYear) {
             await loadEvents(defaultYear, true);
         } catch (error) {
             Obsidianscout.showToast(error.message || t("events.save_failed", "Failed to save event"), "error");
+        } finally {
+            Obsidianscout.setButtonLoading(submitBtn, false);
         }
     });
 

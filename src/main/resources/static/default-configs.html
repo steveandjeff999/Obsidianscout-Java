@@ -653,6 +653,8 @@
         document.getElementById('preset-form').addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            const submitBtn = document.getElementById('preset-form').querySelector('button[type="submit"]');
+
             // Ensure Raw JSON is up to date if submitting from Visual tab
             if (activeEditorTab === 'visual') {
                 updateRawFromVisual();
@@ -671,6 +673,9 @@
                 const errDiv = document.getElementById('json-error');
                 errDiv.textContent = `JSON Error: ${err.message}`;
                 errDiv.style.display = 'block';
+                if (window.Obsidianscout) {
+                    Obsidianscout.setButtonLoading(submitBtn, false);
+                }
                 return;
             }
 
@@ -681,6 +686,10 @@
                 configJson: rawJson,
                 isDefault
             };
+
+            if (window.Obsidianscout) {
+                Obsidianscout.setButtonLoading(submitBtn, true, "Saving...");
+            }
 
             try {
                 const method = id ? 'PUT' : 'POST';
@@ -698,6 +707,10 @@
                 await loadPresets();
             } catch (err) {
                 alert(`Error: ${err.message}`);
+            } finally {
+                if (window.Obsidianscout) {
+                    Obsidianscout.setButtonLoading(submitBtn, false);
+                }
             }
         });
 
