@@ -263,6 +263,8 @@ object ChatMessages : UUIDTable("chat_messages") {
     val content = text("content")
     val createdAt = timestamp("created_at")
     val reactionsJson = text("reactions_json").default("{}")
+    val isEdited = bool("is_edited").default(false)
+    val updatedAt = timestamp("updated_at").nullable()
 
     init {
         index("idx_chat_messages_team_group_program", false, teamNumber, groupName, program)

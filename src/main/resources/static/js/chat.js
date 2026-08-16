@@ -181,14 +181,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    let editingMessageId = null;
+
     function renderMessages(messages) {
         // Save scroll height to detect if we should stick scroll to bottom
         const isScrolledToBottom = messageContainer.scrollHeight - messageContainer.clientHeight <= messageContainer.scrollTop + 50;
 
-        // Track open reaction pickers so we don't destroy them mid-click if rendering happens
+        // Track open reaction pickers or active editing so we don't destroy them mid-action if rendering happens
         const activePickerMsgId = document.querySelector(".reaction-picker-popover")?.closest(".message-bubble")?.dataset.msgId;
-        if (activePickerMsgId) {
-            return; // Skip rendering this poll tick to preserve open picker
+        const activeDropdownMsgId = document.querySelector(".message-actions-dropdown")?.closest(".message-bubble")?.dataset.msgId;
+        if (activePickerMsgId || activeDropdownMsgId || editingMessageId) {
+            return; // Skip rendering this poll tick to preserve active interactions
         }
 
         messageContainer.innerHTML = "";
@@ -199,8 +202,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        const isAdmin = me.role === "ADMIN" || me.role === "SUPERADMIN";
+
         messages.forEach(msg => {
-            const isMe = msg.userId === me.userId;
+            const isMe = msg.userId === me.userId || (msg.username && msg.username.toLowerCase() === me.username.toLowerCase());
             const initials = (msg.username || "?").slice(0, 2).toUpperCase();
             
             // Get avatar color
@@ -250,6 +255,38 @@ document.addEventListener("DOMContentLoaded", async () => {
                 time.textContent = msg.createdAt;
             }
             meta.appendChild(time);
+
+            if (msg.isEdited) {
+                const editedLabel = document.createElement("span");
+                editedLabel.className = "message-edited";
+                editedLabel.textContent = Obsidianscout.t("chat.edited", "(edited)");
+                if (msg.updatedAt) {
+                    try {
+                        const updatedDate = new Date(msg.updatedAt);
+                        editedLabel.title = updatedDate.toLocaleString();
+                    } catch (_) {}
+                }
+                meta.appendChild(editedLabel);
+            }
+
+            // Message actions button (for author or admin)
+            if (isMe || isAdmin) {
+                const actionsWrapper = document.createElement("div");
+                actionsWrapper.className = "message-actions-wrapper";
+
+                const actionsBtn = document.createElement("button");
+                actionsBtn.className = "message-actions-btn";
+                actionsBtn.innerHTML = "•••";
+                actionsBtn.title = Obsidianscout.t("chat.actions", "Message Actions");
+                actionsBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    toggleMessageActionsDropdown(actionsWrapper, msg, isMe, isAdmin);
+                });
+
+                actionsWrapper.appendChild(actionsBtn);
+                meta.appendChild(actionsWrapper);
+            }
+
             bubble.appendChild(meta);
 
             const text = document.createElement("div");
@@ -296,8 +333,157 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         // Auto-scroll to bottom if scrolled to bottom or if active picker wasn't open
-        if (isScrolledToBottom && !activePickerMsgId) {
+        if (isScrolledToBottom && !activePickerMsgId && !editingMessageId) {
             messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+    }
+
+    function toggleMessageActionsDropdown(wrapper, msg, isMe, isAdmin) {
+        // Remove any open dropdowns
+        document.querySelectorAll(".message-actions-dropdown").forEach(d => d.remove());
+
+        const dropdown = document.createElement("div");
+        dropdown.className = "message-actions-dropdown";
+
+        if (isMe) {
+            const editBtn = document.createElement("button");
+            editBtn.className = "message-action-item";
+            editBtn.innerHTML = `✏️ <span>${Obsidianscout.t("chat.edit", "Edit")}</span>`;
+            editBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                dropdown.remove();
+                startEditMessage(msg.id, msg.content, wrapper.closest(".message-bubble"));
+            });
+            dropdown.appendChild(editBtn);
+        }
+
+        if (isMe || isAdmin) {
+            const delBtn = document.createElement("button");
+            delBtn.className = "message-action-item danger";
+            delBtn.innerHTML = `🗑️ <span>${Obsidianscout.t("chat.delete", "Delete")}</span>`;
+            delBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                dropdown.remove();
+                confirmDeleteMessage(msg.id);
+            });
+            dropdown.appendChild(delBtn);
+        }
+
+        wrapper.appendChild(dropdown);
+
+        const closeDropdownHandler = (evt) => {
+            if (!wrapper.contains(evt.target)) {
+                dropdown.remove();
+                document.removeEventListener("click", closeDropdownHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener("click", closeDropdownHandler);
+        }, 10);
+    }
+
+    function startEditMessage(msgId, currentContent, bubble) {
+        if (!bubble) return;
+        editingMessageId = msgId;
+        const textEl = bubble.querySelector(".message-text");
+        if (!textEl) return;
+        textEl.style.display = "none";
+
+        // Remove any previous edit container inside this bubble
+        bubble.querySelector(".message-edit-container")?.remove();
+
+        const editContainer = document.createElement("div");
+        editContainer.className = "message-edit-container";
+
+        const textarea = document.createElement("textarea");
+        textarea.className = "message-edit-textarea";
+        textarea.value = currentContent;
+
+        const actionsRow = document.createElement("div");
+        actionsRow.className = "message-edit-actions";
+
+        const hint = document.createElement("span");
+        hint.className = "message-edit-hint";
+        hint.textContent = "Enter to save • Esc to cancel";
+
+        const cancelBtn = document.createElement("button");
+        cancelBtn.className = "btn ghost";
+        cancelBtn.textContent = Obsidianscout.t("chat.cancel", "Cancel");
+        cancelBtn.addEventListener("click", () => {
+            editingMessageId = null;
+            editContainer.remove();
+            textEl.style.display = "";
+        });
+
+        const saveBtn = document.createElement("button");
+        saveBtn.className = "btn primary";
+        saveBtn.textContent = Obsidianscout.t("chat.save", "Save");
+
+        const submitEdit = async () => {
+            const newText = textarea.value.trim();
+            if (!newText) return;
+            if (newText === currentContent) {
+                editingMessageId = null;
+                editContainer.remove();
+                textEl.style.display = "";
+                return;
+            }
+            Obsidianscout.setButtonLoading(saveBtn, true);
+            try {
+                await Obsidianscout.request(`/api/chat/messages/${msgId}`, {
+                    method: "PUT",
+                    json: { content: newText }
+                });
+                editingMessageId = null;
+                lastMessagesHash = "";
+                loadMessages();
+            } catch (err) {
+                console.error("Failed to edit message", err);
+                Obsidianscout.showToast(Obsidianscout.t("chat.error_edit", "Failed to edit message"), "error");
+                Obsidianscout.setButtonLoading(saveBtn, false);
+            }
+        };
+
+        saveBtn.addEventListener("click", submitEdit);
+
+        textarea.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submitEdit();
+            } else if (e.key === "Escape") {
+                e.preventDefault();
+                editingMessageId = null;
+                editContainer.remove();
+                textEl.style.display = "";
+            }
+        });
+
+        actionsRow.appendChild(hint);
+        actionsRow.appendChild(cancelBtn);
+        actionsRow.appendChild(saveBtn);
+
+        editContainer.appendChild(textarea);
+        editContainer.appendChild(actionsRow);
+
+        textEl.after(editContainer);
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }
+
+    async function confirmDeleteMessage(msgId) {
+        const confirmMsg = Obsidianscout.t("chat.delete_confirm", "Are you sure you want to delete this message? This cannot be undone.");
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+        try {
+            await Obsidianscout.request(`/api/chat/messages/${msgId}`, {
+                method: "DELETE"
+            });
+            lastMessagesHash = "";
+            loadMessages();
+        } catch (err) {
+            console.error("Failed to delete message", err);
+            Obsidianscout.showToast(Obsidianscout.t("chat.error_delete", "Failed to delete message"), "error");
         }
     }
 

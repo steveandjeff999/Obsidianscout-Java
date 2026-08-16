@@ -436,12 +436,19 @@ data class ChatMessageDto(
     val content: String,
     val createdAt: String,
     val reactions: Map<String, List<String>>, // maps reaction emoji to list of usernames who reacted
-    val profilePicture: String? = null
+    val profilePicture: String? = null,
+    val isEdited: Boolean = false,
+    val updatedAt: String? = null
 )
 
 @Serializable
 data class SendMessageRequest(
     val groupName: String,
+    val content: String
+)
+
+@Serializable
+data class EditChatMessageRequest(
     val content: String
 )
 

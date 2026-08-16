@@ -132,7 +132,9 @@ data class ChatMessageBackupDto(
     val username: String,
     val content: String,
     val createdAt: Long,
-    val reactionsJson: String
+    val reactionsJson: String,
+    val isEdited: Boolean = false,
+    val updatedAt: Long? = null
 )
 
 // Global backup DTOs
@@ -505,7 +507,9 @@ object BackupService {
                         username = username,
                         content = row[ChatMessages.content],
                         createdAt = row[ChatMessages.createdAt].toEpochMilli(),
-                        reactionsJson = row[ChatMessages.reactionsJson]
+                        reactionsJson = row[ChatMessages.reactionsJson],
+                        isEdited = row[ChatMessages.isEdited],
+                        updatedAt = row[ChatMessages.updatedAt]?.toEpochMilli()
                     )
                 }
             } else emptyList()
@@ -1019,6 +1023,8 @@ object BackupService {
                             it[content] = c.content
                             it[createdAt] = Instant.ofEpochMilli(c.createdAt)
                             it[reactionsJson] = c.reactionsJson
+                            it[isEdited] = c.isEdited
+                            it[updatedAt] = c.updatedAt?.let { ts -> Instant.ofEpochMilli(ts) }
                         }
                         chatsImported++
                     }

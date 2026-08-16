@@ -1,5 +1,6 @@
 package com.obsidianscout.db
 
+import com.obsidianscout.auth.UserRole
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.routes.ChatMessageDto
 import kotlinx.serialization.decodeFromString
@@ -11,7 +12,9 @@ import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
@@ -39,6 +42,8 @@ object ChatService {
                 ChatMessages.content,
                 ChatMessages.createdAt,
                 ChatMessages.reactionsJson,
+                ChatMessages.isEdited,
+                ChatMessages.updatedAt,
                 Users.profilePicture
             )
             .where { (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.groupName eq groupName) }
@@ -61,7 +66,9 @@ object ChatService {
                     content = row[ChatMessages.content],
                     createdAt = row[ChatMessages.createdAt].toString(),
                     reactions = parsedReactions,
-                    profilePicture = row[Users.profilePicture]
+                    profilePicture = row[Users.profilePicture],
+                    isEdited = row[ChatMessages.isEdited],
+                    updatedAt = row[ChatMessages.updatedAt]?.toString()
                 )
             }
             .reversed()
@@ -123,6 +130,8 @@ object ChatService {
             it[ChatMessages.content] = content
             it[ChatMessages.createdAt] = Instant.now()
             it[ChatMessages.reactionsJson] = "{}"
+            it[ChatMessages.isEdited] = false
+            it[ChatMessages.updatedAt] = null
         }
         val user = Users.select(Users.profilePicture).where { Users.id eq userUuid }.firstOrNull()
         val profilePic = user?.get(Users.profilePicture)
@@ -144,8 +153,86 @@ object ChatService {
             content = row[ChatMessages.content],
             createdAt = row[ChatMessages.createdAt].toString(),
             reactions = parsedReactions,
-            profilePicture = profilePic
+            profilePicture = profilePic,
+            isEdited = row[ChatMessages.isEdited],
+            updatedAt = row[ChatMessages.updatedAt]?.toString()
         )
+    }
+
+    fun editMessage(id: String, userId: String, teamNumber: Int, newContent: String): ChatMessageDto? = transaction {
+        val msgUuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction null
+        val userUuid = runCatching { UUID.fromString(userId) }.getOrNull() ?: return@transaction null
+
+        val row = ChatMessages.selectAll().where {
+            (ChatMessages.id eq msgUuid) and (ChatMessages.teamNumber eq teamNumber)
+        }.firstOrNull() ?: return@transaction null
+
+        if (row[ChatMessages.userId].value != userUuid) {
+            throw IllegalArgumentException("You can only edit your own messages")
+        }
+
+        val now = Instant.now()
+        ChatMessages.update({ ChatMessages.id eq msgUuid }) {
+            it[content] = newContent
+            it[isEdited] = true
+            it[updatedAt] = now
+        }
+
+        (ChatMessages innerJoin Users)
+            .select(
+                ChatMessages.id,
+                ChatMessages.teamNumber,
+                ChatMessages.groupName,
+                ChatMessages.userId,
+                ChatMessages.username,
+                ChatMessages.content,
+                ChatMessages.createdAt,
+                ChatMessages.reactionsJson,
+                ChatMessages.isEdited,
+                ChatMessages.updatedAt,
+                Users.profilePicture
+            )
+            .where { ChatMessages.id eq msgUuid }
+            .firstOrNull()?.let { r ->
+                val reactionsJsonStr = r[ChatMessages.reactionsJson]
+                val parsedReactions: Map<String, List<String>> = try {
+                    JsonSupport.json.decodeFromString(reactionsJsonStr)
+                } catch (e: Exception) {
+                    emptyMap()
+                }
+
+                ChatMessageDto(
+                    id = r[ChatMessages.id].value.toString(),
+                    teamNumber = r[ChatMessages.teamNumber],
+                    groupName = r[ChatMessages.groupName],
+                    userId = r[ChatMessages.userId].value.toString(),
+                    username = r[ChatMessages.username],
+                    content = r[ChatMessages.content],
+                    createdAt = r[ChatMessages.createdAt].toString(),
+                    reactions = parsedReactions,
+                    profilePicture = r[Users.profilePicture],
+                    isEdited = r[ChatMessages.isEdited],
+                    updatedAt = r[ChatMessages.updatedAt]?.toString()
+                )
+            }
+    }
+
+    fun deleteMessage(id: String, userId: String, userRole: UserRole, teamNumber: Int): Boolean = transaction {
+        val msgUuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction false
+        val userUuid = runCatching { UUID.fromString(userId) }.getOrNull() ?: return@transaction false
+
+        val row = ChatMessages.selectAll().where {
+            (ChatMessages.id eq msgUuid) and (ChatMessages.teamNumber eq teamNumber)
+        }.firstOrNull() ?: return@transaction false
+
+        val isOwner = row[ChatMessages.userId].value == userUuid
+        val isAdmin = userRole == UserRole.ADMIN || userRole == UserRole.SUPERADMIN
+
+        if (!isOwner && !isAdmin) {
+            throw IllegalArgumentException("You do not have permission to delete this message")
+        }
+
+        ChatMessages.deleteWhere { ChatMessages.id eq msgUuid } > 0
     }
 
     fun toggleReaction(id: String, username: String, emoji: String): ChatMessageDto? = transaction {
@@ -192,6 +279,8 @@ object ChatService {
                 ChatMessages.content,
                 ChatMessages.createdAt,
                 ChatMessages.reactionsJson,
+                ChatMessages.isEdited,
+                ChatMessages.updatedAt,
                 Users.profilePicture
             )
             .where { ChatMessages.id eq msgUuid }
@@ -212,7 +301,9 @@ object ChatService {
                     content = r[ChatMessages.content],
                     createdAt = r[ChatMessages.createdAt].toString(),
                     reactions = parsedReactions,
-                    profilePicture = r[Users.profilePicture]
+                    profilePicture = r[Users.profilePicture],
+                    isEdited = r[ChatMessages.isEdited],
+                    updatedAt = r[ChatMessages.updatedAt]?.toString()
                 )
             }
     }

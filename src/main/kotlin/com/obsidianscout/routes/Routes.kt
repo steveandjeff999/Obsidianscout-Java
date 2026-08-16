@@ -1744,6 +1744,37 @@ fun Application.configureRoutes() {
                     }
                     call.respond(message)
                 }
+                put("/messages/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
+                    val request = call.receive<EditChatMessageRequest>()
+                    val trimmedContent = request.content.trim()
+                    if (trimmedContent.isEmpty()) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Message content cannot be empty")
+                    }
+                    try {
+                        val updated = ChatService.editMessage(id, session.userId, session.teamNumber, trimmedContent)
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
+                        call.respond(updated)
+                    } catch (e: IllegalArgumentException) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, e.message ?: "Cannot edit message")
+                    }
+                }
+                delete("/messages/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
+                    try {
+                        val deleted = ChatService.deleteMessage(id, session.userId, session.role, session.teamNumber)
+                        if (!deleted) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
+                        }
+                        call.respond(buildJsonObject { put("success", true) })
+                    } catch (e: IllegalArgumentException) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, e.message ?: "Cannot delete message")
+                    }
+                }
                 post("/messages/{id}/react") {
                     val session = call.requireSession()
                     val id = call.parameters["id"]
