@@ -234,6 +234,24 @@ object DatabaseFactory {
                 transaction {
                     SchemaUtils.createMissingTablesAndColumns(*tables.toTypedArray())
                 }
+                // Explicit column migrations for PostgreSQL (safe to run repeatedly with IF NOT EXISTS)
+                dataSource.connection.use { conn ->
+                    conn.autoCommit = true
+                    conn.createStatement().use { stmt ->
+                        val pgMigrations = listOf(
+                            "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_roles TEXT NOT NULL DEFAULT '[]'",
+                            "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'"
+                        )
+                        for (sql in pgMigrations) {
+                            try {
+                                stmt.executeUpdate(sql)
+                                println("[Database] Ran PG migration: $sql")
+                            } catch (e: Exception) {
+                                println("[Database] Note running PG migration ($sql): ${e.message}")
+                            }
+                        }
+                    }
+                }
             }
         }
 

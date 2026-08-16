@@ -11,7 +11,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    let currentGroup = "general";
+    // Start with no group selected — will be set after loadGroups() resolves
+    let currentGroup = "";
     const urlParams = new URLSearchParams(window.location.search);
     const initialGroupParam = urlParams.get("group");
     if (initialGroupParam && initialGroupParam.trim() !== "") {
@@ -27,7 +28,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     let pollInterval = null;
-    let knownGroups = ["general"];
+    let knownGroups = [];
     let isChatEnabled = true;
 
     // DOM Elements
@@ -91,12 +92,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // List of groups
     async function loadGroups() {
         try {
             const groups = await Obsidianscout.request("/api/chat/groups");
-            knownGroups = groups && groups.length > 0 ? groups : ["general"];
-            if (!knownGroups.includes(currentGroup)) {
+            knownGroups = groups && groups.length > 0 ? groups : [];
+            // If the currently selected group is not accessible, reset to first available
+            if (knownGroups.length > 0 && !knownGroups.includes(currentGroup)) {
                 currentGroup = knownGroups[0];
             }
             renderGroups();
@@ -206,8 +207,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             const remainingGroups = knownGroups.filter(g => g !== group);
             if (currentGroup === group) {
-                const nextGroup = remainingGroups.length > 0 ? remainingGroups[0] : "general";
-                switchGroup(nextGroup);
+                const nextGroup = remainingGroups.length > 0 ? remainingGroups[0] : null;
+                if (nextGroup) switchGroup(nextGroup);
             }
             await loadGroups();
             if (channelSettingsModal && !channelSettingsModal.classList.contains("hidden")) {
@@ -1056,10 +1057,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             loadMentionOptions()
         ]);
         
-        const urlParams = new URLSearchParams(window.location.search);
-        const initialGroup = urlParams.get('group') || "general";
-        const groupToSwitch = knownGroups.includes(initialGroup) ? initialGroup : "general";
-        switchGroup(groupToSwitch);
+        // After loadGroups(), currentGroup is already set to the first accessible channel.
+        // Honour a URL ?group= param only if the server actually returned that group for this user.
+        const urlParamsInit = new URLSearchParams(window.location.search);
+        const requestedGroup = urlParamsInit.get('group');
+        if (requestedGroup && knownGroups.includes(requestedGroup)) {
+            currentGroup = requestedGroup;
+        } else if (!knownGroups.includes(currentGroup)) {
+            currentGroup = knownGroups[0] || "";
+        }
+
+        if (currentGroup) {
+            switchGroup(currentGroup);
+        }
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', (event) => {
