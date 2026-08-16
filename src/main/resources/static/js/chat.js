@@ -36,10 +36,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     const groupListContainer = document.getElementById("group-list-container");
     const btnCreateGroup = document.getElementById("btn-create-group");
     const currentGroupTitle = document.getElementById("current-group-title");
+    const btnChannelSettings = document.getElementById("btn-channel-settings");
     const messageContainer = document.getElementById("message-container");
     const chatMessageInput = document.getElementById("chat-message-input");
     const btnSendMessage = document.getElementById("btn-send-message");
     const btnBackChannels = document.getElementById("btn-back-channels");
+
+    // Modal elements
+    const channelSettingsModal = document.getElementById("channel-settings-modal");
+    const channelSettingsTitle = document.getElementById("channel-settings-title");
+    const btnCloseChannelSettings = document.getElementById("btn-close-channel-settings");
+    const btnCancelChannelSettings = document.getElementById("btn-cancel-channel-settings");
+    const btnSaveChannelSettings = document.getElementById("btn-save-channel-settings");
+    const btnModalClearChannel = document.getElementById("btn-modal-clear-channel");
+    const btnModalDeleteChannel = document.getElementById("btn-modal-delete-channel");
+    const channelRolesContainer = document.getElementById("channel-roles-container");
+    const channelMembersContainer = document.getElementById("channel-members-container");
+    const channelMemberSearch = document.getElementById("channel-member-search");
+    const channelDeleteHint = document.getElementById("channel-delete-hint");
+
+    let settingsTargetGroup = "";
+    let teamMembersList = [];
+    let selectedGroupRoles = [];
+    let selectedGroupUserIds = [];
 
     // Autocomplete state
     let mentionDropdown = null;
@@ -76,8 +95,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function loadGroups() {
         try {
             const groups = await Obsidianscout.request("/api/chat/groups");
-            const combined = Array.from(new Set(["general", ...groups]));
-            knownGroups = combined;
+            knownGroups = groups && groups.length > 0 ? groups : ["general"];
+            if (!knownGroups.includes(currentGroup)) {
+                currentGroup = knownGroups[0];
+            }
             renderGroups();
             loadGroupUnreads();
         } catch (e) {
@@ -105,13 +126,21 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function renderGroups() {
         groupListContainer.innerHTML = "";
+        const isAdmin = me && (me.role === "ADMIN" || me.role === "SUPERADMIN");
+
         knownGroups.forEach(group => {
             const item = document.createElement("div");
             item.className = `group-item ${group === currentGroup ? "active" : ""}`;
             
             const labelSpan = document.createElement("span");
             labelSpan.textContent = `# ${group}`;
+            labelSpan.style.overflow = "hidden";
+            labelSpan.style.textOverflow = "ellipsis";
+            labelSpan.style.whiteSpace = "nowrap";
             item.appendChild(labelSpan);
+
+            const actionsContainer = document.createElement("div");
+            actionsContainer.className = "group-item-actions";
 
             if (group !== currentGroup && groupUnreads[group]) {
                 const info = groupUnreads[group];
@@ -119,13 +148,41 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const badge = document.createElement("span");
                     badge.className = "group-badge";
                     badge.textContent = info.mentionCount;
-                    item.appendChild(badge);
+                    actionsContainer.appendChild(badge);
                 } else if (info.unreadCount > 0) {
                     const dot = document.createElement("span");
                     dot.className = "group-dot";
-                    item.appendChild(dot);
+                    actionsContainer.appendChild(dot);
                 }
             }
+
+            if (isAdmin) {
+                const settingsBtn = document.createElement("button");
+                settingsBtn.className = "delete-group-btn";
+                settingsBtn.title = Obsidianscout.t("chat.channel_settings", "Channel Settings");
+                settingsBtn.setAttribute("aria-label", `Settings for #${group}`);
+                settingsBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+                settingsBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    openChannelSettingsModal(group);
+                });
+                actionsContainer.appendChild(settingsBtn);
+
+                if (knownGroups.length > 1) {
+                    const delBtn = document.createElement("button");
+                    delBtn.className = "delete-group-btn";
+                    delBtn.title = Obsidianscout.t("chat.delete_channel", "Delete Channel");
+                    delBtn.setAttribute("aria-label", `Delete channel #${group}`);
+                    delBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
+                    delBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        confirmDeleteGroup(group);
+                    });
+                    actionsContainer.appendChild(delBtn);
+                }
+            }
+
+            item.appendChild(actionsContainer);
 
             item.addEventListener("click", () => {
                 switchGroup(group);
@@ -134,10 +191,235 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    async function confirmDeleteGroup(group) {
+        if (knownGroups.length <= 1) {
+            alert(Obsidianscout.t("chat.cannot_delete_last", "Cannot delete the only remaining channel. At least one channel must exist."));
+            return;
+        }
+        const confirmMsg = Obsidianscout.t("chat.delete_channel_confirm", "Are you sure you want to delete the channel '#{group}'? All messages in this channel will be permanently deleted.").replace("{group}", group);
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            await Obsidianscout.request(`/api/chat/groups/${encodeURIComponent(group)}`, {
+                method: "DELETE"
+            });
+            const remainingGroups = knownGroups.filter(g => g !== group);
+            if (currentGroup === group) {
+                const nextGroup = remainingGroups.length > 0 ? remainingGroups[0] : "general";
+                switchGroup(nextGroup);
+            }
+            await loadGroups();
+            if (channelSettingsModal && !channelSettingsModal.classList.contains("hidden")) {
+                closeChannelSettingsModal();
+            }
+        } catch (e) {
+            console.error("Failed to delete channel:", e);
+            alert(Obsidianscout.t("chat.error_delete_channel", "Failed to delete channel."));
+        }
+    }
+
+    async function confirmClearGroup(group) {
+        const confirmMsg = Obsidianscout.t("chat.clear_messages_confirm", "Are you sure you want to clear all messages in '#{group}'? This action cannot be undone.").replace("{group}", group);
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            await Obsidianscout.request(`/api/chat/groups/${encodeURIComponent(group)}/clear`, {
+                method: "POST"
+            });
+            if (currentGroup === group) {
+                lastMessagesHash = "";
+                await loadMessages();
+            }
+            if (channelSettingsModal && !channelSettingsModal.classList.contains("hidden")) {
+                closeChannelSettingsModal();
+            }
+            Obsidianscout.showToast(Obsidianscout.t("chat.messages_cleared", "Channel messages cleared."), "success");
+        } catch (e) {
+            console.error("Failed to clear channel messages:", e);
+            alert(Obsidianscout.t("chat.error_clear_channel", "Failed to clear channel messages."));
+        }
+    }
+
+    // Channel Settings Modal
+    const availableRoles = [
+        { id: "ADMIN", label: "Admin" },
+        { id: "SUPERADMIN", label: "Superadmin" },
+        { id: "LEAD_SCOUT", label: "Lead Scout" },
+        { id: "DRIVE_TEAM", label: "Drive Team" },
+        { id: "SCOUT", label: "Scout" },
+        { id: "GUEST", label: "Guest" }
+    ];
+
+    async function openChannelSettingsModal(group) {
+        settingsTargetGroup = group;
+        channelSettingsTitle.textContent = `# ${group} - ${Obsidianscout.t("chat.channel_settings", "Channel Settings")}`;
+
+        if (knownGroups.length <= 1) {
+            btnModalDeleteChannel.disabled = true;
+            btnModalDeleteChannel.style.opacity = "0.5";
+            btnModalDeleteChannel.style.cursor = "not-allowed";
+            if (channelDeleteHint) channelDeleteHint.style.display = "block";
+        } else {
+            btnModalDeleteChannel.disabled = false;
+            btnModalDeleteChannel.style.opacity = "1";
+            btnModalDeleteChannel.style.cursor = "pointer";
+            if (channelDeleteHint) channelDeleteHint.style.display = "none";
+        }
+
+        channelRolesContainer.innerHTML = `<div style="font-size: 12px; color: var(--muted); font-style: italic;">${Obsidianscout.t("chat.loading", "Loading...")}</div>`;
+        channelMembersContainer.innerHTML = `<div style="font-size: 12px; color: var(--muted); font-style: italic;">${Obsidianscout.t("chat.loading", "Loading...")}</div>`;
+        channelMemberSearch.value = "";
+        channelSettingsModal.classList.remove("hidden");
+
+        try {
+            const [details, members] = await Promise.all([
+                Obsidianscout.request(`/api/chat/groups/${encodeURIComponent(group)}/details`),
+                Obsidianscout.request("/api/chat/team-members")
+            ]);
+            teamMembersList = members || [];
+            selectedGroupRoles = details.allowedRoles ? [...details.allowedRoles] : [];
+            selectedGroupUserIds = details.allowedUserIds ? [...details.allowedUserIds] : [];
+            renderChannelRoles();
+            renderChannelMembers();
+        } catch (e) {
+            console.error("Failed to load channel details", e);
+            channelRolesContainer.innerHTML = `<div style="color: #ef4444; font-size: 12px;">Failed to load channel settings</div>`;
+            channelMembersContainer.innerHTML = ``;
+        }
+    }
+
+    function closeChannelSettingsModal() {
+        channelSettingsModal.classList.add("hidden");
+    }
+
+    function renderChannelRoles() {
+        channelRolesContainer.innerHTML = "";
+        availableRoles.forEach(r => {
+            const label = document.createElement("label");
+            label.style.cssText = "display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); cursor: pointer; user-select: none;";
+            
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.value = r.id;
+            checkbox.checked = selectedGroupRoles.includes(r.id);
+            checkbox.addEventListener("change", () => {
+                if (checkbox.checked) {
+                    if (!selectedGroupRoles.includes(r.id)) selectedGroupRoles.push(r.id);
+                } else {
+                    selectedGroupRoles = selectedGroupRoles.filter(x => x !== r.id);
+                }
+            });
+
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(r.label));
+            channelRolesContainer.appendChild(label);
+        });
+    }
+
+    function renderChannelMembers() {
+        channelMembersContainer.innerHTML = "";
+        const query = channelMemberSearch.value.trim().toLowerCase();
+        const filtered = teamMembersList.filter(m => {
+            if (!query) return true;
+            return m.username.toLowerCase().includes(query) || m.role.toLowerCase().includes(query);
+        });
+
+        if (filtered.length === 0) {
+            channelMembersContainer.innerHTML = `<div style="font-size: 12px; color: var(--muted); font-style: italic; padding: 4px;">No members match search</div>`;
+            return;
+        }
+
+        filtered.forEach(m => {
+            const label = document.createElement("label");
+            label.style.cssText = "display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--ink); padding: 4px 6px; border-radius: 4px; cursor: pointer; user-select: none;";
+            
+            const left = document.createElement("div");
+            left.style.cssText = "display: flex; align-items: center; gap: 8px;";
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.value = m.userId;
+            checkbox.checked = selectedGroupUserIds.includes(m.userId);
+            checkbox.addEventListener("change", () => {
+                if (checkbox.checked) {
+                    if (!selectedGroupUserIds.includes(m.userId)) selectedGroupUserIds.push(m.userId);
+                } else {
+                    selectedGroupUserIds = selectedGroupUserIds.filter(x => x !== m.userId);
+                }
+            });
+
+            const nameSpan = document.createElement("span");
+            nameSpan.textContent = m.username;
+
+            left.appendChild(checkbox);
+            left.appendChild(nameSpan);
+
+            const roleBadge = document.createElement("span");
+            roleBadge.style.cssText = "font-size: 10px; color: var(--muted); background: var(--surface-3); padding: 2px 6px; border-radius: 4px;";
+            roleBadge.textContent = m.role;
+
+            label.appendChild(left);
+            label.appendChild(roleBadge);
+            channelMembersContainer.appendChild(label);
+        });
+    }
+
+    if (channelMemberSearch) {
+        channelMemberSearch.addEventListener("input", renderChannelMembers);
+    }
+    if (btnCloseChannelSettings) {
+        btnCloseChannelSettings.addEventListener("click", closeChannelSettingsModal);
+    }
+    if (btnCancelChannelSettings) {
+        btnCancelChannelSettings.addEventListener("click", closeChannelSettingsModal);
+    }
+    if (btnModalClearChannel) {
+        btnModalClearChannel.addEventListener("click", () => {
+            if (settingsTargetGroup) confirmClearGroup(settingsTargetGroup);
+        });
+    }
+    if (btnModalDeleteChannel) {
+        btnModalDeleteChannel.addEventListener("click", () => {
+            if (settingsTargetGroup) confirmDeleteGroup(settingsTargetGroup);
+        });
+    }
+    if (btnSaveChannelSettings) {
+        btnSaveChannelSettings.addEventListener("click", async () => {
+            if (!settingsTargetGroup) return;
+            Obsidianscout.setButtonLoading(btnSaveChannelSettings, true);
+            try {
+                await Obsidianscout.request(`/api/chat/groups/${encodeURIComponent(settingsTargetGroup)}/permissions`, {
+                    method: "PUT",
+                    json: {
+                        allowedRoles: selectedGroupRoles,
+                        allowedUserIds: selectedGroupUserIds
+                    }
+                });
+                closeChannelSettingsModal();
+                Obsidianscout.showToast(Obsidianscout.t("chat.permissions_saved", "Permissions saved successfully."), "success");
+                await loadGroups();
+            } catch (e) {
+                console.error("Failed to save channel permissions", e);
+                alert(Obsidianscout.t("chat.error_save_permissions", "Failed to save permissions."));
+            } finally {
+                Obsidianscout.setButtonLoading(btnSaveChannelSettings, false);
+            }
+        });
+    }
+    if (btnChannelSettings) {
+        btnChannelSettings.addEventListener("click", () => {
+            if (currentGroup) openChannelSettingsModal(currentGroup);
+        });
+    }
+
     // Switch groups
     function switchGroup(group) {
         currentGroup = group;
         currentGroupTitle.textContent = `# ${group}`;
+        const isAdmin = me && (me.role === "ADMIN" || me.role === "SUPERADMIN");
+        if (btnChannelSettings) {
+            btnChannelSettings.style.display = isAdmin ? "inline-flex" : "none";
+        }
         renderGroups();
         lastMessagesHash = "";
         
@@ -348,7 +630,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (isMe) {
             const editBtn = document.createElement("button");
             editBtn.className = "message-action-item";
-            editBtn.innerHTML = `✏️ <span>${Obsidianscout.t("chat.edit", "Edit")}</span>`;
+            editBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> <span>${Obsidianscout.t("chat.edit", "Edit")}</span>`;
             editBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 dropdown.remove();
@@ -360,7 +642,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (isMe || isAdmin) {
             const delBtn = document.createElement("button");
             delBtn.className = "message-action-item danger";
-            delBtn.innerHTML = `🗑️ <span>${Obsidianscout.t("chat.delete", "Delete")}</span>`;
+            delBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg> <span>${Obsidianscout.t("chat.delete", "Delete")}</span>`;
             delBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 dropdown.remove();

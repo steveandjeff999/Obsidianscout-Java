@@ -1,5 +1,6 @@
 package com.obsidianscout.utils
 
+import com.obsidianscout.auth.UserRole
 import com.obsidianscout.config.AppConfigLoader
 import com.obsidianscout.db.DatabaseFactory
 import com.obsidianscout.scouting.AllianceService
@@ -19,7 +20,7 @@ fun main() {
         println("Warm up error 1: ${e.message}")
     }
     try {
-        ChatService.getUnreadStatus("00000000-0000-0000-0000-000000000001", 5454, "admin")
+        ChatService.getUnreadStatus("00000000-0000-0000-0000-000000000001", 5454, "admin", UserRole.ADMIN)
     } catch (e: Exception) {
         println("Warm up error 2: ${e.message}")
     }
@@ -35,7 +36,7 @@ fun main() {
     println("Benchmarking getUnreadStatus...")
     val timeUnread = measureTimeMillis {
         for (i in 1..100) {
-            ChatService.getUnreadStatus("00000000-0000-0000-0000-000000000001", 5454, "admin")
+            ChatService.getUnreadStatus("00000000-0000-0000-0000-000000000001", 5454, "admin", UserRole.ADMIN)
         }
     }
     println("100 calls to getUnreadStatus took: ${timeUnread}ms (Avg: ${timeUnread / 100.0}ms)")

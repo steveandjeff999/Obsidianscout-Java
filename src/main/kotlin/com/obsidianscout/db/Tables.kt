@@ -288,6 +288,8 @@ object ChatGroups : UUIDTable("chat_groups") {
     val groupName = varchar("group_name", 64)
     val createdByUserId = reference("created_by_user_id", Users).nullable()
     val createdAt = timestamp("created_at")
+    val allowedRoles = text("allowed_roles").default("[]")
+    val allowedUserIds = text("allowed_user_ids").default("[]")
 
     init {
         uniqueIndex("ux_chat_groups_team_program_name", teamNumber, program, groupName)

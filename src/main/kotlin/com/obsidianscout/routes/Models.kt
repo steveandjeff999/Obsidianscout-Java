@@ -454,7 +454,33 @@ data class EditChatMessageRequest(
 
 @Serializable
 data class CreateGroupRequest(
-    val groupName: String
+    val groupName: String,
+    val allowedRoles: List<String> = emptyList(),
+    val allowedUserIds: List<String> = emptyList()
+)
+
+@Serializable
+data class ChatGroupDetailsDto(
+    val groupName: String,
+    val isDefault: Boolean = false,
+    val allowedRoles: List<String> = emptyList(),
+    val allowedUserIds: List<String> = emptyList(),
+    val createdByUserId: String? = null,
+    val createdAt: String? = null
+)
+
+@Serializable
+data class UpdateGroupPermissionsRequest(
+    val allowedRoles: List<String> = emptyList(),
+    val allowedUserIds: List<String> = emptyList()
+)
+
+@Serializable
+data class ChatTeamMemberDto(
+    val userId: String,
+    val username: String,
+    val role: String,
+    val profilePicture: String? = null
 )
 
 @Serializable

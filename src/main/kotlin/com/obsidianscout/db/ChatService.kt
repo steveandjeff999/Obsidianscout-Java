@@ -3,6 +3,9 @@ package com.obsidianscout.db
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.routes.ChatMessageDto
+import com.obsidianscout.routes.ChatGroupDetailsDto
+import com.obsidianscout.routes.UnreadStatusDto
+import com.obsidianscout.routes.GroupUnreadStatus
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import org.jetbrains.exposed.sql.ResultRow
@@ -25,13 +28,85 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import org.jetbrains.exposed.dao.id.EntityID
-import com.obsidianscout.routes.UnreadStatusDto
-import com.obsidianscout.routes.GroupUnreadStatus
-
 
 object ChatService {
 
-    fun getMessages(teamNumber: Int, groupName: String, limit: Int = 200): List<ChatMessageDto> = transaction {
+    fun canUserAccessGroup(allowedRolesJson: String, allowedUserIdsJson: String, userId: String, userRole: UserRole): Boolean {
+        if (userRole == UserRole.ADMIN || userRole == UserRole.SUPERADMIN) {
+            return true
+        }
+        val allowedRoles: List<String> = try {
+            JsonSupport.json.decodeFromString(allowedRolesJson)
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val allowedUserIds: List<String> = try {
+            JsonSupport.json.decodeFromString(allowedUserIdsJson)
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        // If no roles or users are specified, the channel is public to all team members
+        if (allowedRoles.isEmpty() && allowedUserIds.isEmpty()) {
+            return true
+        }
+
+        if (allowedRoles.contains(userRole.name)) {
+            return true
+        }
+
+        if (allowedUserIds.contains(userId)) {
+            return true
+        }
+
+        return false
+    }
+
+    private fun ensureDefaultGroup(teamNumber: Int) {
+        val existing = ChatGroups.selectAll().where { ChatGroups.teamNumber eq teamNumber }.firstOrNull()
+        if (existing == null) {
+            val messageGroups = ChatMessages.select(ChatMessages.groupName)
+                .where { ChatMessages.teamNumber eq teamNumber }
+                .withDistinct()
+                .map { it[ChatMessages.groupName] }
+
+            if (messageGroups.isNotEmpty()) {
+                messageGroups.forEach { grp ->
+                    ChatGroups.insert {
+                        it[ChatGroups.teamNumber] = teamNumber
+                        it[ChatGroups.groupName] = grp
+                        it[ChatGroups.createdAt] = Instant.now()
+                        it[ChatGroups.allowedRoles] = "[]"
+                        it[ChatGroups.allowedUserIds] = "[]"
+                    }
+                }
+            } else {
+                ChatGroups.insert {
+                    it[ChatGroups.teamNumber] = teamNumber
+                    it[ChatGroups.groupName] = "general"
+                    it[ChatGroups.createdAt] = Instant.now()
+                    it[ChatGroups.allowedRoles] = "[]"
+                    it[ChatGroups.allowedUserIds] = "[]"
+                }
+            }
+        }
+    }
+
+    fun getMessages(teamNumber: Int, groupName: String, userId: String, userRole: UserRole, limit: Int = 200): List<ChatMessageDto> = transaction {
+        ensureDefaultGroup(teamNumber)
+        val sanitized = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim().ifEmpty { "general" }
+        val groupRow = ChatGroups.selectAll().where {
+            (ChatGroups.teamNumber eq teamNumber) and (ChatGroups.groupName eq sanitized)
+        }.firstOrNull()
+
+        if (groupRow != null) {
+            val allowedRolesJson = groupRow[ChatGroups.allowedRoles]
+            val allowedUserIdsJson = groupRow[ChatGroups.allowedUserIds]
+            if (!canUserAccessGroup(allowedRolesJson, allowedUserIdsJson, userId, userRole)) {
+                throw IllegalArgumentException("You do not have permission to view channel #$sanitized")
+            }
+        }
+
         (ChatMessages innerJoin Users)
             .select(
                 ChatMessages.id,
@@ -46,7 +121,7 @@ object ChatService {
                 ChatMessages.updatedAt,
                 Users.profilePicture
             )
-            .where { (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.groupName eq groupName) }
+            .where { (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.groupName eq sanitized) }
             .orderBy(ChatMessages.createdAt to SortOrder.DESC)
             .limit(limit)
             .map { row ->
@@ -74,28 +149,87 @@ object ChatService {
             .reversed()
     }
 
-    fun getGroups(teamNumber: Int): List<String> = transaction {
-        val createdGroups = ChatGroups.select(ChatGroups.groupName)
+    fun getGroups(teamNumber: Int, userId: String, userRole: UserRole): List<String> = transaction {
+        ensureDefaultGroup(teamNumber)
+        val allGroups = ChatGroups.selectAll()
             .where { ChatGroups.teamNumber eq teamNumber }
-            .withDistinct()
-            .map { it[ChatGroups.groupName] }
+            .mapNotNull { row ->
+                val groupName = row[ChatGroups.groupName]
+                val allowedRolesJson = row[ChatGroups.allowedRoles]
+                val allowedUserIdsJson = row[ChatGroups.allowedUserIds]
+                if (canUserAccessGroup(allowedRolesJson, allowedUserIdsJson, userId, userRole)) {
+                    groupName
+                } else null
+            }
 
-        val groups = if (createdGroups.isNotEmpty()) {
-            createdGroups
+        if (allGroups.isEmpty()) {
+            listOf("general")
         } else {
-            val messageGroups = ChatMessages.select(ChatMessages.groupName)
-                .where { ChatMessages.teamNumber eq teamNumber }
-                .withDistinct()
-                .map { it[ChatMessages.groupName] }
-            (messageGroups + createdGroups)
+            allGroups.distinct().sorted()
         }
-
-        (groups + "general")
-            .distinct()
-            .sorted()
     }
 
-    fun createGroup(teamNumber: Int, groupName: String, userId: String? = null): Boolean = transaction {
+    fun getAllGroupDetails(teamNumber: Int, userId: String, userRole: UserRole): List<ChatGroupDetailsDto> = transaction {
+        ensureDefaultGroup(teamNumber)
+        val allGroups = ChatGroups.selectAll().where { ChatGroups.teamNumber eq teamNumber }
+        val isAdmin = userRole == UserRole.ADMIN || userRole == UserRole.SUPERADMIN
+
+        allGroups.mapNotNull { row ->
+            val groupName = row[ChatGroups.groupName]
+            val allowedRolesJson = row[ChatGroups.allowedRoles]
+            val allowedUserIdsJson = row[ChatGroups.allowedUserIds]
+
+            if (isAdmin || canUserAccessGroup(allowedRolesJson, allowedUserIdsJson, userId, userRole)) {
+                val roles: List<String> = try { JsonSupport.json.decodeFromString(allowedRolesJson) } catch (_: Exception) { emptyList() }
+                val userIds: List<String> = try { JsonSupport.json.decodeFromString(allowedUserIdsJson) } catch (_: Exception) { emptyList() }
+
+                ChatGroupDetailsDto(
+                    groupName = groupName,
+                    isDefault = (groupName == "general"),
+                    allowedRoles = roles,
+                    allowedUserIds = userIds,
+                    createdByUserId = row[ChatGroups.createdByUserId]?.value?.toString(),
+                    createdAt = row[ChatGroups.createdAt].toString()
+                )
+            } else null
+        }.sortedBy { it.groupName }
+    }
+
+    fun getGroupDetails(teamNumber: Int, groupName: String, userId: String, userRole: UserRole): ChatGroupDetailsDto? = transaction {
+        ensureDefaultGroup(teamNumber)
+        val sanitized = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim()
+        val row = ChatGroups.selectAll().where {
+            (ChatGroups.teamNumber eq teamNumber) and (ChatGroups.groupName eq sanitized)
+        }.firstOrNull() ?: return@transaction null
+
+        val allowedRolesJson = row[ChatGroups.allowedRoles]
+        val allowedUserIdsJson = row[ChatGroups.allowedUserIds]
+        val isAdmin = userRole == UserRole.ADMIN || userRole == UserRole.SUPERADMIN
+
+        if (!isAdmin && !canUserAccessGroup(allowedRolesJson, allowedUserIdsJson, userId, userRole)) {
+            throw IllegalArgumentException("You do not have permission to view channel #$sanitized")
+        }
+
+        val roles: List<String> = try { JsonSupport.json.decodeFromString(allowedRolesJson) } catch (_: Exception) { emptyList() }
+        val userIds: List<String> = try { JsonSupport.json.decodeFromString(allowedUserIdsJson) } catch (_: Exception) { emptyList() }
+
+        ChatGroupDetailsDto(
+            groupName = row[ChatGroups.groupName],
+            isDefault = (row[ChatGroups.groupName] == "general"),
+            allowedRoles = roles,
+            allowedUserIds = userIds,
+            createdByUserId = row[ChatGroups.createdByUserId]?.value?.toString(),
+            createdAt = row[ChatGroups.createdAt].toString()
+        )
+    }
+
+    fun createGroup(
+        teamNumber: Int,
+        groupName: String,
+        userId: String? = null,
+        allowedRoles: List<String> = emptyList(),
+        allowedUserIds: List<String> = emptyList()
+    ): Boolean = transaction {
         val sanitized = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim()
         if (sanitized.isEmpty()) return@transaction false
         val userUuid = userId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
@@ -104,23 +238,138 @@ object ChatService {
             (ChatGroups.teamNumber eq teamNumber) and (ChatGroups.groupName eq sanitized)
         }.firstOrNull()
 
+        val rolesJson = JsonSupport.json.encodeToString(allowedRoles)
+        val usersJson = JsonSupport.json.encodeToString(allowedUserIds)
+
         if (existing == null) {
             ChatGroups.insert {
                 it[ChatGroups.teamNumber] = teamNumber
                 it[ChatGroups.groupName] = sanitized
                 it[ChatGroups.createdByUserId] = userUuid?.let { u -> EntityID(u, Users) }
                 it[ChatGroups.createdAt] = Instant.now()
+                it[ChatGroups.allowedRoles] = rolesJson
+                it[ChatGroups.allowedUserIds] = usersJson
             }
         }
         true
     }
 
-    fun sendMessage(teamNumber: Int, groupName: String, userId: String, username: String, content: String): ChatMessageDto = transaction {
-        val userUuid = UUID.fromString(userId)
+    fun updateGroupPermissions(
+        teamNumber: Int,
+        groupName: String,
+        allowedRoles: List<String>,
+        allowedUserIds: List<String>,
+        userRole: UserRole
+    ): Boolean = transaction {
+        val isAdmin = userRole == UserRole.ADMIN || userRole == UserRole.SUPERADMIN
+        if (!isAdmin) {
+            throw IllegalArgumentException("Only administrators can update channel permissions")
+        }
 
-        // Ensure group is persisted when posting a message
+        val sanitized = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim()
+        if (sanitized.isEmpty()) return@transaction false
+
+        ensureDefaultGroup(teamNumber)
+
+        val rolesJson = JsonSupport.json.encodeToString(allowedRoles)
+        val usersJson = JsonSupport.json.encodeToString(allowedUserIds)
+
+        val updated = ChatGroups.update({ (ChatGroups.teamNumber eq teamNumber) and (ChatGroups.groupName eq sanitized) }) {
+            it[ChatGroups.allowedRoles] = rolesJson
+            it[ChatGroups.allowedUserIds] = usersJson
+        }
+
+        if (updated == 0) {
+            ChatGroups.insert {
+                it[ChatGroups.teamNumber] = teamNumber
+                it[ChatGroups.groupName] = sanitized
+                it[ChatGroups.createdAt] = Instant.now()
+                it[ChatGroups.allowedRoles] = rolesJson
+                it[ChatGroups.allowedUserIds] = usersJson
+            }
+        }
+        true
+    }
+
+    fun clearGroupMessages(teamNumber: Int, groupName: String, userRole: UserRole): Boolean = transaction {
+        val isAdmin = userRole == UserRole.ADMIN || userRole == UserRole.SUPERADMIN
+        if (!isAdmin) {
+            throw IllegalArgumentException("Only administrators can clear channel messages")
+        }
+
+        val sanitized = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim()
+        if (sanitized.isEmpty()) return@transaction false
+
+        ChatMessages.deleteWhere {
+            (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.groupName eq sanitized)
+        }
+
+        UserChatLastRead.deleteWhere {
+            UserChatLastRead.groupName eq sanitized
+        }
+
+        true
+    }
+
+    fun deleteGroup(teamNumber: Int, groupName: String, userRole: UserRole): Boolean = transaction {
+        val sanitized = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim()
+        if (sanitized.isEmpty()) {
+            throw IllegalArgumentException("Invalid channel name")
+        }
+
+        val isAdmin = userRole == UserRole.ADMIN || userRole == UserRole.SUPERADMIN
+        if (!isAdmin) {
+            throw IllegalArgumentException("Only administrators can delete channels")
+        }
+
+        ensureDefaultGroup(teamNumber)
+
+        val existingGroups = ChatGroups.selectAll().where { ChatGroups.teamNumber eq teamNumber }.map { it[ChatGroups.groupName] }
+        if (existingGroups.size <= 1) {
+            throw IllegalArgumentException("Cannot delete the only remaining channel. At least one channel must exist.")
+        }
+
+        ChatGroups.deleteWhere {
+            (ChatGroups.teamNumber eq teamNumber) and (ChatGroups.groupName eq sanitized)
+        }
+
+        ChatMessages.deleteWhere {
+            (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.groupName eq sanitized)
+        }
+
+        UserChatLastRead.deleteWhere {
+            UserChatLastRead.groupName eq sanitized
+        }
+
+        true
+    }
+
+    fun sendMessage(
+        teamNumber: Int,
+        groupName: String,
+        userId: String,
+        username: String,
+        content: String,
+        userRole: UserRole
+    ): ChatMessageDto = transaction {
+        val userUuid = UUID.fromString(userId)
         val sanitizedGroup = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim().ifEmpty { "general" }
-        createGroup(teamNumber, sanitizedGroup, userId)
+
+        ensureDefaultGroup(teamNumber)
+
+        val groupRow = ChatGroups.selectAll().where {
+            (ChatGroups.teamNumber eq teamNumber) and (ChatGroups.groupName eq sanitizedGroup)
+        }.firstOrNull()
+
+        if (groupRow != null) {
+            val allowedRolesJson = groupRow[ChatGroups.allowedRoles]
+            val allowedUserIdsJson = groupRow[ChatGroups.allowedUserIds]
+            if (!canUserAccessGroup(allowedRolesJson, allowedUserIdsJson, userId, userRole)) {
+                throw IllegalArgumentException("You do not have permission to post in channel #$sanitizedGroup")
+            }
+        } else {
+            createGroup(teamNumber, sanitizedGroup, userId)
+        }
 
         val id = ChatMessages.insertAndGetId {
             it[ChatMessages.teamNumber] = teamNumber
@@ -326,13 +575,13 @@ object ChatService {
         }
     }
 
-    fun getUnreadStatus(userId: String, teamNumber: Int, username: String): UnreadStatusDto = transaction {
+    fun getUnreadStatus(userId: String, teamNumber: Int, username: String, userRole: UserRole): UnreadStatusDto = transaction {
         val userUuid = UUID.fromString(userId)
         val lastReads = UserChatLastRead.selectAll()
             .where { UserChatLastRead.userId eq userUuid }
             .associate { it[UserChatLastRead.groupName] to it[UserChatLastRead.lastReadAt] }
 
-        val groups = getGroups(teamNumber)
+        val groups = getGroups(teamNumber, userId, userRole)
         val userMentionLower = "@${username.lowercase()}"
         val sevenDaysAgo = Instant.now().minus(7, ChronoUnit.DAYS)
 
