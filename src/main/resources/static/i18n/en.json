@@ -970,6 +970,7 @@
   "chat.cannot_delete_last_hint": "Cannot delete the only remaining channel on your team.",
   "chat.permissions_saved": "Permissions saved successfully.",
   "chat.error_save_permissions": "Failed to save permissions.",
+  "chat.admin_required": "A channel must include either the Admin role or at least one Admin team member.",
   "chat.save_changes": "Save Changes",
   "banners.admin_locked_msg": "You need admin or Site Admin access to manage banners.",
   "banners.title": "Banner Management",

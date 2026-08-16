@@ -968,6 +968,7 @@
   "chat.cannot_delete_last_hint": "No puedes eliminar el único canal restante de tu equipo.",
   "chat.permissions_saved": "Permisos guardados con éxito.",
   "chat.error_save_permissions": "Error al guardar los permisos.",
+  "chat.admin_required": "Un canal debe incluir el rol de Administrador o al menos un miembro administrador del equipo.",
   "chat.save_changes": "Guardar Cambios",
   "banners.admin_locked_msg": "Necesitas acceso de administrador o Administrador de Sitio para gestionar banners.",
   "banners.title": "Gestión de Banners",

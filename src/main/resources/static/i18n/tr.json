@@ -970,6 +970,7 @@
   "chat.cannot_delete_last_hint": "Takımınızdaki kalan tek kanalı silemezsiniz.",
   "chat.permissions_saved": "İzinler başarıyla kaydedildi.",
   "chat.error_save_permissions": "İzinler kaydedilemedi.",
+  "chat.admin_required": "Bir kanal, Yönetici rolünü veya en az bir Yönetici takım üyesini içermelidir.",
   "chat.save_changes": "Değişiklikleri Kaydet",
   "banners.admin_locked_msg": "Bannerları yönetmek için admin veya Site Yöneticisi yetkisi gereklidir.",
   "banners.title": "Banner Yönetimi",

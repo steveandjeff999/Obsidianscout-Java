@@ -126,7 +126,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function renderGroups() {
         groupListContainer.innerHTML = "";
-        const isAdmin = me && (me.role === "ADMIN" || me.role === "SUPERADMIN");
+        const userRole = (me?.role || "").toUpperCase();
+        const isAdmin = userRole === "ADMIN" || userRole === "SUPERADMIN";
 
         knownGroups.forEach(group => {
             const item = document.createElement("div");
@@ -243,11 +244,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Channel Settings Modal
     const availableRoles = [
         { id: "ADMIN", label: "Admin" },
-        { id: "SUPERADMIN", label: "Superadmin" },
-        { id: "LEAD_SCOUT", label: "Lead Scout" },
-        { id: "DRIVE_TEAM", label: "Drive Team" },
-        { id: "SCOUT", label: "Scout" },
-        { id: "GUEST", label: "Guest" }
+        { id: "ANALYTICS", label: "Analytics" },
+        { id: "SCOUT", label: "Scout" }
     ];
 
     async function openChannelSettingsModal(group) {
@@ -386,6 +384,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (btnSaveChannelSettings) {
         btnSaveChannelSettings.addEventListener("click", async () => {
             if (!settingsTargetGroup) return;
+
+            const isRestricted = selectedGroupRoles.length > 0 || selectedGroupUserIds.length > 0;
+            const hasAdminRole = selectedGroupRoles.includes("ADMIN") || selectedGroupRoles.includes("SUPERADMIN");
+            const hasAdminUser = selectedGroupUserIds.some(uid => {
+                const member = teamMembersList.find(m => m.userId === uid);
+                if (!member) return false;
+                const roleUpper = (member.role || "").toUpperCase();
+                return roleUpper === "ADMIN" || roleUpper === "SUPERADMIN";
+            });
+
+            if (isRestricted && !hasAdminRole && !hasAdminUser) {
+                Obsidianscout.showToast(Obsidianscout.t("chat.admin_required", "A channel must include either the Admin role or at least one Admin team member."), "error");
+                return;
+            }
+
             Obsidianscout.setButtonLoading(btnSaveChannelSettings, true);
             try {
                 await Obsidianscout.request(`/api/chat/groups/${encodeURIComponent(settingsTargetGroup)}/permissions`, {
@@ -416,7 +429,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     function switchGroup(group) {
         currentGroup = group;
         currentGroupTitle.textContent = `# ${group}`;
-        const isAdmin = me && (me.role === "ADMIN" || me.role === "SUPERADMIN");
+        const userRole = (me?.role || "").toUpperCase();
+        const isAdmin = userRole === "ADMIN" || userRole === "SUPERADMIN";
         if (btnChannelSettings) {
             btnChannelSettings.style.display = isAdmin ? "inline-flex" : "none";
         }

@@ -17,6 +17,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
@@ -32,7 +33,7 @@ import org.jetbrains.exposed.dao.id.EntityID
 object ChatService {
 
     fun canUserAccessGroup(allowedRolesJson: String, allowedUserIdsJson: String, userId: String, userRole: UserRole): Boolean {
-        if (userRole == UserRole.ADMIN || userRole == UserRole.SUPERADMIN) {
+        if (userRole == UserRole.SUPERADMIN) {
             return true
         }
         val allowedRoles: List<String> = try {
@@ -234,6 +235,22 @@ object ChatService {
         if (sanitized.isEmpty()) return@transaction false
         val userUuid = userId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
 
+        val hasAdminRole = allowedRoles.contains("ADMIN") || allowedRoles.contains("SUPERADMIN")
+        val hasAdminUser = if (!hasAdminRole && allowedUserIds.isNotEmpty()) {
+            val userUuids = allowedUserIds.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+            if (userUuids.isNotEmpty()) {
+                Users.selectAll().where {
+                    (Users.teamNumber eq teamNumber) and
+                    (Users.id inList userUuids) and
+                    ((Users.role eq UserRole.ADMIN.name) or (Users.role eq UserRole.SUPERADMIN.name))
+                }.count() > 0
+            } else false
+        } else false
+
+        if ((allowedRoles.isNotEmpty() || allowedUserIds.isNotEmpty()) && !hasAdminRole && !hasAdminUser) {
+            throw IllegalArgumentException("A channel must include either the Admin role or at least one Admin team member.")
+        }
+
         val existing = ChatGroups.selectAll().where {
             (ChatGroups.teamNumber eq teamNumber) and (ChatGroups.groupName eq sanitized)
         }.firstOrNull()
@@ -270,6 +287,22 @@ object ChatService {
         if (sanitized.isEmpty()) return@transaction false
 
         ensureDefaultGroup(teamNumber)
+
+        val hasAdminRole = allowedRoles.contains("ADMIN") || allowedRoles.contains("SUPERADMIN")
+        val hasAdminUser = if (!hasAdminRole && allowedUserIds.isNotEmpty()) {
+            val userUuids = allowedUserIds.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+            if (userUuids.isNotEmpty()) {
+                Users.selectAll().where {
+                    (Users.teamNumber eq teamNumber) and
+                    (Users.id inList userUuids) and
+                    ((Users.role eq UserRole.ADMIN.name) or (Users.role eq UserRole.SUPERADMIN.name))
+                }.count() > 0
+            } else false
+        } else false
+
+        if ((allowedRoles.isNotEmpty() || allowedUserIds.isNotEmpty()) && !hasAdminRole && !hasAdminUser) {
+            throw IllegalArgumentException("A channel must include either the Admin role or at least one Admin team member.")
+        }
 
         val rolesJson = JsonSupport.json.encodeToString(allowedRoles)
         val usersJson = JsonSupport.json.encodeToString(allowedUserIds)

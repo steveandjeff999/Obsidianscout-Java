@@ -970,6 +970,7 @@
   "chat.cannot_delete_last_hint": "לא ניתן למחוק את הערוץ היחיד שנותר בצוות שלך.",
   "chat.permissions_saved": "ההרשאות נשמרו בהצלחה.",
   "chat.error_save_permissions": "שמירת ההרשאות נכשלה.",
+  "chat.admin_required": "ערוץ חייב לכלול את תפקיד המנהל או לפחות חבר צוות מנהל אחד.",
   "chat.save_changes": "שמור שינויים",
   "banners.admin_locked_msg": "דרושה גישת מנהל מערכת או מנהל אתר לניהול באנרים.",
   "banners.title": "ניהול באנרים",
