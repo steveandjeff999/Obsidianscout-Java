@@ -21,9 +21,21 @@ data class AppConfig(
     val google_sheet_url: String = "",
     val google_sheet_password: String = "",
     val cockroach_port: Int = 26257,
+    val site_url: String = "https://kotlin.obsidianscout.com",
     val current_version: String = "0.4.4.6", // The version this server is running — update this on each release
     val gist_update: GistUpdateConfig = GistUpdateConfig()
-)
+) {
+    fun getEffectiveSiteUrl(): String {
+        val trimmed = site_url.trim()
+        val base = if (trimmed.isBlank()) "https://kotlin.obsidianscout.com" else trimmed
+        val withScheme = if (!base.startsWith("http://") && !base.startsWith("https://")) {
+            "https://$base"
+        } else {
+            base
+        }
+        return withScheme.removeSuffix("/")
+    }
+}
 
 @Serializable
 data class GistUpdateConfig(
@@ -113,7 +125,14 @@ object AppConfigLoader {
             var config = JsonSupport.json.decodeFromString<AppConfig>(text)
 
             // If the configuration file is missing the new fields, write them back to disk.
+            var needsWrite = false
             if (!text.contains("database_type")) {
+                needsWrite = true
+            }
+            if (!text.contains("site_url")) {
+                needsWrite = true
+            }
+            if (needsWrite) {
                 val updatedText = JsonSupport.json.encodeToString(config)
                 Files.writeString(path, updatedText)
             }

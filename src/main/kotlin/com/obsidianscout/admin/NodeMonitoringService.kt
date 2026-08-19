@@ -2,6 +2,7 @@ package com.obsidianscout.admin
 
 import com.obsidianscout.auth.EmailService
 import com.obsidianscout.auth.UserRole
+import com.obsidianscout.config.AppConfigLoader
 import com.obsidianscout.db.FcmService
 import com.obsidianscout.db.Users
 import com.obsidianscout.integrations.SettingsService
@@ -256,6 +257,9 @@ object NodeMonitoringService {
             }
 
             if (smtpConfigured) {
+                val appConfig = AppConfigLoader.load()
+                val siteUrl = appConfig.getEffectiveSiteUrl()
+                val clusterUrl = "$siteUrl/cluster-management"
                 val emailSubject = "🚨 [ObsidianScout Alert] Cluster Node Down: ${node.ip}"
                 val emailHtml = """
                     <html>
@@ -286,7 +290,7 @@ object NodeMonitoringService {
                                 </tr>
                             </table>
                             <p style="text-align: center; margin: 30px 0;">
-                                <a href="/cluster-management" style="background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open Cluster Management UI</a>
+                                <a href="$clusterUrl" style="background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open Cluster Management UI</a>
                             </p>
                             <p style="color: #64748b; font-size: 13px; margin-top: 24px; border-top: 1px solid #334155; padding-top: 12px;">
                                 You are receiving this automated alert because you are enrolled in ObsidianScout Superadmin Cluster Health Notifications.
@@ -350,6 +354,9 @@ object NodeMonitoringService {
         // 2. Email Notifications
         val smtpSettings = SettingsService.getSmtpSettings()
         if (smtpSettings.host.isNotBlank() && enrolledEmails.isNotEmpty()) {
+            val appConfig = AppConfigLoader.load()
+            val siteUrl = appConfig.getEffectiveSiteUrl()
+            val clusterUrl = "$siteUrl/cluster-management"
             val emailSubject = "🟢 [RECOVERED] Cluster Node Back Online: Node ${node.ip}"
             val emailHtml = """
                 <!DOCTYPE html>
@@ -377,7 +384,7 @@ object NodeMonitoringService {
                             </tr>
                         </table>
                         <p style="text-align: center; margin: 30px 0;">
-                            <a href="/cluster-management" style="background-color: #22c55e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open Cluster Management UI</a>
+                            <a href="$clusterUrl" style="background-color: #22c55e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open Cluster Management UI</a>
                         </p>
                         <p style="color: #64748b; font-size: 13px; margin-top: 24px; border-top: 1px solid #334155; padding-top: 12px;">
                             You are receiving this automated alert because you are enrolled in ObsidianScout Superadmin Cluster Health Notifications.
@@ -438,6 +445,9 @@ object NodeMonitoringService {
             }
 
             if (smtpConfigured) {
+                val appConfig = AppConfigLoader.load()
+                val siteUrl = appConfig.getEffectiveSiteUrl()
+                val clusterUrl = "$siteUrl/cluster-management"
                 val emailSubject = "🧪 [TEST Alert] ObsidianScout Node Down Notification"
                 val emailHtml = """
                     <html>
@@ -453,7 +463,7 @@ object NodeMonitoringService {
                                 If a CockroachDB or app cluster node transitions to <strong>OFFLINE</strong> status, you will immediately receive an alert like this via Email and FCM Push.
                             </p>
                             <p style="text-align: center; margin: 30px 0;">
-                                <a href="/cluster-management" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open Cluster Management</a>
+                                <a href="$clusterUrl" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open Cluster Management</a>
                             </p>
                         </div>
                     </body>
