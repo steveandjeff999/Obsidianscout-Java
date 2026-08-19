@@ -54,6 +54,22 @@ object QualitativeScoutingConfigs : UUIDTable("qualitative_scouting_configs") {
     }
 }
 
+object ConfigRevisions : UUIDTable("config_revisions") {
+    val teamNumber = integer("team_number").default(0)
+    val program = varchar("program", 8).default("FRC")
+    val configKind = varchar("config_kind", 16).default("game")
+    val version = integer("version").default(1)
+    val title = varchar("title", 128).default("ObsidianScout")
+    val configJson = text("config_json")
+    val changeSummary = text("change_summary").default("")
+    val savedByUsername = varchar("saved_by_username", 64).default("")
+    val createdAt = timestamp("created_at")
+
+    init {
+        index("ix_config_revisions_team_prog_kind", false, teamNumber, program, configKind)
+    }
+}
+
 object DefaultConfigs : UUIDTable("default_configs") {
     val name = varchar("name", 64)
     val program = varchar("program", 8).default("FRC")

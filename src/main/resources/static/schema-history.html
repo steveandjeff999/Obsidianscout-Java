@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Schema History</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <style>
+        .revision-card {
+            background: var(--surface-2, rgba(255, 255, 255, 0.03));
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .revision-card:hover {
+            border-color: rgba(255, 255, 255, 0.18);
+            background: var(--surface-3, rgba(255, 255, 255, 0.05));
+        }
+        .revision-version-badge {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent, #6366f1);
+            background: rgba(99, 102, 241, 0.12);
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-family: monospace;
+        }
+        .revision-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: var(--muted, #94a3b8);
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+        .revision-summary {
+            font-size: 14px;
+            color: var(--text, #e2e8f0);
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+        .code-box-full {
+            background: var(--surface-1, #0f172a);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 14px;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            max-height: 380px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: var(--text, #e2e8f0);
+        }
+    </style>
+</head>
+<body data-page="schema-history">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div id="admin-locked" class="card hidden">
+                <h2>Admin only</h2>
+                <p class="notice">You need team admin access to view schema history.</p>
+            </div>
+
+            <div id="history-container" class="card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+                    <div>
+                        <h1 style="margin: 0 0 6px 0;">Scouting Schema History</h1>
+                        <p class="notice" style="margin: 0;">
+                            Review historical revisions of your scouting forms, inspect past field structures, restore previous versions, or run data migrations.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <a id="btn-goto-migration" href="/config-migration" class="btn secondary" style="text-decoration: none;">🔄 Data Migration</a>
+                        <a href="/admin-settings" class="btn ghost" style="text-decoration: none;">&larr; Admin Settings</a>
+                    </div>
+                </div>
+
+                <!-- Form Kind Switcher Tabs -->
+                <div class="tab-row mt-20 mb-20">
+                    <button class="tab active" data-kind="game" type="button">Game Scouting Form</button>
+                    <button class="tab" data-kind="pit" type="button">Pit Scouting Form</button>
+                    <button class="tab" data-kind="qual" type="button">Qualitative Scouting Form</button>
+                </div>
+
+                <!-- Revisions List -->
+                <div id="revisions-list">
+                    <div style="text-align: center; color: var(--muted); padding: 32px;">Loading revisions...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Inspect Revision Modal Backdrop -->
+    <div id="inspect-modal" class="modal-backdrop">
+        <div class="modal-container" style="width: min(800px, 95vw);">
+            <div class="modal-header">
+                <h2 id="inspect-title" class="modal-title" style="margin: 0;">Revision Details</h2>
+                <button id="btn-close-inspect" class="modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 16px 0;">
+                <div id="inspect-meta-bar" style="margin-bottom: 12px; font-size: 13px; color: var(--muted);"></div>
+                <div id="inspect-content" class="code-box-full"></div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button id="btn-restore-from-modal" class="btn secondary" type="button">Restore This Version</button>
+                <button id="btn-dismiss-inspect" class="btn ghost" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script defer src="/js/common.js"></script>
+    <script defer src="/js/schema-history.js"></script>
+</body>
+</html>

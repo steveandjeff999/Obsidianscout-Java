@@ -76,6 +76,36 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Normalize and merge entries
             state.entries = mergeEntries(matchEntries || [], pitEntries || [], qualEntries || []);
 
+            // Parse URL parameters for direct deep-linking and search
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramSearch = urlParams.get("search") || urlParams.get("team") || urlParams.get("teamNumber") || "";
+            const paramMatch = urlParams.get("match") || urlParams.get("matchNumber") || "";
+            const paramMatchKey = urlParams.get("matchKey") || "";
+            const paramEvent = urlParams.get("eventKey") || urlParams.get("event");
+            const paramType = urlParams.get("type") || "";
+            const paramEntryId = urlParams.get("entryId") || urlParams.get("id") || "";
+
+            if (paramEvent !== null && paramEvent !== undefined) {
+                state.filters.eventKey = (paramEvent === "all") ? "" : paramEvent;
+            }
+            if (paramSearch) {
+                state.filters.teamQuery = paramSearch.trim().toLowerCase();
+            }
+            if (paramMatch) {
+                state.filters.matchNumber = paramMatch.trim();
+            } else if (paramMatchKey) {
+                const matchNum = paramMatchKey.match(/_qm(\d+)/i) || paramMatchKey.match(/(\d+)$/);
+                if (matchNum) {
+                    state.filters.matchNumber = matchNum[1];
+                }
+            }
+            if (paramType) {
+                state.filters.type = paramType.toLowerCase();
+            }
+            if (paramEntryId) {
+                state.selectedEntryId = paramEntryId;
+            }
+
             initControls(state);
             await loadTeamsForEvent(state);
             renderAll(state);
@@ -213,6 +243,11 @@ function initControls(state) {
         eventFilter.appendChild(option);
     });
 
+    teamSearch.value = state.filters.teamQuery || "";
+    matchFilter.value = state.filters.matchNumber || "";
+    typeFilter.value = state.filters.type || "all";
+    sortSelect.value = state.filters.sortBy || "match-type";
+
     eventFilter.addEventListener("change", async () => {
         state.filters.eventKey = eventFilter.value;
         state.selectedEntryId = null;
@@ -301,7 +336,10 @@ function getFilteredAndSortedRows(state) {
     if (state.filters.matchNumber) {
         const matchNumFilter = parseInt(state.filters.matchNumber, 10);
         if (!isNaN(matchNumFilter)) {
-            rows = rows.filter(e => e.matchNumber === matchNumFilter);
+            rows = rows.filter(e => {
+                const num = extractMatchNumber(e.matchNumber, e.matchKey);
+                return num === matchNumFilter;
+            });
         }
     }
 
@@ -377,8 +415,15 @@ function renderTableSection(state) {
         return;
     }
 
-    // Auto-select first row if none selected or if selected is not in filtered rows
-    if (!state.selectedEntryId || !rows.some(r => r.id === state.selectedEntryId)) {
+    // Auto-select row if selectedEntryId matches an entry in rows (or matches by originalId / raw id)
+    if (state.selectedEntryId) {
+        const found = rows.find(r => r.id === state.selectedEntryId || String(r.originalId) === String(state.selectedEntryId) || `match-${r.originalId}` === String(state.selectedEntryId) || `pit-${r.originalId}` === String(state.selectedEntryId) || `qual-${r.originalId}` === String(state.selectedEntryId));
+        if (found) {
+            state.selectedEntryId = found.id;
+        } else if (!rows.some(r => r.id === state.selectedEntryId)) {
+            state.selectedEntryId = rows[0].id;
+        }
+    } else if (!state.selectedEntryId || !rows.some(r => r.id === state.selectedEntryId)) {
         state.selectedEntryId = rows[0].id;
     }
 
@@ -426,6 +471,13 @@ function renderTableSection(state) {
 
     const activeEntry = rows.find(r => r.id === state.selectedEntryId) || null;
     renderDetail(state, activeEntry);
+
+    setTimeout(() => {
+        const selectedEl = table.querySelector("tbody tr.selected");
+        if (selectedEl) {
+            selectedEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+    }, 50);
 }
 
 function renderDetail(state, entry) {
@@ -689,4 +741,15 @@ function getMatchLabel(matchKey, matchNumber) {
     }
     
     return `${t("matches.match", "Match")} ${matchNumber}`;
+}
+
+function extractMatchNumber(matchNumber, matchKey) {
+    if (matchNumber !== null && matchNumber !== undefined && !isNaN(Number(matchNumber))) {
+        return Number(matchNumber);
+    }
+    if (matchKey) {
+        const m = String(matchKey).match(/_qm(\d+)/i) || String(matchKey).match(/qm(\d+)/i) || String(matchKey).match(/(\d+)$/);
+        if (m) return parseInt(m[1], 10);
+    }
+    return null;
 }

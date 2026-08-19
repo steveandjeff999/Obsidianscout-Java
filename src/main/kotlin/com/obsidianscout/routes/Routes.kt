@@ -3,6 +3,9 @@ package com.obsidianscout.routes
 import com.obsidianscout.scouting.AllianceService
 import com.obsidianscout.analytics.AnalyticsService
 import com.obsidianscout.analytics.PredictorService
+import com.obsidianscout.analytics.ValidationService
+import com.obsidianscout.config.ConfigMigrationService
+import com.obsidianscout.auth.ApiException
 import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.auth.UserRole
@@ -657,8 +660,28 @@ fun Application.configureRoutes() {
                 put {
                     val session = call.requireAdmin()
                     val request = call.receive<ConfigUpdateRequest>()
+                    val oldConfig = runCatching { ConfigService.getConfig(session.teamNumber, session.program, local = true) }.getOrNull()
                     val updated = ConfigService.updateConfig(session.teamNumber, session.program, request.configJson)
-                    call.respond(updated)
+                    val (hasChanges, changedFields) = ConfigMigrationService.detectFieldChanges(oldConfig, updated, session.teamNumber, session.program, "game")
+                    val entryCount = ConfigMigrationService.countExistingEntries(session.teamNumber, session.program, "game")
+
+                    val changeSummary = if (changedFields.isEmpty()) "Config updated (no field structure changes)" else changedFields.joinToString(", ")
+                    ConfigMigrationService.saveRevision(
+                        teamNumber = session.teamNumber,
+                        program = session.program,
+                        kind = "game",
+                        config = updated,
+                        changeSummary = changeSummary,
+                        savedByUsername = session.username
+                    )
+
+                    call.respond(ConfigUpdateResponse(
+                        config = updated,
+                        hasFieldChanges = hasChanges,
+                        changedFields = changedFields,
+                        entryCount = entryCount,
+                        configKind = "game"
+                    ))
                 }
             }
 
@@ -707,8 +730,28 @@ fun Application.configureRoutes() {
                 put {
                     val session = call.requireAdmin()
                     val request = call.receive<ConfigUpdateRequest>()
+                    val oldConfig = runCatching { ConfigService.getPitConfig(session.teamNumber, session.program, local = true) }.getOrNull()
                     val updated = ConfigService.updatePitConfig(session.teamNumber, session.program, request.configJson)
-                    call.respond(updated)
+                    val (hasChanges, changedFields) = ConfigMigrationService.detectFieldChanges(oldConfig, updated, session.teamNumber, session.program, "pit")
+                    val entryCount = ConfigMigrationService.countExistingEntries(session.teamNumber, session.program, "pit")
+
+                    val changeSummary = if (changedFields.isEmpty()) "Pit config updated" else changedFields.joinToString(", ")
+                    ConfigMigrationService.saveRevision(
+                        teamNumber = session.teamNumber,
+                        program = session.program,
+                        kind = "pit",
+                        config = updated,
+                        changeSummary = changeSummary,
+                        savedByUsername = session.username
+                    )
+
+                    call.respond(ConfigUpdateResponse(
+                        config = updated,
+                        hasFieldChanges = hasChanges,
+                        changedFields = changedFields,
+                        entryCount = entryCount,
+                        configKind = "pit"
+                    ))
                 }
             }
 
@@ -757,8 +800,71 @@ fun Application.configureRoutes() {
                 put {
                     val session = call.requireAdmin()
                     val request = call.receive<ConfigUpdateRequest>()
+                    val oldConfig = runCatching { ConfigService.getQualitativeConfig(session.teamNumber, session.program, local = true) }.getOrNull()
                     val updated = ConfigService.updateQualitativeConfig(session.teamNumber, session.program, request.configJson)
-                    call.respond(updated)
+                    val (hasChanges, changedFields) = ConfigMigrationService.detectFieldChanges(oldConfig, updated, session.teamNumber, session.program, "qual")
+                    val entryCount = ConfigMigrationService.countExistingEntries(session.teamNumber, session.program, "qual")
+
+                    val changeSummary = if (changedFields.isEmpty()) "Qualitative config updated" else changedFields.joinToString(", ")
+                    ConfigMigrationService.saveRevision(
+                        teamNumber = session.teamNumber,
+                        program = session.program,
+                        kind = "qual",
+                        config = updated,
+                        changeSummary = changeSummary,
+                        savedByUsername = session.username
+                    )
+
+                    call.respond(ConfigUpdateResponse(
+                        config = updated,
+                        hasFieldChanges = hasChanges,
+                        changedFields = changedFields,
+                        entryCount = entryCount,
+                        configKind = "qual"
+                    ))
+                }
+            }
+
+            route("/config-migration") {
+                get("/status") {
+                    val session = call.requireAdmin()
+                    val kind = call.request.queryParameters["kind"] ?: "game"
+                    val status = ConfigMigrationService.getSchemaStatus(session.teamNumber, session.program, kind)
+                    call.respond(status)
+                }
+                post("/preview") {
+                    val session = call.requireAdmin()
+                    val request = call.receive<ConfigMigrationRequest>()
+                    val preview = ConfigMigrationService.previewMigration(session.teamNumber, session.program, request)
+                    call.respond(preview)
+                }
+                post("/apply") {
+                    val session = call.requireAdmin()
+                    val request = call.receive<ConfigMigrationRequest>()
+                    val result = ConfigMigrationService.applyMigration(session.teamNumber, session.program, request)
+                    call.respond(result)
+                }
+            }
+
+            route("/config-history") {
+                get {
+                    val session = call.requireAdmin()
+                    val kind = call.request.queryParameters["kind"] ?: "game"
+                    val revisions = ConfigMigrationService.listRevisions(session.teamNumber, session.program, kind)
+                    call.respond(revisions)
+                }
+                get("/{id}") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"] ?: throw IllegalArgumentException("Missing revision id")
+                    val revision = ConfigMigrationService.getRevision(id, session.teamNumber, session.program)
+                        ?: throw ApiException(HttpStatusCode.NotFound, "Revision not found")
+                    call.respond(revision)
+                }
+                post("/{id}/restore") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"] ?: throw IllegalArgumentException("Missing revision id")
+                    val result = ConfigMigrationService.restoreRevision(id, session.teamNumber, session.program, session.username)
+                    call.respond(result)
                 }
             }
 
@@ -1153,6 +1259,29 @@ fun Application.configureRoutes() {
                     val summary = call.measure("summary-db", "Summary DB Query") {
                         IntegrationService.summary()
                     }
+                    call.respond(summary)
+                }
+            }
+
+            route("/validation") {
+                get {
+                    val session = call.requireAnalyticsOrAbove()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: call.request.queryParameters["event"]
+                        ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
+                    val forcePrescout = call.request.queryParameters["forcePrescout"]?.toBoolean() ?: false
+                    val threshold = call.request.queryParameters["threshold"]?.toDoubleOrNull() ?: 15.0
+
+                    if (eventKey.isBlank()) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
+                    }
+
+                    val summary = ValidationService.validateEvent(
+                        session = session,
+                        eventKeyParam = eventKey,
+                        forcePrescout = forcePrescout,
+                        anomalyThreshold = threshold
+                    )
                     call.respond(summary)
                 }
             }
@@ -2670,6 +2799,7 @@ fun Application.configureRoutes() {
             "all-data" to "all-data.html",
             "analytics" to "analytics.html",
             "custom-analytics" to "custom-analytics.html",
+            "data-validation" to "data-validation.html",
             "graphs" to "graphs.html",
             "events" to "events.html",
             "teams" to "teams.html",
@@ -2696,6 +2826,8 @@ fun Application.configureRoutes() {
             "docs" to "docs.html",
             "contact" to "contact.html",
             "migration" to "migration.html",
+            "config-migration" to "config-migration.html",
+            "schema-history" to "schema-history.html",
             "theme-editor" to "theme-editor.html",
             "404" to "404.html",
             "500" to "500.html"

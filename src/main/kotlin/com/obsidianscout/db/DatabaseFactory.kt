@@ -102,6 +102,7 @@ object DatabaseFactory {
                 ScoutingConfigs,
                 PitScoutingConfigs,
                 QualitativeScoutingConfigs,
+                ConfigRevisions,
                 DefaultConfigs,
                 ScoutingEntries,
                 PitScoutingEntries,

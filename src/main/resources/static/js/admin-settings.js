@@ -69,6 +69,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         { id: "pit-data", label: "Pit Data" },
         { id: "analytics", label: "Analytics" },
         { id: "custom-analytics", label: "Custom Analytics" },
+        { id: "data-validation", label: "Data Validation" },
         { id: "graphs", label: "Graphs" },
         { id: "teams", label: "Teams" },
         { id: "rankings", label: "Rankings" },
@@ -272,6 +273,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
             });
 
+            updateConfigModeButtons();
             wireTabs();
 
             // Populate configs
@@ -431,7 +433,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 } catch (err) {}
 
                 try {
-                    await Obsidianscout.request(configModes[activeConfigKind].apiPath, {
+                    const saveRes = await Obsidianscout.request(configModes[activeConfigKind].apiPath, {
                         method: "PUT",
                         json: {
                             configJson: text
@@ -439,6 +441,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                         button: saveButton
                     });
                     Obsidianscout.showToast("Config saved", "success");
+
+                    if (saveRes && saveRes.hasFieldChanges && saveRes.entryCount > 0) {
+                        showMigrationPromptModal(activeConfigKind, saveRes.entryCount, saveRes.changedFields || []);
+                    }
                 } catch (error) {
                     Obsidianscout.showToast(error.message || "Save failed", "error");
                 }
@@ -980,6 +986,306 @@ document.addEventListener("DOMContentLoaded", async () => {
     function updateConfigModeButtons() {
         configModeButtons.forEach((button) => {
             button.classList.toggle("active", button.dataset.configKind === activeConfigKind);
+        });
+        const btnMig = document.getElementById("btn-config-migration");
+        if (btnMig) {
+            btnMig.href = `/config-migration?kind=${activeConfigKind}`;
+        }
+        const btnHist = document.getElementById("btn-schema-history");
+        if (btnHist) {
+            btnHist.href = `/schema-history?kind=${activeConfigKind}`;
+        }
+    }
+
+    async function showMigrationPromptModal(kind, entryCount, changedFields) {
+        if (document.getElementById("migration-prompt-backdrop")) return;
+
+        const kindLabel = kind === "game" ? "Game Form" : (kind === "pit" ? "Pit Form" : "Qualitative Form");
+
+        const backdrop = document.createElement("div");
+        backdrop.id = "migration-prompt-backdrop";
+        backdrop.className = "modal-backdrop show";
+
+        const container = document.createElement("div");
+        container.className = "modal-container";
+        container.style.width = "min(780px, 95vw)";
+        container.style.maxHeight = "90vh";
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+
+        const changedListHtml = changedFields.length > 0
+            ? `<ul style="margin: 6px 0 0 0; padding-left: 18px; font-size: 12px; color: var(--muted); display: grid; gap: 2px; max-height: 80px; overflow-y: auto;">
+                ${changedFields.map(f => `<li>• ${f}</li>`).join("")}
+               </ul>`
+            : "";
+
+        container.innerHTML = `
+            <div class="modal-header">
+                <h2 class="modal-title" style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px;">
+                    <span>🔄</span> Form Changes Detected - Data Migration
+                </h2>
+                <button class="modal-close btn-prompt-close" aria-label="Close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted);">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 14px 0; overflow-y: auto; flex: 1;">
+                <p style="margin: 0 0 10px 0; font-size: 14px; line-height: 1.4;">
+                    Your <strong>${kindLabel}</strong> configuration was saved with field modifications. You have <strong>${entryCount}</strong> existing scouting records in the database.
+                </p>
+                <div class="card soft" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); padding: 10px; margin-bottom: 14px; border-radius: 8px;">
+                    <div style="font-size: 12px; font-weight: 600; color: #f59e0b;">Detected Schema Changes:</div>
+                    ${changedListHtml || '<div style="font-size: 12px; color: var(--muted); margin-top: 2px;">Field structure modified.</div>'}
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong style="font-size: 14px;">Field Mapping Matrix</strong>
+                    <button id="modal-btn-auto-match" class="btn secondary" type="button" style="padding: 4px 10px; font-size: 12px;">Auto-Match</button>
+                </div>
+
+                <div style="max-height: 220px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 4px 8px; margin-bottom: 12px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: var(--muted); text-align: left;">
+                                <th style="padding: 6px;">Legacy Field</th>
+                                <th style="padding: 6px;">Action</th>
+                                <th style="padding: 6px;">Target New Field</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-mapping-tbody">
+                            <tr><td colspan="3" style="text-align: center; padding: 12px; color: var(--muted);">Loading schema details...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="modal-new-fields-wrap" class="hidden" style="margin-bottom: 12px;">
+                    <strong style="font-size: 13px;">Backfill Default Values for New Fields</strong>
+                    <div id="modal-new-fields-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 6px;"></div>
+                </div>
+
+                <details style="margin-top: 8px;">
+                    <summary style="cursor: pointer; font-size: 13px; color: var(--accent); font-weight: 500;">Preview Sample Transformation (Dry Run)</summary>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
+                        <div>
+                            <div style="font-size: 11px; font-weight: 600; color: #ef4444; margin-bottom: 4px;">Before</div>
+                            <pre id="modal-preview-before" style="background: var(--surface-1); padding: 8px; border-radius: 6px; font-size: 11px; max-height: 140px; overflow-y: auto; color: var(--text); border: 1px solid rgba(255,255,255,0.08); margin: 0;"></pre>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; font-weight: 600; color: #22c55e; margin-bottom: 4px;">After</div>
+                            <pre id="modal-preview-after" style="background: var(--surface-1); padding: 8px; border-radius: 6px; font-size: 11px; max-height: 140px; overflow-y: auto; color: var(--text); border: 1px solid rgba(255,255,255,0.08); margin: 0;"></pre>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
+                <a href="/schema-history?kind=${kind}" class="btn ghost" style="text-decoration: none; font-size: 12px;">📜 Schema History</a>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn ghost btn-prompt-close">Dismiss / Later</button>
+                    <button id="modal-btn-execute-migration" type="button" class="btn" style="font-weight: 600;">Migrate Records Now &rarr;</button>
+                </div>
+            </div>
+        `;
+
+        backdrop.appendChild(container);
+        document.body.appendChild(backdrop);
+
+        const closeModal = () => {
+            backdrop.remove();
+        };
+
+        container.querySelectorAll(".btn-prompt-close").forEach(btn => {
+            btn.addEventListener("click", closeModal);
+        });
+
+        // Load Schema Status into Modal
+        let modalSchema = null;
+        const tbody = container.querySelector("#modal-mapping-tbody");
+        const newFieldsWrap = container.querySelector("#modal-new-fields-wrap");
+        const newFieldsList = container.querySelector("#modal-new-fields-list");
+        const previewBeforeEl = container.querySelector("#modal-preview-before");
+        const previewAfterEl = container.querySelector("#modal-preview-after");
+        const btnAutoMatch = container.querySelector("#modal-btn-auto-match");
+        const btnExecute = container.querySelector("#modal-btn-execute-migration");
+
+        try {
+            modalSchema = await Obsidianscout.request(`/api/config-migration/status?kind=${kind}`);
+            renderModalMapping();
+            await fetchModalPreview();
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="3" style="color: #ef4444; padding: 10px;">Error loading schema: ${err.message}</td></tr>`;
+        }
+
+        function renderModalMapping() {
+            if (!modalSchema) return;
+            tbody.innerHTML = "";
+            const dataKeys = modalSchema.dataKeys || [];
+            const configFields = modalSchema.configFields || [];
+
+            if (dataKeys.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--muted); padding: 12px;">No existing entries found.</td></tr>`;
+                return;
+            }
+
+            dataKeys.forEach(k => {
+                const isMatched = !modalSchema.unmatchedDataKeys.includes(k);
+                const tr = document.createElement("tr");
+                tr.dataset.oldKey = k;
+                tr.style.borderBottom = "1px solid rgba(255,255,255,0.04)";
+
+                let targetOpts = `<option value="">-- Target Field --</option>`;
+                configFields.forEach(f => {
+                    const sel = f.id === k ? "selected" : "";
+                    targetOpts += `<option value="${f.id}" ${sel}>${f.label} (${f.id})</option>`;
+                });
+
+                tr.innerHTML = `
+                    <td style="padding: 6px;"><span class="${isMatched ? 'matched-key-badge' : 'legacy-key-badge'}" style="font-size: 11px; padding: 2px 6px;">${k}</span></td>
+                    <td style="padding: 6px;">
+                        <select class="input modal-map-action" style="padding: 4px 6px; font-size: 12px; width: 100%;">
+                            <option value="map" ${isMatched ? "selected" : ""}>Map</option>
+                            <option value="keep">Keep</option>
+                            <option value="delete">Delete</option>
+                        </select>
+                    </td>
+                    <td style="padding: 6px;">
+                        <select class="input modal-map-target" style="padding: 4px 6px; font-size: 12px; width: 100%;">
+                            ${targetOpts}
+                        </select>
+                    </td>
+                `;
+
+                const actionSel = tr.querySelector(".modal-map-action");
+                const targetSel = tr.querySelector(".modal-map-target");
+                actionSel.addEventListener("change", () => {
+                    targetSel.disabled = actionSel.value !== "map";
+                    fetchModalPreview();
+                });
+                targetSel.addEventListener("change", fetchModalPreview);
+
+                tbody.appendChild(tr);
+            });
+
+            // New fields backfill
+            const newKeys = modalSchema.newConfigKeys || [];
+            if (newKeys.length > 0) {
+                newFieldsWrap.classList.remove("hidden");
+                newFieldsList.innerHTML = "";
+                newKeys.forEach(nk => {
+                    const f = configFields.find(x => x.id === nk);
+                    if (!f) return;
+                    const d = document.createElement("div");
+                    d.innerHTML = `
+                        <label style="font-size: 11px; color: var(--muted); margin-bottom: 2px; display: block;">${f.label} (${f.id})</label>
+                        <input type="text" class="input modal-default-input" data-field-key="${f.id}" data-field-type="${f.type}" placeholder="Default value..." style="padding: 4px 8px; font-size: 12px; width: 100%;">
+                    `;
+                    d.querySelector("input").addEventListener("input", fetchModalPreview);
+                    newFieldsList.appendChild(d);
+                });
+            } else {
+                newFieldsWrap.classList.add("hidden");
+            }
+        }
+
+        function buildModalPayload() {
+            const rows = tbody.querySelectorAll("tr[data-old-key]");
+            const mappings = [];
+            rows.forEach(tr => {
+                const oldKey = tr.dataset.oldKey;
+                const actionSel = tr.querySelector(".modal-map-action");
+                const targetSel = tr.querySelector(".modal-map-target");
+                const action = actionSel ? actionSel.value : "keep";
+                const newKey = (action === "map" && targetSel) ? targetSel.value.trim() : null;
+                mappings.push({ oldKey, newKey: newKey || null, action });
+            });
+
+            const defaultValues = {};
+            const defInputs = newFieldsList.querySelectorAll(".modal-default-input");
+            defInputs.forEach(inp => {
+                const k = inp.dataset.fieldKey;
+                const type = inp.dataset.fieldType;
+                const v = inp.value;
+                if (v !== "" && v !== undefined) {
+                    if (type === "checkbox") defaultValues[k] = v === "true";
+                    else if (type === "counter" || type === "number") defaultValues[k] = Number(v) || 0;
+                    else defaultValues[k] = v;
+                }
+            });
+
+            return { configKind: kind, mappings, defaultValues };
+        }
+
+        async function fetchModalPreview() {
+            try {
+                const payload = buildModalPayload();
+                const prev = await Obsidianscout.request("/api/config-migration/preview", {
+                    method: "POST",
+                    json: payload
+                });
+                if (prev.sampleEntries && prev.sampleEntries.length > 0) {
+                    previewBeforeEl.textContent = JSON.stringify(prev.sampleEntries[0].before, null, 2);
+                    previewAfterEl.textContent = JSON.stringify(prev.sampleEntries[0].after, null, 2);
+                } else {
+                    previewBeforeEl.textContent = "No entries to preview";
+                    previewAfterEl.textContent = "No entries to preview";
+                }
+            } catch (err) {
+                previewBeforeEl.textContent = "Error";
+                previewAfterEl.textContent = err.message;
+            }
+        }
+
+        btnAutoMatch.addEventListener("click", () => {
+            if (!modalSchema) return;
+            const configFields = modalSchema.configFields || [];
+            const rows = tbody.querySelectorAll("tr[data-old-key]");
+            let matched = 0;
+            rows.forEach(tr => {
+                const oldKey = tr.dataset.oldKey;
+                const targetSel = tr.querySelector(".modal-map-target");
+                const actionSel = tr.querySelector(".modal-map-action");
+                if (!targetSel || targetSel.value) return;
+
+                const normOld = oldKey.toLowerCase().replace(/[^a-z0-9]/g, "");
+                const found = configFields.find(f => {
+                    const normId = f.id.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    const normLabel = f.label.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    return normId === normOld || normLabel === normOld || normId.includes(normOld) || normOld.includes(normId);
+                });
+                if (found) {
+                    targetSel.value = found.id;
+                    actionSel.value = "map";
+                    targetSel.disabled = false;
+                    matched++;
+                }
+            });
+            if (matched > 0) {
+                Obsidianscout.showToast(`Auto-matched ${matched} fields.`, "success");
+                fetchModalPreview();
+            } else {
+                Obsidianscout.showToast("No automatic matches found.", "info");
+            }
+        });
+
+        btnExecute.addEventListener("click", async () => {
+            if (!confirm(`Are you sure you want to apply data migration to ${entryCount} records?\n\nThis will update old records to match the current schema.`)) {
+                return;
+            }
+
+            try {
+                Obsidianscout.setButtonLoading(btnExecute, true, "Migrating...");
+                const payload = buildModalPayload();
+                const res = await Obsidianscout.request("/api/config-migration/apply", {
+                    method: "POST",
+                    json: payload,
+                    button: btnExecute
+                });
+
+                Obsidianscout.showToast(res.message || "Migration succeeded!", "success");
+                alert(`Data Migration Complete!\n\n${res.message || `Successfully migrated ${res.count} records.`}`);
+                closeModal();
+            } catch (err) {
+                console.error("Migration in modal failed:", err);
+                Obsidianscout.showToast(err.message || "Migration failed", "error");
+            } finally {
+                Obsidianscout.setButtonLoading(btnExecute, false);
+            }
         });
     }
 

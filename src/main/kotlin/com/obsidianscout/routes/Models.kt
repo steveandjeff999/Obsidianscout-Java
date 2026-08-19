@@ -603,6 +603,167 @@ data class TestApiResponse(
     val message: String
 )
 
+@Serializable
+data class ConfigUpdateResponse(
+    val config: com.obsidianscout.config.ScoutingConfig,
+    val hasFieldChanges: Boolean = false,
+    val changedFields: List<String> = emptyList(),
+    val entryCount: Int = 0,
+    val configKind: String = "game"
+)
+
+@Serializable
+data class FieldMappingDTO(
+    val oldKey: String,
+    val newKey: String? = null,
+    val action: String = "map", // "map", "keep", "delete"
+    val targetType: String? = null,
+    val valueMap: Map<String, String>? = null
+)
+
+@Serializable
+data class ConfigMigrationRequest(
+    val configKind: String, // "game", "pit", "qual"
+    val mappings: List<FieldMappingDTO> = emptyList(),
+    val defaultValues: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap()
+)
+
+@Serializable
+data class ConfigMigrationSample(
+    val id: String,
+    val before: JsonObject,
+    val after: JsonObject
+)
+
+@Serializable
+data class ConfigMigrationPreviewResponse(
+    val sampleEntries: List<ConfigMigrationSample>,
+    val totalAffectedCount: Int
+)
+
+@Serializable
+data class ConfigMigrationResult(
+    val success: Boolean,
+    val count: Int,
+    val message: String
+)
+
+@Serializable
+data class ConfigSchemaStatusResponse(
+    val configKind: String,
+    val entryCount: Int,
+    val configVersion: Int,
+    val configFields: List<com.obsidianscout.config.ScoutingField>,
+    val dataKeys: List<String>,
+    val unmatchedDataKeys: List<String>,
+    val newConfigKeys: List<String>
+)
+
+@Serializable
+data class ConfigRevisionDTO(
+    val id: String,
+    val teamNumber: Int,
+    val program: String,
+    val configKind: String,
+    val version: Int,
+    val title: String,
+    val changeSummary: String,
+    val savedByUsername: String,
+    val createdAt: String,
+    val fieldCount: Int
+)
+
+@Serializable
+data class ConfigRevisionDetailDTO(
+    val id: String,
+    val teamNumber: Int,
+    val program: String,
+    val configKind: String,
+    val version: Int,
+    val title: String,
+    val configJson: String,
+    val changeSummary: String,
+    val savedByUsername: String,
+    val createdAt: String
+)
+
+@Serializable
+data class TeamMatchEntryBreakdown(
+    val teamNumber: Int,
+    val teamKey: String,
+    val scoutedScore: Double,
+    val entryId: String,
+    val scouterName: String? = null,
+    val hasDiscrepancy: Boolean = false
+)
+
+@Serializable
+data class AllianceValidationRecord(
+    val allianceColor: String,
+    val teams: List<Int>,
+    val scoutedTeams: List<Int>,
+    val missingTeams: List<Int>,
+    val isFullyScouted: Boolean,
+    val actualScore: Double?,
+    val scoutedScoreSum: Double,
+    val scoreDiff: Double?,
+    val isAnomaly: Boolean,
+    val warning: String? = null,
+    val teamBreakdowns: List<TeamMatchEntryBreakdown> = emptyList()
+)
+
+@Serializable
+data class MatchValidationRecord(
+    val matchKey: String,
+    val eventKey: String,
+    val compLevel: String,
+    val setNumber: Int?,
+    val matchNumber: Int?,
+    val label: String,
+    val scheduledTime: Long?,
+    val actualTime: Long?,
+    val redAlliance: AllianceValidationRecord,
+    val blueAlliance: AllianceValidationRecord,
+    val isFullyScouted: Boolean,
+    val hasAnomaly: Boolean,
+    val matchWarning: String? = null
+)
+
+@Serializable
+data class TeamValidationRecord(
+    val teamNumber: Int,
+    val teamKey: String,
+    val nickname: String?,
+    val scoutedMatchCount: Int,
+    val averageScoutedScore: Double?,
+    val epa: Double?,
+    val opr: Double?,
+    val epaDiff: Double?,
+    val oprDiff: Double?,
+    val isAnomaly: Boolean,
+    val anomalyReason: String? = null,
+    val hasDiscrepancy: Boolean = false
+)
+
+@Serializable
+data class ValidationSummaryResponse(
+    val eventKey: String,
+    val totalMatches: Int,
+    val fullyScoutedMatches: Int,
+    val incompleteMatches: Int,
+    val unscoutedMatches: Int,
+    val matchesWithAnomalies: Int,
+    val teamsAnalyzed: Int,
+    val teamsWithAnomalies: Int,
+    val useStatboticsEpa: Boolean,
+    val useTbaOpr: Boolean,
+    val threshold: Double,
+    val matches: List<MatchValidationRecord>,
+    val teams: List<TeamValidationRecord>
+)
+
+
+
 
 
 

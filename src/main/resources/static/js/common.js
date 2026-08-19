@@ -1088,9 +1088,10 @@
         if (currentPage && settings && (me.role === "SCOUT" || me.role === "ANALYTICS" || me.role === "ADMIN")) {
             const allowedPages = me.role === "SCOUT" ? settings.scoutPages : (me.role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
             const isCustomAnalyticsAllowed = (currentPage === "custom-analytics" && (me.role === "ADMIN" || me.role === "ANALYTICS" || me.role === "SUPERADMIN"));
+            const isDataValidationAllowed = (currentPage === "data-validation" && (me.role === "ADMIN" || me.role === "ANALYTICS" || me.role === "SUPERADMIN"));
             if (allowedPages && Array.isArray(allowedPages)) {
-                const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password", "docs", "contact", "custom-analytics"];
-                if (!isCustomAnalyticsAllowed && !bypassPages.includes(currentPage) && !superAdminPages.includes(currentPage) && !allowedPages.includes(currentPage)) {
+                const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password", "docs", "contact", "custom-analytics", "data-validation", "config-migration", "schema-history"];
+                if (!isCustomAnalyticsAllowed && !isDataValidationAllowed && !bypassPages.includes(currentPage) && !superAdminPages.includes(currentPage) && !allowedPages.includes(currentPage)) {
                     showToast("You do not have access to this page", "error");
                     const fallback = allowedPages.includes("dashboard") ? "/dashboard" : "/config";
                     setTimeout(() => {
@@ -1386,8 +1387,8 @@
                     if (allowedPages && Array.isArray(allowedPages)) {
                         document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                             const page = link.dataset.page;
-                            const bypassPages = ["settings", "login", "index", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password", "docs", "contact", "custom-analytics"];
-                            const isAllowedRolePage = (page === "custom-analytics" && (role === "ADMIN" || role === "ANALYTICS" || role === "SUPERADMIN"));
+                            const bypassPages = ["settings", "login", "index", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password", "docs", "contact", "custom-analytics", "data-validation", "config-migration", "schema-history"];
+                            const isAllowedRolePage = ((page === "custom-analytics" || page === "data-validation") && (role === "ADMIN" || role === "ANALYTICS" || role === "SUPERADMIN"));
                             if (!isAllowedRolePage && !bypassPages.includes(page) && !superAdminPages.includes(page) && !allowedPages.includes(page)) {
                                 link.style.display = "none";
                             }
@@ -3178,7 +3179,7 @@
     };
 
     function isPageAccessible(page, role) {
-        const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor"];
+        const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "custom-analytics", "data-validation"];
         if (bypassPages.includes(page)) return true;
 
         if (["users", "banners", "admin-settings", "default-configs"].includes(page) && !isAdmin(role)) {

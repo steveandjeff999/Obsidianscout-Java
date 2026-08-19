@@ -46,14 +46,14 @@ val DEFAULT_SCOUT_PAGES = listOf(
 
 val DEFAULT_ANALYTICS_PAGES = listOf(
     "dashboard", "events", "scout", "pit-scout", "qual-scout", "qr-scanner",
-    "all-data", "qual-data", "pit-data", "analytics", "custom-analytics", "graphs",
+    "all-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "teams", "rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact"
 )
 
 val DEFAULT_ADMIN_PAGES = listOf(
     "dashboard", "admin-settings", "users", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
-    "all-data", "qual-data", "pit-data", "analytics", "custom-analytics", "graphs",
+    "all-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "events", "teams", "rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact"
 )
@@ -62,6 +62,7 @@ fun canonicalTbaEventCode(code: String): String = code.trim().lowercase().remove
 
 fun canonicalTbaEventKey(year: Int, codeOrKey: String): String {
     val clean = canonicalTbaEventCode(codeOrKey)
+    if (clean.isBlank()) return ""
     val yearStr = year.toString()
     return if (clean.startsWith(yearStr)) clean else "$yearStr$clean"
 }
@@ -220,12 +221,14 @@ object SettingsService {
             if ("dashboard" !in this) add("dashboard")
             if ("events" !in this) add("events")
             if ("custom-analytics" !in this) add("custom-analytics")
+            if ("data-validation" !in this) add("data-validation")
         }
         val normalizedAdminPages = settings.adminPages.toMutableList().apply {
             if ("dashboard" !in this) add("dashboard")
             if ("admin-settings" !in this) add("admin-settings")
             if ("events" !in this) add("events")
             if ("custom-analytics" !in this) add("custom-analytics")
+            if ("data-validation" !in this) add("data-validation")
         }
         val rawStatboticsUrl = settings.statboticsBaseUrl.trim()
         val statboticsUrl = (if (rawStatboticsUrl.isBlank()) "https://api.statbotics.io" else rawStatboticsUrl).removeSuffix("/")
