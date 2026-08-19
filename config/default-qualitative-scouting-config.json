@@ -12,6 +12,7 @@
             "min": null,
             "max": null,
             "step": null,
+            "doubleStep": null,
             "pointsPer": null
         },
         {
@@ -24,6 +25,7 @@
             "min": 1,
             "max": 5,
             "step": null,
+            "doubleStep": null,
             "pointsPer": null
         },
         {
@@ -36,6 +38,7 @@
             "min": null,
             "max": null,
             "step": null,
+            "doubleStep": null,
             "pointsPer": null
         },
         {
@@ -48,6 +51,7 @@
             "min": null,
             "max": null,
             "step": null,
+            "doubleStep": null,
             "pointsPer": null
         },
         {
@@ -60,6 +64,7 @@
             "min": null,
             "max": null,
             "step": null,
+            "doubleStep": null,
             "pointsPer": null
         },
         {
@@ -72,6 +77,7 @@
             "min": null,
             "max": null,
             "step": null,
+            "doubleStep": null,
             "pointsPer": null
         },
         {
@@ -84,6 +90,7 @@
             "min": null,
             "max": null,
             "step": null,
+            "doubleStep": null,
             "pointsPer": null
         }
     ],
