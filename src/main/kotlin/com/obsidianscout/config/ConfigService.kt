@@ -63,6 +63,7 @@ data class ScoutingField(
     val min: Int? = null,
     val max: Int? = null,
     val step: Int? = null,
+    val doubleStep: Int? = null,
     val pointsPer: Double? = null
 )
 

@@ -1,0 +1,319 @@
+.auth-card .form-grid {
+    gap: 14px;
+}
+
+.form-grid {
+    display: grid;
+    gap: 18px;
+}
+
+.form-grid-wide {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.field {
+    display: grid;
+    gap: 6px;
+}
+
+.field.checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-direction: row;
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.field.checkbox-field input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--primary);
+}
+
+.field.checkbox-field label {
+    cursor: pointer;
+    font-size: 14px;
+    user-select: none;
+    color: var(--ink-muted);
+}
+
+.form-section {
+    grid-column: 1 / -1;
+    margin-top: 10px;
+}
+
+.form-section h3 {
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+}
+
+label {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+input, select, textarea {
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--ink);
+    max-width: 100%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+body.theme-dark input,
+body.theme-dark select,
+body.theme-dark textarea {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+input:focus, select:focus, textarea:focus {
+    border-color: var(--ink);
+    background: var(--surface);
+    box-shadow: 0 0 0 2px var(--surface-3);
+    outline: none;
+}
+
+body.theme-dark input:focus,
+body.theme-dark select:focus,
+body.theme-dark textarea:focus {
+    background: var(--surface);
+    border-color: var(--ink);
+    box-shadow: 0 0 0 2px var(--surface-3);
+}
+
+select {
+    width: 100%;
+    min-width: 0;
+    text-overflow: ellipsis;
+}
+
+.select-wide {
+    width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.form-disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+textarea {
+    min-height: 140px;
+    resize: vertical;
+}
+
+/* Visual Config Form Builder */
+.field-card {
+    background: var(--surface);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: var(--radius-sm);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    box-shadow: 
+        inset 0 1px 2px rgba(255, 255, 255, 0.5),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.03),
+        0 4px 12px rgba(0, 0, 0, 0.03);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+}
+
+body.theme-dark .field-card {
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        inset 0 1px 2px rgba(255, 255, 255, 0.15),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.2),
+        0 4px 12px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+}
+
+.field-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+        inset 0 2px 3px rgba(255, 255, 255, 0.7),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.02),
+        0 12px 28px rgba(0, 0, 0, 0.08);
+    border-color: rgba(255, 255, 255, 0.55);
+}
+
+body.theme-dark .field-card:hover {
+    box-shadow: 
+        inset 0 2px 3px rgba(255, 255, 255, 0.25),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.15),
+        0 12px 28px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.field-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+}
+
+body.theme-dark .field-card-header {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.field-card-header h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.field-card-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Fields layout inside visual card */
+.field-card-body {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+}
+
+.field-card-body-full {
+    grid-column: 1 / -1;
+}
+
+.field-card-body-half {
+    grid-column: span 1;
+}
+
+/* Dynamic Option Builder */
+.options-builder {
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    background: var(--surface-2);
+    margin-top: 6px;
+}
+
+body.theme-dark .options-builder {
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.options-builder-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.options-builder-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.options-builder-list {
+    display: grid;
+    gap: 8px;
+}
+
+.option-item-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 80px 32px;
+    gap: 8px;
+    align-items: center;
+}
+
+.option-item-row input {
+    padding: 8px 10px;
+    font-size: 13px;
+}
+
+/* ── Global Toggle Switch Styles ── */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--surface-3);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: .3s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: inset 0 1px 2.5px rgba(0, 0, 0, 0.05);
+}
+
+body.theme-dark .slider {
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 2.5px rgba(0, 0, 0, 0.2);
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: linear-gradient(135deg, #ffffff 0%, #eef1f5 100%);
+    transition: .3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 
+        inset 0 1px 1px #ffffff,
+        0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+input:checked + .slider {
+    background-color: var(--accent);
+}
+
+input:checked + .slider:before {
+    transform: translateX(24px);
+    background: #ffffff;
+}
+
+.slider.round {
+    border-radius: 26px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+

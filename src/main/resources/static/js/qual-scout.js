@@ -485,35 +485,87 @@ function getFieldPhase(field) {
 function buildCounter(field) {
     const wrapper = document.createElement("div");
     wrapper.className = "counter";
-    const minus = document.createElement("button");
-    minus.type = "button";
-    minus.textContent = "-";
+
+    const step = field.step || 1;
+    const doubleStep = field.doubleStep !== undefined ? field.doubleStep : field.double_step;
+    const hasDoubleStep = doubleStep !== undefined && doubleStep !== null && Number(doubleStep) > 0;
+    const dStep = hasDoubleStep ? Number(doubleStep) : null;
 
     const input = document.createElement("input");
     input.type = "number";
     input.value = field.min || 0;
     applyNumberBounds(input, field);
 
-    const plus = document.createElement("button");
-    plus.type = "button";
-    plus.textContent = "+";
+    if (hasDoubleStep) {
+        const minusDouble = document.createElement("button");
+        minusDouble.type = "button";
+        minusDouble.className = "btn-counter-double btn-counter-minus-double";
+        minusDouble.textContent = `-${dStep}`;
+        minusDouble.addEventListener("click", () => {
+            const min = field.min || 0;
+            input.value = String(Math.max(Number(input.value || 0) - dStep, min));
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
 
-    minus.addEventListener("click", () => {
-        const step = field.step || 1;
-        input.value = String(Math.max(Number(input.value || 0) - step, field.min || 0));
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+        const minus = document.createElement("button");
+        minus.type = "button";
+        minus.className = "btn-counter-single btn-counter-minus";
+        minus.textContent = `-${step}`;
+        minus.addEventListener("click", () => {
+            const min = field.min || 0;
+            input.value = String(Math.max(Number(input.value || 0) - step, min));
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
 
-    plus.addEventListener("click", () => {
-        const step = field.step || 1;
-        const max = field.max ?? Number.POSITIVE_INFINITY;
-        input.value = String(Math.min(Number(input.value || 0) + step, max));
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+        const plus = document.createElement("button");
+        plus.type = "button";
+        plus.className = "btn-counter-single btn-counter-plus";
+        plus.textContent = `+${step}`;
+        plus.addEventListener("click", () => {
+            const max = field.max ?? Number.POSITIVE_INFINITY;
+            input.value = String(Math.min(Number(input.value || 0) + step, max));
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
 
-    wrapper.appendChild(minus);
-    wrapper.appendChild(input);
-    wrapper.appendChild(plus);
+        const plusDouble = document.createElement("button");
+        plusDouble.type = "button";
+        plusDouble.className = "btn-counter-double btn-counter-plus-double";
+        plusDouble.textContent = `+${dStep}`;
+        plusDouble.addEventListener("click", () => {
+            const max = field.max ?? Number.POSITIVE_INFINITY;
+            input.value = String(Math.min(Number(input.value || 0) + dStep, max));
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+
+        wrapper.appendChild(minusDouble);
+        wrapper.appendChild(minus);
+        wrapper.appendChild(input);
+        wrapper.appendChild(plus);
+        wrapper.appendChild(plusDouble);
+    } else {
+        const minus = document.createElement("button");
+        minus.type = "button";
+        minus.textContent = "-";
+        minus.addEventListener("click", () => {
+            const min = field.min || 0;
+            input.value = String(Math.max(Number(input.value || 0) - step, min));
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+
+        const plus = document.createElement("button");
+        plus.type = "button";
+        plus.textContent = "+";
+        plus.addEventListener("click", () => {
+            const max = field.max ?? Number.POSITIVE_INFINITY;
+            input.value = String(Math.min(Number(input.value || 0) + step, max));
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+
+        wrapper.appendChild(minus);
+        wrapper.appendChild(input);
+        wrapper.appendChild(plus);
+    }
+
     return { wrapper, input };
 }
 

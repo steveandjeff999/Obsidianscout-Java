@@ -1,0 +1,547 @@
+/* ==========================================================================
+   Interactive Tutorial / Tour Styles
+   ========================================================================== */
+
+/* Spotlight highlight effect */
+.tour-highlighted {
+    position: relative !important;
+    z-index: 10001 !important;
+    outline: 3px solid var(--accent) !important;
+    outline-offset: 4px !important;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6) !important, 0 0 15px var(--accent) !important;
+    border-radius: 4px !important;
+    transition: outline 0.2s ease, box-shadow 0.2s ease !important;
+    background-color: var(--surface) !important;
+}
+
+/* Semi-transparent backdrop overlay to prevent interaction outside highlighted area */
+.tour-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.25);
+    pointer-events: auto; /* blocks clicks outside the spotlight element */
+}
+
+/* Floating Tour Step Popup */
+.tour-popup {
+    position: absolute;
+    z-index: 10002;
+    width: 320px;
+    padding: 18px;
+    background: var(--surface-2);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    color: var(--ink);
+    font-family: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: tour-popup-entry 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+body.theme-dark .tour-popup {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.tour-popup h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.tour-popup p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink);
+}
+
+.tour-popup-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 10px;
+}
+
+body.theme-dark .tour-popup-footer {
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.tour-popup-progress {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.tour-popup-nav {
+    display: flex;
+    gap: 8px;
+}
+
+.tour-popup-nav button {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s ease;
+}
+
+.tour-popup-nav .btn-tour-next {
+    background: var(--accent);
+    color: white;
+}
+
+.tour-popup-nav .btn-tour-next:hover {
+    background: var(--accent-2);
+}
+
+.tour-popup-nav .btn-tour-back {
+    background: var(--surface-3);
+    color: var(--ink);
+}
+
+.tour-popup-nav .btn-tour-back:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.tour-popup-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+}
+
+.tour-popup-close:hover {
+    color: var(--ink);
+}
+
+/* Centered modal for level selector */
+.tour-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10005;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tour-modal {
+    width: 460px;
+    max-width: 90%;
+    background: var(--surface-2);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.4);
+    padding: 26px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    color: var(--ink);
+    animation: tour-modal-entry 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+body.theme-dark .tour-modal {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.tour-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.tour-modal-close:hover {
+    color: var(--ink);
+}
+
+.tour-modal h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+}
+
+.tour-modal p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted);
+}
+
+.tour-modal-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent-3);
+    margin-top: 6px;
+}
+
+.tour-level-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tour-level-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 16px;
+    background: var(--surface-3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    color: var(--ink);
+}
+
+.tour-level-btn:hover {
+    background: var(--surface-2);
+    border-color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.tour-level-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.tour-level-desc {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+/* Animations */
+@keyframes tour-popup-entry {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Setup Wizard Styles */
+.wizard-progress {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    margin-bottom: 32px;
+    padding: 0 10px;
+}
+
+.wizard-progress::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    right: 10px;
+    height: 3px;
+    background: var(--surface-3);
+    z-index: 1;
+    transform: translateY(-50%);
+}
+
+.wizard-progress-bar {
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    height: 3px;
+    background: var(--accent);
+    z-index: 1;
+    transform: translateY(-50%);
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.wizard-step-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 2px solid var(--surface-3);
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    position: relative;
+    z-index: 2;
+    transition: all 0.3s ease;
+}
+
+.wizard-step-dot.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    box-shadow: 0 0 12px rgba(11, 143, 136, 0.4);
+}
+
+.wizard-step-dot.completed {
+    background: var(--accent-2);
+    border-color: var(--accent-2);
+    color: white;
+}
+
+.wizard-step-content {
+    display: none;
+    animation: wizard-step-fade 0.3s ease forwards;
+}
+
+.wizard-step-content.active {
+    display: block;
+}
+
+.wizard-welcome-card {
+    text-align: center;
+    padding: 20px 10px;
+}
+
+.wizard-welcome-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.wizard-welcome-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.wizard-welcome-desc {
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+.wizard-section-divider {
+}
+
+.tour-modal h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+}
+
+.tour-modal p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted);
+}
+
+.tour-modal-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent-3);
+    margin-top: 6px;
+}
+
+.tour-level-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tour-level-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 16px;
+    background: var(--surface-3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    color: var(--ink);
+}
+
+.tour-level-btn:hover {
+    background: var(--surface-2);
+    border-color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.tour-level-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.tour-level-desc {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+/* Animations */
+@keyframes tour-popup-entry {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Setup Wizard Styles */
+.wizard-progress {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    margin-bottom: 32px;
+    padding: 0 10px;
+}
+
+.wizard-progress::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    right: 10px;
+    height: 3px;
+    background: var(--surface-3);
+    z-index: 1;
+    transform: translateY(-50%);
+}
+
+.wizard-progress-bar {
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    height: 3px;
+    background: var(--accent);
+    z-index: 1;
+    transform: translateY(-50%);
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.wizard-step-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 2px solid var(--surface-3);
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    position: relative;
+    z-index: 2;
+    transition: all 0.3s ease;
+}
+
+.wizard-step-dot.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    box-shadow: 0 0 12px rgba(11, 143, 136, 0.4);
+}
+
+.wizard-step-dot.completed {
+    background: var(--accent-2);
+    border-color: var(--accent-2);
+    color: white;
+}
+
+.wizard-step-content {
+    display: none;
+    animation: wizard-step-fade 0.3s ease forwards;
+}
+
+.wizard-step-content.active {
+    display: block;
+}
+
+.wizard-welcome-card {
+    text-align: center;
+    padding: 20px 10px;
+}
+
+.wizard-welcome-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.wizard-welcome-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.wizard-welcome-desc {
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+.wizard-section-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 20px 0;
+}
+
+.wizard-field-desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+

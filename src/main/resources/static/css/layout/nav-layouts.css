@@ -1,0 +1,789 @@
+.sidebar-brand img,
+.topbar-brand-icon {
+    max-height: 36px;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+/* ── Topbar Navigation Layout & Dropdowns ──────────────────────────── */
+body.nav-layout-topbar .app-shell {
+    flex-direction: column !important;
+}
+
+body.nav-layout-topbar .sidebar {
+    width: 100% !important;
+    height: 56px !important;
+    min-height: 56px !important;
+    max-height: 56px !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10000 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 0 24px !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05) !important;
+    overflow: visible !important;
+    background: var(--surface) !important;
+    gap: 16px !important;
+    box-sizing: border-box !important;
+}
+
+body.theme-dark.nav-layout-topbar .sidebar {
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+}
+
+body.nav-layout-topbar .sidebar-brand {
+    margin-bottom: 0;
+    flex-shrink: 0;
+    white-space: nowrap;
+    display: flex !important;
+    align-items: center !important;
+}
+
+body.nav-layout-topbar .topbar-brand-icon,
+body.nav-layout-topbar .sidebar-brand img {
+    width: 32px !important;
+    height: 32px !important;
+    max-width: 32px !important;
+    max-height: 32px !important;
+    object-fit: contain !important;
+    display: block !important;
+}
+
+body.nav-layout-topbar .sidebar-header {
+    flex-shrink: 0;
+}
+
+body.nav-layout-topbar .sidebar-toggle {
+    display: none !important;
+}
+
+body.nav-layout-topbar .sidebar-nav {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 6px !important;
+    margin-bottom: 0 !important;
+    overflow: visible !important;
+    flex: 1 !important;
+}
+
+body.nav-layout-topbar .sidebar-section-title {
+    display: none !important;
+}
+
+body.nav-layout-topbar .sidebar-link {
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+    white-space: nowrap !important;
+    border-radius: var(--radius-sm, 8px) !important;
+}
+
+/* Category & Account Dropdowns */
+.topbar-dropdown {
+    position: relative !important;
+    display: inline-block !important;
+}
+
+.topbar-dropdown-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 6px 14px !important;
+    border-radius: var(--radius-sm, 8px) !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: var(--muted) !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    white-space: nowrap !important;
+    outline: none !important;
+}
+
+.topbar-dropdown-btn:hover,
+.topbar-dropdown.open .topbar-dropdown-btn {
+    color: var(--ink) !important;
+    background: var(--surface-2) !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+body.theme-dark .topbar-dropdown-btn:hover,
+body.theme-dark .topbar-dropdown.open .topbar-dropdown-btn {
+    color: #ffffff !important;
+    background: var(--surface-3) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.topbar-dropdown-btn.active-category {
+    color: var(--accent) !important;
+    background: rgba(15, 118, 110, 0.1) !important;
+    border-color: rgba(15, 118, 110, 0.25) !important;
+    font-weight: 700 !important;
+}
+
+body.theme-dark .topbar-dropdown-btn.active-category {
+    color: var(--accent) !important;
+    background: rgba(20, 184, 166, 0.15) !important;
+    border-color: rgba(20, 184, 166, 0.3) !important;
+}
+
+.topbar-dropdown-arrow {
+    font-size: 10px !important;
+    opacity: 0.7 !important;
+    transition: transform 0.2s ease !important;
+}
+
+.topbar-dropdown.open .topbar-dropdown-arrow {
+    transform: rotate(180deg) !important;
+}
+
+/* Dropdown Menu Panel */
+.topbar-dropdown-menu {
+    display: none !important;
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    left: 0 !important;
+    min-width: 200px !important;
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.05) !important;
+    padding: 6px !important;
+    z-index: 99999 !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+}
+
+body.theme-dark .topbar-dropdown-menu {
+    background: var(--surface-2) !important;
+    border-color: var(--border) !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6) !important;
+}
+
+.topbar-dropdown.open .topbar-dropdown-menu {
+    display: flex !important;
+}
+
+.topbar-dropdown-menu .sidebar-link {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 8px 12px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: var(--muted) !important;
+    text-decoration: none !important;
+    transition: all 0.12s ease !important;
+}
+
+.topbar-dropdown-menu .sidebar-link:hover {
+    color: var(--ink) !important;
+    background: var(--surface-2) !important;
+}
+
+body.theme-dark .topbar-dropdown-menu .sidebar-link:hover {
+    color: #ffffff !important;
+    background: var(--surface-3) !important;
+}
+
+.topbar-dropdown-menu .sidebar-link.active {
+    background: var(--accent) !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+}
+
+body.theme-dark .topbar-dropdown-menu .sidebar-link.active {
+    background: var(--accent) !important;
+    color: #09090b !important;
+}
+
+/* Account Dropdown */
+body.nav-layout-topbar .sidebar-footer {
+    margin-top: 0 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 10px !important;
+    flex-shrink: 0 !important;
+}
+
+.topbar-account-dropdown {
+    position: relative !important;
+}
+
+.topbar-account-dropdown .topbar-dropdown-menu {
+    right: 0 !important;
+    left: auto !important;
+    min-width: 250px !important;
+    padding: 12px !important;
+}
+
+.topbar-account-btn {
+    padding: 4px 10px 4px 4px !important;
+    gap: 8px !important;
+    border-radius: 20px !important;
+    background: var(--surface-2) !important;
+    border: 1px solid var(--border) !important;
+}
+
+body.theme-dark .topbar-account-btn {
+    background: var(--surface-3) !important;
+}
+
+#topbar-account-avatar .nav-avatar,
+#topbar-account-avatar .nav-avatar-initials {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 11px !important;
+    border: none !important;
+}
+
+.topbar-user-card {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 4px 4px 8px !important;
+}
+
+.topbar-user-details {
+    display: flex !important;
+    flex-direction: column !important;
+    line-height: 1.3 !important;
+    min-width: 0 !important;
+}
+
+.topbar-user-name {
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    color: var(--ink) !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.topbar-user-meta {
+    font-size: 11px !important;
+    color: var(--muted) !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.topbar-menu-divider {
+    height: 1px !important;
+    background: var(--border) !important;
+    margin: 8px 0 !important;
+}
+
+.topbar-account-menu .btn,
+.topbar-account-menu #btn-take-tour {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    border-radius: 6px !important;
+    margin-top: 4px !important;
+}
+
+body.nav-layout-topbar .api-attribution,
+body.nav-layout-topbar .mobile-topbar {
+    display: none !important;
+}
+
+/* ── Sidebar Right Layout ──────────────────────────────────────────── */
+body.nav-layout-sidebar-right .app-shell {
+    flex-direction: row !important;
+}
+
+body.nav-layout-sidebar-right .sidebar {
+    order: 2 !important;
+    border-left: 1px solid var(--border) !important;
+    border-right: none !important;
+}
+
+body.nav-layout-sidebar-right .main-content {
+    order: 1 !important;
+}
+
+/* ── Topbar (Bottom) Layout ────────────────────────────────────────── */
+body.nav-layout-topbar-bottom .app-shell {
+    flex-direction: column-reverse !important;
+    padding-bottom: 56px !important;
+}
+
+body.nav-layout-topbar-bottom .sidebar {
+    position: fixed !important;
+    bottom: 0 !important;
+    top: auto !important;
+    border-top: 1px solid var(--border) !important;
+    border-bottom: none !important;
+}
+
+body.nav-layout-topbar-bottom .topbar-dropdown-menu {
+    bottom: calc(100% + 8px) !important;
+    top: auto !important;
+}
+
+body.nav-layout-topbar-bottom .topbar-account-dropdown .topbar-dropdown-menu {
+    bottom: calc(100% + 8px) !important;
+    top: auto !important;
+    right: 0 !important;
+    left: auto !important;
+}
+
+/* ── Compact Bar (Left) Layout ─────────────────────────────────────── */
+body.nav-layout-topbar-left .app-shell {
+    flex-direction: row !important;
+}
+
+body.nav-layout-topbar-left .sidebar {
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    position: sticky !important;
+    top: 0 !important;
+    flex-direction: column !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 16px 0 !important;
+    border-right: 1px solid var(--border) !important;
+    border-bottom: none !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+}
+
+body.nav-layout-topbar-left .sidebar-header {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body.nav-layout-topbar-left .sidebar-brand {
+    font-size: 0 !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    margin: 0 auto 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 10px !important;
+    background: var(--surface-2) !important;
+    border: 1px solid var(--border) !important;
+    box-sizing: border-box !important;
+    text-decoration: none !important;
+    flex-shrink: 0 !important;
+}
+
+body.nav-layout-topbar-left .topbar-brand-icon {
+    width: 22px !important;
+    height: 22px !important;
+    object-fit: contain !important;
+    display: block !important;
+    margin: auto !important;
+}
+
+body.nav-layout-topbar-left .sidebar-nav {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+}
+
+body.nav-layout-topbar-left .topbar-dropdown {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    margin: 0 !important;
+}
+
+body.nav-layout-topbar-left .topbar-dropdown-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    padding: 0 !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+}
+
+body.nav-layout-topbar-left .topbar-dropdown-label,
+body.nav-layout-topbar-left .topbar-dropdown-arrow {
+    display: none !important;
+}
+
+body.nav-layout-topbar-left .topbar-dropdown-icon {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 20px !important;
+    height: 20px !important;
+    margin: auto !important;
+}
+
+body.nav-layout-topbar-left .topbar-dropdown-menu {
+    left: calc(100% + 8px) !important;
+    top: 0 !important;
+    bottom: auto !important;
+    right: auto !important;
+}
+
+body.nav-layout-topbar-left .sidebar-footer {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    margin-top: auto !important;
+    padding: 0 0 8px !important;
+    box-sizing: border-box !important;
+}
+
+body.nav-layout-topbar-left #topbar-account-username {
+    display: none !important;
+}
+
+body.nav-layout-topbar-left .topbar-account-btn {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+}
+
+body.nav-layout-topbar-left .topbar-account-dropdown .topbar-dropdown-menu {
+    left: calc(100% + 8px) !important;
+    bottom: 8px !important;
+    top: auto !important;
+    right: auto !important;
+}
+
+/* ── Compact Bar (Right) Layout ────────────────────────────────────── */
+body.nav-layout-topbar-right .app-shell {
+    flex-direction: row !important;
+}
+
+body.nav-layout-topbar-right .sidebar {
+    order: 2 !important;
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    position: sticky !important;
+    top: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 16px 0 !important;
+    border-left: 1px solid var(--border) !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+}
+
+body.nav-layout-topbar-right .main-content {
+    order: 1 !important;
+}
+
+body.nav-layout-topbar-right .sidebar-header {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body.nav-layout-topbar-right .sidebar-brand {
+    font-size: 0 !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    margin: 0 auto 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 10px !important;
+    background: var(--surface-2) !important;
+    border: 1px solid var(--border) !important;
+    box-sizing: border-box !important;
+    text-decoration: none !important;
+    flex-shrink: 0 !important;
+}
+
+body.nav-layout-topbar-right .topbar-brand-icon {
+    width: 22px !important;
+    height: 22px !important;
+    object-fit: contain !important;
+    display: block !important;
+    margin: auto !important;
+}
+
+body.nav-layout-topbar-right .sidebar-nav {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+}
+
+body.nav-layout-topbar-right .topbar-dropdown {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    margin: 0 !important;
+}
+
+body.nav-layout-topbar-right .topbar-dropdown-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    padding: 0 !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+}
+
+body.nav-layout-topbar-right .topbar-dropdown-label,
+body.nav-layout-topbar-right .topbar-dropdown-arrow {
+    display: none !important;
+}
+
+body.nav-layout-topbar-right .topbar-dropdown-icon {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 20px !important;
+    height: 20px !important;
+    margin: auto !important;
+}
+
+body.nav-layout-topbar-right .topbar-dropdown-menu {
+    right: calc(100% + 8px) !important;
+    left: auto !important;
+    top: 0 !important;
+    bottom: auto !important;
+}
+
+body.nav-layout-topbar-right .sidebar-footer {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    margin-top: auto !important;
+    padding: 0 0 8px !important;
+    box-sizing: border-box !important;
+}
+
+body.nav-layout-topbar-right #topbar-account-username {
+    display: none !important;
+}
+
+body.nav-layout-topbar-right .topbar-account-btn {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+}
+
+body.nav-layout-topbar-right .topbar-account-dropdown .topbar-dropdown-menu {
+    right: calc(100% + 8px) !important;
+    left: auto !important;
+    bottom: 8px !important;
+    top: auto !important;
+}
+
+/* ── Connection Widget & Standalone Link Fixes for Compact Bars ───── */
+body.nav-layout-topbar-left .connection-widget,
+body.nav-layout-topbar-right .connection-widget {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 auto 12px !important;
+    box-sizing: border-box !important;
+    background: var(--surface-2) !important;
+    border: 1px solid var(--border) !important;
+}
+
+body.nav-layout-topbar-left .connection-widget .status-text,
+body.nav-layout-topbar-right .connection-widget .status-text {
+    display: none !important;
+}
+
+body.nav-layout-topbar-left .connection-widget .status-dot,
+body.nav-layout-topbar-right .connection-widget .status-dot {
+    margin: 0 !important;
+}
+
+body.nav-layout-topbar-left .sidebar-nav > .sidebar-link,
+body.nav-layout-topbar-right .sidebar-nav > .sidebar-link {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    padding: 0 !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0 !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+}
+
+body.nav-layout-topbar-left .sidebar-nav > .sidebar-link .sidebar-link-icon,
+body.nav-layout-topbar-right .sidebar-nav > .sidebar-link .sidebar-link-icon {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 14px !important;
+    margin: auto !important;
+}
+
+/* Standalone Footer Actions (Theme Toggle & Logout) for Compact Bars */
+.topbar-footer-actions {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    margin-top: 0 !important;
+}
+
+/* Language Select & Avatar Fixes for Compact Bars */
+body.nav-layout-topbar-left .sidebar-footer #lang-select,
+body.nav-layout-topbar-right .sidebar-footer #lang-select,
+body.nav-layout-topbar-left .sidebar-footer .field,
+body.nav-layout-topbar-right .sidebar-footer .field {
+    display: none !important;
+}
+
+body.nav-layout-topbar-left #topbar-account-avatar,
+body.nav-layout-topbar-right #topbar-account-avatar {
+    width: 32px !important;
+    height: 32px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: auto !important;
+}
+
+body.nav-layout-topbar-left #topbar-account-avatar .nav-avatar,
+body.nav-layout-topbar-right #topbar-account-avatar .nav-avatar,
+body.nav-layout-topbar-left #topbar-account-avatar .nav-avatar-initials,
+body.nav-layout-topbar-right #topbar-account-avatar .nav-avatar-initials {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: auto !important;
+}
+
+body.nav-layout-topbar-top .topbar-footer-actions,
+body.nav-layout-topbar-bottom .topbar-footer-actions {
+    display: none !important;
+}
+
+.topbar-footer-btn {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 auto !important;
+    background: var(--surface-2) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--muted) !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    outline: none !important;
+    box-sizing: border-box !important;
+}
+
+.topbar-footer-btn:hover {
+    color: var(--ink) !important;
+    background: var(--surface-3) !important;
+    border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+body.theme-dark .topbar-footer-btn:hover {
+    color: #ffffff !important;
+    background: var(--surface-3) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+

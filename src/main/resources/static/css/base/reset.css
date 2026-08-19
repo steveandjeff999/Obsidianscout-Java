@@ -1,0 +1,21 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    min-height: 100vh;
+    background: var(--bg);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body::before {
+    display: none;
+}
+
+body.theme-dark::before {
+    display: none;
+}
+

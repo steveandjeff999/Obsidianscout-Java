@@ -1,0 +1,120 @@
+/* Premium Modal Dialog styles */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 15, 20, 0.45);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.modal-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-container {
+    background: var(--surface);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: var(--radius);
+    padding: 32px;
+    width: min(540px, 92vw);
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow);
+    transform: scale(0.95) translateY(10px);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+body.theme-dark .modal-container {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.modal-backdrop.show .modal-container {
+    transform: scale(1) translateY(0);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.modal-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    color: var(--muted);
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px;
+    transition: color 0.2s;
+}
+
+.modal-close:hover {
+    color: var(--ink);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 28px;
+}
+
+/* Mobile Responsive Modal and Form Layouts */
+@media (max-width: 600px) {
+    .modal-container {
+        padding: 24px 16px;
+        border-radius: var(--radius-sm);
+        max-height: 95vh;
+        width: 94vw;
+        margin: 12px auto;
+    }
+    
+    .modal-header {
+        margin-bottom: 18px;
+    }
+    
+    .modal-title {
+        font-size: 18px;
+    }
+    
+    .modal-footer {
+        flex-direction: column-reverse;
+        gap: 10px;
+        margin-top: 20px;
+    }
+    
+    .modal-footer button,
+    .modal-footer .btn {
+        width: 100%;
+        margin: 0;
+        padding: 12px;
+        border-radius: 999px;
+    }
+
+    .form-grid-wide {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .form-grid {
+        gap: 12px;
+    }
+}
+

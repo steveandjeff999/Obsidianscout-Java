@@ -1,0 +1,202 @@
+.row {
+    display: flex;
+}
+
+.grid {
+    display: grid;
+}
+
+.wrap {
+    flex-wrap: wrap;
+}
+
+.gap-8 {
+    gap: 8px;
+}
+
+.gap-12 {
+    gap: 12px;
+}
+
+.mt-6 {
+    margin-top: 6px;
+}
+
+.mt-8 {
+    margin-top: 8px;
+}
+
+.mt-12 {
+    margin-top: 12px;
+}
+
+.mt-16 {
+    margin-top: 16px;
+}
+
+.mt-18 {
+    margin-top: 18px;
+}
+
+.mt-20 {
+    margin-top: 20px;
+}
+
+.mt-24 {
+    margin-top: 24px;
+}
+
+.mb-18 {
+    margin-bottom: 18px;
+}
+
+.input-hidden {
+    display: none;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
+.bar-track {
+    background: var(--surface-3);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 10px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    border-radius: 999px;
+}
+
+.inline-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 43px;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink);
+}
+
+.inline-control input {
+    padding: 0;
+}
+
+.code-input {
+    width: 100%;
+    min-height: 320px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 13px;
+    background: #fffdf8;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+}
+
+body.theme-dark .code-input {
+    background: #17191c;
+    color: var(--ink);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.counter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.counter button {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    background: var(--surface-2);
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.theme-dark .counter button {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.counter button:hover {
+    background: var(--surface-3);
+    border-color: var(--accent);
+}
+
+.counter button:active {
+    transform: scale(0.95);
+}
+
+.counter input {
+    width: 80px;
+    text-align: center;
+}
+
+.rating {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.rating output {
+    font-weight: 700;
+}
+
+.superadmin-option {
+    display: none;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Utility classes */
+.justify-between {
+    justify-content: space-between;
+}
+
+.align-center {
+    align-items: center;
+}
+
+/* Sleek rating progress bar */
+.qual-rating-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.counter button {
+    min-width: 38px;
+    height: 38px;
+    padding: 0 6px;
+    box-sizing: border-box;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    background: var(--surface-2);
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+

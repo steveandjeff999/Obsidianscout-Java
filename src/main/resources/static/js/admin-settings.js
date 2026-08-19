@@ -1181,8 +1181,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             if ((field.type === "number" || field.type === "counter" || field.type === "rating") && field.min === undefined) {
                 field.min = field.type === "rating" ? 1 : 0;
-                field.max = field.type === "rating" ? 5 : 10;
+                field.max = field.type === "rating" ? 5 : (field.type === "counter" ? null : 10);
                 field.step = 1;
+            }
+            if (field.type !== "counter") {
+                delete field.doubleStep;
+                delete field.double_step;
             }
             updateRawFromVisual();
             renderVisualFields();
@@ -1228,7 +1232,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         labelWrap.style.alignItems = "center";
         labelWrap.style.gap = "8px";
         labelWrap.style.cursor = "pointer";
-        labelWrap.style.marginTop = "8px";
+        labelWrap.style.height = "38px";
+        labelWrap.style.margin = "0";
+        labelWrap.style.boxSizing = "border-box";
         const inputReq = document.createElement("input");
         inputReq.type = "checkbox";
         inputReq.checked = !!field.required;
@@ -1249,17 +1255,25 @@ document.addEventListener("DOMContentLoaded", async () => {
             divReq.style.display = "none";
         }
         
-        // 5. Numeric Bounds
+        // 5. Numeric Bounds & Stepping
         if (field.type === "number" || field.type === "counter" || field.type === "rating") {
             const boundsDiv = document.createElement("div");
             boundsDiv.className = "field-card-body-full grid gap-12 mt-6";
-            boundsDiv.style.gridTemplateColumns = "repeat(auto-fit, minmax(100px, 1fr))";
+            boundsDiv.style.gridTemplateColumns = "repeat(auto-fit, minmax(130px, 1fr))";
+            boundsDiv.style.alignItems = "start";
             
             // Min
             const divMin = document.createElement("div");
             divMin.className = "field";
+            const headerMin = document.createElement("div");
+            headerMin.style.minHeight = "20px";
+            headerMin.style.display = "flex";
+            headerMin.style.alignItems = "center";
+            headerMin.style.marginBottom = "4px";
             const labelMin = document.createElement("label");
+            labelMin.style.margin = "0";
             labelMin.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.min','Min') : 'Min';
+            headerMin.appendChild(labelMin);
             const inputMin = document.createElement("input");
             inputMin.type = "number";
             inputMin.value = field.min !== undefined && field.min !== null ? field.min : "";
@@ -1267,15 +1281,24 @@ document.addEventListener("DOMContentLoaded", async () => {
                 field.min = e.target.value !== "" ? Number(e.target.value) : null;
                 updateRawFromVisual();
             });
-            divMin.appendChild(labelMin);
+            divMin.appendChild(headerMin);
             divMin.appendChild(inputMin);
             boundsDiv.appendChild(divMin);
             
             // Max
             const divMax = document.createElement("div");
             divMax.className = "field";
+            const headerMax = document.createElement("div");
+            headerMax.style.minHeight = "20px";
+            headerMax.style.display = "flex";
+            headerMax.style.justifyContent = "space-between";
+            headerMax.style.alignItems = "center";
+            headerMax.style.marginBottom = "4px";
             const labelMax = document.createElement("label");
+            labelMax.style.margin = "0";
             labelMax.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.max','Max') : 'Max';
+            headerMax.appendChild(labelMax);
+
             const inputMax = document.createElement("input");
             inputMax.type = "number";
             inputMax.value = field.max !== undefined && field.max !== null ? field.max : "";
@@ -1290,15 +1313,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
                 updateRawFromVisual();
             });
-            divMax.appendChild(labelMax);
-            divMax.appendChild(inputMax);
+
             if (field.type === "counter") {
                 const noLimitWrap = document.createElement("label");
                 noLimitWrap.style.display = "flex";
                 noLimitWrap.style.alignItems = "center";
-                noLimitWrap.style.gap = "8px";
+                noLimitWrap.style.gap = "4px";
                 noLimitWrap.style.cursor = "pointer";
-                noLimitWrap.style.marginTop = "8px";
+                noLimitWrap.style.fontSize = "11px";
+                noLimitWrap.style.fontWeight = "600";
+                noLimitWrap.style.color = "var(--muted)";
+                noLimitWrap.style.margin = "0";
                 inputNoLimit = document.createElement("input");
                 inputNoLimit.type = "checkbox";
                 inputNoLimit.checked = counterHasNoLimit;
@@ -1316,15 +1341,24 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
                 noLimitWrap.appendChild(inputNoLimit);
                 noLimitWrap.appendChild(document.createTextNode((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.no_limit','No limit') : 'No limit'));
-                divMax.appendChild(noLimitWrap);
+                headerMax.appendChild(noLimitWrap);
             }
+            divMax.appendChild(headerMax);
+            divMax.appendChild(inputMax);
             boundsDiv.appendChild(divMax);
             
             // Step
             const divStep = document.createElement("div");
             divStep.className = "field";
+            const headerStep = document.createElement("div");
+            headerStep.style.minHeight = "20px";
+            headerStep.style.display = "flex";
+            headerStep.style.alignItems = "center";
+            headerStep.style.marginBottom = "4px";
             const labelStep = document.createElement("label");
+            labelStep.style.margin = "0";
             labelStep.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.step','Step') : 'Step';
+            headerStep.appendChild(labelStep);
             const inputStep = document.createElement("input");
             inputStep.type = "number";
             inputStep.value = field.step !== undefined && field.step !== null ? field.step : "";
@@ -1332,15 +1366,107 @@ document.addEventListener("DOMContentLoaded", async () => {
                 field.step = e.target.value !== "" ? Number(e.target.value) : null;
                 updateRawFromVisual();
             });
-            divStep.appendChild(labelStep);
+            divStep.appendChild(headerStep);
             divStep.appendChild(inputStep);
             boundsDiv.appendChild(divStep);
+
+            // Double Step (Counter only, disabled by default)
+            if (field.type === "counter") {
+                const divDoubleStep = document.createElement("div");
+                divDoubleStep.className = "field";
+                const headerDoubleStep = document.createElement("div");
+                headerDoubleStep.style.minHeight = "20px";
+                headerDoubleStep.style.display = "flex";
+                headerDoubleStep.style.justifyContent = "space-between";
+                headerDoubleStep.style.alignItems = "center";
+                headerDoubleStep.style.marginBottom = "4px";
+
+                const labelDoubleStep = document.createElement("label");
+                labelDoubleStep.style.margin = "0";
+                labelDoubleStep.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.double_step','Double Step') : 'Double Step';
+                headerDoubleStep.appendChild(labelDoubleStep);
+                
+                const hasDoubleStep = (field.doubleStep !== undefined && field.doubleStep !== null && field.doubleStep !== "") ||
+                                      (field.double_step !== undefined && field.double_step !== null && field.double_step !== "");
+                const currentDoubleVal = hasDoubleStep ? (field.doubleStep ?? field.double_step) : "";
+
+                const inputDoubleStep = document.createElement("input");
+                inputDoubleStep.type = "number";
+                inputDoubleStep.placeholder = "e.g. 5";
+                inputDoubleStep.value = currentDoubleVal !== "" ? currentDoubleVal : "";
+                inputDoubleStep.disabled = !hasDoubleStep;
+                inputDoubleStep.addEventListener("input", (e) => {
+                    field.doubleStep = e.target.value !== "" ? Number(e.target.value) : null;
+                    updateRawFromVisual();
+                });
+
+                const enableDoubleWrap = document.createElement("label");
+                enableDoubleWrap.style.display = "flex";
+                enableDoubleWrap.style.alignItems = "center";
+                enableDoubleWrap.style.gap = "4px";
+                enableDoubleWrap.style.cursor = "pointer";
+                enableDoubleWrap.style.fontSize = "11px";
+                enableDoubleWrap.style.fontWeight = "600";
+                enableDoubleWrap.style.color = "var(--muted)";
+                enableDoubleWrap.style.margin = "0";
+                const inputEnableDouble = document.createElement("input");
+                inputEnableDouble.type = "checkbox";
+                inputEnableDouble.checked = hasDoubleStep;
+                inputEnableDouble.addEventListener("change", (e) => {
+                    if (e.target.checked) {
+                        inputDoubleStep.disabled = false;
+                        if (!inputDoubleStep.value) {
+                            inputDoubleStep.value = "5";
+                        }
+                        field.doubleStep = Number(inputDoubleStep.value);
+                    } else {
+                        inputDoubleStep.disabled = true;
+                        inputDoubleStep.value = "";
+                        field.doubleStep = null;
+                        if (field.double_step !== undefined) delete field.double_step;
+                    }
+                    updateRawFromVisual();
+                });
+                enableDoubleWrap.appendChild(inputEnableDouble);
+                enableDoubleWrap.appendChild(document.createTextNode((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? (Obsidianscout.t('settings.enable','Enable')) : 'Enable'));
+                headerDoubleStep.appendChild(enableDoubleWrap);
+
+                divDoubleStep.appendChild(headerDoubleStep);
+                divDoubleStep.appendChild(inputDoubleStep);
+                boundsDiv.appendChild(divDoubleStep);
+            }
+
+            // Scoring Points inside boundsDiv for uniform row
+            if (supportsPointsConfig()) {
+                const divPoints = document.createElement("div");
+                divPoints.className = "field";
+                const headerPoints = document.createElement("div");
+                headerPoints.style.minHeight = "20px";
+                headerPoints.style.display = "flex";
+                headerPoints.style.alignItems = "center";
+                headerPoints.style.marginBottom = "4px";
+                const labelPoints = document.createElement("label");
+                labelPoints.style.margin = "0";
+                labelPoints.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.points_per','Points per action') : 'Points per action';
+                headerPoints.appendChild(labelPoints);
+
+                const inputPoints = document.createElement("input");
+                inputPoints.type = "number";
+                inputPoints.step = "any";
+                inputPoints.placeholder = "e.g. 3.0";
+                inputPoints.value = field.pointsPer !== undefined && field.pointsPer !== null ? field.pointsPer : "";
+                inputPoints.addEventListener("input", (e) => {
+                    field.pointsPer = e.target.value !== "" ? Number(e.target.value) : null;
+                    updateRawFromVisual();
+                });
+                divPoints.appendChild(headerPoints);
+                divPoints.appendChild(inputPoints);
+                boundsDiv.appendChild(divPoints);
+            }
             
             body.appendChild(boundsDiv);
-        }
-        
-        // 6. Scoring Points
-        if (supportsPointsConfig() && (field.type === "number" || field.type === "counter" || field.type === "rating" || field.type === "checkbox")) {
+        } else if (supportsPointsConfig() && field.type === "checkbox") {
+            // Scoring points for standalone checkbox type
             const divPoints = document.createElement("div");
             divPoints.className = "field";
             const labelPoints = document.createElement("label");
@@ -1514,7 +1640,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             type: "counter",
             required: false,
             min: 0,
-            max: 10,
+            max: null,
             step: 1,
             pointsPer: 0
         } : {
@@ -1650,6 +1776,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
                 if (field.step !== undefined && field.step !== null && field.step !== "") {
                     cleaned.step = Number(field.step);
+                }
+                const dStep = field.doubleStep !== undefined ? field.doubleStep : field.double_step;
+                if (dStep !== undefined && dStep !== null && dStep !== "") {
+                    cleaned.doubleStep = Number(dStep);
                 }
             }
             

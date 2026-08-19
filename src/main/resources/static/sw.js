@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obsidianscout-shell-v32';
+const CACHE_NAME = 'obsidianscout-shell-v33';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 // Application shell assets cached during install
@@ -34,6 +34,25 @@ const ASSETS = [
     '/users',
     '/config',
     '/css/app.css',
+    '/css/base/variables.css',
+    '/css/base/reset.css',
+    '/css/base/typography.css',
+    '/css/layout/shell.css',
+    '/css/layout/navigation.css',
+    '/css/layout/nav-layouts.css',
+    '/css/components/buttons.css',
+    '/css/components/cards.css',
+    '/css/components/forms.css',
+    '/css/components/tables.css',
+    '/css/components/modals.css',
+    '/css/components/alerts-banners.css',
+    '/css/components/widgets.css',
+    '/css/pages/scanner.css',
+    '/css/pages/team-profile.css',
+    '/css/pages/graphs-analytics.css',
+    '/css/pages/tour-wizard.css',
+    '/css/utilities/helpers.css',
+    '/css/utilities/animations.css',
     '/js/common.js',
     '/js/login.js',
     '/js/dashboard.js',

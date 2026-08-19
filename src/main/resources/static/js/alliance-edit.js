@@ -829,8 +829,12 @@
             }
             if ((field.type === "number" || field.type === "counter" || field.type === "rating") && field.min === undefined) {
                 field.min = field.type === "rating" ? 1 : 0;
-                field.max = field.type === "rating" ? 5 : 10;
+                field.max = field.type === "rating" ? 5 : (field.type === "counter" ? null : 10);
                 field.step = 1;
+            }
+            if (field.type !== "counter") {
+                delete field.doubleStep;
+                delete field.double_step;
             }
             updateRawFromVisual();
             renderVisualFields();
@@ -876,7 +880,9 @@
         labelWrap.style.alignItems = "center";
         labelWrap.style.gap = "8px";
         labelWrap.style.cursor = "pointer";
-        labelWrap.style.marginTop = "8px";
+        labelWrap.style.height = "38px";
+        labelWrap.style.margin = "0";
+        labelWrap.style.boxSizing = "border-box";
         const inputReq = document.createElement("input");
         inputReq.type = "checkbox";
         inputReq.checked = !!field.required;
@@ -897,29 +903,144 @@
         } else {
             // Type-specific configs
             if (field.type === "number" || field.type === "counter" || field.type === "rating") {
+                const boundsDiv = document.createElement("div");
+                boundsDiv.className = "field-card-body-full grid gap-12 mt-6";
+                boundsDiv.style.gridTemplateColumns = "repeat(auto-fit, minmax(130px, 1fr))";
+                boundsDiv.style.alignItems = "start";
+
                 const divMin = document.createElement("div");
                 divMin.className = "field";
-                divMin.innerHTML = `<label>Min Value</label><input type="number" value="${field.min !== undefined ? field.min : 0}" />`;
+                divMin.innerHTML = `<div style="min-height: 20px; display: flex; align-items: center; margin-bottom: 4px;"><label style="margin:0;">Min Value</label></div><input type="number" value="${field.min !== undefined ? field.min : 0}" />`;
                 divMin.querySelector("input").addEventListener("input", (e) => {
                     field.min = Number(e.target.value);
                     updateRawFromVisual();
                 });
-                body.appendChild(divMin);
+                boundsDiv.appendChild(divMin);
 
+                const counterHasNoLimit = field.type === "counter" && (field.max === undefined || field.max === null || field.max === "");
                 const divMax = document.createElement("div");
                 divMax.className = "field";
-                divMax.innerHTML = `<label>Max Value</label><input type="number" value="${field.max !== undefined ? field.max : 10}" />`;
-                divMax.querySelector("input").addEventListener("input", (e) => {
-                    field.max = Number(e.target.value);
+                const headerMax = document.createElement("div");
+                headerMax.style.minHeight = "20px";
+                headerMax.style.display = "flex";
+                headerMax.style.justifyContent = "space-between";
+                headerMax.style.alignItems = "center";
+                headerMax.style.marginBottom = "4px";
+                const labelMax = document.createElement("label");
+                labelMax.style.margin = "0";
+                labelMax.textContent = "Max Value";
+                headerMax.appendChild(labelMax);
+
+                const inputMax = document.createElement("input");
+                inputMax.type = "number";
+                inputMax.value = (field.max !== undefined && field.max !== null) ? field.max : "";
+                inputMax.disabled = counterHasNoLimit;
+                let inputNoLimit = null;
+                inputMax.addEventListener("input", (e) => {
+                    field.max = e.target.value !== "" ? Number(e.target.value) : null;
+                    if (inputNoLimit && e.target.value !== "") {
+                        inputNoLimit.checked = false;
+                        inputMax.disabled = false;
+                    }
                     updateRawFromVisual();
                 });
-                body.appendChild(divMax);
-            }
 
-            if (supportsPointsConfig() && (field.type === "number" || field.type === "counter" || field.type === "rating" || field.type === "checkbox")) {
+                if (field.type === "counter") {
+                    const noLimitWrap = document.createElement("label");
+                    noLimitWrap.style.display = "flex";
+                    noLimitWrap.style.alignItems = "center";
+                    noLimitWrap.style.gap = "4px";
+                    noLimitWrap.style.cursor = "pointer";
+                    noLimitWrap.style.fontSize = "11px";
+                    noLimitWrap.style.fontWeight = "600";
+                    noLimitWrap.style.color = "var(--muted)";
+                    noLimitWrap.style.margin = "0";
+                    inputNoLimit = document.createElement("input");
+                    inputNoLimit.type = "checkbox";
+                    inputNoLimit.checked = counterHasNoLimit;
+                    inputNoLimit.addEventListener("change", (e) => {
+                        if (e.target.checked) {
+                            field.max = null;
+                            inputMax.value = "";
+                            inputMax.disabled = true;
+                        } else {
+                            field.max = 10;
+                            inputMax.value = "10";
+                            inputMax.disabled = false;
+                        }
+                        updateRawFromVisual();
+                    });
+                    noLimitWrap.appendChild(inputNoLimit);
+                    noLimitWrap.appendChild(document.createTextNode("No limit"));
+                    headerMax.appendChild(noLimitWrap);
+                }
+                divMax.appendChild(headerMax);
+                divMax.appendChild(inputMax);
+                boundsDiv.appendChild(divMax);
+
+                const divStep = document.createElement("div");
+                divStep.className = "field";
+                divStep.innerHTML = `<div style="min-height: 20px; display: flex; align-items: center; margin-bottom: 4px;"><label style="margin:0;">Step</label></div><input type="number" value="${field.step !== undefined ? field.step : 1}" />`;
+                divStep.querySelector("input").addEventListener("input", (e) => {
+                    field.step = Number(e.target.value);
+                    updateRawFromVisual();
+                });
+                boundsDiv.appendChild(divStep);
+
+                if (field.type === "counter") {
+                    const hasDoubleStep = (field.doubleStep !== undefined && field.doubleStep !== null && field.doubleStep !== "") ||
+                                          (field.double_step !== undefined && field.double_step !== null && field.double_step !== "");
+                    const currentDoubleVal = hasDoubleStep ? (field.doubleStep ?? field.double_step) : "";
+                    const divDoubleStep = document.createElement("div");
+                    divDoubleStep.className = "field";
+                    divDoubleStep.innerHTML = `
+                        <div style="min-height: 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="margin:0;">Double Step</label>
+                            <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--muted); margin: 0; cursor: pointer;">
+                                <input type="checkbox" class="enable-double-step-toggle" ${hasDoubleStep ? "checked" : ""} />
+                                <span>Enable</span>
+                            </label>
+                        </div>
+                        <input type="number" placeholder="e.g. 5" value="${currentDoubleVal}" ${!hasDoubleStep ? "disabled" : ""} />
+                    `;
+                    const inputDStep = divDoubleStep.querySelector("input[type='number']");
+                    const toggleDStep = divDoubleStep.querySelector(".enable-double-step-toggle");
+                    inputDStep.addEventListener("input", (e) => {
+                        field.doubleStep = e.target.value !== "" ? Number(e.target.value) : null;
+                        updateRawFromVisual();
+                    });
+                    toggleDStep.addEventListener("change", (e) => {
+                        if (e.target.checked) {
+                            inputDStep.disabled = false;
+                            if (!inputDStep.value) inputDStep.value = "5";
+                            field.doubleStep = Number(inputDStep.value);
+                        } else {
+                            inputDStep.disabled = true;
+                            inputDStep.value = "";
+                            field.doubleStep = null;
+                            if (field.double_step !== undefined) delete field.double_step;
+                        }
+                        updateRawFromVisual();
+                    });
+                    boundsDiv.appendChild(divDoubleStep);
+                }
+
+                if (supportsPointsConfig()) {
+                    const divPoints = document.createElement("div");
+                    divPoints.className = "field";
+                    divPoints.innerHTML = `<div style="min-height: 20px; display: flex; align-items: center; margin-bottom: 4px;"><label style="margin:0;">Points per action</label></div><input type="number" step="any" value="${field.pointsPer !== undefined ? field.pointsPer : 0}" />`;
+                    divPoints.querySelector("input").addEventListener("input", (e) => {
+                        field.pointsPer = Number(e.target.value);
+                        updateRawFromVisual();
+                    });
+                    boundsDiv.appendChild(divPoints);
+                }
+
+                body.appendChild(boundsDiv);
+            } else if (supportsPointsConfig() && field.type === "checkbox") {
                 const divPoints = document.createElement("div");
                 divPoints.className = "field";
-                divPoints.innerHTML = `<label>Points per action</label><input type="number" step="any" value="${field.pointsPer !== undefined ? field.pointsPer : 0}" />`;
+                divPoints.innerHTML = `<div style="min-height: 20px; display: flex; align-items: center; margin-bottom: 4px;"><label style="margin:0;">Points per action</label></div><input type="number" step="any" value="${field.pointsPer !== undefined ? field.pointsPer : 0}" />`;
                 divPoints.querySelector("input").addEventListener("input", (e) => {
                     field.pointsPer = Number(e.target.value);
                     updateRawFromVisual();
@@ -1014,6 +1135,9 @@
             id: uniqueSlug,
             label: "New Field " + (fields.length + 1),
             type: "counter",
+            min: 0,
+            max: null,
+            step: 1,
             required: false,
             _autoId: uniqueSlug
         };
@@ -1101,6 +1225,10 @@
                 }
                 if (field.step !== undefined && field.step !== null && field.step !== "") {
                     cleaned.step = Number(field.step);
+                }
+                const dStep = field.doubleStep !== undefined ? field.doubleStep : field.double_step;
+                if (dStep !== undefined && dStep !== null && dStep !== "") {
+                    cleaned.doubleStep = Number(dStep);
                 }
             }
             
@@ -1587,35 +1715,86 @@
         function buildSharedCounter(field) {
             const wrapper = document.createElement("div");
             wrapper.className = "counter";
-            const minus = document.createElement("button");
-            minus.type = "button";
-            minus.textContent = "-";
+
+            const step = field.step || 1;
+            const doubleStep = field.doubleStep !== undefined ? field.doubleStep : field.double_step;
+            const hasDoubleStep = doubleStep !== undefined && doubleStep !== null && Number(doubleStep) > 0;
+            const dStep = hasDoubleStep ? Number(doubleStep) : null;
 
             const input = document.createElement("input");
             input.type = "number";
             input.value = field.min || 0;
             applySharedNumberBounds(input, field);
 
-            const plus = document.createElement("button");
-            plus.type = "button";
-            plus.textContent = "+";
+            if (hasDoubleStep) {
+                const minusDouble = document.createElement("button");
+                minusDouble.type = "button";
+                minusDouble.className = "btn-counter-double btn-counter-minus-double";
+                minusDouble.textContent = `-${dStep}`;
+                minusDouble.addEventListener("click", () => {
+                    const min = field.min || 0;
+                    input.value = String(Math.max(Number(input.value || 0) - dStep, min));
+                    input.dispatchEvent(new Event("input", { bubbles: true }));
+                });
 
-            minus.addEventListener("click", () => {
-                const step = field.step || 1;
-                input.value = String(Math.max(Number(input.value || 0) - step, field.min || 0));
-                input.dispatchEvent(new Event("input", { bubbles: true }));
-            });
+                const minus = document.createElement("button");
+                minus.type = "button";
+                minus.className = "btn-counter-single btn-counter-minus";
+                minus.textContent = `-${step}`;
+                minus.addEventListener("click", () => {
+                    const min = field.min || 0;
+                    input.value = String(Math.max(Number(input.value || 0) - step, min));
+                    input.dispatchEvent(new Event("input", { bubbles: true }));
+                });
 
-            plus.addEventListener("click", () => {
-                const step = field.step || 1;
-                const max = field.max ?? Number.POSITIVE_INFINITY;
-                input.value = String(Math.min(Number(input.value || 0) + step, max));
-                input.dispatchEvent(new Event("input", { bubbles: true }));
-            });
+                const plus = document.createElement("button");
+                plus.type = "button";
+                plus.className = "btn-counter-single btn-counter-plus";
+                plus.textContent = `+${step}`;
+                plus.addEventListener("click", () => {
+                    const max = field.max ?? Number.POSITIVE_INFINITY;
+                    input.value = String(Math.min(Number(input.value || 0) + step, max));
+                    input.dispatchEvent(new Event("input", { bubbles: true }));
+                });
 
-            wrapper.appendChild(minus);
-            wrapper.appendChild(input);
-            wrapper.appendChild(plus);
+                const plusDouble = document.createElement("button");
+                plusDouble.type = "button";
+                plusDouble.className = "btn-counter-double btn-counter-plus-double";
+                plusDouble.textContent = `+${dStep}`;
+                plusDouble.addEventListener("click", () => {
+                    const max = field.max ?? Number.POSITIVE_INFINITY;
+                    input.value = String(Math.min(Number(input.value || 0) + dStep, max));
+                    input.dispatchEvent(new Event("input", { bubbles: true }));
+                });
+
+                wrapper.appendChild(minusDouble);
+                wrapper.appendChild(minus);
+                wrapper.appendChild(input);
+                wrapper.appendChild(plus);
+                wrapper.appendChild(plusDouble);
+            } else {
+                const minus = document.createElement("button");
+                minus.type = "button";
+                minus.textContent = "-";
+                minus.addEventListener("click", () => {
+                    input.value = String(Math.max(Number(input.value || 0) - step, field.min || 0));
+                    input.dispatchEvent(new Event("input", { bubbles: true }));
+                });
+
+                const plus = document.createElement("button");
+                plus.type = "button";
+                plus.textContent = "+";
+                plus.addEventListener("click", () => {
+                    const max = field.max ?? Number.POSITIVE_INFINITY;
+                    input.value = String(Math.min(Number(input.value || 0) + step, max));
+                    input.dispatchEvent(new Event("input", { bubbles: true }));
+                });
+
+                wrapper.appendChild(minus);
+                wrapper.appendChild(input);
+                wrapper.appendChild(plus);
+            }
+
             return { wrapper, input };
         }
 
