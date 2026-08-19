@@ -1051,7 +1051,7 @@ fun Application.configureRoutes() {
 
             route("/analytics") {
                 get {
-                    val session = call.requireAnalyticsOrAbove()
+                    val session = call.requireSession()
                     val config = ConfigService.getConfig(session.teamNumber)
                     val forcePrescout = call.request.queryParameters["usePrescout"]?.toBoolean() ?: false
                     
@@ -1265,7 +1265,7 @@ fun Application.configureRoutes() {
 
             route("/validation") {
                 get {
-                    val session = call.requireAnalyticsOrAbove()
+                    val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: call.request.queryParameters["event"]
                         ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()

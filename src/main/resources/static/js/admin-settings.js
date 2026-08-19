@@ -71,6 +71,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         { id: "custom-analytics", label: "Custom Analytics" },
         { id: "data-validation", label: "Data Validation" },
         { id: "graphs", label: "Graphs" },
+        { id: "events", label: "Events" },
         { id: "teams", label: "Teams" },
         { id: "rankings", label: "Rankings" },
         { id: "qual-rankings", label: "Qual Rankings" },
