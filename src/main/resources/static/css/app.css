@@ -8,7 +8,7 @@
 @import url('./base/reset.css');
 @import url('./base/typography.css');
 
-/* 2. Layout & Navigation */
+/* 2. Layout & Navigation (Desktop) */
 @import url('./layout/shell.css');
 @import url('./layout/navigation.css');
 @import url('./layout/nav-layouts.css');
@@ -28,6 +28,9 @@
 @import url('./pages/graphs-analytics.css');
 @import url('./pages/tour-wizard.css');
 
-/* 5. Utilities & Animations */
+/* 5. Responsive & Mobile Overrides */
+@import url('./layout/responsive.css');
+
+/* 6. Utilities & Animations */
 @import url('./utilities/helpers.css');
 @import url('./utilities/animations.css');

@@ -172,29 +172,43 @@ object UpdateValidator {
         return ValidationResult.Success
     }
 
-    // ── Version Blacklist Management (Disabled) ───────────────────────────────────────
+    // ── Version Blacklist Management ─────────────────────────────────────────────────
 
     /**
-     * Checks whether [version] is in the failed versions blacklist.
-     * Always returns false (version blacklisting disabled).
+     * Checks if [version] has been blacklisted due to a previous boot failure or corruption.
      */
     fun isBlacklistedVersion(version: String): Boolean {
-        return false
+        val clean = version.trim().removePrefix("v")
+        val list = getBlacklistedVersions()
+        return list.contains(clean) || list.contains("v$clean")
     }
 
     /**
      * Records [version] into the failed versions blacklist file.
-     * No-op (version blacklisting disabled).
      */
     fun blacklistVersion(version: String, reason: String = "Boot failure") {
-        // No-op
+        try {
+            val clean = version.trim().removePrefix("v")
+            blacklistFile.appendText("$clean # $reason\n")
+        } catch (e: Exception) {
+            log.warn("Failed to write blacklisted version $version: ${e.message}")
+        }
     }
 
     /**
      * Reads all blacklisted version strings from disk.
      */
     fun getBlacklistedVersions(): Set<String> {
-        return emptySet()
+        return try {
+            if (!blacklistFile.exists()) return emptySet()
+            blacklistFile.readLines()
+                .map { it.split("#").first().trim() }
+                .filter { it.isNotEmpty() }
+                .toSet()
+        } catch (e: Exception) {
+            log.warn("Failed to read blacklist file: ${e.message}")
+            emptySet()
+        }
     }
 
     sealed class ValidationResult {

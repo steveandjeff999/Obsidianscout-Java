@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obsidianscout-shell-v33';
+const CACHE_NAME = 'obsidianscout-shell-v34';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 // Application shell assets cached during install
@@ -40,6 +40,7 @@ const ASSETS = [
     '/css/layout/shell.css',
     '/css/layout/navigation.css',
     '/css/layout/nav-layouts.css',
+    '/css/layout/responsive.css',
     '/css/components/buttons.css',
     '/css/components/cards.css',
     '/css/components/forms.css',

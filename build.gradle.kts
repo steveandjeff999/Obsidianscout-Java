@@ -589,6 +589,13 @@ tasks.register<JavaExec>("regenerateConfigs") {
     mainClass.set("com.obsidianscout.utils.RegenerateConfigsKt")
 }
 
+tasks.register<JavaExec>("updateReflections") {
+    group = "build"
+    description = "Scans all classes and automatically updates reflect-config.json for GraalVM native image."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.obsidianscout.utils.UpdateReflectionsKt")
+}
+
 val javaToolchains = project.extensions.getByType<JavaToolchainService>()
 
 graalvmNative {

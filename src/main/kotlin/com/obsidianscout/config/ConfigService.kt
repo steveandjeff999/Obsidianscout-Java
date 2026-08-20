@@ -192,6 +192,78 @@ object ConfigService {
                     }
                 }
             }
+
+            // Migrate all existing general phases across all server config tables to teleop
+            try {
+                ScoutingConfigs.selectAll().forEach { row ->
+                    val oldJson = row[ScoutingConfigs.configJson]
+                    val normalized = normalizeConfigJson(oldJson)
+                    if (normalized != oldJson) {
+                        ScoutingConfigs.update({ ScoutingConfigs.id eq row[ScoutingConfigs.id] }) {
+                            it[configJson] = normalized
+                            it[updatedAt] = Instant.now()
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {}
+
+            try {
+                PitScoutingConfigs.selectAll().forEach { row ->
+                    val oldJson = row[PitScoutingConfigs.configJson]
+                    val normalized = normalizeConfigJson(oldJson)
+                    if (normalized != oldJson) {
+                        PitScoutingConfigs.update({ PitScoutingConfigs.id eq row[PitScoutingConfigs.id] }) {
+                            it[configJson] = normalized
+                            it[updatedAt] = Instant.now()
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {}
+
+            try {
+                QualitativeScoutingConfigs.selectAll().forEach { row ->
+                    val oldJson = row[QualitativeScoutingConfigs.configJson]
+                    val normalized = normalizeConfigJson(oldJson)
+                    if (normalized != oldJson) {
+                        QualitativeScoutingConfigs.update({ QualitativeScoutingConfigs.id eq row[QualitativeScoutingConfigs.id] }) {
+                            it[configJson] = normalized
+                            it[updatedAt] = Instant.now()
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {}
+
+            try {
+                DefaultConfigs.selectAll().forEach { row ->
+                    val oldJson = row[DefaultConfigs.configJson]
+                    val normalized = normalizeConfigJson(oldJson)
+                    if (normalized != oldJson) {
+                        DefaultConfigs.update({ DefaultConfigs.id eq row[DefaultConfigs.id] }) {
+                            it[configJson] = normalized
+                            it[updatedAt] = Instant.now()
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {}
+
+            try {
+                ScoutingAlliances.selectAll().forEach { row ->
+                    val matchOld = row[ScoutingAlliances.matchConfigJson]
+                    val pitOld = row[ScoutingAlliances.pitConfigJson]
+                    val qualOld = row[ScoutingAlliances.qualitativeConfigJson]
+                    val matchNorm = matchOld?.let { normalizeConfigJson(it) }
+                    val pitNorm = pitOld?.let { normalizeConfigJson(it) }
+                    val qualNorm = qualOld?.let { normalizeConfigJson(it) }
+                    if (matchNorm != matchOld || pitNorm != pitOld || qualNorm != qualOld) {
+                        ScoutingAlliances.update({ ScoutingAlliances.id eq row[ScoutingAlliances.id] }) {
+                            if (matchNorm != null) it[matchConfigJson] = matchNorm
+                            if (pitNorm != null) it[pitConfigJson] = pitNorm
+                            if (qualNorm != null) it[qualitativeConfigJson] = qualNorm
+                            it[updatedAt] = Instant.now()
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {}
         }
     }
 
@@ -840,6 +912,15 @@ object ConfigService {
             val normalizedLabelStr = extractStringLabel(originalLabel)
             val labelChanged = originalLabel !is JsonPrimitive || originalLabel.content != normalizedLabelStr
 
+            // Phase migration: general or blank -> teleop
+            val originalPhase = (fieldObj["phase"] as? JsonPrimitive)?.content
+            var phaseChanged = false
+            var finalPhase = originalPhase
+            if (originalPhase != null && (originalPhase.equals("general", ignoreCase = true) || originalPhase.isBlank())) {
+                finalPhase = "teleop"
+                phaseChanged = true
+            }
+
             val options = fieldObj["options"] as? JsonArray
             var optionsChanged = false
             val transformedOptions = options?.map { option ->
@@ -883,11 +964,14 @@ object ConfigService {
                 }
             }
 
-            val fieldChanged = labelChanged || optionsChanged
+            val fieldChanged = labelChanged || optionsChanged || phaseChanged
             if (fieldChanged) {
                 anyFieldChanged = true
                 val updatedFieldMap = fieldObj.toMutableMap()
                 updatedFieldMap["label"] = JsonPrimitive(normalizedLabelStr)
+                if (finalPhase != null) {
+                    updatedFieldMap["phase"] = JsonPrimitive(finalPhase)
+                }
                 if (transformedOptions != null) {
                     updatedFieldMap["options"] = JsonArray(transformedOptions)
                 }

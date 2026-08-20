@@ -1,0 +1,309 @@
+/* ==========================================================================
+   ObsidianScout Responsive & Mobile Stylesheet
+   Cascades after all desktop layouts, components, and page styles.
+   ========================================================================== */
+
+/* ── Mobile / Small-Screen Navigation & Layout (max-width: 900px) ───── */
+@media (max-width: 900px) {
+    .nav-layout-field {
+        display: none !important;
+    }
+
+    /* Mobile Topbar Display */
+    .mobile-topbar,
+    body.nav-layout-topbar .mobile-topbar,
+    body.nav-layout-topbar-left .mobile-topbar,
+    body.nav-layout-topbar-right .mobile-topbar,
+    body.nav-layout-topbar-bottom .mobile-topbar,
+    body.nav-layout-sidebar-right .mobile-topbar,
+    body.nav-layout-compact-left .mobile-topbar,
+    body.nav-layout-compact-right .mobile-topbar {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 1100 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        justify-content: space-between !important;
+        padding: 10px 12px !important;
+        background: linear-gradient(130deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.45) 100%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(210%) !important;
+        backdrop-filter: blur(24px) saturate(210%) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.45) !important;
+        box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 4px 20px rgba(0, 0, 0, 0.02) !important;
+        transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    body.theme-dark .mobile-topbar,
+    body.theme-dark.nav-layout-topbar .mobile-topbar,
+    body.theme-dark.nav-layout-topbar-left .mobile-topbar,
+    body.theme-dark.nav-layout-topbar-right .mobile-topbar,
+    body.theme-dark.nav-layout-topbar-bottom .mobile-topbar,
+    body.theme-dark.nav-layout-sidebar-right .mobile-topbar,
+    body.theme-dark.nav-layout-compact-left .mobile-topbar,
+    body.theme-dark.nav-layout-compact-right .mobile-topbar {
+        background: linear-gradient(130deg, rgba(28, 30, 34, 0.65) 0%, rgba(18, 20, 24, 0.45) 100%) !important;
+        border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+        box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.1), 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .mobile-topbar-brand {
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        font-size: 13px;
+    }
+
+    .mobile-menu-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: var(--surface);
+        border-radius: 8px;
+        font-size: 20px;
+        padding: 6px;
+        cursor: pointer;
+        width: 44px;
+        height: 44px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+    }
+
+    .hamburger-icon {
+        display: inline-block;
+        line-height: 1;
+        font-size: 20px;
+    }
+
+    /* App Shell on Mobile */
+    .app-shell,
+    body.nav-layout-topbar .app-shell,
+    body.nav-layout-sidebar-right .app-shell,
+    body.nav-layout-topbar-left .app-shell,
+    body.nav-layout-topbar-right .app-shell,
+    body.nav-layout-topbar-bottom .app-shell,
+    body.nav-layout-compact-left .app-shell,
+    body.nav-layout-compact-right .app-shell {
+        flex-direction: column !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+    }
+
+    /* Mobile Drawer (Sidebar) */
+    .sidebar,
+    body.nav-layout-topbar .sidebar,
+    body.nav-layout-sidebar-right .sidebar,
+    body.nav-layout-topbar-left .sidebar,
+    body.nav-layout-topbar-right .sidebar,
+    body.nav-layout-topbar-bottom .sidebar,
+    body.nav-layout-compact-left .sidebar,
+    body.nav-layout-compact-right .sidebar {
+        position: fixed !important;
+        left: 12px !important;
+        right: 12px !important;
+        top: 72px !important;
+        height: calc(100vh - 88px) !important;
+        min-height: auto !important;
+        max-height: none !important;
+        width: auto !important;
+        z-index: 1000 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 20px !important;
+        border-radius: 20px !important;
+        border: none !important;
+        box-shadow: 0 16px 40px rgba(0,0,0,0.18) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        transform: translateY(-115%) !important;
+        transition: transform 0.25s ease, visibility 0.25s ease !important;
+    }
+
+    .sidebar.mobile-open,
+    body.nav-layout-topbar .sidebar.mobile-open,
+    body.nav-layout-sidebar-right .sidebar.mobile-open,
+    body.nav-layout-topbar-left .sidebar.mobile-open,
+    body.nav-layout-topbar-right .sidebar.mobile-open,
+    body.nav-layout-topbar-bottom .sidebar.mobile-open,
+    body.nav-layout-compact-left .sidebar.mobile-open,
+    body.nav-layout-compact-right .sidebar.mobile-open {
+        transform: translateY(0) !important;
+    }
+
+    .sidebar-nav,
+    body.nav-layout-topbar .sidebar-nav,
+    body.nav-layout-topbar-left .sidebar-nav,
+    body.nav-layout-topbar-right .sidebar-nav,
+    body.nav-layout-compact-left .sidebar-nav,
+    body.nav-layout-compact-right .sidebar-nav {
+        display: grid !important;
+        flex-direction: column !important;
+        flex: none !important;
+    }
+
+    .sidebar-toggle,
+    body.nav-layout-topbar .sidebar-toggle,
+    body.nav-layout-topbar-left .sidebar-toggle,
+    body.nav-layout-topbar-right .sidebar-toggle,
+    body.nav-layout-compact-left .sidebar-toggle,
+    body.nav-layout-compact-right .sidebar-toggle {
+        display: none !important;
+    }
+
+    .sidebar-section-title,
+    body.nav-layout-topbar .sidebar-section-title,
+    body.nav-layout-compact-left .sidebar-section-title,
+    body.nav-layout-compact-right .sidebar-section-title {
+        display: block !important;
+    }
+
+    /* Sidebar Overlay */
+    .sidebar-overlay {
+        display: block !important;
+        position: fixed !important;
+        inset: 0 !important;
+        background: rgba(0,0,0,0.36) !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        transition: opacity 0.2s ease, visibility 0.2s ease !important;
+        z-index: 900 !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+
+    .sidebar-overlay.visible {
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+
+    /* Main Content on Mobile */
+    .main-content,
+    body.nav-layout-topbar .main-content,
+    body.nav-layout-sidebar-right .main-content,
+    body.nav-layout-topbar-left .main-content,
+    body.nav-layout-topbar-right .main-content,
+    body.nav-layout-topbar-bottom .main-content,
+    body.nav-layout-compact-left .main-content,
+    body.nav-layout-compact-right .main-content {
+        padding: 20px 16px 80px !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .shell {
+        padding: 20px 12px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .card {
+        padding: 18px;
+        border-radius: 14px;
+    }
+
+    .hero h1 {
+        font-size: 28px;
+    }
+
+    .nav-inner {
+        width: 100%;
+        padding: 0 12px;
+        gap: 12px;
+    }
+
+    .nav {
+        padding: 10px 0;
+    }
+
+    .nav-links {
+        display: none;
+    }
+
+    .brand {
+        font-size: 13px;
+        letter-spacing: 2px;
+    }
+
+    .nav-actions {
+        margin-left: auto;
+        gap: 8px;
+    }
+
+    button, .btn {
+        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 16px;
+        touch-action: manipulation;
+    }
+
+    input, select, textarea {
+        font-size: 16px;
+    }
+
+    img, video, iframe {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .grid, .row {
+        gap: 12px;
+        display: block;
+    }
+
+    .scanner-container-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .orb {
+        display: none !important;
+    }
+
+    body::before {
+        display: none;
+    }
+}
+
+/* ── Tablet Breakpoints ────────────────────────────────────────────── */
+@media (max-width: 720px) {
+    .nav-inner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .nav-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+@media (min-width: 901px) and (max-width: 960px) {
+    .app-shell {
+        flex-direction: column;
+    }
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+    }
+    .main-content {
+        padding: 24px;
+    }
+}
+
+@media (max-width: 600px) {
+    .modal {
+        width: 95%;
+        max-height: 90vh;
+        margin: 10px auto;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr !important;
+    }
+}

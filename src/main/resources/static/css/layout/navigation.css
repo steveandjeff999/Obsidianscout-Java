@@ -437,3 +437,12 @@ body.theme-dark .nav-link.active {
     min-width: 10px;
 }
 
+
+/* ── Desktop Defaults for Mobile Navigation Elements ──────────────── */
+.mobile-topbar {
+    display: none;
+}
+
+.sidebar-overlay {
+    display: none;
+}

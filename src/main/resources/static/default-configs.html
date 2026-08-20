@@ -480,24 +480,20 @@
                             <div class="field">
                                 <label style="font-size:0.8rem;">Type</label>
                                 <select class="input" onchange="updateVisualField(${idx}, 'type', this.value)">
-                                    <option value="number" ${typeVal === 'number' ? 'selected' : ''}>Number</option>
                                     <option value="counter" ${typeVal === 'counter' ? 'selected' : ''}>Counter (+ / -)</option>
-                                    <option value="toggle" ${typeVal === 'toggle' || typeVal === 'checkbox' || typeVal === 'boolean' ? 'selected' : ''}>Toggle / Checkbox</option>
-                                    <option value="text" ${typeVal === 'text' ? 'selected' : ''}>Text Input</option>
-                                    <option value="select" ${typeVal === 'select' ? 'selected' : ''}>Dropdown Options</option>
-                                    <option value="multiselect" ${typeVal === 'multiselect' ? 'selected' : ''}>Multi-Select</option>
-                                    <option value="stopwatch" ${typeVal === 'stopwatch' ? 'selected' : ''}>Stopwatch / Timer</option>
+                                    <option value="number" ${typeVal === 'number' ? 'selected' : ''}>Number</option>
                                     <option value="rating" ${typeVal === 'rating' ? 'selected' : ''}>Rating (1-5)</option>
-                                    <option value="section" ${typeVal === 'section' ? 'selected' : ''}>Section Header</option>
-                                    <option value="divider" ${typeVal === 'divider' ? 'selected' : ''}>Divider Line</option>
+                                    <option value="toggle" ${typeVal === 'toggle' || typeVal === 'checkbox' || typeVal === 'boolean' ? 'selected' : ''}>Toggle / Checkbox</option>
+                                    <option value="select" ${typeVal === 'select' ? 'selected' : ''}>Dropdown Options</option>
+                                    <option value="text" ${typeVal === 'text' ? 'selected' : ''}>Text (Static Display)</option>
+                                    <option value="textarea" ${typeVal === 'textarea' || typeVal === 'notes' ? 'selected' : ''}>Text Area (Input)</option>
                                 </select>
                             </div>
                             <div class="field">
                                 <label style="font-size:0.8rem;">Section / Phase</label>
                                 <select class="input" onchange="updateVisualField(${idx}, 'phase', this.value)">
-                                    <option value="" ${!phaseVal ? 'selected' : ''}>General</option>
                                     <option value="auto" ${phaseVal === 'auto' ? 'selected' : ''}>Autonomous</option>
-                                    <option value="teleop" ${phaseVal === 'teleop' ? 'selected' : ''}>Teleop</option>
+                                    <option value="teleop" ${(!phaseVal || phaseVal === 'teleop' || phaseVal === 'general') ? 'selected' : ''}>Teleop</option>
                                     <option value="endgame" ${phaseVal === 'endgame' ? 'selected' : ''}>Endgame</option>
                                     <option value="pit" ${phaseVal === 'pit' ? 'selected' : ''}>Pit Scouting</option>
                                 </select>

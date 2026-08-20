@@ -1472,12 +1472,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         const labelType = document.createElement("label");
         labelType.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.type','Type') : 'Type';
         const selectType = document.createElement("select");
-        const types = ["text", "textarea", "number", "counter", "rating", "checkbox", "select"];
+        const types = [
+            { value: "counter", label: "COUNTER" },
+            { value: "number", label: "NUMBER" },
+            { value: "rating", label: "RATING" },
+            { value: "checkbox", label: "CHECKBOX" },
+            { value: "select", label: "SELECT" },
+            { value: "text", label: "TEXT (STATIC DISPLAY)" },
+            { value: "textarea", label: "TEXTAREA (INPUT)" }
+        ];
         types.forEach((t) => {
             const opt = document.createElement("option");
-            opt.value = t;
-            opt.textContent = t.toUpperCase();
-            opt.selected = field.type === t;
+            opt.value = t.value;
+            opt.textContent = t.label;
+            opt.selected = field.type === t.value;
             selectType.appendChild(opt);
         });
         selectType.addEventListener("change", (e) => {
@@ -1509,7 +1517,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         labelPhase.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.phase','Phase') : 'Phase';
         const selectPhase = document.createElement("select");
         const phaseOptions = [
-            { value: "", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.general','General') : 'General' },
             { value: "auto", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.auto','Auto') : 'Auto' },
             { value: "teleop", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.teleop','Teleop') : 'Teleop' },
             { value: "endgame", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.endgame','Endgame') : 'Endgame' }
@@ -1520,9 +1527,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             option.textContent = phase.label;
             selectPhase.appendChild(option);
         });
-        selectPhase.value = field.phase || resolveFieldPhase(field) || "";
+        const currentPhaseVal = field.phase || resolveFieldPhase(field) || "teleop";
+        selectPhase.value = currentPhaseVal === "general" ? "teleop" : currentPhaseVal;
         selectPhase.addEventListener("change", (e) => {
-            field.phase = e.target.value || "";
+            field.phase = e.target.value || "teleop";
             updateRawFromVisual();
         });
         divPhase.appendChild(labelPhase);
@@ -1938,6 +1946,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             _autoId: baseId,
             label: "New Field",
             type: "counter",
+            phase: "teleop",
             required: false,
             min: 0,
             max: null,
@@ -1948,6 +1957,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             _autoId: baseId,
             label: "New Note",
             type: "textarea",
+            phase: "teleop",
             required: false
         };
         currentConfig.fields.push(newField);
@@ -2018,13 +2028,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function resolveFieldPhase(field) {
-        if (!field) return "";
-        if (field.phase) return String(field.phase).toLowerCase();
+        if (!field) return "teleop";
+        if (field.phase) {
+            const p = String(field.phase).toLowerCase().trim();
+            if (p === "general" || p === "") return "teleop";
+            return p;
+        }
         const id = String(field.id || "").toLowerCase();
         if (id.startsWith("auto")) return "auto";
         if (id.startsWith("teleop")) return "teleop";
         if (id.startsWith("endgame")) return "endgame";
-        return "";
+        return "teleop";
     }
 
     function updateRawFromVisual() {
@@ -2058,9 +2072,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             const type = cleaned.type;
 
-
             if (field.phase) {
-                cleaned.phase = String(field.phase);
+                const p = String(field.phase).trim();
+                cleaned.phase = (p.toLowerCase() === "general" || p === "") ? "teleop" : p;
+            } else {
+                cleaned.phase = resolveFieldPhase(field) || "teleop";
             }
             
             if (type === "number" || type === "counter" || type === "rating") {

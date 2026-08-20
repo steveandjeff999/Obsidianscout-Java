@@ -121,6 +121,9 @@ async function loadScoutPageData(me) {
 
         if (clearButton) {
             clearButton.addEventListener("click", () => {
+                if (!confirm(Obsidianscout.t("scout.confirm_clear", "Are you sure you want to clear the form? All entered data will be reset."))) {
+                    return;
+                }
                 clearFormFields(fields, form);
                 updatePointsPreview(fields, form, pointsPreview);
             });
@@ -427,12 +430,38 @@ function buildField(field) {
                 }
                 input.appendChild(optionNode);
             });
-            break;
+        case "text":
+        case "static_text":
+        case "label":
+        case "info": {
+            const staticDisplay = document.createElement("div");
+            staticDisplay.className = "static-text-display";
+            staticDisplay.style.fontSize = "0.92rem";
+            staticDisplay.style.color = "var(--text-primary, #e2e8f0)";
+            staticDisplay.style.backgroundColor = "var(--glass-bg, rgba(255, 255, 255, 0.05))";
+            staticDisplay.style.border = "1px solid var(--glass-border, rgba(255, 255, 255, 0.1))";
+            staticDisplay.style.borderRadius = "10px";
+            staticDisplay.style.padding = "10px 14px";
+            staticDisplay.style.margin = "4px 0";
+            staticDisplay.style.lineHeight = "1.4";
+            staticDisplay.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
+            if (field.placeholder) {
+                const sub = document.createElement("div");
+                sub.style.fontSize = "0.8rem";
+                sub.style.color = "var(--text-muted, #94a3b8)";
+                sub.style.marginTop = "4px";
+                sub.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.placeholder) : field.placeholder;
+                staticDisplay.appendChild(sub);
+            }
+            wrapper.appendChild(staticDisplay);
+            return wrapper;
+        }
         case "checkbox":
             input = document.createElement("input");
             input.type = "checkbox";
             break;
         case "textarea":
+        case "notes":
             input = document.createElement("textarea");
             break;
         default:
@@ -461,18 +490,20 @@ function injectSections(fields) {
 
 function getFieldPhase(field) {
     if (!field) {
-        return "";
+        return "teleop";
     }
     if (field.phase) {
-        const p = String(field.phase).toLowerCase();
+        const p = String(field.phase).toLowerCase().trim();
         if (p === "postmatch" || p === "post-match" || p === "post match" || p === "post") return "postmatch";
+        if (p === "general" || p === "") return "teleop";
         return p;
     }
     const id = String(field.id || "").toLowerCase();
     if (id.startsWith("auto")) return "auto";
     if (id.startsWith("teleop")) return "teleop";
     if (id.startsWith("endgame")) return "endgame";
-    return "postmatch";
+    if (id.startsWith("post")) return "postmatch";
+    return "teleop";
 }
 
 function buildCounter(field) {

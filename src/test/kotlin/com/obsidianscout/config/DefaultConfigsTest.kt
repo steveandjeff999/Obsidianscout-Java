@@ -3,6 +3,7 @@ package com.obsidianscout.config
 import com.obsidianscout.db.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 import kotlin.test.AfterTest
@@ -26,7 +27,7 @@ class DefaultConfigsTest {
         }
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
         transaction {
-            SchemaUtils.create(DefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs)
+            SchemaUtils.create(DefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs, ScoutingAlliances)
         }
         ConfigService.ensureDefaultConfig()
     }
@@ -90,5 +91,56 @@ class DefaultConfigsTest {
         // 5. Verify Pit config is still intact
         val pitResult2 = ConfigService.getPitConfigJson(teamNum, prog, local = true)
         assertTrue("Custom Pit" in pitResult2, "Resetting match config should leave pit config untouched")
+    }
+
+    @Test
+    fun testGeneralPhaseMigratedToTeleop() {
+        val teamNum = 2222
+        val prog = "FRC"
+
+        val rawGeneralConfig = """
+            {
+                "version": 1,
+                "title": "Legacy Config with General Phase",
+                "fields": [
+                    {
+                        "id": "driverNotes",
+                        "label": "Driver Notes",
+                        "type": "text",
+                        "phase": "general"
+                    },
+                    {
+                        "id": "autoSpeaker",
+                        "label": "Auto Speaker",
+                        "type": "counter",
+                        "phase": "auto"
+                    }
+                ]
+            }
+        """.trimIndent()
+
+        // 1. Verify updateConfig migrates "general" phase to "teleop"
+        val updated = ConfigService.updateConfig(teamNum, prog, rawGeneralConfig)
+        val driverNotesField = updated.fields.find { it.id == "driverNotes" }
+        assertNotNull(driverNotesField)
+        assertEquals("teleop", driverNotesField.phase)
+
+        // 2. Verify server startup / ensureDefaultConfig migrates existing DB rows
+        val legacyTeamNum = 3333
+        transaction {
+            ScoutingConfigs.insert {
+                it[ScoutingConfigs.teamNumber] = legacyTeamNum
+                it[ScoutingConfigs.program] = prog
+                it[ScoutingConfigs.configJson] = rawGeneralConfig
+                it[ScoutingConfigs.updatedAt] = java.time.Instant.now()
+            }
+        }
+
+        ConfigService.ensureDefaultConfig()
+
+        val migratedConfig = ConfigService.getConfig(legacyTeamNum, prog, local = true)
+        val migratedNotes = migratedConfig.fields.find { it.id == "driverNotes" }
+        assertNotNull(migratedNotes)
+        assertEquals("teleop", migratedNotes.phase)
     }
 }

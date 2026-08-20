@@ -80,6 +80,9 @@ async function loadPitScoutPageData(me) {
 
         if (clearButton) {
             clearButton.addEventListener("click", () => {
+                if (!confirm(Obsidianscout.t("pit_scout.confirm_clear", "Are you sure you want to clear the form? All entered data will be reset."))) {
+                    return;
+                }
                 clearFormFields(fields, form);
             });
         }
