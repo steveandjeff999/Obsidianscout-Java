@@ -22,6 +22,7 @@ import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.deleteWhere
@@ -47,7 +48,7 @@ data class QualitativeScoutingEntryRecord(
 
 object QualitativeScoutingService {
     fun listEntries(session: UserSession, includePrescout: Boolean = false, all: Boolean = false): List<QualitativeScoutingEntryRecord> {
-        return transaction {
+        return readTransaction {
             val query = QualitativeScoutingEntries.selectAll()
             if (!includePrescout) {
                 query.andWhere { QualitativeScoutingEntries.isPrescout eq false }
@@ -98,7 +99,7 @@ object QualitativeScoutingService {
     }
 
     fun listPrescoutEntries(session: UserSession, all: Boolean = false): List<QualitativeScoutingEntryRecord> {
-        return transaction {
+        return readTransaction {
             val query = QualitativeScoutingEntries.selectAll()
             query.andWhere { QualitativeScoutingEntries.isPrescout eq true }
             if (session.role != UserRole.SUPERADMIN) {

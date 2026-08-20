@@ -21,6 +21,7 @@ import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.deleteWhere
@@ -51,7 +52,7 @@ object ScoutingService {
      * Everyone else sees their own team's entries PLUS entries from accepted alliance partner teams.
      */
     fun listEntries(session: UserSession, includePrescout: Boolean = false, all: Boolean = false): List<ScoutingEntryRecord> {
-        return transaction {
+        return readTransaction {
             val query = ScoutingEntries.selectAll()
             if (!includePrescout) {
                 query.andWhere { ScoutingEntries.isPrescout eq false }
@@ -102,7 +103,7 @@ object ScoutingService {
     }
 
     fun listPrescoutEntries(session: UserSession, all: Boolean = false): List<ScoutingEntryRecord> {
-        return transaction {
+        return readTransaction {
             val query = ScoutingEntries.selectAll()
             query.andWhere { ScoutingEntries.isPrescout eq true }
             if (session.role != UserRole.SUPERADMIN) {

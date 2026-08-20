@@ -12,6 +12,7 @@ import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.upsert
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URI
@@ -48,7 +49,7 @@ object FcmService {
             fcmCredentials = null
             fcmProjectId = ""
 
-            val configRow = transaction {
+            val configRow = readTransaction {
                 FcmConfigs.selectAll().firstOrNull()
             }
 
@@ -99,7 +100,7 @@ object FcmService {
 
     private fun checkClusterSync() {
         try {
-            val dbUpdatedAt = transaction {
+            val dbUpdatedAt = readTransaction {
                 FcmConfigs.selectAll().firstOrNull()?.get(FcmConfigs.updatedAt)
             } ?: Instant.EPOCH
 
@@ -111,7 +112,7 @@ object FcmService {
         }
     }
 
-    fun getPublicConfig(): FcmPublicConfigDto = transaction {
+    fun getPublicConfig(): FcmPublicConfigDto = readTransaction {
         val row = FcmConfigs.selectAll().firstOrNull()
         if (row == null) {
             FcmPublicConfigDto(
@@ -134,7 +135,7 @@ object FcmService {
         }
     }
 
-    fun getAdminConfig(): FcmAdminConfigDto = transaction {
+    fun getAdminConfig(): FcmAdminConfigDto = readTransaction {
         val row = FcmConfigs.selectAll().firstOrNull()
         val hasJson = row != null && row[FcmConfigs.serviceAccountJson].isNotBlank()
         if (row == null) {
@@ -301,7 +302,7 @@ object FcmService {
         checkClusterSync()
         if (!isInitialized || targetUserUuids.isEmpty()) return
 
-        val deviceTokens = transaction {
+        val deviceTokens = readTransaction {
             FcmDeviceTokens.selectAll()
                 .where { FcmDeviceTokens.userId inList targetUserUuids }
                 .map { it[FcmDeviceTokens.deviceToken] }
@@ -362,14 +363,14 @@ object FcmService {
             return Pair(false, "Firebase Admin SDK is not initialized. Check your credentials.")
         }
 
-        var tokens = transaction {
+        var tokens = readTransaction {
             FcmDeviceTokens.selectAll()
                 .where { FcmDeviceTokens.userId eq adminUserId }
                 .map { it[FcmDeviceTokens.deviceToken] }
         }
 
         if (tokens.isEmpty()) {
-            tokens = transaction {
+            tokens = readTransaction {
                 FcmDeviceTokens.selectAll()
                     .map { it[FcmDeviceTokens.deviceToken] }
             }

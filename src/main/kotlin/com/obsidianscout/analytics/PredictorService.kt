@@ -21,12 +21,13 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import com.obsidianscout.auth.ApiException
 
 object PredictorService {
     suspend fun predict(session: UserSession, matchKey: String, forcePrescout: Boolean = false, eventKeyParam: String? = null): MatchPredictionResponse {
         val matchKeyLower = matchKey.lowercase().trim()
-        var eventKey = transaction {
+        var eventKey = readTransaction {
             ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKeyLower }
                 .limit(1)
                 .map { it[ApiMatches.eventKey] }
@@ -36,18 +37,18 @@ object PredictorService {
         if (eventKey == null) {
             val inferredEventKey = eventKeyParam?.lowercase()?.trim() ?: "^([0-9]{4}[a-zA-Z0-9]+)".toRegex().find(matchKeyLower)?.value
             if (inferredEventKey != null) {
-                val count = transaction {
+                val count = readTransaction {
                     ApiMatches.selectAll().where { ApiMatches.eventKey eq inferredEventKey }.count()
                 }
                 if (count == 0L) {
-                    val settings = transaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
+                    val settings = readTransaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
                     try {
                         com.obsidianscout.integrations.IntegrationService.syncCustomEventData(settings, inferredEventKey)
                     } catch (e: Exception) {
                         // ignore or log
                     }
                 }
-                eventKey = transaction {
+                eventKey = readTransaction {
                     ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKeyLower }
                         .limit(1)
                         .map { it[ApiMatches.eventKey] }
@@ -60,7 +61,7 @@ object PredictorService {
             throw ApiException(HttpStatusCode.NotFound, "Match not found")
         }
 
-        val needsStatsSync = transaction {
+        val needsStatsSync = readTransaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
             val checkEpa = settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
@@ -70,14 +71,14 @@ object PredictorService {
 
         if (needsStatsSync) {
             try {
-                val settings = transaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
+                val settings = readTransaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
                 com.obsidianscout.integrations.IntegrationService.syncStats(settings, eventKey)
             } catch (e: Exception) {
                 throw ApiException(HttpStatusCode.BadGateway, "Failed to fetch EPA/OPR stats from API: ${e.message}")
             }
         }
 
-        return transaction {
+        return readTransaction {
             val matchRow = ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKey.lowercase() }
                 .limit(1)
                 .firstOrNull()
@@ -282,11 +283,11 @@ object PredictorService {
 
     suspend fun predictAll(session: UserSession, eventKey: String, forcePrescout: Boolean = false): List<MatchPredictionResponse> {
         val eventKeyLower = eventKey.lowercase().trim()
-        val count = transaction {
+        val count = readTransaction {
             ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKeyLower }.count()
         }
         if (count == 0L) {
-            val settings = transaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
+            val settings = readTransaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
             try {
                 com.obsidianscout.integrations.IntegrationService.syncCustomEventData(settings, eventKeyLower)
             } catch (e: Exception) {
@@ -294,7 +295,7 @@ object PredictorService {
             }
         }
 
-        val needsStatsSync = transaction {
+        val needsStatsSync = readTransaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyLower }.toList()
             val checkEpa = settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
@@ -304,14 +305,14 @@ object PredictorService {
 
         if (needsStatsSync) {
             try {
-                val settings = transaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
+                val settings = readTransaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
                 com.obsidianscout.integrations.IntegrationService.syncStats(settings, eventKeyLower)
             } catch (e: Exception) {
                 throw ApiException(HttpStatusCode.BadGateway, "Failed to fetch EPA/OPR stats from API: ${e.message}")
             }
         }
 
-        return transaction {
+        return readTransaction {
             val matches = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKeyLower }
                 .toList()
                 .sortedWith(
@@ -325,7 +326,7 @@ object PredictorService {
                 )
 
             if (matches.isEmpty()) {
-                return@transaction emptyList()
+                return@readTransaction emptyList<MatchPredictionResponse>()
             }
 
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)

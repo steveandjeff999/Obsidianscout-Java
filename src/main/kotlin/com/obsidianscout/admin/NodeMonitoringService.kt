@@ -19,6 +19,7 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -65,7 +66,7 @@ object NodeMonitoringService {
 
     fun hasEnrolledSuperadmins(): Boolean {
         return try {
-            transaction {
+            readTransaction {
                 !Users.selectAll()
                     .where { (Users.role eq UserRole.SUPERADMIN.name) and (Users.nodeAlertsEnabled eq true) }
                     .empty()
@@ -217,7 +218,7 @@ object NodeMonitoringService {
             return
         }
         // Find enrolled SUPERADMIN users
-        val (enrolledUuids, enrolledEmails) = transaction {
+        val (enrolledUuids, enrolledEmails) = readTransaction {
             val rows = Users.selectAll()
                 .where { (Users.role eq UserRole.SUPERADMIN.name) and (Users.nodeAlertsEnabled eq true) }
                 .toList()
@@ -320,7 +321,7 @@ object NodeMonitoringService {
             return
         }
         // Find enrolled SUPERADMIN users
-        val (enrolledUuids, enrolledEmails) = transaction {
+        val (enrolledUuids, enrolledEmails) = readTransaction {
             val rows = Users.selectAll()
                 .where { (Users.role eq UserRole.SUPERADMIN.name) and (Users.nodeAlertsEnabled eq true) }
                 .toList()

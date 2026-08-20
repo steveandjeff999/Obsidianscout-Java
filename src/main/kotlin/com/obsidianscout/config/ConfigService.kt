@@ -19,6 +19,7 @@ import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -268,7 +269,7 @@ object ConfigService {
     }
 
     fun getDefaultConfigs(program: String, configType: String? = null): List<DefaultConfigDTO> {
-        return transaction {
+        return readTransaction {
             var query = DefaultConfigs.selectAll().where { DefaultConfigs.program eq program }
             if (!configType.isNullOrBlank()) {
                 val filterType = if (configType.equals("game", ignoreCase = true)) "match" else if (configType.equals("qual", ignoreCase = true)) "qualitative" else configType.lowercase()
@@ -294,7 +295,7 @@ object ConfigService {
             "qual", "qualitative" -> "qualitative"
             else -> configType.lowercase()
         }
-        val defaultRow = transaction {
+        val defaultRow = readTransaction {
             DefaultConfigs
                 .selectAll().where { (DefaultConfigs.name eq presetName) and (DefaultConfigs.configType eq targetType) }
                 .firstOrNull()
@@ -320,7 +321,7 @@ object ConfigService {
             "qual", "qualitative" -> "qualitative"
             else -> configType.lowercase()
         }
-        val defaultJson = transaction {
+        val defaultJson = readTransaction {
             DefaultConfigs
                 .selectAll().where { (DefaultConfigs.program eq program) and (DefaultConfigs.configType eq targetType) and (DefaultConfigs.isDefault eq true) }
                 .firstOrNull()?.get(DefaultConfigs.configJson)
@@ -340,7 +341,7 @@ object ConfigService {
     }
 
     fun getAllDefaultConfigs(): List<DefaultConfigDTO> {
-        return transaction {
+        return readTransaction {
             DefaultConfigs.selectAll().orderBy(DefaultConfigs.program to SortOrder.ASC, DefaultConfigs.name to SortOrder.ASC).map { row ->
                 DefaultConfigDTO(
                     id = row[DefaultConfigs.id].value.toString(),
@@ -451,7 +452,7 @@ object ConfigService {
     }
 
     fun getConfigJson(teamNumber: Int, program: String = "FRC", local: Boolean = false): String {
-        return transaction {
+        return readTransaction {
             if (!local) {
                 val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                 if (activeAllianceId != null) {
@@ -460,7 +461,7 @@ object ConfigService {
                         .firstOrNull()
                         ?.get(ScoutingAlliances.matchConfigJson)
                     if (!allianceConfig.isNullOrBlank()) {
-                        return@transaction allianceConfig
+                        return@readTransaction allianceConfig
                     }
                 }
             }
@@ -473,7 +474,7 @@ object ConfigService {
                 ?.get(ScoutingConfigs.configJson)
 
             if (teamConfig != null) {
-                return@transaction teamConfig
+                return@readTransaction teamConfig
             }
 
             // Fall back to team 0 (global default)
@@ -517,7 +518,7 @@ object ConfigService {
     }
 
     fun getPitConfigJson(teamNumber: Int, program: String = "FRC", local: Boolean = false): String {
-        return transaction {
+        return readTransaction {
             if (!local) {
                 val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                 if (activeAllianceId != null) {
@@ -526,7 +527,7 @@ object ConfigService {
                         .firstOrNull()
                         ?.get(ScoutingAlliances.pitConfigJson)
                     if (!allianceConfig.isNullOrBlank()) {
-                        return@transaction allianceConfig
+                        return@readTransaction allianceConfig
                     }
                 }
             }
@@ -538,7 +539,7 @@ object ConfigService {
                 ?.get(PitScoutingConfigs.configJson)
 
             if (teamConfig != null) {
-                return@transaction teamConfig
+                return@readTransaction teamConfig
             }
 
             PitScoutingConfigs
@@ -581,7 +582,7 @@ object ConfigService {
     }
 
     fun getQualitativeConfigJson(teamNumber: Int, program: String = "FRC", local: Boolean = false): String {
-        return transaction {
+        return readTransaction {
             if (!local) {
                 val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                 if (activeAllianceId != null) {
@@ -590,7 +591,7 @@ object ConfigService {
                         .firstOrNull()
                         ?.get(ScoutingAlliances.qualitativeConfigJson)
                     if (!allianceConfig.isNullOrBlank()) {
-                        return@transaction allianceConfig
+                        return@readTransaction allianceConfig
                     }
                 }
             }
@@ -602,7 +603,7 @@ object ConfigService {
                 ?.get(QualitativeScoutingConfigs.configJson)
 
             if (teamConfig != null) {
-                return@transaction teamConfig
+                return@readTransaction teamConfig
             }
 
             QualitativeScoutingConfigs

@@ -20,6 +20,7 @@ import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import java.security.Security
 import java.util.UUID
 import org.bouncycastle.jce.provider.BouncyCastleProvider
@@ -73,7 +74,7 @@ object PushNotificationService {
             try {
                 // 1. Find all users in the same team except the sender
                 val senderUuid = runCatching { UUID.fromString(message.userId) }.getOrNull()
-                val targetUsers = transaction {
+                val targetUsers = readTransaction {
                     val q = (PushSubscriptions innerJoin Users).selectAll()
                     val filtered = if (senderUuid != null) {
                         q.where { (Users.teamNumber eq message.teamNumber) and (Users.id neq senderUuid) }
@@ -94,7 +95,7 @@ object PushNotificationService {
                 }
 
                 // 2. Dispatch to FCM devices for team users
-                val fcmTargetUserUuids = transaction {
+                val fcmTargetUserUuids = readTransaction {
                     val q = Users.selectAll()
                     val filtered = if (senderUuid != null) {
                         q.where { (Users.teamNumber eq message.teamNumber) and (Users.id neq senderUuid) }

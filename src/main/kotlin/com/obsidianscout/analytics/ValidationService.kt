@@ -22,6 +22,7 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import kotlin.math.abs
 import kotlin.math.round
 
@@ -35,11 +36,11 @@ object ValidationService {
     ): ValidationSummaryResponse {
         val eventKeyLower = eventKeyParam.lowercase().trim()
 
-        val count = transaction {
+        val count = readTransaction {
             ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKeyLower }.count()
         }
         if (count == 0L) {
-            val settings = transaction {
+            val settings = readTransaction {
                 com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             }
             try {
@@ -49,7 +50,7 @@ object ValidationService {
             }
         }
 
-        val needsStatsSync = transaction {
+        val needsStatsSync = readTransaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyLower }.toList()
             val checkEpa = settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
@@ -59,7 +60,7 @@ object ValidationService {
 
         if (needsStatsSync) {
             try {
-                val settings = transaction {
+                val settings = readTransaction {
                     com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                 }
                 com.obsidianscout.integrations.IntegrationService.syncStats(settings, eventKeyLower)
@@ -68,7 +69,7 @@ object ValidationService {
             }
         }
 
-        return transaction {
+        return readTransaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val useStatboticsEpa = settings.useStatboticsEpa
             val useTbaOpr = settings.useTbaOpr

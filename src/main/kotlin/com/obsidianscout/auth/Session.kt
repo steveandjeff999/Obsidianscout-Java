@@ -43,7 +43,7 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         ?: throw ApiException(HttpStatusCode.Unauthorized, "Not signed in")
     val exists = if (DatabaseFactory.isReady) {
         runCatching {
-            transaction {
+            com.obsidianscout.db.readTransaction {
                 val uuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
                 if (uuid == null) false else Users.selectAll().where { Users.id eq uuid }.any()
             }

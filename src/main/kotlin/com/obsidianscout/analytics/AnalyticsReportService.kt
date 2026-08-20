@@ -95,7 +95,7 @@ data class AnalyticsDatasetResponse(
 
 object AnalyticsReportService {
 
-    fun listReports(session: UserSession): List<AnalyticsReportRecord> = transaction {
+    fun listReports(session: UserSession): List<AnalyticsReportRecord> = readTransaction {
         val userUuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
         val userTeam = session.teamNumber
         val program = session.program
@@ -140,7 +140,7 @@ object AnalyticsReportService {
         }
     }
 
-    fun getReport(id: String, session: UserSession): AnalyticsReportRecord = transaction {
+    fun getReport(id: String, session: UserSession): AnalyticsReportRecord = readTransaction {
         val reportUuid = runCatching { UUID.fromString(id) }.getOrNull()
             ?: throw ApiException(HttpStatusCode.BadRequest, "Invalid report ID")
 
@@ -329,7 +329,7 @@ object AnalyticsReportService {
         val scoutingEventKeys: List<String> = (rawMatchEntries.mapNotNull { it.eventKey } + rawPitEntries.mapNotNull { it.eventKey } + rawQualEntries.mapNotNull { it.eventKey }).filter { it.isNotBlank() }.distinct()
         val visibleEventKeys: List<String> = (listOfNotNull(configuredEventKey) + scoutingEventKeys).distinct()
 
-        val teamsList = transaction {
+        val teamsList = readTransaction {
             val query = if (!eventKeyFilter.isNullOrBlank()) {
                 ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyFilter }
             } else if (visibleEventKeys.isNotEmpty()) {

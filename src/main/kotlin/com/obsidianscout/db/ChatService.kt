@@ -93,7 +93,7 @@ object ChatService {
         }
     }
 
-    fun getMessages(teamNumber: Int, groupName: String, userId: String, userRole: UserRole, limit: Int = 200): List<ChatMessageDto> = transaction {
+    fun getMessages(teamNumber: Int, groupName: String, userId: String, userRole: UserRole, limit: Int = 200): List<ChatMessageDto> = readTransaction {
         ensureDefaultGroup(teamNumber)
         val sanitized = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim().ifEmpty { "general" }
         val groupRow = ChatGroups.selectAll().where {
@@ -150,7 +150,7 @@ object ChatService {
             .reversed()
     }
 
-    fun getGroups(teamNumber: Int, userId: String, userRole: UserRole): List<String> = transaction {
+    fun getGroups(teamNumber: Int, userId: String, userRole: UserRole): List<String> = readTransaction {
         ensureDefaultGroup(teamNumber)
         val allGroups = ChatGroups.selectAll()
             .where { ChatGroups.teamNumber eq teamNumber }
@@ -170,7 +170,7 @@ object ChatService {
         }
     }
 
-    fun getAllGroupDetails(teamNumber: Int, userId: String, userRole: UserRole): List<ChatGroupDetailsDto> = transaction {
+    fun getAllGroupDetails(teamNumber: Int, userId: String, userRole: UserRole): List<ChatGroupDetailsDto> = readTransaction {
         ensureDefaultGroup(teamNumber)
         val allGroups = ChatGroups.selectAll().where { ChatGroups.teamNumber eq teamNumber }
         val isAdmin = userRole == UserRole.ADMIN || userRole == UserRole.SUPERADMIN
@@ -196,12 +196,12 @@ object ChatService {
         }.sortedBy { it.groupName }
     }
 
-    fun getGroupDetails(teamNumber: Int, groupName: String, userId: String, userRole: UserRole): ChatGroupDetailsDto? = transaction {
+    fun getGroupDetails(teamNumber: Int, groupName: String, userId: String, userRole: UserRole): ChatGroupDetailsDto? = readTransaction {
         ensureDefaultGroup(teamNumber)
         val sanitized = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim()
         val row = ChatGroups.selectAll().where {
             (ChatGroups.teamNumber eq teamNumber) and (ChatGroups.groupName eq sanitized)
-        }.firstOrNull() ?: return@transaction null
+        }.firstOrNull() ?: return@readTransaction null
 
         val allowedRolesJson = row[ChatGroups.allowedRoles]
         val allowedUserIdsJson = row[ChatGroups.allowedUserIds]
@@ -608,7 +608,7 @@ object ChatService {
         }
     }
 
-    fun getUnreadStatus(userId: String, teamNumber: Int, username: String, userRole: UserRole): UnreadStatusDto = transaction {
+    fun getUnreadStatus(userId: String, teamNumber: Int, username: String, userRole: UserRole): UnreadStatusDto = readTransaction {
         val userUuid = UUID.fromString(userId)
         val lastReads = UserChatLastRead.selectAll()
             .where { UserChatLastRead.userId eq userUuid }

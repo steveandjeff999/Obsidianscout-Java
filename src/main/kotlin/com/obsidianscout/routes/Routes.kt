@@ -1039,7 +1039,7 @@ fun Application.configureRoutes() {
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
                     val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-                    val (cachedTeams, cachedMatches) = transaction {
+                    val (cachedTeams, cachedMatches) = com.obsidianscout.db.readTransaction {
                         val teamCount = com.obsidianscout.db.ApiTeams.selectAll().where { com.obsidianscout.db.ApiTeams.eventKey eq eventKey }.count().toInt()
                         val matchCount = com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.eventKey eq eventKey }.count().toInt()
                         Pair(teamCount, matchCount)
@@ -1208,11 +1208,11 @@ fun Application.configureRoutes() {
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
                     val eventKeyLower = eventKey.lowercase().trim()
-                    val count = transaction {
+                    val count = com.obsidianscout.db.readTransaction {
                         com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.eventKey eq eventKeyLower }.count()
                     }
                     if (count == 0L) {
-                        val settings = transaction { AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
+                        val settings = com.obsidianscout.db.readTransaction { AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
                         try {
                             IntegrationService.syncCustomEventData(settings, eventKeyLower)
                         } catch (e: Exception) {
@@ -2019,7 +2019,7 @@ fun Application.configureRoutes() {
                 }
                 get("/team-users") {
                     val session = call.requireSession()
-                    val usernames = transaction {
+                    val usernames = com.obsidianscout.db.readTransaction {
                         com.obsidianscout.db.Users.selectAll()
                             .where { (com.obsidianscout.db.Users.teamNumber eq session.teamNumber) and (com.obsidianscout.db.Users.username neq "Deleted User") }
                             .map { it[com.obsidianscout.db.Users.username] }
@@ -2029,7 +2029,7 @@ fun Application.configureRoutes() {
                 }
                 get("/team-members") {
                     val session = call.requireSession()
-                    val members = transaction {
+                    val members = com.obsidianscout.db.readTransaction {
                         com.obsidianscout.db.Users.selectAll()
                             .where { (com.obsidianscout.db.Users.teamNumber eq session.teamNumber) and (com.obsidianscout.db.Users.username neq "Deleted User") }
                             .map {
@@ -2266,7 +2266,7 @@ fun Application.configureRoutes() {
                     val idUuid = runCatching { java.util.UUID.fromString(id) }.getOrElse {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id format")
                     }
-                    val configJson = transaction {
+                    val configJson = com.obsidianscout.db.readTransaction {
                         val row = ScoutingAlliances.selectAll().where { ScoutingAlliances.id eq idUuid }.firstOrNull()
                         if (row != null) {
                             when (kind) {
@@ -2320,7 +2320,7 @@ fun Application.configureRoutes() {
                     
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         // Verify user is a member of this alliance
-                        val isMember = transaction {
+                        val isMember = com.obsidianscout.db.readTransaction {
                             AllianceMemberships
                                 .selectAll().where {
                                     (AllianceMemberships.allianceId eq idUuid) and

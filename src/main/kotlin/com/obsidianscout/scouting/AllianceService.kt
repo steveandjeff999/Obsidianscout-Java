@@ -21,6 +21,7 @@ import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.sql.update
 import java.time.Instant
 import java.util.UUID
@@ -103,7 +104,7 @@ object AllianceService {
      * along with every membership row for each alliance.
      * SUPERADMIN sees all alliances.
      */
-    fun listAlliances(session: UserSession): List<AllianceRecord> = transaction {
+    fun listAlliances(session: UserSession): List<AllianceRecord> = readTransaction {
         if (session.role == UserRole.SUPERADMIN) {
             val ids = ScoutingAlliances
                 .select(ScoutingAlliances.id)
@@ -126,7 +127,7 @@ object AllianceService {
     /**
      * Returns alliances where the calling team has a pending INVITED status.
      */
-    fun listInvites(session: UserSession): List<AllianceRecord> = transaction {
+    fun listInvites(session: UserSession): List<AllianceRecord> = readTransaction {
         val allianceIds = AllianceMemberships
             .selectAll().where {
                 (AllianceMemberships.teamNumber eq session.teamNumber) and
@@ -141,7 +142,7 @@ object AllianceService {
     /**
      * Returns the count of pending invites for a team — used for the sidebar badge.
      */
-    fun getInviteCount(session: UserSession): Int = transaction {
+    fun getInviteCount(session: UserSession): Int = readTransaction {
         AllianceMemberships
             .selectAll().where {
                 (AllianceMemberships.teamNumber eq session.teamNumber) and
@@ -712,7 +713,7 @@ object AllianceService {
      * Used by ScoutingService / PitScoutingService / QualitativeScoutingService
      * to transparently include partner data in list queries.
      */
-    fun getAlliancePartnerTeams(teamNumber: Int, program: String = "FRC"): Set<Int> = transaction {
+    fun getAlliancePartnerTeams(teamNumber: Int, program: String = "FRC"): Set<Int> = readTransaction {
         // Find all alliance IDs where this team is ADMIN or ACCEPTED and active
         val myAllianceIds = AllianceMemberships
             .selectAll().where {
@@ -723,7 +724,7 @@ object AllianceService {
             }
             .map { it[AllianceMemberships.allianceId].value }
 
-        if (myAllianceIds.isEmpty()) return@transaction emptySet()
+        if (myAllianceIds.isEmpty()) return@readTransaction emptySet()
 
         // Find all other ACCEPTED/ADMIN members in those alliances who are also active
         AllianceMemberships
@@ -742,7 +743,7 @@ object AllianceService {
      * Checks if a team has an active (ACCEPTED or ADMIN) alliance membership
      * and returns the alliance ID.
      */
-    fun getActiveAllianceId(teamNumber: Int, program: String = "FRC"): UUID? = transaction {
+    fun getActiveAllianceId(teamNumber: Int, program: String = "FRC"): UUID? = readTransaction {
         AllianceMemberships
             .selectAll().where {
                 (AllianceMemberships.teamNumber eq teamNumber) and
@@ -758,7 +759,7 @@ object AllianceService {
     /**
      * Checks if the team is an ADMIN in the alliance.
      */
-    fun isAllianceAdmin(teamNumber: Int, allianceId: UUID): Boolean = transaction {
+    fun isAllianceAdmin(teamNumber: Int, allianceId: UUID): Boolean = readTransaction {
         AllianceMemberships
             .selectAll().where {
                 (AllianceMemberships.allianceId eq allianceId) and
@@ -803,7 +804,7 @@ object AllianceService {
      */
     fun getAlliance(session: UserSession, allianceId: String): AllianceRecord {
         val allianceUuid = UUID.fromString(allianceId)
-        return transaction {
+        return readTransaction {
             val isMember = AllianceMemberships
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceUuid) and

@@ -28,8 +28,119 @@ object DatabaseFactory {
     @Volatile
     var isReady = false
     @Volatile
+    var isCockroach: Boolean = false
+    @Volatile
     var orchestrator: com.obsidianscout.db.orchestration.CockroachOrchestrator? = null
+    @Volatile
+    private var lastQuorumProbeTime: Long = 0L
     internal var activeDataSource: HikariDataSource? = null
+
+    private val asOfSystemTimeCandidates = listOf(
+        "follower_read_timestamp()",
+        "with_max_staleness(INTERVAL '10s')",
+        "with_max_staleness(INTERVAL '1m')",
+        "with_max_staleness(INTERVAL '10m')",
+        "with_max_staleness(INTERVAL '1h')",
+        "with_max_staleness(INTERVAL '24h')",
+        "'-5s'",
+        "'-30s'",
+        "'-5m'",
+        "'-1h'",
+        "'-24h'"
+    )
+
+    /**
+     * Executes a read-only database block.
+     * When running on CockroachDB and quorum is lost (or when a query fails with a quorum loss / range unavailable error),
+     * this automatically falls back to AS OF SYSTEM TIME historical follower reads to retrieve the latest available data
+     * stored on this node without failing.
+     */
+    fun <T> readTransaction(
+        db: Database? = null,
+        statement: org.jetbrains.exposed.sql.Transaction.() -> T
+    ): T {
+        val isCrdb = isCockroach && (db == null || !db.url.startsWith("jdbc:sqlite"))
+        if (!isCrdb) {
+            return transaction(db = db) { statement() }
+        }
+
+        val quorumCurrentlyLost = com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost
+        val now = System.currentTimeMillis()
+
+        // If quorum was marked lost, attempt a normal live read probe every 5 seconds to automatically detect cluster recovery
+        if (quorumCurrentlyLost && (now - lastQuorumProbeTime > 5_000L)) {
+            lastQuorumProbeTime = now
+            try {
+                val result = transaction(db = db) { statement() }
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = false
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = null
+                println("[Database] ✅ CockroachDB cluster quorum restored. Resumed standard live reads.")
+                return result
+            } catch (probeEx: Throwable) {
+                if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(probeEx)) {
+                    return executeAsOfSystemTime(db, statement, rootCause = probeEx)
+                }
+                throw probeEx
+            }
+        }
+
+        if (quorumCurrentlyLost) {
+            try {
+                return executeAsOfSystemTime(db, statement)
+            } catch (e: Exception) {
+                println("[Database] AS OF SYSTEM TIME read attempt encountered error (${e.message?.substringBefore("\n")?.take(100)}). Retrying standard read in case quorum was restored...")
+            }
+        }
+
+        try {
+            return transaction(db = db) { statement() }
+        } catch (e: Throwable) {
+            if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = true
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = e.message ?: "Database cluster quorum lost."
+                println("[Database] ⚠️ CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Automatically falling back to AS OF SYSTEM TIME reads to retrieve latest available data...")
+                return executeAsOfSystemTime(db, statement, rootCause = e)
+            }
+            throw e
+        }
+    }
+
+    /**
+     * Executes statement inside an AS OF SYSTEM TIME transaction block, iterating through staleness candidates
+     * until the newest valid historical state is read.
+     */
+    fun <T> executeAsOfSystemTime(
+        db: Database? = null,
+        statement: org.jetbrains.exposed.sql.Transaction.() -> T,
+        rootCause: Throwable? = null
+    ): T {
+        val isCrdb = isCockroach && (db == null || !db.url.startsWith("jdbc:sqlite"))
+        if (!isCrdb) {
+            return transaction(db = db) { statement() }
+        }
+        var lastException: Throwable? = rootCause
+        for (candidate in asOfSystemTimeCandidates) {
+            try {
+                val result = transaction(db = db) {
+                    exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
+                    statement()
+                }
+                println("[Database] ✅ Successfully served read query using CockroachDB AS OF SYSTEM TIME ($candidate).")
+                return result
+            } catch (candidateEx: Throwable) {
+                lastException = candidateEx
+                val isQuorumOrTimeErr = com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(candidateEx) ||
+                        candidateEx.message?.contains("as of system time", ignoreCase = true) == true ||
+                        candidateEx.message?.contains("closed timestamp", ignoreCase = true) == true ||
+                        candidateEx.message?.contains("timestamp", ignoreCase = true) == true ||
+                        candidateEx.message?.contains("deadline", ignoreCase = true) == true
+                if (!isQuorumOrTimeErr) {
+                    throw candidateEx
+                }
+            }
+        }
+        throw lastException ?: IllegalStateException("All CockroachDB AS OF SYSTEM TIME fallback candidates exhausted during quorum loss.")
+    }
 
     fun close() {
         try {
@@ -39,10 +150,12 @@ object DatabaseFactory {
         }
         activeDataSource = null
         isReady = false
+        isCockroach = false
     }
 
     fun init(config: DatabaseConfig, runMigration: Boolean = true, isCockroach: Boolean = false) {
         close()
+        this.isCockroach = isCockroach
 
         ensureJdbcDriverLoaded(config.type)
 
@@ -1448,3 +1561,12 @@ object DatabaseFactory {
         """.trimIndent()
     )
 }
+
+/**
+ * Top-level convenience delegate for DatabaseFactory.readTransaction.
+ */
+fun <T> readTransaction(
+    db: org.jetbrains.exposed.sql.Database? = null,
+    statement: org.jetbrains.exposed.sql.Transaction.() -> T
+): T = DatabaseFactory.readTransaction(db, statement)
+

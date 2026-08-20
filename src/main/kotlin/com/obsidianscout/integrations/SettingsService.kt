@@ -9,6 +9,7 @@ import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.and
 import java.time.Instant
@@ -142,7 +143,7 @@ object SettingsService {
     }
 
     fun getSettings(teamNumber: Int, program: String = "FRC"): ApiSettings {
-        val (jsonText, isTeamSpecific) = transaction {
+        val (jsonText, isTeamSpecific) = readTransaction {
             // Try team-specific settings first
             val teamSettings = AppSettings
                 .selectAll().where { (AppSettings.teamNumber eq teamNumber) and (AppSettings.program eq program) }
@@ -151,7 +152,7 @@ object SettingsService {
                 ?.get(AppSettings.settingsJson)
 
             if (teamSettings != null) {
-                return@transaction Pair(teamSettings, true)
+                return@readTransaction Pair(teamSettings, true)
             }
 
             // Fall back to team 0 (global default)
@@ -245,7 +246,7 @@ object SettingsService {
     }
 
     fun teamNumbersEligibleForAutoSync(): List<Pair<Int, String>> {
-        return transaction {
+        return readTransaction {
             AppSettings.selectAll()
                 .map { Pair(it[AppSettings.teamNumber], it[AppSettings.program]) }
                 .distinct()
@@ -282,7 +283,7 @@ object SettingsService {
     }
 
     fun getSmtpSettings(): SmtpSettings {
-        val jsonText = transaction {
+        val jsonText = readTransaction {
             AppSettings
                 .selectAll().where { AppSettings.teamNumber eq -1 }
                 .limit(1)
@@ -321,7 +322,7 @@ object SettingsService {
 
     fun getCloudflaredSettings(): CloudflaredSettings {
         val jsonText = try {
-            transaction {
+            readTransaction {
                 AppSettings
                     .selectAll().where { AppSettings.teamNumber eq -2 }
                     .limit(1)

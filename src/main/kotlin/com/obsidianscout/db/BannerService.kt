@@ -17,7 +17,7 @@ import java.util.UUID
 
 object BannerService {
 
-    fun getAll(teamNumber: Int? = null): List<BannerDto> = transaction {
+    fun getAll(teamNumber: Int? = null): List<BannerDto> = readTransaction {
         val query = if (teamNumber != null) {
             Banners.selectAll().where { (Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0) }
         } else {
@@ -26,20 +26,20 @@ object BannerService {
         query.map { it.toDto() }
     }
 
-    fun getActive(teamNumber: Int): List<BannerDto> = transaction {
+    fun getActive(teamNumber: Int): List<BannerDto> = readTransaction {
         Banners.selectAll().where { 
             (Banners.isActive eq true) and ((Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0))
         }.map { it.toDto() }
     }
 
-    fun getLoginBanners(): List<BannerDto> = transaction {
+    fun getLoginBanners(): List<BannerDto> = readTransaction {
         Banners.selectAll().where { 
             (Banners.isActive eq true) and (Banners.showOnLogin eq true)
         }.map { it.toDto() }
     }
 
-    fun getById(id: String): BannerDto? = transaction {
-        val uuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction null
+    fun getById(id: String): BannerDto? = readTransaction {
+        val uuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@readTransaction null
         Banners.selectAll().where { Banners.id eq uuid }.firstOrNull()?.toDto()
     }
 

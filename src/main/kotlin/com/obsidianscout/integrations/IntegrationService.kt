@@ -55,6 +55,7 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -453,7 +454,7 @@ object IntegrationService {
         activeSettings: ApiSettings? = null,
         session: UserSession? = null
     ): List<EventRecord> {
-        return transaction {
+        return readTransaction {
             val normalizedActiveKey = activeKey?.lowercase()?.trim() ?: ""
             val requiredKeys = mutableSetOf<String>()
             val activeMatchesYear = normalizedActiveKey.isNotBlank() && (year == null || normalizedActiveKey.startsWith(year.toString()))
@@ -588,7 +589,7 @@ object IntegrationService {
     }
 
     fun listTeams(eventKey: String, session: UserSession): List<TeamRecord> {
-        return transaction {
+        return readTransaction {
             val bbotMappings = getBBotMappings(eventKey)
             val placeholderToBBot = bbotMappings.associate { it.placeholderKey.lowercase().trim() to it.bbotKey }
 
@@ -690,7 +691,7 @@ object IntegrationService {
     }
 
     fun listMatches(eventKey: String): List<MatchRecord> {
-        return transaction {
+        return readTransaction {
             // Fetch the event venue timezone once so every MatchRecord can carry it.
             // All scheduledTime/actualTime values stored in the DB are UTC epoch seconds.
             val eventTimezone = ApiEvents.selectAll()
@@ -807,12 +808,12 @@ object IntegrationService {
     )
 
     fun getBBotMappings(eventKey: String): List<BBotMapping> {
-        return transaction {
+        return readTransaction {
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
             val isFtcEvent = eventKey.contains("ftc", ignoreCase = true) ||
                 allTeams.any { it[ApiTeams.teamKey].startsWith("ftc", ignoreCase = true) }
             if (isFtcEvent) {
-                return@transaction emptyList()
+                return@readTransaction emptyList()
             }
             val allMatches = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
 
@@ -874,7 +875,7 @@ object IntegrationService {
     }
 
     fun summary(): SummaryResponse {
-        return transaction {
+        return readTransaction {
             SummaryResponse(
                 entries = ScoutingEntries.selectAll().count().toInt(),
                 events = ApiEvents.selectAll().count().toInt(),
@@ -885,7 +886,7 @@ object IntegrationService {
     }
 
     fun getEvent(eventKey: String): EventRecord? {
-        return transaction {
+        return readTransaction {
             val key = eventKey.lowercase().trim()
             ApiEvents.selectAll().where { ApiEvents.eventKey eq key }.limit(1).map { row ->
                 val storedCode = row[ApiEvents.eventCode]

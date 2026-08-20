@@ -548,16 +548,9 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                         if (nodesBelowThreeStart == 0L) {
                             nodesBelowThreeStart = now
                         }
-                        val belowDuration = now - nodesBelowThreeStart
-                        if (belowDuration > 120_000 && currentReplicas > 1) { // Sustained 2 minutes below 3 nodes
-                            println("[Cockroach] WARNING: Active nodes fell to $activeNodes for ${belowDuration / 1000}s. Downscaling cluster replication factor to 1...")
-                            if (setReplicationFactor(1)) {
-                                currentReplicas = 1
-                                isQuorumLost = false
-                                quorumLossDetails = null
-                                println("[Cockroach] Replication factor successfully downscaled to 1.")
-                            }
-                        }
+                        // Intentionally keep cluster replication factor at 3 without downscaling to 1.
+                        // This prevents split-brain writes/divergent histories and ensures seamless Raft consensus catch-up upon node reconnection,
+                        // while readTransaction safely serves latest available committed reads via AS OF SYSTEM TIME.
                     }
 
                     // ── Self-Healing: Invalid Leases ──────────────────────────────────
@@ -923,7 +916,8 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     stmt.execute("SET CLUSTER SETTING kv.replication_reports.interval = '30s'")
                     try { stmt.execute("SET CLUSTER SETTING kv.liveness.heartbeat_interval = '4s'") } catch (_: Exception) {}
                     try { stmt.execute("SET CLUSTER SETTING kv.liveness.lease_duration = '12s'") } catch (_: Exception) {}
-                    println("[Cockroach] Snapshot rate limits and Tailscale VPN liveness thresholds applied (32 MiB/s max, 12s lease duration)")
+                    try { stmt.execute("SET CLUSTER SETTING sql.defaults.default_transaction_use_follower_reads.enabled = true") } catch (_: Exception) {}
+                    println("[Cockroach] Snapshot rate limits, follower read defaults, and Tailscale VPN liveness thresholds applied (32 MiB/s max, 12s lease duration)")
                 }
             }
         } catch (e: Exception) {
@@ -1030,34 +1024,6 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             println("[Cockroach] User SQL setup completed via JDBC")
         } catch (e: Exception) {
             println("[Cockroach] Failed database user setup: ${e.message}")
-        }
-    }
-
-    private fun healQuorumLossCli(tailscaleIp: String, port: Int, isInsecure: Boolean) {
-        try {
-            println("[Cockroach] Attempting CLI zone check/reset...")
-            val cmd = mutableListOf(
-                binaryFile.absolutePath,
-                "sql",
-                "--host=$tailscaleIp:$port",
-                "-e",
-                "ALTER RANGE default CONFIGURE ZONE USING num_replicas = 1; ALTER RANGE system CONFIGURE ZONE USING num_replicas = 1;"
-            )
-            if (isInsecure) {
-                cmd.add("--insecure")
-            } else {
-                val certsDir = File(rootDir, "certs")
-                cmd.add("--certs-dir=${certsDir.absolutePath}")
-            }
-            val p = ProcessBuilder(cmd).directory(rootDir).start()
-            val exited = p.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)
-            if (exited && p.exitValue() == 0) {
-                println("[Cockroach] ✅ Quorum check/reset complete via CLI.")
-            } else {
-                println("[Cockroach] CLI zone reset timed out or skipped. Waiting for cluster nodes to establish Raft consensus...")
-            }
-        } catch (e: Exception) {
-            println("[Cockroach] Error during quorum recovery CLI: ${e.message}")
         }
     }
 
@@ -1168,14 +1134,37 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             var curr: Throwable? = e
             while (curr != null) {
                 val msg = curr.message?.lowercase() ?: ""
+                val className = curr::class.java.simpleName.lowercase()
                 if (msg.contains("lost quorum") ||
+                    msg.contains("quorum lost") ||
+                    msg.contains("quorum is lost") ||
                     msg.contains("range unavailable") ||
+                    msg.contains("ranges unavailable") ||
+                    msg.contains("range is unavailable") ||
                     msg.contains("under-quorum") ||
+                    msg.contains("under quorum") ||
                     msg.contains("poisoned latch") ||
                     msg.contains("cannot write because range") ||
+                    msg.contains("cannot write because replica") ||
+                    msg.contains("cannot serve requests") ||
                     msg.contains("leaderless for") ||
+                    msg.contains("range is leaderless") ||
+                    msg.contains("leader unavailable") ||
+                    msg.contains("no lease holder") ||
+                    msg.contains("no leaseholder") ||
                     msg.contains("transactionretrywithtoughluck") ||
-                    (msg.contains("replica unavailable") && (msg.contains("quorum") || msg.contains("range") || msg.contains("unable to serve")))
+                    msg.contains("result is ambiguous") ||
+                    msg.contains("ambiguousresult") ||
+                    msg.contains("unable to satisfy read at timestamp") ||
+                    msg.contains("unable to route request") ||
+                    msg.contains("latch acquisition failed") ||
+                    msg.contains("replica descriptor for range") ||
+                    msg.contains("desc = transport is closing") ||
+                    className.contains("rangeunavailable") ||
+                    className.contains("notleaseholder") ||
+                    className.contains("ambiguousresult") ||
+                    (msg.contains("replica") && msg.contains("unavailable")) ||
+                    (msg.contains("deadline exceeded") && (msg.contains("range") || msg.contains("replica") || msg.contains("lease") || msg.contains("raft") || msg.contains("liveness") || msg.contains("heartbeat") || msg.contains("context")))
                 ) {
                     return true
                 }
@@ -1185,3 +1174,4 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         }
     }
 }
+

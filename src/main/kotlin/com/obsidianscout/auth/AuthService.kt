@@ -15,6 +15,7 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.sql.addLogger
 import org.jetbrains.exposed.sql.StdOutSqlLogger
 import org.jetbrains.exposed.sql.deleteWhere
@@ -89,13 +90,13 @@ object AuthService {
     }
 
     fun login(username: String, teamNumber: Int, password: String, program: String = "FRC"): UserRecord? {
-        // Fetch the stored hash first (short transaction — just a DB read).
-        val (hash, record) = transaction {
+        // Fetch the stored hash first (short read transaction).
+        val (hash, record) = readTransaction {
             val row = Users
                 .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) and (Users.program eq program) }
                 .limit(1)
                 .firstOrNull()
-                ?: return@transaction null
+                ?: return@readTransaction null
             Pair(row[Users.passwordHash], rowToUser(row))
         } ?: return null
 
@@ -195,7 +196,7 @@ object AuthService {
         offset: Long = 0L
     ): List<UserRecord> {
         println("listUsers: search=$search, teamFilter=$teamFilter, roleFilter=$roleFilter, programFilter=$programFilter, limit=$limit, offset=$offset")
-        return transaction {
+        return readTransaction {
             addLogger(StdOutSqlLogger)
             val query = when (callerSession.role) {
                 UserRole.SUPERADMIN -> {
@@ -215,7 +216,7 @@ object AuthService {
                     }
                     q
                 }
-                else -> return@transaction emptyList()
+                else -> return@readTransaction emptyList()
             }
 
             if (!search.isNullOrBlank()) {
@@ -490,7 +491,7 @@ object AuthService {
 
     fun getUserById(userId: String): UserRecord? {
         val uuid = runCatching { UUID.fromString(userId) }.getOrNull() ?: return null
-        return transaction {
+        return readTransaction {
             Users.selectAll().where { Users.id eq uuid }
                 .limit(1)
                 .map { rowToUser(it) }

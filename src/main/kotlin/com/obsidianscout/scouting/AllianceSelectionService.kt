@@ -7,6 +7,7 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.sql.update
 import java.time.Instant
 
@@ -39,7 +40,7 @@ object AllianceSelectionService {
     }
 
     fun getSelection(session: UserSession, eventKey: String): AllianceSelectionResponse {
-        return transaction {
+        return readTransaction {
             val owner = resolveOwnerKey(session)
             val row = AllianceSelections
                 .selectAll().where {

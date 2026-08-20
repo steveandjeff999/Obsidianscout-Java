@@ -65,6 +65,7 @@ import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
+import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.dao.id.EntityID
 import java.io.File
 import java.time.Instant
@@ -138,7 +139,7 @@ suspend fun ApplicationCall.requireMobileSession(secret: String): UserSession {
     val token = authHeader.removePrefix("Bearer ").trim()
     val session = JwtHelper.verifyToken(token, secret)
         ?: throw MobileApiException(HttpStatusCode.Unauthorized, "Invalid or expired token", "INVALID_TOKEN")
-    val exists = transaction {
+    val exists = readTransaction {
         Users.selectAll().where { Users.id eq UUID.fromString(session.userId) }.any()
     }
     if (!exists) {
@@ -2139,7 +2140,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val invitesList = AllianceService.listInvites(session)
 
                 val details = allianceList.map { item ->
-                    val memberCount = transaction {
+                    val memberCount = readTransaction {
                         AllianceMemberships.selectAll().where { 
                             (AllianceMemberships.allianceId eq UUID.fromString(item.id)) and 
                             (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED")) 
@@ -2155,7 +2156,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     )
                 }
 
-                val mappedPending = transaction {
+                val mappedPending = readTransaction {
                     invitesList.map { item ->
                         val membershipId = AllianceMemberships.selectAll().where {
                             (AllianceMemberships.allianceId eq UUID.fromString(item.id)) and
@@ -2255,7 +2256,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 val messages = if (type == "dm") {
                     if (otherUserId != null) {
-                        val otherUser = transaction {
+                        val otherUser = readTransaction {
                             AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber)
                                 .find { it.id == otherUserId }
                         } ?: throw MobileApiException(HttpStatusCode.NotFound, "User not found", "USER_NOT_FOUND")
@@ -2284,7 +2285,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             get("/chat/members") {
                 val session = call.requireMobileSession(secret)
-                val users = transaction {
+                val users = readTransaction {
                     AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = session.teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = session.teamNumber)
                 }.filter { it.username != session.username }
 
@@ -2312,7 +2313,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 )
 
                 if (req.recipientId != null) {
-                    val otherUser = transaction {
+                    val otherUser = readTransaction {
                         AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber)
                             .find { it.id == req.recipientId }
                     } ?: throw MobileApiException(HttpStatusCode.NotFound, "Recipient not found", "USER_NOT_IN_SCOPE")
@@ -2370,7 +2371,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         if (messages.isNotEmpty()) {
                             val last = messages.last()
                             val otherUserStr = file.name.removeSuffix("_chat_history.json").split("_").find { it != session.username } ?: ""
-                            val otherUser = transaction {
+                            val otherUser = readTransaction {
                                 AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber)
                                     .find { it.username == otherUserStr }
                             }
