@@ -51,15 +51,20 @@ async function initPrescoutPit(me) {
         const fieldContainer = document.getElementById("form-fields");
         const submitButton = document.getElementById("pit-submit");
         const clearButton = document.getElementById("pit-clear");
-        const teamSelect = document.getElementById("team-select");
+        const teamInput = document.getElementById("team-input");
         const timezoneBadge = document.getElementById("timezone-badge");
         const eventCodeInput = document.getElementById("event-code-input");
-        const loadEventBtn = document.getElementById("load-event-btn");
         const formBlocked = document.getElementById("form-blocked");
 
-        timezoneBadge.textContent = settings.timezone;
+        timezoneBadge.textContent = settings.timezone || "UTC";
 
-        let entryCache = [];
+        const defaultEvent = Obsidianscout.resolveEventKey(settings) || settings.eventCode || "prescout";
+        if (eventCodeInput && !eventCodeInput.value) {
+            eventCodeInput.value = defaultEvent;
+        }
+        currentEventKey = (eventCodeInput && eventCodeInput.value.trim().toLowerCase()) || defaultEvent;
+
+        let entryCache = await loadEntryCache();
 
         // Build dynamic form fields
         const reserved = new Set(["eventKey", "targetTeamNumber"]);
@@ -73,6 +78,43 @@ async function initPrescoutPit(me) {
                 }
             });
 
+        async function handleSelectionChange(preserveFields = false) {
+            const rawTeam = teamInput ? teamInput.value.trim() : "";
+            const teamNumber = Number(rawTeam);
+            currentEventKey = (eventCodeInput && eventCodeInput.value.trim().toLowerCase()) || defaultEvent;
+
+            const ready = Boolean(teamNumber > 0 && currentEventKey);
+            setFormEnabled(form, formBlocked, ready);
+
+            if (!ready) {
+                if (!preserveFields) {
+                    clearFormFields(fields, form);
+                }
+                return;
+            }
+
+            if (!preserveFields) {
+                clearFormFields(fields, form);
+                const entry = findEntry(entryCache, currentEventKey, teamNumber);
+                if (entry) {
+                    applyEntryToForm(entry, fields, form);
+                }
+            }
+        }
+
+        if (teamInput) {
+            teamInput.addEventListener("input", () => {
+                handleSelectionChange(false);
+            });
+        }
+
+        if (eventCodeInput) {
+            eventCodeInput.addEventListener("input", () => {
+                currentEventKey = eventCodeInput.value.trim().toLowerCase() || defaultEvent;
+                handleSelectionChange(false);
+            });
+        }
+
         if (clearButton) {
             clearButton.addEventListener("click", () => {
                 if (!confirm(Obsidianscout.t("pit_scout.confirm_clear", "Are you sure you want to clear the form? All entered data will be reset."))) {
@@ -82,20 +124,31 @@ async function initPrescoutPit(me) {
             });
         }
 
+        function resolvePayload() {
+            const rawTeam = teamInput ? teamInput.value.trim() : "";
+            const teamNumber = Number(rawTeam);
+            if (!teamNumber || teamNumber <= 0) {
+                Obsidianscout.showToast("Enter a valid team number", "error");
+                return null;
+            }
+
+            currentEventKey = (eventCodeInput && eventCodeInput.value.trim().toLowerCase()) || defaultEvent;
+            const payload = buildPayload(config.fields, form);
+            if (!payload) return null;
+
+            payload.eventKey = currentEventKey;
+            payload.targetTeamNumber = teamNumber;
+            payload.type = "prescout-pit";
+            return payload;
+        }
+
         const exportJsonBtn = document.getElementById("pit-export-json");
         if (exportJsonBtn) {
             exportJsonBtn.addEventListener("click", () => {
-                if (!teamSelect.value || !currentEventKey) {
-                    Obsidianscout.showToast("Select a team and load an event first", "error");
-                    return;
-                }
-                const payload = buildPayload(config.fields, form);
+                const payload = resolvePayload();
                 if (!payload) return;
-                payload.eventKey = currentEventKey;
-                payload.targetTeamNumber = Number(teamSelect.value);
-                payload.type = "prescout-pit";
 
-                const filename = `prescout_pit_${currentEventKey}_team${payload.targetTeamNumber}.json`;
+                const filename = `prescout_pit_${payload.eventKey}_team${payload.targetTeamNumber}.json`;
                 Obsidianscout.downloadJson(payload, filename);
             });
         }
@@ -103,90 +156,18 @@ async function initPrescoutPit(me) {
         const genQrBtn = document.getElementById("pit-gen-qr");
         if (genQrBtn) {
             genQrBtn.addEventListener("click", () => {
-                if (!teamSelect.value || !currentEventKey) {
-                    Obsidianscout.showToast("Select a team and load an event first", "error");
-                    return;
-                }
-                const payload = buildPayload(config.fields, form);
+                const payload = resolvePayload();
                 if (!payload) return;
-                payload.eventKey = currentEventKey;
-                payload.targetTeamNumber = Number(teamSelect.value);
-                payload.type = "prescout-pit";
 
                 Obsidianscout.showQrModal(payload, "Pit Prescouting", payload.targetTeamNumber, null);
             });
         }
 
-        // Event loading logic
-        loadEventBtn.addEventListener("click", async () => {
-            const rawCode = eventCodeInput.value.trim().toLowerCase();
-            if (!rawCode) {
-                Obsidianscout.showToast("Enter a valid event code", "error");
-                return;
-            }
-
-            Obsidianscout.setButtonLoading(loadEventBtn, true, "Syncing Event...");
-            eventCodeInput.disabled = true;
-            teamSelect.disabled = true;
-
-            try {
-                let key = rawCode;
-                if (!/^\d{4}/.test(rawCode)) {
-                    key = `${settings.year}${rawCode}`;
-                }
-                currentEventKey = key;
-
-                await Obsidianscout.request(`/api/prescout/sync-event?eventKey=${key}`, {
-                    method: "POST"
-                });
-
-                Obsidianscout.showToast("Event teams synced successfully!", "success");
-
-                await loadTeams(key, teamSelect);
-                teamSelect.disabled = false;
-
-                entryCache = await loadEntryCache();
-                await handleSelectionChange();
-            } catch (err) {
-                console.error(err);
-                Obsidianscout.showToast("Failed to load event: " + err.message, "error");
-            } finally {
-                Obsidianscout.setButtonLoading(loadEventBtn, false);
-                eventCodeInput.disabled = false;
-            }
-        });
-
-        teamSelect.addEventListener("change", handleSelectionChange);
-
-        async function handleSelectionChange() {
-            const teamValue = teamSelect.value;
-            const ready = Boolean(teamValue && currentEventKey);
-            setFormEnabled(form, formBlocked, ready);
-            clearFormFields(fields, form);
-
-            if (!ready) {
-                return;
-            }
-
-            const entry = findEntry(entryCache, currentEventKey, Number(teamValue));
-            if (entry) {
-                applyEntryToForm(entry, fields, form);
-            }
-        }
-
         const saveOfflineButton = document.getElementById("pit-save-offline");
         if (saveOfflineButton) {
             saveOfflineButton.addEventListener("click", () => {
-                if (!teamSelect.value || !currentEventKey) {
-                    Obsidianscout.showToast("Select a team", "error");
-                    return;
-                }
-
-                const payload = buildPayload(config.fields, form);
+                const payload = resolvePayload();
                 if (!payload) return;
-
-                payload.eventKey = currentEventKey;
-                payload.targetTeamNumber = Number(teamSelect.value);
 
                 const pending = JSON.parse(Obsidianscout.safeGetItem("pending_prescout_pit_scouting_entries") || "[]");
                 pending.push({
@@ -194,32 +175,20 @@ async function initPrescoutPit(me) {
                 });
                 Obsidianscout.safeSetItem("pending_prescout_pit_scouting_entries", JSON.stringify(pending));
 
-                Obsidianscout.showToast("Saved locally (Offline mode)", "success");
+                Obsidianscout.showToast(`Saved locally (Offline mode) - Team ${payload.targetTeamNumber}`, "success");
                 Obsidianscout.updateConnectionStatus();
 
                 clearFormFields(fields, form);
-                handleSelectionChange();
+                handleSelectionChange(true);
             });
         }
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
+            const payload = resolvePayload();
+            if (!payload) return;
+
             Obsidianscout.setButtonLoading(submitButton, true, t('scout.saving', 'Saving entry...'));
-
-            if (!teamSelect.value || !currentEventKey) {
-                Obsidianscout.showToast("Select a team", "error");
-                Obsidianscout.setButtonLoading(submitButton, false);
-                return;
-            }
-
-            const payload = buildPayload(config.fields, form);
-            if (!payload) {
-                Obsidianscout.setButtonLoading(submitButton, false);
-                return;
-            }
-
-            payload.eventKey = currentEventKey;
-            payload.targetTeamNumber = Number(teamSelect.value);
 
             try {
                 const response = await Obsidianscout.request("/api/prescout/pit-scouting", {
@@ -228,7 +197,7 @@ async function initPrescoutPit(me) {
                         data: payload
                     }
                 });
-                Obsidianscout.showToast("Pit prescout entry saved", "success");
+                Obsidianscout.showToast(`Pit prescout entry saved for Team ${payload.targetTeamNumber}`, "success");
                 
                 const newEntry = (response && response.entry) ? response.entry : {
                     eventKey: payload.eventKey,
@@ -252,41 +221,18 @@ async function initPrescoutPit(me) {
                     });
                     Obsidianscout.safeSetItem("pending_prescout_pit_scouting_entries", JSON.stringify(pending));
 
-                    Obsidianscout.showToast("Saved locally (Offline mode)", "success");
+                    Obsidianscout.showToast(`Saved locally (Offline mode) - Team ${payload.targetTeamNumber}`, "success");
                     Obsidianscout.updateConnectionStatus();
 
                     clearFormFields(fields, form);
-                    handleSelectionChange();
+                    handleSelectionChange(true);
                 } else {
-                    Obsidianscout.showToast(error.message || "Failed to save entry", "error");
-                }
-            } finally {
-                Obsidianscout.setButtonLoading(submitButton, false);
-            }
         });
 
     } catch (err) {
         console.error(err);
         Obsidianscout.showRetryButton(mainContentWrapper, "Failed to load config: " + err.message, () => initPrescoutPit(me));
     }
-}
-
-async function loadTeams(eventKey, teamSelect) {
-    const teams = await Obsidianscout.request(`/api/teams?eventKey=${eventKey}`);
-
-    teamSelect.innerHTML = "";
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = t('prescout_pit.select_team', "Select team");
-    teamSelect.appendChild(placeholder);
-
-    teams.forEach((team) => {
-        const option = document.createElement("option");
-        option.value = team.teamNumber;
-        const displayNum = Obsidianscout.formatTeam(team.teamKey, team.teamNumber);
-        option.textContent = `${displayNum} ${team.nickname || team.name || ""}`.trim();
-        teamSelect.appendChild(option);
-    });
 }
 
 function buildField(field) {
@@ -329,11 +275,28 @@ function buildField(field) {
                 input.appendChild(optionNode);
             });
             break;
+        case "text":
+        case "static_text":
+        case "label":
+        case "info": {
+            const staticDisplay = document.createElement("div");
+            staticDisplay.className = "static-text-display";
+            staticDisplay.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
+            if (field.placeholder) {
+                const sub = document.createElement("div");
+                sub.className = "static-text-sub";
+                sub.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.placeholder) : field.placeholder;
+                staticDisplay.appendChild(sub);
+            }
+            wrapper.appendChild(staticDisplay);
+            return wrapper;
+        }
         case "checkbox":
             input = document.createElement("input");
             input.type = "checkbox";
             break;
         case "textarea":
+        case "notes":
             input = document.createElement("textarea");
             break;
         default:
@@ -445,23 +408,63 @@ function buildCounter(field) {
 
 function buildRating(field) {
     const wrapper = document.createElement("div");
-    wrapper.className = "rating";
+    wrapper.className = "rating-stars-container";
 
     const input = document.createElement("input");
-    input.type = "range";
-    input.min = field.min || 1;
-    input.max = field.max || 5;
-    input.step = field.step || 1;
-    input.value = input.min;
+    input.type = "hidden";
+    const minVal = Number(field.min !== undefined && field.min !== null ? field.min : 1);
+    const maxVal = Number(field.max !== undefined && field.max !== null ? field.max : 5);
+    input.min = minVal;
+    input.max = maxVal;
+    input.value = String(minVal);
 
-    const output = document.createElement("output");
-    output.textContent = input.value;
+    const starsGroup = document.createElement("div");
+    starsGroup.className = "rating-stars-group";
+
+    const starElements = [];
+    const count = Math.max(1, maxVal - minVal + 1);
+
+    function updateStars(val) {
+        input.value = String(val);
+        starElements.forEach((btn, idx) => {
+            const starNum = minVal + idx;
+            if (starNum <= val) {
+                btn.classList.add("selected");
+                btn.textContent = "★";
+            } else {
+                btn.classList.remove("selected");
+                btn.textContent = "☆";
+            }
+        });
+    }
+
+    for (let i = 0; i < count; i++) {
+        const starNum = minVal + i;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "rating-star-btn";
+        btn.dataset.value = String(starNum);
+        btn.textContent = (starNum <= minVal) ? "★" : "☆";
+        if (starNum <= minVal) {
+            btn.classList.add("selected");
+        }
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            updateStars(starNum);
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        starsGroup.appendChild(btn);
+        starElements.push(btn);
+    }
+
     input.addEventListener("input", () => {
-        output.textContent = input.value;
+        const val = Number(input.value) || minVal;
+        updateStars(val);
     });
 
     wrapper.appendChild(input);
-    wrapper.appendChild(output);
+    wrapper.appendChild(starsGroup);
     return { wrapper, input };
 }
 
@@ -569,10 +572,7 @@ function applyEntryToForm(entry, fields, form) {
         }
         input.value = value;
         if (field.type === "rating") {
-            const output = input.parentElement?.querySelector("output");
-            if (output) {
-                output.textContent = input.value;
-            }
+            input.dispatchEvent(new Event("input", { bubbles: true }));
         }
     });
 }
@@ -590,12 +590,9 @@ function clearFormFields(fields, form) {
             input.checked = false;
             return;
         }
-        input.value = field.type === "counter" && field.min !== undefined && field.min !== null ? field.min : "";
+        input.value = field.type === "counter" && field.min !== undefined && field.min !== null ? field.min : ((field.type === "rating" && field.min !== undefined && field.min !== null) ? String(field.min) : (field.type === "rating" ? "1" : ""));
         if (field.type === "rating") {
-            const output = input.parentElement?.querySelector("output");
-            if (output) {
-                output.textContent = input.min || "0";
-            }
+            input.dispatchEvent(new Event("input", { bubbles: true }));
         }
     });
 }
@@ -603,6 +600,14 @@ function clearFormFields(fields, form) {
 function setFormEnabled(form, notice, enabled) {
     if (notice) {
         notice.classList.toggle("hidden", enabled);
+    }
+    const fieldContainer = document.getElementById("form-fields");
+    if (fieldContainer) {
+        fieldContainer.classList.toggle("hidden", !enabled);
+    }
+    const actionsRow = form.querySelector(".row.gap-12") || form.querySelector(".form-actions");
+    if (actionsRow) {
+        actionsRow.classList.toggle("hidden", !enabled);
     }
     const inputs = form.querySelectorAll("input, select, textarea, button");
     inputs.forEach((input) => {

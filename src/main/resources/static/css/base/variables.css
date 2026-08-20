@@ -19,6 +19,8 @@
     --primary: var(--accent);
     --ink-muted: var(--muted);
     --danger: #ef4444;
+    --text-primary: var(--ink);
+    --text-muted: var(--muted);
 }
 
 body.theme-dark {
@@ -41,5 +43,6 @@ body.theme-dark {
     --danger: #f87171;
     --primary: var(--accent);
     --on-primary: #09090b;
+    --text-primary: var(--ink);
+    --text-muted: var(--muted);
 }
-

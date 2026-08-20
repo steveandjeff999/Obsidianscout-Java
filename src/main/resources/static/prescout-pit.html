@@ -32,19 +32,14 @@
         <main class="main-content">
             <div class="card">
                 <h1 data-i18n="prescout-pit.pit_prescouting">Pit Prescouting</h1>
-                <p class="notice" data-i18n="prescout-pit.enter_an_event_code_load_the_t">Enter an event code, load the teams, then fill in the form driven by config JSON.</p>
-
                 <div class="split mb-18">
                     <div class="field">
                         <label for="event-code-input" data-i18n="prescout-pit.event_code">Event Code</label>
-                        <div class="row gap-8">
-                            <input id="event-code-input" type="text" data-i18n-placeholder="prescout-pit.placeholder_eg_2024micmp" placeholder="e.g. 2024micmp" style="min-width: 140px;" />
-                            <button id="load-event-btn" class="btn" type="button" data-i18n="prescout-pit.load">Load</button>
-                        </div>
+                        <input id="event-code-input" type="text" data-i18n-placeholder="prescout-pit.placeholder_eg_2024micmp" placeholder="e.g. prescout or 2024micmp" style="min-width: 140px;" />
                     </div>
                     <div class="field">
-                        <label for="team-select" data-i18n="all-data.team">Team</label>
-                        <select id="team-select" disabled></select>
+                        <label for="team-input" data-i18n="all-data.team">Team Number</label>
+                        <input id="team-input" type="number" min="1" placeholder="e.g. 254" />
                     </div>
                     <div class="field">
                         <label data-i18n="dashboard.timezone">Timezone</label>
@@ -53,10 +48,10 @@
                 </div>
 
                 <form id="pit-scouting-form" class="form-grid">
-                    <div id="form-blocked" class="notice" data-i18n="prescout-pit.enter_an_event_code_and_click_">Enter an event code and click Load, then select a team to start scouting.</div>
-                    <div id="form-fields" class="form-grid"></div>
+                    <div id="form-blocked" class="notice">Enter a team number to start pit prescouting.</div>
+                    <div id="form-fields" class="form-grid hidden"></div>
 
-                    <div class="row gap-12 wrap">
+                    <div class="row gap-12 wrap hidden">
                         <button id="pit-submit" class="btn" type="submit" disabled data-i18n="scout.save_entry">Save entry</button>
                         <button id="pit-save-offline" class="btn secondary" type="button" disabled data-i18n="scout.save_offline">Save Offline</button>
                         <button id="pit-export-json" class="btn secondary" type="button" disabled data-i18n="pit-scout.export_json">Export JSON</button>

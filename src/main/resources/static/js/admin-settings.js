@@ -1329,6 +1329,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             { key: "auto", title: "Auto" },
             { key: "teleop", title: "Teleop" },
             { key: "endgame", title: "Endgame" },
+            { key: "postmatch", title: "Post Match" },
             { key: "", title: "General" }
         ];
 
@@ -1519,7 +1520,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const phaseOptions = [
             { value: "auto", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.auto','Auto') : 'Auto' },
             { value: "teleop", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.teleop','Teleop') : 'Teleop' },
-            { value: "endgame", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.endgame','Endgame') : 'Endgame' }
+            { value: "endgame", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.endgame','Endgame') : 'Endgame' },
+            { value: "postmatch", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.postmatch','Post Match') : 'Post Match' }
         ];
         phaseOptions.forEach((phase) => {
             const option = document.createElement("option");
@@ -2032,12 +2034,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (field.phase) {
             const p = String(field.phase).toLowerCase().trim();
             if (p === "general" || p === "") return "teleop";
+            if (p === "post" || p === "post_match" || p === "post-match" || p === "postmatch") return "postmatch";
             return p;
         }
         const id = String(field.id || "").toLowerCase();
         if (id.startsWith("auto")) return "auto";
         if (id.startsWith("teleop")) return "teleop";
         if (id.startsWith("endgame")) return "endgame";
+        if (id.startsWith("post")) return "postmatch";
         return "teleop";
     }
 

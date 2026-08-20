@@ -317,3 +317,58 @@ input:checked + .slider:before {
     border-radius: 50%;
 }
 
+/* ── Static Text Display Field ── */
+.static-text-display {
+    font-size: 0.92rem;
+    color: var(--ink);
+    background-color: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin: 4px 0;
+    line-height: 1.4;
+}
+
+.static-text-display .static-text-sub {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 4px;
+}
+
+/* ── Star Rating Component ── */
+.rating-stars-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+}
+
+.rating-stars-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.rating-star-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 28px;
+    line-height: 1;
+    padding: 6px 8px;
+    color: var(--muted);
+    transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease;
+    user-select: none;
+    border-radius: 8px;
+}
+
+.rating-star-btn:hover {
+    transform: scale(1.25);
+    color: #f59e0b;
+}
+
+.rating-star-btn.selected {
+    color: #f59e0b;
+    text-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+}
+

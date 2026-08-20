@@ -409,26 +409,17 @@ function buildField(field) {
                 }
                 input.appendChild(optionNode);
             });
+            break;
         case "text":
         case "static_text":
         case "label":
         case "info": {
             const staticDisplay = document.createElement("div");
             staticDisplay.className = "static-text-display";
-            staticDisplay.style.fontSize = "0.92rem";
-            staticDisplay.style.color = "var(--text-primary, #e2e8f0)";
-            staticDisplay.style.backgroundColor = "var(--glass-bg, rgba(255, 255, 255, 0.05))";
-            staticDisplay.style.border = "1px solid var(--glass-border, rgba(255, 255, 255, 0.1))";
-            staticDisplay.style.borderRadius = "10px";
-            staticDisplay.style.padding = "10px 14px";
-            staticDisplay.style.margin = "4px 0";
-            staticDisplay.style.lineHeight = "1.4";
             staticDisplay.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
             if (field.placeholder) {
                 const sub = document.createElement("div");
-                sub.style.fontSize = "0.8rem";
-                sub.style.color = "var(--text-muted, #94a3b8)";
-                sub.style.marginTop = "4px";
+                sub.className = "static-text-sub";
                 sub.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.placeholder) : field.placeholder;
                 staticDisplay.appendChild(sub);
             }
@@ -574,23 +565,63 @@ function buildCounter(field) {
 
 function buildRating(field) {
     const wrapper = document.createElement("div");
-    wrapper.className = "rating";
+    wrapper.className = "rating-stars-container";
 
     const input = document.createElement("input");
-    input.type = "range";
-    input.min = field.min || 1;
-    input.max = field.max || 5;
-    input.step = field.step || 1;
-    input.value = input.min;
+    input.type = "hidden";
+    const minVal = Number(field.min !== undefined && field.min !== null ? field.min : 1);
+    const maxVal = Number(field.max !== undefined && field.max !== null ? field.max : 5);
+    input.min = minVal;
+    input.max = maxVal;
+    input.value = String(minVal);
 
-    const output = document.createElement("output");
-    output.textContent = input.value;
+    const starsGroup = document.createElement("div");
+    starsGroup.className = "rating-stars-group";
+
+    const starElements = [];
+    const count = Math.max(1, maxVal - minVal + 1);
+
+    function updateStars(val) {
+        input.value = String(val);
+        starElements.forEach((btn, idx) => {
+            const starNum = minVal + idx;
+            if (starNum <= val) {
+                btn.classList.add("selected");
+                btn.textContent = "★";
+            } else {
+                btn.classList.remove("selected");
+                btn.textContent = "☆";
+            }
+        });
+    }
+
+    for (let i = 0; i < count; i++) {
+        const starNum = minVal + i;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "rating-star-btn";
+        btn.dataset.value = String(starNum);
+        btn.textContent = (starNum <= minVal) ? "★" : "☆";
+        if (starNum <= minVal) {
+            btn.classList.add("selected");
+        }
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            updateStars(starNum);
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        starsGroup.appendChild(btn);
+        starElements.push(btn);
+    }
+
     input.addEventListener("input", () => {
-        output.textContent = input.value;
+        const val = Number(input.value) || minVal;
+        updateStars(val);
     });
 
     wrapper.appendChild(input);
-    wrapper.appendChild(output);
+    wrapper.appendChild(starsGroup);
     return { wrapper, input };
 }
 
@@ -709,10 +740,7 @@ function applyEntryToForm(entry, fields, form) {
         }
         input.value = value;
         if (field.type === "rating") {
-            const output = input.parentElement?.querySelector("output");
-            if (output) {
-                output.textContent = input.value;
-            }
+            input.dispatchEvent(new Event("input", { bubbles: true }));
         }
     });
 
@@ -746,12 +774,9 @@ function clearFormFields(fields, form) {
             input.checked = false;
             return;
         }
-        input.value = field.type === "counter" && field.min !== undefined && field.min !== null ? field.min : "";
+        input.value = field.type === "counter" && field.min !== undefined && field.min !== null ? field.min : ((field.type === "rating" && field.min !== undefined && field.min !== null) ? String(field.min) : (field.type === "rating" ? "1" : ""));
         if (field.type === "rating") {
-            const output = input.parentElement?.querySelector("output");
-            if (output) {
-                output.textContent = input.min || "0";
-            }
+            input.dispatchEvent(new Event("input", { bubbles: true }));
         }
     });
 
@@ -835,6 +860,14 @@ function buildRobotRoleCollectionField() {
 function setFormEnabled(form, notice, enabled) {
     if (notice) {
         notice.classList.toggle("hidden", enabled);
+    }
+    const fieldContainer = document.getElementById("form-fields");
+    if (fieldContainer) {
+        fieldContainer.classList.toggle("hidden", !enabled);
+    }
+    const actionsRow = form.querySelector(".row.gap-12") || form.querySelector(".form-actions");
+    if (actionsRow) {
+        actionsRow.classList.toggle("hidden", !enabled);
     }
     const inputs = form.querySelectorAll("input, select, textarea, button");
     inputs.forEach((input) => {
