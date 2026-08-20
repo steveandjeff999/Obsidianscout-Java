@@ -40,7 +40,8 @@ data class ScoutingEntryRecord(
     val isPrescout: Boolean = false,
     val matchPlayedTime: Long? = null,
     val hasDiscrepancy: Boolean = false,
-    val conflictingTeams: List<Int> = emptyList()
+    val conflictingTeams: List<Int> = emptyList(),
+    val username: String? = null
 )
 
 object ScoutingService {
@@ -68,6 +69,13 @@ object ScoutingService {
             } else {
                 emptyMap()
             }
+            val userIds = rows.map { it[ScoutingEntries.submittedByUserId].value }.distinct()
+            val userNames = if (userIds.isNotEmpty()) {
+                com.obsidianscout.db.Users.selectAll().where { com.obsidianscout.db.Users.id inList userIds }
+                    .associate { it[com.obsidianscout.db.Users.id].value to it[com.obsidianscout.db.Users.username] }
+            } else {
+                emptyMap()
+            }
             val rawRecords = rows.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
                 val mKey = row[ScoutingEntries.matchKey]
@@ -85,7 +93,8 @@ object ScoutingService {
                     isPrescout = row[ScoutingEntries.isPrescout],
                     matchPlayedTime = matchTimes[mKey],
                     hasDiscrepancy = row[ScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = conflicting
+                    conflictingTeams = conflicting,
+                    username = userNames[row[ScoutingEntries.submittedByUserId].value]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -109,6 +118,13 @@ object ScoutingService {
             } else {
                 emptyMap()
             }
+            val userIds = rows.map { it[ScoutingEntries.submittedByUserId].value }.distinct()
+            val userNames = if (userIds.isNotEmpty()) {
+                com.obsidianscout.db.Users.selectAll().where { com.obsidianscout.db.Users.id inList userIds }
+                    .associate { it[com.obsidianscout.db.Users.id].value to it[com.obsidianscout.db.Users.username] }
+            } else {
+                emptyMap()
+            }
             val rawRecords = rows.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
                 val mKey = row[ScoutingEntries.matchKey]
@@ -126,7 +142,8 @@ object ScoutingService {
                     isPrescout = row[ScoutingEntries.isPrescout],
                     matchPlayedTime = matchTimes[mKey],
                     hasDiscrepancy = row[ScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = conflicting
+                    conflictingTeams = conflicting,
+                    username = userNames[row[ScoutingEntries.submittedByUserId].value]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -253,7 +270,8 @@ object ScoutingService {
                 isPrescout = duplicate[ScoutingEntries.isPrescout],
                 matchPlayedTime = matchPlayedTime,
                 hasDiscrepancy = duplicate[ScoutingEntries.hasDiscrepancy],
-                conflictingTeams = conflicting
+                conflictingTeams = conflicting,
+                username = session.username
             )
         }
 
@@ -303,7 +321,8 @@ object ScoutingService {
                 isPrescout = isPrescout,
                 matchPlayedTime = matchPlayedTime,
                 hasDiscrepancy = updatedRow[ScoutingEntries.hasDiscrepancy],
-                conflictingTeams = conflicting
+                conflictingTeams = conflicting,
+                username = session.username
             )
         }
     }

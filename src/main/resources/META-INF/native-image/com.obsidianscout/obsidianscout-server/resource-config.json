@@ -10,6 +10,7 @@
       { "pattern": ".*\\.jks" },
       { "pattern": ".*\\.crt" },
       { "pattern": ".*\\.pem" },
+      { "pattern": "static/.*" },
       { "pattern": "com/google/.*" },
       { "pattern": "google/.*" }
     ],

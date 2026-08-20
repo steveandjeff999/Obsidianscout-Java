@@ -79,14 +79,86 @@
 
                 <!-- Tabs -->
                 <div class="team-tabs">
-                    <button class="team-tab-btn active" data-tab="overview" data-i18n="team.overview">Overview</button>
+                    <button class="team-tab-btn active" data-tab="analytics" data-i18n="team.analytics">Analytics</button>
+                    <button class="team-tab-btn" data-tab="overview" data-i18n="team.overview">Overview</button>
+                    <button class="team-tab-btn" data-tab="pit" data-i18n="team.pit_profile">Pit Profile</button>
                     <button class="team-tab-btn" data-tab="schedule" data-i18n="team.match_schedule">Match Schedule</button>
                     <button class="team-tab-btn" data-tab="records" data-i18n="team.scouting_records">Scouting Records</button>
                 </div>
 
                 <!-- Tab Contents -->
-                <!-- 1. Overview -->
-                <div class="team-tab-content active" id="tab-overview">
+                <!-- 1. Analytics -->
+                <div class="team-tab-content active" id="tab-analytics">
+                    <!-- Phase Breakdown Grid -->
+                    <div class="card">
+                        <h2 data-i18n="team.scoring_breakdown">Scoring Breakdown by Phase</h2>
+                        <div class="team-phase-grid mt-16">
+                            <div class="phase-card phase-auto">
+                                <div class="phase-label">Autonomous Avg</div>
+                                <div class="phase-val" id="analytics-auto-avg">--</div>
+                            </div>
+                            <div class="phase-card phase-teleop">
+                                <div class="phase-label">Teleop Avg</div>
+                                <div class="phase-val" id="analytics-teleop-avg">--</div>
+                            </div>
+                            <div class="phase-card phase-endgame">
+                                <div class="phase-label">Endgame Avg</div>
+                                <div class="phase-val" id="analytics-endgame-avg">--</div>
+                            </div>
+                            <div class="phase-card phase-max">
+                                <div class="phase-label">Peak Match Score</div>
+                                <div class="phase-val" id="analytics-max-score">--</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Match Scoring Progression Chart -->
+                    <div class="card mt-20" id="card-progression-chart">
+                        <h2>Match-by-Match Scoring Trend</h2>
+                        <p class="notice">Visual breakdown of scored points across played qualification and playoff matches.</p>
+                        <div class="team-chart-wrapper mt-16" id="team-chart-container">
+                            <!-- Populated by JS -->
+                        </div>
+                        <div class="chart-legend mt-12">
+                            <span class="legend-badge legend-auto"><span class="legend-dot"></span> Auto</span>
+                            <span class="legend-badge legend-teleop"><span class="legend-dot"></span> Teleop</span>
+                            <span class="legend-badge legend-endgame"><span class="legend-dot"></span> Endgame</span>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Game Metrics Breakdown -->
+                    <div class="card mt-20" id="card-game-metrics">
+                        <h2>Game Metrics & Cycle Averages</h2>
+                        <p class="notice">Detailed averages and completion percentages calculated from match scouting forms.</p>
+                        <div class="table-scroll mt-16">
+                            <table class="table" id="team-metrics-table">
+                                <thead>
+                                    <tr>
+                                        <th>Metric / Action</th>
+                                        <th>Phase</th>
+                                        <th>Average / Rate</th>
+                                        <th>Max in Match</th>
+                                        <th>Total Recorded</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="team-metrics-tbody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Qualitative Scout Feedback -->
+                    <div class="card mt-20" id="card-qual-summary">
+                        <h2>Qualitative Scout Observations</h2>
+                        <div class="qual-feedback-list mt-12" id="team-qual-list">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Overview -->
+                <div class="team-tab-content" id="tab-overview">
                     <div class="card">
                         <h2 data-i18n="team.team_information">Team Information</h2>
                         <div class="form-grid form-grid-wide" style="margin-top: 16px;">
@@ -126,7 +198,18 @@
                     </div>
                 </div>
 
-                <!-- 2. Match Schedule -->
+                <!-- 3. Pit Profile -->
+                <div class="team-tab-content" id="tab-pit">
+                    <div class="card">
+                        <h2 data-i18n="team.pit_scouting_profile">Pit Scouting Profile</h2>
+                        <p class="notice" data-i18n="team.pit_scouting_details">Technical specifications, mechanism details, and robot capabilities recorded during pit scouting.</p>
+                        <div class="pit-profile-grid mt-16" id="pit-profile-container">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Match Schedule -->
                 <div class="team-tab-content" id="tab-schedule">
                     <div class="card">
                         <h2 data-i18n="team.match_schedule">Match Schedule</h2>
@@ -149,7 +232,7 @@
                     </div>
                 </div>
 
-                <!-- 3. Scouting Records -->
+                <!-- 5. Scouting Records -->
                 <div class="team-tab-content" id="tab-records">
                     <div class="card">
                         <div class="row gap-12 wrap align-center" style="width: 100%; margin-bottom: 20px;">

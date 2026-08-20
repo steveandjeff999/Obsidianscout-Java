@@ -1472,7 +1472,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const labelType = document.createElement("label");
         labelType.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.type','Type') : 'Type';
         const selectType = document.createElement("select");
-        const types = ["text", "textarea", "number", "counter", "rating", "checkbox", "select", "section"];
+        const types = ["text", "textarea", "number", "counter", "rating", "checkbox", "select"];
         types.forEach((t) => {
             const opt = document.createElement("option");
             opt.value = t;
@@ -1554,13 +1554,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         divReq.appendChild(labelReq);
         divReq.appendChild(labelWrap);
         body.appendChild(divReq);
-        
-        // Adjust for section type
-        if (field.type === "section") {
-            divId.style.display = "none";
-            divPhase.style.display = "none";
-            divReq.style.display = "none";
-        }
         
         // 5. Numeric Bounds & Stepping
         if (field.type === "number" || field.type === "counter" || field.type === "rating") {
@@ -2064,11 +2057,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             };
             
             const type = cleaned.type;
-            
-            if (type === "section") {
-                delete cleaned.required;
-                return cleaned;
-            }
+
 
             if (field.phase) {
                 cleaned.phase = String(field.phase);

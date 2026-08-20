@@ -41,7 +41,8 @@ data class QualitativeScoutingEntryRecord(
     val isPrescout: Boolean = false,
     val matchPlayedTime: Long? = null,
     val hasDiscrepancy: Boolean = false,
-    val conflictingTeams: List<Int> = emptyList()
+    val conflictingTeams: List<Int> = emptyList(),
+    val username: String? = null
 )
 
 object QualitativeScoutingService {
@@ -64,6 +65,13 @@ object QualitativeScoutingService {
             } else {
                 emptyMap()
             }
+            val userIds = rows.map { it[QualitativeScoutingEntries.submittedByUserId].value }.distinct()
+            val userNames = if (userIds.isNotEmpty()) {
+                Users.selectAll().where { Users.id inList userIds }
+                    .associate { it[Users.id].value to it[Users.username] }
+            } else {
+                emptyMap()
+            }
             val rawRecords = rows.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
                 val mKey = row[QualitativeScoutingEntries.matchKey]
@@ -81,7 +89,8 @@ object QualitativeScoutingService {
                     isPrescout = row[QualitativeScoutingEntries.isPrescout],
                     matchPlayedTime = matchTimes[mKey],
                     hasDiscrepancy = row[QualitativeScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = conflicting
+                    conflictingTeams = conflicting,
+                    username = userNames[row[QualitativeScoutingEntries.submittedByUserId].value]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -105,6 +114,13 @@ object QualitativeScoutingService {
             } else {
                 emptyMap()
             }
+            val userIds = rows.map { it[QualitativeScoutingEntries.submittedByUserId].value }.distinct()
+            val userNames = if (userIds.isNotEmpty()) {
+                Users.selectAll().where { Users.id inList userIds }
+                    .associate { it[Users.id].value to it[Users.username] }
+            } else {
+                emptyMap()
+            }
             val rawRecords = rows.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
                 val mKey = row[QualitativeScoutingEntries.matchKey]
@@ -122,7 +138,8 @@ object QualitativeScoutingService {
                     isPrescout = row[QualitativeScoutingEntries.isPrescout],
                     matchPlayedTime = matchTimes[mKey],
                     hasDiscrepancy = row[QualitativeScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = conflicting
+                    conflictingTeams = conflicting,
+                    username = userNames[row[QualitativeScoutingEntries.submittedByUserId].value]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -249,7 +266,8 @@ object QualitativeScoutingService {
                 isPrescout = duplicate[QualitativeScoutingEntries.isPrescout],
                 matchPlayedTime = matchPlayedTime,
                 hasDiscrepancy = duplicate[QualitativeScoutingEntries.hasDiscrepancy],
-                conflictingTeams = conflicting
+                conflictingTeams = conflicting,
+                username = session.username
             )
         }
 
@@ -297,7 +315,8 @@ object QualitativeScoutingService {
                 isPrescout = isPrescout,
                 matchPlayedTime = matchPlayedTime,
                 hasDiscrepancy = updatedRow[QualitativeScoutingEntries.hasDiscrepancy],
-                conflictingTeams = conflicting
+                conflictingTeams = conflicting,
+                username = session.username
             )
         }
     }

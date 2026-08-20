@@ -389,12 +389,7 @@ function matchHasTeam(teams, teamKey) {
 
 function buildField(field) {
     if (field.type === "section") {
-        const section = document.createElement("div");
-        section.className = "form-section";
-        const title = document.createElement("h3");
-        title.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
-        section.appendChild(title);
-        return section;
+        return null;
     }
 
     const wrapper = document.createElement("div");
@@ -461,32 +456,7 @@ function buildField(field) {
 }
 
 function injectSections(fields) {
-    if (!fields.length) {
-        return fields;
-    }
-    if (fields.some((field) => field.type === "section")) {
-        return fields;
-    }
-
-    const result = [];
-    const inserted = new Set();
-    fields.forEach((field) => {
-        const phase = getFieldPhase(field);
-        if (!inserted.has("auto") && phase === "auto") {
-            result.push({ id: "sectionAuto", label: "Auto", type: "section" });
-            inserted.add("auto");
-        }
-        if (!inserted.has("teleop") && phase === "teleop") {
-            result.push({ id: "sectionTeleop", label: "Teleop", type: "section" });
-            inserted.add("teleop");
-        }
-        if (!inserted.has("endgame") && phase === "endgame") {
-            result.push({ id: "sectionEndgame", label: "Endgame", type: "section" });
-            inserted.add("endgame");
-        }
-        result.push(field);
-    });
-    return result;
+    return (fields || []).filter((field) => field.type !== "section");
 }
 
 function getFieldPhase(field) {

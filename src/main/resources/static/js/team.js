@@ -139,7 +139,9 @@ async function loadTeamProfile() {
 
         renderHeader();
         renderStats();
+        renderAnalytics();
         renderOverview();
+        renderPitDetails();
         renderMatches();
         renderScoutingRecords();
         setupTabs();
@@ -168,6 +170,7 @@ function mergeAndFilterEntries(match, pit, qual, teamNum) {
                 matchKey: e.matchKey,
                 createdAt: e.createdAt,
                 matchPlayedTime: e.matchPlayedTime || null,
+                username: e.username,
                 data: e.data
             });
         }
@@ -188,6 +191,7 @@ function mergeAndFilterEntries(match, pit, qual, teamNum) {
                 matchKey: null,
                 createdAt: e.createdAt,
                 matchPlayedTime: null,
+                username: e.username,
                 data: e.data
             });
         }
@@ -208,6 +212,7 @@ function mergeAndFilterEntries(match, pit, qual, teamNum) {
                 matchKey: e.matchKey,
                 createdAt: e.createdAt,
                 matchPlayedTime: e.matchPlayedTime || null,
+                username: e.username,
                 data: e.data
             });
         }
@@ -277,6 +282,290 @@ function renderStats() {
     // Matches Scheduled
     const matchCountEl = document.getElementById("stat-matches-count");
     matchCountEl.textContent = state.matches.length.toString();
+}
+
+function renderAnalytics() {
+    const matchEntries = state.entries.filter(e => e.type === "Match");
+    const qualEntries = state.entries.filter(e => e.type === "Qualitative");
+    const config = state.configs.match;
+
+    let autoSum = 0;
+    let teleopSum = 0;
+    let endgameSum = 0;
+    let totalSum = 0;
+    let maxScore = 0;
+
+    const progression = [];
+    const fieldStats = {};
+
+    if (config && config.fields) {
+        config.fields.forEach(f => {
+            if (f.type !== "section" && !RESERVED_FIELDS.has(f.id)) {
+                fieldStats[f.id] = {
+                    field: f,
+                    count: 0,
+                    sum: 0,
+                    max: 0,
+                    options: {}
+                };
+            }
+        });
+    }
+
+    matchEntries.forEach(entry => {
+        const d = entry.data || {};
+        let mAuto = 0;
+        let mTeleop = 0;
+        let mEndgame = 0;
+
+        if (config && config.fields) {
+            config.fields.forEach(f => {
+                if (RESERVED_FIELDS.has(f.id) || f.type === "section") return;
+                const val = d[f.id];
+                if (val === undefined || val === null) return;
+
+                let pts = 0;
+                let numVal = 0;
+
+                if (["counter", "number", "slider", "rating"].includes(f.type)) {
+                    numVal = parseFloat(val) || 0;
+                    pts = numVal * (f.pointsPer || 0);
+                    if (fieldStats[f.id]) {
+                        fieldStats[f.id].count++;
+                        fieldStats[f.id].sum += numVal;
+                        fieldStats[f.id].max = Math.max(fieldStats[f.id].max, numVal);
+                    }
+                } else if (["checkbox", "toggle", "boolean"].includes(f.type)) {
+                    const isTrue = val === true || val === "true" || val === 1 || val === "1";
+                    if (isTrue) {
+                        pts = f.pointsPer || 0;
+                        if (fieldStats[f.id]) fieldStats[f.id].sum++;
+                    }
+                    if (fieldStats[f.id]) fieldStats[f.id].count++;
+                } else if (["select", "radio"].includes(f.type)) {
+                    const optVal = String(val);
+                    if (fieldStats[f.id]) {
+                        fieldStats[f.id].count++;
+                        fieldStats[f.id].options[optVal] = (fieldStats[f.id].options[optVal] || 0) + 1;
+                    }
+                }
+
+                const phase = (f.phase || "").toLowerCase();
+                if (phase.includes("auto")) {
+                    mAuto += pts;
+                } else if (phase.includes("end")) {
+                    mEndgame += pts;
+                } else {
+                    mTeleop += pts;
+                }
+            });
+        }
+
+        const mTotal = mAuto + mTeleop + mEndgame;
+        autoSum += mAuto;
+        teleopSum += mTeleop;
+        endgameSum += mEndgame;
+        totalSum += mTotal;
+        maxScore = Math.max(maxScore, mTotal);
+
+        progression.push({
+            matchNumber: entry.matchNumber || 0,
+            matchKey: entry.matchKey || `M${entry.matchNumber || ""}`,
+            auto: mAuto,
+            teleop: mTeleop,
+            endgame: mEndgame,
+            total: mTotal
+        });
+    });
+
+    const count = matchEntries.length;
+    const autoAvg = count > 0 ? (autoSum / count) : 0;
+    const teleopAvg = count > 0 ? (teleopSum / count) : 0;
+    const endgameAvg = count > 0 ? (endgameSum / count) : 0;
+    const totalAvg = count > 0 ? (totalSum / count) : (state.team.averagePoints || 0);
+
+    // Update stat card in header if computed total is greater than 0
+    const avgEl = document.getElementById("stat-avg-points");
+    if (avgEl && totalAvg > 0) {
+        avgEl.textContent = totalAvg.toFixed(1);
+    }
+
+    // Populate phase breakdown cards
+    const autoEl = document.getElementById("analytics-auto-avg");
+    const teleopEl = document.getElementById("analytics-teleop-avg");
+    const endgameEl = document.getElementById("analytics-endgame-avg");
+    const maxEl = document.getElementById("analytics-max-score");
+
+    if (autoEl) autoEl.textContent = count > 0 ? autoAvg.toFixed(1) : "--";
+    if (teleopEl) teleopEl.textContent = count > 0 ? teleopAvg.toFixed(1) : "--";
+    if (endgameEl) endgameEl.textContent = count > 0 ? endgameAvg.toFixed(1) : "--";
+    if (maxEl) maxEl.textContent = count > 0 ? maxScore.toFixed(1) : "--";
+
+    renderProgressionChart(progression);
+    renderMetricsTable(fieldStats);
+    renderQualFeedback(qualEntries);
+}
+
+function renderProgressionChart(progression) {
+    const container = document.getElementById("team-chart-container");
+    if (!container) return;
+
+    if (progression.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 32px 16px;">No scouted match data available to display score trend.</div>';
+        return;
+    }
+
+    progression.sort((a, b) => a.matchNumber - b.matchNumber);
+
+    const maxPoints = Math.max(...progression.map(p => p.total), 10);
+    const chartHeight = 160;
+
+    let barsHtml = '<div class="chart-bars-row">';
+    progression.forEach(item => {
+        const autoPct = maxPoints > 0 ? ((item.auto / maxPoints) * chartHeight) : 0;
+        const teleopPct = maxPoints > 0 ? ((item.teleop / maxPoints) * chartHeight) : 0;
+        const endgamePct = maxPoints > 0 ? ((item.endgame / maxPoints) * chartHeight) : 0;
+
+        barsHtml += `
+            <div class="chart-bar-column" title="Match ${item.matchNumber}: Total ${item.total.toFixed(1)} (Auto: ${item.auto.toFixed(1)}, Teleop: ${item.teleop.toFixed(1)}, Endgame: ${item.endgame.toFixed(1)})">
+                <div class="chart-bar-value">${item.total.toFixed(0)}</div>
+                <div class="chart-bar-stack" style="height: ${chartHeight}px;">
+                    ${item.endgame > 0 ? `<div class="bar-segment bar-endgame" style="height: ${endgamePct}px;"></div>` : ''}
+                    ${item.teleop > 0 ? `<div class="bar-segment bar-teleop" style="height: ${teleopPct}px;"></div>` : ''}
+                    ${item.auto > 0 ? `<div class="bar-segment bar-auto" style="height: ${autoPct}px;"></div>` : ''}
+                </div>
+                <div class="chart-bar-label">M${item.matchNumber || '-'}</div>
+            </div>
+        `;
+    });
+    barsHtml += '</div>';
+
+    container.innerHTML = barsHtml;
+}
+
+function renderMetricsTable(fieldStats) {
+    const tbody = document.getElementById("team-metrics-tbody");
+    if (!tbody) return;
+
+    const entries = Object.values(fieldStats).filter(st => st.count > 0);
+    if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">No match scouting metrics recorded yet.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = entries.map(st => {
+        const f = st.field;
+        const phase = f.phase || "Teleop";
+        let avgRate = "--";
+        let maxVal = "--";
+        let totalVal = "--";
+
+        if (["counter", "number", "slider", "rating"].includes(f.type)) {
+            const avg = st.count > 0 ? (st.sum / st.count) : 0;
+            avgRate = avg.toFixed(1);
+            maxVal = st.max.toFixed(0);
+            totalVal = st.sum.toFixed(0);
+        } else if (["checkbox", "toggle", "boolean"].includes(f.type)) {
+            const pct = st.count > 0 ? ((st.sum / st.count) * 100) : 0;
+            avgRate = `${pct.toFixed(0)}% (${st.sum}/${st.count})`;
+            maxVal = "Yes";
+            totalVal = `${st.sum} matches`;
+        } else if (["select", "radio"].includes(f.type)) {
+            avgRate = Object.entries(st.options).map(([k, v]) => `${k} (${v})`).join(", ") || "--";
+            maxVal = "--";
+            totalVal = `${st.count} entries`;
+        }
+
+        return `
+            <tr>
+                <td><strong>${localize(f.label)}</strong></td>
+                <td><span class="meta-pill" style="font-size: 11px;">${phase.toUpperCase()}</span></td>
+                <td><strong style="color: var(--accent);">${avgRate}</strong></td>
+                <td>${maxVal}</td>
+                <td>${totalVal}</td>
+            </tr>
+        `;
+    }).join("");
+}
+
+function renderQualFeedback(qualEntries) {
+    const container = document.getElementById("team-qual-list");
+    if (!container) return;
+
+    if (qualEntries.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 20px;">No qualitative scouting observations recorded for this team.</div>';
+        return;
+    }
+
+    container.innerHTML = qualEntries.map(e => {
+        const d = e.data || {};
+        const matchLabel = e.matchNumber ? `Match ${e.matchNumber}` : "General Observation";
+        const scouterName = e.username || (d && (d.username || d.scouter || d.scout_name)) || (e.ownerTeamNumber ? `Team ${e.ownerTeamNumber}` : "Scout");
+        const dateStr = formatDateTime(e.createdAt);
+        
+        let notes = d.notes || d.comments || d.driver_skill || d.defense || "";
+        if (!notes) {
+            notes = Object.entries(d).filter(([k]) => !RESERVED_FIELDS.has(k)).map(([k, v]) => `${k}: ${v}`).join(" | ");
+        }
+
+        return `
+            <div class="qual-feedback-card">
+                <div class="qual-feedback-header">
+                    <span class="qual-match-badge">${matchLabel}</span>
+                    <span class="qual-meta">Scouted by ${scouterName} • ${dateStr}</span>
+                </div>
+                <div class="qual-feedback-body">${notes}</div>
+            </div>
+        `;
+    }).join("");
+}
+
+function renderPitDetails() {
+    const container = document.getElementById("pit-profile-container");
+    if (!container) return;
+
+    const pitEntries = state.entries.filter(e => e.type === "Pit");
+    if (pitEntries.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 32px 16px;">No pit scouting profile recorded for this team.</div>';
+        return;
+    }
+
+    const latest = pitEntries[0];
+    const d = latest.data || {};
+    const config = state.configs.pit;
+
+    if (config && config.fields) {
+        const groups = groupFields(config.fields);
+        container.innerHTML = groups.map(group => {
+            const fieldsHtml = group.fields.map(f => {
+                const val = d[f.id];
+                const formatted = formatFieldValue(f, val);
+                return `
+                    <div class="pit-profile-item">
+                        <span class="pit-profile-label">${localize(f.label)}</span>
+                        <strong class="pit-profile-value">${formatted}</strong>
+                    </div>
+                `;
+            }).join("");
+
+            return `
+                <div class="pit-profile-section">
+                    ${group.title ? `<h3 class="pit-section-header">${group.title}</h3>` : ''}
+                    <div class="pit-section-grid">
+                        ${fieldsHtml}
+                    </div>
+                </div>
+            `;
+        }).join("");
+    } else {
+        const items = Object.entries(d).filter(([k]) => !RESERVED_FIELDS.has(k)).map(([k, v]) => `
+            <div class="pit-profile-item">
+                <span class="pit-profile-label">${k}</span>
+                <strong class="pit-profile-value">${v}</strong>
+            </div>
+        `).join("");
+        container.innerHTML = `<div class="pit-section-grid">${items}</div>`;
+    }
 }
 
 function renderOverview() {
@@ -415,13 +704,14 @@ function renderScoutingRecords() {
         const matchLabel = entry.matchNumber !== null ? getMatchLabel(entry.matchKey, entry.matchNumber) : "";
         const metaText = entry.type === "Pit" ? "Pit Scouting" : `${matchLabel} (${entry.type})`;
         const recordTypeClass = entry.type.toLowerCase().substring(0, 4);
+        const scouterName = entry.username || (entry.data && (entry.data.username || entry.data.scouter || entry.data.scout_name)) || (entry.ownerTeamNumber ? `Team ${entry.ownerTeamNumber}` : "Scout");
 
         card.innerHTML = `
             <div class="record-card-header">
                 <div class="record-card-header-left">
                     <span class="record-type-badge ${recordTypeClass === "qual" ? "qual" : recordTypeClass}">${entry.type}</span>
                     <span class="record-meta-text">${metaText}</span>
-                    <span class="record-date-text">| Scouter Team: ${entry.ownerTeamNumber} | ${formatDateTime(entry.createdAt)}</span>
+                    <span class="record-date-text">| Scouter: ${scouterName} | ${formatDateTime(entry.createdAt)}</span>
                 </div>
                 <div class="record-card-expand-icon">&#9662;</div>
             </div>
@@ -539,20 +829,13 @@ function groupFields(fields) {
     let current = { title: "", fields: [] };
     fields.forEach((field) => {
         if (field.type === "section") {
-            if (current.title || current.fields.length) {
-                groups.push(current);
-            }
-            current = { 
-                title: localize(field.label), 
-                fields: [] 
-            };
             return;
         }
         if (!RESERVED_FIELDS.has(field.id)) {
             current.fields.push(field);
         }
     });
-    if (current.title || current.fields.length) {
+    if (current.fields.length) {
         groups.push(current);
     }
     return groups;

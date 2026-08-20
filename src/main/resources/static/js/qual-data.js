@@ -854,10 +854,6 @@ function groupFields(fields) {
 
     fields.forEach((field) => {
         if (field.type === "section") {
-            if (current.title || current.fields.length) {
-                groups.push(current);
-            }
-            current = { title: localizeLabel(field.label), fields: [] };
             return;
         }
         if (["eventKey", "matchKey", "matchNumber", "targetTeamNumber"].includes(field.id)) {
@@ -865,11 +861,9 @@ function groupFields(fields) {
         }
         current.fields.push(field);
     });
-
-    if (current.title || current.fields.length) {
+    if (current.fields.length) {
         groups.push(current);
     }
-
     return groups;
 }
 

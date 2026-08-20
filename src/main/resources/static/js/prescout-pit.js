@@ -63,11 +63,14 @@ async function initPrescoutPit(me) {
 
         // Build dynamic form fields
         const reserved = new Set(["eventKey", "targetTeamNumber"]);
-        const fields = config.fields || [];
+        const fields = (config.fields || []).filter((field) => field.type !== "section");
         fields
             .filter((field) => !reserved.has(field.id))
             .forEach((field) => {
-                fieldContainer.appendChild(buildField(field));
+                const node = buildField(field);
+                if (node) {
+                    fieldContainer.appendChild(node);
+                }
             });
 
         if (clearButton) {
@@ -285,12 +288,7 @@ async function loadTeams(eventKey, teamSelect) {
 
 function buildField(field) {
     if (field.type === "section") {
-        const section = document.createElement("div");
-        section.className = "form-section";
-        const title = document.createElement("h3");
-        title.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
-        section.appendChild(title);
-        return section;
+        return null;
     }
 
     const wrapper = document.createElement("div");

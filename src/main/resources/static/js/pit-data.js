@@ -369,17 +369,13 @@ function groupFields(fields) {
     let current = { title: "", fields: [] };
     fields.forEach((field) => {
         if (field.type === "section") {
-            if (current.title || current.fields.length) {
-                groups.push(current);
-            }
-            current = { title: field.label, fields: [] };
             return;
         }
         if (!RESERVED_FIELDS.has(field.id)) {
             current.fields.push(field);
         }
     });
-    if (current.title || current.fields.length) {
+    if (current.fields.length) {
         groups.push(current);
     }
     return groups;

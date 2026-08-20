@@ -38,7 +38,8 @@ data class PitScoutingEntryRecord(
     val createdAt: String,
     val isPrescout: Boolean = false,
     val hasDiscrepancy: Boolean = false,
-    val conflictingTeams: List<Int> = emptyList()
+    val conflictingTeams: List<Int> = emptyList(),
+    val username: String? = null
 )
 
 object PitScoutingService {
@@ -53,7 +54,15 @@ object PitScoutingService {
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { PitScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            val rawRecords = query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).map { row ->
+            val rows = query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).toList()
+            val userIds = rows.map { it[PitScoutingEntries.submittedByUserId].value }.distinct()
+            val userNames = if (userIds.isNotEmpty()) {
+                Users.selectAll().where { Users.id inList userIds }
+                    .associate { it[Users.id].value to it[Users.username] }
+            } else {
+                emptyMap()
+            }
+            val rawRecords = rows.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
                 val conflictStr = row[PitScoutingEntries.conflictingTeams]
                 val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
@@ -66,7 +75,8 @@ object PitScoutingService {
                     createdAt = row[PitScoutingEntries.createdAt].toString(),
                     isPrescout = row[PitScoutingEntries.isPrescout],
                     hasDiscrepancy = row[PitScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = conflicting
+                    conflictingTeams = conflicting,
+                    username = userNames[row[PitScoutingEntries.submittedByUserId].value]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -82,7 +92,15 @@ object PitScoutingService {
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { PitScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            val rawRecords = query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).map { row ->
+            val rows = query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).toList()
+            val userIds = rows.map { it[PitScoutingEntries.submittedByUserId].value }.distinct()
+            val userNames = if (userIds.isNotEmpty()) {
+                Users.selectAll().where { Users.id inList userIds }
+                    .associate { it[Users.id].value to it[Users.username] }
+            } else {
+                emptyMap()
+            }
+            val rawRecords = rows.map { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
                 val conflictStr = row[PitScoutingEntries.conflictingTeams]
                 val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
@@ -95,7 +113,8 @@ object PitScoutingService {
                     createdAt = row[PitScoutingEntries.createdAt].toString(),
                     isPrescout = row[PitScoutingEntries.isPrescout],
                     hasDiscrepancy = row[PitScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = conflicting
+                    conflictingTeams = conflicting,
+                    username = userNames[row[PitScoutingEntries.submittedByUserId].value]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -207,7 +226,8 @@ object PitScoutingService {
                 createdAt = duplicate[PitScoutingEntries.createdAt].toString(),
                 isPrescout = duplicate[PitScoutingEntries.isPrescout],
                 hasDiscrepancy = duplicate[PitScoutingEntries.hasDiscrepancy],
-                conflictingTeams = conflicting
+                conflictingTeams = conflicting,
+                username = session.username
             )
         }
 
@@ -242,7 +262,8 @@ object PitScoutingService {
                 createdAt = now.toString(),
                 isPrescout = isPrescout,
                 hasDiscrepancy = updatedRow[PitScoutingEntries.hasDiscrepancy],
-                conflictingTeams = conflicting
+                conflictingTeams = conflicting,
+                username = session.username
             )
         }
     }
