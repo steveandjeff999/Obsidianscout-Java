@@ -3677,6 +3677,11 @@
         return "FRC";
     }
 
+    function getProgramPrefix() {
+        const prog = getProgram();
+        return (prog || "FRC").toLowerCase();
+    }
+
     function openConflictResolutionModal(options) {
         const { type = 'match', fields = [], conflictingEntries = [], onResolved = () => {} } = options;
         if (!conflictingEntries || conflictingEntries.length === 0) return;
