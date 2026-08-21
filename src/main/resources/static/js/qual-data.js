@@ -83,6 +83,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function loadAllQualData() {
+        state.reload = loadAllQualData;
         Obsidianscout.showLoadingSpinner(dynamicContainer, "Loading qualitative data...");
         try {
             const settingsResponse = await Obsidianscout.request("/api/settings");
@@ -90,7 +91,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const [config, entries, events] = await Promise.all([
                 Obsidianscout.request("/api/qual-config"),
-                Obsidianscout.request("/api/qual-scouting?includePrescout=true"),
+                Obsidianscout.request("/api/qual-scouting?includePrescout=true&all=true"),
                 Obsidianscout.request(`/api/events?year=${state.settings.year}&cached=1`)
             ]);
 
@@ -483,15 +484,41 @@ function renderEntryDetail(state, ui, entry) {
         warnBanner.style.borderColor = "#eab308";
         warnBanner.style.background = "rgba(234, 179, 8, 0.08)";
         warnBanner.style.color = "#854d0e";
-        warnBanner.style.padding = "10px 16px";
-        warnBanner.style.borderRadius = "6px";
-        warnBanner.style.border = "1px solid";
+        warnBanner.style.padding = "12px 16px";
+        warnBanner.style.borderRadius = "8px";
+        warnBanner.style.border = "1px solid #eab308";
         warnBanner.innerHTML = `
-            <span class="icon">⚠️</span>
-            <div style="flex:1;">
-                <strong>Discrepancy Warning:</strong> Different qualitative scouting data exists for this match from: <strong>${(entry.conflictingTeams || []).join(", ")}</strong>. You can view or resolve this discrepancy in the Alliance Scouting Data page.
+            <div style="display:flex; align-items:flex-start; gap:10px;">
+                <span class="icon" style="font-size:1.2rem;">⚠️</span>
+                <div style="flex:1;">
+                    <div style="font-weight:700; color:#fbbf24;">Discrepancy Detected</div>
+                    <div style="font-size:0.85rem; margin-top:2px; color:#cbd5e1;">
+                        Different qualitative scouting data exists for this match from partner teams: <strong>${(entry.conflictingTeams || []).join(", ")}</strong>.
+                    </div>
+                    <button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                        ⚡ Resolve Discrepancy
+                    </button>
+                </div>
             </div>
         `;
+        const resolveBtn = warnBanner.querySelector("#btn-resolve-conflict");
+        if (resolveBtn) {
+            resolveBtn.addEventListener("click", () => {
+                const conflicting = (state.entriesRaw || []).filter(e =>
+                    e.targetTeamNumber === entry.targetTeamNumber &&
+                    e.eventKey === entry.eventKey &&
+                    e.matchNumber === entry.matchNumber
+                );
+                Obsidianscout.openConflictResolutionModal({
+                    type: "qual",
+                    fields: state.config ? state.config.fields || [] : [],
+                    conflictingEntries: conflicting.length > 0 ? conflicting : [entry],
+                    onResolved: () => {
+                        if (typeof state.reload === 'function') state.reload();
+                    }
+                });
+            });
+        }
         ui.entryDetail.appendChild(warnBanner);
     }
 
