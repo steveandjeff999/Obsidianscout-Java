@@ -2688,6 +2688,28 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 call.respond(MobileNotificationsScheduledResponse())
             }
 
+            // Data Validation & Anomaly Detection
+            get("/validation") {
+                val session = call.requireMobileSession(secret)
+                val eventKey = call.request.queryParameters["eventKey"]
+                    ?: call.request.queryParameters["event"]
+                    ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
+                val forcePrescout = call.request.queryParameters["forcePrescout"]?.toBoolean() ?: false
+                val threshold = call.request.queryParameters["threshold"]?.toDoubleOrNull() ?: 15.0
+
+                if (eventKey.isBlank()) {
+                    throw MobileApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter", "MISSING_EVENT_KEY")
+                }
+
+                val summary = ValidationService.validateEvent(
+                    session = session,
+                    eventKeyParam = eventKey,
+                    forcePrescout = forcePrescout,
+                    anomalyThreshold = threshold
+                )
+                call.respond(summary)
+            }
+
             // Sync status & triggering
             get("/sync/status") {
                 call.requireMobileSession(secret)
