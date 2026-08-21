@@ -1480,13 +1480,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             { value: "checkbox", label: "CHECKBOX" },
             { value: "select", label: "SELECT" },
             { value: "text", label: "TEXT (STATIC DISPLAY)" },
-            { value: "textarea", label: "TEXTAREA (INPUT)" }
+            { value: "textarea", label: "TEXTAREA (INPUT)" },
+            { value: "image", label: "IMAGE (PHOTO UPLOAD)" }
         ];
         types.forEach((t) => {
             const opt = document.createElement("option");
             opt.value = t.value;
             opt.textContent = t.label;
-            opt.selected = field.type === t.value;
+            opt.selected = field.type === t.value || (t.value === "image" && (field.type === "image_upload" || field.type === "photo"));
             selectType.appendChild(opt);
         });
         selectType.addEventListener("change", (e) => {
@@ -1506,6 +1507,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (field.type !== "counter") {
                 delete field.doubleStep;
                 delete field.double_step;
+            }
+            if (field.type === "image" || field.type === "text") {
+                delete field.min;
+                delete field.max;
+                delete field.step;
+                delete field.pointsPer;
             }
             updateRawFromVisual();
             renderVisualFields();

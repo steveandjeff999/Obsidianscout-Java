@@ -591,11 +591,33 @@ function renderDetail(state, entry) {
 
         group.fields.forEach(field => {
             const value = entry.data ? entry.data[field.id] : undefined;
-            const item = buildDetailItem(
-                (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label,
-                formatFieldValue(field, value)
-            );
-            groupNode.appendChild(item);
+            const isImage = (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/")));
+            if (isImage && value) {
+                const item = document.createElement("div");
+                item.className = "pit-detail-item";
+                const label = document.createElement("span");
+                label.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
+                item.appendChild(label);
+
+                const imageCard = document.createElement("div");
+                imageCard.style.cssText = "margin-top:6px;padding:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:6px;";
+                const imgEl = document.createElement("img");
+                imgEl.src = value;
+                imgEl.style.cssText = "max-width:100%;max-height:200px;object-fit:contain;border-radius:8px;cursor:pointer;";
+                imgEl.title = "Click to inspect full image";
+                imgEl.addEventListener("click", () => {
+                    Obsidianscout.showImageModal(value, `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function' ? Obsidianscout.localize(field.label) : field.label)} - Team ${entry.targetTeamNumber}`);
+                });
+                imageCard.appendChild(imgEl);
+                item.appendChild(imageCard);
+                groupNode.appendChild(item);
+            } else {
+                const item = buildDetailItem(
+                    (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label,
+                    formatFieldValue(field, value)
+                );
+                groupNode.appendChild(item);
+            }
         });
 
         if (group.fields.length) {
@@ -631,6 +653,9 @@ function groupFields(fields) {
 function formatFieldValue(field, value) {
     if (value === null || value === undefined || value === "") {
         return "--";
+    }
+    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/"))) {
+        return "📷 [Photo]";
     }
     if (field.type === "checkbox") {
         return value ? "Yes" : "No";

@@ -26,6 +26,7 @@ import com.obsidianscout.scouting.ScoutingService
 import com.obsidianscout.scouting.PitScoutingService
 import com.obsidianscout.scouting.QualitativeScoutingService
 import com.obsidianscout.scouting.AllianceService
+import com.obsidianscout.analytics.ValidationService
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.ContentType
 import io.ktor.server.application.Application

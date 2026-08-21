@@ -307,12 +307,38 @@ function renderDetail(state) {
         group.fields.forEach((field) => {
             const item = document.createElement("div");
             item.className = "pit-detail-item";
+            const val = selected.entry.data[field.id];
+            const isImage = (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof val === "string" && val.startsWith("data:image/")));
+
             const label = document.createElement("span");
             label.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
-            const value = document.createElement("strong");
-            value.textContent = formatValue(field, selected.entry.data[field.id]);
             item.appendChild(label);
-            item.appendChild(value);
+
+            if (isImage && val) {
+                const imageCard = document.createElement("div");
+                imageCard.className = "pit-detail-image-card";
+                imageCard.style.cssText = "margin-top:6px;padding:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:6px;";
+                const imgEl = document.createElement("img");
+                imgEl.src = val;
+                imgEl.style.cssText = "max-width:100%;max-height:200px;object-fit:contain;border-radius:8px;cursor:pointer;";
+                imgEl.title = "Click to inspect full image";
+                imgEl.addEventListener("click", () => {
+                    Obsidianscout.showImageModal(val, `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function' ? Obsidianscout.localize(field.label) : field.label)} - Team ${selected.teamNumber}`);
+                });
+                const hint = document.createElement("span");
+                hint.style.cssText = "font-size:0.75rem;color:#38bdf8;cursor:pointer;";
+                hint.textContent = "🔍 Tap image to zoom";
+                hint.addEventListener("click", () => {
+                    Obsidianscout.showImageModal(val, `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function' ? Obsidianscout.localize(field.label) : field.label)} - Team ${selected.teamNumber}`);
+                });
+                imageCard.appendChild(imgEl);
+                imageCard.appendChild(hint);
+                item.appendChild(imageCard);
+            } else {
+                const value = document.createElement("strong");
+                value.textContent = formatValue(field, val);
+                item.appendChild(value);
+            }
             groupNode.appendChild(item);
         });
 
@@ -453,6 +479,9 @@ function appendStatusCell(row, text, complete) {
 function formatValue(field, value) {
     if (value === null || value === undefined || value === "") {
         return "--";
+    }
+    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/"))) {
+        return "📷 [Photo]";
     }
     if (field.type === "checkbox") {
         return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? (value ? Obsidianscout.t('yes','Yes') : Obsidianscout.t('no','No')) : (value ? 'Yes' : 'No');

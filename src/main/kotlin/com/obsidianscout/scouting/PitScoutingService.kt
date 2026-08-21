@@ -26,6 +26,13 @@ import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.deleteWhere
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.Base64
+import javax.imageio.ImageIO
+import java.awt.Graphics2D
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
 import java.time.Instant
 import java.util.UUID
 
@@ -232,7 +239,8 @@ object PitScoutingService {
             )
         }
 
-        val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
+        val cleanData = sanitizePitData(request.data)
+        val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), cleanData)
         val now = Instant.now()
         val callerUuid = UUID.fromString(session.userId)
 
@@ -259,7 +267,7 @@ object PitScoutingService {
                 ownerTeamNumber = session.teamNumber,
                 targetTeamNumber = meta.targetTeamNumber,
                 eventKey = meta.eventKey,
-                data = request.data,
+                data = cleanData,
                 createdAt = now.toString(),
                 isPrescout = isPrescout,
                 hasDiscrepancy = updatedRow[PitScoutingEntries.hasDiscrepancy],
@@ -306,7 +314,8 @@ object PitScoutingService {
         if (meta.targetTeamNumber == null) {
             throw ApiException(HttpStatusCode.BadRequest, "Team is required")
         }
-        val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
+        val cleanData = sanitizePitData(request.data)
+        val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), cleanData)
 
         return transaction {
             val row = PitScoutingEntries.selectAll().where { PitScoutingEntries.id eq entryUuid }.firstOrNull()
@@ -389,6 +398,74 @@ object PitScoutingService {
 
             recalculateDiscrepancies(eventKey, targetTeamNumber, isPrescout)
         }
+    }
+}
+
+private fun sanitizePitData(data: JsonObject): JsonObject {
+    val sanitized = mutableMapOf<String, JsonElement>()
+    for ((key, value) in data) {
+        if (value is JsonPrimitive && value.isString) {
+            val content = value.content
+            if (content.startsWith("data:image/") || (content.length > 5000 && content.startsWith("/9j/"))) {
+                sanitized[key] = JsonPrimitive(sanitizeAndDownscaleBase64Image(content))
+                continue
+            }
+        }
+        sanitized[key] = value
+    }
+    return JsonObject(sanitized)
+}
+
+private fun sanitizeAndDownscaleBase64Image(dataUriOrBase64: String, maxDim: Int = 1280): String {
+    try {
+        val base64Data = if (dataUriOrBase64.contains(",")) {
+            dataUriOrBase64.substringAfter(",")
+        } else {
+            dataUriOrBase64
+        }
+        val bytes = Base64.getDecoder().decode(base64Data.trim())
+        if (bytes.size < 4) return dataUriOrBase64
+        val isJpeg = bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()
+        val isPng = bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
+        val isWebp = bytes.size > 12 && bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() && bytes[2] == 'F'.code.toByte() && bytes[3] == 'F'.code.toByte()
+
+        if (!isJpeg && !isPng && !isWebp) {
+            return dataUriOrBase64
+        }
+
+        val originalImage: BufferedImage? = ImageIO.read(ByteArrayInputStream(bytes))
+        if (originalImage == null) return dataUriOrBase64
+
+        var width = originalImage.width
+        var height = originalImage.height
+
+        val needsResize = width > maxDim || height > maxDim
+        if (needsResize) {
+            if (width > height) {
+                height = ((height.toDouble() * maxDim) / width).toInt().coerceAtLeast(1)
+                width = maxDim
+            } else {
+                width = ((width.toDouble() * maxDim) / height).toInt().coerceAtLeast(1)
+                height = maxDim
+            }
+        }
+
+        // Re-render to clean RGB BufferedImage to strip all EXIF/GPS/malicious chunks
+        val cleanImage = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+        val g2d: Graphics2D = cleanImage.createGraphics()
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g2d.drawImage(originalImage, 0, 0, width, height, null)
+        g2d.dispose()
+
+        val outputStream = ByteArrayOutputStream()
+        ImageIO.write(cleanImage, "jpg", outputStream)
+        val cleanBytes = outputStream.toByteArray()
+        val cleanBase64 = Base64.getEncoder().encodeToString(cleanBytes)
+        return "data:image/jpeg;base64,$cleanBase64"
+    } catch (e: Exception) {
+        return dataUriOrBase64
     }
 }
 
