@@ -1492,6 +1492,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         selectType.addEventListener("change", (e) => {
             field.type = e.target.value;
             
+            if (field.type === "text") {
+                field.required = false;
+            }
             if (field.type === "select" && !field.options) {
                 field.options = [];
             }
@@ -1539,31 +1542,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         divPhase.appendChild(selectPhase);
         body.appendChild(divPhase);
         
-        // 5. Required Checkbox
-        const divReq = document.createElement("div");
-        divReq.className = "field";
-        const labelReq = document.createElement("label");
-        labelReq.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.required','Required') : 'Required';
-        const labelWrap = document.createElement("label");
-        labelWrap.style.display = "flex";
-        labelWrap.style.alignItems = "center";
-        labelWrap.style.gap = "8px";
-        labelWrap.style.cursor = "pointer";
-        labelWrap.style.height = "38px";
-        labelWrap.style.margin = "0";
-        labelWrap.style.boxSizing = "border-box";
-        const inputReq = document.createElement("input");
-        inputReq.type = "checkbox";
-        inputReq.checked = !!field.required;
-        inputReq.addEventListener("change", (e) => {
-            field.required = e.target.checked;
-            updateRawFromVisual();
-        });
-        labelWrap.appendChild(inputReq);
-        labelWrap.appendChild(document.createTextNode((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.is_required','Is Required') : ' Is Required'));
-        divReq.appendChild(labelReq);
-        divReq.appendChild(labelWrap);
-        body.appendChild(divReq);
+        // 5. Required Checkbox (Only for interactive fields, not static text)
+        if (field.type !== "text") {
+            const divReq = document.createElement("div");
+            divReq.className = "field";
+            const labelReq = document.createElement("label");
+            labelReq.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.required','Required') : 'Required';
+            const labelWrap = document.createElement("label");
+            labelWrap.style.display = "flex";
+            labelWrap.style.alignItems = "center";
+            labelWrap.style.gap = "8px";
+            labelWrap.style.cursor = "pointer";
+            labelWrap.style.height = "38px";
+            labelWrap.style.margin = "0";
+            labelWrap.style.boxSizing = "border-box";
+            const inputReq = document.createElement("input");
+            inputReq.type = "checkbox";
+            inputReq.checked = !!field.required;
+            inputReq.addEventListener("change", (e) => {
+                field.required = e.target.checked;
+                updateRawFromVisual();
+            });
+            labelWrap.appendChild(inputReq);
+            labelWrap.appendChild(document.createTextNode((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.is_required','Is Required') : ' Is Required'));
+            divReq.appendChild(labelReq);
+            divReq.appendChild(labelWrap);
+            body.appendChild(divReq);
+        } else {
+            field.required = false;
+        }
         
         // 5. Numeric Bounds & Stepping
         if (field.type === "number" || field.type === "counter" || field.type === "rating") {
@@ -2071,7 +2078,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 id: field.id ? field.id.trim() : "",
                 label: normalizedLabel,
                 type: field.type || "text",
-                required: !!field.required
+                required: (field.type === "text" || field.type === "section") ? false : !!field.required
             };
             
             const type = cleaned.type;
