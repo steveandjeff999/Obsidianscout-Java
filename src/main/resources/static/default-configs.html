@@ -444,6 +444,8 @@
         function renderVisualFields() {
             const list = document.getElementById('visual-fields-list');
             const fields = currentPresetConfig.fields || [];
+            const configType = document.getElementById('preset-type')?.value || 'match';
+            const supportsPhases = configType === 'match';
 
             if (fields.length === 0) {
                 list.innerHTML = `<p class="notice" style="text-align: center; padding: 16px;">No fields configured. Click "+ Add Field" above.</p>`;
@@ -489,6 +491,7 @@
                                     <option value="textarea" ${typeVal === 'textarea' || typeVal === 'notes' ? 'selected' : ''}>Text Area (Input)</option>
                                 </select>
                             </div>
+                            ${supportsPhases ? `
                             <div class="field">
                                 <label style="font-size:0.8rem;">Section / Phase</label>
                                 <select class="input" onchange="updateVisualField(${idx}, 'phase', this.value)">
@@ -498,6 +501,7 @@
                                     <option value="pit" ${phaseVal === 'pit' ? 'selected' : ''}>Pit Scouting</option>
                                 </select>
                             </div>
+                            ` : ''}
                         </div>
                         ${isSelect ? `
                             <div class="field" style="margin-top: 6px;">
@@ -527,11 +531,13 @@
 
         function addVisualField() {
             if (!currentPresetConfig.fields) currentPresetConfig.fields = [];
+            const configType = document.getElementById('preset-type')?.value || 'match';
+            const supportsPhases = configType === 'match';
             currentPresetConfig.fields.push({
                 id: `field_${Date.now().toString().slice(-4)}`,
                 label: "New Field",
                 type: "number",
-                phase: "auto"
+                ...(supportsPhases ? { phase: "auto" } : {})
             });
             renderVisualFields();
         }
@@ -632,6 +638,7 @@
 
         document.getElementById('tab-visual').addEventListener('click', () => switchEditorTab('visual'));
         document.getElementById('tab-raw').addEventListener('click', () => switchEditorTab('raw'));
+        document.getElementById('preset-type').addEventListener('change', renderVisualFields);
 
         document.getElementById('btn-format-json').addEventListener('click', () => {
             const textarea = document.getElementById('preset-json');

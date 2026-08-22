@@ -523,13 +523,13 @@ function buildImageUpload(field) {
     btnCamera.type = "button";
     btnCamera.className = "btn";
     btnCamera.style.cssText = "background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;";
-    btnCamera.innerHTML = `<span>📷</span><span>Take Photo</span>`;
+    btnCamera.innerHTML = `<span>Take Photo</span>`;
 
     const btnBrowse = document.createElement("button");
     btnBrowse.type = "button";
     btnBrowse.className = "btn";
     btnBrowse.style.cssText = "background:rgba(255,255,255,0.08);color:#f8fafc;border:1px solid rgba(255,255,255,0.15);padding:8px 14px;border-radius:8px;font-weight:600;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;";
-    btnBrowse.innerHTML = `<span>📁</span><span>Choose Image</span>`;
+    btnBrowse.innerHTML = `<span>Choose Image</span>`;
 
     btnRow.appendChild(btnCamera);
     btnRow.appendChild(btnBrowse);

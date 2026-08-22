@@ -385,6 +385,11 @@ function buildField(field) {
             wrapper.appendChild(staticDisplay);
             return wrapper;
         }
+        case "image":
+        case "image_upload":
+        case "photo":
+            ({ wrapper: input, input: actualInput } = buildImageUpload(field));
+            break;
         case "checkbox":
             input = document.createElement("input");
             input.type = "checkbox";
@@ -584,6 +589,150 @@ function buildRating(field) {
     return { wrapper, input };
 }
 
+function buildImageUpload(field) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "image-upload-field-container";
+    wrapper.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:12px;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.18);border-radius:12px;";
+
+    const hiddenInput = document.createElement("input");
+    hiddenInput.type = "hidden";
+    hiddenInput.name = field.id;
+    hiddenInput.id = `field-${field.id}`;
+    if (field.required) hiddenInput.required = true;
+
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.style.display = "none";
+
+    const emptyState = document.createElement("div");
+    emptyState.className = "image-empty-state";
+    emptyState.style.cssText = "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px 8px;text-align:center;";
+
+    const emptyPrompt = document.createElement("div");
+    emptyPrompt.style.cssText = "color:#94a3b8;font-size:0.85rem;";
+    emptyPrompt.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.placeholder) : (field.placeholder || "Take a live photo or upload an image of the robot:");
+
+    const btnRow = document.createElement("div");
+    btnRow.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;justify-content:center;";
+
+    const btnCamera = document.createElement("button");
+    btnCamera.type = "button";
+    btnCamera.className = "btn";
+    btnCamera.style.cssText = "background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;";
+    btnCamera.innerHTML = `<span>Take Photo</span>`;
+
+    const btnBrowse = document.createElement("button");
+    btnBrowse.type = "button";
+    btnBrowse.className = "btn";
+    btnBrowse.style.cssText = "background:rgba(255,255,255,0.08);color:#f8fafc;border:1px solid rgba(255,255,255,0.15);padding:8px 14px;border-radius:8px;font-weight:600;font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;";
+    btnBrowse.innerHTML = `<span>Choose Image</span>`;
+
+    btnRow.appendChild(btnCamera);
+    btnRow.appendChild(btnBrowse);
+    emptyState.appendChild(emptyPrompt);
+    emptyState.appendChild(btnRow);
+
+    const previewState = document.createElement("div");
+    previewState.className = "image-preview-state";
+    previewState.style.cssText = "display:none;flex-direction:column;align-items:center;gap:10px;";
+
+    const imgPreview = document.createElement("img");
+    imgPreview.style.cssText = "max-width:100%;max-height:240px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);object-fit:contain;cursor:pointer;";
+    imgPreview.title = "Click to inspect full image";
+
+    const badgeRow = document.createElement("div");
+    badgeRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;width:100%;font-size:0.8rem;color:#94a3b8;";
+
+    const sizeBadge = document.createElement("span");
+    sizeBadge.className = "img-meta-badge";
+    sizeBadge.style.cssText = "background:rgba(56,189,248,0.15);color:#38bdf8;padding:2px 8px;border-radius:6px;font-weight:600;";
+
+    const actionButtons = document.createElement("div");
+    actionButtons.style.cssText = "display:flex;gap:8px;";
+
+    const btnRetake = document.createElement("button");
+    btnRetake.type = "button";
+    btnRetake.className = "btn btn-sm";
+    btnRetake.style.cssText = "background:rgba(255,255,255,0.08);color:#f8fafc;border:1px solid rgba(255,255,255,0.15);padding:4px 10px;border-radius:6px;font-size:0.8rem;cursor:pointer;";
+    btnRetake.textContent = "Change / Retake";
+
+    const btnRemove = document.createElement("button");
+    btnRemove.type = "button";
+    btnRemove.className = "btn btn-sm";
+    btnRemove.style.cssText = "background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);padding:4px 10px;border-radius:6px;font-size:0.8rem;cursor:pointer;";
+    btnRemove.textContent = "Remove";
+
+    actionButtons.appendChild(btnRetake);
+    actionButtons.appendChild(btnRemove);
+    badgeRow.appendChild(sizeBadge);
+    badgeRow.appendChild(actionButtons);
+
+    previewState.appendChild(imgPreview);
+    previewState.appendChild(badgeRow);
+
+    wrapper.appendChild(hiddenInput);
+    wrapper.appendChild(fileInput);
+    wrapper.appendChild(emptyState);
+    wrapper.appendChild(previewState);
+
+    function updatePreview(dataUrl, infoText = "") {
+        if (dataUrl) {
+            hiddenInput.value = dataUrl;
+            imgPreview.src = dataUrl;
+            sizeBadge.textContent = infoText || "Cleaned & Compressed";
+            emptyState.style.display = "none";
+            previewState.style.display = "flex";
+        } else {
+            hiddenInput.value = "";
+            imgPreview.src = "";
+            fileInput.value = "";
+            emptyState.style.display = "flex";
+            previewState.style.display = "none";
+        }
+    }
+
+    wrapper.updateImage = updatePreview;
+
+    btnCamera.addEventListener("click", () => {
+        Obsidianscout.openInlineCameraModal({
+            onCapture: (result) => {
+                updatePreview(result.dataUrl, `${result.width}x${result.height} (${result.formattedSize})`);
+                hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+        });
+    });
+
+    btnBrowse.addEventListener("click", () => fileInput.click());
+    btnRetake.addEventListener("click", () => {
+        btnCamera.click();
+    });
+    btnRemove.addEventListener("click", () => {
+        updatePreview(null);
+        hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    fileInput.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const result = await Obsidianscout.processImageUpload(file);
+            updatePreview(result.dataUrl, `${result.width}x${result.height} (${result.formattedSize})`);
+            hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+        } catch (err) {
+            Obsidianscout.showToast(err.message || "Failed to process image", "error");
+        }
+    });
+
+    imgPreview.addEventListener("click", () => {
+        if (hiddenInput.value) {
+            Obsidianscout.showImageModal(hiddenInput.value, field.label || "Robot Photo");
+        }
+    });
+
+    return { wrapper, input: hiddenInput };
+}
+
 function applyNumberBounds(input, field) {
     if (field.min !== null && field.min !== undefined) {
         input.min = field.min;
@@ -717,6 +866,13 @@ function applyEntryToForm(entry, fields, form) {
         if (value === undefined || value === null) {
             return;
         }
+        if (field.type === "image" || field.type === "image_upload" || field.type === "photo") {
+            const container = input.closest(".image-upload-field-container");
+            if (container && typeof container.updateImage === "function") {
+                container.updateImage(value);
+            }
+            return;
+        }
         if (field.type === "checkbox") {
             input.checked = Boolean(value);
             return;
@@ -735,6 +891,13 @@ function clearFormFields(fields, form) {
         }
         const input = form.querySelector(`[name='${field.id}']`);
         if (!input) {
+            return;
+        }
+        if (field.type === "image" || field.type === "image_upload" || field.type === "photo") {
+            const container = input.closest(".image-upload-field-container");
+            if (container && typeof container.updateImage === "function") {
+                container.updateImage(null);
+            }
             return;
         }
         if (field.type === "checkbox") {

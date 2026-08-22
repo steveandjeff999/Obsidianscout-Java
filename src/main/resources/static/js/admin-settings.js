@@ -58,6 +58,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         return activeConfigKind !== "qual";
     }
 
+    function supportsPhasesConfig() {
+        return activeConfigKind === "game";
+    }
+
     const configurablePages = [
         { id: "dashboard", label: "Dashboard" },
         { id: "scout", label: "Scout" },
@@ -1317,7 +1321,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const hasManualSections = fields.some((field) => field.type === "section");
-        if (hasManualSections) {
+        if (hasManualSections || !supportsPhasesConfig()) {
             fields.forEach((field, index) => {
                 const cardNode = createFieldCard(field, index);
                 visualFieldsList.appendChild(cardNode);
@@ -1522,32 +1526,34 @@ document.addEventListener("DOMContentLoaded", async () => {
         body.appendChild(divType);
 
         // 4. Phase Select (auto/teleop/endgame)
-        const divPhase = document.createElement("div");
-        divPhase.className = "field";
-        const labelPhase = document.createElement("label");
-        labelPhase.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.phase','Phase') : 'Phase';
-        const selectPhase = document.createElement("select");
-        const phaseOptions = [
-            { value: "auto", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.auto','Auto') : 'Auto' },
-            { value: "teleop", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.teleop','Teleop') : 'Teleop' },
-            { value: "endgame", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.endgame','Endgame') : 'Endgame' },
-            { value: "postmatch", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.postmatch','Post Match') : 'Post Match' }
-        ];
-        phaseOptions.forEach((phase) => {
-            const option = document.createElement("option");
-            option.value = phase.value;
-            option.textContent = phase.label;
-            selectPhase.appendChild(option);
-        });
-        const currentPhaseVal = field.phase || resolveFieldPhase(field) || "teleop";
-        selectPhase.value = currentPhaseVal === "general" ? "teleop" : currentPhaseVal;
-        selectPhase.addEventListener("change", (e) => {
-            field.phase = e.target.value || "teleop";
-            updateRawFromVisual();
-        });
-        divPhase.appendChild(labelPhase);
-        divPhase.appendChild(selectPhase);
-        body.appendChild(divPhase);
+        if (supportsPhasesConfig()) {
+            const divPhase = document.createElement("div");
+            divPhase.className = "field";
+            const labelPhase = document.createElement("label");
+            labelPhase.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.phase','Phase') : 'Phase';
+            const selectPhase = document.createElement("select");
+            const phaseOptions = [
+                { value: "auto", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.auto','Auto') : 'Auto' },
+                { value: "teleop", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.teleop','Teleop') : 'Teleop' },
+                { value: "endgame", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.endgame','Endgame') : 'Endgame' },
+                { value: "postmatch", label: (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('phase.postmatch','Post Match') : 'Post Match' }
+            ];
+            phaseOptions.forEach((phase) => {
+                const option = document.createElement("option");
+                option.value = phase.value;
+                option.textContent = phase.label;
+                selectPhase.appendChild(option);
+            });
+            const currentPhaseVal = field.phase || resolveFieldPhase(field) || "teleop";
+            selectPhase.value = currentPhaseVal === "general" ? "teleop" : currentPhaseVal;
+            selectPhase.addEventListener("change", (e) => {
+                field.phase = e.target.value || "teleop";
+                updateRawFromVisual();
+            });
+            divPhase.appendChild(labelPhase);
+            divPhase.appendChild(selectPhase);
+            body.appendChild(divPhase);
+        }
         
         // 5. Required Checkbox (Only for interactive fields, not static text)
         if (field.type !== "text") {
@@ -1962,7 +1968,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             _autoId: baseId,
             label: "New Field",
             type: "counter",
-            phase: "teleop",
+            ...(supportsPhasesConfig() ? { phase: "teleop" } : {}),
             required: false,
             min: 0,
             max: null,
@@ -1973,7 +1979,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             _autoId: baseId,
             label: "New Note",
             type: "textarea",
-            phase: "teleop",
+            ...(supportsPhasesConfig() ? { phase: "teleop" } : {}),
             required: false
         };
         currentConfig.fields.push(newField);
@@ -2090,11 +2096,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             const type = cleaned.type;
 
-            if (field.phase) {
-                const p = String(field.phase).trim();
-                cleaned.phase = (p.toLowerCase() === "general" || p === "") ? "teleop" : p;
-            } else {
-                cleaned.phase = resolveFieldPhase(field) || "teleop";
+            if (supportsPhasesConfig()) {
+                if (field.phase) {
+                    const p = String(field.phase).trim();
+                    cleaned.phase = (p.toLowerCase() === "general" || p === "") ? "teleop" : p;
+                } else {
+                    cleaned.phase = resolveFieldPhase(field) || "teleop";
+                }
             }
             
             if (type === "number" || type === "counter" || type === "rating") {

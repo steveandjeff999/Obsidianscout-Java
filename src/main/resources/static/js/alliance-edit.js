@@ -46,6 +46,10 @@
         return activeConfigKind !== "qual";
     }
 
+    function supportsPhasesConfig() {
+        return activeConfigKind === "game";
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // Init
     // ─────────────────────────────────────────────────────────────────
@@ -662,7 +666,7 @@
         }
 
         const hasManualSections = fields.some((field) => field.type === "section");
-        if (hasManualSections) {
+        if (hasManualSections || !supportsPhasesConfig()) {
             fields.forEach((field, index) => {
                 const cardNode = createFieldCard(field, index);
                 visualFieldsList.appendChild(cardNode);
@@ -844,31 +848,33 @@
         body.appendChild(divType);
 
         // Phase Select
-        const divPhase = document.createElement("div");
-        divPhase.className = "field";
-        const labelPhase = document.createElement("label");
-        labelPhase.textContent = 'Phase';
-        const selectPhase = document.createElement("select");
-        const phaseOptions = [
-            { value: "", label: 'General' },
-            { value: "auto", label: 'Auto' },
-            { value: "teleop", label: 'Teleop' },
-            { value: "endgame", label: 'Endgame' }
-        ];
-        phaseOptions.forEach((phase) => {
-            const option = document.createElement("option");
-            option.value = phase.value;
-            option.textContent = phase.label;
-            selectPhase.appendChild(option);
-        });
-        selectPhase.value = field.phase || resolveFieldPhase(field) || "";
-        selectPhase.addEventListener("change", (e) => {
-            field.phase = e.target.value || "";
-            updateRawFromVisual();
-        });
-        divPhase.appendChild(labelPhase);
-        divPhase.appendChild(selectPhase);
-        body.appendChild(divPhase);
+        if (supportsPhasesConfig()) {
+            const divPhase = document.createElement("div");
+            divPhase.className = "field";
+            const labelPhase = document.createElement("label");
+            labelPhase.textContent = 'Phase';
+            const selectPhase = document.createElement("select");
+            const phaseOptions = [
+                { value: "", label: 'General' },
+                { value: "auto", label: 'Auto' },
+                { value: "teleop", label: 'Teleop' },
+                { value: "endgame", label: 'Endgame' }
+            ];
+            phaseOptions.forEach((phase) => {
+                const option = document.createElement("option");
+                option.value = phase.value;
+                option.textContent = phase.label;
+                selectPhase.appendChild(option);
+            });
+            selectPhase.value = field.phase || resolveFieldPhase(field) || "";
+            selectPhase.addEventListener("change", (e) => {
+                field.phase = e.target.value || "";
+                updateRawFromVisual();
+            });
+            divPhase.appendChild(labelPhase);
+            divPhase.appendChild(selectPhase);
+            body.appendChild(divPhase);
+        }
         
         // Required Checkbox
         const divReq = document.createElement("div");
@@ -1212,7 +1218,7 @@
                 return cleaned;
             }
 
-            if (field.phase) {
+            if (supportsPhasesConfig() && field.phase) {
                 cleaned.phase = String(field.phase);
             }
             

@@ -18,10 +18,10 @@ export function showImageModal(imageSrc, title = "Robot Photo Preview") {
     topBar.style.cssText = "width:100%;max-width:900px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;color:#f8fafc;";
     topBar.innerHTML = `
         <div style="font-weight:700;font-size:1.1rem;display:flex;align-items:center;gap:8px;">
-            <span>📷</span><span>${title}</span>
+            <span>${title}</span>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
-            <a href="${imageSrc}" download="robot_photo.jpg" class="btn btn-sm" style="background:rgba(255,255,255,0.1);color:#fff;text-decoration:none;padding:6px 12px;border-radius:8px;font-size:0.85rem;">⬇ Download</a>
+            <a href="${imageSrc}" download="robot_photo.jpg" class="btn btn-sm" style="background:rgba(255,255,255,0.1);color:#fff;text-decoration:none;padding:6px 12px;border-radius:8px;font-size:0.85rem;">Download</a>
             <button type="button" class="btn-close-lightbox" style="background:none;border:none;color:#cbd5e1;font-size:1.6rem;cursor:pointer;padding:2px 8px;">✕</button>
         </div>
     `;
@@ -68,7 +68,6 @@ export function openInlineCameraModal(options = {}) {
     header.style.cssText = "display:flex;align-items:center;justify-content:space-between;";
     header.innerHTML = `
         <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:1.3rem;">📷</span>
             <h3 style="margin:0;font-size:1.1rem;font-weight:700;color:#f8fafc;">Inline Camera Capture</h3>
         </div>
         <button type="button" class="btn-close-cam" style="background:none;border:none;color:#94a3b8;font-size:1.4rem;cursor:pointer;padding:4px 8px;">✕</button>
@@ -97,13 +96,13 @@ export function openInlineCameraModal(options = {}) {
     btnFlip.type = "button";
     btnFlip.className = "btn";
     btnFlip.style.cssText = "background:rgba(255,255,255,0.08);color:#f8fafc;border:1px solid rgba(255,255,255,0.12);padding:10px 14px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:0.85rem;font-weight:600;";
-    btnFlip.innerHTML = `🔄 Flip Camera`;
+    btnFlip.innerHTML = `Flip Camera`;
 
     const btnCapture = document.createElement("button");
     btnCapture.type = "button";
     btnCapture.className = "btn primary";
     btnCapture.style.cssText = "flex:1;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border:none;padding:12px 20px;border-radius:10px;cursor:pointer;font-weight:700;font-size:0.95rem;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(2,132,199,0.4);";
-    btnCapture.innerHTML = `📸 Capture Snapshot`;
+    btnCapture.innerHTML = `Capture Snapshot`;
 
     controls.appendChild(btnFlip);
     controls.appendChild(btnCapture);
