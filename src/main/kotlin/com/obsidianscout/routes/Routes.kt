@@ -112,6 +112,9 @@ fun Application.configureRoutes() {
                 val appConfig = AppConfigLoader.load()
                 call.respond(VersionResponse(appConfig.current_version, com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode()))
             }
+            get("/health") {
+                call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
+            }
             route("/cluster") {
                 get("/status") {
                     val appConfig = AppConfigLoader.load()

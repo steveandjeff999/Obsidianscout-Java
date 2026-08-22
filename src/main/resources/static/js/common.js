@@ -88,7 +88,11 @@ import {
 import {
     injectConnectionWidget,
     updateConnectionStatus,
-    renderServerVersion
+    renderServerVersion,
+    isServerOnline,
+    checkServerConnection,
+    setServerOnline,
+    startConnectionMonitoring
 } from './components/connection-widget.js';
 
 import {
@@ -197,6 +201,10 @@ window.Obsidianscout = {
     canAccessAnalytics,
     ROLE_HIERARCHY,
     updateConnectionStatus,
+    isServerOnline,
+    checkServerConnection,
+    setServerOnline,
+    startConnectionMonitoring,
     syncOfflineEntries,
     showLoadingSpinner,
     showRetryButton,
@@ -253,6 +261,10 @@ export {
     canAccessAnalytics,
     ROLE_HIERARCHY,
     updateConnectionStatus,
+    isServerOnline,
+    checkServerConnection,
+    setServerOnline,
+    startConnectionMonitoring,
     syncOfflineEntries,
     showLoadingSpinner,
     showRetryButton,
@@ -427,30 +439,37 @@ async function onDOMContentLoaded() {
 
     wireSidebarToggle();
     injectMobileTopBar();
+    startConnectionMonitoring();
 
-    window.addEventListener("online", () => {
-        updateConnectionStatus();
-        const isCacheManager = document.body && document.body.dataset.page === "cache-manager";
-        if (!isCacheManager) {
-            syncOfflineEntries();
-        }
-        syncOfflineCache();
-        const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
-        const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
-        if (isDataPage && !isUserEditing) {
-            saveScrollPositions();
-            window.location.reload();
+    window.addEventListener("online", async () => {
+        const online = await checkServerConnection({ force: true });
+        if (online) {
+            const isCacheManager = document.body && document.body.dataset.page === "cache-manager";
+            if (!isCacheManager) {
+                syncOfflineEntries();
+            }
+            syncOfflineCache();
+            const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
+            const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
+            if (isDataPage && !isUserEditing) {
+                saveScrollPositions();
+                window.location.reload();
+            }
         }
     });
-    window.addEventListener("offline", updateConnectionStatus);
+    window.addEventListener("offline", () => {
+        setServerOnline(false);
+    });
 
-    if (navigator.onLine) {
-        const isCacheManager = document.body && document.body.dataset.page === "cache-manager";
-        if (!isCacheManager) {
-            syncOfflineEntries();
+    checkServerConnection({ force: true }).then((online) => {
+        if (online) {
+            const isCacheManager = document.body && document.body.dataset.page === "cache-manager";
+            if (!isCacheManager) {
+                syncOfflineEntries();
+            }
+            syncOfflineCache();
         }
-        syncOfflineCache();
-    }
+    });
 
     // Load selected language bundle and apply translations
     loadLocale(safeGetItem('obsidianscout:lang') || 'en').then(() => applyTranslations());

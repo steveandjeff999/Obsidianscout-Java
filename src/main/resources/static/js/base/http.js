@@ -162,6 +162,16 @@ export async function request(path, options = {}) {
 
     try {
         const response = await fetch(path, opts);
+        if (response.status >= 502 && response.status <= 504) {
+            if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.setServerOnline === 'function') {
+                window.Obsidianscout.setServerOnline(false);
+            }
+        } else {
+            if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.setServerOnline === 'function') {
+                window.Obsidianscout.setServerOnline(true);
+            }
+        }
+
         if (response.status === 204) {
             return null;
         }
@@ -217,6 +227,10 @@ export async function request(path, options = {}) {
 
         return data;
     } catch (error) {
+        if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.setServerOnline === 'function') {
+            window.Obsidianscout.setServerOnline(false);
+        }
+
         if (method === "GET") {
             const cachedText = safeGetItem("cache:" + path);
             if (cachedText !== null) {

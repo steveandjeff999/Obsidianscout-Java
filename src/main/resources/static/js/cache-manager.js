@@ -145,10 +145,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             tdActions.appendChild(btnView);
 
             // Sync button
+            const isOnline = (Obsidianscout && typeof Obsidianscout.isServerOnline === 'function') ? Obsidianscout.isServerOnline() : navigator.onLine;
             const btnSync = document.createElement("button");
             btnSync.className = "btn-mini sync";
             btnSync.textContent = "Upload";
-            btnSync.disabled = !navigator.onLine;
+            btnSync.disabled = !isOnline;
             btnSync.addEventListener("click", () => syncEntry(entry));
             tdActions.appendChild(btnSync);
 
@@ -211,8 +212,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     modalCloseFooterBtn.addEventListener("click", closePayloadModal);
 
     async function syncEntry(entry) {
-        if (!navigator.onLine) {
-            Obsidianscout.showToast("You are offline", "error");
+        const isOnline = (Obsidianscout && typeof Obsidianscout.isServerOnline === 'function') ? Obsidianscout.isServerOnline() : navigator.onLine;
+        if (!isOnline) {
+            Obsidianscout.showToast("Server is offline", "error");
             return;
         }
 
@@ -250,8 +252,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Global action handlers
     btnSyncAll.addEventListener("click", async () => {
-        if (!navigator.onLine) {
-            Obsidianscout.showToast("You are offline", "error");
+        const isOnline = (Obsidianscout && typeof Obsidianscout.isServerOnline === 'function') ? Obsidianscout.isServerOnline() : navigator.onLine;
+        if (!isOnline) {
+            Obsidianscout.showToast("Server is offline", "error");
             return;
         }
 
@@ -366,6 +369,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Custom event sync notifier
     window.addEventListener("obsidianscout:offline-entries-synced", () => {
+        loadAndRenderEntries();
+    });
+
+    window.addEventListener("obsidianscout:connection-changed", () => {
         loadAndRenderEntries();
     });
 

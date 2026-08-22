@@ -49,7 +49,11 @@ export const CACHE_CONFIGS = {
 };
 
 export async function syncOfflineEntries() {
-    if (!navigator.onLine) return;
+    if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.isServerOnline === 'function') {
+        if (!window.Obsidianscout.isServerOnline()) return;
+    } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return;
+    }
 
     let totalPending = 0;
     for (const type in CACHE_CONFIGS) {
@@ -100,7 +104,11 @@ export async function syncOfflineEntries() {
 }
 
 export async function syncOfflineCache(clearOldOthers = false) {
-    if (!navigator.onLine) return;
+    if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.isServerOnline === 'function') {
+        if (!window.Obsidianscout.isServerOnline()) return;
+    } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return;
+    }
     const loggedIn = await checkLoginStatus();
     if (!loggedIn) return;
 
