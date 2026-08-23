@@ -170,6 +170,18 @@ fun Application.configureRoutes() {
                         "Invalid credentials"
                     )
 
+                    val userUuid = UUID.fromString(user.id)
+                    val ipAddress = call.request.headers["CF-Connecting-IP"]
+                        ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
+                        ?: call.request.local.remoteHost
+                    val userAgent = call.request.headers["User-Agent"] ?: ""
+                    val sessionUuid = AuthService.createSession(
+                        userId = userUuid,
+                        clientType = "web",
+                        userAgent = userAgent,
+                        ipAddress = ipAddress
+                    )
+
                     val session = UserSession(
                         userId = user.id,
                         username = user.username,
@@ -180,7 +192,8 @@ fun Application.configureRoutes() {
                         profilePicture = null,
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
-                        nodeAlertsEnabled = user.nodeAlertsEnabled
+                        nodeAlertsEnabled = user.nodeAlertsEnabled,
+                        sessionId = sessionUuid.toString()
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
@@ -195,7 +208,8 @@ fun Application.configureRoutes() {
                         profilePicture = user.profilePicture,
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
-                        nodeAlertsEnabled = user.nodeAlertsEnabled
+                        nodeAlertsEnabled = user.nodeAlertsEnabled,
+                        sessionId = sessionUuid.toString()
                     )
                     call.respond(LoginResponse(responseSession))
                 }
@@ -209,6 +223,19 @@ fun Application.configureRoutes() {
                         role = request.role,
                         email = request.email
                     )
+
+                    val userUuid = UUID.fromString(user.id)
+                    val ipAddress = call.request.headers["CF-Connecting-IP"]
+                        ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
+                        ?: call.request.local.remoteHost
+                    val userAgent = call.request.headers["User-Agent"] ?: ""
+                    val sessionUuid = AuthService.createSession(
+                        userId = userUuid,
+                        clientType = "web",
+                        userAgent = userAgent,
+                        ipAddress = ipAddress
+                    )
+
                     val session = UserSession(
                         userId = user.id,
                         username = user.username,
@@ -219,7 +246,8 @@ fun Application.configureRoutes() {
                         profilePicture = null,
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
-                        nodeAlertsEnabled = user.nodeAlertsEnabled
+                        nodeAlertsEnabled = user.nodeAlertsEnabled,
+                        sessionId = sessionUuid.toString()
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
                     call.sessions.set(session)
@@ -234,11 +262,20 @@ fun Application.configureRoutes() {
                         profilePicture = user.profilePicture,
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
-                        nodeAlertsEnabled = user.nodeAlertsEnabled
+                        nodeAlertsEnabled = user.nodeAlertsEnabled,
+                        sessionId = sessionUuid.toString()
                     )
                     call.respond(LoginResponse(responseSession))
                 }
                 post("/logout") {
+                    val session = call.sessions.get<UserSession>()
+                    if (session != null && !session.sessionId.isNullOrBlank()) {
+                        val userUuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
+                        val sessionUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
+                        if (userUuid != null && sessionUuid != null) {
+                            AuthService.revokeSession(userUuid, sessionUuid)
+                        }
+                    }
                     call.sessions.clear<UserSession>()
                     call.respond(HttpStatusCode.NoContent)
                 }
@@ -1843,6 +1880,45 @@ fun Application.configureRoutes() {
                 AuthService.deleteUser(session, session.userId)
                 call.sessions.clear<UserSession>()
                 call.respond(HttpStatusCode.NoContent)
+            }
+
+            get("/user/sessions") {
+                val session = call.requireSession()
+                val userUuid = UUID.fromString(session.userId)
+                val sessions = AuthService.listSessions(userUuid, session.sessionId)
+                call.respond(UserSessionsResponse(sessions))
+            }
+
+            delete("/user/sessions/{id}") {
+                val session = call.requireSession()
+                val targetIdStr = call.parameters["id"]
+                    ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing session ID")
+                val targetUuid = runCatching { UUID.fromString(targetIdStr) }.getOrElse {
+                    throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid session ID format")
+                }
+                val userUuid = UUID.fromString(session.userId)
+                val deleted = AuthService.revokeSession(userUuid, targetUuid)
+                if (!deleted) {
+                    throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Session not found")
+                }
+                if (targetIdStr == session.sessionId) {
+                    call.sessions.clear<UserSession>()
+                }
+                call.respond(RevokeSessionResponse(success = true, message = "Session revoked successfully"))
+            }
+
+            delete("/user/sessions") {
+                val session = call.requireSession()
+                val userUuid = UUID.fromString(session.userId)
+                val othersOnly = call.request.queryParameters["othersOnly"]?.toBooleanStrictOrNull() ?: false
+                if (othersOnly) {
+                    val count = AuthService.revokeAllOtherSessions(userUuid, session.sessionId)
+                    call.respond(RevokeSessionResponse(success = true, revokedCount = count, message = "All other sessions revoked successfully"))
+                } else {
+                    val count = AuthService.revokeAllSessions(userUuid)
+                    call.sessions.clear<UserSession>()
+                    call.respond(RevokeSessionResponse(success = true, revokedCount = count, message = "All sessions revoked successfully"))
+                }
             }
 
             route("/chat") {

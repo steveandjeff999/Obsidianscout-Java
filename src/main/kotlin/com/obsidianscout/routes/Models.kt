@@ -762,6 +762,19 @@ data class ValidationSummaryResponse(
     val teams: List<TeamValidationRecord>
 )
 
+@Serializable
+data class UserSessionsResponse(
+    val sessions: List<com.obsidianscout.auth.UserSessionInfo>
+)
+
+@Serializable
+data class RevokeSessionResponse(
+    val success: Boolean = true,
+    val message: String,
+    val revokedCount: Int? = null
+)
+
+
 
 
 

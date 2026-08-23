@@ -29,8 +29,10 @@ import com.obsidianscout.db.PasswordResetTokens
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
+import com.obsidianscout.db.UserSessions
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 @Serializable
 enum class UserRole {
@@ -57,6 +59,18 @@ data class UserRecord(
     val notificationPreference: String = "all",
     val tourProgress: String? = null,
     val nodeAlertsEnabled: Boolean = false
+)
+
+@Serializable
+data class UserSessionInfo(
+    val id: String,
+    val clientType: String,
+    val deviceName: String,
+    val userAgent: String,
+    val ipAddress: String,
+    val createdAt: String,
+    val lastActiveAt: String,
+    val isCurrent: Boolean
 )
 
 object AuthService {
@@ -484,9 +498,145 @@ object AuthService {
             // Delete password reset tokens for the target user
             PasswordResetTokens.deleteWhere { userId eq targetUuid }
 
+            // Delete active sessions for the target user
+            UserSessions.deleteWhere { userId eq targetUuid }
+
             // Delete the target user
             Users.deleteWhere { Users.id eq targetUuid }
         }
+    }
+
+    private val sessionTouchCache = ConcurrentHashMap<UUID, Long>()
+
+    fun createSession(
+        userId: UUID,
+        clientType: String = "web",
+        userAgent: String = "",
+        ipAddress: String = "",
+        customDeviceName: String? = null,
+        expiresAt: Instant? = null
+    ): UUID {
+        val device = customDeviceName?.takeIf { it.isNotBlank() } ?: parseDeviceName(userAgent, clientType)
+        val now = Instant.now()
+        return transaction {
+            UserSessions.insertAndGetId {
+                it[UserSessions.userId] = userId
+                it[UserSessions.clientType] = clientType
+                it[UserSessions.deviceName] = device
+                it[UserSessions.userAgent] = userAgent
+                it[UserSessions.ipAddress] = ipAddress
+                it[UserSessions.createdAt] = now
+                it[UserSessions.lastActiveAt] = now
+                it[UserSessions.expiresAt] = expiresAt
+            }.value
+        }
+    }
+
+    fun listSessions(userId: UUID, currentSessionId: String?): List<UserSessionInfo> {
+        return readTransaction {
+            UserSessions.selectAll().where { UserSessions.userId eq userId }
+                .orderBy(UserSessions.lastActiveAt to SortOrder.DESC)
+                .map { row ->
+                    val sId = row[UserSessions.id].value.toString()
+                    UserSessionInfo(
+                        id = sId,
+                        clientType = row[UserSessions.clientType],
+                        deviceName = row[UserSessions.deviceName],
+                        userAgent = row[UserSessions.userAgent],
+                        ipAddress = row[UserSessions.ipAddress],
+                        createdAt = row[UserSessions.createdAt].toString(),
+                        lastActiveAt = row[UserSessions.lastActiveAt].toString(),
+                        isCurrent = (sId == currentSessionId)
+                    )
+                }
+        }
+    }
+
+    fun revokeSession(userId: UUID, sessionId: UUID): Boolean {
+        return transaction {
+            UserSessions.deleteWhere {
+                (UserSessions.id eq sessionId) and (UserSessions.userId eq userId)
+            } > 0
+        }
+    }
+
+    fun revokeAllOtherSessions(userId: UUID, currentSessionId: String?): Int {
+        val currentUuid = currentSessionId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        return transaction {
+            if (currentUuid != null) {
+                UserSessions.deleteWhere {
+                    (UserSessions.userId eq userId) and (UserSessions.id neq currentUuid)
+                }
+            } else {
+                UserSessions.deleteWhere {
+                    UserSessions.userId eq userId
+                }
+            }
+        }
+    }
+
+    fun revokeAllSessions(userId: UUID): Int {
+        return transaction {
+            UserSessions.deleteWhere {
+                UserSessions.userId eq userId
+            }
+        }
+    }
+
+    fun touchSession(sessionIdStr: String) {
+        val sessionUuid = runCatching { UUID.fromString(sessionIdStr) }.getOrNull() ?: return
+        val nowMs = System.currentTimeMillis()
+        val lastTouch = sessionTouchCache[sessionUuid] ?: 0L
+        if (nowMs - lastTouch > 300_000L) { // 5 minutes throttle
+            sessionTouchCache[sessionUuid] = nowMs
+            transaction {
+                UserSessions.update({ UserSessions.id eq sessionUuid }) {
+                    it[lastActiveAt] = Instant.ofEpochMilli(nowMs)
+                }
+            }
+        }
+    }
+
+    fun parseDeviceName(userAgent: String?, clientType: String = "web"): String {
+        if (userAgent.isNullOrBlank()) {
+            return if (clientType.equals("mobile", ignoreCase = true)) "Mobile App" else "Web Browser"
+        }
+        val ua = userAgent.trim()
+
+        if (ua.contains("ObsidianScout", ignoreCase = true) || ua.contains("Dart/", ignoreCase = true) || clientType.equals("mobile", ignoreCase = true)) {
+            val os = when {
+                ua.contains("Android", ignoreCase = true) -> "Android"
+                ua.contains("iPhone", ignoreCase = true) || ua.contains("iPad", ignoreCase = true) || ua.contains("iOS", ignoreCase = true) -> "iOS"
+                ua.contains("Windows", ignoreCase = true) -> "Windows"
+                ua.contains("Macintosh", ignoreCase = true) || ua.contains("Mac OS", ignoreCase = true) -> "macOS"
+                else -> "Mobile"
+            }
+            return "ObsidianScout App on $os"
+        }
+
+        val browser = when {
+            ua.contains("Edg/", ignoreCase = true) || ua.contains("Edge/", ignoreCase = true) -> "Edge"
+            ua.contains("OPR/", ignoreCase = true) || ua.contains("Opera", ignoreCase = true) -> "Opera"
+            ua.contains("SamsungBrowser", ignoreCase = true) -> "Samsung Internet"
+            ua.contains("Chrome", ignoreCase = true) && !ua.contains("Chromium", ignoreCase = true) -> "Chrome"
+            ua.contains("Firefox", ignoreCase = true) -> "Firefox"
+            ua.contains("Safari", ignoreCase = true) && !ua.contains("Chrome", ignoreCase = true) -> "Safari"
+            ua.contains("Trident", ignoreCase = true) || ua.contains("MSIE", ignoreCase = true) -> "Internet Explorer"
+            else -> "Web Browser"
+        }
+
+        val os = when {
+            ua.contains("iPhone", ignoreCase = true) -> "iOS (iPhone)"
+            ua.contains("iPad", ignoreCase = true) -> "iOS (iPad)"
+            ua.contains("Android", ignoreCase = true) -> "Android"
+            ua.contains("Windows NT 10.0", ignoreCase = true) || ua.contains("Windows", ignoreCase = true) -> "Windows"
+            ua.contains("Mac OS X", ignoreCase = true) || ua.contains("Macintosh", ignoreCase = true) -> "macOS"
+            ua.contains("CrOS", ignoreCase = true) -> "ChromeOS"
+            ua.contains("Linux", ignoreCase = true) -> "Linux"
+            else -> "Unknown OS"
+        }
+
+        return "$browser on $os"
     }
 
     fun getUserById(userId: String): UserRecord? {

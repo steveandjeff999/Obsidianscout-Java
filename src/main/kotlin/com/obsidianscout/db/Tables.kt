@@ -386,3 +386,19 @@ object AnalyticsReports : UUIDTable("analytics_reports") {
         index("idx_analytics_reports_user", false, userId)
     }
 }
+
+object UserSessions : UUIDTable("user_sessions") {
+    val userId = reference("user_id", Users)
+    val clientType = varchar("client_type", 32).default("web") // "web", "mobile", "api"
+    val deviceName = varchar("device_name", 255).default("Unknown Device")
+    val userAgent = text("user_agent").default("")
+    val ipAddress = varchar("ip_address", 64).default("")
+    val createdAt = timestamp("created_at")
+    val lastActiveAt = timestamp("last_active_at")
+    val expiresAt = timestamp("expires_at").nullable()
+
+    init {
+        index("idx_user_sessions_user", false, userId)
+    }
+}
+

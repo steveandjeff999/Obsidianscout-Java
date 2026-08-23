@@ -97,15 +97,18 @@ data class MobileErrorResponse(
 object JwtHelper {
     private fun getAlgorithm(secret: String): Algorithm = Algorithm.HMAC256(secret)
 
-    fun generateToken(session: UserSession, secret: String, expiresAt: Date): String {
-        return JWT.create()
+    fun generateToken(session: UserSession, secret: String, expiresAt: Date, sessionId: String? = session.sessionId): String {
+        val builder = JWT.create()
             .withClaim("userId", session.userId)
             .withClaim("username", session.username)
             .withClaim("teamNumber", session.teamNumber)
             .withClaim("role", session.role.name)
             .withClaim("email", session.email)
             .withExpiresAt(expiresAt)
-            .sign(getAlgorithm(secret))
+        if (!sessionId.isNullOrBlank()) {
+            builder.withClaim("sessionId", sessionId)
+        }
+        return builder.sign(getAlgorithm(secret))
     }
 
     fun verifyToken(token: String, secret: String): UserSession? {
@@ -118,12 +121,14 @@ object JwtHelper {
             val roleStr = jwt.getClaim("role").asString() ?: return null
             val role = try { UserRole.valueOf(roleStr) } catch (_: Exception) { return null }
             val email = jwt.getClaim("email").asString()
+            val sessionId = jwt.getClaim("sessionId").asString()
             UserSession(
                 userId = userId,
                 username = username,
                 teamNumber = teamNumber,
                 role = role,
-                email = email
+                email = email,
+                sessionId = sessionId
             )
         } catch (e: Exception) {
             null
@@ -140,11 +145,27 @@ suspend fun ApplicationCall.requireMobileSession(secret: String): UserSession {
     val token = authHeader.removePrefix("Bearer ").trim()
     val session = JwtHelper.verifyToken(token, secret)
         ?: throw MobileApiException(HttpStatusCode.Unauthorized, "Invalid or expired token", "INVALID_TOKEN")
-    val exists = readTransaction {
-        Users.selectAll().where { Users.id eq UUID.fromString(session.userId) }.any()
+    val userUuid = UUID.fromString(session.userId)
+    val (userExists, sessionValid) = readTransaction {
+        val uExists = Users.selectAll().where { Users.id eq userUuid }.any()
+        val sOk = if (!session.sessionId.isNullOrBlank()) {
+            val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
+            if (sUuid != null) {
+                com.obsidianscout.db.UserSessions.selectAll().where { (com.obsidianscout.db.UserSessions.id eq sUuid) and (com.obsidianscout.db.UserSessions.userId eq userUuid) }.any()
+            } else false
+        } else {
+            true
+        }
+        Pair(uExists, sOk)
     }
-    if (!exists) {
+    if (!userExists) {
         throw MobileApiException(HttpStatusCode.Unauthorized, "Account has been deleted", "AUTH_REQUIRED")
+    }
+    if (!sessionValid) {
+        throw MobileApiException(HttpStatusCode.Unauthorized, "Session has been revoked", "AUTH_REVOKED")
+    }
+    if (!session.sessionId.isNullOrBlank()) {
+        AuthService.touchSession(session.sessionId)
     }
     return session
 }
@@ -1042,17 +1063,30 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     throw MobileApiException(HttpStatusCode.Unauthorized, "Invalid credentials", "INVALID_CREDENTIALS")
                 }
 
+                val ipAddress = call.request.headers["CF-Connecting-IP"]
+                    ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
+                    ?: call.request.local.remoteHost
+                val userAgent = call.request.headers["User-Agent"] ?: ""
+                val userUuid = UUID.fromString(user.id)
+                val sessionUuid = AuthService.createSession(
+                    userId = userUuid,
+                    clientType = "mobile",
+                    userAgent = userAgent,
+                    ipAddress = ipAddress
+                )
+
                 val session = UserSession(
                     userId = user.id,
                     username = user.username,
                     teamNumber = user.teamNumber,
                     program = user.program,
                     role = user.role,
-                    email = user.email
+                    email = user.email,
+                    sessionId = sessionUuid.toString()
                 )
 
                 val expiresAt = Date(System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000)
-                val token = JwtHelper.generateToken(session, secret, expiresAt)
+                val token = JwtHelper.generateToken(session, secret, expiresAt, sessionUuid.toString())
 
                 call.respond(
                     MobileLoginResponse(
@@ -1086,16 +1120,30 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     throw MobileApiException(HttpStatusCode.Conflict, e.message ?: "Username exists", "USERNAME_EXISTS")
                 }
 
+                val ipAddress = call.request.headers["CF-Connecting-IP"]
+                    ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
+                    ?: call.request.local.remoteHost
+                val userAgent = call.request.headers["User-Agent"] ?: ""
+                val userUuid = UUID.fromString(user.id)
+                val sessionUuid = AuthService.createSession(
+                    userId = userUuid,
+                    clientType = "mobile",
+                    userAgent = userAgent,
+                    ipAddress = ipAddress
+                )
+
                 val session = UserSession(
                     userId = user.id,
                     username = user.username,
                     teamNumber = user.teamNumber,
+                    program = user.program,
                     role = user.role,
-                    email = user.email
+                    email = user.email,
+                    sessionId = sessionUuid.toString()
                 )
 
                 val expiresAt = Date(System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000)
-                val token = JwtHelper.generateToken(session, secret, expiresAt)
+                val token = JwtHelper.generateToken(session, secret, expiresAt, sessionUuid.toString())
 
                 call.respond(
                     HttpStatusCode.Created,
@@ -1116,7 +1164,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             post("/auth/refresh") {
                 val session = call.requireMobileSession(secret)
                 val expiresAt = Date(System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000)
-                val token = JwtHelper.generateToken(session, secret, expiresAt)
+                val token = JwtHelper.generateToken(session, secret, expiresAt, session.sessionId)
 
                 call.respond(
                     MobileLoginResponse(

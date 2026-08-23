@@ -238,7 +238,8 @@ object DatabaseFactory {
                 FcmDeviceTokens,
                 ClusterSecrets,
                 ClusterNotificationLocks,
-                AnalyticsReports
+                AnalyticsReports,
+                UserSessions
             )
 
             if (isCockroach) {

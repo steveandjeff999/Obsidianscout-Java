@@ -22,6 +22,9 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
 
+import com.obsidianscout.db.UserSessions
+import org.jetbrains.exposed.sql.and
+
 @Serializable
 data class UserSession(
     val userId: String,
@@ -33,7 +36,8 @@ data class UserSession(
     val profilePicture: String? = null,
     val notificationPreference: String = "all",
     val tourProgress: String? = null,
-    val nodeAlertsEnabled: Boolean = false
+    val nodeAlertsEnabled: Boolean = false,
+    val sessionId: String? = null
 )
 
 class ApiException(val status: HttpStatusCode, override val message: String) : RuntimeException(message)
@@ -41,19 +45,39 @@ class ApiException(val status: HttpStatusCode, override val message: String) : R
 suspend fun ApplicationCall.requireSession(): UserSession {
     val session = sessions.get<UserSession>()
         ?: throw ApiException(HttpStatusCode.Unauthorized, "Not signed in")
-    val exists = if (DatabaseFactory.isReady) {
-        runCatching {
+    if (DatabaseFactory.isReady) {
+        val userUuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
+        if (userUuid == null) {
+            sessions.clear<UserSession>()
+            throw ApiException(HttpStatusCode.Unauthorized, "Invalid user")
+        }
+        val (userExists, sessionValid) = runCatching {
             com.obsidianscout.db.readTransaction {
-                val uuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
-                if (uuid == null) false else Users.selectAll().where { Users.id eq uuid }.any()
+                val exists = Users.selectAll().where { Users.id eq userUuid }.any()
+                val sessionOk = if (!session.sessionId.isNullOrBlank()) {
+                    val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
+                    if (sUuid != null) {
+                        UserSessions.selectAll().where { (UserSessions.id eq sUuid) and (UserSessions.userId eq userUuid) }.any()
+                    } else false
+                } else {
+                    true
+                }
+                Pair(exists, sessionOk)
             }
-        }.getOrDefault(true)
-    } else {
-        true
-    }
-    if (!exists) {
-        sessions.clear<UserSession>()
-        throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
+        }.getOrDefault(Pair(true, true))
+
+        if (!userExists) {
+            sessions.clear<UserSession>()
+            throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
+        }
+        if (!sessionValid) {
+            sessions.clear<UserSession>()
+            throw ApiException(HttpStatusCode.Unauthorized, "Session has been revoked")
+        }
+
+        if (!session.sessionId.isNullOrBlank()) {
+            AuthService.touchSession(session.sessionId)
+        }
     }
     return session
 }
