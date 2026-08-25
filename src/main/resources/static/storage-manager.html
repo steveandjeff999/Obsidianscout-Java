@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ObsidianScout | Site Storage Management</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .stats-grid-storage {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card-storage {
+            background: var(--surface-2);
+            padding: 18px;
+            border-radius: var(--radius-sm, 12px);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        body.theme-dark .stat-card-storage {
+            background: var(--surface-3);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .stat-card-storage:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .stat-label-storage {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .stat-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 999px;
+            text-transform: uppercase;
+        }
+
+        .badge-safe {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .badge-info {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+        }
+
+        .stat-value-storage {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--ink);
+            line-height: 1.1;
+        }
+
+        .stat-subtext {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 6px;
+        }
+
+        /* Storage Ratio Bar */
+        .storage-bar-wrapper {
+            margin-bottom: 24px;
+            background: var(--surface-2);
+            padding: 16px 20px;
+            border-radius: var(--radius-sm, 12px);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        body.theme-dark .storage-bar-wrapper {
+            background: var(--surface-3);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .storage-bar-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .storage-progress-bar {
+            height: 14px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.08);
+            display: flex;
+            overflow: hidden;
+            gap: 2px;
+        }
+
+        body.theme-dark .storage-progress-bar {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .progress-segment {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .seg-api { background: #3b82f6; }
+        .seg-scout { background: #10b981; }
+        .seg-chat { background: #f59e0b; }
+        .seg-accounts { background: #8b5cf6; }
+        .seg-config { background: #ec4899; }
+
+        .storage-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 12px;
+            font-size: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        /* Filter Controls */
+        .storage-controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .filter-group input, .filter-group select {
+            padding: 8px 12px;
+            font-size: 13px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background: var(--surface);
+            color: var(--ink);
+        }
+
+        body.theme-dark .filter-group input, body.theme-dark .filter-group select {
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Tables */
+        .storage-table-container {
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            background: var(--surface);
+        }
+
+        body.theme-dark .storage-table-container {
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .storage-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        .storage-table th, .storage-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        body.theme-dark .storage-table th, body.theme-dark .storage-table td {
+            border-bottom-color: rgba(255, 255, 255, 0.06);
+        }
+
+        .storage-table th {
+            background: var(--surface-2);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--muted);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        body.theme-dark .storage-table th {
+            background: var(--surface-3);
+        }
+
+        .storage-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .storage-table tr:hover td {
+            background: rgba(0, 0, 0, 0.015);
+        }
+
+        body.theme-dark .storage-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .btn-table-action {
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-table-action.purge {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            border-color: rgba(59, 130, 246, 0.2);
+        }
+
+        .btn-table-action.purge:hover {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-table-action.danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-table-action.danger:hover {
+            background: #ef4444;
+            color: white;
+        }
+
+        /* Danger Alert Banner in Modal */
+        .danger-banner {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-left: 4px solid #ef4444;
+            padding: 14px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            color: #ef4444;
+        }
+
+        .danger-banner h4 {
+            margin: 0 0 6px 0;
+            font-size: 15px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .danger-banner p {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.4;
+            color: var(--ink);
+        }
+
+        /* Maintenance cards grid */
+        .maintenance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .maintenance-card {
+            background: var(--surface-2);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        body.theme-dark .maintenance-card {
+            background: var(--surface-3);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+    </style>
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="storage-manager">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div id="superadmin-locked" class="card hidden">
+                <h2>Superadmin Access Required</h2>
+                <p class="notice">You must be logged in as a Superadmin (Site Admin) to access Site Storage Management.</p>
+                <div class="mt-16">
+                    <a href="/admin-settings" class="btn secondary">&larr; Return to Admin Settings</a>
+                </div>
+            </div>
+
+            <div id="storage-panel" class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;">
+                    <div>
+                        <h1 style="margin: 0; font-size: 24px; display: flex; align-items: center; gap: 10px;">
+                            <span>💾</span> Site Storage Management
+                        </h1>
+                        <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
+                            Monitor database footprint, manage re-syncable API event caches, view data use by scouting team number, and run safe or deep data pruning.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button id="btn-refresh-storage" class="btn secondary" type="button" style="display: flex; align-items: center; gap: 6px;">
+                            <span>🔄</span> Refresh Storage Data
+                        </button>
+                        <a href="/admin-settings" class="btn ghost" style="text-decoration: none;">&larr; Admin Settings</a>
+                    </div>
+                </div>
+
+                <!-- High Level Storage Statistics Grid -->
+                <div class="stats-grid-storage">
+                    <div class="stat-card-storage">
+                        <div class="stat-header">
+                            <span class="stat-label-storage">Database Storage</span>
+                            <span id="db-engine-badge" class="stat-badge badge-info">SQLite</span>
+                        </div>
+                        <div class="stat-value-storage" id="stat-total-size">0 MB</div>
+                        <div class="stat-subtext" id="stat-total-records">0 total records</div>
+                    </div>
+
+                    <div class="stat-card-storage">
+                        <div class="stat-header">
+                            <span class="stat-label-storage">API Event Caches</span>
+                            <span class="stat-badge badge-safe">Re-syncable</span>
+                        </div>
+                        <div class="stat-value-storage" id="stat-api-cache-size" style="color: #3b82f6;">0 MB</div>
+                        <div class="stat-subtext" id="stat-api-cache-records">0 cached event rows</div>
+                    </div>
+
+                    <div class="stat-card-storage">
+                        <div class="stat-header">
+                            <span class="stat-label-storage">User Scouting Data</span>
+                            <span class="stat-badge badge-danger">Team Data</span>
+                        </div>
+                        <div class="stat-value-storage" id="stat-scouting-size" style="color: #10b981;">0 MB</div>
+                        <div class="stat-subtext" id="stat-scouting-records">0 match/pit/qual forms</div>
+                    </div>
+
+                    <div class="stat-card-storage">
+                        <div class="stat-header">
+                            <span class="stat-label-storage">Team Chat & Accounts</span>
+                            <span class="stat-badge badge-info">App Data</span>
+                        </div>
+                        <div class="stat-value-storage" id="stat-chat-accounts-size" style="color: #f59e0b;">0 MB</div>
+                        <div class="stat-subtext" id="stat-chat-accounts-records">0 messages & users</div>
+                    </div>
+                </div>
+
+                <!-- Storage Breakdown Progress Ratio Bar -->
+                <div class="storage-bar-wrapper">
+                    <div class="storage-bar-header">
+                        <span>Database Allocation Ratio</span>
+                        <span id="storage-bar-summary">Estimating...</span>
+                    </div>
+                    <div class="storage-progress-bar">
+                        <div id="bar-api" class="progress-segment seg-api" style="width: 0%;" title="API Event Caches"></div>
+                        <div id="bar-scout" class="progress-segment seg-scout" style="width: 0%;" title="User Scouting Forms"></div>
+                        <div id="bar-chat" class="progress-segment seg-chat" style="width: 0%;" title="Team Chat"></div>
+                        <div id="bar-accounts" class="progress-segment seg-accounts" style="width: 0%;" title="Accounts & Sessions"></div>
+                        <div id="bar-config" class="progress-segment seg-config" style="width: 0%;" title="Configs & System"></div>
+                    </div>
+                    <div class="storage-legend">
+                        <div class="legend-item"><div class="legend-dot seg-api"></div><span>API Event Caches</span></div>
+                        <div class="legend-item"><div class="legend-dot seg-scout"></div><span>User Scouting Records</span></div>
+                        <div class="legend-item"><div class="legend-dot seg-chat"></div><span>Team Chat Messages</span></div>
+                        <div class="legend-item"><div class="legend-dot seg-accounts"></div><span>Accounts & Sessions</span></div>
+                        <div class="legend-item"><div class="legend-dot seg-config"></div><span>Configurations & System</span></div>
+                    </div>
+                </div>
+
+                <!-- Tabs Navigation -->
+                <div class="tab-row mb-18">
+                    <button class="tab active" data-storage-tab="events" id="tab-events" type="button">API Event Caches</button>
+                    <button class="tab" data-storage-tab="teams" id="tab-teams" type="button">Data Usage by Scouting Team</button>
+                    <button class="tab" data-storage-tab="maintenance" id="tab-maintenance" type="button">Pruning & Maintenance</button>
+                </div>
+
+                <!-- TAB 1: API EVENT CACHES -->
+                <div data-storage-panel="events">
+                    <div class="storage-controls-row">
+                        <div class="filter-group">
+                            <input id="search-event" type="text" placeholder="Search event key or name..." style="min-width: 220px;" />
+                            <select id="filter-event-year">
+                                <option value="">All Years</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button id="btn-clear-old-events" class="btn secondary" type="button">Prune Events &le; Year</button>
+                            <button id="btn-clear-all-api" class="btn warning" type="button">Clear All API Caches</button>
+                        </div>
+                    </div>
+
+                    <div class="storage-table-container">
+                        <table class="storage-table">
+                            <thead>
+                                <tr>
+                                    <th>Event Key</th>
+                                    <th>Event Name</th>
+                                    <th>Year</th>
+                                    <th>Matches</th>
+                                    <th>Teams</th>
+                                    <th>EPA History</th>
+                                    <th>Cache Size</th>
+                                    <th>Scouting Presence</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="event-cache-table-body">
+                                <tr>
+                                    <td colspan="9" style="text-align: center; color: var(--muted); padding: 24px;">Loading event cache details...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB 2: DATA USAGE BY SCOUTING TEAM -->
+                <div data-storage-panel="teams" class="hidden">
+                    <div class="storage-controls-row">
+                        <div class="filter-group">
+                            <input id="search-team-number" type="number" placeholder="Search team number (e.g. 254)..." style="min-width: 220px;" />
+                            <select id="filter-team-program">
+                                <option value="">All Programs (FRC / FTC)</option>
+                                <option value="FRC">FRC</option>
+                                <option value="FTC">FTC</option>
+                            </select>
+                        </div>
+                        <div>
+                            <span class="notice" style="margin: 0; font-size: 13px;">Grouped by scouting team number across all events</span>
+                        </div>
+                    </div>
+
+                    <div class="storage-table-container">
+                        <table class="storage-table">
+                            <thead>
+                                <tr>
+                                    <th>Team #</th>
+                                    <th>Program</th>
+                                    <th>Total Storage</th>
+                                    <th>Match Entries</th>
+                                    <th>Pit Entries</th>
+                                    <th>Qual Entries</th>
+                                    <th>Configs & Revs</th>
+                                    <th>Chat Msgs</th>
+                                    <th>Users</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="team-storage-table-body">
+                                <tr>
+                                    <td colspan="10" style="text-align: center; color: var(--muted); padding: 24px;">Loading team storage breakdown...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB 3: PRUNING & MAINTENANCE -->
+                <div data-storage-panel="maintenance" class="hidden">
+                    <p class="notice">
+                        Perform routine cleanup of historical drafts, chat logs, inactive sessions, and defragment database files to reclaim space.
+                    </p>
+
+                    <div class="maintenance-grid">
+                        <!-- Prune Config Revisions -->
+                        <div class="maintenance-card">
+                            <div>
+                                <h3 style="margin: 0 0 8px 0; font-size: 16px;">🧹 Prune Config Revisions</h3>
+                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;">
+                                    Retain only the latest $N$ revision snapshots per form kind for each team, pruning obsolete draft revisions.
+                                </p>
+                                <div class="field mb-16">
+                                    <label for="input-keep-revisions">Keep Latest Revisions Per Form</label>
+                                    <input type="number" id="input-keep-revisions" value="10" min="1" max="100" style="width: 100px;" />
+                                </div>
+                            </div>
+                            <button id="btn-prune-revisions" class="btn secondary" type="button">Prune Older Revisions</button>
+                        </div>
+
+                        <!-- Prune Old Chat Messages -->
+                        <div class="maintenance-card">
+                            <div>
+                                <h3 style="margin: 0 0 8px 0; font-size: 16px;">💬 Prune Team Chat Messages</h3>
+                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;">
+                                    Clean up historic team chat messages older than a specified number of days to reduce table size.
+                                </p>
+                                <div class="field mb-16">
+                                    <label for="input-chat-days">Delete Messages Older Than (Days)</label>
+                                    <input type="number" id="input-chat-days" value="90" min="7" max="1000" style="width: 100px;" />
+                                </div>
+                            </div>
+                            <button id="btn-prune-chat" class="btn secondary" type="button">Prune Chat History</button>
+                        </div>
+
+                        <!-- Prune Sessions and Reset Tokens -->
+                        <div class="maintenance-card">
+                            <div>
+                                <h3 style="margin: 0 0 8px 0; font-size: 16px;">🔑 Clean Expired Sessions & Tokens</h3>
+                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;">
+                                    Remove expired user login sessions, stale device tokens, and used password reset tokens.
+                                </p>
+                            </div>
+                            <button id="btn-prune-sessions" class="btn secondary" type="button">Clean Expired Sessions</button>
+                        </div>
+
+                        <!-- Database Reclaim / Vacuum -->
+                        <div class="maintenance-card">
+                            <div>
+                                <h3 style="margin: 0 0 8px 0; font-size: 16px;">⚡ Reclaim Physical Disk Space</h3>
+                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;">
+                                    Runs SQLite <code>VACUUM</code> or PostgreSQL optimization to defragment storage and shrink physical database file size after large deletions.
+                                </p>
+                            </div>
+                            <button id="btn-reclaim-space" class="btn" type="button">Execute Database VACUUM</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: SAFE CACHE PURGE CONFIRMATION -->
+    <div id="modal-cache-purge" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">Clear API Event Cache</h3>
+                <button class="modal-close" data-close-modal="modal-cache-purge">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="cache-purge-desc" style="font-size: 14px; margin-bottom: 12px;"></p>
+                <div class="notice" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.2); color: #065f46;">
+                    <strong>ℹ️ Safe Operation:</strong> Match schedules, team rosters, and Statbotics EPA will automatically re-sync on demand when requested by users.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn ghost" data-close-modal="modal-cache-purge">Cancel</button>
+                <button id="btn-confirm-cache-purge" class="btn">Clear API Cache</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: TEAM DATA LOSS WARNING & DESTRUCTION CONFIRMATION -->
+    <div id="modal-danger-delete" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container" style="max-width: 520px;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(239, 68, 68, 0.2);">
+                <h3 class="modal-title" style="color: #ef4444; display: flex; align-items: center; gap: 8px;">
+                    <span>⚠️</span> Permanent Team Data Loss Warning
+                </h3>
+                <button class="modal-close" data-close-modal="modal-danger-delete">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="danger-banner">
+                    <h4>CRITICAL DATA LOSS WARNING</h4>
+                    <p id="danger-target-description">
+                        This action will permanently delete user scouting data.
+                    </p>
+                </div>
+                <p style="font-size: 13px; line-height: 1.5; color: var(--muted); margin-bottom: 16px;">
+                    This data was entered manually by scouting teams and <strong>CANNOT be restored from The Blue Alliance or FIRST APIs</strong>. This operation is permanent and irreversible.
+                </p>
+                <div class="field">
+                    <label id="danger-confirm-label" for="input-danger-confirm" style="font-weight: 700; color: var(--ink);">
+                        Type <code>CONFIRM</code> to proceed:
+                    </label>
+                    <input type="text" id="input-danger-confirm" placeholder="Type confirmation phrase here..." style="width: 100%; border-color: rgba(239, 68, 68, 0.3);" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn ghost" data-close-modal="modal-danger-delete">Cancel</button>
+                <button id="btn-execute-danger-delete" class="btn warning" style="background: #ef4444; color: white;" disabled>
+                    Permanently Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: TEAM STORAGE DRILL-DOWN DETAILS -->
+    <div id="modal-team-detail" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="team-detail-title">Team Storage Breakdown</h3>
+                <button class="modal-close" data-close-modal="modal-team-detail">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="team-detail-summary" style="margin-bottom: 16px;"></div>
+                <h4 style="margin: 16px 0 8px 0; font-size: 14px;">Event-by-Event Breakdown</h4>
+                <div class="storage-table-container">
+                    <table class="storage-table">
+                        <thead>
+                            <tr>
+                                <th>Event Key</th>
+                                <th>Match Forms</th>
+                                <th>Pit Forms</th>
+                                <th>Qual Forms</th>
+                                <th>Total Data</th>
+                            </tr>
+                        </thead>
+                        <tbody id="team-detail-events-body">
+                            <!-- Dynamic Event Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn ghost" data-close-modal="modal-team-detail">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/storage-manager.js"></script>
+</body>
+</html>

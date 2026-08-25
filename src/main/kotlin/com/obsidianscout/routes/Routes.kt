@@ -2843,6 +2843,80 @@ fun Application.configureRoutes() {
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAllClusterLogs(limit, filter))
                     }
                 }
+
+                route("/storage") {
+                    get("/overview") {
+                        call.requireSuperAdmin()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.getStorageOverview())
+                    }
+                    get("/events") {
+                        call.requireSuperAdmin()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.getEventCacheStorage())
+                    }
+                    get("/teams") {
+                        call.requireSuperAdmin()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.getTeamStorageUsage())
+                    }
+                    get("/teams/{teamNumber}") {
+                        call.requireSuperAdmin()
+                        val teamNumber = call.parameters["teamNumber"]?.toIntOrNull()
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid team number")
+                        val program = call.request.queryParameters["program"] ?: "FRC"
+                        val details = com.obsidianscout.admin.StorageManagementService.getTeamDetailedStorage(teamNumber, program)
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Team data not found")
+                        call.respond(details)
+                    }
+                    post("/cache/clear-event") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<ClearEventCacheRequest>()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.clearEventCache(req.eventKey))
+                    }
+                    post("/cache/clear-old-years") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<ClearOldEventCachesRequest>()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.clearOldEventCaches(req.olderThanYear))
+                    }
+                    post("/cache/clear-all") {
+                        call.requireSuperAdmin()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.clearAllApiCaches())
+                    }
+                    post("/user-data/delete-event") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<DeleteEventScoutingDataRequest>()
+                        if (req.confirmText.trim().uppercase() != "CONFIRM") {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Confirmation text must be 'CONFIRM' to delete team scouting data.")
+                        }
+                        call.respond(com.obsidianscout.admin.StorageManagementService.deleteEventScoutingData(req.eventKey, req.teamNumber, req.program))
+                    }
+                    post("/user-data/delete-team") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<DeleteTeamDataRequest>()
+                        val expected = "DELETE TEAM ${req.teamNumber}".trim().uppercase()
+                        val actual = req.confirmText.trim().uppercase().replace(Regex("\\s+"), " ")
+                        if (actual != expected) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Confirmation text must be '$expected' to permanently delete team dataset.")
+                        }
+                        call.respond(com.obsidianscout.admin.StorageManagementService.deleteTeamData(req.teamNumber, req.program))
+                    }
+                    post("/prune/config-revisions") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<PruneConfigRevisionsRequest>()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.pruneConfigRevisions(req.keepLatestPerKind))
+                    }
+                    post("/prune/chat") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<PruneChatMessagesRequest>()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.pruneChatMessages(req.olderThanDays))
+                    }
+                    post("/prune/sessions") {
+                        call.requireSuperAdmin()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.pruneExpiredSessions())
+                    }
+                    post("/maintenance/reclaim") {
+                        call.requireSuperAdmin()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.reclaimDiskSpace())
+                    }
+                }
             }
 
             route("/cluster") {
@@ -2895,6 +2969,7 @@ fun Application.configureRoutes() {
             "config" to "config.html",
             "admin-settings" to "admin-settings.html",
             "cluster-management" to "cluster-management.html",
+            "storage-manager" to "storage-manager.html",
             "fcm-settings" to "fcm-settings.html",
             "default-configs" to "default-configs.html",
             "backup" to "backup.html",

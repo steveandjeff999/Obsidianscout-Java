@@ -774,6 +774,41 @@ data class RevokeSessionResponse(
     val revokedCount: Int? = null
 )
 
+@Serializable
+data class ClearEventCacheRequest(
+    val eventKey: String
+)
+
+@Serializable
+data class ClearOldEventCachesRequest(
+    val olderThanYear: Int
+)
+
+@Serializable
+data class DeleteEventScoutingDataRequest(
+    val eventKey: String,
+    val teamNumber: Int? = null,
+    val program: String = "FRC",
+    val confirmText: String = ""
+)
+
+@Serializable
+data class DeleteTeamDataRequest(
+    val teamNumber: Int,
+    val program: String = "FRC",
+    val confirmText: String = ""
+)
+
+@Serializable
+data class PruneConfigRevisionsRequest(
+    val keepLatestPerKind: Int = 10
+)
+
+@Serializable
+data class PruneChatMessagesRequest(
+    val olderThanDays: Int = 90
+)
+
 
 
 

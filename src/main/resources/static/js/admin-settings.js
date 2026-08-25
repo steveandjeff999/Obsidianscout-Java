@@ -876,6 +876,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
             }
 
+            // Storage Manager card (Site Admin / SuperAdmin only)
+            const storageManagerCard = document.getElementById("storage-manager-card");
+            if (storageManagerCard) {
+                storageManagerCard.style.display = isUserSuperAdmin ? "block" : "none";
+            }
+
             // Cluster Security Keys card (Site Admin / SuperAdmin only)
             const clusterKeysCard = document.getElementById("cluster-keys-card");
             if (clusterKeysCard) {

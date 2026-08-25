@@ -146,7 +146,7 @@ export function setActiveNav() {
 export function adjustNavForRole(user) {
     if (!user) return;
     const role = user.role;
-    const superAdminPages = ["cluster-management", "fcm-settings", "migration"];
+    const superAdminPages = ["cluster-management", "storage-manager", "fcm-settings", "migration"];
 
     // Superadmin-only pages: show only for SUPERADMIN
     superAdminPages.forEach((page) => {
