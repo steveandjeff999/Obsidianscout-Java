@@ -14,24 +14,31 @@
             display: grid;
             grid-template-columns: 1fr;
             gap: 24px;
+            min-width: 0;
+            width: 100%;
         }
 
         @media (min-width: 1024px) {
             .page-container {
-                grid-template-columns: 2fr 1fr;
+                grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
                 align-items: start;
             }
+        }
+
+        .page-container > * {
+            min-width: 0;
         }
 
         .alliances-grid {
             display: grid;
             grid-template-columns: 1fr;
             gap: 20px;
+            min-width: 0;
         }
 
         @media (min-width: 768px) {
             .alliances-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
@@ -54,6 +61,8 @@
             display: flex;
             flex-direction: column;
             gap: 14px;
+            min-width: 0;
+            overflow: hidden;
             transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
                         box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
                         border-color 0.3s ease;
@@ -127,6 +136,7 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
+            min-width: 0;
         }
 
         .slot-row {
@@ -140,6 +150,8 @@
             transition: border-color 0.2s, background-color 0.2s;
             cursor: pointer;
             position: relative;
+            min-width: 0;
+            overflow: hidden;
         }
 
         body.theme-dark .slot-row {
@@ -169,7 +181,7 @@
             font-size: 0.95rem;
             font-weight: 700;
             color: var(--ink);
-            flex-grow: 1;
+            flex: 1 1 auto;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -194,6 +206,7 @@
             opacity: 0.5;
             transition: opacity 0.2s, transform 0.2s;
             display: none;
+            flex-shrink: 0;
         }
 
         .slot-clear:hover {
@@ -214,6 +227,7 @@
             flex-direction: column;
             gap: 20px;
             max-height: calc(100vh - 48px);
+            min-width: 0;
         }
 
         /* Recommendations List */
@@ -223,6 +237,8 @@
             flex-direction: column;
             max-height: calc(100vh - 120px);
             min-height: 400px;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .recs-scroll-area {
@@ -243,6 +259,8 @@
             border: 1px solid transparent;
             cursor: pointer;
             transition: all 0.2s ease;
+            min-width: 0;
+            overflow: hidden;
         }
 
         body.theme-dark .rec-item {
@@ -264,6 +282,9 @@
             display: flex;
             align-items: center;
             gap: 12px;
+            min-width: 0;
+            flex: 1 1 auto;
+            overflow: hidden;
         }
 
         .rec-rank {
@@ -272,12 +293,14 @@
             color: var(--muted);
             width: 20px;
             text-align: center;
+            flex-shrink: 0;
         }
 
         .rec-team-number {
             font-size: 1.05rem;
             font-weight: 900;
             color: var(--accent);
+            flex-shrink: 0;
         }
 
         .rec-nickname {
@@ -287,13 +310,15 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 140px;
+            min-width: 0;
+            flex: 1 1 auto;
         }
 
         .rec-right {
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-shrink: 0;
         }
 
         .rec-score-badge {
