@@ -10,6 +10,7 @@ button {
     font-family: inherit;
 }
 
+/* ── Primary Button System ────────────────────────────────────────── */
 .btn {
     display: inline-flex;
     align-items: center;
@@ -23,21 +24,44 @@ button {
     cursor: pointer;
     background: var(--ink);
     color: var(--bg);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--transition-fast), opacity var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast);
+    user-select: none;
+}
+
+body.theme-dark .btn {
+    background: #ffffff;
+    color: #09090b;
+    font-weight: 700;
 }
 
 .btn:hover {
     transform: translateY(-1px);
-    opacity: 0.92;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background: var(--accent);
+    color: #ffffff;
+    box-shadow: 0 4px 14px var(--accent-glow);
 }
 
-.btn:active {
-    transform: translateY(0);
-    opacity: 1;
+body.theme-dark .btn:hover {
+    background: var(--accent);
+    color: #09090b;
+    box-shadow: 0 0 16px var(--accent-glow);
 }
 
+.btn:active,
+.btn.active {
+    transform: scale(0.98);
+    opacity: 0.95;
+}
+
+body.theme-dark .btn:active,
+body.theme-dark .btn.active {
+    background: var(--accent);
+    color: #09090b;
+    font-weight: 700;
+}
+
+/* ── Ghost Button ─────────────────────────────────────────────────── */
 .btn.ghost {
     background: transparent;
     color: var(--ink);
@@ -47,23 +71,27 @@ button {
 
 .btn.ghost:hover {
     background: var(--surface-2);
-    border-color: var(--border);
-    color: var(--ink);
+    border-color: var(--accent);
+    color: var(--accent);
     box-shadow: none;
 }
 
+/* ── Secondary Button ─────────────────────────────────────────────── */
 .btn.secondary {
     background: var(--surface-2);
     color: var(--ink);
     border: 1px solid var(--border);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--shadow-sm);
 }
 
 .btn.secondary:hover {
     background: var(--surface-3);
-    border-color: var(--border);
+    border-color: var(--muted);
+    color: var(--ink);
+    transform: translateY(-1px);
 }
 
+/* ── Dark / Tertiary Button ───────────────────────────────────────── */
 .btn.dark {
     background: var(--surface-3);
     color: var(--ink);
@@ -71,45 +99,36 @@ button {
 }
 
 .btn.dark:hover {
-    opacity: 0.9;
+    background: var(--accent);
+    color: #ffffff;
+    border-color: var(--accent);
 }
 
+body.theme-dark .btn.dark:hover {
+    background: var(--accent);
+    color: #09090b;
+}
+
+/* ── Danger Button ────────────────────────────────────────────────── */
 .btn.danger {
     background: var(--danger);
     color: #ffffff;
     border: 1px solid transparent;
-    box-shadow: 0 1px 3px rgba(239, 68, 68, 0.3);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
 }
 
 .btn.danger:hover {
-    box-shadow: 
-        inset 0 2px 4px rgba(255, 255, 255, 0.6), 
-        inset 0 -2px 3px rgba(0, 0, 0, 0.12), 
-        0 14px 28px rgba(223, 56, 44, 0.35);
+    opacity: 0.92;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
 }
 
-.btn-sync-offline {
-    padding: 6px 12px;
-    font-size: 11px;
-    border-radius: 999px;
-    background: var(--accent-2);
-    color: white;
-    font-weight: bold;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 4px 8px rgba(242, 139, 53, 0.2);
-    animation: button-bounce 1s infinite alternate;
-}
-
-.btn-sync-offline:hover {
-    transform: scale(1.05);
-}
-
+/* ── Control & Icon Buttons ───────────────────────────────────────── */
 .btn-control-icon {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: 8px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border);
     background: var(--surface-2);
     color: var(--muted);
     font-weight: bold;
@@ -117,42 +136,43 @@ button {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
 }
 
 body.theme-dark .btn-control-icon {
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--border);
 }
 
 .btn-control-icon:hover {
     background: var(--surface-3);
     color: var(--ink);
+    transform: scale(1.05);
 }
 
 .btn-control-icon.delete {
-    color: #c84b31;
-    border-color: rgba(200, 75, 49, 0.2);
+    color: var(--danger);
+    border-color: var(--danger-surface);
 }
 
 .btn-control-icon.delete:hover {
-    background: rgba(200, 75, 49, 0.1);
-    color: #c84b31;
+    background: var(--danger-surface);
+    color: var(--danger);
 }
 
 .btn-icon-edit {
     cursor: pointer;
     background: transparent;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border);
     color: var(--muted);
     padding: 6px 12px;
     border-radius: 8px;
     font-size: 12px;
     font-weight: 600;
-    transition: all 0.2s;
+    transition: all var(--transition-fast);
 }
 
 body.theme-dark .btn-icon-edit {
-    border-color: rgba(255, 255, 255, 0.12);
+    border-color: var(--border);
 }
 
 .btn-icon-edit:hover {
@@ -169,12 +189,32 @@ body.theme-dark .btn-icon-edit {
     font-size: 18px;
     padding: 4px;
     line-height: 1;
+    transition: color var(--transition-fast);
 }
 
 .btn-remove-item:hover {
-    color: #c84b31;
+    color: var(--danger);
 }
 
+/* ── Offline & Sync Buttons ───────────────────────────────────────── */
+.btn-sync-offline {
+    padding: 6px 12px;
+    font-size: 11px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-2);
+    color: white;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(2, 132, 199, 0.2);
+    animation: button-bounce 1s infinite alternate;
+}
+
+.btn-sync-offline:hover {
+    transform: scale(1.05);
+}
+
+/* ── Banner Buttons ───────────────────────────────────────────────── */
 .btn-banner-toggle {
     background: none;
     border: none;
@@ -208,20 +248,20 @@ body.theme-dark .btn-icon-edit {
     opacity: 1;
 }
 
-/* Robot Role Filter & Badge styles */
+/* ── Robot Role Filter & Badge styles ─────────────────────────────── */
 .btn-role-filter {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     padding: 8px 16px;
-    border-radius: 20px;
+    border-radius: var(--radius-pill);
     border: 1px solid var(--border);
     background-color: var(--surface-3);
-    color: var(--text);
+    color: var(--text-primary);
     cursor: pointer;
     font-size: 13px;
     font-weight: 600;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
 }
 
 .btn-role-filter:hover {
@@ -258,121 +298,13 @@ body.theme-dark .btn-role-filter.active {
 
 /* Role specific badge colors */
 .role-badge.role-cycling { background-color: #1e3a8a; color: #eff6ff; }
-
 .role-badge.role-stealing { background-color: #78350f; color: #fef3c7; }
-
 .role-badge.role-scoring { background-color: #064e3b; color: #ecfdf5; }
-
 .role-badge.role-feeding { background-color: #134e4a; color: #f0fdfa; }
-
 .role-badge.role-defending { background-color: #4c1d95; color: #f5f3ff; }
-
 .role-badge.role-nc { background-color: #374151; color: #f9fafb; }
 
-.btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 18px;
-    border-radius: var(--btn-radius, var(--radius-sm));
-    border: 1px solid transparent;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    background: var(--ink);
-    color: var(--bg);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, color 0.15s ease;
-}
-
-body.theme-dark .btn {
-    background: #ffffff;
-    color: #09090b;
-    font-weight: 700;
-}
-
-.btn:hover {
-    transform: translateY(-1px);
-    background: var(--accent);
-    color: #ffffff;
-    box-shadow: 0 4px 14px rgba(15, 118, 110, 0.3);
-}
-
-body.theme-dark .btn:hover {
-    background: var(--accent);
-    color: #09090b;
-    box-shadow: 0 0 16px rgba(20, 184, 166, 0.4);
-}
-
-.btn:active,
-.btn.active {
-    transform: translateY(0);
-    opacity: 1;
-}
-
-body.theme-dark .btn:active,
-body.theme-dark .btn.active {
-    background: var(--accent);
-    color: #09090b;
-    font-weight: 700;
-}
-
-.btn.ghost {
-    background: transparent;
-    color: var(--ink);
-    border: 1px solid var(--border);
-    box-shadow: none;
-}
-
-.btn.ghost:hover {
-    background: var(--surface-2);
-    border-color: var(--accent);
-    color: var(--accent);
-    box-shadow: none;
-}
-
-.btn.secondary {
-    background: var(--surface-2);
-    color: var(--ink);
-    border: 1px solid var(--border);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-.btn.secondary:hover {
-    background: var(--surface-3);
-    border-color: var(--muted);
-    color: var(--ink);
-}
-
-.btn.dark {
-    background: var(--surface-3);
-    color: var(--ink);
-    border: 1px solid var(--border);
-}
-
-.btn.dark:hover {
-    background: var(--accent);
-    color: #ffffff;
-}
-
-body.theme-dark .btn.dark:hover {
-    background: var(--accent);
-    color: #09090b;
-}
-
-.btn.danger {
-    background: var(--danger);
-    color: #ffffff;
-    border: 1px solid transparent;
-    box-shadow: 0 1px 3px rgba(239, 68, 68, 0.3);
-}
-
-.btn.danger:hover {
-    opacity: 0.92;
-    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
-}
-
+/* ── Button Loading Dots ─────────────────────────────────────────── */
 .btn-dots {
     display: inline-flex;
     align-items: center;
