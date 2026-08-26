@@ -412,11 +412,33 @@ async function onDOMContentLoaded() {
     }
 
     if ('serviceWorker' in navigator) {
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('[ServiceWorker] Active controller changed to new version');
+        });
+
         navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
             .then(reg => {
-                console.log('[ServiceWorker] Scope:', reg.scope);
+                console.log('[ServiceWorker] Registered with scope:', reg.scope);
                 // Force an update check on page load
                 reg.update().catch(err => console.warn('[ServiceWorker] Update check failed:', err));
+
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    if (newWorker) {
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log('[ServiceWorker] New version installed and ready.');
+                            }
+                        });
+                    }
+                });
+
+                // Periodically check for updates every hour
+                setInterval(() => {
+                    reg.update().catch(err => console.warn('[ServiceWorker] Periodic update check failed:', err));
+                }, 3600000);
+
                 navigator.serviceWorker.ready.then(readyReg => {
                     initPushNotifications(readyReg);
                 });
@@ -442,6 +464,11 @@ async function onDOMContentLoaded() {
     startConnectionMonitoring();
 
     window.addEventListener("online", async () => {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then(reg => {
+                reg.update().catch(err => console.warn('[ServiceWorker] Online update check failed:', err));
+            });
+        }
         const online = await checkServerConnection({ force: true });
         if (online) {
             const isCacheManager = document.body && document.body.dataset.page === "cache-manager";

@@ -2987,6 +2987,23 @@ fun Application.configureRoutes() {
             "500" to "500.html"
         )
 
+        get("/sw.js") {
+            call.response.headers.append(HttpHeaders.CacheControl, "no-cache, no-store, must-revalidate, max-age=0")
+            call.response.headers.append(HttpHeaders.Pragma, "no-cache")
+            call.response.headers.append(HttpHeaders.Expires, "0")
+            call.response.headers.append("Service-Worker-Allowed", "/")
+            val swBytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val fsFile = File("static/sw.js")
+                if (fsFile.exists()) fsFile.readBytes()
+                else Thread.currentThread().contextClassLoader.getResourceAsStream("static/sw.js")?.readBytes()
+            }
+            if (swBytes != null) {
+                call.respondBytes(swBytes, ContentType.parse("application/javascript; charset=UTF-8"))
+            } else {
+                call.respond(HttpStatusCode.NotFound)
+            }
+        }
+
         pages.forEach { (path, fileName) ->
             get("/$path") {
                 call.respondStaticHtml(fileName)

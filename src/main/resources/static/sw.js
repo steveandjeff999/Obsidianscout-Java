@@ -1,13 +1,16 @@
-const CACHE_NAME = 'obsidianscout-shell-v35';
+const CACHE_NAME = 'obsidianscout-shell-v36';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 // Application shell assets cached during install
 const ASSETS = [
     '/favicon.ico',
+    '/manifest.json',
     '/assets/images/obsidian/obsidian-192.png',
     '/assets/images/obsidian/obsidian-512.png',
     '/base.html',
     '/',
+    '/index.html',
+    '/reset-password',
     '/dashboard',
     '/scout',
     '/pit-scout',
@@ -20,19 +23,40 @@ const ASSETS = [
     '/pit-data',
     '/analytics',
     '/custom-analytics',
+    '/data-validation',
     '/graphs',
     '/events',
     '/teams',
+    '/rankings',
+    '/qual-rankings',
+    '/team',
     '/matches',
     '/predictor',
+    '/event-predictor',
     '/alliances',
     '/alliance-edit',
+    '/alliance-selection',
     '/all-data',
     '/cache-manager',
     '/qual-data',
-    '/team',
     '/users',
     '/config',
+    '/admin-settings',
+    '/cluster-management',
+    '/storage-manager',
+    '/fcm-settings',
+    '/default-configs',
+    '/backup',
+    '/banners',
+    '/chat',
+    '/docs',
+    '/contact',
+    '/migration',
+    '/config-migration',
+    '/schema-history',
+    '/theme-editor',
+    '/404',
+    '/500',
     '/css/app.css',
     '/css/base/variables.css',
     '/css/base/reset.css',
@@ -79,10 +103,12 @@ const ASSETS = [
     '/js/utilities/media.js',
     '/js/utilities/svg-filters.js',
     '/js/login.js',
+    '/js/reset-password.js',
     '/js/dashboard.js',
     '/js/scout.js',
     '/js/pit-scout.js',
     '/js/qual-scout.js',
+    '/js/prescout.js',
     '/js/prescout-scout.js',
     '/js/prescout-pit.js',
     '/js/prescout-qual.js',
@@ -90,24 +116,43 @@ const ASSETS = [
     '/js/pit-data.js',
     '/js/analytics.js',
     '/js/custom-analytics.js',
+    '/js/data-validation.js',
     '/js/graphs.js',
     '/js/events.js',
     '/js/teams.js',
+    '/js/rankings.js',
+    '/js/qual-rankings.js',
+    '/js/team.js',
     '/js/matches.js',
     '/js/predictor.js',
+    '/js/event-predictor.js',
     '/js/alliances.js',
     '/js/alliance-edit.js',
+    '/js/alliance-selection.js',
     '/js/all-data.js',
     '/js/cache-manager.js',
     '/js/qual-data.js',
-    '/js/team.js',
     '/js/users.js',
     '/js/settings.js',
+    '/js/admin-settings.js',
+    '/js/cluster-management.js',
+    '/js/storage-manager.js',
+    '/js/backup.js',
+    '/js/banners.js',
+    '/js/chat.js',
+    '/js/contact.js',
+    '/js/migration.js',
+    '/js/config-migration.js',
+    '/js/schema-history.js',
+    '/js/theme-editor.js',
     '/vendor/qrcode.min.js',
     '/vendor/qr-scanner.min.js',
     '/vendor/qr-scanner-worker.min.js',
     '/vendor/jabcodeJSLib.min.js',
     '/vendor/plotly-2.32.0.min.js',
+    '/vendor/marked.min.js',
+    '/vendor/html5-qrcode.min.js',
+    '/vendor/jsQR.js',
     '/i18n/en.json',
     '/i18n/es.json',
     '/i18n/tr.json',
@@ -132,7 +177,7 @@ self.addEventListener('install', (event) => {
                 console.log('[ServiceWorker] Pre-caching offline shell assets sequentially');
                 for (const url of ASSETS) {
                     try {
-                        const response = await fetch(url);
+                        const response = await fetch(url, { cache: 'reload' });
                         if (response.status === 200) {
                             await cache.put(url, response);
                         }
@@ -172,16 +217,16 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 1. Navigation / HTML pages: Network-First with Cache Fallback
+    // 1. Navigation / HTML pages: Network-First with Timeout & Cache Fallback
     if (event.request.mode === 'navigate' ||
         url.pathname.endsWith('.html') ||
         url.pathname === '/' ||
         !url.pathname.includes('.')) {
 
         event.respondWith(
-            fetch(event.request)
+            fetchWithTimeout(event.request, NAVIGATION_TIMEOUT_MS)
                 .then((networkResponse) => {
-                    if (networkResponse.status === 200) {
+                    if (networkResponse && networkResponse.status === 200) {
                         const responseClone = networkResponse.clone();
                         caches.open(CACHE_NAME).then((cache) => {
                             cache.put(event.request, responseClone);
@@ -190,13 +235,21 @@ self.addEventListener('fetch', (event) => {
                     return networkResponse;
                 })
                 .catch(() => {
-                    // Fallback to cache if offline
+                    // Fallback to exact cached request if offline or timed out
                     return caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
                         if (cachedResponse) {
                             return cachedResponse;
                         }
-                        // Fallback to root index page if specific page not cached
-                        return caches.match('/', { ignoreSearch: true });
+                        // Fallback to pathname match
+                        return caches.match(url.pathname, { ignoreSearch: true }).then((pathResponse) => {
+                            if (pathResponse) {
+                                return pathResponse;
+                            }
+                            // Fallback to root / index page if specific page not cached
+                            return caches.match('/', { ignoreSearch: true }).then((rootResponse) => {
+                                return rootResponse || caches.match('/index.html', { ignoreSearch: true });
+                            });
+                        });
                     });
                 })
         );
