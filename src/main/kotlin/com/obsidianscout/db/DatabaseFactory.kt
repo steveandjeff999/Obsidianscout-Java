@@ -155,28 +155,31 @@ object DatabaseFactory {
 
     fun init(config: DatabaseConfig, runMigration: Boolean = true, isCockroach: Boolean = false) {
         close()
-        this.isCockroach = isCockroach
+        val engineType = config.type.lowercase()
+        val isCockroachEngine = isCockroach || engineType == "cockroach"
+        this.isCockroach = isCockroachEngine
 
         ensureJdbcDriverLoaded(config.type)
 
-        if (config.type.lowercase() == "postgres") {
+        if (engineType == "postgres") {
             ensurePostgresDatabaseExists(config)
         }
 
+        val isPostgresCompatible = engineType == "postgres" || engineType == "cockroach" || engineType == "postgresql"
+
         val hikariConfig = HikariConfig().apply {
-            val type = config.type.lowercase()
-            val jdbcUrl = when (type) {
-                "postgres" -> buildPostgresUrl(config)
+            val jdbcUrl = when {
+                isPostgresCompatible -> buildPostgresOrCockroachUrl(config)
                 else -> buildSqliteUrl(config)
             }
             this.jdbcUrl = jdbcUrl
-            driverClassName = if (type == "postgres") {
+            driverClassName = if (isPostgresCompatible) {
                 "org.postgresql.Driver"
             } else {
                 "org.sqlite.JDBC"
             }
             val isLowMem = System.getenv("LOW_RAM") == "1" || System.getenv("LOW_MEM") == "1"
-            if (type == "postgres") {
+            if (isPostgresCompatible) {
                 // 20 connections gives enough headroom for concurrent startup bursts:
                 // ClusterSecretService (30s poll) + SyncScheduler + multiple auth checks
                 // + admin page loads all fire simultaneously after each update restart.
@@ -186,9 +189,10 @@ object DatabaseFactory {
                 idleTimeout = 60_000L
                 maxLifetime = 300_000L
                 isAutoCommit = true
-                username = config.postgres.user
-                password = config.postgres.password
-                transactionIsolation = if (isCockroach) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
+                val (user, pass) = getCredentials(config)
+                if (!user.isNullOrBlank()) username = user
+                if (!pass.isNullOrBlank()) password = pass
+                transactionIsolation = if (isCockroachEngine) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
             } else {
                 maximumPoolSize = if (isLowMem) 4 else 8
                 minimumIdle = 1
@@ -419,11 +423,11 @@ object DatabaseFactory {
     }
 
     private fun migrateIntToUuidIfNeeded(config: DatabaseConfig, isCockroach: Boolean) {
-        val isPostgres = config.type.lowercase() == "postgres"
+        val type = config.type.lowercase()
+        val isPostgres = type == "postgres" || type == "cockroach" || type == "postgresql"
         ensureJdbcDriverLoaded(config.type)
-        val jdbcUrl = if (isPostgres) buildPostgresUrl(config) else buildSqliteUrl(config)
-        val user = if (isPostgres) config.postgres.user else null
-        val pass = if (isPostgres) config.postgres.password else null
+        val jdbcUrl = if (isPostgres) buildPostgresOrCockroachUrl(config) else buildSqliteUrl(config)
+        val (user, pass) = if (isPostgres) getCredentials(config) else Pair(null, null)
 
         val conn = if (user != null) {
             DriverManager.getConnection(jdbcUrl, user, pass)
@@ -1221,19 +1225,73 @@ object DatabaseFactory {
         } catch (_: Exception) {}
     }
 
+    private fun getCredentials(config: DatabaseConfig): Pair<String?, String?> {
+        val type = config.type.lowercase()
+        return when (type) {
+            "cockroach" -> {
+                val user = if (config.cockroach.user.isNotBlank()) config.cockroach.user else config.postgres.user
+                val pass = if (config.cockroach.password.isNotBlank()) config.cockroach.password else config.postgres.password
+                Pair(user, pass)
+            }
+            else -> Pair(config.postgres.user, config.postgres.password)
+        }
+    }
+
     private fun buildSqliteUrl(config: DatabaseConfig): String {
         val filePath = Paths.get(config.sqlite.file)
         filePath.parent?.let { Files.createDirectories(it) }
         return "jdbc:sqlite:${filePath.toString()}?journal_mode=WAL&busy_timeout=5000&synchronous=NORMAL"
     }
 
-    private fun buildPostgresUrl(config: DatabaseConfig): String {
-        val pg = config.postgres
-        val hostPart = if (pg.host.contains(",") || pg.host.contains(":")) pg.host else "${pg.host}:${pg.port}"
-        val base = "jdbc:postgresql://$hostPart/${pg.database}"
-        val ssl = if (pg.ssl) "sslmode=require" else "sslmode=disable"
-        return "$base?$ssl&reWriteBatchedInserts=true&connectTimeout=10&socketTimeout=30&tcpKeepAlive=true"
+    private fun buildPostgresOrCockroachUrl(config: DatabaseConfig): String {
+        // 1. Direct custom URL takes priority if provided
+        val explicitUrl = when {
+            config.url.isNotBlank() -> config.url.trim()
+            config.type.lowercase() == "cockroach" && config.cockroach.url.isNotBlank() -> config.cockroach.url.trim()
+            config.postgres.url.isNotBlank() -> config.postgres.url.trim()
+            else -> ""
+        }
+        if (explicitUrl.isNotBlank()) {
+            val normalized = if (explicitUrl.startsWith("jdbc:", ignoreCase = true)) {
+                explicitUrl
+            } else if (explicitUrl.startsWith("postgresql://", ignoreCase = true) || explicitUrl.startsWith("postgres://", ignoreCase = true)) {
+                "jdbc:$explicitUrl"
+            } else {
+                explicitUrl
+            }
+            return normalized
+        }
+
+        // 2. Build URL from component fields
+        val isCockroach = config.type.lowercase() == "cockroach"
+        val host = if (isCockroach && config.cockroach.host.isNotBlank() && config.cockroach.host != "localhost") {
+            config.cockroach.host
+        } else if (isCockroach && config.postgres.host.isNotBlank() && config.postgres.host != "localhost") {
+            config.postgres.host
+        } else if (isCockroach) {
+            config.cockroach.host
+        } else {
+            config.postgres.host
+        }
+
+        val port = if (isCockroach) {
+            if (config.cockroach.port != 26257 && config.cockroach.port != 0) config.cockroach.port
+            else if (config.postgres.port != 5432 && config.postgres.port != 0) config.postgres.port
+            else config.cockroach.port
+        } else {
+            config.postgres.port
+        }
+
+        val database = if (isCockroach && config.cockroach.database.isNotBlank()) config.cockroach.database else config.postgres.database
+        val ssl = if (isCockroach) config.cockroach.ssl || config.postgres.ssl else config.postgres.ssl
+
+        val hostPart = if (host.contains(",") || host.contains(":")) host else "$host:$port"
+        val base = "jdbc:postgresql://$hostPart/$database"
+        val sslMode = if (ssl) "sslmode=require" else "sslmode=disable"
+        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=10&socketTimeout=30&tcpKeepAlive=true"
     }
+
+    private fun buildPostgresUrl(config: DatabaseConfig): String = buildPostgresOrCockroachUrl(config)
 
     /**
      * Connects to the default "postgres" maintenance database and creates the
@@ -1289,7 +1347,7 @@ object DatabaseFactory {
 
     private fun ensureJdbcDriverLoaded(type: String) {
         when (type.lowercase()) {
-            "postgres" -> Class.forName("org.postgresql.Driver")
+            "postgres", "cockroach", "postgresql" -> Class.forName("org.postgresql.Driver")
             else -> Class.forName("org.sqlite.JDBC")
         }
     }

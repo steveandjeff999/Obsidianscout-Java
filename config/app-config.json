@@ -24,8 +24,19 @@
             "database": "obsidianscoutjava",
             "user": "postgres",
             "password": "postgres",
-            "ssl": false
-        }
+            "ssl": false,
+            "url": ""
+        },
+        "cockroach": {
+            "host": "localhost",
+            "port": 26257,
+            "database": "obsidianscoutjava",
+            "user": "root",
+            "password": "",
+            "ssl": false,
+            "url": ""
+        },
+        "url": ""
     },
     "seed": {
         "adminUsername": "superadmin",

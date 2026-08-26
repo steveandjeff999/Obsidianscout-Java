@@ -60,4 +60,35 @@ class AppConfigTest {
             tempDir.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun testDatabaseConfigCockroachAndCustomUrl() {
+        val json = """
+            {
+                "database": {
+                    "type": "cockroach",
+                    "cockroach": {
+                        "host": "crdb.example.com",
+                        "port": 26257,
+                        "database": "obsidianscout_prod",
+                        "user": "appuser",
+                        "password": "secretpassword",
+                        "ssl": true,
+                        "url": "jdbc:postgresql://crdb.example.com:26257/obsidianscout_prod?sslmode=require"
+                    },
+                    "url": "jdbc:postgresql://crdb.example.com:26257/obsidianscout_prod?sslmode=require"
+                }
+            }
+        """.trimIndent()
+
+        val config = JsonSupport.json.decodeFromString<AppConfig>(json)
+        assertEquals("cockroach", config.database.type)
+        assertEquals("crdb.example.com", config.database.cockroach.host)
+        assertEquals(26257, config.database.cockroach.port)
+        assertEquals("obsidianscout_prod", config.database.cockroach.database)
+        assertEquals("appuser", config.database.cockroach.user)
+        assertEquals("secretpassword", config.database.cockroach.password)
+        assertTrue(config.database.cockroach.ssl)
+        assertEquals("jdbc:postgresql://crdb.example.com:26257/obsidianscout_prod?sslmode=require", config.database.url)
+    }
 }

@@ -423,7 +423,8 @@ fun Application.module(appConfig: AppConfig) {
                     delay(10000)
                 }
 
-                if (appConfig.database_type.lowercase() == "cockroach") {
+                val isAutonomousCockroach = appConfig.database_type.lowercase() == "cockroach" && appConfig.google_sheet_url.isNotBlank()
+                if (isAutonomousCockroach) {
                     val orchestrator = cockroachOrchestrator ?: run {
                         val newOrch = CockroachOrchestrator(appConfig)
                         cockroachOrchestrator = newOrch
@@ -436,11 +437,12 @@ fun Application.module(appConfig: AppConfig) {
                     dbConfig = appConfig.database
                 }
 
+                val isCockroach = (appConfig.database_type.lowercase() == "cockroach" || appConfig.database.type.lowercase() == "cockroach")
                 DatabaseFactory.orchestrator = cockroachOrchestrator
                 DatabaseFactory.init(
                     config = dbConfig!!,
                     runMigration = true,
-                    isCockroach = (appConfig.database_type.lowercase() == "cockroach")
+                    isCockroach = isCockroach
                 )
                 ConfigService.ensureDefaultConfig()
                 SettingsService.ensureDefaultSettings()

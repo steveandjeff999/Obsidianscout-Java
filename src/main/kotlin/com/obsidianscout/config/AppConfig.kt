@@ -65,9 +65,23 @@ data class HttpsConfig(
 
 @Serializable
 data class DatabaseConfig(
+    /**
+     * Database engine type.
+     * Supported options:
+     *   - "sqlite": Embedded SQLite local file (default for single-node standalone deployments)
+     *   - "postgres": External or remote PostgreSQL server / cluster
+     *   - "cockroach": External or remote CockroachDB cluster (uses PostgreSQL wire protocol on port 26257)
+     */
     val type: String = "sqlite",
     val sqlite: SqliteConfig = SqliteConfig(),
-    val postgres: PostgresConfig = PostgresConfig()
+    val postgres: PostgresConfig = PostgresConfig(),
+    val cockroach: CockroachConfig = CockroachConfig(),
+    /**
+     * Optional direct JDBC connection URL (e.g., "jdbc:postgresql://<host>:26257/<database>?sslmode=require"
+     * or "postgresql://<user>:<password>@<host>:26257/<database>?sslmode=verify-full").
+     * When provided, this URL takes precedence over host/port/database settings.
+     */
+    val url: String = ""
 )
 
 @Serializable
@@ -82,7 +96,21 @@ data class PostgresConfig(
     val database: String = "obsidianscoutjava",
     val user: String = "postgres",
     val password: String = "postgres",
-    val ssl: Boolean = false
+    val ssl: Boolean = false,
+    /** Optional direct JDBC connection string (e.g. "jdbc:postgresql://localhost:5432/obsidianscoutjava?sslmode=disable") */
+    val url: String = ""
+)
+
+@Serializable
+data class CockroachConfig(
+    val host: String = "localhost",
+    val port: Int = 26257,
+    val database: String = "obsidianscoutjava",
+    val user: String = "root",
+    val password: String = "",
+    val ssl: Boolean = false,
+    /** Optional direct JDBC connection string (e.g. "jdbc:postgresql://remote-host:26257/obsidianscoutjava?sslmode=require") */
+    val url: String = ""
 )
 
 @Serializable
