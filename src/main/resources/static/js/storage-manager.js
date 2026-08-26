@@ -141,24 +141,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         const totalSizeEl = document.getElementById("stat-total-size");
         const totalRecordsEl = document.getElementById("stat-total-records");
         if (totalSizeEl) totalSizeEl.textContent = formatBytes(overviewData.totalPhysicalSizeBytes);
-        if (totalRecordsEl) totalRecordsEl.textContent = `${formatNumber(overviewData.totalRecords)} database rows`;
+        if (totalRecordsEl) totalRecordsEl.textContent = `${formatNumber(overviewData.totalRecords)} ${Obsidianscout.t("storage.total_records", "total records")}`;
 
         const apiSizeEl = document.getElementById("stat-api-cache-size");
         const apiRecordsEl = document.getElementById("stat-api-cache-records");
         if (apiSizeEl) apiSizeEl.textContent = formatBytes(overviewData.apiCacheBytes);
-        if (apiRecordsEl) apiRecordsEl.textContent = `${formatNumber(overviewData.apiCacheRecords)} cached API rows`;
+        if (apiRecordsEl) apiRecordsEl.textContent = `${formatNumber(overviewData.apiCacheRecords)} ${Obsidianscout.t("storage.cached_api_rows", "cached event rows")}`;
 
         const scoutSizeEl = document.getElementById("stat-scouting-size");
         const scoutRecordsEl = document.getElementById("stat-scouting-records");
         if (scoutSizeEl) scoutSizeEl.textContent = formatBytes(overviewData.userScoutingBytes);
-        if (scoutRecordsEl) scoutRecordsEl.textContent = `${formatNumber(overviewData.userScoutingRecords)} user scouting forms`;
+        if (scoutRecordsEl) scoutRecordsEl.textContent = `${formatNumber(overviewData.userScoutingRecords)} ${Obsidianscout.t("storage.user_scouting_forms", "match/pit/qual forms")}`;
 
         const chatAccountsSizeEl = document.getElementById("stat-chat-accounts-size");
         const chatAccountsRecordsEl = document.getElementById("stat-chat-accounts-records");
         const chatAndAccountBytes = (overviewData.chatBytes || 0) + (overviewData.accountsBytes || 0);
         const chatAndAccountRecords = (overviewData.chatRecords || 0) + (overviewData.accountsRecords || 0);
         if (chatAccountsSizeEl) chatAccountsSizeEl.textContent = formatBytes(chatAndAccountBytes);
-        if (chatAccountsRecordsEl) chatAccountsRecordsEl.textContent = `${formatNumber(chatAndAccountRecords)} chat & user records`;
+        if (chatAccountsRecordsEl) chatAccountsRecordsEl.textContent = `${formatNumber(chatAndAccountRecords)} ${Obsidianscout.t("storage.chat_user_records", "messages & users")}`;
 
         // Progress Bar Calculation
         const totalEstimated = overviewData.totalEstimatedBytes > 0 ? overviewData.totalEstimatedBytes : 1;
@@ -187,7 +187,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const years = Array.from(new Set(eventsData.map(e => e.year))).filter(y => y > 0).sort((a, b) => b - a);
         
         const currentSelected = yearSelect.value;
-        yearSelect.innerHTML = `<option value="">All Years</option>` + years.map(y => `<option value="${y}">${y}</option>`).join("");
+        const allYearsText = Obsidianscout.t("storage.all_years", "All Years");
+        yearSelect.innerHTML = `<option value="">${escapeHtml(allYearsText)}</option>` + years.map(y => `<option value="${y}">${y}</option>`).join("");
         if (currentSelected) yearSelect.value = currentSelected;
     }
 
@@ -209,15 +210,21 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        const formsLabel = Obsidianscout.t("storage.forms", "Forms");
+        const cachedLabel = Obsidianscout.t("storage.cached", "Cached");
+        const noneLabel = Obsidianscout.t("storage.none", "None");
+        const clearCacheLabel = Obsidianscout.t("storage.btn_clear_cache", "Clear Cache");
+        const deleteScoutingLabel = Obsidianscout.t("storage.btn_delete_scouting", "Delete Scouting");
+
         tbody.innerHTML = filtered.map(e => {
             const hasScouting = e.userScoutingEntryCount > 0;
             const scoutingBadge = hasScouting
-                ? `<span class="stat-badge badge-danger" title="${e.userScoutingEntryCount} submitted scouting records">${e.userScoutingEntryCount} Forms</span>`
-                : `<span class="stat-badge badge-safe" style="opacity: 0.7;">0 Forms</span>`;
+                ? `<span class="stat-badge badge-danger" title="${e.userScoutingEntryCount} submitted scouting records">${e.userScoutingEntryCount} ${formsLabel}</span>`
+                : `<span class="stat-badge badge-safe" style="opacity: 0.7;">0 ${formsLabel}</span>`;
 
             const epaBadge = e.hasEpaHistory
-                ? `<span class="stat-badge badge-safe">Cached</span>`
-                : `<span class="stat-badge" style="background: rgba(0,0,0,0.05); color: var(--muted);">None</span>`;
+                ? `<span class="stat-badge badge-safe">${cachedLabel}</span>`
+                : `<span class="stat-badge" style="background: rgba(0,0,0,0.05); color: var(--muted);">${noneLabel}</span>`;
 
             return `
                 <tr>
@@ -231,8 +238,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <td>${scoutingBadge}</td>
                     <td>
                         <div style="display: flex; gap: 6px;">
-                            <button class="btn-table-action purge" data-action="clear-cache" data-key="${escapeHtml(e.eventKey)}" data-name="${escapeHtml(e.name)}" title="Purge external API cache (Safe to re-sync)">Clear Cache</button>
-                            ${hasScouting ? `<button class="btn-table-action danger" data-action="delete-event-scouting" data-key="${escapeHtml(e.eventKey)}" data-name="${escapeHtml(e.name)}" title="Permanently delete user scouting forms for this event">Delete Scouting</button>` : ''}
+                            <button class="btn-table-action purge" data-action="clear-cache" data-key="${escapeHtml(e.eventKey)}" data-name="${escapeHtml(e.name)}" title="Purge external API cache (Safe to re-sync)">${escapeHtml(clearCacheLabel)}</button>
+                            ${hasScouting ? `<button class="btn-table-action danger" data-action="delete-event-scouting" data-key="${escapeHtml(e.eventKey)}" data-name="${escapeHtml(e.name)}" title="Permanently delete user scouting forms for this event">${escapeHtml(deleteScoutingLabel)}</button>` : ''}
                         </div>
                     </td>
                 </tr>
@@ -259,6 +266,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        const revsLabel = Obsidianscout.t("storage.revs", "revs");
+        const msgsLabel = Obsidianscout.t("storage.msgs", "msgs");
+        const usersLabel = Obsidianscout.t("storage.users_count", "users");
+        const detailsLabel = Obsidianscout.t("storage.btn_details", "Details");
+        const wipeTeamLabel = Obsidianscout.t("storage.btn_wipe_team", "Wipe Team Data");
+
         tbody.innerHTML = filtered.map(t => {
             return `
                 <tr>
@@ -268,13 +281,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <td>${formatNumber(t.matchEntryCount)} <span style="font-size: 11px; color: var(--muted);">(${formatBytes(t.matchBytes)})</span></td>
                     <td>${formatNumber(t.pitEntryCount)} <span style="font-size: 11px; color: var(--muted);">(${formatBytes(t.pitBytes)})</span></td>
                     <td>${formatNumber(t.qualEntryCount)} <span style="font-size: 11px; color: var(--muted);">(${formatBytes(t.qualBytes)})</span></td>
-                    <td>${formatNumber(t.configRevisionCount)} revs</td>
-                    <td>${formatNumber(t.chatMessageCount)} msgs</td>
-                    <td>${formatNumber(t.userCount)} users</td>
+                    <td>${formatNumber(t.configRevisionCount)} ${escapeHtml(revsLabel)}</td>
+                    <td>${formatNumber(t.chatMessageCount)} ${escapeHtml(msgsLabel)}</td>
+                    <td>${formatNumber(t.userCount)} ${escapeHtml(usersLabel)}</td>
                     <td>
                         <div style="display: flex; gap: 6px;">
-                            <button class="btn-table-action purge" data-action="inspect-team" data-team="${t.teamNumber}" data-program="${escapeHtml(t.program)}">Details</button>
-                            <button class="btn-table-action danger" data-action="delete-team" data-team="${t.teamNumber}" data-program="${escapeHtml(t.program)}" title="Delete all team scouting data and configs">Wipe Team Data</button>
+                            <button class="btn-table-action purge" data-action="inspect-team" data-team="${t.teamNumber}" data-program="${escapeHtml(t.program)}">${escapeHtml(detailsLabel)}</button>
+                            <button class="btn-table-action danger" data-action="delete-team" data-team="${t.teamNumber}" data-program="${escapeHtml(t.program)}" title="Delete all team scouting data and configs">${escapeHtml(wipeTeamLabel)}</button>
                         </div>
                     </td>
                 </tr>
@@ -634,6 +647,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
     }
+
+    // Language Change Listener
+    window.addEventListener("obsidianscout:languagechange", () => {
+        if (storageOverviewData) {
+            renderOverview(storageOverviewData);
+        }
+        populateYearFilter();
+        renderEventsTable();
+        renderTeamsTable();
+    });
 
     // Initial Load
     loadAllStorageData();

@@ -348,28 +348,26 @@
 
         <main class="main-content">
             <div id="superadmin-locked" class="card hidden">
-                <h2>Superadmin Access Required</h2>
-                <p class="notice">You must be logged in as a Superadmin (Site Admin) to access Site Storage Management.</p>
+                <h2 data-i18n="storage.locked_title">Superadmin Access Required</h2>
+                <p class="notice" data-i18n="storage.locked_notice">You must be logged in as a Superadmin (Site Admin) to access Site Storage Management.</p>
                 <div class="mt-16">
-                    <a href="/admin-settings" class="btn secondary">&larr; Return to Admin Settings</a>
+                    <a href="/admin-settings" class="btn secondary" data-i18n="storage.btn_return_admin">&larr; Return to Admin Settings</a>
                 </div>
             </div>
 
             <div id="storage-panel" class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;">
                     <div>
-                        <h1 style="margin: 0; font-size: 24px; display: flex; align-items: center; gap: 10px;">
-                            <span>💾</span> Site Storage Management
-                        </h1>
-                        <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
+                        <h1 style="margin: 0; font-size: 24px;" data-i18n="storage.title">Site Storage Management</h1>
+                        <p class="notice" style="margin-top: 4px; margin-bottom: 0;" data-i18n="storage.notice">
                             Monitor database footprint, manage re-syncable API event caches, view data use by scouting team number, and run safe or deep data pruning.
                         </p>
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center;">
-                        <button id="btn-refresh-storage" class="btn secondary" type="button" style="display: flex; align-items: center; gap: 6px;">
-                            <span>🔄</span> Refresh Storage Data
+                        <button id="btn-refresh-storage" class="btn secondary" type="button" data-i18n="storage.btn_refresh">
+                            Refresh Storage Data
                         </button>
-                        <a href="/admin-settings" class="btn ghost" style="text-decoration: none;">&larr; Admin Settings</a>
+                        <a href="/admin-settings" class="btn ghost" style="text-decoration: none;" data-i18n="storage.btn_admin_settings">&larr; Admin Settings</a>
                     </div>
                 </div>
 
@@ -377,7 +375,7 @@
                 <div class="stats-grid-storage">
                     <div class="stat-card-storage">
                         <div class="stat-header">
-                            <span class="stat-label-storage">Database Storage</span>
+                            <span class="stat-label-storage" data-i18n="storage.db_storage">Database Storage</span>
                             <span id="db-engine-badge" class="stat-badge badge-info">SQLite</span>
                         </div>
                         <div class="stat-value-storage" id="stat-total-size">0 MB</div>
@@ -386,8 +384,8 @@
 
                     <div class="stat-card-storage">
                         <div class="stat-header">
-                            <span class="stat-label-storage">API Event Caches</span>
-                            <span class="stat-badge badge-safe">Re-syncable</span>
+                            <span class="stat-label-storage" data-i18n="storage.api_caches">API Event Caches</span>
+                            <span class="stat-badge badge-safe" data-i18n="storage.resyncable">Re-syncable</span>
                         </div>
                         <div class="stat-value-storage" id="stat-api-cache-size" style="color: #3b82f6;">0 MB</div>
                         <div class="stat-subtext" id="stat-api-cache-records">0 cached event rows</div>
@@ -395,8 +393,8 @@
 
                     <div class="stat-card-storage">
                         <div class="stat-header">
-                            <span class="stat-label-storage">User Scouting Data</span>
-                            <span class="stat-badge badge-danger">Team Data</span>
+                            <span class="stat-label-storage" data-i18n="storage.user_scouting_data">User Scouting Data</span>
+                            <span class="stat-badge badge-danger" data-i18n="storage.team_data">Team Data</span>
                         </div>
                         <div class="stat-value-storage" id="stat-scouting-size" style="color: #10b981;">0 MB</div>
                         <div class="stat-subtext" id="stat-scouting-records">0 match/pit/qual forms</div>
@@ -404,8 +402,8 @@
 
                     <div class="stat-card-storage">
                         <div class="stat-header">
-                            <span class="stat-label-storage">Team Chat & Accounts</span>
-                            <span class="stat-badge badge-info">App Data</span>
+                            <span class="stat-label-storage" data-i18n="storage.chat_accounts">Team Chat & Accounts</span>
+                            <span class="stat-badge badge-info" data-i18n="storage.app_data">App Data</span>
                         </div>
                         <div class="stat-value-storage" id="stat-chat-accounts-size" style="color: #f59e0b;">0 MB</div>
                         <div class="stat-subtext" id="stat-chat-accounts-records">0 messages & users</div>
@@ -415,8 +413,8 @@
                 <!-- Storage Breakdown Progress Ratio Bar -->
                 <div class="storage-bar-wrapper">
                     <div class="storage-bar-header">
-                        <span>Database Allocation Ratio</span>
-                        <span id="storage-bar-summary">Estimating...</span>
+                        <span data-i18n="storage.allocation_ratio">Database Allocation Ratio</span>
+                        <span id="storage-bar-summary" data-i18n="storage.estimating">Estimating...</span>
                     </div>
                     <div class="storage-progress-bar">
                         <div id="bar-api" class="progress-segment seg-api" style="width: 0%;" title="API Event Caches"></div>
@@ -426,33 +424,33 @@
                         <div id="bar-config" class="progress-segment seg-config" style="width: 0%;" title="Configs & System"></div>
                     </div>
                     <div class="storage-legend">
-                        <div class="legend-item"><div class="legend-dot seg-api"></div><span>API Event Caches</span></div>
-                        <div class="legend-item"><div class="legend-dot seg-scout"></div><span>User Scouting Records</span></div>
-                        <div class="legend-item"><div class="legend-dot seg-chat"></div><span>Team Chat Messages</span></div>
-                        <div class="legend-item"><div class="legend-dot seg-accounts"></div><span>Accounts & Sessions</span></div>
-                        <div class="legend-item"><div class="legend-dot seg-config"></div><span>Configurations & System</span></div>
+                        <div class="legend-item"><div class="legend-dot seg-api"></div><span data-i18n="storage.legend_api">API Event Caches</span></div>
+                        <div class="legend-item"><div class="legend-dot seg-scout"></div><span data-i18n="storage.legend_scout">User Scouting Records</span></div>
+                        <div class="legend-item"><div class="legend-dot seg-chat"></div><span data-i18n="storage.legend_chat">Team Chat Messages</span></div>
+                        <div class="legend-item"><div class="legend-dot seg-accounts"></div><span data-i18n="storage.legend_accounts">Accounts & Sessions</span></div>
+                        <div class="legend-item"><div class="legend-dot seg-config"></div><span data-i18n="storage.legend_config">Configurations & System</span></div>
                     </div>
                 </div>
 
                 <!-- Tabs Navigation -->
                 <div class="tab-row mb-18">
-                    <button class="tab active" data-storage-tab="events" id="tab-events" type="button">API Event Caches</button>
-                    <button class="tab" data-storage-tab="teams" id="tab-teams" type="button">Data Usage by Scouting Team</button>
-                    <button class="tab" data-storage-tab="maintenance" id="tab-maintenance" type="button">Pruning & Maintenance</button>
+                    <button class="tab active" data-storage-tab="events" id="tab-events" type="button" data-i18n="storage.tab_events">API Event Caches</button>
+                    <button class="tab" data-storage-tab="teams" id="tab-teams" type="button" data-i18n="storage.tab_teams">Data Usage by Scouting Team</button>
+                    <button class="tab" data-storage-tab="maintenance" id="tab-maintenance" type="button" data-i18n="storage.tab_maintenance">Pruning & Maintenance</button>
                 </div>
 
                 <!-- TAB 1: API EVENT CACHES -->
                 <div data-storage-panel="events">
                     <div class="storage-controls-row">
                         <div class="filter-group">
-                            <input id="search-event" type="text" placeholder="Search event key or name..." style="min-width: 220px;" />
+                            <input id="search-event" type="text" placeholder="Search event key or name..." data-i18n-placeholder="storage.search_event_placeholder" style="min-width: 220px;" />
                             <select id="filter-event-year">
-                                <option value="">All Years</option>
+                                <option value="" data-i18n="storage.all_years">All Years</option>
                             </select>
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button id="btn-clear-old-events" class="btn secondary" type="button">Prune Events &le; Year</button>
-                            <button id="btn-clear-all-api" class="btn warning" type="button">Clear All API Caches</button>
+                            <button id="btn-clear-old-events" class="btn secondary" type="button" data-i18n="storage.btn_prune_years">Prune Events &le; Year</button>
+                            <button id="btn-clear-all-api" class="btn warning" type="button" data-i18n="storage.btn_clear_all_api">Clear All API Caches</button>
                         </div>
                     </div>
 
@@ -460,15 +458,15 @@
                         <table class="storage-table">
                             <thead>
                                 <tr>
-                                    <th>Event Key</th>
-                                    <th>Event Name</th>
-                                    <th>Year</th>
-                                    <th>Matches</th>
-                                    <th>Teams</th>
-                                    <th>EPA History</th>
-                                    <th>Cache Size</th>
-                                    <th>Scouting Presence</th>
-                                    <th>Actions</th>
+                                    <th data-i18n="storage.th_event_key">Event Key</th>
+                                    <th data-i18n="storage.th_event_name">Event Name</th>
+                                    <th data-i18n="storage.th_year">Year</th>
+                                    <th data-i18n="storage.th_matches">Matches</th>
+                                    <th data-i18n="storage.th_teams">Teams</th>
+                                    <th data-i18n="storage.th_epa_history">EPA History</th>
+                                    <th data-i18n="storage.th_cache_size">Cache Size</th>
+                                    <th data-i18n="storage.th_scouting_presence">Scouting Presence</th>
+                                    <th data-i18n="storage.th_actions">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="event-cache-table-body">
@@ -484,15 +482,15 @@
                 <div data-storage-panel="teams" class="hidden">
                     <div class="storage-controls-row">
                         <div class="filter-group">
-                            <input id="search-team-number" type="number" placeholder="Search team number (e.g. 254)..." style="min-width: 220px;" />
+                            <input id="search-team-number" type="number" placeholder="Search team number (e.g. 254)..." data-i18n-placeholder="storage.search_team_placeholder" style="min-width: 220px;" />
                             <select id="filter-team-program">
-                                <option value="">All Programs (FRC / FTC)</option>
+                                <option value="" data-i18n="storage.all_programs">All Programs (FRC / FTC)</option>
                                 <option value="FRC">FRC</option>
                                 <option value="FTC">FTC</option>
                             </select>
                         </div>
                         <div>
-                            <span class="notice" style="margin: 0; font-size: 13px;">Grouped by scouting team number across all events</span>
+                            <span class="notice" style="margin: 0; font-size: 13px;" data-i18n="storage.team_group_notice">Grouped by scouting team number across all events</span>
                         </div>
                     </div>
 
@@ -500,16 +498,16 @@
                         <table class="storage-table">
                             <thead>
                                 <tr>
-                                    <th>Team #</th>
-                                    <th>Program</th>
-                                    <th>Total Storage</th>
-                                    <th>Match Entries</th>
-                                    <th>Pit Entries</th>
-                                    <th>Qual Entries</th>
-                                    <th>Configs & Revs</th>
-                                    <th>Chat Msgs</th>
-                                    <th>Users</th>
-                                    <th>Actions</th>
+                                    <th data-i18n="storage.th_team_num">Team #</th>
+                                    <th data-i18n="storage.th_program">Program</th>
+                                    <th data-i18n="storage.th_total_storage">Total Storage</th>
+                                    <th data-i18n="storage.th_match_entries">Match Entries</th>
+                                    <th data-i18n="storage.th_pit_entries">Pit Entries</th>
+                                    <th data-i18n="storage.th_qual_entries">Qual Entries</th>
+                                    <th data-i18n="storage.th_configs_revs">Configs & Revs</th>
+                                    <th data-i18n="storage.th_chat_msgs">Chat Msgs</th>
+                                    <th data-i18n="storage.th_users">Users</th>
+                                    <th data-i18n="storage.th_actions">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="team-storage-table-body">
@@ -523,7 +521,7 @@
 
                 <!-- TAB 3: PRUNING & MAINTENANCE -->
                 <div data-storage-panel="maintenance" class="hidden">
-                    <p class="notice">
+                    <p class="notice" data-i18n="storage.maintenance_notice">
                         Perform routine cleanup of historical drafts, chat logs, inactive sessions, and defragment database files to reclaim space.
                     </p>
 
@@ -531,53 +529,53 @@
                         <!-- Prune Config Revisions -->
                         <div class="maintenance-card">
                             <div>
-                                <h3 style="margin: 0 0 8px 0; font-size: 16px;">🧹 Prune Config Revisions</h3>
-                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;">
-                                    Retain only the latest $N$ revision snapshots per form kind for each team, pruning obsolete draft revisions.
+                                <h3 style="margin: 0 0 8px 0; font-size: 16px;" data-i18n="storage.prune_revs_title">Prune Config Revisions</h3>
+                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;" data-i18n="storage.prune_revs_desc">
+                                    Retain only the latest N revision snapshots per form kind for each team, pruning obsolete draft revisions.
                                 </p>
                                 <div class="field mb-16">
-                                    <label for="input-keep-revisions">Keep Latest Revisions Per Form</label>
+                                    <label for="input-keep-revisions" data-i18n="storage.prune_revs_label">Keep Latest Revisions Per Form</label>
                                     <input type="number" id="input-keep-revisions" value="10" min="1" max="100" style="width: 100px;" />
                                 </div>
                             </div>
-                            <button id="btn-prune-revisions" class="btn secondary" type="button">Prune Older Revisions</button>
+                            <button id="btn-prune-revisions" class="btn secondary" type="button" data-i18n="storage.btn_prune_revs">Prune Older Revisions</button>
                         </div>
 
                         <!-- Prune Old Chat Messages -->
                         <div class="maintenance-card">
                             <div>
-                                <h3 style="margin: 0 0 8px 0; font-size: 16px;">💬 Prune Team Chat Messages</h3>
-                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;">
+                                <h3 style="margin: 0 0 8px 0; font-size: 16px;" data-i18n="storage.prune_chat_title">Prune Team Chat Messages</h3>
+                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;" data-i18n="storage.prune_chat_desc">
                                     Clean up historic team chat messages older than a specified number of days to reduce table size.
                                 </p>
                                 <div class="field mb-16">
-                                    <label for="input-chat-days">Delete Messages Older Than (Days)</label>
+                                    <label for="input-chat-days" data-i18n="storage.prune_chat_label">Delete Messages Older Than (Days)</label>
                                     <input type="number" id="input-chat-days" value="90" min="7" max="1000" style="width: 100px;" />
                                 </div>
                             </div>
-                            <button id="btn-prune-chat" class="btn secondary" type="button">Prune Chat History</button>
+                            <button id="btn-prune-chat" class="btn secondary" type="button" data-i18n="storage.btn_prune_chat">Prune Chat History</button>
                         </div>
 
                         <!-- Prune Sessions and Reset Tokens -->
                         <div class="maintenance-card">
                             <div>
-                                <h3 style="margin: 0 0 8px 0; font-size: 16px;">🔑 Clean Expired Sessions & Tokens</h3>
-                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;">
+                                <h3 style="margin: 0 0 8px 0; font-size: 16px;" data-i18n="storage.clean_sessions_title">Clean Expired Sessions & Tokens</h3>
+                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;" data-i18n="storage.clean_sessions_desc">
                                     Remove expired user login sessions, stale device tokens, and used password reset tokens.
                                 </p>
                             </div>
-                            <button id="btn-prune-sessions" class="btn secondary" type="button">Clean Expired Sessions</button>
+                            <button id="btn-prune-sessions" class="btn secondary" type="button" data-i18n="storage.btn_clean_sessions">Clean Expired Sessions</button>
                         </div>
 
                         <!-- Database Reclaim / Vacuum -->
                         <div class="maintenance-card">
                             <div>
-                                <h3 style="margin: 0 0 8px 0; font-size: 16px;">⚡ Reclaim Physical Disk Space</h3>
-                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;">
+                                <h3 style="margin: 0 0 8px 0; font-size: 16px;" data-i18n="storage.reclaim_title">Reclaim Physical Disk Space</h3>
+                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;" data-i18n="storage.reclaim_desc">
                                     Runs SQLite <code>VACUUM</code> or PostgreSQL optimization to defragment storage and shrink physical database file size after large deletions.
                                 </p>
                             </div>
-                            <button id="btn-reclaim-space" class="btn" type="button">Execute Database VACUUM</button>
+                            <button id="btn-reclaim-space" class="btn" type="button" data-i18n="storage.btn_reclaim">Execute Database VACUUM</button>
                         </div>
                     </div>
                 </div>
@@ -590,18 +588,18 @@
     <div id="modal-cache-purge" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container">
             <div class="modal-header">
-                <h3 class="modal-title">Clear API Event Cache</h3>
+                <h3 class="modal-title" data-i18n="storage.modal_clear_cache_title">Clear API Event Cache</h3>
                 <button class="modal-close" data-close-modal="modal-cache-purge">&times;</button>
             </div>
             <div class="modal-body">
                 <p id="cache-purge-desc" style="font-size: 14px; margin-bottom: 12px;"></p>
                 <div class="notice" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.2); color: #065f46;">
-                    <strong>ℹ️ Safe Operation:</strong> Match schedules, team rosters, and Statbotics EPA will automatically re-sync on demand when requested by users.
+                    <strong data-i18n="storage.safe_op_title">Safe Operation:</strong> <span data-i18n="storage.safe_op_notice">Match schedules, team rosters, and Statbotics EPA will automatically re-sync on demand when requested by users.</span>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn ghost" data-close-modal="modal-cache-purge">Cancel</button>
-                <button id="btn-confirm-cache-purge" class="btn">Clear API Cache</button>
+                <button class="btn ghost" data-close-modal="modal-cache-purge" data-i18n="storage.btn_cancel">Cancel</button>
+                <button id="btn-confirm-cache-purge" class="btn" data-i18n="storage.btn_clear_api_cache">Clear API Cache</button>
             </div>
         </div>
     </div>
@@ -610,20 +608,18 @@
     <div id="modal-danger-delete" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container" style="max-width: 520px;">
             <div class="modal-header" style="border-bottom: 1px solid rgba(239, 68, 68, 0.2);">
-                <h3 class="modal-title" style="color: #ef4444; display: flex; align-items: center; gap: 8px;">
-                    <span>⚠️</span> Permanent Team Data Loss Warning
-                </h3>
+                <h3 class="modal-title" style="color: #ef4444;" data-i18n="storage.modal_danger_title">Permanent Team Data Loss Warning</h3>
                 <button class="modal-close" data-close-modal="modal-danger-delete">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="danger-banner">
-                    <h4>CRITICAL DATA LOSS WARNING</h4>
+                    <h4 data-i18n="storage.critical_data_loss">CRITICAL DATA LOSS WARNING</h4>
                     <p id="danger-target-description">
                         This action will permanently delete user scouting data.
                     </p>
                 </div>
-                <p style="font-size: 13px; line-height: 1.5; color: var(--muted); margin-bottom: 16px;">
-                    This data was entered manually by scouting teams and <strong>CANNOT be restored from The Blue Alliance or FIRST APIs</strong>. This operation is permanent and irreversible.
+                <p style="font-size: 13px; line-height: 1.5; color: var(--muted); margin-bottom: 16px;" data-i18n="storage.danger_notice">
+                    This data was entered manually by scouting teams and CANNOT be restored from The Blue Alliance or FIRST APIs. This operation is permanent and irreversible.
                 </p>
                 <div class="field">
                     <label id="danger-confirm-label" for="input-danger-confirm" style="font-weight: 700; color: var(--ink);">
@@ -633,8 +629,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn ghost" data-close-modal="modal-danger-delete">Cancel</button>
-                <button id="btn-execute-danger-delete" class="btn warning" style="background: #ef4444; color: white;" disabled>
+                <button class="btn ghost" data-close-modal="modal-danger-delete" data-i18n="storage.btn_cancel">Cancel</button>
+                <button id="btn-execute-danger-delete" class="btn warning" style="background: #ef4444; color: white;" disabled data-i18n="storage.btn_permanently_delete">
                     Permanently Delete
                 </button>
             </div>
@@ -645,17 +641,17 @@
     <div id="modal-team-detail" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container" style="max-width: 600px;">
             <div class="modal-header">
-                <h3 class="modal-title" id="team-detail-title">Team Storage Breakdown</h3>
+                <h3 class="modal-title" id="team-detail-title" data-i18n="storage.modal_team_detail_title">Team Storage Breakdown</h3>
                 <button class="modal-close" data-close-modal="modal-team-detail">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="team-detail-summary" style="margin-bottom: 16px;"></div>
-                <h4 style="margin: 16px 0 8px 0; font-size: 14px;">Event-by-Event Breakdown</h4>
+                <h4 style="margin: 16px 0 8px 0; font-size: 14px;" data-i18n="storage.event_breakdown_title">Event-by-Event Breakdown</h4>
                 <div class="storage-table-container">
                     <table class="storage-table">
                         <thead>
                             <tr>
-                                <th>Event Key</th>
+                                <th data-i18n="storage.th_event_key">Event Key</th>
                                 <th>Match Forms</th>
                                 <th>Pit Forms</th>
                                 <th>Qual Forms</th>
@@ -669,7 +665,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn ghost" data-close-modal="modal-team-detail">Close</button>
+                <button class="btn ghost" data-close-modal="modal-team-detail" data-i18n="storage.btn_close">Close</button>
             </div>
         </div>
     </div>
