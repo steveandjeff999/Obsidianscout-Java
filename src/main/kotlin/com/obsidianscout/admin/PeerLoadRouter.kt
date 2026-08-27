@@ -155,15 +155,15 @@ object PeerLoadRouter {
             LoadBalancerSettings()
         }
 
-        ServerLogService.appendLog("INFO", "PeerLoadRouter", "Peer Load Router started (probe interval: s, enabled=).")
+        ServerLogService.appendLog("INFO", "PeerLoadRouter", "Peer Load Router started (probe interval: ${cachedSettings.probeIntervalSeconds}s, enabled=${cachedSettings.enabled}).")
 
         monitoringJob = scope.launch {
-            delay(5_000L)
+            delay(2_000L)
             while (isActive) {
                 try {
                     refreshSettingsAndProbePeers()
                 } catch (e: Exception) {
-                    ServerLogService.appendLog("ERROR", "PeerLoadRouter", "Error during peer load probe cycle: ")
+                    ServerLogService.appendLog("ERROR", "PeerLoadRouter", "Error during peer load probe cycle: ${e.message}")
                 }
                 val interval = cachedSettings.probeIntervalSeconds.coerceAtLeast(5L) * 1000L
                 delay(interval)
@@ -179,7 +179,7 @@ object PeerLoadRouter {
         ServerLogService.appendLog("INFO", "PeerLoadRouter", "Peer Load Router stopped.")
     }
 
-    private suspend fun refreshSettingsAndProbePeers() = withContext(Dispatchers.IO) {
+    suspend fun refreshSettingsAndProbePeers() = withContext(Dispatchers.IO) {
         cachedSettings = try {
             SettingsService.getLoadBalancerSettings()
         } catch (_: Throwable) {
@@ -194,7 +194,7 @@ object PeerLoadRouter {
         val cluster = try {
             ClusterManagementService.getClusterNodes()
         } catch (e: Exception) {
-            ServerLogService.appendLog("WARN", "PeerLoadRouter", "Failed to retrieve cluster nodes for load probe: ")
+            ServerLogService.appendLog("WARN", "PeerLoadRouter", "Failed to retrieve cluster nodes for load probe: ${e.message}")
             return@withContext
         }
 
@@ -208,8 +208,9 @@ object PeerLoadRouter {
         for (peer in onlinePeers) {
             try {
                 val t0 = System.currentTimeMillis()
+                val targetProbeUrl = "http://${peer.ip}:${peer.appPort}/api/cluster/load"
                 val req = HttpRequest.newBuilder()
-                    .uri(URI.create("http://:/api/cluster/load"))
+                    .uri(URI.create(targetProbeUrl))
                     .timeout(Duration.ofSeconds(4))
                     .GET()
                     .build()
@@ -411,7 +412,7 @@ object PeerLoadRouter {
     }
 
     suspend fun forwardRequest(peer: NodeLoad, call: ApplicationCall): Boolean = withContext(Dispatchers.IO) {
-        val targetUrl = "http://:"
+        val targetUrl = "http://${peer.ip}:${peer.appPort}${call.request.uri}"
         val method = call.request.httpMethod.value
 
         val bodyBytes = try {
@@ -483,12 +484,17 @@ object PeerLoadRouter {
             )
             true
         } catch (e: Exception) {
-            ServerLogService.appendLog("WARN", "PeerLoadRouter", "Failed to forward request   to peer : ")
+            ServerLogService.appendLog("WARN", "PeerLoadRouter", "Failed to forward request $method ${call.request.uri} to peer ${peer.ip}: ${e.message}")
             false
         }
     }
 
     fun getStatus(): LoadBalancerStatusResponse {
+        cachedSettings = try {
+            SettingsService.getLoadBalancerSettings()
+        } catch (_: Throwable) {
+            cachedSettings
+        }
         val local = getLocalNodeLoad()
         val peers = peerLoadMap.values.toList().sortedByDescending { it.score }
         val best = selectBestNode(local)

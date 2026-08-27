@@ -2802,6 +2802,9 @@ fun Application.configureRoutes() {
                         val req = call.receive<com.obsidianscout.integrations.LoadBalancerSettings>()
                         val updated = SettingsService.updateLoadBalancerSettings(req)
                         com.obsidianscout.admin.PeerLoadRouter.updateCachedSettings(updated)
+                        if (updated.enabled) {
+                            com.obsidianscout.admin.PeerLoadRouter.refreshSettingsAndProbePeers()
+                        }
                         call.respond(updated)
                     }
                     get("/load-balancer/status") {
