@@ -317,6 +317,29 @@
                             <div style="color: #64748b; text-align: center; padding: 16px;">No load balancing activity recorded yet in the last 30 minutes.</div>
                         </div>
                     </div>
+
+                    <!-- Overload Simulation Testing Section (Superadmin Only) -->
+                    <div id="lb-stress-card" style="margin-top: 14px; background: rgba(239, 68, 68, 0.07); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 13px; font-weight: 700; color: #f87171;">🔥 Overload Simulation & Load Balancer Verification</span>
+                                    <span id="lb-stress-status-pill" class="badge" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8; font-size: 11px;">Idle</span>
+                                </div>
+                                <div style="font-size: 12px; color: #fca5a5; margin-top: 2px;">
+                                    Simulates high CPU & memory utilization on this server to verify automatic traffic offloading to cluster peers. Automatically stops after 60s max.
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button id="btn-lb-stress-start" class="btn-action" type="button" style="background: #dc2626; color: white; border: none; padding: 8px 14px; font-weight: 600; cursor: pointer; border-radius: 6px;">
+                                    Simulate Overload (60s)
+                                </button>
+                                <button id="btn-lb-stress-stop" class="btn-action hidden" type="button" style="background: #475569; color: white; border: none; padding: 8px 14px; font-weight: 600; cursor: pointer; border-radius: 6px;">
+                                    Stop Overload
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Server List Table -->

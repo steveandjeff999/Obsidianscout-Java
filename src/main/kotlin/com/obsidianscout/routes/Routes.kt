@@ -2811,6 +2811,21 @@ fun Application.configureRoutes() {
                         call.requireSuperAdminOrClusterAuth()
                         call.respond(com.obsidianscout.admin.PeerLoadRouter.getStatus())
                     }
+                    post("/stress/start") {
+                        val session = call.requireSuperAdmin()
+                        val result = com.obsidianscout.admin.ServerStressTestService.startStressTest(session.username)
+                        call.respond(result)
+                    }
+                    post("/stress/stop") {
+                        val session = call.requireSuperAdmin()
+                        val result = com.obsidianscout.admin.ServerStressTestService.stopStressTest(session.username)
+                        call.respond(result)
+                    }
+                    get("/stress/status") {
+                        call.requireSuperAdmin()
+                        val result = com.obsidianscout.admin.ServerStressTestService.getStatus()
+                        call.respond(result)
+                    }
                     get("/notifications/enrollment") {
                         val session = call.requireSuperAdmin()
                         val user = AuthService.getUserById(session.userId)

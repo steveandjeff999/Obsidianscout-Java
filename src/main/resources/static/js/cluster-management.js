@@ -258,9 +258,54 @@
                     }).join("");
                 }
             }
+
+            // Also check and update overload stress test status
+            loadStressTestStatus();
         } catch (e) {
             // Non-superadmins will get 403, hide the card
             card.classList.add("hidden");
+        }
+    }
+
+    let stressPollInterval = null;
+
+    async function loadStressTestStatus() {
+        const pill = document.getElementById("lb-stress-status-pill");
+        const startBtn = document.getElementById("btn-lb-stress-start");
+        const stopBtn = document.getElementById("btn-lb-stress-stop");
+        if (!pill) return;
+
+        try {
+            const status = await apiRequest("/api/admin/cluster/stress/status");
+            if (status.isRunning) {
+                pill.textContent = `Overload Active (${status.remainingSeconds}s remaining)`;
+                pill.style.background = "rgba(239, 68, 68, 0.25)";
+                pill.style.color = "#f87171";
+                pill.style.border = "1px solid rgba(239, 68, 68, 0.5)";
+                if (startBtn) startBtn.classList.add("hidden");
+                if (stopBtn) stopBtn.classList.remove("hidden");
+
+                if (!stressPollInterval) {
+                    stressPollInterval = setInterval(() => {
+                        loadStressTestStatus();
+                        loadLoadBalancerStatus();
+                    }, 2000);
+                }
+            } else {
+                pill.textContent = "Idle";
+                pill.style.background = "rgba(100, 116, 139, 0.2)";
+                pill.style.color = "#94a3b8";
+                pill.style.border = "1px solid rgba(100, 116, 139, 0.3)";
+                if (startBtn) startBtn.classList.remove("hidden");
+                if (stopBtn) stopBtn.classList.add("hidden");
+
+                if (stressPollInterval) {
+                    clearInterval(stressPollInterval);
+                    stressPollInterval = null;
+                }
+            }
+        } catch (_e) {
+            // non-superadmin or network error
         }
     }
 
@@ -268,6 +313,8 @@
         const toggle = document.getElementById("lb-enable-toggle");
         const btnConfig = document.getElementById("btn-lb-configure");
         const btnRefresh = document.getElementById("btn-lb-refresh");
+        const btnStressStart = document.getElementById("btn-lb-stress-start");
+        const btnStressStop = document.getElementById("btn-lb-stress-stop");
 
         toggle?.addEventListener("change", async (e) => {
             const enabled = e.target.checked;
@@ -293,7 +340,39 @@
 
         btnRefresh?.addEventListener("click", () => {
             loadLoadBalancerStatus();
+            loadStressTestStatus();
             showToastMsg("Load balancer status refreshed.", "info");
+        });
+
+        btnStressStart?.addEventListener("click", async () => {
+            if (!confirm("Start simulated server overload test for up to 60 seconds? This safely spikes local CPU and heap to verify traffic forwarding to peers.")) {
+                return;
+            }
+            try {
+                Obsidianscout.setButtonLoading(btnStressStart, true, "Starting...");
+                const res = await apiRequest("/api/admin/cluster/stress/start", { method: "POST" });
+                showToastMsg(res.message || "Simulated overload started.", "warning");
+                loadStressTestStatus();
+                setTimeout(loadLoadBalancerStatus, 1500);
+            } catch (err) {
+                showToastMsg("Failed to start overload simulation: " + err.message, "error");
+            } finally {
+                Obsidianscout.setButtonLoading(btnStressStart, false);
+            }
+        });
+
+        btnStressStop?.addEventListener("click", async () => {
+            try {
+                Obsidianscout.setButtonLoading(btnStressStop, true, "Stopping...");
+                const res = await apiRequest("/api/admin/cluster/stress/stop", { method: "POST" });
+                showToastMsg(res.message || "Simulated overload stopped.", "info");
+                loadStressTestStatus();
+                setTimeout(loadLoadBalancerStatus, 1000);
+            } catch (err) {
+                showToastMsg("Failed to stop overload simulation: " + err.message, "error");
+            } finally {
+                Obsidianscout.setButtonLoading(btnStressStop, false);
+            }
         });
 
         document.getElementById("modal-lb-cancel")?.addEventListener("click", closeLoadBalancerModal);

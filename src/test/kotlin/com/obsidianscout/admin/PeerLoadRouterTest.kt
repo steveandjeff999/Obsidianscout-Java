@@ -208,4 +208,28 @@ class PeerLoadRouterTest {
         assertEquals(2, stats.totalLocalServed30m)
         assertTrue(stats.forwardedRatio30m > 0.70)
     }
+
+    @Test
+    fun testServerStressTestLifecycle() {
+        val initial = ServerStressTestService.getStatus()
+        assertFalse(initial.isRunning)
+
+        val startRes = ServerStressTestService.startStressTest("testAdmin")
+        assertTrue(startRes.isRunning)
+        assertTrue(startRes.remainingSeconds in 1..60)
+
+        // Prevent duplicate concurrent starts
+        val secondStart = ServerStressTestService.startStressTest("testAdmin2")
+        assertTrue(secondStart.isRunning)
+        assertTrue(secondStart.message.contains("already active", ignoreCase = true))
+
+        val status = ServerStressTestService.getStatus()
+        assertTrue(status.isRunning)
+
+        val stopRes = ServerStressTestService.stopStressTest("testAdmin")
+        assertFalse(stopRes.isRunning)
+
+        val finalStatus = ServerStressTestService.getStatus()
+        assertFalse(finalStatus.isRunning)
+    }
 }
