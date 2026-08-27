@@ -277,6 +277,48 @@
                     <div id="node-alerts-status-msg" style="margin-top: 10px; font-size: 13px; color: #cbd5e1; display: none;"></div>
                 </div>
 
+                <!-- Load Balancer & Capacity-Aware Request Forwarding Card (Superadmin only) -->
+                <div id="load-balancer-card" class="card soft mb-24 hidden" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); padding: 18px; border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <h3 style="margin: 0; font-size: 16px; color: #34d399;">⚡ Peer Request Forwarding & Load Balancer</h3>
+                                <span id="lb-status-pill" class="badge" style="background: rgba(100, 116, 139, 0.3); color: #94a3b8; font-size: 11px;">Checking...</span>
+                            </div>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #a7f3d0;">
+                                Automatically routes incoming requests to the best available server node across the network based on heap availability, CPU load, and network latency.
+                            </p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <label style="color: white; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="lb-enable-toggle" style="width: 18px; height: 18px; cursor: pointer;" />
+                                <span>Enable Load Balancing</span>
+                            </label>
+                            <button id="btn-lb-configure" class="btn-action config" type="button" style="padding: 8px 14px;">Configure Settings</button>
+                            <button id="btn-lb-refresh" class="btn-action logs" type="button" style="padding: 8px 14px;">Refresh Status</button>
+                        </div>
+                    </div>
+
+                    <!-- Live Load Balancer Metrics Grid -->
+                    <div id="lb-metrics-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px;">
+                        <!-- Dynamically populated stats: Forwarded Count, Best Route, Local Score, Peer Scores -->
+                    </div>
+
+                    <!-- 30-Minute Activity Timeline & Statistics -->
+                    <div id="lb-activity-card" style="margin-top: 14px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 13px; font-weight: 700; color: #f1f5f9;">📊 Last ~30 Min Activity & Load Offloading History</span>
+                                <span id="lb-30m-summary-pill" class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 11px;">0 forwarded</span>
+                            </div>
+                            <span style="font-size: 11px; color: #94a3b8;">Rolling 30-minute window</span>
+                        </div>
+                        <div id="lb-activity-list" style="max-height: 220px; overflow-y: auto; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px;">
+                            <div style="color: #64748b; text-align: center; padding: 16px;">No load balancing activity recorded yet in the last 30 minutes.</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Server List Table -->
                 <div class="server-table-card">
                     <h2 style="font-size: 17px; margin-top: 0; margin-bottom: 16px;" data-i18n="cluster.servers_title">Discovered Cluster Servers</h2>
@@ -371,6 +413,52 @@
             <div class="modal-footer">
                 <button id="modal-reinstall-cancel" class="btn ghost" type="button" data-i18n="btn.cancel">Cancel</button>
                 <button id="modal-reinstall-confirm" class="btn secondary" style="background: #f59e0b; color: white;" type="button" data-i18n="cluster.modal_reinstall_confirm">Force Reinstall</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Balancer Settings Modal -->
+    <div id="load-balancer-modal" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container" style="max-width: 600px; width: 90%;">
+            <div class="modal-header">
+                <h2 class="modal-title" style="color: #34d399;">⚙️ Configure Cluster Load Balancer</h2>
+                <button type="button" class="modal-close" id="modal-lb-cancel-x" aria-label="Close">&#x2715;</button>
+            </div>
+            <div style="padding: 20px;">
+                <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-muted, #94a3b8);">
+                    Settings are stored in CockroachDB and shared by every server node across the cluster.
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Local Preference Margin (Tie Breaker)</label>
+                        <input type="number" id="lb-input-margin" step="0.01" min="0" max="1" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                        <small style="color: #94a3b8; font-size: 11px;">Peers must beat local score by at least this margin (e.g. 0.10) to trigger a remote forward.</small>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Max Expected Latency Ceiling (ms)</label>
+                        <input type="number" id="lb-input-latency" step="1" min="10" max="5000" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                        <small style="color: #94a3b8; font-size: 11px;">Latency normalization ceiling for score calculation (default: 150ms).</small>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Probe Interval (s)</label>
+                            <input type="number" id="lb-input-probe" step="1" min="5" max="300" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Forward Timeout (s)</label>
+                            <input type="number" id="lb-input-timeout" step="1" min="5" max="120" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Excluded Path Prefixes (comma-separated)</label>
+                        <input type="text" id="lb-input-excluded" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                        <small style="color: #94a3b8; font-size: 11px;">Path prefixes that should never be forwarded (e.g. /api/admin, /api/cluster, /cluster-management).</small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-lb-cancel" class="btn ghost" type="button">Cancel</button>
+                <button id="modal-lb-save" class="btn secondary" style="background: #10b981; color: white;" type="button">Save Cluster Settings</button>
             </div>
         </div>
     </div>

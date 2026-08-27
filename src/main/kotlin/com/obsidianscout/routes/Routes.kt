@@ -156,6 +156,10 @@ fun Application.configureRoutes() {
                         }
                     )
                 }
+                get("/load") {
+                    val localLoad = com.obsidianscout.admin.PeerLoadRouter.getLocalNodeLoad()
+                    call.respond(localLoad)
+                }
             }
             route("/auth") {
                 post("/login") {
@@ -2788,6 +2792,21 @@ fun Application.configureRoutes() {
                         val appConfig = AppConfigLoader.load()
                         val result = com.obsidianscout.auth.ClusterSecretService.regenerateClusterKeys(appConfig)
                         call.respond(result)
+                    }
+                    get("/load-balancer/settings") {
+                        call.requireSuperAdminOrClusterAuth()
+                        call.respond(SettingsService.getLoadBalancerSettings())
+                    }
+                    put("/load-balancer/settings") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<com.obsidianscout.integrations.LoadBalancerSettings>()
+                        val updated = SettingsService.updateLoadBalancerSettings(req)
+                        com.obsidianscout.admin.PeerLoadRouter.updateCachedSettings(updated)
+                        call.respond(updated)
+                    }
+                    get("/load-balancer/status") {
+                        call.requireSuperAdminOrClusterAuth()
+                        call.respond(com.obsidianscout.admin.PeerLoadRouter.getStatus())
                     }
                     get("/notifications/enrollment") {
                         val session = call.requireSuperAdmin()

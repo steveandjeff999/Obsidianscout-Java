@@ -240,6 +240,37 @@ fun Application.module(appConfig: AppConfig) {
         }
     }
     
+    // Transparent cluster peer load-balancing / request offloading interceptor
+    intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
+        // Loop guard — never re-forward a peer-forwarded request
+        if (call.request.headers.contains("X-Forwarded-By-Peer")) return@intercept
+
+        // WebSocket upgrade guard — WebSocket connections stay local
+        if (call.request.headers["Upgrade"]?.equals("websocket", ignoreCase = true) == true) return@intercept
+
+        val settings = com.obsidianscout.admin.PeerLoadRouter.cachedSettings
+        if (!settings.enabled) return@intercept
+
+        val path = call.request.path()
+        val isExcluded = settings.excludedPathPrefixes.any { path.startsWith(it) } ||
+                path.startsWith("/api/cluster/") ||
+                path.startsWith("/api/admin/cluster/") ||
+                path.startsWith("/cluster-management")
+        if (isExcluded) return@intercept
+
+        val best = com.obsidianscout.admin.PeerLoadRouter.selectBestNode()
+        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+
+        if (best.ip != localIp) {
+            val forwarded = com.obsidianscout.admin.PeerLoadRouter.forwardRequest(best, call)
+            if (forwarded) {
+                finish()
+                return@intercept
+            }
+        }
+        com.obsidianscout.admin.PeerLoadRouter.recordLocalServed()
+    }
+
     // Intercept requests to serve 503 if database is not ready
     intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
         val path = call.request.path()
@@ -455,6 +486,7 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.scouting.DeduplicationScheduler.start()
                 com.obsidianscout.admin.CloudflaredService.initOnStartup()
                 com.obsidianscout.admin.NodeMonitoringService.start()
+                com.obsidianscout.admin.PeerLoadRouter.start(appConfig)
                 println("[Database] Background database initialization completed successfully.")
                 
                 // Mark update boot successful once startup completes
@@ -475,6 +507,7 @@ fun Application.module(appConfig: AppConfig) {
     }
 
     environment.monitor.subscribe(ApplicationStopped) {
+        com.obsidianscout.admin.PeerLoadRouter.stop()
         com.obsidianscout.admin.NodeMonitoringService.stop()
         com.obsidianscout.auth.ClusterSecretService.stopBackgroundSync()
         SyncScheduler.stop()

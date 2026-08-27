@@ -41,6 +41,20 @@ data class CloudflaredSettings(
     val customHostname: String = ""
 )
 
+@Serializable
+data class LoadBalancerSettings(
+    val enabled: Boolean = false,
+    val probeIntervalSeconds: Long = 15,      // how often to refresh peer load cache
+    val forwardTimeoutSeconds: Long = 30,     // upstream proxy read timeout
+    val localPreferenceMargin: Double = 0.1,  // peer must beat local score by this much to win
+    val maxExpectedLatencyMs: Double = 150.0, // latency ceiling for normalization (LAN ≈ 1–20 ms)
+    val excludedPathPrefixes: List<String> = listOf(
+        "/api/admin",
+        "/api/cluster",
+        "/cluster-management"
+    )
+)
+
 val DEFAULT_SCOUT_PAGES = listOf(
     "dashboard", "chat", "scout", "pit-scout", "qual-scout", "qr-scanner", "contact"
 )
@@ -356,6 +370,52 @@ object SettingsService {
             if (row == null) {
                 AppSettings.insert {
                     it[AppSettings.teamNumber] = -2
+                    it[settingsJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            } else {
+                AppSettings.update({ AppSettings.id eq row[AppSettings.id] }) {
+                    it[settingsJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            }
+        }
+        return settings
+    }
+
+    fun getLoadBalancerSettings(): LoadBalancerSettings {
+        val jsonText = try {
+            readTransaction {
+                AppSettings
+                    .selectAll().where { AppSettings.teamNumber eq -3 }
+                    .limit(1)
+                    .firstOrNull()
+                    ?.get(AppSettings.settingsJson)
+            }
+        } catch (e: Throwable) {
+            null
+        }
+        return if (jsonText.isNullOrBlank()) {
+            LoadBalancerSettings()
+        } else {
+            try {
+                JsonSupport.json.decodeFromString(LoadBalancerSettings.serializer(), jsonText)
+            } catch (e: Throwable) {
+                LoadBalancerSettings()
+            }
+        }
+    }
+
+    fun updateLoadBalancerSettings(settings: LoadBalancerSettings): LoadBalancerSettings {
+        val jsonText = JsonSupport.json.encodeToString(LoadBalancerSettings.serializer(), settings)
+        transaction {
+            val row = AppSettings
+                .selectAll().where { AppSettings.teamNumber eq -3 }
+                .limit(1)
+                .firstOrNull()
+            if (row == null) {
+                AppSettings.insert {
+                    it[AppSettings.teamNumber] = -3
                     it[settingsJson] = jsonText
                     it[updatedAt] = Instant.now()
                 }

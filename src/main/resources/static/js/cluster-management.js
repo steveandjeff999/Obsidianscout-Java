@@ -61,6 +61,8 @@
         loadClusterNodes();
         loadNodeAlertEnrollment();
         bindNodeAlertEvents();
+        loadLoadBalancerStatus();
+        bindLoadBalancerEvents();
     }
 
     async function loadNodeAlertEnrollment() {
@@ -125,6 +127,252 @@
                 Obsidianscout.setButtonLoading(testBtn, false);
             }
         });
+    }
+
+    async function loadLoadBalancerStatus() {
+        const card = document.getElementById("load-balancer-card");
+        const toggle = document.getElementById("lb-enable-toggle");
+        const pill = document.getElementById("lb-status-pill");
+        const container = document.getElementById("lb-metrics-container");
+        if (!card) return;
+
+        try {
+            const status = await apiRequest("/api/admin/cluster/load-balancer/status");
+            card.classList.remove("hidden");
+            if (toggle) toggle.checked = !!status.enabled;
+
+            if (pill) {
+                if (!status.enabled) {
+                    pill.textContent = "Disabled";
+                    pill.style.background = "rgba(100, 116, 139, 0.2)";
+                    pill.style.color = "#94a3b8";
+                    pill.style.border = "1px solid rgba(100, 116, 139, 0.3)";
+                } else if (status.isForwardingActive) {
+                    pill.textContent = `Forwarding Active -> ${status.bestNodeIp}`;
+                    pill.style.background = "rgba(16, 185, 129, 0.2)";
+                    pill.style.color = "#34d399";
+                    pill.style.border = "1px solid rgba(16, 185, 129, 0.4)";
+                } else {
+                    pill.textContent = "Active (Serving Locally)";
+                    pill.style.background = "rgba(59, 130, 246, 0.2)";
+                    pill.style.color = "#60a5fa";
+                    pill.style.border = "1px solid rgba(59, 130, 246, 0.4)";
+                }
+            }
+
+            if (container) {
+                const local = status.localNode || {};
+                const localScore = (local.score * 100).toFixed(1);
+                const localHeap = `${local.availableHeapMb || 0} MB free / ${local.maxHeapMb || 0} MB`;
+                const localCpu = `${Math.round((local.cpuLoad || 0) * 100)}%`;
+                const peers = status.peerNodes || [];
+
+                let peersHtml = "";
+                if (peers.length === 0) {
+                    peersHtml = `<div style="color: #94a3b8; font-size: 12px;">No active remote peer nodes discovered on the cluster.</div>`;
+                } else {
+                    peersHtml = peers.map(p => {
+                        const scorePct = (p.score * 100).toFixed(1);
+                        const isWinner = (p.ip === status.bestNodeIp);
+                        const winnerBadge = isWinner ? `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 10px; margin-left: 4px;">Top Route</span>` : "";
+                        return `
+                            <div style="background: rgba(0, 0, 0, 0.2); padding: 8px 10px; border-radius: 6px; margin-bottom: 6px; border: 1px solid ${isWinner ? 'rgba(16, 185, 129, 0.4)' : 'rgba(255, 255, 255, 0.05)'};">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-family: monospace; font-weight: 600; font-size: 13px; color: ${isWinner ? '#34d399' : '#f1f5f9'};">${escapeHtml(p.ip)}${winnerBadge}</span>
+                                    <span style="font-size: 12px; font-weight: 700; color: #38bdf8;">${scorePct}%</span>
+                                </div>
+                                <div style="font-size: 11px; color: #94a3b8; margin-top: 2px; display: flex; gap: 10px;">
+                                    <span>Latency: <strong>${p.latencyMs}ms</strong></span>
+                                    <span>Free Heap: <strong>${p.availableHeapMb}MB</strong></span>
+                                    <span>CPU: <strong>${Math.round((p.cpuLoad || 0) * 100)}%</strong></span>
+                                </div>
+                            </div>
+                        `;
+                    }).join("");
+                }
+
+                container.innerHTML = `
+                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px;">
+                        <div style="font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Forwarded Requests</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #34d399; margin-top: 4px;">${status.forwardedCount || 0}</div>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Check every ${status.probeIntervalSeconds}s</div>
+                    </div>
+                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px;">
+                        <div style="font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Selected Target</div>
+                        <div style="font-size: 15px; font-weight: 700; font-family: monospace; color: #60a5fa; margin-top: 6px;">${escapeHtml(status.bestNodeIp || "local")}</div>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Local Preference Margin: +${status.localPreferenceMargin}</div>
+                    </div>
+                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px;">
+                        <div style="font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 600;">Local Node Capacity</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #38bdf8; margin-top: 4px;">Score: ${localScore}%</div>
+                        <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">${localHeap} (CPU: ${localCpu})</div>
+                    </div>
+                    <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px; grid-column: 1 / -1;">
+                        <div style="font-size: 12px; text-transform: uppercase; color: #94a3b8; font-weight: 600; margin-bottom: 8px;">Network Peer Load & Latency Ranking</div>
+                        ${peersHtml}
+                    </div>
+                `;
+            }
+
+            // Render 30-minute activity history
+            const summaryPill = document.getElementById("lb-30m-summary-pill");
+            const activityList = document.getElementById("lb-activity-list");
+            const stats = status.recentStats || {};
+            const fwd30m = stats.totalForwarded30m || 0;
+            const loc30m = stats.totalLocalServed30m || 0;
+            const ratioPct = Math.round((stats.forwardedRatio30m || 0) * 100);
+
+            if (summaryPill) {
+                summaryPill.textContent = `${fwd30m} forwarded / ${loc30m} local (${ratioPct}% offloaded)`;
+            }
+
+            if (activityList) {
+                const history = (status.activityHistory || []).slice().reverse();
+                if (history.length === 0) {
+                    activityList.innerHTML = `<div style="color: #64748b; text-align: center; padding: 16px;">No load balancing activity recorded yet in the last 30 minutes.</div>`;
+                } else {
+                    activityList.innerHTML = history.map(item => {
+                        const timeStr = new Date(item.timestampEpochMs).toLocaleTimeString();
+                        const isFwd = item.isForwarded;
+                        const badgeColor = isFwd ? '#34d399' : '#60a5fa';
+                        const badgeBg = isFwd ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)';
+                        const badgeBorder = isFwd ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)';
+                        const badgeText = isFwd ? `Forwarded -> ${escapeHtml(item.targetIp)}` : 'Served Locally';
+
+                        return `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); gap: 10px; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="color: #64748b; font-size: 11px;">[${timeStr}]</span>
+                                    <span style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder}; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                                        ${badgeText}
+                                    </span>
+                                    <span style="color: #cbd5e1; font-size: 11px;">${escapeHtml(item.note || "")}</span>
+                                </div>
+                                <div style="font-size: 11px; color: #94a3b8; display: flex; gap: 10px;">
+                                    <span>+${item.requestsForwarded} fwd / +${item.requestsServedLocally} loc</span>
+                                    <span>Free Heap: ${item.localHeapFreeMb}MB</span>
+                                    <span>CPU: ${item.localCpuPercent}%</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join("");
+                }
+            }
+        } catch (e) {
+            // Non-superadmins will get 403, hide the card
+            card.classList.add("hidden");
+        }
+    }
+
+    function bindLoadBalancerEvents() {
+        const toggle = document.getElementById("lb-enable-toggle");
+        const btnConfig = document.getElementById("btn-lb-configure");
+        const btnRefresh = document.getElementById("btn-lb-refresh");
+
+        toggle?.addEventListener("change", async (e) => {
+            const enabled = e.target.checked;
+            try {
+                const currentSettings = await apiRequest("/api/admin/cluster/load-balancer/settings");
+                currentSettings.enabled = enabled;
+                await apiRequest("/api/admin/cluster/load-balancer/settings", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(currentSettings)
+                });
+                showToastMsg(enabled ? "Cluster load balancing enabled." : "Cluster load balancing disabled.", "success");
+                loadLoadBalancerStatus();
+            } catch (err) {
+                showToastMsg("Failed to update load balancer state: " + err.message, "error");
+                toggle.checked = !enabled;
+            }
+        });
+
+        btnConfig?.addEventListener("click", () => {
+            openLoadBalancerModal();
+        });
+
+        btnRefresh?.addEventListener("click", () => {
+            loadLoadBalancerStatus();
+            showToastMsg("Load balancer status refreshed.", "info");
+        });
+
+        document.getElementById("modal-lb-cancel")?.addEventListener("click", closeLoadBalancerModal);
+        document.getElementById("modal-lb-cancel-x")?.addEventListener("click", closeLoadBalancerModal);
+        document.getElementById("modal-lb-save")?.addEventListener("click", saveLoadBalancerSettings);
+    }
+
+    async function openLoadBalancerModal() {
+        const modal = document.getElementById("load-balancer-modal");
+        if (!modal) return;
+
+        try {
+            const settings = await apiRequest("/api/admin/cluster/load-balancer/settings");
+            const marginInput = document.getElementById("lb-input-margin");
+            const latencyInput = document.getElementById("lb-input-latency");
+            const probeInput = document.getElementById("lb-input-probe");
+            const timeoutInput = document.getElementById("lb-input-timeout");
+            const excludedInput = document.getElementById("lb-input-excluded");
+
+            if (marginInput) marginInput.value = settings.localPreferenceMargin ?? 0.10;
+            if (latencyInput) latencyInput.value = settings.maxExpectedLatencyMs ?? 150.0;
+            if (probeInput) probeInput.value = settings.probeIntervalSeconds ?? 15;
+            if (timeoutInput) timeoutInput.value = settings.forwardTimeoutSeconds ?? 30;
+            if (excludedInput) excludedInput.value = (settings.excludedPathPrefixes || []).join(", ");
+
+            modal.classList.add("show");
+        } catch (e) {
+            showToastMsg("Failed to load load balancer settings: " + e.message, "error");
+        }
+    }
+
+    function closeLoadBalancerModal() {
+        const modal = document.getElementById("load-balancer-modal");
+        if (modal) modal.classList.remove("show");
+    }
+
+    async function saveLoadBalancerSettings() {
+        const saveBtn = document.getElementById("modal-lb-save");
+        const marginInput = document.getElementById("lb-input-margin");
+        const latencyInput = document.getElementById("lb-input-latency");
+        const probeInput = document.getElementById("lb-input-probe");
+        const timeoutInput = document.getElementById("lb-input-timeout");
+        const excludedInput = document.getElementById("lb-input-excluded");
+        const toggle = document.getElementById("lb-enable-toggle");
+
+        const margin = parseFloat(marginInput?.value) || 0.10;
+        const latency = parseFloat(latencyInput?.value) || 150.0;
+        const probe = parseInt(probeInput?.value) || 15;
+        const timeout = parseInt(timeoutInput?.value) || 30;
+        const excluded = (excludedInput?.value || "")
+            .split(",")
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
+        const enabled = toggle?.checked ?? false;
+
+        const payload = {
+            enabled: enabled,
+            probeIntervalSeconds: probe,
+            forwardTimeoutSeconds: timeout,
+            localPreferenceMargin: margin,
+            maxExpectedLatencyMs: latency,
+            excludedPathPrefixes: excluded.length > 0 ? excluded : ["/api/admin", "/api/cluster", "/cluster-management"]
+        };
+
+        Obsidianscout.setButtonLoading(saveBtn, true, "Saving...");
+        try {
+            await apiRequest("/api/admin/cluster/load-balancer/settings", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            showToastMsg("Cluster load balancer configuration saved successfully.", "success");
+            closeLoadBalancerModal();
+            loadLoadBalancerStatus();
+        } catch (e) {
+            showToastMsg("Failed to save load balancer settings: " + e.message, "error");
+        } finally {
+            Obsidianscout.setButtonLoading(saveBtn, false);
+        }
     }
 
     function bindEvents() {
