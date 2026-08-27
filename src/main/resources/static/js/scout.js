@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     mainContent = document.querySelector(".main-content");
     if (mainContent) {
-        const siblings = Array.from(mainContent.children);
+        const siblings = Array.from(mainContent.children).filter(child => !child.classList.contains("banner-container"));
         mainContentWrapper = document.createElement("div");
         mainContentWrapper.id = "scout-wrapper";
         siblings.forEach(child => mainContentWrapper.appendChild(child));

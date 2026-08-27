@@ -5,7 +5,61 @@
 
 import { request } from '../base/http.js';
 
+let isDelegationInitialized = false;
+
+function initBannerEventDelegation() {
+    if (isDelegationInitialized) return;
+    isDelegationInitialized = true;
+
+    document.addEventListener("click", (e) => {
+        const toggleBtn = e.target.closest(".btn-banner-toggle");
+        if (toggleBtn) {
+            const item = toggleBtn.closest(".banner-item");
+            if (item) {
+                const details = item.querySelector(".banner-details");
+                if (details) {
+                    const isHidden = details.classList.toggle("hidden");
+                    toggleBtn.textContent = isHidden ? "Read More" : "Show Less";
+                }
+            }
+            return;
+        }
+
+        const closeBtn = e.target.closest(".btn-banner-close");
+        if (closeBtn) {
+            const item = closeBtn.closest(".banner-item");
+            if (item) {
+                const bannerId = item.dataset.id;
+                item.remove();
+                if (bannerId) {
+                    let dismissed = [];
+                    try {
+                        const saved = localStorage.getItem("obsidianscout:dismissed_banners");
+                        if (saved) dismissed = JSON.parse(saved);
+                    } catch (err) {
+                        console.warn("Failed to load dismissed banners", err);
+                    }
+                    if (!dismissed.includes(bannerId)) {
+                        dismissed.push(bannerId);
+                        try {
+                            localStorage.setItem("obsidianscout:dismissed_banners", JSON.stringify(dismissed));
+                        } catch (err) {
+                            console.warn("Failed to save dismissed banners", err);
+                        }
+                    }
+                }
+                const container = document.querySelector(".banner-container");
+                if (container && container.children.length === 0) {
+                    container.remove();
+                }
+            }
+            return;
+        }
+    });
+}
+
 export async function loadAndRenderBanners() {
+    initBannerEventDelegation();
     const mainContent = document.querySelector(".main-content") || document.querySelector(".login-shell") || document.querySelector(".shell");
     if (!mainContent) return;
 
@@ -102,32 +156,6 @@ export async function loadAndRenderBanners() {
             }
 
             item.innerHTML = html;
-
-            if (banner.isExpandable && banner.expandableMessage) {
-                const toggleBtn = item.querySelector(".btn-banner-toggle");
-                const details = item.querySelector(".banner-details");
-                toggleBtn.addEventListener("click", () => {
-                    const isHidden = details.classList.toggle("hidden");
-                    toggleBtn.textContent = isHidden ? "Read More" : "Show Less";
-                });
-            }
-
-            if (banner.isDismissible) {
-                const closeBtn = item.querySelector(".btn-banner-close");
-                closeBtn.addEventListener("click", () => {
-                    item.remove();
-                    dismissed.push(banner.id);
-                    try {
-                        localStorage.setItem("obsidianscout:dismissed_banners", JSON.stringify(dismissed));
-                    } catch (e) {
-                        console.warn("Failed to save dismissed banners", e);
-                    }
-                    if (container.children.length === 0) {
-                        container.remove();
-                    }
-                });
-            }
-
             container.appendChild(item);
         });
     } catch (error) {

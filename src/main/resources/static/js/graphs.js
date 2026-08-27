@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     mainContent = document.querySelector(".main-content");
     if (mainContent) {
-        const siblings = Array.from(mainContent.children).filter(child => !child.classList.contains("graphs-hero"));
+        const siblings = Array.from(mainContent.children).filter(child => !child.classList.contains("graphs-hero") && !child.classList.contains("banner-container"));
         mainContentWrapper = document.createElement("div");
         mainContentWrapper.id = "graphs-wrapper";
         siblings.forEach(child => mainContentWrapper.appendChild(child));
