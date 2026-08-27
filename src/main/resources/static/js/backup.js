@@ -118,23 +118,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const scope = isSuperAdmin ? (document.getElementById("import-scope")?.value || "team") : "team";
 
         try {
-            const response = await fetch(`/api/admin/import?scope=${scope}`, {
+            const report = await Obsidianscout.request(`/api/admin/import?scope=${scope}`, {
                 method: "POST",
-                body: formData,
-                credentials: "same-origin"
+                body: formData
             });
 
-            if (!response.ok) {
-                const text = await response.text();
-                let errMsg = "Import failed";
-                try {
-                    const errObj = JSON.parse(text);
-                    if (errObj && errObj.error) errMsg = errObj.error;
-                } catch(e) {}
-                throw new Error(errMsg);
-            }
-
-            const report = await response.json();
             displayReport(report);
             Obsidianscout.showToast("Data imported successfully", "success");
         } catch (err) {

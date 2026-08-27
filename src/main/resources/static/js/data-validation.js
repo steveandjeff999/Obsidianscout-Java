@@ -22,8 +22,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     setupModalListeners();
     setupTabListeners();
+    setupControlListeners();
     await loadEvents();
 });
+
+function setupControlListeners() {
+    const eventSelect = document.getElementById("event-select");
+    if (eventSelect) eventSelect.addEventListener("change", fetchValidationData);
+    document.getElementById("threshold-select")?.addEventListener("change", fetchValidationData);
+    document.getElementById("force-prescout")?.addEventListener("change", fetchValidationData);
+    document.getElementById("filter-status")?.addEventListener("change", renderValidationViews);
+    document.getElementById("search-input")?.addEventListener("input", renderValidationViews);
+}
 
 function setupModalListeners() {
     const modal = document.getElementById("validation-modal");
@@ -89,13 +99,6 @@ async function loadEvents() {
             }
             eventSelect.appendChild(opt);
         });
-
-        // Event listeners
-        eventSelect.addEventListener("change", fetchValidationData);
-        document.getElementById("threshold-select").addEventListener("change", fetchValidationData);
-        document.getElementById("force-prescout").addEventListener("change", fetchValidationData);
-        document.getElementById("filter-status").addEventListener("change", renderValidationViews);
-        document.getElementById("search-input").addEventListener("input", renderValidationViews);
 
         if (eventSelect.value) {
             await fetchValidationData();

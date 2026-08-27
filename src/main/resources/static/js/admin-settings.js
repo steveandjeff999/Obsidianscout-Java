@@ -67,6 +67,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         { id: "scout", label: "Scout" },
         { id: "pit-scout", label: "Pit Scout" },
         { id: "qual-scout", label: "Qual Scout" },
+        { id: "prescout", label: "Pre-Scout" },
         { id: "qr-scanner", label: "QR Scanner" },
         { id: "all-data", label: "All Data" },
         { id: "qual-data", label: "Qual Data" },

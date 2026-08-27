@@ -65,19 +65,28 @@
             state.settings = settings;
             currentEventKey = Obsidianscout.resolveEventKey(settings);
 
+            const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function') 
+                ? Obsidianscout.getProgram() === "FTC" 
+                : (settings && settings.program === "FTC");
+            const effectiveUseEpa = !isFtc && settings.useStatboticsEpa;
+            const effectiveUseOpr = settings.useTbaOpr;
+
             // Filter metric selector options
             const metricSelect = document.getElementById("metric-select");
             if (metricSelect) {
-                if (!settings.useStatboticsEpa) {
+                if (!effectiveUseEpa) {
                     const optEpa = metricSelect.querySelector('option[value="epa"]');
                     if (optEpa) optEpa.remove();
                 }
-                if (!settings.useTbaOpr) {
+                if (!effectiveUseOpr) {
                     const optOpr = metricSelect.querySelector('option[value="opr"]');
                     if (optOpr) optOpr.remove();
+                } else if (isFtc) {
+                    const optOpr = metricSelect.querySelector('option[value="opr"]');
+                    if (optOpr) optOpr.textContent = "FTC Scout OPR";
                 }
-                if ((selectedMetric === "epa" && !settings.useStatboticsEpa) ||
-                    (selectedMetric === "opr" && !settings.useTbaOpr)) {
+                if ((selectedMetric === "epa" && !effectiveUseEpa) ||
+                    (selectedMetric === "opr" && !effectiveUseOpr)) {
                     selectedMetric = "weighted";
                     metricSelect.value = "weighted";
                 }
@@ -268,9 +277,15 @@
     }
 
     function resetBoardStateOnly() {
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function') 
+            ? Obsidianscout.getProgram() === "FTC" 
+            : false;
+        const totalAlliances = isFtc ? 4 : 8;
         boardState = {};
-        for (let i = 1; i <= 8; i++) {
-            boardState[`alliance${i}`] = { captain: null, firstPick: null, secondPick: null, backup: null };
+        for (let i = 1; i <= totalAlliances; i++) {
+            boardState[`alliance${i}`] = isFtc 
+                ? { captain: null, firstPick: null, backup: null }
+                : { captain: null, firstPick: null, secondPick: null, backup: null };
         }
     }
 
@@ -309,11 +324,17 @@
             num += team.averagePoints * 1.0;
             den += 1.0;
         }
-        if (state.settings?.useStatboticsEpa && team.epa !== null && team.epa !== undefined) {
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function') 
+            ? Obsidianscout.getProgram() === "FTC" 
+            : (state.settings?.program === "FTC");
+        const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
+        const effectiveUseOpr = state.settings?.useTbaOpr;
+
+        if (effectiveUseEpa && team.epa !== null && team.epa !== undefined) {
             num += team.epa * 0.8;
             den += 0.8;
         }
-        if (state.settings?.useTbaOpr && team.opr !== null && team.opr !== undefined) {
+        if (effectiveUseOpr && team.opr !== null && team.opr !== undefined) {
             num += team.opr * 0.6;
             den += 0.6;
         }
@@ -436,9 +457,14 @@
         const container = document.getElementById("alliances-grid-container");
         container.innerHTML = "";
 
-        for (let i = 1; i <= 8; i++) {
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function') 
+            ? Obsidianscout.getProgram() === "FTC" 
+            : false;
+        const totalAlliances = isFtc ? 4 : 8;
+
+        for (let i = 1; i <= totalAlliances; i++) {
             const allianceKey = `alliance${i}`;
-            const alliance = boardState[allianceKey];
+            const alliance = boardState[allianceKey] || { captain: null, firstPick: null, secondPick: null, backup: null };
             const card = document.createElement("div");
             card.className = "alliance-card";
 
@@ -449,7 +475,7 @@
                 <div class="slot-container">
                     ${renderSlotHtml(i, "captain", alliance.captain)}
                     ${renderSlotHtml(i, "firstPick", alliance.firstPick)}
-                    ${renderSlotHtml(i, "secondPick", alliance.secondPick)}
+                    ${!isFtc ? renderSlotHtml(i, "secondPick", alliance.secondPick) : ""}
                     ${renderSlotHtml(i, "backup", alliance.backup)}
                 </div>
             `;
@@ -605,8 +631,14 @@
             const opr = team.opr !== null && team.opr !== undefined ? team.opr.toFixed(1) : "-";
             const rank = teamRanks[team.teamNumber];
 
-            const epaSpan = state.settings?.useStatboticsEpa ? `<span>EPA: ${epa}</span>` : "";
-            const oprSpan = state.settings?.useTbaOpr ? `<span>OPR: ${opr}</span>` : "";
+            const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function') 
+                ? Obsidianscout.getProgram() === "FTC" 
+                : (state.settings?.program === "FTC");
+            const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
+            const effectiveUseOpr = state.settings?.useTbaOpr;
+
+            const epaSpan = effectiveUseEpa ? `<span>EPA: ${epa}</span>` : "";
+            const oprSpan = effectiveUseOpr ? `<span>${isFtc ? 'FTC OPR' : 'OPR'}: ${opr}</span>` : "";
 
             item.innerHTML = `
                 <div class="selector-team">
@@ -648,6 +680,12 @@
             calculatedAvg = team.averagePoints.toFixed(1);
         }
 
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function') 
+            ? Obsidianscout.getProgram() === "FTC" 
+            : (state.settings?.program === "FTC");
+        const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
+        const effectiveUseOpr = state.settings?.useTbaOpr;
+
         const epa = team.epa !== null && team.epa !== undefined ? team.epa.toFixed(1) : "-";
         const opr = team.opr !== null && team.opr !== undefined ? team.opr.toFixed(1) : "-";
         const teamMatches = state.matches.filter(m => {
@@ -656,10 +694,14 @@
         });
 
         const cardEpa = document.getElementById("breakdown-card-epa");
-        if (cardEpa) cardEpa.style.display = state.settings?.useStatboticsEpa ? "" : "none";
+        if (cardEpa) cardEpa.style.display = effectiveUseEpa ? "" : "none";
 
         const cardOpr = document.getElementById("breakdown-card-opr");
-        if (cardOpr) cardOpr.style.display = state.settings?.useTbaOpr ? "" : "none";
+        if (cardOpr) {
+            cardOpr.style.display = effectiveUseOpr ? "" : "none";
+            const oprLabel = cardOpr.querySelector(".breakdown-stat-label");
+            if (oprLabel) oprLabel.textContent = isFtc ? "FTC Scout OPR" : (typeof t === 'function' ? t('alliance-selection.tba_opr', "TBA OPR") : "TBA OPR");
+        }
 
         document.getElementById("breakdown-stat-scouted").textContent = calculatedAvg;
         document.getElementById("breakdown-stat-epa").textContent = epa;

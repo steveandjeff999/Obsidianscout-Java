@@ -5,14 +5,17 @@
 
 document.addEventListener("DOMContentLoaded", async () => {
     // 1. Superadmin Authentication Guard
-    let me = null;
-    try {
-        me = await Obsidianscout.getMe();
-    } catch (e) {
-        console.warn("Failed to get current user info", e);
-    }
+    Obsidianscout.initTheme();
+    const me = await Obsidianscout.requireAuth();
+    if (!me) return;
 
-    if (!me || !Obsidianscout.isSuperAdmin(me.role)) {
+    Obsidianscout.setUserBadge(me);
+    Obsidianscout.setActiveNav();
+    Obsidianscout.adjustNavForRole(me);
+    Obsidianscout.wireLogout();
+    Obsidianscout.wireThemeToggle();
+
+    if (!Obsidianscout.isSuperAdmin(me.role)) {
         const lockedEl = document.getElementById("superadmin-locked");
         const panelEl = document.getElementById("storage-panel");
         if (lockedEl) lockedEl.classList.remove("hidden");

@@ -178,11 +178,17 @@ function initDatasource(state) {
     }
 
     const settings = state.settings;
-    if (settings && (settings.useStatboticsEpa || settings.useTbaOpr)) {
+    const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+        ? Obsidianscout.getProgram() === "FTC"
+        : (settings?.program === "FTC");
+    const effectiveUseEpa = !isFtc && settings?.useStatboticsEpa;
+    const effectiveUseOpr = settings?.useTbaOpr;
+
+    if (settings && (effectiveUseEpa || effectiveUseOpr)) {
         datasourceField.classList.remove("hidden");
         datasourceSelect.innerHTML = "";
 
-        if (settings.useStatboticsEpa && settings.useTbaOpr) {
+        if (effectiveUseEpa && effectiveUseOpr) {
             const optAll = document.createElement("option");
             optAll.value = "all";
             optAll.textContent = t('rankings.metric.all', "All Three");
@@ -195,17 +201,17 @@ function initDatasource(state) {
         optScouted.selected = true;
         datasourceSelect.appendChild(optScouted);
 
-        if (settings.useStatboticsEpa) {
+        if (effectiveUseEpa) {
             const optEpa = document.createElement("option");
             optEpa.value = "epa";
             optEpa.textContent = t('predictor.statbotics_epa', "Statbotics EPA");
             datasourceSelect.appendChild(optEpa);
         }
 
-        if (settings.useTbaOpr) {
+        if (effectiveUseOpr) {
             const optOpr = document.createElement("option");
             optOpr.value = "opr";
-            optOpr.textContent = t('predictor.tba_opr', "TBA OPR");
+            optOpr.textContent = isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('predictor.tba_opr', "TBA OPR");
             datasourceSelect.appendChild(optOpr);
         }
 
@@ -215,7 +221,7 @@ function initDatasource(state) {
         });
     } else {
         datasourceField.classList.add("hidden");
-        state.datasource = "scouted";
+    }    state.datasource = "scouted";
     }
 
     toggleFieldsForDatasource(state);
@@ -671,14 +677,22 @@ function generateGraphs(state) {
 }
 
 function getDatasourceLabel(datasource) {
+    const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+        ? Obsidianscout.getProgram() === "FTC"
+        : (state.settings?.program === "FTC");
     if (datasource === "epa") return t('predictor.statbotics_epa', "Statbotics EPA");
-    if (datasource === "opr") return t('predictor.tba_opr', "TBA OPR");
+    if (datasource === "opr") return isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('predictor.tba_opr', "TBA OPR");
     if (datasource === "all") return t('rankings.metric.all', "All Three");
     return t('predictor.scouted_data', "Scouted Data");
 }
 
 function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
     const theme = resolveThemeTokens();
+    const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+        ? Obsidianscout.getProgram() === "FTC"
+        : (state.settings?.program === "FTC");
+    const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
+    const effectiveUseOpr = state.settings?.useTbaOpr;
 
     // 1. Build the data series
     const data = selectedTeams.map(teamNumber => {
@@ -694,7 +708,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
 
     // 2. Sort the data based on state.sort
     const sortField = state.datasource === "all" 
-        ? (state.settings?.useStatboticsEpa ? "epa" : (state.settings?.useTbaOpr ? "opr" : "scouted")) 
+        ? (effectiveUseEpa ? "epa" : (effectiveUseOpr ? "opr" : "scouted")) 
         : state.datasource;
 
     data.sort((a, b) => {
@@ -707,10 +721,10 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
     const labels = data.map(item => item.label);
 
     if (graphType === "bar") {
-        if (state.datasource === "epa") {
+        if (state.datasource === "epa" && effectiveUseEpa) {
             const series = data.map(item => ({ label: item.label, value: item.epa }));
             renderPlotlyBar(container, series, { orientation: "h" });
-        } else if (state.datasource === "opr") {
+        } else if (state.datasource === "opr" && effectiveUseOpr) {
             const series = data.map(item => ({ label: item.label, value: item.opr }));
             renderPlotlyBar(container, series, { orientation: "h" });
         } else if (state.datasource === "all") {
@@ -721,16 +735,16 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
                 x: labels,
                 y: data.map(item => item.scouted)
             });
-            if (state.settings?.useStatboticsEpa) {
+            if (effectiveUseEpa) {
                 series.push({
                     name: "Statbotics EPA",
                     x: labels,
                     y: data.map(item => item.epa)
                 });
             }
-            if (state.settings?.useTbaOpr) {
+            if (effectiveUseOpr) {
                 series.push({
-                    name: "TBA OPR",
+                    name: isFtc ? "FTC Scout OPR" : "TBA OPR",
                     x: labels,
                     y: data.map(item => item.opr)
                 });
@@ -750,7 +764,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
             });
         }
         if (state.datasource === "epa" || state.datasource === "all") {
-            if (state.settings?.useStatboticsEpa || state.datasource === "epa") {
+            if (effectiveUseEpa || (state.datasource === "epa" && effectiveUseEpa)) {
                 series.push({
                     name: "Statbotics EPA",
                     x: labels,
@@ -759,10 +773,14 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
             }
         }
         if (state.datasource === "opr" || state.datasource === "all") {
-            if (state.settings?.useTbaOpr || state.datasource === "opr") {
+            if (effectiveUseOpr || (state.datasource === "opr" && effectiveUseOpr)) {
                 series.push({
-                    name: "TBA OPR",
+                    name: isFtc ? "FTC Scout OPR" : "TBA OPR",
                     x: labels,
+                    y: data.map(item => item.opr)
+                });
+            }
+        }
                     y: data.map(item => item.opr)
                 });
             }

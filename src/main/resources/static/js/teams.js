@@ -42,6 +42,11 @@ async function initTeamsPage() {
         currentEventKey = Obsidianscout.resolveEventKey(settings);
 
         const isAdmin = Obsidianscout.isAdmin(currentUser.role);
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+            ? Obsidianscout.getProgram() === "FTC"
+            : (settings && settings.program === "FTC");
+        const effectiveUseEpa = !isFtc && settings.useStatboticsEpa;
+        const effectiveUseOpr = settings.useTbaOpr;
 
         // Restore HTML
         tableCard.innerHTML = originalTableCardHTML;
@@ -49,13 +54,16 @@ async function initTeamsPage() {
         // Apply visibility for OPR/EPA headers and modal fields
         const thOpr = document.getElementById("th-team-opr");
         const thEpa = document.getElementById("th-team-epa");
-        if (thOpr) thOpr.style.display = settings.useTbaOpr ? "" : "none";
-        if (thEpa) thEpa.style.display = settings.useStatboticsEpa ? "" : "none";
+        if (thOpr) {
+            thOpr.style.display = effectiveUseOpr ? "" : "none";
+            if (isFtc) thOpr.textContent = "FTC OPR";
+        }
+        if (thEpa) thEpa.style.display = effectiveUseEpa ? "" : "none";
 
         const fieldOpr = document.getElementById("field-team-opr");
         const fieldEpa = document.getElementById("field-team-epa");
-        if (fieldOpr) fieldOpr.style.display = settings.useTbaOpr ? "" : "none";
-        if (fieldEpa) fieldEpa.style.display = settings.useStatboticsEpa ? "" : "none";
+        if (fieldOpr) fieldOpr.style.display = effectiveUseOpr ? "" : "none";
+        if (fieldEpa) fieldEpa.style.display = effectiveUseEpa ? "" : "none";
 
         // Populate event filter select dropdown
         const eventFilter = document.getElementById("event-filter");
@@ -144,8 +152,14 @@ async function loadTeams(eventKey) {
                 </td>`;
             }
             const displayNum = Obsidianscout.formatTeam(team.teamKey, team.teamNumber);
-            const oprCell = (currentSettings && currentSettings.useTbaOpr) ? `<td>${team.opr !== null ? team.opr.toFixed(2) : ""}</td>` : "";
-            const epaCell = (currentSettings && currentSettings.useStatboticsEpa) ? `<td>${team.epa !== null ? team.epa.toFixed(2) : ""}</td>` : "";
+            const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+                ? Obsidianscout.getProgram() === "FTC"
+                : (currentSettings && currentSettings.program === "FTC");
+            const effectiveUseEpa = !isFtc && currentSettings && currentSettings.useStatboticsEpa;
+            const effectiveUseOpr = currentSettings && currentSettings.useTbaOpr;
+
+            const oprCell = effectiveUseOpr ? `<td>${team.opr !== null ? team.opr.toFixed(2) : ""}</td>` : "";
+            const epaCell = effectiveUseEpa ? `<td>${team.epa !== null ? team.epa.toFixed(2) : ""}</td>` : "";
             row.innerHTML = `
                 <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${displayNum}</a></td>
                 <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${team.nickname || team.name || ""}</a></td>

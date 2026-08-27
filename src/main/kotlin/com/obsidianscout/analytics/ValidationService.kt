@@ -50,10 +50,11 @@ object ValidationService {
             }
         }
 
+        val isFtc = session.program.equals("FTC", ignoreCase = true)
         val needsStatsSync = readTransaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyLower }.toList()
-            val checkEpa = settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
+            val checkEpa = !isFtc && settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
             val checkOpr = settings.useTbaOpr && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.opr] == null || it[ApiTeams.opr] == 0.0 }
             checkEpa || checkOpr
         }
@@ -71,7 +72,7 @@ object ValidationService {
 
         return readTransaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-            val useStatboticsEpa = settings.useStatboticsEpa
+            val useStatboticsEpa = !isFtc && settings.useStatboticsEpa
             val useTbaOpr = settings.useTbaOpr
 
             val allTeamsInEvent = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyLower }.toList()
@@ -81,34 +82,35 @@ object ValidationService {
             val teamNumberByKey = mutableMapOf<String, Int>()
             val canonicalKeyByKey = mutableMapOf<String, String>()
 
+            val progPrefix = session.program.lowercase()
             bbotMappings.forEach { m ->
-                val bKey = if (m.bbotKey.startsWith("frc")) m.bbotKey else "frc${m.bbotKey}"
-                val pKey = if (m.placeholderKey.startsWith("frc")) m.placeholderKey else "frc${m.placeholderKey}"
+                val bKey = if (m.bbotKey.startsWith("frc") || m.bbotKey.startsWith("ftc")) m.bbotKey else "$progPrefix${m.bbotKey}"
+                val pKey = if (m.placeholderKey.startsWith("frc") || m.placeholderKey.startsWith("ftc")) m.placeholderKey else "$progPrefix${m.placeholderKey}"
                 val num = m.placeholderNumber
 
                 teamKeyByNumber[num] = bKey
                 teamNumberByKey[bKey] = num
-                teamNumberByKey[bKey.removePrefix("frc")] = num
+                teamNumberByKey[bKey.removePrefix("frc").removePrefix("ftc")] = num
                 teamNumberByKey[pKey] = num
-                teamNumberByKey[pKey.removePrefix("frc")] = num
+                teamNumberByKey[pKey.removePrefix("frc").removePrefix("ftc")] = num
 
                 canonicalKeyByKey[bKey] = bKey
-                canonicalKeyByKey[bKey.removePrefix("frc")] = bKey
+                canonicalKeyByKey[bKey.removePrefix("frc").removePrefix("ftc")] = bKey
                 canonicalKeyByKey[pKey] = bKey
-                canonicalKeyByKey[pKey.removePrefix("frc")] = bKey
+                canonicalKeyByKey[pKey.removePrefix("frc").removePrefix("ftc")] = bKey
             }
 
             allTeamsInEvent.forEach { row ->
                 val origKey = row[ApiTeams.teamKey].lowercase().trim()
                 val num = row[ApiTeams.teamNumber]
-                val oKey = if (origKey.startsWith("frc")) origKey else "frc$origKey"
+                val oKey = if (origKey.startsWith("frc") || origKey.startsWith("ftc")) origKey else "$progPrefix$origKey"
 
                 if (!teamNumberByKey.containsKey(oKey)) {
                     teamKeyByNumber[num] = oKey
                     teamNumberByKey[oKey] = num
-                    teamNumberByKey[oKey.removePrefix("frc")] = num
+                    teamNumberByKey[oKey.removePrefix("frc").removePrefix("ftc")] = num
                     canonicalKeyByKey[oKey] = oKey
-                    canonicalKeyByKey[oKey.removePrefix("frc")] = oKey
+                    canonicalKeyByKey[oKey.removePrefix("frc").removePrefix("ftc")] = oKey
                 }
             }
 
@@ -232,7 +234,7 @@ object ValidationService {
                         breakdowns.add(
                             TeamMatchEntryBreakdown(
                                 teamNumber = teamNum,
-                                teamKey = teamKeyByNumber[teamNum] ?: "frc$teamNum",
+                                teamKey = teamKeyByNumber[teamNum] ?: "$progPrefix$teamNum",
                                 scoutedScore = roundedScore,
                                 entryId = entry.id,
                                 scouterName = scouterNameByEntryId[entry.id],
@@ -342,8 +344,8 @@ object ValidationService {
             val allTeamNumbers = (allTeamsInEvent.map { it[ApiTeams.teamNumber] } + entriesByTeam.keys).distinct().sorted()
 
             val teamRecords = allTeamNumbers.map { teamNumber ->
-                val resolvedKey = teamKeyByNumber[teamNumber] ?: "frc$teamNumber"
-                val teamRow = teamInfoMap[resolvedKey] ?: teamInfoMap["frc$teamNumber"]
+                val resolvedKey = teamKeyByNumber[teamNumber] ?: "$progPrefix$teamNumber"
+                val teamRow = teamInfoMap[resolvedKey] ?: teamInfoMap["$progPrefix$teamNumber"]
                 val nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name) ?: "Team $teamNumber"
                 val epa = teamRow?.get(ApiTeams.epa)
                 val opr = teamRow?.get(ApiTeams.opr)

@@ -46,19 +46,63 @@ async function loadEvents() {
         const settingsResponse = await Obsidianscout.request("/api/settings");
         appSettings = settingsResponse.settings;
 
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+            ? Obsidianscout.getProgram() === "FTC"
+            : (appSettings && appSettings.program === "FTC");
+
+        if (isFtc) {
+            const noticeEl = document.querySelector(".notice[data-i18n='event_predictor.notice']");
+            if (noticeEl) {
+                noticeEl.textContent = t('event_predictor.notice_ftc', "Select an event to calculate and display predictions for all scheduled matches based on scouted data or FTC Scout OPR.");
+            }
+        }
+
+        const effectiveUseEpa = !isFtc && appSettings.useStatboticsEpa;
+        const effectiveUseOpr = appSettings.useTbaOpr;
+
         const datasourceSelect = document.getElementById("datasource-select");
         if (datasourceSelect) {
-            if (!appSettings.useStatboticsEpa) {
+            if (!effectiveUseEpa) {
                 const optEpa = datasourceSelect.querySelector('option[value="epa"]');
                 if (optEpa) optEpa.remove();
             }
-            if (!appSettings.useTbaOpr) {
+            if (!effectiveUseOpr) {
                 const optOpr = datasourceSelect.querySelector('option[value="opr"]');
                 if (optOpr) optOpr.remove();
+            } else if (isFtc) {
+                const optOpr = datasourceSelect.querySelector('option[value="opr"]');
+                if (optOpr) optOpr.textContent = t('predictor.ftcscout_opr', "FTC Scout OPR");
             }
-            if (!appSettings.useStatboticsEpa || !appSettings.useTbaOpr) {
+            if (!effectiveUseEpa || !effectiveUseOpr) {
                 const optAll = datasourceSelect.querySelector('option[value="all"]');
                 if (optAll) optAll.remove();
+            }
+        }
+
+        // Apply initial visibility & labels to modal DOM elements
+        const modalEpaComp = document.getElementById("modal-epa-comparison");
+        const modalEpaCard = document.getElementById("modal-spotlight-epa-card");
+        if (modalEpaComp) modalEpaComp.style.display = effectiveUseEpa ? "" : "none";
+        if (modalEpaCard) modalEpaCard.style.display = effectiveUseEpa ? "" : "none";
+
+        const modalOprComp = document.getElementById("modal-opr-comparison");
+        const modalOprCard = document.getElementById("modal-spotlight-opr-card");
+        if (modalOprComp) {
+            modalOprComp.style.display = effectiveUseOpr ? "" : "none";
+            const modalOprTitle = modalOprComp.querySelector(".comp-bar-label span:nth-child(2)");
+            if (modalOprTitle) {
+                modalOprTitle.textContent = isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('alliance-selection.tba_opr', "TBA OPR");
+            }
+        }
+        if (modalOprCard) {
+            modalOprCard.style.display = effectiveUseOpr ? "" : "none";
+            const modalOprCardTitle = modalOprCard.querySelector(".winner-spotlight-title");
+            if (modalOprCardTitle && isFtc) {
+                modalOprCardTitle.textContent = "FTC Scout OPR Prediction";
+            }
+            const modalOprCardSubtext = modalOprCard.querySelector(".winner-subtext");
+            if (modalOprCardSubtext && isFtc) {
+                modalOprCardSubtext.textContent = "No FTC Scout OPR data synced";
             }
         }
 
@@ -217,6 +261,12 @@ function renderPredictionsList() {
             let redVotes = 0;
             let blueVotes = 0;
 
+            const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+                ? Obsidianscout.getProgram() === "FTC"
+                : (appSettings && appSettings.program === "FTC");
+            const effectiveUseEpa = !isFtc && appSettings && appSettings.useStatboticsEpa;
+            const effectiveUseOpr = appSettings && appSettings.useTbaOpr;
+
             const redScouted = match.redAlliance.totalScoutedScore;
             const blueScouted = match.blueAlliance.totalScoutedScore;
             if (redScouted > 0 || blueScouted > 0) {
@@ -226,14 +276,14 @@ function renderPredictionsList() {
 
             const redEpa = match.redAlliance.totalEpa;
             const blueEpa = match.blueAlliance.totalEpa;
-            if (redEpa > 0 || blueEpa > 0) {
+            if (effectiveUseEpa && (redEpa > 0 || blueEpa > 0)) {
                 if (redEpa > blueEpa) redVotes++;
                 else if (blueEpa > redEpa) blueVotes++;
             }
 
             const redOpr = match.redAlliance.totalOpr;
             const blueOpr = match.blueAlliance.totalOpr;
-            if (redOpr > 0 || blueOpr > 0) {
+            if (effectiveUseOpr && (redOpr > 0 || blueOpr > 0)) {
                 if (redOpr > blueOpr) redVotes++;
                 else if (blueOpr > redOpr) blueVotes++;
             }
@@ -250,20 +300,34 @@ function renderPredictionsList() {
                     winnerBadgeHtml = `<span class="winner-badge draw-win">Split / Tie</span>`;
                 }
 
+                let epaRowHtml = "";
+                if (effectiveUseEpa) {
+                    epaRowHtml = `
+                        <div class="score-row" style="font-size: 0.75rem;">
+                            <span style="color: #f59e0b; font-weight: 500;">EPA:</span>
+                            <span style="font-weight: 600; color: #e2e8f0;">R ${redEpa.toFixed(1)} - B ${blueEpa.toFixed(1)}</span>
+                        </div>
+                    `;
+                }
+
+                let oprRowHtml = "";
+                if (effectiveUseOpr) {
+                    oprRowHtml = `
+                        <div class="score-row" style="font-size: 0.75rem;">
+                            <span style="color: #3b82f6; font-weight: 500;">${isFtc ? 'FTC OPR:' : 'OPR:'}</span>
+                            <span style="font-weight: 600; color: #e2e8f0;">R ${redOpr.toFixed(1)} - B ${blueOpr.toFixed(1)}</span>
+                        </div>
+                    `;
+                }
+
                 detailsHtml = `
                     <div class="score-comp">
                         <div class="score-row" style="font-size: 0.75rem;">
                             <span style="color: #f87171; font-weight: 500;">Scouted:</span>
                             <span style="font-weight: 600; color: #e2e8f0;">R ${redScouted.toFixed(1)} - B ${blueScouted.toFixed(1)}</span>
                         </div>
-                        <div class="score-row" style="font-size: 0.75rem;">
-                            <span style="color: #f59e0b; font-weight: 500;">EPA:</span>
-                            <span style="font-weight: 600; color: #e2e8f0;">R ${redEpa.toFixed(1)} - B ${blueEpa.toFixed(1)}</span>
-                        </div>
-                        <div class="score-row" style="font-size: 0.75rem;">
-                            <span style="color: #3b82f6; font-weight: 500;">OPR:</span>
-                            <span style="font-weight: 600; color: #e2e8f0;">R ${redOpr.toFixed(1)} - B ${blueOpr.toFixed(1)}</span>
-                        </div>
+                        ${epaRowHtml}
+                        ${oprRowHtml}
                     </div>
                 `;
             }
@@ -363,6 +427,12 @@ function renderModalPrediction(data) {
     const red = data.redAlliance;
     const blue = data.blueAlliance;
 
+    const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+        ? Obsidianscout.getProgram() === "FTC"
+        : (appSettings && appSettings.program === "FTC");
+    const effectiveUseEpa = !isFtc && appSettings && appSettings.useStatboticsEpa;
+    const effectiveUseOpr = appSettings && appSettings.useTbaOpr;
+
     // Scouted Score Comparison Bar
     const redScouted = red.totalScoutedScore;
     const blueScouted = blue.totalScoutedScore;
@@ -374,7 +444,7 @@ function renderModalPrediction(data) {
     // EPA Comparison Bar & Card
     const epaComp = document.getElementById("modal-epa-comparison");
     const epaCard = document.getElementById("modal-spotlight-epa-card");
-    if (appSettings && !appSettings.useStatboticsEpa) {
+    if (!effectiveUseEpa) {
         if (epaComp) epaComp.style.display = "none";
         if (epaCard) epaCard.style.display = "none";
     } else {
@@ -391,7 +461,12 @@ function renderModalPrediction(data) {
     // OPR Comparison Bar & Card
     const oprComp = document.getElementById("modal-opr-comparison");
     const oprCard = document.getElementById("modal-spotlight-opr-card");
-    if (appSettings && !appSettings.useTbaOpr) {
+    const modalOprTitle = document.querySelector("#modal-opr-comparison .comp-bar-label span:nth-child(2)");
+    if (modalOprTitle) {
+        modalOprTitle.textContent = isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('alliance-selection.tba_opr', "TBA OPR");
+    }
+
+    if (!effectiveUseOpr) {
         if (oprComp) oprComp.style.display = "none";
         if (oprCard) oprCard.style.display = "none";
     } else {
@@ -410,8 +485,8 @@ function renderModalPrediction(data) {
     document.getElementById("modal-blue-total-scouted").textContent = `${blueScouted.toFixed(1)} pts`;
 
     // Render team lists
-    renderModalTeamList("modal-red-team-list", red.teams);
-    renderModalTeamList("modal-blue-team-list", blue.teams);
+    renderModalTeamList("modal-red-team-list", red.teams, effectiveUseEpa, effectiveUseOpr);
+    renderModalTeamList("modal-blue-team-list", blue.teams, effectiveUseEpa, effectiveUseOpr);
 }
 
 function updateModalBar(redBarId, blueBarId, redVal, blueVal) {
@@ -462,7 +537,7 @@ function renderModalSpotlight(winnerId, subtextId, redVal, blueVal, label) {
     }
 }
 
-function renderModalTeamList(listId, teams) {
+function renderModalTeamList(listId, teams, effectiveUseEpa, effectiveUseOpr) {
     const list = document.getElementById(listId);
     if (!list) return;
     list.innerHTML = "";
@@ -476,10 +551,10 @@ function renderModalTeamList(listId, teams) {
             : "No scouted data";
         
         let metricsHtml = `<span class="metric-pill">${t.scoutedMatchesCount} matches</span>`;
-        if (t.epa !== null && appSettings && appSettings.useStatboticsEpa) {
+        if (t.epa !== null && effectiveUseEpa) {
             metricsHtml += `<span class="metric-pill">EPA: ${t.epa.toFixed(1)}</span>`;
         }
-        if (t.opr !== null && appSettings && appSettings.useTbaOpr) {
+        if (t.opr !== null && effectiveUseOpr) {
             metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
         }
 

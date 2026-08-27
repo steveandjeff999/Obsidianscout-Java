@@ -2984,7 +2984,8 @@ fun Application.configureRoutes() {
             "schema-history" to "schema-history.html",
             "theme-editor" to "theme-editor.html",
             "404" to "404.html",
-            "500" to "500.html"
+            "500" to "500.html",
+            "503" to "503.html"
         )
 
         get("/sw.js") {

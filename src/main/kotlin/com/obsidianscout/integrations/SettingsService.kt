@@ -231,6 +231,8 @@ object SettingsService {
             if ("custom-analytics" !in this) add("custom-analytics")
             if ("data-validation" !in this) add("data-validation")
         }
+        val isFtc = settings.program.equals("FTC", ignoreCase = true)
+        val normalizedUseStatboticsEpa = if (isFtc) false else settings.useStatboticsEpa
         val rawStatboticsUrl = settings.statboticsBaseUrl.trim()
         val statboticsUrl = (if (rawStatboticsUrl.isBlank()) "https://api.statbotics.io" else rawStatboticsUrl).removeSuffix("/")
         return settings.copy(
@@ -238,6 +240,7 @@ object SettingsService {
             eventKey = resolvedKey,
             timezone = settings.timezone.ifBlank { "America/New_York" },
             preferredSource = settings.preferredSource.lowercase(),
+            useStatboticsEpa = normalizedUseStatboticsEpa,
             scoutPages = normalizedScoutPages,
             analyticsPages = normalizedAnalyticsPages,
             adminPages = normalizedAdminPages,

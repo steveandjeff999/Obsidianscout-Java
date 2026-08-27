@@ -253,11 +253,16 @@ function renderHeader() {
 
 function renderStats() {
     const t = state.team;
+    const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+        ? Obsidianscout.getProgram() === "FTC"
+        : (state.settings?.program === "FTC");
+    const effectiveUseEpa = !isFtc && state.settings && state.settings.useStatboticsEpa;
+    const effectiveUseOpr = state.settings && state.settings.useTbaOpr;
     
     // EPA
     const cardEpa = document.getElementById("card-stat-epa");
     if (cardEpa) {
-        cardEpa.style.display = (state.settings && state.settings.useStatboticsEpa) ? "" : "none";
+        cardEpa.style.display = effectiveUseEpa ? "" : "none";
     }
     const epaEl = document.getElementById("stat-epa");
     if (epaEl) epaEl.textContent = t.epa !== null && t.epa !== undefined ? t.epa.toFixed(2) : "--";
@@ -265,7 +270,9 @@ function renderStats() {
     // OPR
     const cardOpr = document.getElementById("card-stat-opr");
     if (cardOpr) {
-        cardOpr.style.display = (state.settings && state.settings.useTbaOpr) ? "" : "none";
+        cardOpr.style.display = effectiveUseOpr ? "" : "none";
+        const oprTitle = cardOpr.querySelector(".stat-card-title");
+        if (oprTitle && isFtc) oprTitle.textContent = "FTC OPR";
     }
     const oprEl = document.getElementById("stat-opr");
     if (oprEl) oprEl.textContent = t.opr !== null && t.opr !== undefined ? t.opr.toFixed(2) : "--";

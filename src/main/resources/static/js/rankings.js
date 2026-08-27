@@ -45,23 +45,32 @@ async function initRankingsPage() {
         // Restore HTML
         card.innerHTML = originalCardHTML;
 
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+            ? Obsidianscout.getProgram() === "FTC"
+            : (settings && settings.program === "FTC");
+        const effectiveUseEpa = !isFtc && settings.useStatboticsEpa;
+        const effectiveUseOpr = settings.useTbaOpr;
+
         // Metric selector options filtering based on team settings
         const metricSelect = document.getElementById("metric-select");
-        if (!settings.useStatboticsEpa) {
+        if (!effectiveUseEpa) {
             const optEpa = metricSelect.querySelector('option[value="epa"]');
             if (optEpa) optEpa.remove();
         }
-        if (!settings.useTbaOpr) {
+        if (!effectiveUseOpr) {
             const optOpr = metricSelect.querySelector('option[value="opr"]');
             if (optOpr) optOpr.remove();
+        } else if (isFtc) {
+            const optOpr = metricSelect.querySelector('option[value="opr"]');
+            if (optOpr) optOpr.textContent = t('predictor.ftcscout_opr', "FTC Scout OPR");
         }
-        if (!settings.useStatboticsEpa || !settings.useTbaOpr) {
+        if (!effectiveUseEpa || !effectiveUseOpr) {
             const optAll = metricSelect.querySelector('option[value="all"]');
             if (optAll) optAll.remove();
         }
-        if ((currentMetric === "epa" && !settings.useStatboticsEpa) ||
-            (currentMetric === "opr" && !settings.useTbaOpr) ||
-            (currentMetric === "all" && (!settings.useStatboticsEpa || !settings.useTbaOpr))) {
+        if ((currentMetric === "epa" && !effectiveUseEpa) ||
+            (currentMetric === "opr" && !effectiveUseOpr) ||
+            (currentMetric === "all" && (!effectiveUseEpa || !effectiveUseOpr))) {
             currentMetric = "scouted";
             activeSortMetric = "scouted";
         }
@@ -216,18 +225,28 @@ function renderTable() {
         headerEpa.style.display = "";
     }
 
-    if (appSettings && !appSettings.useTbaOpr) {
+    const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+        ? Obsidianscout.getProgram() === "FTC"
+        : (appSettings && appSettings.program === "FTC");
+    const effectiveUseEpa = !isFtc && appSettings && appSettings.useStatboticsEpa;
+    const effectiveUseOpr = appSettings && appSettings.useTbaOpr;
+
+    if (headerOpr && isFtc) {
+        headerOpr.textContent = "FTC OPR";
+    }
+
+    if (!effectiveUseOpr) {
         headerOpr.style.display = "none";
     }
-    if (appSettings && !appSettings.useStatboticsEpa) {
+    if (!effectiveUseEpa) {
         headerEpa.style.display = "none";
     }
 
     // Highlight active sorting column
     let activeHeader = null;
     if (activeSortMetric === "scouted") activeHeader = headerScouted;
-    else if (activeSortMetric === "opr") activeHeader = headerOpr;
-    else if (activeSortMetric === "epa") activeHeader = headerEpa;
+    else if (activeSortMetric === "opr" && effectiveUseOpr) activeHeader = headerOpr;
+    else if (activeSortMetric === "epa" && effectiveUseEpa) activeHeader = headerEpa;
 
     if (activeHeader && activeHeader.style.display !== "none") {
         activeHeader.style.fontWeight = "bold";
@@ -254,10 +273,10 @@ function renderTable() {
             epaCell = "";
         }
 
-        if (appSettings && !appSettings.useTbaOpr) {
+        if (!effectiveUseOpr) {
             oprCell = "";
         }
-        if (appSettings && !appSettings.useStatboticsEpa) {
+        if (!effectiveUseEpa) {
             epaCell = "";
         }
 

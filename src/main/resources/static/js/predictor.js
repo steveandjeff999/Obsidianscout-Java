@@ -53,11 +53,64 @@ async function loadPredictorData() {
         const datasourceSelect = document.getElementById("datasource-select");
         const datasourceField = document.getElementById("datasource-field");
 
-        if (settings.useStatboticsEpa || settings.useTbaOpr) {
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+            ? Obsidianscout.getProgram() === "FTC"
+            : (settings && settings.program === "FTC");
+
+        if (isFtc) {
+            const noticeEl = document.querySelector(".notice[data-i18n='predictor.notice']");
+            if (noticeEl) {
+                noticeEl.textContent = t('predictor.notice_ftc', "Select any match in the active event to compare the alliances and predict the outcome using scouted data or OPR.");
+            }
+        }
+
+        const effectiveUseEpa = !isFtc && settings.useStatboticsEpa;
+        const effectiveUseOpr = settings.useTbaOpr;
+
+        // Apply initial visibility & labels to DOM elements even before a match is selected
+        const epaComp = document.getElementById("epa-comparison");
+        const epaCard = document.getElementById("spotlight-epa-card");
+        if (epaComp) {
+            if (!effectiveUseEpa) epaComp.classList.add("hidden");
+            else epaComp.classList.remove("hidden");
+        }
+        if (epaCard) {
+            if (!effectiveUseEpa) epaCard.classList.add("hidden");
+            else epaCard.classList.remove("hidden");
+        }
+
+        const oprComp = document.getElementById("opr-comparison");
+        const oprCard = document.getElementById("spotlight-opr-card");
+        if (oprComp) {
+            if (!effectiveUseOpr) oprComp.classList.add("hidden");
+            else {
+                oprComp.classList.remove("hidden");
+                const oprTitleSpan = oprComp.querySelector(".comp-bar-label span:nth-child(2)");
+                if (oprTitleSpan) {
+                    oprTitleSpan.textContent = isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('alliance-selection.tba_opr', "TBA OPR");
+                }
+            }
+        }
+        if (oprCard) {
+            if (!effectiveUseOpr) oprCard.classList.add("hidden");
+            else {
+                oprCard.classList.remove("hidden");
+                const oprCardTitle = oprCard.querySelector(".winner-spotlight-title");
+                if (oprCardTitle && isFtc) {
+                    oprCardTitle.textContent = "FTC Scout OPR Prediction";
+                }
+                const oprCardSubtext = oprCard.querySelector(".winner-subtext");
+                if (oprCardSubtext && isFtc) {
+                    oprCardSubtext.textContent = "No FTC Scout OPR data synced";
+                }
+            }
+        }
+
+        if (effectiveUseEpa || effectiveUseOpr) {
             datasourceField.classList.remove("hidden");
             datasourceSelect.innerHTML = "";
 
-            if (settings.useStatboticsEpa && settings.useTbaOpr) {
+            if (effectiveUseEpa && effectiveUseOpr) {
                 const optAll = document.createElement("option");
                 optAll.value = "all";
                 optAll.textContent = t('predictor.all_3', "All 3");
@@ -69,17 +122,17 @@ async function loadPredictorData() {
             optScouted.textContent = t('predictor.scouted_data', "Scouted Data");
             datasourceSelect.appendChild(optScouted);
 
-            if (settings.useStatboticsEpa) {
+            if (effectiveUseEpa) {
                 const optEpa = document.createElement("option");
                 optEpa.value = "epa";
                 optEpa.textContent = t('predictor.statbotics_epa', "Statbotics EPA");
                 datasourceSelect.appendChild(optEpa);
             }
 
-            if (settings.useTbaOpr) {
+            if (effectiveUseOpr) {
                 const optOpr = document.createElement("option");
                 optOpr.value = "opr";
-                optOpr.textContent = t('predictor.tba_opr', "TBA OPR");
+                optOpr.textContent = isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('predictor.tba_opr', "TBA OPR");
                 datasourceSelect.appendChild(optOpr);
             }
 
@@ -203,8 +256,14 @@ function renderPrediction(data) {
     const red = data.redAlliance;
     const blue = data.blueAlliance;
 
+    const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function') 
+        ? Obsidianscout.getProgram() === "FTC" 
+        : (currentSettings && currentSettings.program === "FTC");
+    const effectiveUseEpa = !isFtc && currentSettings && currentSettings.useStatboticsEpa;
+    const effectiveUseOpr = currentSettings && currentSettings.useTbaOpr;
+
     const datasourceSelect = document.getElementById("datasource-select");
-    const selectedSource = (currentSettings && (currentSettings.useStatboticsEpa || currentSettings.useTbaOpr) && datasourceSelect) 
+    const selectedSource = (currentSettings && (effectiveUseEpa || effectiveUseOpr) && datasourceSelect) 
         ? datasourceSelect.value 
         : "scouted";
 
@@ -216,6 +275,12 @@ function renderPrediction(data) {
     const epaCard = document.getElementById("spotlight-epa-card");
     const oprCard = document.getElementById("spotlight-opr-card");
 
+    // Update OPR comparison title for FTC vs FRC
+    const oprTitleSpan = oprComp ? oprComp.querySelector(".comp-bar-label span:nth-child(2)") : null;
+    if (oprTitleSpan) {
+        oprTitleSpan.textContent = isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('predictor.tba_opr', "TBA OPR");
+    }
+
     // 1. Scouted Score Comparison Bar
     const redScouted = red.totalScoutedScore;
     const blueScouted = blue.totalScoutedScore;
@@ -225,33 +290,37 @@ function renderPrediction(data) {
     renderSpotlight("spotlight-scouted-winner", "spotlight-scouted-subtext", redScouted, blueScouted, "Scouted");
 
     // 2. EPA Comparison Bar
-    const redEpa = red.totalEpa;
-    const blueEpa = blue.totalEpa;
-    document.getElementById("lbl-epa-red").textContent = `Red: ${redEpa.toFixed(1)}`;
-    document.getElementById("lbl-epa-blue").textContent = `Blue: ${blueEpa.toFixed(1)}`;
-    updateBar("bar-epa-red", "bar-epa-blue", redEpa, blueEpa);
-    renderSpotlight("spotlight-epa-winner", "spotlight-epa-subtext", redEpa, blueEpa, "EPA");
+    if (effectiveUseEpa) {
+        const redEpa = red.totalEpa;
+        const blueEpa = blue.totalEpa;
+        document.getElementById("lbl-epa-red").textContent = `Red: ${redEpa.toFixed(1)}`;
+        document.getElementById("lbl-epa-blue").textContent = `Blue: ${blueEpa.toFixed(1)}`;
+        updateBar("bar-epa-red", "bar-epa-blue", redEpa, blueEpa);
+        renderSpotlight("spotlight-epa-winner", "spotlight-epa-subtext", redEpa, blueEpa, "EPA");
+    }
 
     // 3. OPR Comparison Bar
-    const redOpr = red.totalOpr;
-    const blueOpr = blue.totalOpr;
-    document.getElementById("lbl-opr-red").textContent = `Red: ${redOpr.toFixed(1)}`;
-    document.getElementById("lbl-opr-blue").textContent = `Blue: ${blueOpr.toFixed(1)}`;
-    updateBar("bar-opr-red", "bar-opr-blue", redOpr, blueOpr);
-    renderSpotlight("spotlight-opr-winner", "spotlight-opr-subtext", redOpr, blueOpr, "OPR");
+    if (effectiveUseOpr) {
+        const redOpr = red.totalOpr;
+        const blueOpr = blue.totalOpr;
+        document.getElementById("lbl-opr-red").textContent = `Red: ${redOpr.toFixed(1)}`;
+        document.getElementById("lbl-opr-blue").textContent = `Blue: ${blueOpr.toFixed(1)}`;
+        updateBar("bar-opr-red", "bar-opr-blue", redOpr, blueOpr);
+        renderSpotlight("spotlight-opr-winner", "spotlight-opr-subtext", redOpr, blueOpr, "OPR");
+    }
 
     // Toggle Visibility
     if (selectedSource === "all") {
         scoutedComp.classList.remove("hidden");
         scoutedCard.classList.remove("hidden");
-        if (currentSettings && currentSettings.useStatboticsEpa) {
+        if (effectiveUseEpa) {
             epaComp.classList.remove("hidden");
             epaCard.classList.remove("hidden");
         } else {
             epaComp.classList.add("hidden");
             epaCard.classList.add("hidden");
         }
-        if (currentSettings && currentSettings.useTbaOpr) {
+        if (effectiveUseOpr) {
             oprComp.classList.remove("hidden");
             oprCard.classList.remove("hidden");
         } else {
@@ -271,41 +340,35 @@ function renderPrediction(data) {
 
         document.getElementById("red-total-scouted").textContent = `${redScouted.toFixed(1)} pts`;
         document.getElementById("blue-total-scouted").textContent = `${blueScouted.toFixed(1)} pts`;
-    } else if (selectedSource === "epa") {
+    } else if (selectedSource === "epa" && effectiveUseEpa) {
         scoutedComp.classList.add("hidden");
         scoutedCard.classList.add("hidden");
-        if (currentSettings && currentSettings.useStatboticsEpa) {
-            epaComp.classList.remove("hidden");
-            epaCard.classList.remove("hidden");
-        } else {
-            epaComp.classList.add("hidden");
-            epaCard.classList.add("hidden");
-        }
+        epaComp.classList.remove("hidden");
+        epaCard.classList.remove("hidden");
         oprComp.classList.add("hidden");
         oprCard.classList.add("hidden");
 
+        const redEpa = red.totalEpa;
+        const blueEpa = blue.totalEpa;
         document.getElementById("red-total-scouted").textContent = `${redEpa.toFixed(1)} EPA`;
         document.getElementById("blue-total-scouted").textContent = `${blueEpa.toFixed(1)} EPA`;
-    } else if (selectedSource === "opr") {
+    } else if (selectedSource === "opr" && effectiveUseOpr) {
         scoutedComp.classList.add("hidden");
         scoutedCard.classList.add("hidden");
         epaComp.classList.add("hidden");
         epaCard.classList.add("hidden");
-        if (currentSettings && currentSettings.useTbaOpr) {
-            oprComp.classList.remove("hidden");
-            oprCard.classList.remove("hidden");
-        } else {
-            oprComp.classList.add("hidden");
-            oprCard.classList.add("hidden");
-        }
+        oprComp.classList.remove("hidden");
+        oprCard.classList.remove("hidden");
 
+        const redOpr = red.totalOpr;
+        const blueOpr = blue.totalOpr;
         document.getElementById("red-total-scouted").textContent = `${redOpr.toFixed(1)} OPR`;
         document.getElementById("blue-total-scouted").textContent = `${blueOpr.toFixed(1)} OPR`;
     }
 
     // 5. Build Team Breakdown Lists
-    renderTeamList("red-team-list", red.teams, selectedSource);
-    renderTeamList("blue-team-list", blue.teams, selectedSource);
+    renderTeamList("red-team-list", red.teams, selectedSource, effectiveUseEpa, effectiveUseOpr);
+    renderTeamList("blue-team-list", blue.teams, selectedSource, effectiveUseEpa, effectiveUseOpr);
 }
 
 function updateBar(redBarId, blueBarId, redVal, blueVal) {
@@ -352,7 +415,7 @@ function renderSpotlight(winnerId, subtextId, redVal, blueVal, label) {
     }
 }
 
-function renderTeamList(listId, teams, selectedSource) {
+function renderTeamList(listId, teams, selectedSource, effectiveUseEpa, effectiveUseOpr) {
     const list = document.getElementById(listId);
     list.innerHTML = "";
 
@@ -369,13 +432,13 @@ function renderTeamList(listId, teams, selectedSource) {
                 : "No scouted data";
             
             metricsHtml += `<span class="metric-pill">${t.scoutedMatchesCount} matches</span>`;
-            if (t.epa !== null && currentSettings && currentSettings.useStatboticsEpa) {
+            if (t.epa !== null && effectiveUseEpa) {
                 metricsHtml += `<span class="metric-pill">EPA: ${t.epa.toFixed(1)}</span>`;
             }
-            if (t.opr !== null && currentSettings && currentSettings.useTbaOpr) {
+            if (t.opr !== null && effectiveUseOpr) {
                 metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
             }
-        } else if (selectedSource === "epa") {
+        } else if (selectedSource === "epa" && effectiveUseEpa) {
             primaryLabel = t.epa !== null 
                 ? `${t.epa.toFixed(1)} EPA` 
                 : "No EPA data";
@@ -384,10 +447,10 @@ function renderTeamList(listId, teams, selectedSource) {
             if (t.averageScoutedScore !== null) {
                 metricsHtml += `<span class="metric-pill">Scouted: ${t.averageScoutedScore.toFixed(1)} pts</span>`;
             }
-            if (t.opr !== null && currentSettings && currentSettings.useTbaOpr) {
+            if (t.opr !== null && effectiveUseOpr) {
                 metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
             }
-        } else if (selectedSource === "opr") {
+        } else if (selectedSource === "opr" && effectiveUseOpr) {
             primaryLabel = t.opr !== null 
                 ? `${t.opr.toFixed(1)} OPR` 
                 : "No OPR data";
@@ -396,7 +459,7 @@ function renderTeamList(listId, teams, selectedSource) {
             if (t.averageScoutedScore !== null) {
                 metricsHtml += `<span class="metric-pill">Scouted: ${t.averageScoutedScore.toFixed(1)} pts</span>`;
             }
-            if (t.epa !== null && currentSettings && currentSettings.useStatboticsEpa) {
+            if (t.epa !== null && effectiveUseEpa) {
                 metricsHtml += `<span class="metric-pill">EPA: ${t.epa.toFixed(1)}</span>`;
             }
         }

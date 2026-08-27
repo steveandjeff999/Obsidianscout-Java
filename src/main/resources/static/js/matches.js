@@ -296,8 +296,18 @@ async function setupModal(defaultEventKey, timezone) {
             blueTeam3.value.trim()
         ].filter(Boolean);
 
-        if (redTeams.length !== 3 || blueTeams.length !== 3) {
-            Obsidianscout.showToast(t("matches.alliances_invalid", "Alliances must have exactly 3 teams each"), "error");
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function') 
+            ? Obsidianscout.getProgram() === "FTC" 
+            : false;
+        const minTeams = isFtc ? 2 : 3;
+
+        if (redTeams.length < minTeams || blueTeams.length < minTeams) {
+            Obsidianscout.showToast(
+                isFtc 
+                    ? t("matches.alliances_invalid_ftc", "Alliances must have at least 2 teams each for FTC") 
+                    : t("matches.alliances_invalid", "Alliances must have exactly 3 teams each"), 
+                "error"
+            );
             Obsidianscout.setButtonLoading(submitBtn, false);
             return;
         }

@@ -621,8 +621,12 @@
         async function deletePreset(id, name) {
             if (!confirm(`Are you sure you want to delete the default config preset '${name}'?`)) return;
             try {
-                const res = await fetch(`/api/admin/default-configs/${id}`, { method: 'DELETE' });
-                if (!res.ok) throw new Error('Failed to delete preset');
+                if (window.Obsidianscout) {
+                    await Obsidianscout.request(`/api/admin/default-configs/${id}`, { method: 'DELETE' });
+                } else {
+                    const res = await fetch(`/api/admin/default-configs/${id}`, { method: 'DELETE' });
+                    if (!res.ok) throw new Error('Failed to delete preset');
+                }
                 await loadPresets();
             } catch (err) {
                 alert(`Error deleting preset: ${err.message}`);
@@ -697,14 +701,21 @@
             try {
                 const method = id ? 'PUT' : 'POST';
                 const url = id ? `/api/admin/default-configs/${id}` : '/api/admin/default-configs';
-                const res = await fetch(url, {
-                    method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dto)
-                });
-                if (!res.ok) {
-                    const errorObj = await res.json().catch(() => ({}));
-                    throw new Error(errorObj.error || 'Failed to save preset');
+                if (window.Obsidianscout) {
+                    await Obsidianscout.request(url, {
+                        method,
+                        json: dto
+                    });
+                } else {
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(dto)
+                    });
+                    if (!res.ok) {
+                        const errorObj = await res.json().catch(() => ({}));
+                        throw new Error(errorObj.error || 'Failed to save preset');
+                    }
                 }
                 closeModal();
                 await loadPresets();

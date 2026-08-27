@@ -395,13 +395,16 @@ object AnalyticsReportService {
             }
         }
 
+        val isFtc = session.program.equals("FTC", ignoreCase = true)
         // Calculated Total Score and Auto/Teleop/Endgame Scores
         fields.add(FieldMetadata("calc_total_score", "Total Score", "number", "calculated", "Overall Scores"))
         fields.add(FieldMetadata("calc_auto_score", "Auto Score", "number", "calculated", "Phase Scores"))
         fields.add(FieldMetadata("calc_teleop_score", "Teleop Score", "number", "calculated", "Phase Scores"))
         fields.add(FieldMetadata("calc_endgame_score", "Endgame Score", "number", "calculated", "Phase Scores"))
-        fields.add(FieldMetadata("statbotics_epa", "EPA", "number", "calculated", "Statistics"))
-        fields.add(FieldMetadata("tba_opr", "OPR", "number", "calculated", "Statistics"))
+        if (!isFtc) {
+            fields.add(FieldMetadata("statbotics_epa", "EPA", "number", "calculated", "Statistics"))
+        }
+        fields.add(FieldMetadata("tba_opr", if (isFtc) "FTC Scout OPR" else "OPR", "number", "calculated", "Statistics"))
 
         // Pit config fields
         pitConfig.fields.forEach { field ->
