@@ -232,4 +232,19 @@ class PeerLoadRouterTest {
         val finalStatus = ServerStressTestService.getStatus()
         assertFalse(finalStatus.isRunning)
     }
+
+    @Test
+    fun testGzipDecompressionHandling() {
+        val originalHtml = "<html><body><h1>Hello Obsidianscout</h1></body></html>"
+        val originalBytes = originalHtml.toByteArray(Charsets.UTF_8)
+
+        // Compress bytes with gzip
+        val baos = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(baos).use { it.write(originalBytes) }
+        val gzippedBytes = baos.toByteArray()
+
+        // Decompress using the exact pattern in PeerLoadRouter
+        val decompressed = java.util.zip.GZIPInputStream(gzippedBytes.inputStream()).use { it.readBytes() }
+        assertEquals(originalHtml, String(decompressed, Charsets.UTF_8))
+    }
 }

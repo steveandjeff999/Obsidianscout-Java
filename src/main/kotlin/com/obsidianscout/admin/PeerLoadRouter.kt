@@ -116,7 +116,8 @@ object PeerLoadRouter {
         "te",
         "keep-alive",
         "proxy-connection",
-        "http2-settings"
+        "http2-settings",
+        "accept-encoding"
     )
 
     private val HOP_BY_HOP_RESPONSE_HEADERS = setOf(
@@ -124,6 +125,7 @@ object PeerLoadRouter {
         "keep-alive",
         "transfer-encoding",
         "content-length",
+        "content-encoding",
         "upgrade",
         "proxy-authenticate",
         "trailer"
@@ -457,10 +459,27 @@ object PeerLoadRouter {
         reqBuilder.header("X-Forwarded-For", clientIp)
         reqBuilder.header("X-Forwarded-Proto", proto)
         reqBuilder.header("X-Forwarded-Host", host)
+        reqBuilder.header("Accept-Encoding", "identity")
 
         return@withContext try {
             val resp = getHttpClient().send(reqBuilder.build(), HttpResponse.BodyHandlers.ofByteArray())
             forwardedCount.incrementAndGet()
+
+            val rawBytes = resp.body() ?: ByteArray(0)
+            val contentEncoding = resp.headers().firstValue("Content-Encoding").orElse(null)
+
+            // If peer returned compressed bytes, decompress them so Ktor can handle single-stage compression cleanly
+            val uncompressedBytes = try {
+                if (contentEncoding != null && contentEncoding.equals("gzip", ignoreCase = true)) {
+                    java.util.zip.GZIPInputStream(rawBytes.inputStream()).use { it.readBytes() }
+                } else if (contentEncoding != null && contentEncoding.equals("deflate", ignoreCase = true)) {
+                    java.util.zip.InflaterInputStream(rawBytes.inputStream()).use { it.readBytes() }
+                } else {
+                    rawBytes
+                }
+            } catch (_: Exception) {
+                rawBytes
+            }
 
             resp.headers().map().forEach { (name, values) ->
                 val lower = name.lowercase()
@@ -475,10 +494,9 @@ object PeerLoadRouter {
             val contentType = resp.headers().firstValue("Content-Type").orElse(null)?.let {
                 try { ContentType.parse(it) } catch (_: Throwable) { null }
             }
-            val respBytes = resp.body() ?: ByteArray(0)
 
             call.respondBytes(
-                bytes = respBytes,
+                bytes = uncompressedBytes,
                 contentType = contentType,
                 status = statusCode
             )
