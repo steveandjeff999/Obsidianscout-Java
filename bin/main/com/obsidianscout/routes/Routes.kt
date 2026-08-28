@@ -362,7 +362,8 @@ fun Application.configureRoutes() {
                             username = if (isEmailRecovery) userEmail else request.username!!,
                             teamNumber = if (isEmailRecovery) -1 else request.teamNumber!!,
                             token = token,
-                            baseUrl = baseUrl
+                            baseUrl = baseUrl,
+                            isApp = request.isApp || (call.request.headers["X-Client"] == "mobile")
                         )
                     } catch (e: Exception) {
                         throw com.obsidianscout.auth.ApiException(

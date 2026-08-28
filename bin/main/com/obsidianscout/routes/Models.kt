@@ -338,7 +338,8 @@ data class ToggleAllianceActiveRequest(
 data class ForgotPasswordRequest(
     val username: String? = null,
     val teamNumber: Int? = null,
-    val email: String? = null
+    val email: String? = null,
+    val isApp: Boolean = false
 )
 
 @Serializable

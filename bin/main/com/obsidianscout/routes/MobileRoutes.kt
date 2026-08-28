@@ -19,6 +19,9 @@ import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.AllianceMemberships
 import com.obsidianscout.db.Users
+import com.obsidianscout.db.PasswordResetTokens
+import com.obsidianscout.auth.EmailService
+import org.jetbrains.exposed.sql.lowerCase
 import com.obsidianscout.integrations.IntegrationService
 import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.ApiSettings
@@ -1154,6 +1157,273 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         )
                     )
                 }
+            }
+
+            post("/auth/forgot-password") {
+                val request = call.receive<ForgotPasswordRequest>()
+                val smtp = SettingsService.getSmtpSettings()
+                if (smtp.host.isBlank()) {
+                    throw MobileApiException(
+                        HttpStatusCode.ServiceUnavailable,
+                        "SMTP email settings are not configured. Please contact a superadmin.",
+                        "SMTP_NOT_CONFIGURED"
+                    )
+                }
+
+                val token = java.util.UUID.randomUUID().toString()
+                val expires = java.time.Instant.now().plus(1, java.time.temporal.ChronoUnit.HOURS)
+
+                val userEmail: String
+                val isEmailRecovery = !request.email.isNullOrBlank()
+
+                if (isEmailRecovery) {
+                    val recoverEmail = request.email!!.trim()
+                    val matchedUsers = transaction {
+                        Users
+                            .selectAll().where { Users.email.lowerCase() eq recoverEmail.lowercase() }
+                            .toList()
+                    }
+                    if (matchedUsers.isEmpty()) {
+                        throw MobileApiException(
+                            HttpStatusCode.NotFound,
+                            "No accounts found with that email address.",
+                            "USER_NOT_FOUND"
+                        )
+                    }
+                    userEmail = recoverEmail
+
+                    transaction {
+                        PasswordResetTokens.update({ 
+                            (PasswordResetTokens.email.lowerCase() eq recoverEmail.lowercase()) and 
+                            (PasswordResetTokens.used eq false) 
+                        }) {
+                            it[used] = true
+                        }
+
+                        PasswordResetTokens.insert {
+                            it[userId] = null
+                            it[PasswordResetTokens.email] = recoverEmail
+                            it[PasswordResetTokens.token] = token
+                            it[expiresAt] = expires
+                        }
+                    }
+                } else {
+                    val username = request.username?.trim()
+                    val teamNumber = request.teamNumber
+                    if (username.isNullOrBlank() || teamNumber == null) {
+                        throw MobileApiException(
+                            HttpStatusCode.BadRequest,
+                            "Username and team number or email is required.",
+                            "INVALID_REQUEST"
+                        )
+                    }
+
+                    val user = transaction {
+                        Users
+                            .selectAll().where { 
+                                (Users.username eq username) and 
+                                (Users.teamNumber eq teamNumber) 
+                            }
+                            .limit(1)
+                            .firstOrNull()
+                    }
+
+                    if (user == null) {
+                        throw MobileApiException(
+                            HttpStatusCode.NotFound,
+                            "User not found on team.",
+                            "USER_NOT_FOUND"
+                        )
+                    }
+
+                    val foundEmail = user[Users.email]
+                    if (foundEmail.isNullOrBlank()) {
+                        throw MobileApiException(
+                            HttpStatusCode.BadRequest,
+                            "This account does not have a registered email address. Please contact your team admin.",
+                            "NO_EMAIL_ON_ACCOUNT"
+                        )
+                    }
+                    userEmail = foundEmail
+                    val userIdVal = user[Users.id]
+
+                    transaction {
+                        PasswordResetTokens.update({ 
+                            (PasswordResetTokens.userId eq userIdVal) and 
+                            (PasswordResetTokens.used eq false) 
+                        }) {
+                            it[used] = true
+                        }
+
+                        PasswordResetTokens.insert {
+                            it[userId] = userIdVal
+                            it[PasswordResetTokens.email] = null
+                            it[PasswordResetTokens.token] = token
+                            it[expiresAt] = expires
+                        }
+                    }
+                }
+
+                val referer = call.request.headers["Referer"]
+                val origin = call.request.headers["Origin"]
+                val baseUrl = when {
+                    !origin.isNullOrBlank() -> origin.trimEnd('/')
+                    !referer.isNullOrBlank() -> {
+                        runCatching {
+                            val uri = java.net.URI(referer)
+                            "${uri.scheme}://${uri.authority}"
+                        }.getOrNull()
+                    }
+                    else -> null
+                } ?: run {
+                    val hostHeader = call.request.headers["X-Forwarded-Host"]
+                        ?: call.request.headers["Host"]
+                        ?: "localhost:8080"
+                    val scheme = call.request.headers["X-Forwarded-Proto"] ?: "http"
+                    "$scheme://$hostHeader"
+                }
+
+                try {
+                    EmailService.sendForgotPasswordEmail(
+                        to = userEmail,
+                        username = if (isEmailRecovery) userEmail else request.username!!,
+                        teamNumber = if (isEmailRecovery) -1 else request.teamNumber!!,
+                        token = token,
+                        baseUrl = baseUrl,
+                        isApp = true
+                    )
+                } catch (e: Exception) {
+                    throw MobileApiException(
+                        HttpStatusCode.InternalServerError,
+                        "Failed to send email: ${e.message}",
+                        "EMAIL_SEND_FAILED"
+                    )
+                }
+
+                call.respond(mapOf("success" to true, "message" to "Password reset token sent to registered email."))
+            }
+
+            get("/auth/verify-reset-token") {
+                val token = call.request.queryParameters["token"]
+                    ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing token", "MISSING_TOKEN")
+                
+                val tokenRow = transaction {
+                    PasswordResetTokens
+                        .selectAll().where { 
+                            (PasswordResetTokens.token eq token) and 
+                            (PasswordResetTokens.used eq false) 
+                        }
+                        .limit(1)
+                        .firstOrNull()
+                }
+
+                if (tokenRow == null) {
+                    call.respond(VerifyResetTokenResponse(valid = false))
+                    return@get
+                }
+
+                val expiresAt = tokenRow[PasswordResetTokens.expiresAt]
+                if (expiresAt.isBefore(java.time.Instant.now())) {
+                    call.respond(VerifyResetTokenResponse(valid = false))
+                    return@get
+                }
+
+                val userIdVal = tokenRow[PasswordResetTokens.userId]
+                val emailVal = tokenRow[PasswordResetTokens.email]
+
+                val accounts = transaction {
+                    if (userIdVal != null) {
+                        Users
+                            .selectAll().where { Users.id eq userIdVal }
+                            .map { AccountInfo(it[Users.id].value.toString(), it[Users.username], it[Users.teamNumber]) }
+                    } else if (!emailVal.isNullOrBlank()) {
+                        Users
+                            .selectAll().where { Users.email.lowerCase() eq emailVal.lowercase() }
+                            .map { AccountInfo(it[Users.id].value.toString(), it[Users.username], it[Users.teamNumber]) }
+                    } else {
+                        emptyList()
+                    }
+                }
+
+                if (accounts.isEmpty()) {
+                    call.respond(VerifyResetTokenResponse(valid = false))
+                    return@get
+                }
+
+                call.respond(VerifyResetTokenResponse(valid = true, accounts = accounts))
+            }
+
+            post("/auth/reset-password") {
+                val request = call.receive<ResetPasswordRequest>()
+                
+                val tokenRow = transaction {
+                    PasswordResetTokens
+                        .selectAll().where { 
+                            (PasswordResetTokens.token eq request.token) and 
+                            (PasswordResetTokens.used eq false) 
+                        }
+                        .limit(1)
+                        .firstOrNull()
+                }
+
+                if (tokenRow == null) {
+                    throw MobileApiException(HttpStatusCode.BadRequest, "Invalid or expired reset token.", "INVALID_TOKEN")
+                }
+
+                val expiresAt = tokenRow[PasswordResetTokens.expiresAt]
+                if (expiresAt.isBefore(java.time.Instant.now())) {
+                    throw MobileApiException(HttpStatusCode.BadRequest, "Invalid or expired reset token.", "TOKEN_EXPIRED")
+                }
+
+                val tokenUserId = tokenRow[PasswordResetTokens.userId]
+                val tokenEmail = tokenRow[PasswordResetTokens.email]
+
+                val finalUserId = if (tokenUserId != null) {
+                    tokenUserId.value.toString()
+                } else if (!tokenEmail.isNullOrBlank()) {
+                    val reqUserId = request.userId
+                        ?: throw MobileApiException(HttpStatusCode.BadRequest, "Account selection is required.", "ACCOUNT_REQUIRED")
+                    val reqUuid = runCatching { UUID.fromString(reqUserId) }.getOrElse {
+                        throw MobileApiException(HttpStatusCode.BadRequest, "Invalid user ID format.", "INVALID_USER_ID")
+                    }
+                    val isValidAccount = transaction {
+                        Users
+                            .selectAll().where { 
+                                (Users.id eq reqUuid) and 
+                                (Users.email.lowerCase() eq tokenEmail.lowercase()) 
+                            }
+                            .any()
+                    }
+                    if (!isValidAccount) {
+                        throw MobileApiException(HttpStatusCode.BadRequest, "Invalid account selected.", "INVALID_ACCOUNT")
+                    }
+                    reqUserId
+                } else {
+                    throw MobileApiException(HttpStatusCode.BadRequest, "Invalid reset token.", "INVALID_TOKEN")
+                }
+                
+                transaction {
+                    AuthService.updateUser(
+                        callerSession = UserSession(
+                            userId = finalUserId,
+                            username = "SYSTEM",
+                            teamNumber = 0,
+                            role = UserRole.SUPERADMIN
+                        ),
+                        targetUserId = finalUserId,
+                        newUsername = request.newUsername?.takeIf { it.isNotBlank() },
+                        newPassword = request.newPassword,
+                        newRole = null
+                    )
+
+                    PasswordResetTokens.update({ 
+                        PasswordResetTokens.id eq tokenRow[PasswordResetTokens.id] 
+                    }) {
+                        it[used] = true
+                    }
+                }
+
+                call.respond(mapOf("success" to true, "message" to "Credentials have been reset successfully."))
             }
 
             // Profiles
