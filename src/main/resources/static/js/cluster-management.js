@@ -277,7 +277,7 @@
 
         try {
             const status = await apiRequest("/api/admin/cluster/stress/status");
-            if (status.isRunning) {
+            if (status.isRunning && status.remainingSeconds > 0) {
                 pill.textContent = `Overload Active (${status.remainingSeconds}s remaining)`;
                 pill.style.background = "rgba(239, 68, 68, 0.25)";
                 pill.style.color = "#f87171";
@@ -288,8 +288,7 @@
                 if (!stressPollInterval) {
                     stressPollInterval = setInterval(() => {
                         loadStressTestStatus();
-                        loadLoadBalancerStatus();
-                    }, 2000);
+                    }, 1000);
                 }
             } else {
                 pill.textContent = "Idle";
@@ -302,6 +301,7 @@
                 if (stressPollInterval) {
                     clearInterval(stressPollInterval);
                     stressPollInterval = null;
+                    loadLoadBalancerStatus();
                 }
             }
         } catch (_e) {
