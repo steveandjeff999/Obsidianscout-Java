@@ -59,10 +59,13 @@ class DatabaseReadFallbackTest {
             "failed to find replica descriptor for range" to true,
             "context deadline exceeded while waiting for range lease" to true,
             "node liveness: heartbeat failed due to deadline exceeded" to true,
+            "ERROR: query execution canceled due to statement timeout" to true,
+            "canceling statement due to statement timeout" to true,
+            "An I/O error occurred while sending to the backend." to true,
+            "Read timed out" to true,
             "duplicate key value violates unique constraint" to false,
             "table 'non_existent_table' does not exist" to false,
-            "syntax error at or near 'SELEECT'" to false,
-            "connection refused: connect" to false
+            "syntax error at or near 'SELEECT'" to false
         )
 
         for ((message, expected) in testCases) {

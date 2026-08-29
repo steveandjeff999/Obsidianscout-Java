@@ -584,15 +584,24 @@ object AuthService {
     }
 
     fun touchSession(sessionIdStr: String) {
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return
         val sessionUuid = runCatching { UUID.fromString(sessionIdStr) }.getOrNull() ?: return
         val nowMs = System.currentTimeMillis()
         val lastTouch = sessionTouchCache[sessionUuid] ?: 0L
         if (nowMs - lastTouch > 300_000L) { // 5 minutes throttle
             sessionTouchCache[sessionUuid] = nowMs
-            transaction {
-                UserSessions.update({ UserSessions.id eq sessionUuid }) {
-                    it[lastActiveAt] = Instant.ofEpochMilli(nowMs)
+            try {
+                transaction {
+                    exec("SET statement_timeout = '2000ms';")
+                    UserSessions.update({ UserSessions.id eq sessionUuid }) {
+                        it[lastActiveAt] = Instant.ofEpochMilli(nowMs)
+                    }
                 }
+            } catch (e: Exception) {
+                if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
+                    com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = true
+                }
+                // Non-critical background update: do not fail user requests during quorum loss or timeout
             }
         }
     }

@@ -134,7 +134,10 @@ object DatabaseFactory {
         }
 
         try {
-            val result = transaction(db = db) { statement() }
+            val result = transaction(db = db) {
+                exec("SET statement_timeout = '3000ms';")
+                statement()
+            }
             saveLastHealthyTimestamp(java.time.Instant.now())
             cachedWorkingAsOfSystemTime = null
             return result
