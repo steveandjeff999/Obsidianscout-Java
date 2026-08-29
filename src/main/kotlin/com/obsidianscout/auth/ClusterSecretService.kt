@@ -60,6 +60,7 @@ object ClusterSecretService {
      */
     fun syncSecrets(appConfig: AppConfig) {
         initFromConfig(appConfig)
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return
         try {
             transaction {
                 val existing = ClusterSecrets.selectAll().associate { 

@@ -135,7 +135,6 @@ object DatabaseFactory {
 
         try {
             val result = transaction(db = db) {
-                exec("SET statement_timeout = '3000ms';")
                 statement()
             }
             saveLastHealthyTimestamp(java.time.Instant.now())
@@ -145,7 +144,9 @@ object DatabaseFactory {
             if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = true
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = e.message ?: "Database cluster quorum lost."
-                saveLastHealthyTimestamp(java.time.Instant.now())
+                if (lastHealthyQuorumInstant == null) {
+                    saveLastHealthyTimestamp(java.time.Instant.now().minusSeconds(30))
+                }
                 println("[Database] ⚠️ CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Automatically falling back to AS OF SYSTEM TIME reads to retrieve latest available data...")
                 return executeAsOfSystemTime(db, statement, rootCause = e)
             }
@@ -156,7 +157,7 @@ object DatabaseFactory {
     /**
      * Executes statement inside an AS OF SYSTEM TIME transaction block, iterating through staleness candidates
      * until the newest valid historical state is read.
-     * Enforces a fast statement_timeout so dead leaseholders fail fast instead of hanging.
+     * In CockroachDB, 'SET TRANSACTION AS OF SYSTEM TIME' MUST be the very first statement inside the transaction block.
      */
     fun <T> executeAsOfSystemTime(
         db: Database? = null,
@@ -173,7 +174,6 @@ object DatabaseFactory {
         if (cached != null) {
             try {
                 return transaction(db = db) {
-                    exec("SET statement_timeout = '5000ms';")
                     exec("SET TRANSACTION AS OF SYSTEM TIME $cached;")
                     statement()
                 }
@@ -189,7 +189,6 @@ object DatabaseFactory {
         for (candidate in candidates) {
             try {
                 val result = transaction(db = db) {
-                    exec("SET statement_timeout = '5000ms';")
                     exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
                     statement()
                 }
@@ -204,7 +203,8 @@ object DatabaseFactory {
                         candidateEx.message?.contains("timestamp", ignoreCase = true) == true ||
                         candidateEx.message?.contains("deadline", ignoreCase = true) == true ||
                         candidateEx.message?.contains("timeout", ignoreCase = true) == true ||
-                        candidateEx.message?.contains("canceling statement due to statement timeout", ignoreCase = true) == true
+                        candidateEx.message?.contains("canceling statement", ignoreCase = true) == true ||
+                        candidateEx.message?.contains("query execution canceled", ignoreCase = true) == true
                 if (!isQuorumOrTimeErr) {
                     throw candidateEx
                 }
@@ -264,6 +264,7 @@ object DatabaseFactory {
                 if (!user.isNullOrBlank()) username = user
                 if (!pass.isNullOrBlank()) password = pass
                 transactionIsolation = if (isCockroachEngine) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
+                connectionInitSql = "SET statement_timeout = '5000ms';"
             } else {
                 maximumPoolSize = if (isLowMem) 4 else 8
                 minimumIdle = 1
