@@ -171,6 +171,7 @@ object DeduplicationScheduler {
      * stays independent of any CockroachOrchestrator instance.
      */
     private fun isClusterReady(): Boolean {
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return false
         return try {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return true
             ds.connection.use { conn ->

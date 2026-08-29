@@ -82,13 +82,16 @@ object DatabaseFactory {
 
         if (lastHealthy != null) {
             // Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store)
-            val offsetsMs = listOf(500L, 2_000L, 10_000L, 30_000L, 60_000L, 300_000L, 1_800_000L, 7_200_000L, 86_400_000L)
+            val offsetsMs = listOf(1_000L, 5_000L, 15_000L, 30_000L, 60_000L, 300_000L, 1_800_000L, 7_200_000L, 86_400_000L)
             for (offset in offsetsMs) {
                 val targetInstant = lastHealthy.minusMillis(offset)
                 val formatted = formatter.format(targetInstant)
                 candidates.add("'$formatted'")
             }
         }
+
+        candidates.add("follower_read_timestamp()")
+        candidates.add("with_max_staleness(INTERVAL '10s')")
 
         // Relative interval fallbacks in case lastHealthy was null or cluster loss time is unknown
         candidates.addAll(listOf(
@@ -102,8 +105,6 @@ object DatabaseFactory {
             "'-6h'",
             "'-24h'",
             "'-72h'",
-            "follower_read_timestamp()",
-            "with_max_staleness(INTERVAL '10s')",
             "with_max_staleness(INTERVAL '1m')",
             "with_max_staleness(INTERVAL '1h')"
         ))
@@ -264,7 +265,11 @@ object DatabaseFactory {
                 if (!user.isNullOrBlank()) username = user
                 if (!pass.isNullOrBlank()) password = pass
                 transactionIsolation = if (isCockroachEngine) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
-                connectionInitSql = "SET statement_timeout = '5000ms';"
+                connectionInitSql = if (isCockroachEngine) {
+                    "SET default_transaction_use_follower_reads = 'on'; SET statement_timeout = '5000ms';"
+                } else {
+                    "SET statement_timeout = '5000ms';"
+                }
             } else {
                 maximumPoolSize = if (isLowMem) 4 else 8
                 minimumIdle = 1
