@@ -253,6 +253,10 @@ fun Application.module(appConfig: AppConfig) {
 
         val path = call.request.path()
         val isExcluded = settings.excludedPathPrefixes.any { path.startsWith(it) } ||
+                path == "/health" ||
+                path == "/api/health" ||
+                path == "/version" ||
+                path == "/api/version" ||
                 path.startsWith("/api/cluster/") ||
                 path.startsWith("/api/admin/cluster/") ||
                 path.startsWith("/cluster-management")
@@ -274,8 +278,12 @@ fun Application.module(appConfig: AppConfig) {
     // Intercept requests to serve 503 if database is not ready
     intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
         val path = call.request.path()
-        // Exclude cluster status endpoints and static/vendor assets from the blocking interceptor
-        val isExcluded = path.startsWith("/api/cluster/") ||
+        // Exclude cluster status endpoints, health pings, version info, and static/vendor assets from the blocking interceptor
+        val isExcluded = path == "/health" ||
+                path == "/api/health" ||
+                path == "/version" ||
+                path == "/api/version" ||
+                path.startsWith("/api/cluster/") ||
                 path.startsWith("/api/admin/cluster/") ||
                 path.startsWith("/api/banners") ||
                 path.contains("/vendor/") ||

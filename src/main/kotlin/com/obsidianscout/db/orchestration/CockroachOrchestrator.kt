@@ -618,7 +618,9 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return null
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
-                    stmt.execute("SET allow_unsafe_internals = true")
+                    stmt.queryTimeout = 5
+                    try { stmt.execute("SET statement_timeout = '5000ms'") } catch (_: Exception) {}
+                    try { stmt.execute("SET allow_unsafe_internals = true") } catch (_: Exception) {}
                     stmt.executeQuery(
                         "SELECT value FROM crdb_internal.node_metrics WHERE name = '$metricName' LIMIT 1"
                     ).use { rs ->
@@ -1103,10 +1105,14 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             if (ds != null) {
                 ds.connection.use { conn ->
                     conn.createStatement().use { stmt ->
+                        stmt.queryTimeout = 5
+                        try { stmt.execute("SET statement_timeout = '5000ms'") } catch (_: Exception) {}
                         stmt.executeQuery("SELECT 1").use { rs ->
                             if (rs.next()) {
                                 isQuorumLost = false
                                 quorumLossDetails = null
+                                com.obsidianscout.db.DatabaseFactory.saveLastHealthyTimestamp(java.time.Instant.now())
+                                com.obsidianscout.db.DatabaseFactory.cachedWorkingAsOfSystemTime = null
                             }
                         }
                     }
@@ -1160,6 +1166,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     msg.contains("latch acquisition failed") ||
                     msg.contains("replica descriptor for range") ||
                     msg.contains("desc = transport is closing") ||
+                    msg.contains("canceling statement due to statement timeout") ||
                     className.contains("rangeunavailable") ||
                     className.contains("notleaseholder") ||
                     className.contains("ambiguousresult") ||

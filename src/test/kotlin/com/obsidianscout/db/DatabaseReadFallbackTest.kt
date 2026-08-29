@@ -104,24 +104,48 @@ class DatabaseReadFallbackTest {
 
     @Test
     fun testAsOfSystemTimeCandidatesLadderStructure() {
-        // Verify the fallback candidates ladder is non-empty and starts with follower_read_timestamp()
-        val candidates = listOf(
-            "follower_read_timestamp()",
-            "with_max_staleness(INTERVAL '10s')",
-            "with_max_staleness(INTERVAL '1m')",
-            "with_max_staleness(INTERVAL '10m')",
-            "with_max_staleness(INTERVAL '1h')",
-            "with_max_staleness(INTERVAL '24h')",
-            "'-5s'",
-            "'-30s'",
-            "'-5m'",
-            "'-1h'",
-            "'-24h'"
-        )
-
+        val candidates = DatabaseFactory.buildAsOfSystemTimeCandidates()
         assertTrue(candidates.contains("follower_read_timestamp()"))
         assertTrue(candidates.contains("with_max_staleness(INTERVAL '10s')"))
         assertTrue(candidates.contains("'-24h'"))
+    }
+
+    @Test
+    fun testBuildAsOfSystemTimeCandidatesWithAnchoredTimestamp() {
+        val now = java.time.Instant.parse("2026-08-29T12:00:00Z")
+        DatabaseFactory.saveLastHealthyTimestamp(now)
+
+        val candidates = DatabaseFactory.buildAsOfSystemTimeCandidates()
+        assertTrue(candidates.isNotEmpty())
+
+        // First candidate should be anchored before the healthy timestamp
+        val firstCandidate = candidates.first()
+        assertTrue(firstCandidate.startsWith("'2026-08-29 "), "First candidate should be anchored in ISO timestamp: $firstCandidate")
+        assertTrue(firstCandidate.contains("2026-08-29 11:59:59.") || firstCandidate.contains("2026-08-29 12:00:00."))
+
+        // Check that relative interval fallbacks are also included
+        assertTrue(candidates.contains("'-5m'"))
+        assertTrue(candidates.contains("follower_read_timestamp()"))
+    }
+
+    @Test
+    fun testWorkingCandidateCachingAndClearing() {
+        DatabaseFactory.cachedWorkingAsOfSystemTime = "'2026-08-29 12:00:00.000000+00'"
+        assertEquals("'2026-08-29 12:00:00.000000+00'", DatabaseFactory.cachedWorkingAsOfSystemTime)
+
+        // Reset
+        DatabaseFactory.cachedWorkingAsOfSystemTime = null
+        assertEquals(null, DatabaseFactory.cachedWorkingAsOfSystemTime)
+    }
+
+    @Test
+    fun testLoadBalancerExcludesHealthAndVersionEndpoints() {
+        val settings = com.obsidianscout.integrations.LoadBalancerSettings()
+        assertTrue(settings.excludedPathPrefixes.contains("/health"))
+        assertTrue(settings.excludedPathPrefixes.contains("/api/health"))
+        assertTrue(settings.excludedPathPrefixes.contains("/version"))
+        assertTrue(settings.excludedPathPrefixes.contains("/api/version"))
+        assertTrue(settings.excludedPathPrefixes.contains("/api/cluster"))
     }
 
     @Test

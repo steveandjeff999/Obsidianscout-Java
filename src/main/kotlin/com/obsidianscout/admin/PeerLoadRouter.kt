@@ -502,6 +502,7 @@ object PeerLoadRouter {
             )
             true
         } catch (e: Exception) {
+            peerLoadMap.remove(peer.ip)
             ServerLogService.appendLog("WARN", "PeerLoadRouter", "Failed to forward request $method ${call.request.uri} to peer ${peer.ip}: ${e.message}")
             false
         }

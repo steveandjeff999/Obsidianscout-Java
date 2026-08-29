@@ -7,6 +7,7 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.transactions.TransactionManager
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.sql.DriverManager
@@ -35,25 +36,86 @@ object DatabaseFactory {
     private var lastQuorumProbeTime: Long = 0L
     internal var activeDataSource: HikariDataSource? = null
 
-    private val asOfSystemTimeCandidates = listOf(
-        "follower_read_timestamp()",
-        "with_max_staleness(INTERVAL '10s')",
-        "with_max_staleness(INTERVAL '1m')",
-        "with_max_staleness(INTERVAL '10m')",
-        "with_max_staleness(INTERVAL '1h')",
-        "with_max_staleness(INTERVAL '24h')",
-        "'-5s'",
-        "'-30s'",
-        "'-5m'",
-        "'-1h'",
-        "'-24h'"
-    )
+    @Volatile
+    var lastHealthyQuorumInstant: java.time.Instant? = loadLastHealthyTimestamp()
+
+    @Volatile
+    var cachedWorkingAsOfSystemTime: String? = null
+
+    private val lastHealthyTimestampFile: File by lazy {
+        try {
+            val uri = DatabaseFactory::class.java.protectionDomain.codeSource.location.toURI()
+            val jarFile = File(uri)
+            val parent = if (jarFile.isFile) jarFile.parentFile else File(".")
+            val cockroachDir = File(parent, ".cockroach")
+            cockroachDir.mkdirs()
+            File(cockroachDir, ".last_healthy_quorum_ts")
+        } catch (_: Exception) {
+            File(".last_healthy_quorum_ts")
+        }
+    }
+
+    fun saveLastHealthyTimestamp(instant: java.time.Instant) {
+        lastHealthyQuorumInstant = instant
+        try {
+            lastHealthyTimestampFile.writeText(instant.toString())
+        } catch (_: Exception) {
+            // ignore non-critical write error
+        }
+    }
+
+    private fun loadLastHealthyTimestamp(): java.time.Instant? {
+        return try {
+            if (lastHealthyTimestampFile.exists()) {
+                val text = lastHealthyTimestampFile.readText().trim()
+                if (text.isNotBlank()) java.time.Instant.parse(text) else null
+            } else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun buildAsOfSystemTimeCandidates(): List<String> {
+        val candidates = mutableListOf<String>()
+        val lastHealthy = lastHealthyQuorumInstant
+        val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
+
+        if (lastHealthy != null) {
+            // Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store)
+            val offsetsMs = listOf(500L, 2_000L, 10_000L, 30_000L, 60_000L, 300_000L, 1_800_000L, 7_200_000L, 86_400_000L)
+            for (offset in offsetsMs) {
+                val targetInstant = lastHealthy.minusMillis(offset)
+                val formatted = formatter.format(targetInstant)
+                candidates.add("'$formatted'")
+            }
+        }
+
+        // Relative interval fallbacks in case lastHealthy was null or cluster loss time is unknown
+        candidates.addAll(listOf(
+            "'-10s'",
+            "'-30s'",
+            "'-1m'",
+            "'-5m'",
+            "'-15m'",
+            "'-30m'",
+            "'-1h'",
+            "'-6h'",
+            "'-24h'",
+            "'-72h'",
+            "follower_read_timestamp()",
+            "with_max_staleness(INTERVAL '10s')",
+            "with_max_staleness(INTERVAL '1m')",
+            "with_max_staleness(INTERVAL '1h')"
+        ))
+
+        return candidates.distinct()
+    }
 
     /**
      * Executes a read-only database block.
      * When running on CockroachDB and quorum is lost (or when a query fails with a quorum loss / range unavailable error),
      * this automatically falls back to AS OF SYSTEM TIME historical follower reads to retrieve the latest available data
-     * stored on this node without failing.
+     * stored on this node without failing or hanging.
      */
     fun <T> readTransaction(
         db: Database? = null,
@@ -65,39 +127,22 @@ object DatabaseFactory {
         }
 
         val quorumCurrentlyLost = com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost
-        val now = System.currentTimeMillis()
-
-        // If quorum was marked lost, attempt a normal live read probe every 5 seconds to automatically detect cluster recovery
-        if (quorumCurrentlyLost && (now - lastQuorumProbeTime > 5_000L)) {
-            lastQuorumProbeTime = now
-            try {
-                val result = transaction(db = db) { statement() }
-                com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = false
-                com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = null
-                println("[Database] ✅ CockroachDB cluster quorum restored. Resumed standard live reads.")
-                return result
-            } catch (probeEx: Throwable) {
-                if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(probeEx)) {
-                    return executeAsOfSystemTime(db, statement, rootCause = probeEx)
-                }
-                throw probeEx
-            }
-        }
 
         if (quorumCurrentlyLost) {
-            try {
-                return executeAsOfSystemTime(db, statement)
-            } catch (e: Exception) {
-                println("[Database] AS OF SYSTEM TIME read attempt encountered error (${e.message?.substringBefore("\n")?.take(100)}). Retrying standard read in case quorum was restored...")
-            }
+            // When quorum is known to be lost, serve immediately via AS OF SYSTEM TIME follower reads without blocking user threads
+            return executeAsOfSystemTime(db, statement)
         }
 
         try {
-            return transaction(db = db) { statement() }
+            val result = transaction(db = db) { statement() }
+            saveLastHealthyTimestamp(java.time.Instant.now())
+            cachedWorkingAsOfSystemTime = null
+            return result
         } catch (e: Throwable) {
             if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = true
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = e.message ?: "Database cluster quorum lost."
+                saveLastHealthyTimestamp(java.time.Instant.now())
                 println("[Database] ⚠️ CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Automatically falling back to AS OF SYSTEM TIME reads to retrieve latest available data...")
                 return executeAsOfSystemTime(db, statement, rootCause = e)
             }
@@ -108,6 +153,7 @@ object DatabaseFactory {
     /**
      * Executes statement inside an AS OF SYSTEM TIME transaction block, iterating through staleness candidates
      * until the newest valid historical state is read.
+     * Enforces a fast statement_timeout so dead leaseholders fail fast instead of hanging.
      */
     fun <T> executeAsOfSystemTime(
         db: Database? = null,
@@ -118,13 +164,33 @@ object DatabaseFactory {
         if (!isCrdb) {
             return transaction(db = db) { statement() }
         }
+
+        // 1. Fast path: try previously verified working candidate for this outage window
+        val cached = cachedWorkingAsOfSystemTime
+        if (cached != null) {
+            try {
+                return transaction(db = db) {
+                    exec("SET statement_timeout = '5000ms';")
+                    exec("SET TRANSACTION AS OF SYSTEM TIME $cached;")
+                    statement()
+                }
+            } catch (cachedEx: Throwable) {
+                cachedWorkingAsOfSystemTime = null // Invalidate on failure and re-probe candidates
+            }
+        }
+
+        // 2. Probing candidate ladder
+        val candidates = buildAsOfSystemTimeCandidates()
         var lastException: Throwable? = rootCause
-        for (candidate in asOfSystemTimeCandidates) {
+
+        for (candidate in candidates) {
             try {
                 val result = transaction(db = db) {
+                    exec("SET statement_timeout = '5000ms';")
                     exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
                     statement()
                 }
+                cachedWorkingAsOfSystemTime = candidate
                 println("[Database] ✅ Successfully served read query using CockroachDB AS OF SYSTEM TIME ($candidate).")
                 return result
             } catch (candidateEx: Throwable) {
@@ -133,7 +199,9 @@ object DatabaseFactory {
                         candidateEx.message?.contains("as of system time", ignoreCase = true) == true ||
                         candidateEx.message?.contains("closed timestamp", ignoreCase = true) == true ||
                         candidateEx.message?.contains("timestamp", ignoreCase = true) == true ||
-                        candidateEx.message?.contains("deadline", ignoreCase = true) == true
+                        candidateEx.message?.contains("deadline", ignoreCase = true) == true ||
+                        candidateEx.message?.contains("timeout", ignoreCase = true) == true ||
+                        candidateEx.message?.contains("canceling statement due to statement timeout", ignoreCase = true) == true
                 if (!isQuorumOrTimeErr) {
                     throw candidateEx
                 }
@@ -1288,7 +1356,7 @@ object DatabaseFactory {
         val hostPart = if (host.contains(",") || host.contains(":")) host else "$host:$port"
         val base = "jdbc:postgresql://$hostPart/$database"
         val sslMode = if (ssl) "sslmode=require" else "sslmode=disable"
-        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=10&socketTimeout=30&tcpKeepAlive=true"
+        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=5&socketTimeout=15&tcpKeepAlive=true"
     }
 
     private fun buildPostgresUrl(config: DatabaseConfig): String = buildPostgresOrCockroachUrl(config)

@@ -160,11 +160,13 @@ object ClusterManagementService {
 
         // Query database gossip nodes if DB is active
         val gossipIps = mutableSetOf<String>()
-        if (DatabaseFactory.isReady) {
+        if (DatabaseFactory.isReady && !com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
             try {
                 DatabaseFactory.activeDataSource?.connection?.use { conn ->
                     conn.createStatement().use { stmt ->
-                        stmt.execute("SET allow_unsafe_internals = true;")
+                        stmt.queryTimeout = 5
+                        try { stmt.execute("SET statement_timeout = '5000ms';") } catch (_: Exception) {}
+                        try { stmt.execute("SET allow_unsafe_internals = true;") } catch (_: Exception) {}
                         stmt.executeQuery("SELECT address FROM crdb_internal.gossip_nodes;").use { rs ->
                             while (rs.next()) {
                                 val addr = rs.getString("address") ?: ""

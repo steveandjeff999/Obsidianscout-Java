@@ -51,6 +51,10 @@ data class LoadBalancerSettings(
     val excludedPathPrefixes: List<String> = listOf(
         "/api/admin",
         "/api/cluster",
+        "/api/health",
+        "/health",
+        "/api/version",
+        "/version",
         "/cluster-management"
     )
 )
