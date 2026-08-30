@@ -114,6 +114,8 @@ object DatabaseFactory {
         return candidates.distinct()
     }
 
+    private val isInsideAsOfSystemTimeTx = ThreadLocal.withInitial { false }
+
     /**
      * Executes a read-only transaction.
      * When CockroachDB is the active engine, automatically catches quorum loss and
@@ -131,7 +133,7 @@ object DatabaseFactory {
 
         val quorumCurrentlyLost = com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost
 
-        if (quorumCurrentlyLost) {
+        if (quorumCurrentlyLost || isInsideAsOfSystemTimeTx.get()) {
             // When quorum is known to be lost, serve immediately via AS OF SYSTEM TIME follower reads without blocking user threads
             return executeAsOfSystemTime(db, statement)
         }
@@ -162,6 +164,26 @@ object DatabaseFactory {
         }
     }
 
+    private fun <T> runInAsOfTransaction(
+        db: Database?,
+        candidate: String,
+        statement: org.jetbrains.exposed.sql.Transaction.() -> T
+    ): T {
+        return transaction(
+            transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+            readOnly = true,
+            db = db
+        ) {
+            exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
+            isInsideAsOfSystemTimeTx.set(true)
+            try {
+                statement()
+            } finally {
+                isInsideAsOfSystemTimeTx.set(false)
+            }
+        }
+    }
+
     /**
      * Executes statement inside an AS OF SYSTEM TIME transaction block, iterating through staleness candidates
      * until the newest valid historical state is read.
@@ -177,18 +199,20 @@ object DatabaseFactory {
             return transaction(db = db) { statement() }
         }
 
+        // If we are already running inside an active AS OF SYSTEM TIME transaction block on this thread,
+        // reuse the active transaction directly without re-executing 'SET TRANSACTION AS OF SYSTEM TIME'
+        if (isInsideAsOfSystemTimeTx.get()) {
+            val currentTx = org.jetbrains.exposed.sql.transactions.TransactionManager.currentOrNull()
+            if (currentTx != null) {
+                return currentTx.statement()
+            }
+        }
+
         // 1. Fast path: try previously verified working candidate for this outage window
         val cached = cachedWorkingAsOfSystemTime
         if (cached != null) {
             try {
-                return transaction(
-                    transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
-                    readOnly = true,
-                    db = db
-                ) {
-                    exec("SET TRANSACTION AS OF SYSTEM TIME $cached;")
-                    statement()
-                }
+                return runInAsOfTransaction(db, cached, statement)
             } catch (cachedEx: Throwable) {
                 cachedWorkingAsOfSystemTime = null // Invalidate on failure and re-probe candidates
             }
@@ -199,14 +223,7 @@ object DatabaseFactory {
             val doubleChecked = cachedWorkingAsOfSystemTime
             if (doubleChecked != null) {
                 try {
-                    return transaction(
-                        transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
-                        readOnly = true,
-                        db = db
-                    ) {
-                        exec("SET TRANSACTION AS OF SYSTEM TIME $doubleChecked;")
-                        statement()
-                    }
+                    return runInAsOfTransaction(db, doubleChecked, statement)
                 } catch (_: Throwable) {
                     cachedWorkingAsOfSystemTime = null
                 }
@@ -217,14 +234,7 @@ object DatabaseFactory {
 
             for (candidate in candidates) {
                 try {
-                    val result = transaction(
-                        transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
-                        readOnly = true,
-                        db = db
-                    ) {
-                        exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
-                        statement()
-                    }
+                    val result = runInAsOfTransaction(db, candidate, statement)
                     cachedWorkingAsOfSystemTime = candidate
                     println("[Database] ✅ Successfully served read query using CockroachDB AS OF SYSTEM TIME ($candidate).")
                     return result

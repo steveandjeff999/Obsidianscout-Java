@@ -223,5 +223,22 @@ class DatabaseReadFallbackTest {
         assertTrue(totalFilesInspected > 20, "Should have inspected all project files")
         assertTrue(totalReadTxFound >= 25, "Should have audited all readTransaction calls (found $totalReadTxFound)")
     }
+
+    @Test
+    fun testNestedReadTransactionExecution() {
+        // Verify that nested readTransaction blocks correctly execute and return values
+        val outerResult = DatabaseFactory.readTransaction {
+            val innerResult1 = DatabaseFactory.readTransaction {
+                42
+            }
+            val innerResult2 = DatabaseFactory.readTransaction {
+                "hello"
+            }
+            Pair(innerResult1, innerResult2)
+        }
+
+        assertEquals(Pair(42, "hello"), outerResult)
+    }
 }
+
 

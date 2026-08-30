@@ -863,7 +863,7 @@ object AllianceService {
             throw ApiException(HttpStatusCode.Forbidden, "Admin access required")
         }
         if (session.role == UserRole.SUPERADMIN) return
-        transaction {
+        readTransaction {
             val isAdmin = AllianceMemberships
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
@@ -941,14 +941,14 @@ object AllianceService {
 
     fun getEffectiveSettings(teamNumber: Int, program: String = "FRC"): com.obsidianscout.integrations.ApiSettings {
         return effectiveSettingsCache.computeIfAbsent("$program-$teamNumber") {
-            transaction {
+            readTransaction {
                 val localSettings = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber, program)
-                val activeAllianceId = getActiveAllianceId(teamNumber, program) ?: return@transaction localSettings
+                val activeAllianceId = getActiveAllianceId(teamNumber, program) ?: return@readTransaction localSettings
 
                 val allianceRow = ScoutingAlliances
                     .select(ScoutingAlliances.year, ScoutingAlliances.eventCode, ScoutingAlliances.eventKey)
                     .where { ScoutingAlliances.id eq activeAllianceId }
-                    .firstOrNull() ?: return@transaction localSettings
+                    .firstOrNull() ?: return@readTransaction localSettings
 
                 val allianceYear = allianceRow[ScoutingAlliances.year]
                 val allianceEventCode = allianceRow[ScoutingAlliances.eventCode]
