@@ -412,7 +412,7 @@ object NodeMonitoringService {
     }
 
     fun sendTestNodeDownAlert(superAdminUserId: UUID): Pair<Boolean, String> {
-        val userRow = transaction {
+        val userRow = readTransaction {
             Users.selectAll().where { Users.id eq superAdminUserId }.firstOrNull()
         } ?: return Pair(false, "Superadmin user not found.")
 

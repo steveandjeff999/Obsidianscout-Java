@@ -176,7 +176,9 @@ object DeduplicationScheduler {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return true
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
-                    stmt.execute("SET allow_unsafe_internals = true")
+                    stmt.queryTimeout = 1
+                    try { stmt.execute("SET statement_timeout = '800ms'") } catch (_: Exception) {}
+                    try { stmt.execute("SET allow_unsafe_internals = true") } catch (_: Exception) {}
                     stmt.executeQuery(
                         "SELECT value FROM crdb_internal.node_metrics WHERE name = 'ranges.unavailable' LIMIT 1"
                     ).use { rs ->

@@ -433,7 +433,7 @@ object AuthService {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
         }
 
-        val (targetRole, targetTeam) = transaction {
+        val (targetRole, targetTeam) = readTransaction {
             val targetRow = Users.selectAll().where { Users.id eq targetUuid }
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "User not found")
@@ -461,7 +461,7 @@ object AuthService {
 
         // Prevent deleting the last superadmin
         if (targetRole == UserRole.SUPERADMIN) {
-            val superAdminCount = transaction {
+            val superAdminCount = readTransaction {
                 Users.selectAll().where { Users.role eq UserRole.SUPERADMIN.name }.count()
             }
             if (superAdminCount <= 1) {

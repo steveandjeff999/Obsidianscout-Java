@@ -777,6 +777,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     }
 
     private fun runReplicationDiagnostics() {
+        if (isQuorumLost) return
         val invalidLeases = getMetricValue("replicas.leaders_invalid_lease") ?: -1L
         val leaseholders  = getMetricValue("replicas.leaseholders") ?: -1L
         val snapGenerated = getMetricValue("range.snapshots.generated") ?: -1L
@@ -819,7 +820,9 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
-                    stmt.execute("SET allow_unsafe_internals = true;")
+                    stmt.queryTimeout = 1
+                    try { stmt.execute("SET statement_timeout = '800ms';") } catch (_: Exception) {}
+                    try { stmt.execute("SET allow_unsafe_internals = true;") } catch (_: Exception) {}
 
                     println("=========================================================================")
                     println("[Replication Diagnostics] Running cluster health check...")
@@ -879,7 +882,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                 }
             }
         } catch (e: Exception) {
-            println("[Replication Diagnostics] Failed to run diagnostics: ${e.message?.substringBefore("\n")}")
+            println("[Replication Diagnostics] Could not complete diagnostics: ${e.message}")
         }
 
         println("[Replication Diagnostics] Recent CockroachDB Warnings/Errors (From Log):")
@@ -906,13 +909,16 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     }
 
     private fun getActiveNodesCount(): Int {
+        if (isQuorumLost) return 1
         var count = 1
         try {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource
             if (ds != null) {
                 ds.connection.use { conn ->
                     conn.createStatement().use { stmt ->
-                        stmt.execute("SET allow_unsafe_internals = true;")
+                        stmt.queryTimeout = 1
+                        try { stmt.execute("SET statement_timeout = '800ms';") } catch (_: Exception) {}
+                        try { stmt.execute("SET allow_unsafe_internals = true;") } catch (_: Exception) {}
                         stmt.executeQuery("SELECT count(*) FROM crdb_internal.gossip_nodes;").use { rs ->
                             if (rs.next()) {
                                 count = rs.getInt(1)
@@ -922,7 +928,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                 }
             }
         } catch (e: Exception) {
-            println("[Cockroach] Error querying active nodes count: ${e.message}")
+            // Ignored during quorum loss
         }
         return count
     }

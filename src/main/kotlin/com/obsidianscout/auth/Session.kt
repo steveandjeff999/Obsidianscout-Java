@@ -57,7 +57,13 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                 val sessionOk = if (!session.sessionId.isNullOrBlank()) {
                     val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
                     if (sUuid != null) {
-                        UserSessions.selectAll().where { (UserSessions.id eq sUuid) and (UserSessions.userId eq userUuid) }.any()
+                        val found = UserSessions.selectAll().where { (UserSessions.id eq sUuid) and (UserSessions.userId eq userUuid) }.any()
+                        if (!found && com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                            // During quorum loss, historical follower read snapshot may predate the latest session login
+                            true
+                        } else {
+                            found
+                        }
                     } else false
                 } else {
                     true

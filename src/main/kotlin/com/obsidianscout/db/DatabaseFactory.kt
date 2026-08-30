@@ -83,15 +83,7 @@ object DatabaseFactory {
         val baseInstant = lastHealthyQuorumInstant ?: java.time.Instant.now()
         val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
 
-        // 1. Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store across all table ranges)
-        val offsetsMs = listOf(120_000L, 300_000L, 900_000L, 1_800_000L, 60_000L, 30_000L, 7_200_000L, 86_400_000L)
-        for (offset in offsetsMs) {
-            val targetInstant = baseInstant.minusMillis(offset)
-            val formatted = formatter.format(targetInstant)
-            candidates.add("'$formatted'")
-        }
-
-        // 2. Relative interval fallbacks (guaranteed to be behind closed timestamps; 100% locally readable from Pebble without RPC)
+        // 1. Relative interval fallbacks (guaranteed to be behind closed timestamps; 100% locally readable from Pebble without RPC)
         candidates.addAll(listOf(
             "'-5m'",
             "'-15m'",
@@ -103,12 +95,20 @@ object DatabaseFactory {
             "'-72h'"
         ))
 
+        // 2. Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store across all table ranges)
+        val offsetsMs = listOf(300_000L, 900_000L, 1_800_000L, 120_000L, 60_000L, 30_000L, 7_200_000L, 86_400_000L)
+        for (offset in offsetsMs) {
+            val targetInstant = baseInstant.minusMillis(offset)
+            val formatted = formatter.format(targetInstant)
+            candidates.add("'$formatted'")
+        }
+
         // 3. Dynamic bounded staleness follower reads
         candidates.addAll(listOf(
+            "follower_read_timestamp()",
             "with_max_staleness(INTERVAL '10m')",
             "with_max_staleness(INTERVAL '1h')",
-            "with_max_staleness(INTERVAL '24h')",
-            "follower_read_timestamp()"
+            "with_max_staleness(INTERVAL '24h')"
         ))
 
         return candidates.distinct()
@@ -128,7 +128,12 @@ object DatabaseFactory {
     ): T {
         val isCrdb = isCockroach && (db == null || !db.url.startsWith("jdbc:sqlite"))
         if (!isCrdb) {
-            return transaction(db = db) { statement() }
+            return transaction(db = db) {
+                this.maxAttempts = 1
+                this.minRetryDelay = 0
+                this.maxRetryDelay = 0
+                statement()
+            }
         }
 
         val quorumCurrentlyLost = com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost
@@ -144,7 +149,10 @@ object DatabaseFactory {
                 readOnly = true,
                 db = db
             ) {
-                try { exec("SET LOCAL statement_timeout = '1000ms';") } catch (_: Throwable) {}
+                this.maxAttempts = 1
+                this.minRetryDelay = 0
+                this.maxRetryDelay = 0
+                try { exec("SET LOCAL statement_timeout = '800ms';") } catch (_: Throwable) {}
                 statement()
             }
             saveLastHealthyTimestamp(java.time.Instant.now())
@@ -174,8 +182,11 @@ object DatabaseFactory {
             readOnly = true,
             db = db
         ) {
+            this.maxAttempts = 1
+            this.minRetryDelay = 0
+            this.maxRetryDelay = 0
             exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
-            try { exec("SET LOCAL statement_timeout = '1500ms';") } catch (_: Throwable) {}
+            try { exec("SET LOCAL statement_timeout = '800ms';") } catch (_: Throwable) {}
             isInsideAsOfSystemTimeTx.set(true)
             try {
                 statement()
@@ -197,7 +208,12 @@ object DatabaseFactory {
     ): T {
         val isCrdb = isCockroach && (db == null || !db.url.startsWith("jdbc:sqlite"))
         if (!isCrdb) {
-            return transaction(db = db) { statement() }
+            return transaction(db = db) {
+                this.maxAttempts = 1
+                this.minRetryDelay = 0
+                this.maxRetryDelay = 0
+                statement()
+            }
         }
 
         // If we are already running inside an active AS OF SYSTEM TIME transaction block on this thread,
@@ -248,7 +264,8 @@ object DatabaseFactory {
                             candidateEx.message?.contains("deadline", ignoreCase = true) == true ||
                             candidateEx.message?.contains("timeout", ignoreCase = true) == true ||
                             candidateEx.message?.contains("canceling statement", ignoreCase = true) == true ||
-                            candidateEx.message?.contains("query execution canceled", ignoreCase = true) == true
+                            candidateEx.message?.contains("query execution canceled", ignoreCase = true) == true ||
+                            candidateEx.message?.contains("i/o error", ignoreCase = true) == true
                     if (!isQuorumOrTimeErr) {
                         throw candidateEx
                     }
@@ -339,7 +356,14 @@ object DatabaseFactory {
             println("[Database] Note pre-warming pool: ${e.message}")
         }
 
-        Database.connect(dataSource)
+        Database.connect(
+            dataSource,
+            databaseConfig = org.jetbrains.exposed.sql.DatabaseConfig {
+                defaultMaxAttempts = 1
+                defaultMinRetryDelay = 0
+                defaultMaxRetryDelay = 0
+            }
+        )
 
         // Run the INT->UUID migration if the database still has the old schema
         if (runMigration) {
