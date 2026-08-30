@@ -255,14 +255,13 @@ object DatabaseFactory {
             }
             val isLowMem = System.getenv("LOW_RAM") == "1" || System.getenv("LOW_MEM") == "1"
             if (isPostgresCompatible) {
-                // 20 connections gives enough headroom for concurrent startup bursts:
-                // ClusterSecretService (30s poll) + SyncScheduler + multiple auth checks
-                // + admin page loads all fire simultaneously after each update restart.
-                // CockroachDB handles 20 concurrent SERIALIZABLE connections comfortably.
-                maximumPoolSize = if (isLowMem) 6 else 20
-                minimumIdle = if (isLowMem) 4 else 8
-                idleTimeout = 60_000L
-                maxLifetime = 300_000L
+                // Fixed pool size (minimumIdle == maximumPoolSize) ensures all connections stay perpetually
+                // connected to the local CockroachDB daemon and never get closed/recycled during quorum failovers.
+                val poolSize = if (isLowMem) 10 else 24
+                maximumPoolSize = poolSize
+                minimumIdle = poolSize
+                idleTimeout = 600_000L
+                maxLifetime = 1_800_000L
                 isAutoCommit = true
                 val (user, pass) = getCredentials(config)
                 if (!user.isNullOrBlank()) username = user
@@ -276,13 +275,29 @@ object DatabaseFactory {
                 maxLifetime = 300_000L
                 isAutoCommit = true
             }
-            connectionTimeout = 5_000  // fail fast — 5s keeps queued waiters from piling up
+            connectionTimeout = 15_000L  // 15s to allow failover under load without dropping connections
             leakDetectionThreshold = 60000L // 60s threshold to avoid false connection leak warnings during transient CockroachDB leader elections
-            validationTimeout = 5000L
+            validationTimeout = 2000L
         }
 
         val dataSource = HikariDataSource(hikariConfig)
         activeDataSource = dataSource
+
+        // Pre-warm the pool to guarantee all connections are physically open and ready before any network/quorum disruption
+        try {
+            val conns = mutableListOf<java.sql.Connection>()
+            val poolTarget = hikariConfig.maximumPoolSize
+            for (i in 0 until poolTarget) {
+                conns.add(dataSource.connection)
+            }
+            for (conn in conns) {
+                conn.close()
+            }
+            println("[Database] Pre-warmed Hikari connection pool with $poolTarget connections.")
+        } catch (e: Throwable) {
+            println("[Database] Note pre-warming pool: ${e.message}")
+        }
+
         Database.connect(dataSource)
 
         // Run the INT->UUID migration if the database still has the old schema

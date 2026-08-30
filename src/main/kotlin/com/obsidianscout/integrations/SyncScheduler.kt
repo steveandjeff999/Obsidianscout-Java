@@ -246,6 +246,7 @@ object SyncScheduler {
     }
 
     suspend fun runScheduledSync() {
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return
         try {
             runScheduledSyncUnchecked()
         } catch (e: Exception) {

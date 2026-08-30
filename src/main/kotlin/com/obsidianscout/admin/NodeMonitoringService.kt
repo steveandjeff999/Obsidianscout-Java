@@ -82,6 +82,9 @@ object NodeMonitoringService {
      * Returns false if an active (unexpired) lock key exists, preventing duplicate multi-node alerts.
      */
     fun claimNotificationLock(lockKey: String, lockDurationMinutes: Long = 60L): Boolean {
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+            return true // Quorum lost: skip cluster DB lock write and allow local alert dispatch
+        }
         val now = Instant.now()
         val expires = now.plusSeconds(lockDurationMinutes * 60L)
         val localIp = ClusterManagementService.getLocalTailscaleIp()
