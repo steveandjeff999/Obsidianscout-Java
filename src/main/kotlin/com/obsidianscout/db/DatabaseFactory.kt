@@ -83,8 +83,8 @@ object DatabaseFactory {
         val baseInstant = lastHealthyQuorumInstant ?: java.time.Instant.now()
         val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
 
-        // 1. Anchored fixed timestamps before quorum was lost (100% safe for local replica Pebble store without contacting leaseholders)
-        val offsetsMs = listOf(30_000L, 60_000L, 120_000L, 300_000L, 900_000L, 1_800_000L, 7_200_000L, 86_400_000L)
+        // 1. Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store across all table ranges)
+        val offsetsMs = listOf(120_000L, 300_000L, 900_000L, 1_800_000L, 60_000L, 30_000L, 7_200_000L, 86_400_000L)
         for (offset in offsetsMs) {
             val targetInstant = baseInstant.minusMillis(offset)
             val formatted = formatter.format(targetInstant)

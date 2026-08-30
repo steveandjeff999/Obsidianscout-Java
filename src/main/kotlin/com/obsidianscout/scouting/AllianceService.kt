@@ -677,7 +677,7 @@ object AllianceService {
             throw ApiException(HttpStatusCode.Forbidden, "Admin access required")
         }
 
-        return transaction {
+        return readTransaction {
             val sources = mutableMapOf<Pair<Int, String?>, MutableImportSourceCounts>()
 
             ScoutingEntries.selectAll().forEach { row ->
