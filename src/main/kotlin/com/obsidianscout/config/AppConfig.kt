@@ -22,7 +22,7 @@ data class AppConfig(
     val google_sheet_password: String = "",
     val cockroach_port: Int = 26257,
     val site_url: String = "https://kotlin.obsidianscout.com",
-    val current_version: String = "0.5.0.0", // The version this server is running — update this on each release
+    val current_version: String = "0.5.0.1", // The version this server is running — update this on each release
     val gist_update: GistUpdateConfig = GistUpdateConfig()
 ) {
     fun getEffectiveSiteUrl(): String {
