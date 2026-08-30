@@ -498,7 +498,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         replicationJob?.cancel()
         healthProbeJob?.cancel()
 
-        // Ultra-fast proactive health probe running every 1s
+        // Proactive Raft health probe running every 3s (healthy) or 5s (offline)
         healthProbeJob = CoroutineScope(Dispatchers.IO).launch {
             while (isActive) {
                 try {
@@ -510,7 +510,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                         println("[Cockroach] ✅ Cluster quorum restored! Resumed live read/write mode.")
                     }
                 } catch (_: Exception) {}
-                delay(1000)
+                delay(if (isQuorumLost) 5000L else 3000L)
             }
         }
 
@@ -1121,31 +1121,29 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     }
 
     fun checkQuorumStatus() {
+        val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
         try {
-            if (isQuorumLost) {
-                // Quorum was lost: probe with readTransaction. If live read succeeds,
-                // readTransaction will automatically clear isQuorumLost.
-                com.obsidianscout.db.DatabaseFactory.readTransaction {
-                    com.obsidianscout.db.Users.selectAll().limit(1).map { it[com.obsidianscout.db.Users.id] }
-                }
-            } else {
-                val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
-                ds.connection.use { conn ->
-                    conn.createStatement().use { stmt ->
-                        stmt.queryTimeout = 1
-                        try { stmt.execute("SET statement_timeout = '600ms'") } catch (_: Exception) {}
-                        stmt.executeQuery("SELECT 1").use { rs ->
-                            rs.next()
-                        }
+            ds.connection.use { conn ->
+                conn.createStatement().use { stmt ->
+                    try { stmt.execute("SET statement_timeout = '600ms'") } catch (_: Exception) {}
+                    stmt.executeQuery("SELECT id FROM users LIMIT 1").use { rs ->
+                        rs.next()
                     }
                 }
             }
-        } catch (e: Exception) {
+            if (isQuorumLost) {
+                isQuorumLost = false
+                quorumLossDetails = null
+                com.obsidianscout.db.DatabaseFactory.saveLastHealthyTimestamp(java.time.Instant.now())
+                com.obsidianscout.db.DatabaseFactory.cachedWorkingAsOfSystemTime = null
+            } else {
+                com.obsidianscout.db.DatabaseFactory.saveLastHealthyTimestamp(java.time.Instant.now())
+            }
+        } catch (e: Throwable) {
             if (isQuorumLossException(e)) {
                 if (!isQuorumLost) {
                     isQuorumLost = true
                     quorumLossDetails = e.message ?: "Database cluster quorum lost."
-                    println("[Cockroach] ⚠️ Cluster quorum loss proactively detected by health probe! Switched read transactions to AS OF SYSTEM TIME offline mode.")
                 }
             }
         }

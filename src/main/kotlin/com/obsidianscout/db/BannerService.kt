@@ -17,30 +17,46 @@ import java.util.UUID
 
 object BannerService {
 
-    fun getAll(teamNumber: Int? = null): List<BannerDto> = readTransaction {
-        val query = if (teamNumber != null) {
-            Banners.selectAll().where { (Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0) }
-        } else {
-            Banners.selectAll()
+    fun getAll(teamNumber: Int? = null): List<BannerDto> = try {
+        readTransaction {
+            val query = if (teamNumber != null) {
+                Banners.selectAll().where { (Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0) }
+            } else {
+                Banners.selectAll()
+            }
+            query.map { it.toDto() }
         }
-        query.map { it.toDto() }
+    } catch (_: Throwable) {
+        emptyList()
     }
 
-    fun getActive(teamNumber: Int): List<BannerDto> = readTransaction {
-        Banners.selectAll().where { 
-            (Banners.isActive eq true) and ((Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0))
-        }.map { it.toDto() }
+    fun getActive(teamNumber: Int): List<BannerDto> = try {
+        readTransaction {
+            Banners.selectAll().where { 
+                (Banners.isActive eq true) and ((Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0))
+            }.map { it.toDto() }
+        }
+    } catch (_: Throwable) {
+        emptyList()
     }
 
-    fun getLoginBanners(): List<BannerDto> = readTransaction {
-        Banners.selectAll().where { 
-            (Banners.isActive eq true) and (Banners.showOnLogin eq true)
-        }.map { it.toDto() }
+    fun getLoginBanners(): List<BannerDto> = try {
+        readTransaction {
+            Banners.selectAll().where { 
+                (Banners.isActive eq true) and (Banners.showOnLogin eq true)
+            }.map { it.toDto() }
+        }
+    } catch (_: Throwable) {
+        emptyList()
     }
 
-    fun getById(id: String): BannerDto? = readTransaction {
-        val uuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@readTransaction null
-        Banners.selectAll().where { Banners.id eq uuid }.firstOrNull()?.toDto()
+    fun getById(id: String): BannerDto? = try {
+        readTransaction {
+            val uuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@readTransaction null
+            Banners.selectAll().where { Banners.id eq uuid }.firstOrNull()?.toDto()
+        }
+    } catch (_: Throwable) {
+        null
     }
 
     fun create(dto: BannerCreateRequest): BannerDto = transaction {

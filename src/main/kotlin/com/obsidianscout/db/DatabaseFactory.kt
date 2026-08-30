@@ -334,14 +334,15 @@ object DatabaseFactory {
                 val poolSize = if (isLowMem) 12 else 32
                 maximumPoolSize = poolSize
                 minimumIdle = poolSize
-                idleTimeout = 600_000L
-                maxLifetime = 1_800_000L
+                idleTimeout = 0L // 0 = never retire/close idle connections
+                maxLifetime = 0L // 0 = never expire live connections
                 isAutoCommit = true
                 val (user, pass) = getCredentials(config)
                 if (!user.isNullOrBlank()) username = user
                 if (!pass.isNullOrBlank()) password = pass
                 transactionIsolation = if (isCockroachEngine) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
                 connectionInitSql = "SET statement_timeout = '800ms';"
+                connectionTestQuery = "SELECT 1"
             } else {
                 maximumPoolSize = if (isLowMem) 4 else 8
                 minimumIdle = 1
@@ -1460,7 +1461,7 @@ object DatabaseFactory {
         val hostPart = if (host.contains(",") || host.contains(":")) host else "$host:$port"
         val base = "jdbc:postgresql://$hostPart/$database"
         val sslMode = if (ssl) "sslmode=require" else "sslmode=disable"
-        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=2&socketTimeout=3&tcpKeepAlive=true"
+        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=5&tcpKeepAlive=true"
     }
 
     private fun buildPostgresUrl(config: DatabaseConfig): String = buildPostgresOrCockroachUrl(config)
