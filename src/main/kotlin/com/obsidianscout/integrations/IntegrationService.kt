@@ -877,10 +877,10 @@ object IntegrationService {
     fun summary(): SummaryResponse {
         return readTransaction {
             SummaryResponse(
-                entries = ScoutingEntries.selectAll().count().toInt(),
-                events = ApiEvents.selectAll().count().toInt(),
-                teams = ApiTeams.selectAll().count().toInt(),
-                matches = ApiMatches.selectAll().count().toInt()
+                entries = ScoutingEntries.select(ScoutingEntries.id).count().toInt(),
+                events = ApiEvents.select(ApiEvents.id).count().toInt(),
+                teams = ApiTeams.select(ApiTeams.id).count().toInt(),
+                matches = ApiMatches.select(ApiMatches.id).count().toInt()
             )
         }
     }

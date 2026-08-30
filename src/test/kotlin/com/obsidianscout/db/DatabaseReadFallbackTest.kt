@@ -109,7 +109,7 @@ class DatabaseReadFallbackTest {
     fun testAsOfSystemTimeCandidatesLadderStructure() {
         val candidates = DatabaseFactory.buildAsOfSystemTimeCandidates()
         assertTrue(candidates.contains("follower_read_timestamp()"))
-        assertTrue(candidates.contains("with_max_staleness(INTERVAL '10s')"))
+        assertTrue(candidates.contains("with_max_staleness(INTERVAL '10m')"))
         assertTrue(candidates.contains("'-24h'"))
     }
 
@@ -121,13 +121,13 @@ class DatabaseReadFallbackTest {
         val candidates = DatabaseFactory.buildAsOfSystemTimeCandidates()
         assertTrue(candidates.isNotEmpty())
 
-        // First candidates should prioritize bounded staleness follower reads
+        // First candidates should prioritize anchored fixed timestamps safe for local Pebble
         val firstCandidate = candidates.first()
-        assertTrue(firstCandidate.startsWith("with_max_staleness"), "First candidate should be bounded staleness: $firstCandidate")
+        assertTrue(firstCandidate.startsWith("'2026-08-29 "), "First candidate should be anchored timestamp: $firstCandidate")
 
-        // Check that anchored timestamps and relative intervals are also included
-        assertTrue(candidates.any { it.startsWith("'2026-08-29 ") })
+        // Check that relative intervals and follower reads are also included
         assertTrue(candidates.contains("'-5m'"))
+        assertTrue(candidates.contains("with_max_staleness(INTERVAL '10m')"))
         assertTrue(candidates.contains("follower_read_timestamp()"))
     }
 

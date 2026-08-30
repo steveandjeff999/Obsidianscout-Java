@@ -77,32 +77,20 @@ object DatabaseFactory {
 
     fun buildAsOfSystemTimeCandidates(): List<String> {
         val candidates = mutableListOf<String>()
-        val lastHealthy = lastHealthyQuorumInstant
+        val baseInstant = lastHealthyQuorumInstant ?: java.time.Instant.now()
         val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
 
-        // 1. Bounded staleness follower reads — CockroachDB's built-in partition-tolerant local follower read mechanism
-        candidates.add("with_max_staleness(INTERVAL '10m')")
-        candidates.add("with_max_staleness(INTERVAL '1h')")
-        candidates.add("with_max_staleness(INTERVAL '24h')")
-        candidates.add("follower_read_timestamp()")
-
-        if (lastHealthy != null) {
-            // Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store)
-            val offsetsMs = listOf(30_000L, 60_000L, 120_000L, 300_000L, 900_000L, 1_800_000L, 7_200_000L, 86_400_000L)
-            for (offset in offsetsMs) {
-                val targetInstant = lastHealthy.minusMillis(offset)
-                val formatted = formatter.format(targetInstant)
-                candidates.add("'$formatted'")
-            }
+        // 1. Anchored fixed timestamps before quorum was lost (100% safe for local replica Pebble store without contacting leaseholders)
+        val offsetsMs = listOf(30_000L, 60_000L, 120_000L, 300_000L, 900_000L, 1_800_000L, 7_200_000L, 86_400_000L)
+        for (offset in offsetsMs) {
+            val targetInstant = baseInstant.minusMillis(offset)
+            val formatted = formatter.format(targetInstant)
+            candidates.add("'$formatted'")
         }
 
-        // Relative interval fallbacks in case lastHealthy was null or cluster loss time is unknown
+        // 2. Relative interval fallbacks (safe for local replica Pebble store)
         candidates.addAll(listOf(
-            "with_max_staleness(INTERVAL '10s')",
-            "with_max_staleness(INTERVAL '1m')",
-            "'-10s'",
-            "'-30s'",
-            "'-1m'",
+            "'-2m'",
             "'-5m'",
             "'-15m'",
             "'-30m'",
@@ -110,6 +98,14 @@ object DatabaseFactory {
             "'-6h'",
             "'-24h'",
             "'-72h'"
+        ))
+
+        // 3. Dynamic bounded staleness follower reads
+        candidates.addAll(listOf(
+            "with_max_staleness(INTERVAL '10m')",
+            "with_max_staleness(INTERVAL '1h')",
+            "with_max_staleness(INTERVAL '24h')",
+            "follower_read_timestamp()"
         ))
 
         return candidates.distinct()
@@ -1379,7 +1375,7 @@ object DatabaseFactory {
         val hostPart = if (host.contains(",") || host.contains(":")) host else "$host:$port"
         val base = "jdbc:postgresql://$hostPart/$database"
         val sslMode = if (ssl) "sslmode=require" else "sslmode=disable"
-        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=5&socketTimeout=15&tcpKeepAlive=true"
+        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=10&socketTimeout=60&tcpKeepAlive=true"
     }
 
     private fun buildPostgresUrl(config: DatabaseConfig): String = buildPostgresOrCockroachUrl(config)
