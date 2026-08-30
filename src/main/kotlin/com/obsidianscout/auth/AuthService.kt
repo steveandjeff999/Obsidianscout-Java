@@ -592,12 +592,12 @@ object AuthService {
             sessionTouchCache[sessionUuid] = nowMs
             try {
                 transaction {
-                    exec("SET statement_timeout = '2000ms';")
+                    exec("SET statement_timeout = '1500ms';")
                     UserSessions.update({ UserSessions.id eq sessionUuid }) {
                         it[lastActiveAt] = Instant.ofEpochMilli(nowMs)
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
                     com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = true
                 }

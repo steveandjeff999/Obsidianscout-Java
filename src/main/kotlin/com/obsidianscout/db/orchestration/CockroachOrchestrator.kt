@@ -1175,6 +1175,14 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     msg.contains("an i/o error occurred while sending to the backend") ||
                     msg.contains("broken pipe") ||
                     msg.contains("08006") ||
+                    msg.contains("restart transaction") ||
+                    msg.contains("transactionretry") ||
+                    msg.contains("connection is not available") ||
+                    msg.contains("unable to serve request") ||
+                    msg.contains("closed timestamp") ||
+                    msg.contains("namespacetable") ||
+                    (msg.contains("descriptor") && msg.contains("modified")) ||
+                    className.contains("sqltransientconnectionexception") ||
                     className.contains("rangeunavailable") ||
                     className.contains("notleaseholder") ||
                     className.contains("ambiguousresult") ||

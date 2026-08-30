@@ -88,7 +88,7 @@ object DatabaseFactory {
 
         if (lastHealthy != null) {
             // Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store)
-            val offsetsMs = listOf(10_000L, 20_000L, 30_000L, 60_000L, 120_000L, 300_000L, 900_000L, 1_800_000L, 7_200_000L, 86_400_000L)
+            val offsetsMs = listOf(30_000L, 60_000L, 120_000L, 300_000L, 900_000L, 1_800_000L, 7_200_000L, 86_400_000L)
             for (offset in offsetsMs) {
                 val targetInstant = lastHealthy.minusMillis(offset)
                 val formatted = formatter.format(targetInstant)
@@ -149,7 +149,7 @@ object DatabaseFactory {
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = true
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = e.message ?: "Database cluster quorum lost."
                 if (lastHealthyQuorumInstant == null) {
-                    saveLastHealthyTimestamp(java.time.Instant.now().minusSeconds(30))
+                    saveLastHealthyTimestamp(java.time.Instant.now().minusSeconds(60))
                 }
                 println("[Database] ⚠️ CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Automatically falling back to AS OF SYSTEM TIME reads to retrieve latest available data...")
                 return executeAsOfSystemTime(db, statement, rootCause = e)
