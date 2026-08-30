@@ -83,30 +83,42 @@ object DatabaseFactory {
         val baseInstant = lastHealthyQuorumInstant ?: java.time.Instant.now().minusSeconds(60)
         val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
 
-        // 1. Anchored fixed timestamps before quorum was lost (strictly behind frozen closed timestamps; 100% locally readable from Pebble without RPC)
-        val offsetsMs = listOf(10_000L, 30_000L, 60_000L, 120_000L, 300_000L, 900_000L, 1_800_000L, 3_600_000L, 7_200_000L, 21_600_000L, 86_400_000L)
-        for (offset in offsetsMs) {
-            val targetInstant = baseInstant.minusMillis(offset)
-            val formatted = formatter.format(targetInstant)
-            candidates.add("'$formatted'")
-        }
-
-        // 2. Safe relative historical intervals and follower reads
+        // 1. Follower reads & robust safe historical intervals (guaranteed to be fully closed locally in Pebble without RPC)
         candidates.addAll(listOf(
-            "'-1h'",
-            "'-2h'",
-            "'-6h'",
+            "follower_read_timestamp()",
             "'-15m'",
             "'-30m'",
+            "'-1h'",
             "'-5m'",
             "'-2m'",
-            "follower_read_timestamp()",
+            "'-2h'",
+            "'-6h'",
             "'-24h'",
             "'-72h'",
             "with_max_staleness(INTERVAL '10m')",
             "with_max_staleness(INTERVAL '1h')",
             "with_max_staleness(INTERVAL '24h')"
         ))
+
+        // 2. Anchored fixed timestamps before quorum was lost (starting with safe >= 5m offsets that are guaranteed closed)
+        val offsetsMs = listOf(
+            300_000L,     // 5m
+            900_000L,     // 15m
+            1_800_000L,   // 30m
+            3_600_000L,   // 1h
+            7_200_000L,   // 2h
+            21_600_000L,  // 6h
+            86_400_000L,  // 24h
+            120_000L,     // 2m
+            60_000L,      // 1m
+            30_000L,      // 30s
+            10_000L       // 10s
+        )
+        for (offset in offsetsMs) {
+            val targetInstant = baseInstant.minusMillis(offset)
+            val formatted = formatter.format(targetInstant)
+            candidates.add("'$formatted'")
+        }
 
         return candidates.distinct()
     }

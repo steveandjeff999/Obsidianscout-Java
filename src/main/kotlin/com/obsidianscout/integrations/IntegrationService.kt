@@ -875,13 +875,17 @@ object IntegrationService {
     }
 
     fun summary(): SummaryResponse {
-        return readTransaction {
-            SummaryResponse(
-                entries = ScoutingEntries.select(ScoutingEntries.id).count().toInt(),
-                events = ApiEvents.select(ApiEvents.id).count().toInt(),
-                teams = ApiTeams.select(ApiTeams.id).count().toInt(),
-                matches = ApiMatches.select(ApiMatches.id).count().toInt()
-            )
+        return try {
+            readTransaction {
+                SummaryResponse(
+                    entries = ScoutingEntries.select(ScoutingEntries.id).count().toInt(),
+                    events = ApiEvents.select(ApiEvents.id).count().toInt(),
+                    teams = ApiTeams.select(ApiTeams.id).count().toInt(),
+                    matches = ApiMatches.select(ApiMatches.id).count().toInt()
+                )
+            }
+        } catch (_: Throwable) {
+            SummaryResponse(entries = 0, events = 0, teams = 0, matches = 0)
         }
     }
 
