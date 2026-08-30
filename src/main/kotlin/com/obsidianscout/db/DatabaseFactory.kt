@@ -80,33 +80,33 @@ object DatabaseFactory {
 
     fun buildAsOfSystemTimeCandidates(): List<String> {
         val candidates = mutableListOf<String>()
-        val baseInstant = lastHealthyQuorumInstant ?: java.time.Instant.now()
+        val baseInstant = lastHealthyQuorumInstant ?: java.time.Instant.now().minusSeconds(60)
         val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
 
-        // 1. Dynamic follower reads & safe relative intervals (guaranteed to be behind closed timestamps; 100% locally readable from Pebble without RPC)
+        // 1. Anchored fixed timestamps before quorum was lost (strictly behind frozen closed timestamps; 100% locally readable from Pebble without RPC)
+        val offsetsMs = listOf(10_000L, 30_000L, 60_000L, 120_000L, 300_000L, 900_000L, 1_800_000L, 3_600_000L, 7_200_000L, 21_600_000L, 86_400_000L)
+        for (offset in offsetsMs) {
+            val targetInstant = baseInstant.minusMillis(offset)
+            val formatted = formatter.format(targetInstant)
+            candidates.add("'$formatted'")
+        }
+
+        // 2. Safe relative historical intervals and follower reads
         candidates.addAll(listOf(
-            "follower_read_timestamp()",
-            "'-15m'",
-            "'-30m'",
             "'-1h'",
             "'-2h'",
+            "'-6h'",
+            "'-15m'",
+            "'-30m'",
             "'-5m'",
             "'-2m'",
-            "'-6h'",
+            "follower_read_timestamp()",
             "'-24h'",
             "'-72h'",
             "with_max_staleness(INTERVAL '10m')",
             "with_max_staleness(INTERVAL '1h')",
             "with_max_staleness(INTERVAL '24h')"
         ))
-
-        // 2. Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store across all table ranges)
-        val offsetsMs = listOf(900_000L, 1_800_000L, 3_600_000L, 300_000L, 120_000L, 60_000L, 7_200_000L, 86_400_000L)
-        for (offset in offsetsMs) {
-            val targetInstant = baseInstant.minusMillis(offset)
-            val formatted = formatter.format(targetInstant)
-            candidates.add("'$formatted'")
-        }
 
         return candidates.distinct()
     }
@@ -186,7 +186,7 @@ object DatabaseFactory {
             this.minRetryDelay = 0
             this.maxRetryDelay = 0
             exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
-            try { exec("SET LOCAL statement_timeout = '600ms';") } catch (_: Throwable) {}
+            try { exec("SET LOCAL statement_timeout = '800ms';") } catch (_: Throwable) {}
             isInsideAsOfSystemTimeTx.set(true)
             try {
                 statement()
@@ -329,7 +329,7 @@ object DatabaseFactory {
                 if (!user.isNullOrBlank()) username = user
                 if (!pass.isNullOrBlank()) password = pass
                 transactionIsolation = if (isCockroachEngine) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
-                connectionInitSql = "SET statement_timeout = '1500ms';"
+                connectionInitSql = "SET statement_timeout = '800ms';"
             } else {
                 maximumPoolSize = if (isLowMem) 4 else 8
                 minimumIdle = 1
@@ -1448,7 +1448,7 @@ object DatabaseFactory {
         val hostPart = if (host.contains(",") || host.contains(":")) host else "$host:$port"
         val base = "jdbc:postgresql://$hostPart/$database"
         val sslMode = if (ssl) "sslmode=require" else "sslmode=disable"
-        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=2&socketTimeout=2&tcpKeepAlive=true"
+        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=2&socketTimeout=3&tcpKeepAlive=true"
     }
 
     private fun buildPostgresUrl(config: DatabaseConfig): String = buildPostgresOrCockroachUrl(config)

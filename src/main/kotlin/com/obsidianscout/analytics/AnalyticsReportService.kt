@@ -112,13 +112,15 @@ object AnalyticsReportService {
             }
         }.orderBy(AnalyticsReports.updatedAt, SortOrder.DESC)
 
+        val rows = query.toList()
+
         // Cache usernames for display
-        val userIds = query.mapNotNull { runCatching { it[AnalyticsReports.userId].value }.getOrNull() }.distinct()
+        val userIds = rows.mapNotNull { runCatching { it[AnalyticsReports.userId].value }.getOrNull() }.distinct()
         val usernameMap = if (userIds.isNotEmpty()) {
             Users.selectAll().where { Users.id inList userIds }.associate { it[Users.id].value to it[Users.username] }
         } else emptyMap()
 
-        query.map { row ->
+        rows.map { row ->
             val reportUserId = row[AnalyticsReports.userId].value
             val isOwner = (userUuid != null && reportUserId == userUuid) || session.role == UserRole.SUPERADMIN
             AnalyticsReportRecord(
