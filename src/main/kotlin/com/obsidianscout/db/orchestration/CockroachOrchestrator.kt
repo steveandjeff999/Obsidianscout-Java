@@ -931,9 +931,9 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
-                    stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '32 MiB'")
-                    stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate = '32 MiB'")
-                    stmt.execute("SET CLUSTER SETTING kv.replication_reports.interval = '30s'")
+                    try { stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '32 MiB'") } catch (_: Exception) {}
+                    try { stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate = '32 MiB'") } catch (_: Exception) {}
+                    try { stmt.execute("SET CLUSTER SETTING kv.replication_reports.interval = '30s'") } catch (_: Exception) {}
                     try { stmt.execute("SET CLUSTER SETTING kv.closed_timestamp.target_duration = '1s'") } catch (_: Exception) {}
                     try { stmt.execute("SET CLUSTER SETTING kv.closed_timestamp.side_transport_interval = '200ms'") } catch (_: Exception) {}
                     try { stmt.execute("SET CLUSTER SETTING kv.liveness.heartbeat_interval = '4s'") } catch (_: Exception) {}
