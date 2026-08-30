@@ -337,7 +337,7 @@ object DatabaseFactory {
                 maxLifetime = 300_000L
                 isAutoCommit = true
             }
-            connectionTimeout = 5_000L   // 5s fail-fast timeout preventing thread exhaustion
+            connectionTimeout = 10_000L   // 10s timeout to allow connection handshakes during cluster failover
             leakDetectionThreshold = 60000L // 60s threshold to avoid false connection leak warnings during transient CockroachDB leader elections
             validationTimeout = 1000L
         }

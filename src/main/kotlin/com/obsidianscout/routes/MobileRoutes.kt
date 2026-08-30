@@ -148,19 +148,28 @@ suspend fun ApplicationCall.requireMobileSession(secret: String): UserSession {
     val token = authHeader.removePrefix("Bearer ").trim()
     val session = JwtHelper.verifyToken(token, secret)
         ?: throw MobileApiException(HttpStatusCode.Unauthorized, "Invalid or expired token", "INVALID_TOKEN")
+    
     val userUuid = UUID.fromString(session.userId)
+
+    if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+        val userExists = runCatching {
+            readTransaction {
+                Users.selectAll().where { Users.id eq userUuid }.any()
+            }
+        }.getOrDefault(true)
+        if (!userExists) {
+            throw MobileApiException(HttpStatusCode.Unauthorized, "User account no longer exists", "ACCOUNT_DELETED")
+        }
+        return session
+    }
+
     val (userExists, sessionValid) = runCatching {
         readTransaction {
             val uExists = Users.selectAll().where { Users.id eq userUuid }.any()
             val sOk = if (!session.sessionId.isNullOrBlank()) {
                 val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
                 if (sUuid != null) {
-                    val found = com.obsidianscout.db.UserSessions.selectAll().where { (com.obsidianscout.db.UserSessions.id eq sUuid) and (com.obsidianscout.db.UserSessions.userId eq userUuid) }.any()
-                    if (!found && com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-                        true
-                    } else {
-                        found
-                    }
+                    com.obsidianscout.db.UserSessions.selectAll().where { (com.obsidianscout.db.UserSessions.id eq sUuid) and (com.obsidianscout.db.UserSessions.userId eq userUuid) }.any()
                 } else false
             } else {
                 true

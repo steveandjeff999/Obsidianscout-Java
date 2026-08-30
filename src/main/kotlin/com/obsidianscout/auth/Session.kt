@@ -51,19 +51,29 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             sessions.clear<UserSession>()
             throw ApiException(HttpStatusCode.Unauthorized, "Invalid user")
         }
+        // If quorum is lost, trust the cryptographically HMAC-signed session cookie,
+        // and only check that the user exists in Users without touching other range tables.
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+            val userExists = runCatching {
+                com.obsidianscout.db.readTransaction {
+                    Users.selectAll().where { Users.id eq userUuid }.any()
+                }
+            }.getOrDefault(true)
+
+            if (!userExists) {
+                sessions.clear<UserSession>()
+                throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
+            }
+            return session
+        }
+
         val (userExists, sessionValid) = runCatching {
             com.obsidianscout.db.readTransaction {
                 val exists = Users.selectAll().where { Users.id eq userUuid }.any()
                 val sessionOk = if (!session.sessionId.isNullOrBlank()) {
                     val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
                     if (sUuid != null) {
-                        val found = UserSessions.selectAll().where { (UserSessions.id eq sUuid) and (UserSessions.userId eq userUuid) }.any()
-                        if (!found && com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-                            // During quorum loss, historical follower read snapshot may predate the latest session login
-                            true
-                        } else {
-                            found
-                        }
+                        UserSessions.selectAll().where { (UserSessions.id eq sUuid) and (UserSessions.userId eq userUuid) }.any()
                     } else false
                 } else {
                     true
@@ -78,7 +88,7 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         }
         if (!sessionValid) {
             sessions.clear<UserSession>()
-            throw ApiException(HttpStatusCode.Unauthorized, "Session has been revoked")
+            throw ApiException(HttpStatusCode.Unauthorized, "Session has expired or been revoked")
         }
 
         if (!session.sessionId.isNullOrBlank()) {

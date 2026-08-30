@@ -15,6 +15,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import org.jetbrains.exposed.sql.selectAll
 
 data class PeerStatus(val dbReady: Boolean, val isDbActive: Boolean)
 
@@ -1121,26 +1122,31 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
     fun checkQuorumStatus() {
         try {
-            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
-            ds.connection.use { conn ->
-                conn.createStatement().use { stmt ->
-                    stmt.queryTimeout = 1
-                    try { stmt.execute("SET statement_timeout = '800ms'") } catch (_: Exception) {}
-                    // Test a real table read at T_now to confirm live cluster quorum and range leaseholders are responding
-                    stmt.executeQuery("SELECT id FROM users LIMIT 1").use { rs ->
-                        rs.next()
-                        // If the live query succeeds, quorum is healthy and restored!
-                        isQuorumLost = false
-                        quorumLossDetails = null
-                        com.obsidianscout.db.DatabaseFactory.saveLastHealthyTimestamp(java.time.Instant.now())
-                        com.obsidianscout.db.DatabaseFactory.cachedWorkingAsOfSystemTime = null
+            if (isQuorumLost) {
+                // Quorum was lost: probe with readTransaction. If live read succeeds,
+                // readTransaction will automatically clear isQuorumLost.
+                com.obsidianscout.db.DatabaseFactory.readTransaction {
+                    com.obsidianscout.db.Users.selectAll().limit(1).map { it[com.obsidianscout.db.Users.id] }
+                }
+            } else {
+                val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
+                ds.connection.use { conn ->
+                    conn.createStatement().use { stmt ->
+                        stmt.queryTimeout = 1
+                        try { stmt.execute("SET statement_timeout = '600ms'") } catch (_: Exception) {}
+                        stmt.executeQuery("SELECT 1").use { rs ->
+                            rs.next()
+                        }
                     }
                 }
             }
         } catch (e: Exception) {
             if (isQuorumLossException(e)) {
-                isQuorumLost = true
-                quorumLossDetails = e.message ?: "Database cluster quorum lost."
+                if (!isQuorumLost) {
+                    isQuorumLost = true
+                    quorumLossDetails = e.message ?: "Database cluster quorum lost."
+                    println("[Cockroach] ⚠️ Cluster quorum loss proactively detected by health probe! Switched read transactions to AS OF SYSTEM TIME offline mode.")
+                }
             }
         }
     }
