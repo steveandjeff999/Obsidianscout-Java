@@ -632,12 +632,13 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     }
 
     private fun getMetricValue(metricName: String): Long? {
+        if (isQuorumLost) return null
         return try {
             val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return null
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
-                    stmt.queryTimeout = 5
-                    try { stmt.execute("SET statement_timeout = '5000ms'") } catch (_: Exception) {}
+                    stmt.queryTimeout = 1
+                    try { stmt.execute("SET statement_timeout = '800ms'") } catch (_: Exception) {}
                     try { stmt.execute("SET allow_unsafe_internals = true") } catch (_: Exception) {}
                     stmt.executeQuery(
                         "SELECT value FROM crdb_internal.node_metrics WHERE name = '$metricName' LIMIT 1"
@@ -1114,28 +1115,19 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
     fun checkQuorumStatus() {
         try {
-            val unavailable = getMetricValue("ranges.unavailable") ?: 0L
-            if (unavailable > 0L) {
-                isQuorumLost = true
-                quorumLossDetails = "$unavailable range(s) unavailable due to cluster quorum loss."
-                return
-            }
-
-            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource
-            if (ds != null) {
-                ds.connection.use { conn ->
-                    conn.createStatement().use { stmt ->
-                        stmt.queryTimeout = 1
-                        try { stmt.execute("SET statement_timeout = '800ms'") } catch (_: Exception) {}
-                        // Test a real table read at T_now to confirm live cluster quorum and range leaseholders are responding
-                        stmt.executeQuery("SELECT id FROM users LIMIT 1").use { rs ->
-                            rs.next()
-                            // If the live query succeeds, quorum is healthy and restored!
-                            isQuorumLost = false
-                            quorumLossDetails = null
-                            com.obsidianscout.db.DatabaseFactory.saveLastHealthyTimestamp(java.time.Instant.now())
-                            com.obsidianscout.db.DatabaseFactory.cachedWorkingAsOfSystemTime = null
-                        }
+            val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
+            ds.connection.use { conn ->
+                conn.createStatement().use { stmt ->
+                    stmt.queryTimeout = 1
+                    try { stmt.execute("SET statement_timeout = '800ms'") } catch (_: Exception) {}
+                    // Test a real table read at T_now to confirm live cluster quorum and range leaseholders are responding
+                    stmt.executeQuery("SELECT id FROM users LIMIT 1").use { rs ->
+                        rs.next()
+                        // If the live query succeeds, quorum is healthy and restored!
+                        isQuorumLost = false
+                        quorumLossDetails = null
+                        com.obsidianscout.db.DatabaseFactory.saveLastHealthyTimestamp(java.time.Instant.now())
+                        com.obsidianscout.db.DatabaseFactory.cachedWorkingAsOfSystemTime = null
                     }
                 }
             }
