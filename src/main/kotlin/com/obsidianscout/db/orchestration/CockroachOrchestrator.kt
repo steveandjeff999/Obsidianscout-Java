@@ -34,6 +34,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     private val binaryName = if (isWindows) "cockroach.exe" else "cockroach"
     private val binaryFile = File(rootDir, binaryName)
     private var replicationJob: Job? = null
+    private var healthProbeJob: Job? = null
     private var tailscaleIp: String = "127.0.0.1"
     private var port: Int = 26257
     private var isInsecure: Boolean = true
@@ -494,6 +495,23 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
     fun startReplicationMonitor() {
         replicationJob?.cancel()
+        healthProbeJob?.cancel()
+
+        // Ultra-fast proactive health probe running every 1s
+        healthProbeJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isActive) {
+                try {
+                    val wasLost = isQuorumLost
+                    checkQuorumStatus()
+                    if (!wasLost && isQuorumLost) {
+                        println("[Cockroach] ⚠️ Cluster quorum loss proactively detected by health probe! Switched read transactions to AS OF SYSTEM TIME offline mode.")
+                    } else if (wasLost && !isQuorumLost) {
+                        println("[Cockroach] ✅ Cluster quorum restored! Resumed live read/write mode.")
+                    }
+                } catch (_: Exception) {}
+                delay(1000)
+            }
+        }
 
         replicationJob = CoroutineScope(Dispatchers.IO).launch {
             var currentReplicas = getReplicationFactorFromDb().let { if (it > 0) it else 1 }
@@ -916,10 +934,12 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '32 MiB'")
                     stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate = '32 MiB'")
                     stmt.execute("SET CLUSTER SETTING kv.replication_reports.interval = '30s'")
+                    try { stmt.execute("SET CLUSTER SETTING kv.closed_timestamp.target_duration = '1s'") } catch (_: Exception) {}
+                    try { stmt.execute("SET CLUSTER SETTING kv.closed_timestamp.side_transport_interval = '200ms'") } catch (_: Exception) {}
                     try { stmt.execute("SET CLUSTER SETTING kv.liveness.heartbeat_interval = '4s'") } catch (_: Exception) {}
                     try { stmt.execute("SET CLUSTER SETTING kv.liveness.lease_duration = '12s'") } catch (_: Exception) {}
                     try { stmt.execute("SET CLUSTER SETTING sql.defaults.default_transaction_use_follower_reads.enabled = true") } catch (_: Exception) {}
-                    println("[Cockroach] Snapshot rate limits, follower read defaults, and Tailscale VPN liveness thresholds applied (32 MiB/s max, 12s lease duration)")
+                    println("[Cockroach] Snapshot rate limits, follower read defaults, closed timestamp targets, and Tailscale VPN liveness thresholds applied.")
                 }
             }
         } catch (e: Exception) {
@@ -933,9 +953,9 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
                     stmt.executeQuery("SHOW ZONE CONFIG FOR RANGE default").use { rs ->
-                        if (rs.next()) {
-                            val raw = rs.getString("raw_config_sql") ?: ""
-                            val match = Regex("""num_replicas\s*=\s*(\d+)""").find(raw)
+                        while (rs.next()) {
+                            val config = rs.getString("raw_config_sql") ?: rs.getString(1) ?: ""
+                            val match = Regex("""num_replicas\s*=\s*(\d+)""").find(config)
                             if (match != null) {
                                 return match.groupValues[1].toInt()
                             }
@@ -1105,8 +1125,8 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             if (ds != null) {
                 ds.connection.use { conn ->
                     conn.createStatement().use { stmt ->
-                        stmt.queryTimeout = 2
-                        try { stmt.execute("SET statement_timeout = '1500ms'") } catch (_: Exception) {}
+                        stmt.queryTimeout = 1
+                        try { stmt.execute("SET statement_timeout = '800ms'") } catch (_: Exception) {}
                         // Test a real table read at T_now to confirm live cluster quorum and range leaseholders are responding
                         stmt.executeQuery("SELECT id FROM users LIMIT 1").use { rs ->
                             rs.next()

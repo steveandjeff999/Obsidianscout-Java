@@ -91,13 +91,13 @@ object DatabaseFactory {
             candidates.add("'$formatted'")
         }
 
-        // 2. Relative interval fallbacks (safe for local replica Pebble store)
+        // 2. Relative interval fallbacks (guaranteed to be behind closed timestamps; 100% locally readable from Pebble without RPC)
         candidates.addAll(listOf(
-            "'-2m'",
             "'-5m'",
             "'-15m'",
             "'-30m'",
             "'-1h'",
+            "'-2m'",
             "'-6h'",
             "'-24h'",
             "'-72h'"
@@ -142,6 +142,7 @@ object DatabaseFactory {
                 readOnly = true,
                 db = db
             ) {
+                try { exec("SET LOCAL statement_timeout = '1000ms';") } catch (_: Throwable) {}
                 statement()
             }
             saveLastHealthyTimestamp(java.time.Instant.now())
@@ -249,12 +250,12 @@ object DatabaseFactory {
     fun close() {
         try {
             activeDataSource?.close()
+            activeDataSource = null
+            isReady = false
+            println("[Database] Database connection pool closed.")
         } catch (e: Exception) {
-            // ignore
+            println("[Database] Error closing database pool: ${e.message}")
         }
-        activeDataSource = null
-        isReady = false
-        isCockroach = false
     }
 
     fun init(config: DatabaseConfig, runMigration: Boolean = true, isCockroach: Boolean = false) {
@@ -286,7 +287,7 @@ object DatabaseFactory {
             if (isPostgresCompatible) {
                 // Fixed pool size (minimumIdle == maximumPoolSize) ensures all connections stay perpetually
                 // connected to the local CockroachDB daemon and never get closed/recycled during quorum failovers.
-                val poolSize = if (isLowMem) 10 else 24
+                val poolSize = if (isLowMem) 12 else 32
                 maximumPoolSize = poolSize
                 minimumIdle = poolSize
                 idleTimeout = 600_000L
@@ -296,7 +297,7 @@ object DatabaseFactory {
                 if (!user.isNullOrBlank()) username = user
                 if (!pass.isNullOrBlank()) password = pass
                 transactionIsolation = if (isCockroachEngine) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
-                connectionInitSql = "SET statement_timeout = '5000ms';"
+                connectionInitSql = "SET statement_timeout = '1500ms';"
             } else {
                 maximumPoolSize = if (isLowMem) 4 else 8
                 minimumIdle = 1
@@ -304,9 +305,9 @@ object DatabaseFactory {
                 maxLifetime = 300_000L
                 isAutoCommit = true
             }
-            connectionTimeout = 15_000L  // 15s to allow failover under load without dropping connections
+            connectionTimeout = 5_000L   // 5s fail-fast timeout preventing thread exhaustion
             leakDetectionThreshold = 60000L // 60s threshold to avoid false connection leak warnings during transient CockroachDB leader elections
-            validationTimeout = 2000L
+            validationTimeout = 1000L
         }
 
         val dataSource = HikariDataSource(hikariConfig)
