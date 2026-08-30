@@ -1105,15 +1105,16 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             if (ds != null) {
                 ds.connection.use { conn ->
                     conn.createStatement().use { stmt ->
-                        stmt.queryTimeout = 5
-                        try { stmt.execute("SET statement_timeout = '5000ms'") } catch (_: Exception) {}
-                        stmt.executeQuery("SELECT 1").use { rs ->
-                            if (rs.next()) {
-                                isQuorumLost = false
-                                quorumLossDetails = null
-                                com.obsidianscout.db.DatabaseFactory.saveLastHealthyTimestamp(java.time.Instant.now())
-                                com.obsidianscout.db.DatabaseFactory.cachedWorkingAsOfSystemTime = null
-                            }
+                        stmt.queryTimeout = 2
+                        try { stmt.execute("SET statement_timeout = '1500ms'") } catch (_: Exception) {}
+                        // Test a real table read at T_now to confirm live cluster quorum and range leaseholders are responding
+                        stmt.executeQuery("SELECT id FROM users LIMIT 1").use { rs ->
+                            rs.next()
+                            // If the live query succeeds, quorum is healthy and restored!
+                            isQuorumLost = false
+                            quorumLossDetails = null
+                            com.obsidianscout.db.DatabaseFactory.saveLastHealthyTimestamp(java.time.Instant.now())
+                            com.obsidianscout.db.DatabaseFactory.cachedWorkingAsOfSystemTime = null
                         }
                     }
                 }
