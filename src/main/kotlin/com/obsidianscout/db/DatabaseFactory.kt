@@ -134,7 +134,11 @@ object DatabaseFactory {
         }
 
         try {
-            val result = transaction(db = db) {
+            val result = transaction(
+                transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+                readOnly = true,
+                db = db
+            ) {
                 statement()
             }
             saveLastHealthyTimestamp(java.time.Instant.now())
@@ -173,7 +177,11 @@ object DatabaseFactory {
         val cached = cachedWorkingAsOfSystemTime
         if (cached != null) {
             try {
-                return transaction(db = db) {
+                return transaction(
+                    transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+                    readOnly = true,
+                    db = db
+                ) {
                     exec("SET TRANSACTION AS OF SYSTEM TIME $cached;")
                     statement()
                 }
@@ -188,7 +196,11 @@ object DatabaseFactory {
 
         for (candidate in candidates) {
             try {
-                val result = transaction(db = db) {
+                val result = transaction(
+                    transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+                    readOnly = true,
+                    db = db
+                ) {
                     exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
                     statement()
                 }

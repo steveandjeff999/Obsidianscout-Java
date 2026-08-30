@@ -62,40 +62,46 @@ object ClusterSecretService {
         initFromConfig(appConfig)
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return
         try {
-            transaction {
-                val existing = ClusterSecrets.selectAll().associate { 
+            val existing = com.obsidianscout.db.readTransaction {
+                ClusterSecrets.selectAll().associate { 
                     it[ClusterSecrets.keyName] to it[ClusterSecrets.keyValue] 
                 }
+            }
 
-                val dbSessionSecret = existing["session_secret"]
-                val dbVapidPublic = existing["vapid_public_key"]
-                val dbVapidPrivate = existing["vapid_private_key"]
+            val dbSessionSecret = existing["session_secret"]
+            val dbVapidPublic = existing["vapid_public_key"]
+            val dbVapidPrivate = existing["vapid_private_key"]
 
-                var changed = false
-                val now = Instant.now()
+            var changed = false
+            val now = Instant.now()
 
-                val masterSessionSecret = if (!dbSessionSecret.isNull_or_blank()) {
-                    dbSessionSecret!!
-                } else {
-                    val local = sessionSecretRef.get().ifBlank { AppConfigLoader.generateSecret() }
+            val masterSessionSecret = if (!dbSessionSecret.isNull_or_blank()) {
+                dbSessionSecret!!
+            } else {
+                if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return
+                val local = sessionSecretRef.get().ifBlank { AppConfigLoader.generateSecret() }
+                transaction {
                     ClusterSecrets.insert {
                         it[keyName] = "session_secret"
                         it[keyValue] = local
                         it[updatedAt] = now
                     }
-                    local
+                }
+                local
+            }
+
+            val (masterVapidPublic, masterVapidPrivate) = if (!dbVapidPublic.isNull_or_blank() && !dbVapidPrivate.isNull_or_blank()) {
+                Pair(dbVapidPublic!!, dbVapidPrivate!!)
+            } else {
+                if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return
+                val (pub, priv) = if (vapidPublicKeyRef.get().isNotBlank() && vapidPrivateKeyRef.get().isNotBlank()) {
+                    Pair(vapidPublicKeyRef.get(), vapidPrivateKeyRef.get())
+                } else {
+                    val generated = VapidKeyGenerator.generate()
+                    Pair(generated.publicKey, generated.privateKey)
                 }
 
-                val (masterVapidPublic, masterVapidPrivate) = if (!dbVapidPublic.isNull_or_blank() && !dbVapidPrivate.isNull_or_blank()) {
-                    Pair(dbVapidPublic!!, dbVapidPrivate!!)
-                } else {
-                    val (pub, priv) = if (vapidPublicKeyRef.get().isNotBlank() && vapidPrivateKeyRef.get().isNotBlank()) {
-                        Pair(vapidPublicKeyRef.get(), vapidPrivateKeyRef.get())
-                    } else {
-                        val generated = VapidKeyGenerator.generate()
-                        Pair(generated.publicKey, generated.privateKey)
-                    }
-
+                transaction {
                     if (dbVapidPublic.isNull_or_blank()) {
                         ClusterSecrets.insert {
                             it[keyName] = "vapid_public_key"
@@ -110,8 +116,9 @@ object ClusterSecretService {
                             it[updatedAt] = now
                         }
                     }
-                    Pair(pub, priv)
                 }
+                Pair(pub, priv)
+            }
 
                 // Check if in-memory keys need updating
                 if (sessionSecretRef.get() != masterSessionSecret) {
@@ -127,14 +134,13 @@ object ClusterSecretService {
                     changed = true
                 }
 
-                // If keys were updated from DB or newly generated, persist to local app-config.json
-                if (changed || appConfig.server.sessionSecret != masterSessionSecret || appConfig.vapid.publicKey != masterVapidPublic) {
-                    AppConfigLoader.saveSecretUpdates(
-                        sessionSecret = masterSessionSecret,
-                        vapidPublicKey = masterVapidPublic,
-                        vapidPrivateKey = masterVapidPrivate
-                    )
-                }
+            // If keys were updated from DB or newly generated, persist to local app-config.json
+            if (changed || appConfig.server.sessionSecret != masterSessionSecret || appConfig.vapid.publicKey != masterVapidPublic) {
+                AppConfigLoader.saveSecretUpdates(
+                    sessionSecret = masterSessionSecret,
+                    vapidPublicKey = masterVapidPublic,
+                    vapidPrivateKey = masterVapidPrivate
+                )
             }
         } catch (e: Exception) {
             println("[ClusterSecretService] Warning: Failed to sync secrets with database cluster: ${e.message}")
