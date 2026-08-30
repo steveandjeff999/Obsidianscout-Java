@@ -83,33 +83,30 @@ object DatabaseFactory {
         val baseInstant = lastHealthyQuorumInstant ?: java.time.Instant.now()
         val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
 
-        // 1. Relative interval fallbacks (guaranteed to be behind closed timestamps; 100% locally readable from Pebble without RPC)
+        // 1. Dynamic follower reads & safe relative intervals (guaranteed to be behind closed timestamps; 100% locally readable from Pebble without RPC)
         candidates.addAll(listOf(
-            "'-5m'",
+            "follower_read_timestamp()",
             "'-15m'",
             "'-30m'",
             "'-1h'",
+            "'-2h'",
+            "'-5m'",
             "'-2m'",
             "'-6h'",
             "'-24h'",
-            "'-72h'"
+            "'-72h'",
+            "with_max_staleness(INTERVAL '10m')",
+            "with_max_staleness(INTERVAL '1h')",
+            "with_max_staleness(INTERVAL '24h')"
         ))
 
         // 2. Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store across all table ranges)
-        val offsetsMs = listOf(300_000L, 900_000L, 1_800_000L, 120_000L, 60_000L, 30_000L, 7_200_000L, 86_400_000L)
+        val offsetsMs = listOf(900_000L, 1_800_000L, 3_600_000L, 300_000L, 120_000L, 60_000L, 7_200_000L, 86_400_000L)
         for (offset in offsetsMs) {
             val targetInstant = baseInstant.minusMillis(offset)
             val formatted = formatter.format(targetInstant)
             candidates.add("'$formatted'")
         }
-
-        // 3. Dynamic bounded staleness follower reads
-        candidates.addAll(listOf(
-            "follower_read_timestamp()",
-            "with_max_staleness(INTERVAL '10m')",
-            "with_max_staleness(INTERVAL '1h')",
-            "with_max_staleness(INTERVAL '24h')"
-        ))
 
         return candidates.distinct()
     }
@@ -136,10 +133,7 @@ object DatabaseFactory {
             }
         }
 
-        val quorumCurrentlyLost = com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost
-
-        if (quorumCurrentlyLost || isInsideAsOfSystemTimeTx.get()) {
-            // When quorum is known to be lost, serve immediately via AS OF SYSTEM TIME follower reads without blocking user threads
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
             return executeAsOfSystemTime(db, statement)
         }
 
@@ -152,11 +146,17 @@ object DatabaseFactory {
                 this.maxAttempts = 1
                 this.minRetryDelay = 0
                 this.maxRetryDelay = 0
-                try { exec("SET LOCAL statement_timeout = '800ms';") } catch (_: Throwable) {}
+                if (isCrdb) {
+                    try { exec("SET LOCAL statement_timeout = '600ms';") } catch (_: Throwable) {}
+                }
                 statement()
             }
-            saveLastHealthyTimestamp(java.time.Instant.now())
-            cachedWorkingAsOfSystemTime = null
+            if (isCrdb && com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = false
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = null
+                saveLastHealthyTimestamp(java.time.Instant.now())
+                cachedWorkingAsOfSystemTime = null
+            }
             return result
         } catch (e: Throwable) {
             if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
@@ -186,7 +186,7 @@ object DatabaseFactory {
             this.minRetryDelay = 0
             this.maxRetryDelay = 0
             exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
-            try { exec("SET LOCAL statement_timeout = '800ms';") } catch (_: Throwable) {}
+            try { exec("SET LOCAL statement_timeout = '600ms';") } catch (_: Throwable) {}
             isInsideAsOfSystemTimeTx.set(true)
             try {
                 statement()
@@ -227,10 +227,12 @@ object DatabaseFactory {
 
         // 1. Fast path: try previously verified working candidate for this outage window
         val cached = cachedWorkingAsOfSystemTime
+        var failedCached: String? = null
         if (cached != null) {
             try {
                 return runInAsOfTransaction(db, cached, statement)
             } catch (cachedEx: Throwable) {
+                failedCached = cached
                 cachedWorkingAsOfSystemTime = null // Invalidate on failure and re-probe candidates
             }
         }
@@ -242,6 +244,7 @@ object DatabaseFactory {
                 try {
                     return runInAsOfTransaction(db, doubleChecked, statement)
                 } catch (_: Throwable) {
+                    failedCached = doubleChecked
                     cachedWorkingAsOfSystemTime = null
                 }
             }
@@ -250,6 +253,7 @@ object DatabaseFactory {
             var lastException: Throwable? = rootCause
 
             for (candidate in candidates) {
+                if (candidate == failedCached) continue
                 try {
                     val result = runInAsOfTransaction(db, candidate, statement)
                     cachedWorkingAsOfSystemTime = candidate
@@ -1444,7 +1448,7 @@ object DatabaseFactory {
         val hostPart = if (host.contains(",") || host.contains(":")) host else "$host:$port"
         val base = "jdbc:postgresql://$hostPart/$database"
         val sslMode = if (ssl) "sslmode=require" else "sslmode=disable"
-        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=5&socketTimeout=5&tcpKeepAlive=true"
+        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=2&socketTimeout=2&tcpKeepAlive=true"
     }
 
     private fun buildPostgresUrl(config: DatabaseConfig): String = buildPostgresOrCockroachUrl(config)

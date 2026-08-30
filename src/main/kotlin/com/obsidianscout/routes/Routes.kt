@@ -333,7 +333,7 @@ fun Application.configureRoutes() {
 
                     if (isEmailRecovery) {
                         val recoverEmail = request.email!!.trim()
-                        val matchedUsers = transaction {
+                        val matchedUsers = com.obsidianscout.db.readTransaction {
                             com.obsidianscout.db.Users
                                 .selectAll().where { com.obsidianscout.db.Users.email.lowerCase() eq recoverEmail.lowercase() }
                                 .toList()
@@ -374,7 +374,7 @@ fun Application.configureRoutes() {
                             )
                         }
 
-                        val user = transaction {
+                        val user = com.obsidianscout.db.readTransaction {
                             com.obsidianscout.db.Users
                                 .selectAll().where { 
                                     (com.obsidianscout.db.Users.username eq username) and 
@@ -413,7 +413,7 @@ fun Application.configureRoutes() {
                             // Insert new token associated with user ID
                             com.obsidianscout.db.PasswordResetTokens.insert {
                                 it[userId] = userIdVal
-                                it[com.obsidianscout.db.PasswordResetTokens.email] = null
+                                it[com.obsidianscout.db.PasswordResetTokens.email] = foundEmail
                                 it[com.obsidianscout.db.PasswordResetTokens.token] = token
                                 it[expiresAt] = expires
                             }
@@ -462,7 +462,7 @@ fun Application.configureRoutes() {
                     val token = call.request.queryParameters["token"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing token")
                     
-                    val tokenRow = transaction {
+                    val tokenRow = com.obsidianscout.db.readTransaction {
                         com.obsidianscout.db.PasswordResetTokens
                             .selectAll().where { 
                                 (com.obsidianscout.db.PasswordResetTokens.token eq token) and 
@@ -486,7 +486,7 @@ fun Application.configureRoutes() {
                     val userIdVal = tokenRow[com.obsidianscout.db.PasswordResetTokens.userId]
                     val emailVal = tokenRow[com.obsidianscout.db.PasswordResetTokens.email]
 
-                    val accounts = transaction {
+                    val accounts = com.obsidianscout.db.readTransaction {
                         if (userIdVal != null) {
                             com.obsidianscout.db.Users
                                 .selectAll().where { com.obsidianscout.db.Users.id eq userIdVal }
@@ -511,7 +511,7 @@ fun Application.configureRoutes() {
                 post("/reset-password") {
                     val request = call.receive<ResetPasswordRequest>()
                     
-                    val tokenRow = transaction {
+                    val tokenRow = com.obsidianscout.db.readTransaction {
                         com.obsidianscout.db.PasswordResetTokens
                             .selectAll().where { 
                                 (com.obsidianscout.db.PasswordResetTokens.token eq request.token) and 
@@ -542,7 +542,7 @@ fun Application.configureRoutes() {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid user ID format.")
                         }
                         // Verify that the requested userId has the matching email address
-                        val isValidAccount = transaction {
+                        val isValidAccount = com.obsidianscout.db.readTransaction {
                             com.obsidianscout.db.Users
                                 .selectAll().where { 
                                     (com.obsidianscout.db.Users.id eq reqUuid) and 
@@ -1548,7 +1548,7 @@ fun Application.configureRoutes() {
                     val session = call.requireSuperAdmin()
                     val req = call.receive<ResetDatabaseRequest>()
                     
-                    val userRecord = transaction {
+                    val userRecord = com.obsidianscout.db.readTransaction {
                         val uuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
                         if (uuid != null) {
                             com.obsidianscout.db.Users
@@ -1640,7 +1640,7 @@ fun Application.configureRoutes() {
                     val session = call.requireAdmin()
                     val req = call.receive<WipeTeamDataRequest>()
                     
-                    val userRecord = transaction {
+                    val userRecord = com.obsidianscout.db.readTransaction {
                         val uuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
                         if (uuid != null) {
                             com.obsidianscout.db.Users
@@ -2153,6 +2153,13 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val subscription = call.receive<PushSubscriptionDto>()
                     
+                    if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.ServiceUnavailable,
+                            "Database is in read-only offline mode due to cluster quorum loss."
+                        )
+                    }
+
                     transaction {
                         val existing = PushSubscriptions.selectAll()
                             .where { PushSubscriptions.endpoint eq subscription.endpoint }
