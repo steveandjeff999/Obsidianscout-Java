@@ -121,12 +121,12 @@ class DatabaseReadFallbackTest {
         val candidates = DatabaseFactory.buildAsOfSystemTimeCandidates()
         assertTrue(candidates.isNotEmpty())
 
-        // First candidate should be anchored before the healthy timestamp
+        // First candidates should prioritize bounded staleness follower reads
         val firstCandidate = candidates.first()
-        assertTrue(firstCandidate.startsWith("'2026-08-29 "), "First candidate should be anchored in ISO timestamp: $firstCandidate")
-        assertTrue(firstCandidate.contains("2026-08-29 11:59:50."))
+        assertTrue(firstCandidate.startsWith("with_max_staleness"), "First candidate should be bounded staleness: $firstCandidate")
 
-        // Check that relative interval fallbacks are also included
+        // Check that anchored timestamps and relative intervals are also included
+        assertTrue(candidates.any { it.startsWith("'2026-08-29 ") })
         assertTrue(candidates.contains("'-5m'"))
         assertTrue(candidates.contains("follower_read_timestamp()"))
     }

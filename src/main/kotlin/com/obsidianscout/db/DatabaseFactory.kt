@@ -80,6 +80,12 @@ object DatabaseFactory {
         val lastHealthy = lastHealthyQuorumInstant
         val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
 
+        // 1. Bounded staleness follower reads — CockroachDB's built-in partition-tolerant local follower read mechanism
+        candidates.add("with_max_staleness(INTERVAL '10m')")
+        candidates.add("with_max_staleness(INTERVAL '1h')")
+        candidates.add("with_max_staleness(INTERVAL '24h')")
+        candidates.add("follower_read_timestamp()")
+
         if (lastHealthy != null) {
             // Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store)
             val offsetsMs = listOf(10_000L, 20_000L, 30_000L, 60_000L, 120_000L, 300_000L, 900_000L, 1_800_000L, 7_200_000L, 86_400_000L)
@@ -90,11 +96,10 @@ object DatabaseFactory {
             }
         }
 
-        candidates.add("follower_read_timestamp()")
-        candidates.add("with_max_staleness(INTERVAL '10s')")
-
         // Relative interval fallbacks in case lastHealthy was null or cluster loss time is unknown
         candidates.addAll(listOf(
+            "with_max_staleness(INTERVAL '10s')",
+            "with_max_staleness(INTERVAL '1m')",
             "'-10s'",
             "'-30s'",
             "'-1m'",
@@ -104,9 +109,7 @@ object DatabaseFactory {
             "'-1h'",
             "'-6h'",
             "'-24h'",
-            "'-72h'",
-            "with_max_staleness(INTERVAL '1m')",
-            "with_max_staleness(INTERVAL '1h')"
+            "'-72h'"
         ))
 
         return candidates.distinct()
@@ -257,7 +260,7 @@ object DatabaseFactory {
                 // + admin page loads all fire simultaneously after each update restart.
                 // CockroachDB handles 20 concurrent SERIALIZABLE connections comfortably.
                 maximumPoolSize = if (isLowMem) 6 else 20
-                minimumIdle = 2
+                minimumIdle = if (isLowMem) 4 else 8
                 idleTimeout = 60_000L
                 maxLifetime = 300_000L
                 isAutoCommit = true
