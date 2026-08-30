@@ -124,7 +124,7 @@ class DatabaseReadFallbackTest {
         // First candidate should be anchored before the healthy timestamp
         val firstCandidate = candidates.first()
         assertTrue(firstCandidate.startsWith("'2026-08-29 "), "First candidate should be anchored in ISO timestamp: $firstCandidate")
-        assertTrue(firstCandidate.contains("2026-08-29 11:59:59.") || firstCandidate.contains("2026-08-29 12:00:00."))
+        assertTrue(firstCandidate.contains("2026-08-29 11:59:50."))
 
         // Check that relative interval fallbacks are also included
         assertTrue(candidates.contains("'-5m'"))

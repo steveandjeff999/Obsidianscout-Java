@@ -82,7 +82,7 @@ object DatabaseFactory {
 
         if (lastHealthy != null) {
             // Anchored fixed timestamps before quorum was lost (safe for local replica Pebble store)
-            val offsetsMs = listOf(1_000L, 5_000L, 15_000L, 30_000L, 60_000L, 300_000L, 1_800_000L, 7_200_000L, 86_400_000L)
+            val offsetsMs = listOf(10_000L, 20_000L, 30_000L, 60_000L, 120_000L, 300_000L, 900_000L, 1_800_000L, 7_200_000L, 86_400_000L)
             for (offset in offsetsMs) {
                 val targetInstant = lastHealthy.minusMillis(offset)
                 val formatted = formatter.format(targetInstant)
@@ -265,11 +265,7 @@ object DatabaseFactory {
                 if (!user.isNullOrBlank()) username = user
                 if (!pass.isNullOrBlank()) password = pass
                 transactionIsolation = if (isCockroachEngine) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
-                connectionInitSql = if (isCockroachEngine) {
-                    "SET default_transaction_use_follower_reads = 'on'; SET statement_timeout = '5000ms';"
-                } else {
-                    "SET statement_timeout = '5000ms';"
-                }
+                connectionInitSql = "SET statement_timeout = '5000ms';"
             } else {
                 maximumPoolSize = if (isLowMem) 4 else 8
                 minimumIdle = 1
