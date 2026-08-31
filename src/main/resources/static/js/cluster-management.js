@@ -1237,12 +1237,12 @@
             selectiveOpts.style.pointerEvents = isMirrorAll ? "none" : "auto";
         }
 
-        modal.style.display = "flex";
+        modal.classList.add("show");
     }
 
     function closeConfigureQuorumFallbackModal() {
         const modal = document.getElementById("quorum-config-modal");
-        if (modal) modal.style.display = "none";
+        if (modal) modal.classList.remove("show");
         currentConfiguringNodeIp = null;
     }
 
@@ -1301,7 +1301,7 @@
 
         if (nodePill) nodePill.textContent = `Node: ${nodeIp}`;
         modalBody.innerHTML = `<div style="text-align: center; color: #94a3b8; padding: 40px;"><div style="font-size: 24px; margin-bottom: 8px;">⏳</div>Loading remote SQLite snapshot for <strong>${escapeHtml(nodeIp)}</strong>...</div>`;
-        modal.style.display = "flex";
+        modal.classList.add("show");
 
         try {
             const data = await apiRequest(`/api/admin/cluster/quorum-fallback/inspect?targetIp=${encodeURIComponent(nodeIp)}`);
@@ -1313,7 +1313,7 @@
 
     function closeInspectQuorumFallbackModal() {
         const modal = document.getElementById("quorum-inspect-modal");
-        if (modal) modal.style.display = "none";
+        if (modal) modal.classList.remove("show");
     }
 
     function renderInspectData(data, container) {
