@@ -55,7 +55,7 @@
     "google_sheet_password": "",
     "cockroach_port": 26257,
     "site_url": "https://kotlin.obsidianscout.com",
-    "current_version": "0.5.1.0",
+    "current_version": "0.5.1.1",
     "gist_update": {
         "enabled": false,
         "gist_url": "https://gist.githubusercontent.com/steveandjeff999/41b76376d064a6893ff2644b04447d9f/raw/Public-Version.json",
@@ -65,6 +65,14 @@
         "enabled": false,
         "sqlite_file": "data/quorum_fallback.db",
         "sync_interval_seconds": 30,
-        "scouting_retention_days": 7
+        "scouting_retention_days": 7,
+        "mirror_all_data": false,
+        "mirror_users": true,
+        "mirror_scouting": true,
+        "mirror_api_data": true,
+        "mirror_configs": true,
+        "mirror_alliances": true,
+        "mirror_chat": true,
+        "mirror_notifications_secrets": true
     }
 }
