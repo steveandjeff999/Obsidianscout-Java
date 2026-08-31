@@ -80,19 +80,19 @@ object DatabaseFactory {
 
     fun buildAsOfSystemTimeCandidates(): List<String> {
         val candidates = mutableListOf<String>()
-        candidates.add("follower_read_timestamp()")
-        candidates.add("'-5m'")
-        candidates.add("'-15m'")
-        candidates.add("'-1h'")
-        candidates.add("with_max_staleness(INTERVAL '10m')")
-        candidates.add("'-24h'")
-
         val baseInstant = lastHealthyQuorumInstant
         if (baseInstant != null) {
             val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
-            val targetInstant = baseInstant.minusMillis(300_000L)
+            val targetInstant = baseInstant.minusSeconds(30)
             candidates.add("'${formatter.format(targetInstant)}'")
+            candidates.add("'${formatter.format(targetInstant.minusSeconds(300))}'")
         }
+        candidates.add("'-15m'")
+        candidates.add("'-1h'")
+        candidates.add("'-5m'")
+        candidates.add("with_max_staleness(INTERVAL '10m')")
+        candidates.add("follower_read_timestamp()")
+        candidates.add("'-24h'")
         return candidates.distinct()
     }
 
@@ -1433,7 +1433,7 @@ object DatabaseFactory {
         val hostPart = if (host.contains(",") || host.contains(":")) host else "$host:$port"
         val base = "jdbc:postgresql://$hostPart/$database"
         val sslMode = if (ssl) "sslmode=require" else "sslmode=disable"
-        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=5&tcpKeepAlive=true"
+        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=5&socketTimeout=3&tcpKeepAlive=true&options=-c%20statement_timeout=1500"
     }
 
     private fun buildPostgresUrl(config: DatabaseConfig): String = buildPostgresOrCockroachUrl(config)
