@@ -1061,6 +1061,27 @@
             toggleLabel.appendChild(toggleInput);
             toggleLabel.appendChild(document.createTextNode(node.enabled ? "Enabled" : "Disabled"));
 
+            const configBtn = document.createElement("button");
+            configBtn.className = "btn-action config";
+            configBtn.style.padding = "4px 8px";
+            configBtn.style.fontSize = "11px";
+            configBtn.style.marginRight = "6px";
+            configBtn.textContent = "⚙️ Configure";
+            configBtn.addEventListener("click", () => {
+                openConfigureQuorumFallbackModal(node);
+            });
+
+            const inspectBtn = document.createElement("button");
+            inspectBtn.className = "btn-action logs";
+            inspectBtn.style.padding = "4px 8px";
+            inspectBtn.style.fontSize = "11px";
+            inspectBtn.style.marginRight = "6px";
+            inspectBtn.textContent = "🔍 Inspect DB";
+            inspectBtn.disabled = !node.enabled && node.databaseSizeBytes === 0;
+            inspectBtn.addEventListener("click", () => {
+                openInspectQuorumFallbackModal(node.nodeIp);
+            });
+
             const syncBtn = document.createElement("button");
             syncBtn.className = "btn-action logs";
             syncBtn.style.padding = "4px 8px";
@@ -1084,6 +1105,8 @@
             });
 
             actionsTd.appendChild(toggleLabel);
+            actionsTd.appendChild(configBtn);
+            actionsTd.appendChild(inspectBtn);
             actionsTd.appendChild(syncBtn);
             actionsTd.appendChild(purgeBtn);
 
@@ -1114,6 +1137,8 @@
         }
     }
 
+    let currentConfiguringNodeIp = null;
+
     function bindQuorumFallbackEvents() {
         const refreshBtn = document.getElementById("btn-qf-refresh");
         refreshBtn?.addEventListener("click", async () => {
@@ -1127,6 +1152,264 @@
                 refreshBtn.textContent = "Refresh Fallback Status";
             }
         });
+
+        document.getElementById("modal-inspect-close-x")?.addEventListener("click", closeInspectQuorumFallbackModal);
+        document.getElementById("modal-inspect-close-btn")?.addEventListener("click", closeInspectQuorumFallbackModal);
+        document.getElementById("quorum-inspect-modal")?.addEventListener("click", (e) => {
+            if (e.target.id === "quorum-inspect-modal") closeInspectQuorumFallbackModal();
+        });
+
+        document.getElementById("modal-qf-config-close-x")?.addEventListener("click", closeConfigureQuorumFallbackModal);
+        document.getElementById("modal-qf-config-cancel")?.addEventListener("click", closeConfigureQuorumFallbackModal);
+        document.getElementById("quorum-config-modal")?.addEventListener("click", (e) => {
+            if (e.target.id === "quorum-config-modal") closeConfigureQuorumFallbackModal();
+        });
+        document.getElementById("modal-qf-config-save")?.addEventListener("click", saveQuorumFallbackConfig);
+
+        // Toggle selective checkboxes visibility
+        const modeEverything = document.getElementById("qf-mode-everything");
+        const modeSelective = document.getElementById("qf-mode-selective");
+        const selectiveOpts = document.getElementById("qf-selective-options");
+
+        const updateModeUI = () => {
+            if (selectiveOpts) {
+                selectiveOpts.style.opacity = modeEverything?.checked ? "0.4" : "1";
+                selectiveOpts.style.pointerEvents = modeEverything?.checked ? "none" : "auto";
+            }
+        };
+
+        modeEverything?.addEventListener("change", updateModeUI);
+        modeSelective?.addEventListener("change", updateModeUI);
+    }
+
+    function openConfigureQuorumFallbackModal(node) {
+        const modal = document.getElementById("quorum-config-modal");
+        const nodePill = document.getElementById("qf-config-node-pill");
+        if (!modal) return;
+
+        currentConfiguringNodeIp = node.nodeIp;
+        if (nodePill) nodePill.textContent = `Node: ${node.nodeIp}`;
+
+        const cfg = node.config || {};
+        const isMirrorAll = !!cfg.mirror_all_data;
+
+        const radioEverything = document.getElementById("qf-mode-everything");
+        const radioSelective = document.getElementById("qf-mode-selective");
+        if (isMirrorAll) {
+            if (radioEverything) radioEverything.checked = true;
+        } else {
+            if (radioSelective) radioSelective.checked = true;
+        }
+
+        const chkUsers = document.getElementById("qf-chk-users");
+        if (chkUsers) chkUsers.checked = cfg.mirror_users !== false;
+
+        const chkScouting = document.getElementById("qf-chk-scouting");
+        if (chkScouting) chkScouting.checked = cfg.mirror_scouting !== false;
+
+        const chkApi = document.getElementById("qf-chk-api-data");
+        if (chkApi) chkApi.checked = cfg.mirror_api_data !== false;
+
+        const chkConfigs = document.getElementById("qf-chk-configs");
+        if (chkConfigs) chkConfigs.checked = cfg.mirror_configs !== false;
+
+        const chkAlliances = document.getElementById("qf-chk-alliances");
+        if (chkAlliances) chkAlliances.checked = cfg.mirror_alliances !== false;
+
+        const chkChat = document.getElementById("qf-chk-chat");
+        if (chkChat) chkChat.checked = cfg.mirror_chat !== false;
+
+        const chkSecrets = document.getElementById("qf-chk-secrets");
+        if (chkSecrets) chkSecrets.checked = cfg.mirror_notifications_secrets !== false;
+
+        const selRetention = document.getElementById("qf-select-retention");
+        if (selRetention) selRetention.value = String(cfg.scouting_retention_days || 7);
+
+        const inputInterval = document.getElementById("qf-input-interval");
+        if (inputInterval) inputInterval.value = String(cfg.sync_interval_seconds || 30);
+
+        const inputSqlite = document.getElementById("qf-input-sqlite-file");
+        if (inputSqlite) inputSqlite.value = cfg.sqlite_file || "data/quorum_fallback.db";
+
+        const selectiveOpts = document.getElementById("qf-selective-options");
+        if (selectiveOpts) {
+            selectiveOpts.style.opacity = isMirrorAll ? "0.4" : "1";
+            selectiveOpts.style.pointerEvents = isMirrorAll ? "none" : "auto";
+        }
+
+        modal.style.display = "flex";
+    }
+
+    function closeConfigureQuorumFallbackModal() {
+        const modal = document.getElementById("quorum-config-modal");
+        if (modal) modal.style.display = "none";
+        currentConfiguringNodeIp = null;
+    }
+
+    async function saveQuorumFallbackConfig() {
+        if (!currentConfiguringNodeIp) return;
+
+        const saveBtn = document.getElementById("modal-qf-config-save");
+        const radioEverything = document.getElementById("qf-mode-everything");
+        const isMirrorAll = radioEverything?.checked ?? false;
+
+        const payload = {
+            targetIp: currentConfiguringNodeIp,
+            mirrorAllData: isMirrorAll,
+            mirrorUsers: document.getElementById("qf-chk-users")?.checked ?? true,
+            mirrorScouting: document.getElementById("qf-chk-scouting")?.checked ?? true,
+            mirrorApiData: document.getElementById("qf-chk-api-data")?.checked ?? true,
+            mirrorConfigs: document.getElementById("qf-chk-configs")?.checked ?? true,
+            mirrorAlliances: document.getElementById("qf-chk-alliances")?.checked ?? true,
+            mirrorChat: document.getElementById("qf-chk-chat")?.checked ?? true,
+            mirrorNotificationsSecrets: document.getElementById("qf-chk-secrets")?.checked ?? true,
+            scoutingRetentionDays: parseInt(document.getElementById("qf-select-retention")?.value || "7", 10),
+            syncIntervalSeconds: parseInt(document.getElementById("qf-input-interval")?.value || "30", 10),
+            sqliteFile: document.getElementById("qf-input-sqlite-file")?.value?.trim() || "data/quorum_fallback.db"
+        };
+
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = "Saving...";
+        }
+
+        try {
+            const resp = await apiRequest("/api/admin/cluster/quorum-fallback/config", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            showToastMsg(resp.message || "Quorum fallback configuration saved.", resp.success ? "success" : "error");
+            closeConfigureQuorumFallbackModal();
+            setTimeout(() => loadQuorumFallbackStatus(), 1000);
+        } catch (e) {
+            showToastMsg("Failed to save configuration: " + e.message, "error");
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = "Save Node Configuration";
+            }
+        }
+    }
+
+    async function openInspectQuorumFallbackModal(nodeIp) {
+        const modal = document.getElementById("quorum-inspect-modal");
+        const nodePill = document.getElementById("inspect-node-pill");
+        const modalBody = document.getElementById("inspect-modal-body");
+
+        if (!modal || !modalBody) return;
+
+        if (nodePill) nodePill.textContent = `Node: ${nodeIp}`;
+        modalBody.innerHTML = `<div style="text-align: center; color: #94a3b8; padding: 40px;"><div style="font-size: 24px; margin-bottom: 8px;">⏳</div>Loading remote SQLite snapshot for <strong>${escapeHtml(nodeIp)}</strong>...</div>`;
+        modal.style.display = "flex";
+
+        try {
+            const data = await apiRequest(`/api/admin/cluster/quorum-fallback/inspect?targetIp=${encodeURIComponent(nodeIp)}`);
+            renderInspectData(data, modalBody);
+        } catch (err) {
+            modalBody.innerHTML = `<div style="color: #f87171; padding: 20px; text-align: center;">Failed to inspect fallback database on ${escapeHtml(nodeIp)}: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+
+    function closeInspectQuorumFallbackModal() {
+        const modal = document.getElementById("quorum-inspect-modal");
+        if (modal) modal.style.display = "none";
+    }
+
+    function renderInspectData(data, container) {
+        const tableCounts = data.tableCounts || {};
+        const activeEvents = data.activeEvents || [];
+
+        let eventsHtml = "";
+        if (activeEvents.length > 0) {
+            eventsHtml = `
+                <div style="overflow-x: auto; margin-top: 8px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #94a3b8; text-align: left;">
+                                <th style="padding: 6px 8px;">Event Key</th>
+                                <th style="padding: 6px 8px;">Name</th>
+                                <th style="padding: 6px 8px;">Dates</th>
+                                <th style="padding: 6px 8px; text-align: center;">Matches</th>
+                                <th style="padding: 6px 8px; text-align: center;">Teams</th>
+                                <th style="padding: 6px 8px; text-align: center;">Match Scouting</th>
+                                <th style="padding: 6px 8px; text-align: center;">Pit Scouting</th>
+                                <th style="padding: 6px 8px; text-align: center;">Qual Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${activeEvents.map(ev => `
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding: 6px 8px; font-weight: 600; color: #fbbf24;">${escapeHtml(ev.eventKey)}</td>
+                                    <td style="padding: 6px 8px; color: #f1f5f9;">${escapeHtml(ev.name)}</td>
+                                    <td style="padding: 6px 8px; color: #94a3b8;">${escapeHtml(ev.startDate || '')} ${ev.endDate ? '→ ' + escapeHtml(ev.endDate) : ''}</td>
+                                    <td style="padding: 6px 8px; text-align: center; color: #38bdf8;">${ev.matchCount}</td>
+                                    <td style="padding: 6px 8px; text-align: center; color: #38bdf8;">${ev.teamCount}</td>
+                                    <td style="padding: 6px 8px; text-align: center; color: #34d399; font-weight: 600;">${ev.matchScoutingCount}</td>
+                                    <td style="padding: 6px 8px; text-align: center; color: #34d399;">${ev.pitScoutingCount}</td>
+                                    <td style="padding: 6px 8px; text-align: center; color: #34d399;">${ev.qualScoutingCount}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            eventsHtml = `<div style="color: #64748b; font-size: 13px; padding: 12px 0;">No active events within ±1 week are currently stored in this snapshot.</div>`;
+        }
+
+        const tableEntries = Object.entries(tableCounts).sort(([a], [b]) => a.localeCompare(b));
+        const tablesGridHtml = tableEntries.map(([tbl, count]) => `
+            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 12px; color: #cbd5e1; font-family: monospace;">${escapeHtml(tbl)}</span>
+                <span style="font-size: 12px; font-weight: 700; color: ${count > 0 ? '#38bdf8' : '#64748b'};">${count.toLocaleString()}</span>
+            </div>
+        `).join('');
+
+        container.innerHTML = `
+            <!-- Top Status Grid -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 11px; color: #fbbf24; text-transform: uppercase; font-weight: 700;">Mirror Status</div>
+                    <div style="font-size: 15px; font-weight: 700; color: #fef3c7; margin-top: 4px;">${escapeHtml(data.status)}</div>
+                </div>
+                <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 11px; color: #38bdf8; text-transform: uppercase; font-weight: 700;">Snapshot File Size</div>
+                    <div style="font-size: 15px; font-weight: 700; color: #f0f9ff; margin-top: 4px;">${formatBytes(data.databaseSizeBytes)}</div>
+                </div>
+                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 11px; color: #34d399; text-transform: uppercase; font-weight: 700;">Available Free Disk</div>
+                    <div style="font-size: 15px; font-weight: 700; color: #ecfdf5; margin-top: 4px;">${formatBytes(data.freeDiskSpaceBytes)} / ${formatBytes(data.totalDiskSpaceBytes)}</div>
+                </div>
+                <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 11px; color: #c084fc; text-transform: uppercase; font-weight: 700;">Last Synced</div>
+                    <div style="font-size: 13px; font-weight: 600; color: #faf5ff; margin-top: 4px;">${data.lastSyncTimestamp ? new Date(data.lastSyncTimestamp).toLocaleString() : 'Never'}</div>
+                </div>
+            </div>
+
+            <!-- Mirrored Events (±1 Week Window) -->
+            <div style="margin-bottom: 20px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h3 style="font-size: 14px; color: #fbbf24; margin: 0;">📅 Mirrored Events (±1 Week Competition Window)</h3>
+                    <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; font-size: 11px;">${activeEvents.length} events</span>
+                </div>
+                <p style="font-size: 12px; color: #94a3b8; margin: 0 0 10px 0;">
+                    All API event data, match schedules, team rosters, and competition scouting entries within ±7 days of today are fully mirrored.
+                </p>
+                ${eventsHtml}
+            </div>
+
+            <!-- Mirrored Database Tables & Row Counts -->
+            <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h3 style="font-size: 14px; color: #38bdf8; margin: 0;">🗄️ SQLite Table Records Breakdown</h3>
+                    <span class="badge" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; font-size: 11px;">${tableEntries.length} tables</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-top: 10px;">
+                    ${tablesGridHtml}
+                </div>
+            </div>
+        `;
     }
 
     async function toggleQuorumFallbackOnNode(nodeIp, enabled) {

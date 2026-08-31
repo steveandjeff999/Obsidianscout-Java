@@ -817,6 +817,23 @@ data class ToggleQuorumFallbackRequest(
 )
 
 @Serializable
+data class UpdateQuorumFallbackConfigRequest(
+    val targetIp: String = "local",
+    val enabled: Boolean? = null,
+    val sqliteFile: String? = null,
+    val syncIntervalSeconds: Long? = null,
+    val scoutingRetentionDays: Int? = null,
+    val mirrorAllData: Boolean? = null,
+    val mirrorUsers: Boolean? = null,
+    val mirrorScouting: Boolean? = null,
+    val mirrorApiData: Boolean? = null,
+    val mirrorConfigs: Boolean? = null,
+    val mirrorAlliances: Boolean? = null,
+    val mirrorChat: Boolean? = null,
+    val mirrorNotificationsSecrets: Boolean? = null
+)
+
+@Serializable
 data class TargetNodeActionRequest(
     val targetIp: String = "local"
 )

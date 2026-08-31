@@ -525,6 +525,128 @@
         </div>
     </div>
 
+    <!-- Quorum Fallback Database Inspector Modal -->
+    <div id="quorum-inspect-modal" class="modal-backdrop" role="dialog" aria-modal="true" style="display: none;">
+        <div class="modal-container" style="max-width: 900px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h2 class="modal-title" style="color: #fbbf24; font-size: 16px;">🔍 Fallback SQLite Database Inspector</h2>
+                    <span id="inspect-node-pill" class="badge" style="background: rgba(100, 116, 139, 0.3); color: #94a3b8; font-size: 11px;">Node: -</span>
+                </div>
+                <button type="button" class="modal-close" id="modal-inspect-close-x" aria-label="Close">&#x2715;</button>
+            </div>
+            <div id="inspect-modal-body" style="padding: 20px; overflow-y: auto; flex: 1;">
+                <div style="text-align: center; color: #94a3b8; padding: 30px;">Loading database contents...</div>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-inspect-close-btn" class="btn ghost" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quorum Fallback Customization Modal -->
+    <div id="quorum-config-modal" class="modal-backdrop" role="dialog" aria-modal="true" style="display: none;">
+        <div class="modal-container" style="max-width: 650px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h2 class="modal-title" style="color: #fbbf24; font-size: 16px;">⚙️ Customize Fallback Mirror Cache</h2>
+                    <span id="qf-config-node-pill" class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; font-size: 11px;">Node: -</span>
+                </div>
+                <button type="button" class="modal-close" id="modal-qf-config-close-x" aria-label="Close">&#x2715;</button>
+            </div>
+            <div style="padding: 20px; overflow-y: auto; flex: 1;">
+                <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-muted, #94a3b8);">
+                    Customize what datasets and event ranges this specific server node stores locally in SQLite for quorum loss fallback.
+                </p>
+
+                <!-- Mode Selection -->
+                <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                    <div style="font-size: 13px; font-weight: 700; color: #f1f5f9; margin-bottom: 10px;">Cache Mode</div>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: #f8fafc; font-size: 13px;">
+                            <input type="radio" name="qf-mode" id="qf-mode-everything" value="everything" style="margin-top: 3px; cursor: pointer;" />
+                            <div>
+                                <span style="font-weight: 700; color: #34d399;">🌐 Mirror Everything (Full Replica)</span>
+                                <div style="font-size: 11px; color: #94a3b8;">Caches all historical competition data, all match/pit/qualitative scouting entries, all teams/matches, users, chat, and configs without date cutoffs. Best for high-storage servers.</div>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: #f8fafc; font-size: 13px;">
+                            <input type="radio" name="qf-mode" id="qf-mode-selective" value="selective" checked style="margin-top: 3px; cursor: pointer;" />
+                            <div>
+                                <span style="font-weight: 700; color: #fbbf24;">🎯 Customized Selective Cache</span>
+                                <div style="font-size: 11px; color: #94a3b8;">Selectively choose specific data categories and time retention windows to conserve disk space.</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Selective Categories (Enabled when selective mode is active) -->
+                <div id="qf-selective-options" style="background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                    <div style="font-size: 13px; font-weight: 700; color: #f1f5f9; margin-bottom: 10px;">Included Data Categories</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                            <input type="checkbox" id="qf-chk-users" checked />
+                            <span>Users & Active Sessions</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                            <input type="checkbox" id="qf-chk-scouting" checked />
+                            <span>Scouting Submissions</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                            <input type="checkbox" id="qf-chk-api-data" checked />
+                            <span>API Schedule & Teams</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                            <input type="checkbox" id="qf-chk-configs" checked />
+                            <span>Scouting Form Configs</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                            <input type="checkbox" id="qf-chk-alliances" checked />
+                            <span>Alliances & Selections</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                            <input type="checkbox" id="qf-chk-chat" checked />
+                            <span>Chat Groups & History</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                            <input type="checkbox" id="qf-chk-secrets" checked />
+                            <span>FCM & Notification Secrets</span>
+                        </label>
+                    </div>
+
+                    <!-- Retention Window Dropdown -->
+                    <div style="margin-top: 14px;">
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Competition Event & Scouting Window</label>
+                        <select id="qf-select-retention" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px; font-size: 13px;">
+                            <option value="7">±7 Days (1 Week Window - Recommended)</option>
+                            <option value="14">±14 Days (2 Weeks Window)</option>
+                            <option value="30">±30 Days (1 Month Window)</option>
+                            <option value="90">±90 Days (Quarter Season)</option>
+                            <option value="365">±365 Days (Full Year)</option>
+                        </select>
+                        <small style="color: #94a3b8; font-size: 11px;">Mirrors all event schedules, team rosters, and scouting entries occurring within this window of today.</small>
+                    </div>
+                </div>
+
+                <!-- Sync Interval & Advanced -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Sync Interval (seconds)</label>
+                        <input type="number" id="qf-input-interval" min="5" max="3600" step="1" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">SQLite File Path</label>
+                        <input type="text" id="qf-input-sqlite-file" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-qf-config-cancel" class="btn ghost" type="button">Cancel</button>
+                <button id="modal-qf-config-save" class="btn secondary" style="background: #f59e0b; color: white;" type="button">Save Node Configuration</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="/js/common.js"></script>
     <script src="/js/cluster-management.js"></script>
 </body>

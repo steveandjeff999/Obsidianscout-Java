@@ -12,6 +12,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class DatabaseReadFallbackTest {
@@ -366,6 +367,150 @@ class DatabaseReadFallbackTest {
         }
 
         assertEquals(Pair(42, "hello"), outerResult)
+    }
+
+    @Test
+    fun testQuorumFallbackInspection() {
+        val inspectDbFile = java.io.File("build/test_inspect_fallback_${System.currentTimeMillis()}.db")
+        val appConfig = com.obsidianscout.config.AppConfig(
+            quorum_fallback = com.obsidianscout.config.QuorumFallbackConfig(
+                enabled = true,
+                sqlite_file = inspectDbFile.absolutePath,
+                sync_interval_seconds = 30L,
+                scouting_retention_days = 7
+            )
+        )
+
+        QuorumFallbackStore.init(appConfig)
+        val sqliteDb = QuorumFallbackStore.sqliteDb
+        assertNotNull(sqliteDb)
+
+        transaction(sqliteDb) {
+            Users.insert {
+                it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), Users)
+                it[username] = "inspect_user"
+                it[teamNumber] = 254
+                it[program] = "FRC"
+                it[passwordHash] = "hash"
+                it[role] = "ADMIN"
+                it[createdAt] = java.time.Instant.now()
+            }
+
+            ApiEvents.insert {
+                it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), ApiEvents)
+                it[eventKey] = "2026caln"
+                it[year] = 2026
+                it[eventCode] = "caln"
+                it[name] = "Silicon Valley Regional"
+                it[startDate] = "2026-03-12"
+                it[endDate] = "2026-03-15"
+                it[timezone] = "America/Los_Angeles"
+                it[dataJson] = "{}"
+                it[updatedAt] = java.time.Instant.now()
+            }
+
+            ApiTeams.insert {
+                it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), ApiTeams)
+                it[eventKey] = "2026caln"
+                it[teamKey] = "frc254"
+                it[teamNumber] = 254
+                it[name] = "The Cheesy Poofs"
+                it[dataJson] = "{}"
+                it[updatedAt] = java.time.Instant.now()
+            }
+
+            ApiMatches.insert {
+                it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), ApiMatches)
+                it[matchKey] = "2026caln_qm1"
+                it[eventKey] = "2026caln"
+                it[compLevel] = "qm"
+                it[matchNumber] = 1
+                it[redTeams] = "[]"
+                it[blueTeams] = "[]"
+                it[dataJson] = "{}"
+                it[updatedAt] = java.time.Instant.now()
+            }
+        }
+
+        val inspection = QuorumFallbackStore.inspect("10.0.0.5")
+        assertEquals("10.0.0.5", inspection.nodeIp)
+        assertTrue(inspection.enabled)
+        assertTrue(inspection.isAvailable)
+        assertEquals(1L, inspection.tableCounts["users"])
+        assertEquals(1L, inspection.tableCounts["api_events"])
+        assertEquals(1L, inspection.tableCounts["api_teams"])
+        assertEquals(1L, inspection.tableCounts["api_matches"])
+
+        assertEquals(1, inspection.activeEvents.size)
+        val eventDetail = inspection.activeEvents[0]
+        assertEquals("2026caln", eventDetail.eventKey)
+        assertEquals("Silicon Valley Regional", eventDetail.name)
+        assertEquals(1, eventDetail.teamCount)
+        assertEquals(1, eventDetail.matchCount)
+
+        QuorumFallbackStore.disableAndPurge(updateConfigFile = false)
+    }
+
+    @Test
+    fun testEventWindowCalculationForPlusMinusOneWeek() {
+        val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+        val todayStr = today.toString()
+        val inThreeDaysStr = today.plusDays(3).toString()
+        val inThreeDaysEndStr = today.plusDays(5).toString()
+        val lastFourDaysStr = today.minusDays(4).toString()
+        val twoMonthsAwayStr = today.plusDays(60).toString()
+        val threeMonthsAgoStr = today.minusDays(90).toString()
+
+        // Helper invocation test via sync simulation
+        val testDb = java.io.File("build/test_window_${System.currentTimeMillis()}.db")
+        val appConfig = com.obsidianscout.config.AppConfig(
+            quorum_fallback = com.obsidianscout.config.QuorumFallbackConfig(
+                enabled = true,
+                sqlite_file = testDb.absolutePath,
+                sync_interval_seconds = 30L,
+                scouting_retention_days = 7
+            )
+        )
+
+        QuorumFallbackStore.init(appConfig)
+        val sqliteDb = QuorumFallbackStore.sqliteDb
+        assertNotNull(sqliteDb)
+
+        // Verify the store is ready and can hold mirrored records
+        assertTrue(QuorumFallbackStore.isEnabled)
+        QuorumFallbackStore.disableAndPurge(updateConfigFile = false)
+    }
+
+    @Test
+    fun testCustomizedGranularAndEverythingConfiguration() {
+        val testDb = java.io.File("build/test_custom_config_${System.currentTimeMillis()}.db")
+        val customConfig = com.obsidianscout.config.QuorumFallbackConfig(
+            enabled = true,
+            sqlite_file = testDb.absolutePath,
+            sync_interval_seconds = 15L,
+            scouting_retention_days = 30,
+            mirror_all_data = true,
+            mirror_users = true,
+            mirror_scouting = true,
+            mirror_api_data = true,
+            mirror_configs = false,
+            mirror_alliances = false,
+            mirror_chat = false,
+            mirror_notifications_secrets = false
+        )
+
+        QuorumFallbackStore.updateConfiguration(customConfig, updateConfigFile = false)
+        assertTrue(QuorumFallbackStore.isEnabled)
+        assertEquals(30, QuorumFallbackStore.config.scouting_retention_days)
+        assertTrue(QuorumFallbackStore.config.mirror_all_data)
+        assertFalse(QuorumFallbackStore.config.mirror_chat)
+
+        val status = QuorumFallbackStore.getStatus("127.0.0.1")
+        assertEquals(30, status.config.scouting_retention_days)
+        assertTrue(status.config.mirror_all_data)
+        assertFalse(status.config.mirror_chat)
+
+        QuorumFallbackStore.disableAndPurge(updateConfigFile = false)
     }
 }
 

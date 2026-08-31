@@ -43,7 +43,15 @@ data class QuorumFallbackConfig(
     val enabled: Boolean = false,
     val sqlite_file: String = "data/quorum_fallback.db",
     val sync_interval_seconds: Long = 30L,
-    val scouting_retention_days: Int = 7
+    val scouting_retention_days: Int = 7,
+    val mirror_all_data: Boolean = false,
+    val mirror_users: Boolean = true,
+    val mirror_scouting: Boolean = true,
+    val mirror_api_data: Boolean = true,
+    val mirror_configs: Boolean = true,
+    val mirror_alliances: Boolean = true,
+    val mirror_chat: Boolean = true,
+    val mirror_notifications_secrets: Boolean = true
 )
 
 @Serializable

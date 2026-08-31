@@ -18,9 +18,40 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+
+@Serializable
+data class QuorumFallbackEventDetailDto(
+    val eventKey: String,
+    val name: String,
+    val startDate: String?,
+    val endDate: String?,
+    val matchCount: Int,
+    val teamCount: Int,
+    val matchScoutingCount: Int,
+    val pitScoutingCount: Int,
+    val qualScoutingCount: Int
+)
+
+@Serializable
+data class QuorumFallbackInspectionDto(
+    val nodeIp: String,
+    val isLocal: Boolean,
+    val enabled: Boolean,
+    val isAvailable: Boolean,
+    val status: String,
+    val databaseSizeBytes: Long,
+    val freeDiskSpaceBytes: Long,
+    val totalDiskSpaceBytes: Long,
+    val lastSyncTimestamp: String?,
+    val tableCounts: Map<String, Long> = emptyMap(),
+    val activeEvents: List<QuorumFallbackEventDetailDto> = emptyList(),
+    val config: QuorumFallbackConfig = QuorumFallbackConfig()
+)
 
 @Serializable
 data class QuorumFallbackStatusDto(
@@ -34,7 +65,8 @@ data class QuorumFallbackStatusDto(
     val freeDiskSpaceBytes: Long,
     val totalDiskSpaceBytes: Long,
     val lastSyncTimestamp: String?,
-    val recordCounts: Map<String, Long> = emptyMap()
+    val recordCounts: Map<String, Long> = emptyMap(),
+    val config: QuorumFallbackConfig = QuorumFallbackConfig()
 )
 
 object QuorumFallbackStore {
@@ -52,7 +84,9 @@ object QuorumFallbackStore {
         private set
 
     private var sqliteDataSource: HikariDataSource? = null
-    private var config: QuorumFallbackConfig = QuorumFallbackConfig()
+    @Volatile
+    var config: QuorumFallbackConfig = QuorumFallbackConfig()
+        private set
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var syncJob: Job? = null
@@ -253,6 +287,37 @@ object QuorumFallbackStore {
         }
     }
 
+    @Synchronized
+    fun updateConfiguration(newConfig: QuorumFallbackConfig, updateConfigFile: Boolean = true) {
+        val current = AppConfigLoader.load(forceReload = true)
+        val updated = current.copy(quorum_fallback = newConfig)
+
+        if (updateConfigFile) {
+            try {
+                val text = com.obsidianscout.config.JsonSupport.json.encodeToString(com.obsidianscout.config.AppConfig.serializer(), updated)
+                Files.writeString(Paths.get("config", "app-config.json"), text)
+                AppConfigLoader.updateCache(updated)
+            } catch (e: Exception) {
+                println("[QuorumFallbackStore] Error updating app-config.json: ${e.message}")
+            }
+        }
+
+        if (newConfig.enabled) {
+            init(updated)
+            start()
+            scope.launch {
+                delay(1000L)
+                syncFromCockroach()
+            }
+        } else {
+            disableAndPurge(updateConfigFile = false)
+        }
+
+        if (DatabaseFactory.primaryDatabase != null) {
+            org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+        }
+    }
+
     /**
      * Executes a read transaction against the local SQLite snapshot.
      */
@@ -286,52 +351,199 @@ object QuorumFallbackStore {
 
         try {
             val targetDb = sqliteDb ?: return false
-            val cutoffInstant = Instant.now().minus(config.scouting_retention_days.toLong(), ChronoUnit.DAYS)
+            val isMirrorAll = config.mirror_all_data
+            val retentionDays = config.scouting_retention_days.toLong().coerceAtLeast(1L)
+            val today = LocalDate.now(ZoneOffset.UTC)
+            val minDate = today.minusDays(retentionDays)
+            val maxDate = today.plusDays(retentionDays)
+            val cutoffInstant = Instant.now().minus(retentionDays, java.time.temporal.ChronoUnit.DAYS)
 
-            // 1. Read datasets from CockroachDB (in standard read transaction)
-            val usersList = DatabaseFactory.readTransaction { Users.selectAll().toList() }
-            val userSessionsList = DatabaseFactory.readTransaction { UserSessions.selectAll().toList() }
-            val scoutingConfigsList = DatabaseFactory.readTransaction { ScoutingConfigs.selectAll().toList() }
-            val pitConfigsList = DatabaseFactory.readTransaction { PitScoutingConfigs.selectAll().toList() }
-            val qualConfigsList = DatabaseFactory.readTransaction { QualitativeScoutingConfigs.selectAll().toList() }
-            val defaultConfigsList = DatabaseFactory.readTransaction { DefaultConfigs.selectAll().toList() }
-            val configRevisionsList = DatabaseFactory.readTransaction { ConfigRevisions.selectAll().toList() }
-            val appSettingsList = DatabaseFactory.readTransaction { AppSettings.selectAll().toList() }
-            val bannersList = DatabaseFactory.readTransaction { Banners.selectAll().toList() }
-            val alliancesList = DatabaseFactory.readTransaction { ScoutingAlliances.selectAll().toList() }
-            val allianceMembershipsList = DatabaseFactory.readTransaction { AllianceMemberships.selectAll().toList() }
-            val allianceSelectionsList = DatabaseFactory.readTransaction { AllianceSelections.selectAll().toList() }
-            val chatGroupsList = DatabaseFactory.readTransaction { ChatGroups.selectAll().toList() }
-            val chatMessagesList = DatabaseFactory.readTransaction { 
-                ChatMessages.selectAll().orderBy(ChatMessages.createdAt, SortOrder.DESC).limit(2000).toList() 
-            }
-            val lastReadsList = DatabaseFactory.readTransaction { UserChatLastRead.selectAll().toList() }
-            val clusterSecretsList = DatabaseFactory.readTransaction { ClusterSecrets.selectAll().toList() }
-            val fcmConfigsList = DatabaseFactory.readTransaction { FcmConfigs.selectAll().toList() }
-            val fcmTokensList = DatabaseFactory.readTransaction { FcmDeviceTokens.selectAll().toList() }
-            val pushSubsList = DatabaseFactory.readTransaction { PushSubscriptions.selectAll().toList() }
+            // 1. Read datasets from CockroachDB based on configured categories
+            val usersList = if (config.mirror_users || isMirrorAll) {
+                DatabaseFactory.readTransaction { Users.selectAll().toList() }
+            } else emptyList()
 
-            // Recent Events, Teams, Matches (within ±7 days or current season)
-            val eventsList = DatabaseFactory.readTransaction { ApiEvents.selectAll().toList() }
-            val teamsList = DatabaseFactory.readTransaction { ApiTeams.selectAll().toList() }
-            val matchesList = DatabaseFactory.readTransaction { ApiMatches.selectAll().toList() }
+            val userSessionsList = if (config.mirror_users || isMirrorAll) {
+                DatabaseFactory.readTransaction { UserSessions.selectAll().toList() }
+            } else emptyList()
 
-            // 7-day scouting entries + prescout
-            val matchEntriesList = DatabaseFactory.readTransaction {
-                ScoutingEntries.selectAll()
-                    .where { (ScoutingEntries.createdAt greaterEq cutoffInstant) or (ScoutingEntries.isPrescout eq true) }
-                    .toList()
-            }
-            val pitEntriesList = DatabaseFactory.readTransaction {
-                PitScoutingEntries.selectAll()
-                    .where { (PitScoutingEntries.createdAt greaterEq cutoffInstant) or (PitScoutingEntries.isPrescout eq true) }
-                    .toList()
-            }
-            val qualEntriesList = DatabaseFactory.readTransaction {
-                QualitativeScoutingEntries.selectAll()
-                    .where { (QualitativeScoutingEntries.createdAt greaterEq cutoffInstant) or (QualitativeScoutingEntries.isPrescout eq true) }
-                    .toList()
-            }
+            val scoutingConfigsList = if (config.mirror_configs || isMirrorAll) {
+                DatabaseFactory.readTransaction { ScoutingConfigs.selectAll().toList() }
+            } else emptyList()
+
+            val pitConfigsList = if (config.mirror_configs || isMirrorAll) {
+                DatabaseFactory.readTransaction { PitScoutingConfigs.selectAll().toList() }
+            } else emptyList()
+
+            val qualConfigsList = if (config.mirror_configs || isMirrorAll) {
+                DatabaseFactory.readTransaction { QualitativeScoutingConfigs.selectAll().toList() }
+            } else emptyList()
+
+            val defaultConfigsList = if (config.mirror_configs || isMirrorAll) {
+                DatabaseFactory.readTransaction { DefaultConfigs.selectAll().toList() }
+            } else emptyList()
+
+            val configRevisionsList = if (config.mirror_configs || isMirrorAll) {
+                DatabaseFactory.readTransaction { ConfigRevisions.selectAll().toList() }
+            } else emptyList()
+
+            val appSettingsList = if (config.mirror_configs || isMirrorAll) {
+                DatabaseFactory.readTransaction { AppSettings.selectAll().toList() }
+            } else emptyList()
+
+            val bannersList = if (config.mirror_configs || isMirrorAll) {
+                DatabaseFactory.readTransaction { Banners.selectAll().toList() }
+            } else emptyList()
+
+            val alliancesList = if (config.mirror_alliances || isMirrorAll) {
+                DatabaseFactory.readTransaction { ScoutingAlliances.selectAll().toList() }
+            } else emptyList()
+
+            val allianceMembershipsList = if (config.mirror_alliances || isMirrorAll) {
+                DatabaseFactory.readTransaction { AllianceMemberships.selectAll().toList() }
+            } else emptyList()
+
+            val allianceSelectionsList = if (config.mirror_alliances || isMirrorAll) {
+                DatabaseFactory.readTransaction { AllianceSelections.selectAll().toList() }
+            } else emptyList()
+
+            val chatGroupsList = if (config.mirror_chat || isMirrorAll) {
+                DatabaseFactory.readTransaction { ChatGroups.selectAll().toList() }
+            } else emptyList()
+
+            val chatMessagesList = if (config.mirror_chat || isMirrorAll) {
+                DatabaseFactory.readTransaction { 
+                    ChatMessages.selectAll().orderBy(ChatMessages.createdAt, SortOrder.DESC).limit(2000).toList() 
+                }
+            } else emptyList()
+
+            val lastReadsList = if (config.mirror_chat || isMirrorAll) {
+                DatabaseFactory.readTransaction { UserChatLastRead.selectAll().toList() }
+            } else emptyList()
+
+            val clusterSecretsList = if (config.mirror_notifications_secrets || isMirrorAll) {
+                DatabaseFactory.readTransaction { ClusterSecrets.selectAll().toList() }
+            } else emptyList()
+
+            val fcmConfigsList = if (config.mirror_notifications_secrets || isMirrorAll) {
+                DatabaseFactory.readTransaction { FcmConfigs.selectAll().toList() }
+            } else emptyList()
+
+            val fcmTokensList = if (config.mirror_notifications_secrets || isMirrorAll) {
+                DatabaseFactory.readTransaction { FcmDeviceTokens.selectAll().toList() }
+            } else emptyList()
+
+            val pushSubsList = if (config.mirror_notifications_secrets || isMirrorAll) {
+                DatabaseFactory.readTransaction { PushSubscriptions.selectAll().toList() }
+            } else emptyList()
+
+            // Events, Teams & Matches API data
+            val allEvents = if (config.mirror_api_data || config.mirror_scouting || isMirrorAll) {
+                DatabaseFactory.readTransaction { ApiEvents.selectAll().toList() }
+            } else emptyList()
+
+            val activeEventsList = if (isMirrorAll) {
+                allEvents
+            } else if (config.mirror_api_data || config.mirror_scouting) {
+                allEvents.filter { row ->
+                    val startStr = row[ApiEvents.startDate]
+                    val endStr = row[ApiEvents.endDate]
+                    val start = parseDate(startStr)
+                    val end = parseDate(endStr) ?: start
+                    if (start != null || end != null) {
+                        val effectiveStart = start ?: end!!
+                        val effectiveEnd = end ?: start!!
+                        !effectiveStart.isAfter(maxDate) && !effectiveEnd.isBefore(minDate)
+                    } else {
+                        val year = row[ApiEvents.year]
+                        val updated = row[ApiEvents.updatedAt]
+                        (year >= today.year - 1 && year <= today.year + 1) && updated.isAfter(cutoffInstant)
+                    }
+                }
+            } else emptyList()
+
+            val activeEventKeys = activeEventsList.map { it[ApiEvents.eventKey] }.toSet()
+
+            val teamsList = if (config.mirror_api_data || isMirrorAll) {
+                DatabaseFactory.readTransaction {
+                    if (isMirrorAll || activeEventKeys.isEmpty()) {
+                        ApiTeams.selectAll().toList()
+                    } else {
+                        ApiTeams.selectAll().where { ApiTeams.eventKey inList activeEventKeys }.toList()
+                    }
+                }
+            } else emptyList()
+
+            val matchesList = if (config.mirror_api_data || isMirrorAll) {
+                DatabaseFactory.readTransaction {
+                    if (isMirrorAll || activeEventKeys.isEmpty()) {
+                        ApiMatches.selectAll().toList()
+                    } else {
+                        ApiMatches.selectAll().where { ApiMatches.eventKey inList activeEventKeys }.toList()
+                    }
+                }
+            } else emptyList()
+
+            // Scouting entries
+            val matchEntriesList = if (config.mirror_scouting || isMirrorAll) {
+                DatabaseFactory.readTransaction {
+                    if (isMirrorAll) {
+                        ScoutingEntries.selectAll().toList()
+                    } else if (activeEventKeys.isEmpty()) {
+                        ScoutingEntries.selectAll()
+                            .where { (ScoutingEntries.createdAt greaterEq cutoffInstant) or (ScoutingEntries.isPrescout eq true) }
+                            .toList()
+                    } else {
+                        ScoutingEntries.selectAll()
+                            .where { 
+                                (ScoutingEntries.eventKey inList activeEventKeys) or 
+                                (ScoutingEntries.createdAt greaterEq cutoffInstant) or 
+                                (ScoutingEntries.isPrescout eq true) 
+                            }
+                            .toList()
+                    }
+                }
+            } else emptyList()
+
+            val pitEntriesList = if (config.mirror_scouting || isMirrorAll) {
+                DatabaseFactory.readTransaction {
+                    if (isMirrorAll) {
+                        PitScoutingEntries.selectAll().toList()
+                    } else if (activeEventKeys.isEmpty()) {
+                        PitScoutingEntries.selectAll()
+                            .where { (PitScoutingEntries.createdAt greaterEq cutoffInstant) or (PitScoutingEntries.isPrescout eq true) }
+                            .toList()
+                    } else {
+                        PitScoutingEntries.selectAll()
+                            .where { 
+                                (PitScoutingEntries.eventKey inList activeEventKeys) or 
+                                (PitScoutingEntries.createdAt greaterEq cutoffInstant) or 
+                                (PitScoutingEntries.isPrescout eq true) 
+                            }
+                            .toList()
+                    }
+                }
+            } else emptyList()
+
+            val qualEntriesList = if (config.mirror_scouting || isMirrorAll) {
+                DatabaseFactory.readTransaction {
+                    if (isMirrorAll) {
+                        QualitativeScoutingEntries.selectAll().toList()
+                    } else if (activeEventKeys.isEmpty()) {
+                        QualitativeScoutingEntries.selectAll()
+                            .where { (QualitativeScoutingEntries.createdAt greaterEq cutoffInstant) or (QualitativeScoutingEntries.isPrescout eq true) }
+                            .toList()
+                    } else {
+                        QualitativeScoutingEntries.selectAll()
+                            .where { 
+                                (QualitativeScoutingEntries.eventKey inList activeEventKeys) or 
+                                (QualitativeScoutingEntries.createdAt greaterEq cutoffInstant) or 
+                                (QualitativeScoutingEntries.isPrescout eq true) 
+                            }
+                            .toList()
+                    }
+                }
+            } else emptyList()
 
             // 2. Batch mirror into local SQLite inside a single atomic transaction
             transaction(
@@ -607,7 +819,7 @@ object QuorumFallbackStore {
 
                 // Events, Teams & Matches
                 ApiEvents.deleteAll()
-                for (row in eventsList) {
+                for (row in activeEventsList) {
                     ApiEvents.insert {
                         it[id] = EntityID(row[ApiEvents.id].value, ApiEvents)
                         it[eventKey] = row[ApiEvents.eventKey]
@@ -784,8 +996,109 @@ object QuorumFallbackStore {
             freeDiskSpaceBytes = freeDisk,
             totalDiskSpaceBytes = totalDisk,
             lastSyncTimestamp = lastSyncInstant?.toString(),
-            recordCounts = counts
+            recordCounts = counts,
+            config = this.config
         )
+    }
+
+    /**
+     * Inspects all tables and active mirrored events in the local SQLite fallback database.
+     */
+    fun inspect(localIp: String = "127.0.0.1"): QuorumFallbackInspectionDto {
+        val status = getStatus(localIp)
+        val tableCounts = mutableMapOf<String, Long>()
+        val eventsList = mutableListOf<QuorumFallbackEventDetailDto>()
+
+        if (isAvailable && sqliteDb != null) {
+            try {
+                transaction(
+                    transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+                    readOnly = false,
+                    db = sqliteDb!!
+                ) {
+                    tableCounts["users"] = Users.selectAll().count()
+                    tableCounts["user_sessions"] = UserSessions.selectAll().count()
+                    tableCounts["scouting_entries"] = ScoutingEntries.selectAll().count()
+                    tableCounts["pit_scouting_entries"] = PitScoutingEntries.selectAll().count()
+                    tableCounts["qualitative_scouting_entries"] = QualitativeScoutingEntries.selectAll().count()
+                    tableCounts["api_events"] = ApiEvents.selectAll().count()
+                    tableCounts["api_teams"] = ApiTeams.selectAll().count()
+                    tableCounts["api_matches"] = ApiMatches.selectAll().count()
+                    tableCounts["scouting_configs"] = ScoutingConfigs.selectAll().count()
+                    tableCounts["pit_scouting_configs"] = PitScoutingConfigs.selectAll().count()
+                    tableCounts["qualitative_scouting_configs"] = QualitativeScoutingConfigs.selectAll().count()
+                    tableCounts["default_configs"] = DefaultConfigs.selectAll().count()
+                    tableCounts["config_revisions"] = ConfigRevisions.selectAll().count()
+                    tableCounts["app_settings"] = AppSettings.selectAll().count()
+                    tableCounts["scouting_alliances"] = ScoutingAlliances.selectAll().count()
+                    tableCounts["alliance_memberships"] = AllianceMemberships.selectAll().count()
+                    tableCounts["alliance_selections"] = AllianceSelections.selectAll().count()
+                    tableCounts["banners"] = Banners.selectAll().count()
+                    tableCounts["chat_groups"] = ChatGroups.selectAll().count()
+                    tableCounts["chat_messages"] = ChatMessages.selectAll().count()
+                    tableCounts["user_chat_last_read"] = UserChatLastRead.selectAll().count()
+                    tableCounts["cluster_secrets"] = ClusterSecrets.selectAll().count()
+                    tableCounts["fcm_config"] = FcmConfigs.selectAll().count()
+                    tableCounts["fcm_device_tokens"] = FcmDeviceTokens.selectAll().count()
+                    tableCounts["push_subscriptions"] = PushSubscriptions.selectAll().count()
+
+                    // Load mirrored events with their breakdown
+                    val allEvents = ApiEvents.selectAll().toList()
+                    for (ev in allEvents) {
+                        val eKey = ev[ApiEvents.eventKey]
+                        val matchesCount = ApiMatches.selectAll().where { ApiMatches.eventKey eq eKey }.count().toInt()
+                        val teamsCount = ApiTeams.selectAll().where { ApiTeams.eventKey eq eKey }.count().toInt()
+                        val scCount = ScoutingEntries.selectAll().where { ScoutingEntries.eventKey eq eKey }.count().toInt()
+                        val pitCount = PitScoutingEntries.selectAll().where { PitScoutingEntries.eventKey eq eKey }.count().toInt()
+                        val qualCount = QualitativeScoutingEntries.selectAll().where { QualitativeScoutingEntries.eventKey eq eKey }.count().toInt()
+
+                        eventsList.add(
+                            QuorumFallbackEventDetailDto(
+                                eventKey = eKey,
+                                name = ev[ApiEvents.name],
+                                startDate = ev[ApiEvents.startDate],
+                                endDate = ev[ApiEvents.endDate],
+                                matchCount = matchesCount,
+                                teamCount = teamsCount,
+                                matchScoutingCount = scCount,
+                                pitScoutingCount = pitCount,
+                                qualScoutingCount = qualCount
+                            )
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                if (DatabaseFactory.primaryDatabase != null) {
+                    org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+                }
+            }
+        }
+
+        return QuorumFallbackInspectionDto(
+            nodeIp = status.nodeIp,
+            isLocal = status.isLocal,
+            enabled = status.enabled,
+            isAvailable = status.isAvailable,
+            status = status.status,
+            databaseSizeBytes = status.databaseSizeBytes,
+            freeDiskSpaceBytes = status.freeDiskSpaceBytes,
+            totalDiskSpaceBytes = status.totalDiskSpaceBytes,
+            lastSyncTimestamp = status.lastSyncTimestamp,
+            tableCounts = tableCounts,
+            activeEvents = eventsList,
+            config = this.config
+        )
+    }
+
+    private fun parseDate(dateStr: String?): LocalDate? {
+        if (dateStr.isNullOrBlank()) return null
+        return try {
+            val clean = dateStr.trim().take(10)
+            LocalDate.parse(clean)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun ensureDriverLoaded() {

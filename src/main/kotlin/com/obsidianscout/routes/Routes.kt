@@ -2908,10 +2908,30 @@ fun Application.configureRoutes() {
                         val req = call.receive<TargetNodeActionRequest>()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.syncQuorumFallback(req.targetIp))
                     }
+                    get("/quorum-fallback/inspect") {
+                        call.requireAdminOrClusterAuth()
+                        val targetIp = call.request.queryParameters["targetIp"] ?: "local"
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.inspectNodeQuorumFallback(targetIp))
+                    }
+                    put("/quorum-fallback/config") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<UpdateQuorumFallbackConfigRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.updateNodeQuorumFallbackConfig(req))
+                    }
                     get("/nodes/local/quorum-fallback/status") {
                         call.requireAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.db.QuorumFallbackStore.getStatus(localIp))
+                    }
+                    get("/nodes/local/quorum-fallback/inspect") {
+                        call.requireAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.db.QuorumFallbackStore.inspect(localIp))
+                    }
+                    put("/nodes/local/quorum-fallback/config") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<UpdateQuorumFallbackConfigRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.updateNodeQuorumFallbackConfig(req.copy(targetIp = "local")))
                     }
                     post("/nodes/local/quorum-fallback/toggle") {
                         call.requireSuperAdminOrClusterAuth()

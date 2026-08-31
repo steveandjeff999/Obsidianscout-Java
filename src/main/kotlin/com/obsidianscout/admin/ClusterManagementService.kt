@@ -752,7 +752,7 @@ object ClusterManagementService {
             cluster.nodes.map { node ->
                 async {
                     if (node.isLocal || node.ip == localIp) {
-                        com.obsidianscout.db.QuorumFallbackStore.getStatus(localIp)
+                        com.obsidianscout.db.QuorumFallbackStore.getStatus(localIp).copy(isLocal = true, nodeIp = localIp)
                     } else {
                         val appConfig = AppConfigLoader.load()
                         val appPort = appConfig.server.port
@@ -764,7 +764,8 @@ object ClusterManagementService {
                                 .build()
                             val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
                             if (resp.statusCode() == 200) {
-                                JsonSupport.json.decodeFromString<com.obsidianscout.db.QuorumFallbackStatusDto>(resp.body())
+                                val remoteStatus = JsonSupport.json.decodeFromString<com.obsidianscout.db.QuorumFallbackStatusDto>(resp.body())
+                                remoteStatus.copy(isLocal = false, nodeIp = node.ip)
                             } else {
                                 com.obsidianscout.db.QuorumFallbackStatusDto(
                                     nodeIp = node.ip,
@@ -888,6 +889,106 @@ object ClusterManagementService {
                 }
             } catch (e: Exception) {
                 ActionResultResponse(false, "Failed to sync on $targetIp: ${e.message}", targetIp)
+            }
+        }
+    }
+
+    suspend fun inspectNodeQuorumFallback(targetIp: String): com.obsidianscout.db.QuorumFallbackInspectionDto = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        if (isLocal) {
+            com.obsidianscout.db.QuorumFallbackStore.inspect(localIp).copy(isLocal = true, nodeIp = localIp)
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/quorum-fallback/inspect"
+            try {
+                val req = buildSignedClusterRequest(url, "GET")
+                    .timeout(Duration.ofSeconds(6))
+                    .GET()
+                    .build()
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    val remoteInspect = JsonSupport.json.decodeFromString<com.obsidianscout.db.QuorumFallbackInspectionDto>(resp.body())
+                    remoteInspect.copy(isLocal = false, nodeIp = targetIp)
+                } else {
+                    com.obsidianscout.db.QuorumFallbackInspectionDto(
+                        nodeIp = targetIp,
+                        isLocal = false,
+                        enabled = false,
+                        isAvailable = false,
+                        status = "Unreachable (HTTP ${resp.statusCode()})",
+                        databaseSizeBytes = 0L,
+                        freeDiskSpaceBytes = 0L,
+                        totalDiskSpaceBytes = 0L,
+                        lastSyncTimestamp = null,
+                        tableCounts = emptyMap(),
+                        activeEvents = emptyList()
+                    )
+                }
+            } catch (e: Exception) {
+                com.obsidianscout.db.QuorumFallbackInspectionDto(
+                    nodeIp = targetIp,
+                    isLocal = false,
+                    enabled = false,
+                    isAvailable = false,
+                    status = "Offline (${e.message})",
+                    databaseSizeBytes = 0L,
+                    freeDiskSpaceBytes = 0L,
+                    totalDiskSpaceBytes = 0L,
+                    lastSyncTimestamp = null,
+                    tableCounts = emptyMap(),
+                    activeEvents = emptyList()
+                )
+            }
+        }
+    }
+
+    suspend fun updateNodeQuorumFallbackConfig(
+        req: com.obsidianscout.routes.UpdateQuorumFallbackConfigRequest
+    ): ActionResultResponse = withContext(Dispatchers.IO) {
+        val targetIp = req.targetIp
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        if (isLocal) {
+            val currentConfig = com.obsidianscout.db.QuorumFallbackStore.config
+            val newConfig = currentConfig.copy(
+                enabled = req.enabled ?: currentConfig.enabled,
+                sqlite_file = req.sqliteFile ?: currentConfig.sqlite_file,
+                sync_interval_seconds = req.syncIntervalSeconds ?: currentConfig.sync_interval_seconds,
+                scouting_retention_days = req.scoutingRetentionDays ?: currentConfig.scouting_retention_days,
+                mirror_all_data = req.mirrorAllData ?: currentConfig.mirror_all_data,
+                mirror_users = req.mirrorUsers ?: currentConfig.mirror_users,
+                mirror_scouting = req.mirrorScouting ?: currentConfig.mirror_scouting,
+                mirror_api_data = req.mirrorApiData ?: currentConfig.mirror_api_data,
+                mirror_configs = req.mirrorConfigs ?: currentConfig.mirror_configs,
+                mirror_alliances = req.mirrorAlliances ?: currentConfig.mirror_alliances,
+                mirror_chat = req.mirrorChat ?: currentConfig.mirror_chat,
+                mirror_notifications_secrets = req.mirrorNotificationsSecrets ?: currentConfig.mirror_notifications_secrets
+            )
+            com.obsidianscout.db.QuorumFallbackStore.updateConfiguration(newConfig, updateConfigFile = true)
+            ActionResultResponse(true, "Quorum fallback configuration updated for node $localIp.", localIp)
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/quorum-fallback/config"
+            try {
+                val reqBody = JsonSupport.json.encodeToString(req)
+                val httpRequest = buildSignedClusterRequest(url, "PUT")
+                    .timeout(Duration.ofSeconds(6))
+                    .header("Content-Type", "application/json")
+                    .PUT(HttpRequest.BodyPublishers.ofString(reqBody))
+                    .build()
+                val resp = getHttpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    JsonSupport.json.decodeFromString<ActionResultResponse>(resp.body())
+                } else {
+                    ActionResultResponse(false, "Remote server returned HTTP ${resp.statusCode()}", targetIp)
+                }
+            } catch (e: Exception) {
+                ActionResultResponse(false, "Failed to update configuration on $targetIp: ${e.message}", targetIp)
             }
         }
     }
