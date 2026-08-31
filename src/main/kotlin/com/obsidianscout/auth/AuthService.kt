@@ -104,10 +104,17 @@ object AuthService {
     }
 
     fun login(username: String, teamNumber: Int, password: String, program: String = "FRC"): UserRecord? {
+        val cleanUsername = username.trim()
+        val cleanProgram = program.trim()
+
         // Fetch the stored hash first (short read transaction).
         val (hash, record) = readTransaction {
             val row = Users
-                .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) and (Users.program eq program) }
+                .selectAll().where {
+                    (Users.username eq cleanUsername) and
+                    (Users.teamNumber eq teamNumber) and
+                    (Users.program.lowerCase() eq cleanProgram.lowercase())
+                }
                 .limit(1)
                 .firstOrNull()
                 ?: return@readTransaction null
@@ -117,15 +124,17 @@ object AuthService {
         // Support scrypt fallback and automatic BCrypt upgrading
         val verified = if (hash.startsWith("scrypt:")) {
             if (verifyScrypt(password, hash)) {
-                // Re-hash to BCrypt and save
+                // Re-hash to BCrypt and save if database writes are available
                 val newHash = hashPassword(password)
                 val userUuid = runCatching { UUID.fromString(record.id) }.getOrNull()
-                if (userUuid != null) {
-                    transaction {
-                        Users.update({ Users.id eq userUuid }) {
-                            it[passwordHash] = newHash
+                if (userUuid != null && !com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                    try {
+                        transaction {
+                            Users.update({ Users.id eq userUuid }) {
+                                it[passwordHash] = newHash
+                            }
                         }
-                    }
+                    } catch (_: Throwable) {}
                 }
                 true
             } else {
@@ -518,17 +527,26 @@ object AuthService {
     ): UUID {
         val device = customDeviceName?.takeIf { it.isNotBlank() } ?: parseDeviceName(userAgent, clientType)
         val now = Instant.now()
-        return transaction {
-            UserSessions.insertAndGetId {
-                it[UserSessions.userId] = userId
-                it[UserSessions.clientType] = clientType
-                it[UserSessions.deviceName] = device
-                it[UserSessions.userAgent] = userAgent
-                it[UserSessions.ipAddress] = ipAddress
-                it[UserSessions.createdAt] = now
-                it[UserSessions.lastActiveAt] = now
-                it[UserSessions.expiresAt] = expiresAt
-            }.value
+        val generatedId = UUID.randomUUID()
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+            return generatedId
+        }
+        return try {
+            transaction {
+                UserSessions.insertAndGetId {
+                    it[UserSessions.id] = generatedId
+                    it[UserSessions.userId] = userId
+                    it[UserSessions.clientType] = clientType
+                    it[UserSessions.deviceName] = device
+                    it[UserSessions.userAgent] = userAgent
+                    it[UserSessions.ipAddress] = ipAddress
+                    it[UserSessions.createdAt] = now
+                    it[UserSessions.lastActiveAt] = now
+                    it[UserSessions.expiresAt] = expiresAt
+                }.value
+            }
+        } catch (_: Throwable) {
+            generatedId
         }
     }
 
