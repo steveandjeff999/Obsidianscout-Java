@@ -118,11 +118,24 @@ object QuorumFallbackStore {
             }
 
             sqliteDataSource = HikariDataSource(hikariConfig)
-            val db = Database.connect(sqliteDataSource!!)
+            val db = Database.connect(
+                sqliteDataSource!!,
+                databaseConfig = org.jetbrains.exposed.sql.DatabaseConfig {
+                    defaultMaxAttempts = 1
+                    defaultMinRetryDelay = 0
+                    defaultMaxRetryDelay = 0
+                    defaultReadOnly = false
+                    defaultIsolationLevel = java.sql.Connection.TRANSACTION_SERIALIZABLE
+                }
+            )
             this.sqliteDb = db
 
             // Create or update schema in local SQLite mirror
-            transaction(db) {
+            transaction(
+                transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+                readOnly = false,
+                db = db
+            ) {
                 SchemaUtils.createMissingTablesAndColumns(*mirroredTables)
             }
 
@@ -224,7 +237,11 @@ object QuorumFallbackStore {
      */
     fun <T> executeRead(statement: Transaction.() -> T): T {
         val db = sqliteDb ?: throw QuorumLostException("Local SQLite fallback is not available on this server.")
-        return transaction(db = db) {
+        return transaction(
+            transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+            readOnly = false,
+            db = db
+        ) {
             statement()
         }
     }
@@ -290,7 +307,11 @@ object QuorumFallbackStore {
             }
 
             // 2. Batch mirror into local SQLite inside a single atomic transaction
-            transaction(targetDb) {
+            transaction(
+                transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+                readOnly = false,
+                db = targetDb
+            ) {
                 // Users
                 Users.deleteAll()
                 for (row in usersList) {

@@ -73,7 +73,6 @@ object DatabaseFactory {
         try {
             val result = transaction(
                 transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
-                readOnly = true,
                 db = db
             ) {
                 this.maxAttempts = 1

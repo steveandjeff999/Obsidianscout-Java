@@ -164,6 +164,47 @@ class DatabaseReadFallbackTest {
     }
 
     @Test
+    fun testSyncFromCockroachDoesNotThrowReadOnlyError() {
+        val testMainDbFile = java.io.File("build/test_main_db_${System.currentTimeMillis()}.db")
+        val testFallbackDbFile = java.io.File("build/test_fallback_db_${System.currentTimeMillis()}.db")
+
+        try {
+            // 1. Initialize main DB
+            val dbConfig = com.obsidianscout.config.DatabaseConfig(
+                type = "sqlite",
+                sqlite = com.obsidianscout.config.SqliteConfig(file = testMainDbFile.absolutePath)
+            )
+            DatabaseFactory.init(dbConfig, runMigration = true, isCockroach = false)
+
+            // Seed user in main database
+            DatabaseFactory.readTransaction {
+                // Should run without error
+            }
+
+            // 2. Initialize fallback store
+            val appConfig = com.obsidianscout.config.AppConfig(
+                quorum_fallback = com.obsidianscout.config.QuorumFallbackConfig(
+                    enabled = true,
+                    sqlite_file = testFallbackDbFile.absolutePath,
+                    sync_interval_seconds = 30L,
+                    scouting_retention_days = 7
+                )
+            )
+            QuorumFallbackStore.init(appConfig)
+
+            // 3. Execute sync
+            val synced = QuorumFallbackStore.syncFromCockroach()
+            assertTrue(synced, "Sync should succeed without read-only SQLException: ${QuorumFallbackStore.lastSyncStatus}")
+
+            QuorumFallbackStore.disableAndPurge(updateConfigFile = false)
+        } finally {
+            DatabaseFactory.close()
+            if (testMainDbFile.exists()) testMainDbFile.delete()
+            if (testFallbackDbFile.exists()) testFallbackDbFile.delete()
+        }
+    }
+
+    @Test
     fun testLoadBalancerExcludesHealthAndVersionEndpoints() {
         val settings = com.obsidianscout.integrations.LoadBalancerSettings()
         assertTrue(settings.excludedPathPrefixes.contains("/health"))
