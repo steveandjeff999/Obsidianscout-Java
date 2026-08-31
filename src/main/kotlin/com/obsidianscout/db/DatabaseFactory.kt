@@ -80,46 +80,19 @@ object DatabaseFactory {
 
     fun buildAsOfSystemTimeCandidates(): List<String> {
         val candidates = mutableListOf<String>()
-        val baseInstant = lastHealthyQuorumInstant ?: java.time.Instant.now().minusSeconds(60)
-        val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
+        candidates.add("follower_read_timestamp()")
+        candidates.add("'-15m'")
+        candidates.add("'-1h'")
+        candidates.add("'-5m'")
+        candidates.add("with_max_staleness(INTERVAL '10m')")
+        candidates.add("'-24h'")
 
-        // 1. Follower reads & robust safe historical intervals (guaranteed to be fully closed locally in Pebble without RPC)
-        candidates.addAll(listOf(
-            "follower_read_timestamp()",
-            "'-15m'",
-            "'-30m'",
-            "'-1h'",
-            "'-5m'",
-            "'-2m'",
-            "'-2h'",
-            "'-6h'",
-            "'-24h'",
-            "'-72h'",
-            "with_max_staleness(INTERVAL '10m')",
-            "with_max_staleness(INTERVAL '1h')",
-            "with_max_staleness(INTERVAL '24h')"
-        ))
-
-        // 2. Anchored fixed timestamps before quorum was lost (starting with safe >= 5m offsets that are guaranteed closed)
-        val offsetsMs = listOf(
-            300_000L,     // 5m
-            900_000L,     // 15m
-            1_800_000L,   // 30m
-            3_600_000L,   // 1h
-            7_200_000L,   // 2h
-            21_600_000L,  // 6h
-            86_400_000L,  // 24h
-            120_000L,     // 2m
-            60_000L,      // 1m
-            30_000L,      // 30s
-            10_000L       // 10s
-        )
-        for (offset in offsetsMs) {
-            val targetInstant = baseInstant.minusMillis(offset)
-            val formatted = formatter.format(targetInstant)
-            candidates.add("'$formatted'")
+        val baseInstant = lastHealthyQuorumInstant
+        if (baseInstant != null) {
+            val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
+            val targetInstant = baseInstant.minusMillis(300_000L)
+            candidates.add("'${formatter.format(targetInstant)}'")
         }
-
         return candidates.distinct()
     }
 
@@ -197,8 +170,8 @@ object DatabaseFactory {
             this.maxAttempts = 1
             this.minRetryDelay = 0
             this.maxRetryDelay = 0
+            try { exec("SET statement_timeout = '400ms';") } catch (_: Throwable) {}
             exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
-            try { exec("SET LOCAL statement_timeout = '800ms';") } catch (_: Throwable) {}
             isInsideAsOfSystemTimeTx.set(true)
             try {
                 statement()
@@ -245,19 +218,17 @@ object DatabaseFactory {
                 return runInAsOfTransaction(db, cached, statement)
             } catch (cachedEx: Throwable) {
                 failedCached = cached
-                cachedWorkingAsOfSystemTime = null // Invalidate on failure and re-probe candidates
             }
         }
 
         // 2. Synchronized candidate probe ladder (ensures only 1 thread probes candidates while all other threads await the working candidate)
         synchronized(candidateProbeLock) {
             val doubleChecked = cachedWorkingAsOfSystemTime
-            if (doubleChecked != null) {
+            if (doubleChecked != null && doubleChecked != failedCached) {
                 try {
                     return runInAsOfTransaction(db, doubleChecked, statement)
                 } catch (_: Throwable) {
                     failedCached = doubleChecked
-                    cachedWorkingAsOfSystemTime = null
                 }
             }
 

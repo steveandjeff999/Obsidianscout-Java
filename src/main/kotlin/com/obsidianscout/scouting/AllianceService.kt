@@ -142,14 +142,18 @@ object AllianceService {
     /**
      * Returns the count of pending invites for a team — used for the sidebar badge.
      */
-    fun getInviteCount(session: UserSession): Int = readTransaction {
-        AllianceMemberships
-            .selectAll().where {
-                (AllianceMemberships.teamNumber eq session.teamNumber) and
-                (AllianceMemberships.program eq session.program) and
-                (AllianceMemberships.status eq STATUS_INVITED)
-            }
-            .count().toInt()
+    fun getInviteCount(session: UserSession): Int = try {
+        readTransaction {
+            AllianceMemberships
+                .selectAll().where {
+                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program) and
+                    (AllianceMemberships.status eq STATUS_INVITED)
+                }
+                .count().toInt()
+        }
+    } catch (_: Throwable) {
+        0
     }
 
     /**

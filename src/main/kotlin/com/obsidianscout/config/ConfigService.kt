@@ -452,7 +452,7 @@ object ConfigService {
     }
 
     fun getConfigJson(teamNumber: Int, program: String = "FRC", local: Boolean = false): String {
-        return readTransaction {
+        return try { readTransaction {
             if (!local) {
                 val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                 if (activeAllianceId != null) {
@@ -483,7 +483,7 @@ object ConfigService {
                 .limit(1)
                 .firstOrNull()
                 ?.get(ScoutingConfigs.configJson)
-        } ?: loadDefaultConfigText()
+        } } catch (_: Throwable) { null } ?: loadDefaultConfigText()
     }
 
     fun getConfig(teamNumber: Int, program: String = "FRC", local: Boolean = false): ScoutingConfig {
@@ -518,7 +518,7 @@ object ConfigService {
     }
 
     fun getPitConfigJson(teamNumber: Int, program: String = "FRC", local: Boolean = false): String {
-        return readTransaction {
+        return try { readTransaction {
             if (!local) {
                 val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                 if (activeAllianceId != null) {
@@ -547,7 +547,7 @@ object ConfigService {
                 .limit(1)
                 .firstOrNull()
                 ?.get(PitScoutingConfigs.configJson)
-        } ?: loadDefaultPitConfigText()
+        } } catch (_: Throwable) { null } ?: loadDefaultPitConfigText()
     }
 
     fun getPitConfig(teamNumber: Int, program: String = "FRC", local: Boolean = false): ScoutingConfig {
