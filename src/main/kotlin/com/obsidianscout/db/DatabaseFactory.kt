@@ -108,6 +108,11 @@ object DatabaseFactory {
         db: Database? = null,
         statement: org.jetbrains.exposed.sql.Transaction.() -> T
     ): T {
+        val currentTx = org.jetbrains.exposed.sql.transactions.TransactionManager.currentOrNull()
+        if (currentTx != null) {
+            return currentTx.statement()
+        }
+
         val isCrdb = isCockroach && (db == null || !db.url.startsWith("jdbc:sqlite"))
         if (!isCrdb) {
             return transaction(db = db) {
@@ -170,7 +175,6 @@ object DatabaseFactory {
             this.maxAttempts = 1
             this.minRetryDelay = 0
             this.maxRetryDelay = 0
-            try { exec("SET statement_timeout = '400ms';") } catch (_: Throwable) {}
             exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
             isInsideAsOfSystemTimeTx.set(true)
             try {
@@ -191,6 +195,11 @@ object DatabaseFactory {
         statement: org.jetbrains.exposed.sql.Transaction.() -> T,
         rootCause: Throwable? = null
     ): T {
+        val currentTx = org.jetbrains.exposed.sql.transactions.TransactionManager.currentOrNull()
+        if (currentTx != null) {
+            return currentTx.statement()
+        }
+
         val isCrdb = isCockroach && (db == null || !db.url.startsWith("jdbc:sqlite"))
         if (!isCrdb) {
             return transaction(db = db) {
@@ -198,15 +207,6 @@ object DatabaseFactory {
                 this.minRetryDelay = 0
                 this.maxRetryDelay = 0
                 statement()
-            }
-        }
-
-        // If we are already running inside an active AS OF SYSTEM TIME transaction block on this thread,
-        // reuse the active transaction directly without re-executing 'SET TRANSACTION AS OF SYSTEM TIME'
-        if (isInsideAsOfSystemTimeTx.get()) {
-            val currentTx = org.jetbrains.exposed.sql.transactions.TransactionManager.currentOrNull()
-            if (currentTx != null) {
-                return currentTx.statement()
             }
         }
 

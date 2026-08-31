@@ -1256,8 +1256,8 @@ fun Application.configureRoutes() {
                     val count = com.obsidianscout.db.readTransaction {
                         com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.eventKey eq eventKeyLower }.count()
                     }
-                    if (count == 0L) {
-                        val settings = com.obsidianscout.db.readTransaction { AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
+                    if (count == 0L && !com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                        val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                         try {
                             IntegrationService.syncCustomEventData(settings, eventKeyLower)
                         } catch (e: Exception) {

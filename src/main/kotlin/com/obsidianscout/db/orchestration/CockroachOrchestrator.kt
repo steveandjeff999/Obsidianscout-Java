@@ -1126,7 +1126,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
                     try { stmt.execute("SET statement_timeout = '600ms'") } catch (_: Exception) {}
-                    stmt.executeQuery("SELECT id FROM users LIMIT 1").use { rs ->
+                    stmt.executeQuery("SELECT (SELECT count(*) FROM users LIMIT 1) + (SELECT count(*) FROM app_settings LIMIT 1)").use { rs ->
                         rs.next()
                     }
                 }
