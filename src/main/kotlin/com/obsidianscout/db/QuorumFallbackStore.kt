@@ -139,6 +139,14 @@ object QuorumFallbackStore {
                 SchemaUtils.createMissingTablesAndColumns(*mirroredTables)
             }
 
+            // CRITICAL FIX: Database.connect() in Exposed automatically overrides TransactionManager.defaultDatabase.
+            // We MUST immediately restore TransactionManager.defaultDatabase to DatabaseFactory.primaryDatabase
+            // so that all application transactions (AuthService, UserService, session verification, scouter forms)
+            // continue targeting the real CockroachDB database and are never redirected to the SQLite mirror!
+            if (DatabaseFactory.primaryDatabase != null) {
+                org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+            }
+
             isAvailable = true
             lastSyncStatus = "Initialized, awaiting initial sync"
             println("[QuorumFallbackStore] Local SQLite mirror initialized at ${dbFile.absolutePath}")
@@ -146,6 +154,10 @@ object QuorumFallbackStore {
             isAvailable = false
             lastSyncStatus = "Initialization failed: ${e.message}"
             println("[QuorumFallbackStore] Failed to initialize SQLite mirror: ${e.message}")
+        } finally {
+            if (DatabaseFactory.primaryDatabase != null) {
+                org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+            }
         }
     }
 
@@ -212,6 +224,10 @@ object QuorumFallbackStore {
                 println("[QuorumFallbackStore] Error updating app-config.json: ${e.message}")
             }
         }
+
+        if (DatabaseFactory.primaryDatabase != null) {
+            org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+        }
     }
 
     @Synchronized
@@ -226,6 +242,11 @@ object QuorumFallbackStore {
 
         init(updated)
         start()
+
+        if (DatabaseFactory.primaryDatabase != null) {
+            org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+        }
+
         scope.launch {
             delay(1000L)
             syncFromCockroach()
@@ -237,12 +258,18 @@ object QuorumFallbackStore {
      */
     fun <T> executeRead(statement: Transaction.() -> T): T {
         val db = sqliteDb ?: throw QuorumLostException("Local SQLite fallback is not available on this server.")
-        return transaction(
-            transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
-            readOnly = false,
-            db = db
-        ) {
-            statement()
+        try {
+            return transaction(
+                transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+                readOnly = false,
+                db = db
+            ) {
+                statement()
+            }
+        } finally {
+            if (DatabaseFactory.primaryDatabase != null) {
+                org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+            }
         }
     }
 
@@ -698,6 +725,9 @@ object QuorumFallbackStore {
             return false
         } finally {
             isSyncing.set(false)
+            if (DatabaseFactory.primaryDatabase != null) {
+                org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+            }
         }
     }
 
@@ -717,7 +747,11 @@ object QuorumFallbackStore {
         val counts = mutableMapOf<String, Long>()
         if (isAvailable && sqliteDb != null) {
             try {
-                transaction(sqliteDb!!) {
+                transaction(
+                    transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+                    readOnly = false,
+                    db = sqliteDb!!
+                ) {
                     counts["users"] = Users.selectAll().count()
                     counts["scoutingEntries"] = ScoutingEntries.selectAll().count()
                     counts["pitEntries"] = PitScoutingEntries.selectAll().count()
@@ -726,7 +760,12 @@ object QuorumFallbackStore {
                     counts["matches"] = ApiMatches.selectAll().count()
                     counts["teams"] = ApiTeams.selectAll().count()
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            } finally {
+                if (DatabaseFactory.primaryDatabase != null) {
+                    org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+                }
+            }
         }
 
         return QuorumFallbackStatusDto(

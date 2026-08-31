@@ -35,6 +35,9 @@ object DatabaseFactory {
     @Volatile
     var orchestrator: com.obsidianscout.db.orchestration.CockroachOrchestrator? = null
     @Volatile
+    var primaryDatabase: Database? = null
+        internal set
+    @Volatile
     private var lastQuorumProbeTime: Long = 0L
     internal var activeDataSource: HikariDataSource? = null
 
@@ -53,9 +56,10 @@ object DatabaseFactory {
             return currentTx.statement()
         }
 
-        val isCrdb = isCockroach && (db == null || !db.url.startsWith("jdbc:sqlite"))
+        val targetDb = db ?: primaryDatabase
+        val isCrdb = isCockroach && (targetDb == null || !targetDb.url.startsWith("jdbc:sqlite"))
         if (!isCrdb) {
-            return transaction(db = db) {
+            return transaction(db = targetDb) {
                 this.maxAttempts = 1
                 this.minRetryDelay = 0
                 this.maxRetryDelay = 0
@@ -73,7 +77,7 @@ object DatabaseFactory {
         try {
             val result = transaction(
                 transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
-                db = db
+                db = targetDb
             ) {
                 this.maxAttempts = 1
                 this.minRetryDelay = 0
@@ -103,7 +107,9 @@ object DatabaseFactory {
         try {
             activeDataSource?.close()
             activeDataSource = null
+            primaryDatabase = null
             isReady = false
+            org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = null
             println("[Database] Database connection pool closed.")
         } catch (e: Exception) {
             println("[Database] Error closing database pool: ${e.message}")
@@ -181,7 +187,7 @@ object DatabaseFactory {
             println("[Database] Note pre-warming pool: ${e.message}")
         }
 
-        Database.connect(
+        val primaryDb = Database.connect(
             dataSource,
             databaseConfig = org.jetbrains.exposed.sql.DatabaseConfig {
                 defaultMaxAttempts = 1
@@ -189,6 +195,8 @@ object DatabaseFactory {
                 defaultMaxRetryDelay = 0
             }
         )
+        primaryDatabase = primaryDb
+        org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = primaryDb
 
         // Run the INT->UUID migration if the database still has the old schema
         if (runMigration) {

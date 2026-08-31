@@ -40,6 +40,7 @@ class DatabaseReadFallbackTest {
         DatabaseFactory.isCockroach = false
         CockroachOrchestrator.isQuorumLost = false
         CockroachOrchestrator.quorumLossDetails = null
+        DatabaseFactory.close()
         if (testDbFile.exists()) {
             testDbFile.delete()
         }
@@ -195,6 +196,70 @@ class DatabaseReadFallbackTest {
             // 3. Execute sync
             val synced = QuorumFallbackStore.syncFromCockroach()
             assertTrue(synced, "Sync should succeed without read-only SQLException: ${QuorumFallbackStore.lastSyncStatus}")
+
+            // 4. CRITICAL: Verify that TransactionManager.defaultDatabase is STILL the main DB
+            assertEquals(
+                DatabaseFactory.primaryDatabase,
+                org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase,
+                "TransactionManager.defaultDatabase must remain pointing to primaryDatabase and not fallback SQLite"
+            )
+
+            QuorumFallbackStore.disableAndPurge(updateConfigFile = false)
+        } finally {
+            DatabaseFactory.close()
+            if (testMainDbFile.exists()) testMainDbFile.delete()
+            if (testFallbackDbFile.exists()) testFallbackDbFile.delete()
+        }
+    }
+
+    @Test
+    fun testPrimaryDatabaseAndAuthPreservedWhenFallbackEnabled() {
+        val testMainDbFile = java.io.File("build/test_main_db_auth_${System.currentTimeMillis()}.db")
+        val testFallbackDbFile = java.io.File("build/test_fallback_db_auth_${System.currentTimeMillis()}.db")
+
+        try {
+            val dbConfig = com.obsidianscout.config.DatabaseConfig(
+                type = "sqlite",
+                sqlite = com.obsidianscout.config.SqliteConfig(file = testMainDbFile.absolutePath)
+            )
+            DatabaseFactory.init(dbConfig, runMigration = true, isCockroach = false)
+
+            // Insert superadmin in main database
+            transaction {
+                Users.insert {
+                    it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), Users)
+                    it[username] = "superadmin"
+                    it[teamNumber] = 0
+                    it[program] = "FRC"
+                    it[passwordHash] = "secret_hash"
+                    it[role] = "SUPERADMIN"
+                    it[createdAt] = java.time.Instant.now()
+                }
+            }
+
+            // Verify superadmin is readable before enabling fallback
+            val userBefore = transaction {
+                Users.selectAll().where { Users.username eq "superadmin" }.singleOrNull()
+            }
+            assertTrue(userBefore != null, "Superadmin should exist in main database")
+
+            // Initialize and enable fallback store
+            val appConfig = com.obsidianscout.config.AppConfig(
+                quorum_fallback = com.obsidianscout.config.QuorumFallbackConfig(
+                    enabled = true,
+                    sqlite_file = testFallbackDbFile.absolutePath,
+                    sync_interval_seconds = 30L,
+                    scouting_retention_days = 7
+                )
+            )
+            QuorumFallbackStore.init(appConfig)
+
+            // CRITICAL: Verify default transaction still finds superadmin in main database
+            val userAfter = transaction {
+                Users.selectAll().where { Users.username eq "superadmin" }.singleOrNull()
+            }
+            assertTrue(userAfter != null, "Superadmin MUST still be found in default transactions after fallback is enabled!")
+            assertEquals("superadmin", userAfter[Users.username])
 
             QuorumFallbackStore.disableAndPurge(updateConfigFile = false)
         } finally {
