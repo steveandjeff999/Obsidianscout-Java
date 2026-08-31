@@ -23,7 +23,8 @@ data class AppConfig(
     val cockroach_port: Int = 26257,
     val site_url: String = "https://kotlin.obsidianscout.com",
     val current_version: String = "0.5.0.6", // The version this server is running — update this on each release
-    val gist_update: GistUpdateConfig = GistUpdateConfig()
+    val gist_update: GistUpdateConfig = GistUpdateConfig(),
+    val quorum_fallback: QuorumFallbackConfig = QuorumFallbackConfig()
 ) {
     fun getEffectiveSiteUrl(): String {
         val trimmed = site_url.trim()
@@ -36,6 +37,14 @@ data class AppConfig(
         return withScheme.removeSuffix("/")
     }
 }
+
+@Serializable
+data class QuorumFallbackConfig(
+    val enabled: Boolean = false,
+    val sqlite_file: String = "data/quorum_fallback.db",
+    val sync_interval_seconds: Long = 30L,
+    val scouting_retention_days: Int = 7
+)
 
 @Serializable
 data class GistUpdateConfig(
@@ -158,6 +167,9 @@ object AppConfigLoader {
                 needsWrite = true
             }
             if (!text.contains("site_url")) {
+                needsWrite = true
+            }
+            if (!text.contains("quorum_fallback")) {
                 needsWrite = true
             }
             if (needsWrite) {

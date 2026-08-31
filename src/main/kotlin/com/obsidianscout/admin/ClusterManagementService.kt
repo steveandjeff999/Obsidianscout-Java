@@ -743,4 +743,152 @@ object ClusterManagementService {
             logs = sortedLogs
         )
     }
+
+    suspend fun getClusterQuorumFallbackStatus(): List<com.obsidianscout.db.QuorumFallbackStatusDto> = withContext(Dispatchers.IO) {
+        val cluster = getClusterNodes()
+        val localIp = getLocalTailscaleIp()
+
+        coroutineScope {
+            cluster.nodes.map { node ->
+                async {
+                    if (node.isLocal || node.ip == localIp) {
+                        com.obsidianscout.db.QuorumFallbackStore.getStatus(localIp)
+                    } else {
+                        val appConfig = AppConfigLoader.load()
+                        val appPort = appConfig.server.port
+                        val url = "http://${node.ip}:$appPort/api/admin/cluster/nodes/local/quorum-fallback/status"
+                        try {
+                            val req = buildSignedClusterRequest(url, "GET")
+                                .timeout(Duration.ofSeconds(4))
+                                .GET()
+                                .build()
+                            val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                            if (resp.statusCode() == 200) {
+                                JsonSupport.json.decodeFromString<com.obsidianscout.db.QuorumFallbackStatusDto>(resp.body())
+                            } else {
+                                com.obsidianscout.db.QuorumFallbackStatusDto(
+                                    nodeIp = node.ip,
+                                    isLocal = false,
+                                    enabled = false,
+                                    isAvailable = false,
+                                    isActiveServingReads = false,
+                                    status = "Unreachable (HTTP ${resp.statusCode()})",
+                                    databaseSizeBytes = 0L,
+                                    freeDiskSpaceBytes = 0L,
+                                    totalDiskSpaceBytes = 0L,
+                                    lastSyncTimestamp = null
+                                )
+                            }
+                        } catch (e: Exception) {
+                            com.obsidianscout.db.QuorumFallbackStatusDto(
+                                nodeIp = node.ip,
+                                isLocal = false,
+                                enabled = false,
+                                isAvailable = false,
+                                isActiveServingReads = false,
+                                status = "Offline",
+                                databaseSizeBytes = 0L,
+                                freeDiskSpaceBytes = 0L,
+                                totalDiskSpaceBytes = 0L,
+                                lastSyncTimestamp = null
+                            )
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
+    suspend fun toggleQuorumFallback(targetIp: String, enabled: Boolean): ActionResultResponse = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        if (isLocal) {
+            if (enabled) {
+                com.obsidianscout.db.QuorumFallbackStore.enableAndInitialize()
+                ActionResultResponse(true, "Local Quorum Fallback enabled and initialized.", localIp)
+            } else {
+                com.obsidianscout.db.QuorumFallbackStore.disableAndPurge(updateConfigFile = true)
+                ActionResultResponse(true, "Local Quorum Fallback disabled and storage purged.", localIp)
+            }
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/quorum-fallback/toggle?enabled=$enabled"
+            try {
+                val req = buildSignedClusterRequest(url, "POST")
+                    .timeout(Duration.ofSeconds(6))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build()
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    JsonSupport.json.decodeFromString<ActionResultResponse>(resp.body())
+                } else {
+                    ActionResultResponse(false, "Remote server returned HTTP ${resp.statusCode()}", targetIp)
+                }
+            } catch (e: Exception) {
+                ActionResultResponse(false, "Failed to toggle on $targetIp: ${e.message}", targetIp)
+            }
+        }
+    }
+
+    suspend fun purgeQuorumFallback(targetIp: String): ActionResultResponse = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        if (isLocal) {
+            com.obsidianscout.db.QuorumFallbackStore.disableAndPurge(updateConfigFile = true)
+            ActionResultResponse(true, "Local Quorum Fallback database purged and storage reclaimed.", localIp)
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/quorum-fallback/purge"
+            try {
+                val req = buildSignedClusterRequest(url, "POST")
+                    .timeout(Duration.ofSeconds(6))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build()
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    JsonSupport.json.decodeFromString<ActionResultResponse>(resp.body())
+                } else {
+                    ActionResultResponse(false, "Remote server returned HTTP ${resp.statusCode()}", targetIp)
+                }
+            } catch (e: Exception) {
+                ActionResultResponse(false, "Failed to purge on $targetIp: ${e.message}", targetIp)
+            }
+        }
+    }
+
+    suspend fun syncQuorumFallback(targetIp: String): ActionResultResponse = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        if (isLocal) {
+            val ok = com.obsidianscout.db.QuorumFallbackStore.syncFromCockroach()
+            if (ok) {
+                ActionResultResponse(true, "Quorum Fallback synchronization completed successfully.", localIp)
+            } else {
+                ActionResultResponse(false, "Sync skipped or failed (${com.obsidianscout.db.QuorumFallbackStore.lastSyncStatus})", localIp)
+            }
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/quorum-fallback/sync"
+            try {
+                val req = buildSignedClusterRequest(url, "POST")
+                    .timeout(Duration.ofSeconds(10))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build()
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    JsonSupport.json.decodeFromString<ActionResultResponse>(resp.body())
+                } else {
+                    ActionResultResponse(false, "Remote server returned HTTP ${resp.statusCode()}", targetIp)
+                }
+            } catch (e: Exception) {
+                ActionResultResponse(false, "Failed to sync on $targetIp: ${e.message}", targetIp)
+            }
+        }
+    }
 }

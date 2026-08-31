@@ -810,6 +810,17 @@ data class PruneChatMessagesRequest(
     val olderThanDays: Int = 90
 )
 
+@Serializable
+data class ToggleQuorumFallbackRequest(
+    val targetIp: String = "local",
+    val enabled: Boolean = false
+)
+
+@Serializable
+data class TargetNodeActionRequest(
+    val targetIp: String = "local"
+)
+
 
 
 

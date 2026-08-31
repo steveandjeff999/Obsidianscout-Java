@@ -13,6 +13,8 @@ import java.nio.file.Paths
 import java.sql.DriverManager
 import java.util.UUID
 
+class QuorumLostException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
 object DatabaseFactory {
     private val uuidMigratedTables = listOf(
         "users", "scouting_configs", "pit_scouting_configs",
@@ -36,72 +38,10 @@ object DatabaseFactory {
     private var lastQuorumProbeTime: Long = 0L
     internal var activeDataSource: HikariDataSource? = null
 
-    @Volatile
-    var lastHealthyQuorumInstant: java.time.Instant? = loadLastHealthyTimestamp()
-
-    @Volatile
-    var cachedWorkingAsOfSystemTime: String? = null
-
-    private val lastHealthyTimestampFile: File by lazy {
-        try {
-            val uri = DatabaseFactory::class.java.protectionDomain.codeSource.location.toURI()
-            val jarFile = File(uri)
-            val parent = if (jarFile.isFile) jarFile.parentFile else File(".")
-            val cockroachDir = File(parent, ".cockroach")
-            cockroachDir.mkdirs()
-            File(cockroachDir, ".last_healthy_quorum_ts")
-        } catch (_: Exception) {
-            File(".last_healthy_quorum_ts")
-        }
-    }
-
-    private val candidateProbeLock = Any()
-
-    fun saveLastHealthyTimestamp(instant: java.time.Instant, force: Boolean = false) {
-        if (!force && com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return
-        lastHealthyQuorumInstant = instant
-        try {
-            lastHealthyTimestampFile.writeText(instant.toString())
-        } catch (_: Exception) {
-            // ignore non-critical write error
-        }
-    }
-
-    private fun loadLastHealthyTimestamp(): java.time.Instant? {
-        return try {
-            if (lastHealthyTimestampFile.exists()) {
-                val text = lastHealthyTimestampFile.readText().trim()
-                if (text.isNotBlank()) java.time.Instant.parse(text) else null
-            } else null
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    fun buildAsOfSystemTimeCandidates(): List<String> {
-        val candidates = mutableListOf<String>()
-        val baseInstant = lastHealthyQuorumInstant
-        if (baseInstant != null) {
-            val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS+00").withZone(java.time.ZoneOffset.UTC)
-            val targetInstant = baseInstant.minusSeconds(30)
-            candidates.add("'${formatter.format(targetInstant)}'")
-            candidates.add("'${formatter.format(targetInstant.minusSeconds(300))}'")
-        }
-        candidates.add("'-15m'")
-        candidates.add("'-1h'")
-        candidates.add("'-5m'")
-        candidates.add("with_max_staleness(INTERVAL '10m')")
-        candidates.add("follower_read_timestamp()")
-        candidates.add("'-24h'")
-        return candidates.distinct()
-    }
-
-    private val isInsideAsOfSystemTimeTx = ThreadLocal.withInitial { false }
-
     /**
      * Executes a read-only transaction.
      * When CockroachDB is the active engine, automatically catches quorum loss and
-     * falls back to follower reads (`SET TRANSACTION AS OF SYSTEM TIME ...`) so that
+     * falls back to the local SQLite snapshot (QuorumFallbackStore) so that
      * nodes can continue serving reads completely offline during network partitions or quorum loss.
      */
     fun <T> readTransaction(
@@ -124,7 +64,10 @@ object DatabaseFactory {
         }
 
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-            return executeAsOfSystemTime(db, statement)
+            if (QuorumFallbackStore.isEnabled && QuorumFallbackStore.isAvailable) {
+                return QuorumFallbackStore.executeRead(statement)
+            }
+            throw QuorumLostException("Database cluster has lost quorum and local fallback mirror is disabled on this server.")
         }
 
         try {
@@ -136,130 +79,24 @@ object DatabaseFactory {
                 this.maxAttempts = 1
                 this.minRetryDelay = 0
                 this.maxRetryDelay = 0
-                if (isCrdb) {
-                    try { exec("SET LOCAL statement_timeout = '600ms';") } catch (_: Throwable) {}
-                }
                 statement()
             }
             if (isCrdb && com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = false
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = null
-                saveLastHealthyTimestamp(java.time.Instant.now())
-                cachedWorkingAsOfSystemTime = null
             }
             return result
         } catch (e: Throwable) {
             if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = true
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = e.message ?: "Database cluster quorum lost."
-                if (lastHealthyQuorumInstant == null) {
-                    saveLastHealthyTimestamp(java.time.Instant.now().minusSeconds(60), force = true)
+                println("[Database] ⚠️ CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Routing read to local SQLite fallback snapshot...")
+                if (QuorumFallbackStore.isEnabled && QuorumFallbackStore.isAvailable) {
+                    return QuorumFallbackStore.executeRead(statement)
                 }
-                println("[Database] ⚠️ CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Automatically falling back to AS OF SYSTEM TIME reads to retrieve latest available data...")
-                return executeAsOfSystemTime(db, statement, rootCause = e)
+                throw QuorumLostException("Database cluster has lost quorum.", e)
             }
             throw e
-        }
-    }
-
-    private fun <T> runInAsOfTransaction(
-        db: Database?,
-        candidate: String,
-        statement: org.jetbrains.exposed.sql.Transaction.() -> T
-    ): T {
-        return transaction(
-            transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
-            readOnly = true,
-            db = db
-        ) {
-            this.maxAttempts = 1
-            this.minRetryDelay = 0
-            this.maxRetryDelay = 0
-            exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
-            try { exec("SET LOCAL statement_timeout = '800ms';") } catch (_: Throwable) {}
-            isInsideAsOfSystemTimeTx.set(true)
-            try {
-                statement()
-            } finally {
-                isInsideAsOfSystemTimeTx.set(false)
-            }
-        }
-    }
-
-    /**
-     * Executes statement inside an AS OF SYSTEM TIME transaction block, iterating through staleness candidates
-     * until the newest valid historical state is read.
-     * In CockroachDB, 'SET TRANSACTION AS OF SYSTEM TIME' MUST be the very first statement inside the transaction block.
-     */
-    fun <T> executeAsOfSystemTime(
-        db: Database? = null,
-        statement: org.jetbrains.exposed.sql.Transaction.() -> T,
-        rootCause: Throwable? = null
-    ): T {
-        val currentTx = org.jetbrains.exposed.sql.transactions.TransactionManager.currentOrNull()
-        if (currentTx != null) {
-            return currentTx.statement()
-        }
-
-        val isCrdb = isCockroach && (db == null || !db.url.startsWith("jdbc:sqlite"))
-        if (!isCrdb) {
-            return transaction(db = db) {
-                this.maxAttempts = 1
-                this.minRetryDelay = 0
-                this.maxRetryDelay = 0
-                statement()
-            }
-        }
-
-        // 1. Fast path: try previously verified working candidate for this outage window
-        val cached = cachedWorkingAsOfSystemTime
-        var failedCached: String? = null
-        if (cached != null) {
-            try {
-                return runInAsOfTransaction(db, cached, statement)
-            } catch (cachedEx: Throwable) {
-                failedCached = cached
-            }
-        }
-
-        // 2. Synchronized candidate probe ladder (ensures only 1 thread probes candidates while all other threads await the working candidate)
-        synchronized(candidateProbeLock) {
-            val doubleChecked = cachedWorkingAsOfSystemTime
-            if (doubleChecked != null && doubleChecked != failedCached) {
-                try {
-                    return runInAsOfTransaction(db, doubleChecked, statement)
-                } catch (_: Throwable) {
-                    failedCached = doubleChecked
-                }
-            }
-
-            val candidates = buildAsOfSystemTimeCandidates()
-            var lastException: Throwable? = rootCause
-
-            for (candidate in candidates) {
-                if (candidate == failedCached) continue
-                try {
-                    val result = runInAsOfTransaction(db, candidate, statement)
-                    cachedWorkingAsOfSystemTime = candidate
-                    println("[Database] ✅ Successfully served read query using CockroachDB AS OF SYSTEM TIME ($candidate).")
-                    return result
-                } catch (candidateEx: Throwable) {
-                    lastException = candidateEx
-                    val isQuorumOrTimeErr = com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(candidateEx) ||
-                            candidateEx.message?.contains("as of system time", ignoreCase = true) == true ||
-                            candidateEx.message?.contains("closed timestamp", ignoreCase = true) == true ||
-                            candidateEx.message?.contains("timestamp", ignoreCase = true) == true ||
-                            candidateEx.message?.contains("deadline", ignoreCase = true) == true ||
-                            candidateEx.message?.contains("timeout", ignoreCase = true) == true ||
-                            candidateEx.message?.contains("canceling statement", ignoreCase = true) == true ||
-                            candidateEx.message?.contains("query execution canceled", ignoreCase = true) == true ||
-                            candidateEx.message?.contains("i/o error", ignoreCase = true) == true
-                    if (!isQuorumOrTimeErr) {
-                        throw candidateEx
-                    }
-                }
-            }
-            throw lastException ?: IllegalStateException("All CockroachDB AS OF SYSTEM TIME fallback candidates exhausted during quorum loss.")
         }
     }
 
@@ -1433,7 +1270,7 @@ object DatabaseFactory {
         val hostPart = if (host.contains(",") || host.contains(":")) host else "$host:$port"
         val base = "jdbc:postgresql://$hostPart/$database"
         val sslMode = if (ssl) "sslmode=require" else "sslmode=disable"
-        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=5&socketTimeout=3&tcpKeepAlive=true&options=-c%20statement_timeout=1500"
+        return "$base?$sslMode&reWriteBatchedInserts=true&connectTimeout=5&tcpKeepAlive=true"
     }
 
     private fun buildPostgresUrl(config: DatabaseConfig): String = buildPostgresOrCockroachUrl(config)

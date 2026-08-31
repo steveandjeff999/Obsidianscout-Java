@@ -106,39 +106,61 @@ class DatabaseReadFallbackTest {
     }
 
     @Test
-    fun testAsOfSystemTimeCandidatesLadderStructure() {
-        val candidates = DatabaseFactory.buildAsOfSystemTimeCandidates()
-        assertTrue(candidates.contains("follower_read_timestamp()"))
-        assertTrue(candidates.contains("with_max_staleness(INTERVAL '10m')"))
-        assertTrue(candidates.contains("'-24h'"))
-    }
+    fun testQuorumFallbackStoreInitializationAndQuery() {
+        val testFallbackDbFile = java.io.File("build/test_quorum_fallback_${System.currentTimeMillis()}.db")
+        val appConfig = com.obsidianscout.config.AppConfig(
+            quorum_fallback = com.obsidianscout.config.QuorumFallbackConfig(
+                enabled = true,
+                sqlite_file = testFallbackDbFile.absolutePath,
+                sync_interval_seconds = 30L,
+                scouting_retention_days = 7
+            )
+        )
 
-    @Test
-    fun testBuildAsOfSystemTimeCandidatesWithAnchoredTimestamp() {
-        val now = java.time.Instant.parse("2026-08-29T12:00:00Z")
-        DatabaseFactory.saveLastHealthyTimestamp(now)
+        QuorumFallbackStore.init(appConfig)
+        assertTrue(QuorumFallbackStore.isEnabled)
+        assertTrue(QuorumFallbackStore.isAvailable)
 
-        val candidates = DatabaseFactory.buildAsOfSystemTimeCandidates()
-        assertTrue(candidates.isNotEmpty())
+        // Seed sample users into SQLite mirror
+        val sqliteDb = QuorumFallbackStore.sqliteDb
+        assertTrue(sqliteDb != null)
 
-        // Candidates should include anchored fixed timestamps safe for local Pebble
-        val hasAnchoredTimestamp = candidates.any { it.startsWith("'2026-08-29 ") }
-        assertTrue(hasAnchoredTimestamp, "Candidates should include anchored timestamp: $candidates")
+        transaction(sqliteDb) {
+            Users.insert {
+                it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), Users)
+                it[username] = "scout_tester"
+                it[teamNumber] = 9999
+                it[program] = "FRC"
+                it[passwordHash] = "hash"
+                it[role] = "SCOUTER"
+                it[createdAt] = java.time.Instant.now()
+            }
+        }
 
-        // Check that relative intervals and follower reads are also included
-        assertTrue(candidates.contains("'-5m'"))
-        assertTrue(candidates.contains("with_max_staleness(INTERVAL '10m')"))
-        assertTrue(candidates.contains("follower_read_timestamp()"))
-    }
+        // When quorum is lost, readTransaction should route to QuorumFallbackStore
+        CockroachOrchestrator.isQuorumLost = true
+        DatabaseFactory.isCockroach = true
 
-    @Test
-    fun testWorkingCandidateCachingAndClearing() {
-        DatabaseFactory.cachedWorkingAsOfSystemTime = "'2026-08-29 12:00:00.000000+00'"
-        assertEquals("'2026-08-29 12:00:00.000000+00'", DatabaseFactory.cachedWorkingAsOfSystemTime)
+        val usernames = DatabaseFactory.readTransaction {
+            Users.selectAll().map { it[Users.username] }
+        }
 
-        // Reset
-        DatabaseFactory.cachedWorkingAsOfSystemTime = null
-        assertEquals(null, DatabaseFactory.cachedWorkingAsOfSystemTime)
+        assertEquals(listOf("scout_tester"), usernames)
+
+        // Verify status reporting
+        val status = QuorumFallbackStore.getStatus()
+        assertTrue(status.enabled)
+        assertTrue(status.isAvailable)
+        assertTrue(status.isActiveServingReads)
+        assertTrue(status.freeDiskSpaceBytes > 0)
+        assertTrue(status.totalDiskSpaceBytes > 0)
+        assertTrue(status.recordCounts["users"] == 1L)
+
+        // Test disable and purge
+        QuorumFallbackStore.disableAndPurge(updateConfigFile = false)
+        assertFalse(QuorumFallbackStore.isEnabled)
+        assertFalse(QuorumFallbackStore.isAvailable)
+        assertFalse(testFallbackDbFile.exists())
     }
 
     @Test

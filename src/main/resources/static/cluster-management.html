@@ -342,6 +342,45 @@
                     </div>
                 </div>
 
+                <!-- Local Quorum Fallback Mirror Manager Card (Superadmin only) -->
+                <div id="quorum-fallback-card" class="card soft mb-24 hidden" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); padding: 18px; border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <h3 style="margin: 0; font-size: 16px; color: #fbbf24;">🛡️ Local Quorum Loss Fallback Mirror Manager</h3>
+                                <span id="qf-global-status-pill" class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fde68a; font-size: 11px;">Active Mirroring</span>
+                            </div>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #fef3c7;">
+                                Continually mirrors critical data (Users, scouting data from the last 7 days, settings, and secrets) into local SQLite storage. If CockroachDB cluster quorum is lost, servers automatically serve real-time reads from this local snapshot. Storage can be enabled/disabled per server.
+                            </p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <button id="btn-qf-refresh" class="btn-action logs" type="button" style="padding: 8px 14px;">Refresh Fallback Status</button>
+                        </div>
+                    </div>
+
+                    <!-- Quorum Fallback Server Nodes Table -->
+                    <div style="overflow-x: auto; margin-top: 12px;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); color: #94a3b8; text-align: left;">
+                                    <th style="padding: 8px 10px;">Server Node</th>
+                                    <th style="padding: 8px 10px;">Fallback Status</th>
+                                    <th style="padding: 8px 10px;">Snapshot DB Size</th>
+                                    <th style="padding: 8px 10px;">Available Disk Space</th>
+                                    <th style="padding: 8px 10px;">Last Synced</th>
+                                    <th style="padding: 8px 10px; text-align: right;">Per-Server Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="qf-nodes-tbody">
+                                <tr>
+                                    <td colspan="6" style="padding: 16px; text-align: center; color: #64748b;">Loading Quorum Fallback status...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Server List Table -->
                 <div class="server-table-card">
                     <h2 style="font-size: 17px; margin-top: 0; margin-bottom: 16px;" data-i18n="cluster.servers_title">Discovered Cluster Servers</h2>

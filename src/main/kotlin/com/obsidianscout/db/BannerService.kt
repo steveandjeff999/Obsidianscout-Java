@@ -30,24 +30,63 @@ object BannerService {
         emptyList()
     }
 
+    private fun createQuorumLossBanner(): BannerDto {
+        val storeStatus = if (QuorumFallbackStore.isEnabled && QuorumFallbackStore.isAvailable) {
+            "Served from Local SQLite Snapshot"
+        } else {
+            "Local Fallback Disabled"
+        }
+        return BannerDto(
+            id = "system-quorum-lost-fallback",
+            teamNumber = 0,
+            message = "⚠️ Cluster Quorum Lost: Operating in Read-Only Mode ($storeStatus). Recent scouting entries, team stats, and match schedules remain available. New submissions are temporarily paused.",
+            bannerType = "warning",
+            isDismissible = false,
+            isExpandable = true,
+            expandableMessage = "CockroachDB majority consensus has been lost across cluster nodes. This node is serving locally snapshot data. Real-time reads remain active, and writes will automatically resume as soon as cluster quorum restores.",
+            showOnLogin = true,
+            isActive = true,
+            createdAt = Instant.now().toString(),
+            updatedAt = Instant.now().toString()
+        )
+    }
+
     fun getActive(teamNumber: Int): List<BannerDto> = try {
-        readTransaction {
+        val list = readTransaction {
             Banners.selectAll().where { 
                 (Banners.isActive eq true) and ((Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0))
             }.map { it.toDto() }
+        }.toMutableList()
+
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+            list.add(0, createQuorumLossBanner())
         }
+        list
     } catch (_: Throwable) {
-        emptyList()
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+            listOf(createQuorumLossBanner())
+        } else {
+            emptyList()
+        }
     }
 
     fun getLoginBanners(): List<BannerDto> = try {
-        readTransaction {
+        val list = readTransaction {
             Banners.selectAll().where { 
                 (Banners.isActive eq true) and (Banners.showOnLogin eq true)
             }.map { it.toDto() }
+        }.toMutableList()
+
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+            list.add(0, createQuorumLossBanner())
         }
+        list
     } catch (_: Throwable) {
-        emptyList()
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+            listOf(createQuorumLossBanner())
+        } else {
+            emptyList()
+        }
     }
 
     fun getById(id: String): BannerDto? = try {

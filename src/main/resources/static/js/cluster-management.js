@@ -63,6 +63,8 @@
         bindNodeAlertEvents();
         loadLoadBalancerStatus();
         bindLoadBalancerEvents();
+        loadQuorumFallbackStatus();
+        bindQuorumFallbackEvents();
     }
 
     async function loadNodeAlertEnrollment() {
@@ -936,6 +938,257 @@
         }
     }
 
+    async function loadQuorumFallbackStatus() {
+        const card = document.getElementById("quorum-fallback-card");
+        const tbody = document.getElementById("qf-nodes-tbody");
+        const globalPill = document.getElementById("qf-global-status-pill");
+        if (!card || !tbody) return;
+
+        try {
+            const data = await apiRequest("/api/admin/cluster/quorum-fallback");
+            if (data && Array.isArray(data)) {
+                card.classList.remove("hidden");
+                renderQuorumFallbackNodes(data, tbody, globalPill);
+            }
+        } catch (e) {
+            console.warn("[ClusterManagement] Quorum fallback status error:", e);
+            card.classList.add("hidden");
+        }
+    }
+
+    function renderQuorumFallbackNodes(nodes, tbody, globalPill) {
+        tbody.innerHTML = "";
+        let anyActive = false;
+        let allEnabled = true;
+
+        if (nodes.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="padding: 16px; text-align: center; color: #64748b;">No cluster nodes found.</td></tr>`;
+            return;
+        }
+
+        nodes.forEach(node => {
+            if (node.isActiveServingReads) anyActive = true;
+            if (!node.enabled) allEnabled = false;
+
+            const tr = document.createElement("tr");
+            tr.style.borderBottom = "1px solid rgba(255, 255, 255, 0.06)";
+
+            // 1. Server Node IP
+            const nodeTd = document.createElement("td");
+            nodeTd.style.padding = "10px";
+            nodeTd.innerHTML = `
+                <div style="font-family: monospace; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 6px;">
+                    ${escapeHtml(node.nodeIp)}
+                    <span class="node-badge ${node.isLocal ? "local" : "remote"}">${node.isLocal ? "Local" : "Remote"}</span>
+                </div>
+            `;
+
+            // 2. Status Badge
+            const statusTd = document.createElement("td");
+            statusTd.style.padding = "10px";
+            let statusColor = "#94a3b8";
+            let statusBg = "rgba(148, 163, 184, 0.15)";
+            if (node.isActiveServingReads) {
+                statusColor = "#f59e0b";
+                statusBg = "rgba(245, 158, 11, 0.2)";
+            } else if (node.enabled && node.isAvailable) {
+                statusColor = "#10b981";
+                statusBg = "rgba(16, 185, 129, 0.2)";
+            }
+            statusTd.innerHTML = `<span class="badge" style="background: ${statusBg}; color: ${statusColor}; font-size: 11px;">${escapeHtml(node.status)}</span>`;
+
+            // 3. Snapshot DB Size
+            const sizeTd = document.createElement("td");
+            sizeTd.style.padding = "10px";
+            sizeTd.style.fontFamily = "monospace";
+            sizeTd.style.color = node.databaseSizeBytes > 0 ? "#e2e8f0" : "#64748b";
+            sizeTd.textContent = formatBytes(node.databaseSizeBytes);
+
+            // 4. Available Disk Space
+            const diskTd = document.createElement("td");
+            diskTd.style.padding = "10px";
+            if (node.totalDiskSpaceBytes > 0) {
+                const freeFormatted = formatBytes(node.freeDiskSpaceBytes);
+                const totalFormatted = formatBytes(node.totalDiskSpaceBytes);
+                const percentFree = Math.round((node.freeDiskSpaceBytes / node.totalDiskSpaceBytes) * 100);
+                diskTd.innerHTML = `
+                    <div style="font-size: 12px; color: #cbd5e1;">${freeFormatted} free / ${totalFormatted}</div>
+                    <div style="font-size: 11px; color: ${percentFree < 15 ? "#ef4444" : "#94a3b8"};">${percentFree}% disk available</div>
+                `;
+            } else {
+                diskTd.innerHTML = `<span style="color: #64748b;">Unknown</span>`;
+            }
+
+            // 5. Last Synced
+            const syncTd = document.createElement("td");
+            syncTd.style.padding = "10px";
+            syncTd.style.fontSize = "12px";
+            syncTd.style.color = "#94a3b8";
+            if (node.lastSyncTimestamp) {
+                try {
+                    const date = new Date(node.lastSyncTimestamp);
+                    syncTd.textContent = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                } catch (_) {
+                    syncTd.textContent = node.lastSyncTimestamp;
+                }
+            } else {
+                syncTd.textContent = "Never";
+            }
+
+            // 6. Actions
+            const actionsTd = document.createElement("td");
+            actionsTd.style.padding = "10px";
+            actionsTd.style.textAlign = "right";
+
+            const toggleLabel = document.createElement("label");
+            toggleLabel.style.display = "inline-flex";
+            toggleLabel.style.alignItems = "center";
+            toggleLabel.style.gap = "6px";
+            toggleLabel.style.marginRight = "10px";
+            toggleLabel.style.fontSize = "12px";
+            toggleLabel.style.cursor = "pointer";
+            toggleLabel.style.color = "#cbd5e1";
+
+            const toggleInput = document.createElement("input");
+            toggleInput.type = "checkbox";
+            toggleInput.checked = !!node.enabled;
+            toggleInput.style.cursor = "pointer";
+            toggleInput.addEventListener("change", async () => {
+                const wantEnabled = toggleInput.checked;
+                await toggleQuorumFallbackOnNode(node.nodeIp, wantEnabled);
+            });
+
+            toggleLabel.appendChild(toggleInput);
+            toggleLabel.appendChild(document.createTextNode(node.enabled ? "Enabled" : "Disabled"));
+
+            const syncBtn = document.createElement("button");
+            syncBtn.className = "btn-action logs";
+            syncBtn.style.padding = "4px 8px";
+            syncBtn.style.fontSize = "11px";
+            syncBtn.style.marginRight = "6px";
+            syncBtn.textContent = "Sync Now";
+            syncBtn.disabled = !node.enabled;
+            syncBtn.addEventListener("click", async () => {
+                await syncQuorumFallbackOnNode(node.nodeIp, syncBtn);
+            });
+
+            const purgeBtn = document.createElement("button");
+            purgeBtn.className = "btn-action reinstall";
+            purgeBtn.style.padding = "4px 8px";
+            purgeBtn.style.fontSize = "11px";
+            purgeBtn.textContent = "Purge Storage";
+            purgeBtn.addEventListener("click", async () => {
+                if (confirm(`Purge local fallback SQLite database on node ${node.nodeIp} to reclaim storage space?`)) {
+                    await purgeQuorumFallbackOnNode(node.nodeIp, purgeBtn);
+                }
+            });
+
+            actionsTd.appendChild(toggleLabel);
+            actionsTd.appendChild(syncBtn);
+            actionsTd.appendChild(purgeBtn);
+
+            tr.appendChild(nodeTd);
+            tr.appendChild(statusTd);
+            tr.appendChild(sizeTd);
+            tr.appendChild(diskTd);
+            tr.appendChild(syncTd);
+            tr.appendChild(actionsTd);
+
+            tbody.appendChild(tr);
+        });
+
+        if (globalPill) {
+            if (anyActive) {
+                globalPill.style.background = "rgba(239, 68, 68, 0.2)";
+                globalPill.style.color = "#f87171";
+                globalPill.textContent = "⚠️ Active (Quorum Lost / Offline Reads)";
+            } else if (allEnabled) {
+                globalPill.style.background = "rgba(16, 185, 129, 0.2)";
+                globalPill.style.color = "#34d399";
+                globalPill.textContent = "Active Mirroring (All Nodes Ready)";
+            } else {
+                globalPill.style.background = "rgba(245, 158, 11, 0.2)";
+                globalPill.style.color = "#fbbf24";
+                globalPill.textContent = "Partial Mirroring";
+            }
+        }
+    }
+
+    function bindQuorumFallbackEvents() {
+        const refreshBtn = document.getElementById("btn-qf-refresh");
+        refreshBtn?.addEventListener("click", async () => {
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = "Refreshing...";
+            try {
+                await loadQuorumFallbackStatus();
+                showToastMsg("Quorum fallback status refreshed.", "info");
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = "Refresh Fallback Status";
+            }
+        });
+    }
+
+    async function toggleQuorumFallbackOnNode(nodeIp, enabled) {
+        try {
+            showToastMsg(`${enabled ? "Enabling" : "Disabling"} Quorum Fallback on ${nodeIp}...`, "info");
+            const resp = await apiRequest("/api/admin/cluster/quorum-fallback/toggle", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ targetIp: nodeIp, enabled: enabled })
+            });
+            showToastMsg(resp.message || "Updated quorum fallback status.", resp.success ? "success" : "error");
+            setTimeout(() => loadQuorumFallbackStatus(), 1000);
+        } catch (e) {
+            showToastMsg("Failed to toggle fallback: " + e.message, "error");
+            setTimeout(() => loadQuorumFallbackStatus(), 500);
+        }
+    }
+
+    async function syncQuorumFallbackOnNode(nodeIp, btn) {
+        if (btn) btn.disabled = true;
+        try {
+            showToastMsg(`Triggering immediate sync to SQLite mirror on ${nodeIp}...`, "info");
+            const resp = await apiRequest("/api/admin/cluster/quorum-fallback/sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ targetIp: nodeIp })
+            });
+            showToastMsg(resp.message || "Sync finished.", resp.success ? "success" : "error");
+            setTimeout(() => loadQuorumFallbackStatus(), 1000);
+        } catch (e) {
+            showToastMsg("Sync failed: " + e.message, "error");
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    async function purgeQuorumFallbackOnNode(nodeIp, btn) {
+        if (btn) btn.disabled = true;
+        try {
+            showToastMsg(`Purging local fallback storage on ${nodeIp}...`, "info");
+            const resp = await apiRequest("/api/admin/cluster/quorum-fallback/purge", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ targetIp: nodeIp })
+            });
+            showToastMsg(resp.message || "Storage purged.", resp.success ? "success" : "error");
+            setTimeout(() => loadQuorumFallbackStatus(), 1000);
+        } catch (e) {
+            showToastMsg("Purge failed: " + e.message, "error");
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes <= 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB", "TB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+    }
+
     function escapeHtml(str) {
         if (!str) return "";
         return String(str)
@@ -946,3 +1199,4 @@
             .replace(/'/g, "&#039;");
     }
 })();
+

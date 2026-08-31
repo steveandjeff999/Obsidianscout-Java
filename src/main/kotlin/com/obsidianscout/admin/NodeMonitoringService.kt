@@ -491,4 +491,162 @@ object NodeMonitoringService {
         val summary = logs.joinToString(" ")
         return Pair(success, if (success) "Test alert sent! $summary" else "Test alert failed: $summary")
     }
+
+    fun dispatchQuorumLostAlert(details: String?) {
+        val lockKey = "cluster_quorum_lost"
+        if (!claimNotificationLock(lockKey, lockDurationMinutes = 15)) {
+            return
+        }
+
+        val localIp = ClusterManagementService.getLocalTailscaleIp()
+        val (enrolledUuids, enrolledEmails) = try {
+            readTransaction {
+                val rows = Users.selectAll()
+                    .where { (Users.role eq UserRole.SUPERADMIN.name) and (Users.nodeAlertsEnabled eq true) }
+                    .toList()
+                val uuids = rows.map { it[Users.id].value }
+                val emails = rows.mapNotNull { it[Users.email]?.takeIf { e -> e.isNotBlank() } }
+                Pair(uuids, emails)
+            }
+        } catch (_: Exception) {
+            Pair(emptyList(), emptyList())
+        }
+
+        if (enrolledUuids.isEmpty()) return
+
+        ServerLogService.appendLog("WARN", "NodeMonitoringService", "Dispatching Quorum Lost FCM & Email alerts to ${enrolledUuids.size} enrolled superadmin(s).")
+
+        // 1. FCM Push
+        try {
+            FcmService.sendNotificationToUsers(
+                targetUserUuids = enrolledUuids,
+                title = "🚨 Database Quorum Lost",
+                body = "CockroachDB majority quorum lost on node $localIp. Node is serving from local SQLite mirror in read-only mode.",
+                groupName = "cluster-alerts",
+                url = "/cluster-management"
+            )
+        } catch (e: Exception) {
+            ServerLogService.appendLog("ERROR", "NodeMonitoringService", "FCM Quorum Lost alert error: ${e.message}")
+        }
+
+        // 2. Email
+        if (enrolledEmails.isNotEmpty()) {
+            val smtpConfigured = try {
+                SettingsService.getSmtpSettings().host.isNotBlank()
+            } catch (_: Exception) {
+                false
+            }
+            if (smtpConfigured) {
+                val appConfig = AppConfigLoader.load()
+                val siteUrl = appConfig.getEffectiveSiteUrl()
+                val clusterUrl = "$siteUrl/cluster-management"
+                val emailSubject = "🚨 [ObsidianScout Alert] CockroachDB Quorum Lost on $localIp"
+                val emailHtml = """
+                    <html>
+                    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #0f172a; padding: 20px;">
+                        <div style="max-width: 600px; margin: 0 auto; background: #1e293b; border: 1px solid #ef4444; border-radius: 12px; padding: 24px; color: #f8fafc;">
+                            <h2 style="color: #ef4444; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-top: 0;">
+                                🚨 Database Quorum Lost
+                            </h2>
+                            <p style="font-size: 16px;">
+                                Server node <strong>$localIp</strong> has lost CockroachDB cluster majority consensus.
+                            </p>
+                            <p style="color: #cbd5e1;">
+                                The server has automatically switched to the <strong>local SQLite fallback mirror</strong>. Scouting entries, match schedules, and team stats from the last 7 days remain accessible in read-only mode. New submissions will resume once cluster quorum is restored.
+                            </p>
+                            <p style="text-align: center; margin: 30px 0;">
+                                <a href="$clusterUrl" style="background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open Cluster Management UI</a>
+                            </p>
+                        </div>
+                    </body>
+                    </html>
+                """.trimIndent()
+
+                for (toEmail in enrolledEmails) {
+                    try {
+                        EmailService.sendEmail(toEmail, emailSubject, emailHtml)
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+    }
+
+    fun dispatchQuorumRecoveredAlert() {
+        val lockKey = "cluster_quorum_recovered"
+        if (!claimNotificationLock(lockKey, lockDurationMinutes = 15)) {
+            return
+        }
+
+        val localIp = ClusterManagementService.getLocalTailscaleIp()
+        val (enrolledUuids, enrolledEmails) = try {
+            readTransaction {
+                val rows = Users.selectAll()
+                    .where { (Users.role eq UserRole.SUPERADMIN.name) and (Users.nodeAlertsEnabled eq true) }
+                    .toList()
+                val uuids = rows.map { it[Users.id].value }
+                val emails = rows.mapNotNull { it[Users.email]?.takeIf { e -> e.isNotBlank() } }
+                Pair(uuids, emails)
+            }
+        } catch (_: Exception) {
+            Pair(emptyList(), emptyList())
+        }
+
+        if (enrolledUuids.isEmpty()) return
+
+        ServerLogService.appendLog("INFO", "NodeMonitoringService", "Dispatching Quorum Recovered FCM & Email alerts to ${enrolledUuids.size} enrolled superadmin(s).")
+
+        // 1. FCM Push
+        try {
+            FcmService.sendNotificationToUsers(
+                targetUserUuids = enrolledUuids,
+                title = "✅ Database Quorum Restored",
+                body = "CockroachDB cluster consensus restored on node $localIp. Normal read/write operations have resumed.",
+                groupName = "cluster-alerts",
+                url = "/cluster-management"
+            )
+        } catch (e: Exception) {
+            ServerLogService.appendLog("ERROR", "NodeMonitoringService", "FCM Quorum Recovered alert error: ${e.message}")
+        }
+
+        // 2. Email
+        if (enrolledEmails.isNotEmpty()) {
+            val smtpConfigured = try {
+                SettingsService.getSmtpSettings().host.isNotBlank()
+            } catch (_: Exception) {
+                false
+            }
+            if (smtpConfigured) {
+                val appConfig = AppConfigLoader.load()
+                val siteUrl = appConfig.getEffectiveSiteUrl()
+                val clusterUrl = "$siteUrl/cluster-management"
+                val emailSubject = "✅ [ObsidianScout] CockroachDB Quorum Restored on $localIp"
+                val emailHtml = """
+                    <html>
+                    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #0f172a; padding: 20px;">
+                        <div style="max-width: 600px; margin: 0 auto; background: #1e293b; border: 1px solid #22c55e; border-radius: 12px; padding: 24px; color: #f8fafc;">
+                            <h2 style="color: #22c55e; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-top: 0;">
+                                ✅ Database Quorum Restored
+                            </h2>
+                            <p style="font-size: 16px;">
+                                CockroachDB majority consensus has been re-established on node <strong>$localIp</strong>.
+                            </p>
+                            <p style="color: #cbd5e1;">
+                                Server has switched back to CockroachDB and resumed full live read/write database operations.
+                            </p>
+                            <p style="text-align: center; margin: 30px 0;">
+                                <a href="$clusterUrl" style="background-color: #22c55e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Open Cluster Management UI</a>
+                            </p>
+                        </div>
+                    </body>
+                    </html>
+                """.trimIndent()
+
+                for (toEmail in enrolledEmails) {
+                    try {
+                        EmailService.sendEmail(toEmail, emailSubject, emailHtml)
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+    }
 }

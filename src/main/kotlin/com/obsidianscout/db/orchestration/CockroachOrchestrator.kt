@@ -1134,16 +1134,20 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             if (isQuorumLost) {
                 isQuorumLost = false
                 quorumLossDetails = null
-                com.obsidianscout.db.DatabaseFactory.saveLastHealthyTimestamp(java.time.Instant.now())
-                com.obsidianscout.db.DatabaseFactory.cachedWorkingAsOfSystemTime = null
-            } else {
-                com.obsidianscout.db.DatabaseFactory.saveLastHealthyTimestamp(java.time.Instant.now())
+                println("[Cockroach] ✅ Quorum restored! Resumed standard CockroachDB read/write operations.")
+                try {
+                    com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumRecoveredAlert()
+                } catch (_: Exception) {}
             }
         } catch (e: Throwable) {
             if (isQuorumLossException(e)) {
                 if (!isQuorumLost) {
                     isQuorumLost = true
                     quorumLossDetails = e.message ?: "Database cluster quorum lost."
+                    println("[Cockroach] ⚠️ Quorum lost! Switched to local SQLite fallback mirror.")
+                    try {
+                        com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumLostAlert(quorumLossDetails)
+                    } catch (_: Exception) {}
                 }
             }
         }

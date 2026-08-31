@@ -91,4 +91,13 @@ class AppConfigTest {
         assertTrue(config.database.cockroach.ssl)
         assertEquals("jdbc:postgresql://crdb.example.com:26257/obsidianscout_prod?sslmode=require", config.database.url)
     }
+
+    @Test
+    fun testQuorumFallbackDefaultsToFalse() {
+        val config = AppConfig()
+        assertEquals(false, config.quorum_fallback.enabled)
+        assertEquals("data/quorum_fallback.db", config.quorum_fallback.sqlite_file)
+        assertEquals(30L, config.quorum_fallback.sync_interval_seconds)
+        assertEquals(7, config.quorum_fallback.scouting_retention_days)
+    }
 }

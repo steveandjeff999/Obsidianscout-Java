@@ -2887,6 +2887,48 @@ fun Application.configureRoutes() {
                         val filter = call.request.queryParameters["filter"]
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAllClusterLogs(limit, filter))
                     }
+
+                    // Quorum Fallback Mirror Management
+                    get("/quorum-fallback") {
+                        call.requireAdminOrClusterAuth()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterQuorumFallbackStatus())
+                    }
+                    post("/quorum-fallback/toggle") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<ToggleQuorumFallbackRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.toggleQuorumFallback(req.targetIp, req.enabled))
+                    }
+                    post("/quorum-fallback/purge") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<TargetNodeActionRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.purgeQuorumFallback(req.targetIp))
+                    }
+                    post("/quorum-fallback/sync") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<TargetNodeActionRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.syncQuorumFallback(req.targetIp))
+                    }
+                    get("/nodes/local/quorum-fallback/status") {
+                        call.requireAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.db.QuorumFallbackStore.getStatus(localIp))
+                    }
+                    post("/nodes/local/quorum-fallback/toggle") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val enabled = call.request.queryParameters["enabled"]?.toBooleanStrictOrNull() ?: true
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.toggleQuorumFallback(localIp, enabled))
+                    }
+                    post("/nodes/local/quorum-fallback/purge") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.purgeQuorumFallback(localIp))
+                    }
+                    post("/nodes/local/quorum-fallback/sync") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.syncQuorumFallback(localIp))
+                    }
                 }
 
                 route("/storage") {

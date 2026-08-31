@@ -254,6 +254,15 @@ object StorageManagementService {
         val totalEstimatedBytes = totalApiBytes + totalScoutingBytes + totalChatBytes + totalAccountBytes + totalConfigBytes
         val totalRecords = totalApiRecords + totalScoutingRecords + totalChatRecords + totalAccountRecords + totalConfigRecords
 
+        val qfStatus = com.obsidianscout.db.QuorumFallbackStore.getStatus()
+        val qfCategory = StorageCategoryBreakdown(
+            category = "Local Quorum Fallback Mirror",
+            description = "Local SQLite persistent snapshot on this server for real-time reads during quorum loss. Can be enabled/disabled per server in Server Management.",
+            isApiCache = true,
+            recordCount = qfStatus.recordCounts.values.sum(),
+            estimatedBytes = qfStatus.databaseSizeBytes
+        )
+
         val categories = listOf(
             StorageCategoryBreakdown(
                 category = "API Event Caches",
@@ -289,7 +298,8 @@ object StorageManagementService {
                 isApiCache = false,
                 recordCount = totalConfigRecords,
                 estimatedBytes = totalConfigBytes
-            )
+            ),
+            qfCategory
         )
 
         return StorageOverviewDto(

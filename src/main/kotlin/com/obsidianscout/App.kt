@@ -495,6 +495,8 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.admin.CloudflaredService.initOnStartup()
                 com.obsidianscout.admin.NodeMonitoringService.start()
                 com.obsidianscout.admin.PeerLoadRouter.start(appConfig)
+                com.obsidianscout.db.QuorumFallbackStore.init(appConfig)
+                com.obsidianscout.db.QuorumFallbackStore.start()
                 println("[Database] Background database initialization completed successfully.")
                 
                 // Mark update boot successful once startup completes
@@ -515,6 +517,7 @@ fun Application.module(appConfig: AppConfig) {
     }
 
     environment.monitor.subscribe(ApplicationStopped) {
+        com.obsidianscout.db.QuorumFallbackStore.stop()
         com.obsidianscout.admin.PeerLoadRouter.stop()
         com.obsidianscout.admin.NodeMonitoringService.stop()
         com.obsidianscout.auth.ClusterSecretService.stopBackgroundSync()
