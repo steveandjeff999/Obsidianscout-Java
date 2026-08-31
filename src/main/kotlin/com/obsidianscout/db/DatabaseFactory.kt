@@ -81,9 +81,9 @@ object DatabaseFactory {
     fun buildAsOfSystemTimeCandidates(): List<String> {
         val candidates = mutableListOf<String>()
         candidates.add("follower_read_timestamp()")
+        candidates.add("'-5m'")
         candidates.add("'-15m'")
         candidates.add("'-1h'")
-        candidates.add("'-5m'")
         candidates.add("with_max_staleness(INTERVAL '10m')")
         candidates.add("'-24h'")
 
@@ -176,6 +176,7 @@ object DatabaseFactory {
             this.minRetryDelay = 0
             this.maxRetryDelay = 0
             exec("SET TRANSACTION AS OF SYSTEM TIME $candidate;")
+            try { exec("SET LOCAL statement_timeout = '800ms';") } catch (_: Throwable) {}
             isInsideAsOfSystemTimeTx.set(true)
             try {
                 statement()
@@ -302,7 +303,7 @@ object DatabaseFactory {
             if (isPostgresCompatible) {
                 // Fixed pool size (minimumIdle == maximumPoolSize) ensures all connections stay perpetually
                 // connected to the local CockroachDB daemon and never get closed/recycled during quorum failovers.
-                val poolSize = if (isLowMem) 12 else 32
+                val poolSize = if (isLowMem) 16 else 64
                 maximumPoolSize = poolSize
                 minimumIdle = poolSize
                 idleTimeout = 0L // 0 = never retire/close idle connections
