@@ -496,7 +496,8 @@ class DatabaseReadFallbackTest {
             mirror_configs = false,
             mirror_alliances = false,
             mirror_chat = false,
-            mirror_notifications_secrets = false
+            mirror_notifications_secrets = false,
+            mirror_custom_analytics = true
         )
 
         QuorumFallbackStore.updateConfiguration(customConfig, updateConfigFile = false)
@@ -504,11 +505,38 @@ class DatabaseReadFallbackTest {
         assertEquals(30, QuorumFallbackStore.config.scouting_retention_days)
         assertTrue(QuorumFallbackStore.config.mirror_all_data)
         assertFalse(QuorumFallbackStore.config.mirror_chat)
+        assertTrue(QuorumFallbackStore.config.mirror_custom_analytics)
 
         val status = QuorumFallbackStore.getStatus("127.0.0.1")
         assertEquals(30, status.config.scouting_retention_days)
         assertTrue(status.config.mirror_all_data)
         assertFalse(status.config.mirror_chat)
+        assertTrue(status.config.mirror_custom_analytics)
+
+        QuorumFallbackStore.disableAndPurge(updateConfigFile = false)
+    }
+
+    @Test
+    fun testCustomAnalyticsAndConfigsAlwaysMirrored() {
+        val testDb = java.io.File("build/test_analytics_mirror_${System.currentTimeMillis()}.db")
+        val customConfig = com.obsidianscout.config.QuorumFallbackConfig(
+            enabled = true,
+            sqlite_file = testDb.absolutePath,
+            sync_interval_seconds = 30L,
+            scouting_retention_days = 7,
+            mirror_all_data = false,
+            mirror_custom_analytics = true
+        )
+
+        QuorumFallbackStore.updateConfiguration(customConfig, updateConfigFile = false)
+        assertTrue(QuorumFallbackStore.isEnabled)
+        assertTrue(QuorumFallbackStore.config.mirror_custom_analytics)
+
+        val inspection = QuorumFallbackStore.inspect("127.0.0.1")
+        assertTrue(inspection.tableCounts.containsKey("analytics_reports"))
+        assertTrue(inspection.tableCounts.containsKey("scouting_configs"))
+        assertTrue(inspection.tableCounts.containsKey("pit_scouting_configs"))
+        assertTrue(inspection.tableCounts.containsKey("qualitative_scouting_configs"))
 
         QuorumFallbackStore.disableAndPurge(updateConfigFile = false)
     }

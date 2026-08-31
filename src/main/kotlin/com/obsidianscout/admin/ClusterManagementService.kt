@@ -966,7 +966,8 @@ object ClusterManagementService {
                 mirror_configs = req.mirrorConfigs ?: currentConfig.mirror_configs,
                 mirror_alliances = req.mirrorAlliances ?: currentConfig.mirror_alliances,
                 mirror_chat = req.mirrorChat ?: currentConfig.mirror_chat,
-                mirror_notifications_secrets = req.mirrorNotificationsSecrets ?: currentConfig.mirror_notifications_secrets
+                mirror_notifications_secrets = req.mirrorNotificationsSecrets ?: currentConfig.mirror_notifications_secrets,
+                mirror_custom_analytics = req.mirrorCustomAnalytics ?: currentConfig.mirror_custom_analytics
             )
             com.obsidianscout.db.QuorumFallbackStore.updateConfiguration(newConfig, updateConfigFile = true)
             ActionResultResponse(true, "Quorum fallback configuration updated for node $localIp.", localIp)

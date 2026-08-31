@@ -51,7 +51,8 @@ data class QuorumFallbackConfig(
     val mirror_configs: Boolean = true,
     val mirror_alliances: Boolean = true,
     val mirror_chat: Boolean = true,
-    val mirror_notifications_secrets: Boolean = true
+    val mirror_notifications_secrets: Boolean = true,
+    val mirror_custom_analytics: Boolean = true
 )
 
 @Serializable

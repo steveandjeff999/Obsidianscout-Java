@@ -123,7 +123,8 @@ object QuorumFallbackStore {
         ClusterSecrets,
         FcmConfigs,
         FcmDeviceTokens,
-        PushSubscriptions
+        PushSubscriptions,
+        AnalyticsReports
     )
 
     @Synchronized
@@ -367,32 +368,17 @@ object QuorumFallbackStore {
                 DatabaseFactory.readTransaction { UserSessions.selectAll().toList() }
             } else emptyList()
 
-            val scoutingConfigsList = if (config.mirror_configs || isMirrorAll) {
-                DatabaseFactory.readTransaction { ScoutingConfigs.selectAll().toList() }
-            } else emptyList()
+            // Game, Pit, and Qualitative configs are fundamental to app operation and always mirrored
+            val scoutingConfigsList = DatabaseFactory.readTransaction { ScoutingConfigs.selectAll().toList() }
+            val pitConfigsList = DatabaseFactory.readTransaction { PitScoutingConfigs.selectAll().toList() }
+            val qualConfigsList = DatabaseFactory.readTransaction { QualitativeScoutingConfigs.selectAll().toList() }
+            val defaultConfigsList = DatabaseFactory.readTransaction { DefaultConfigs.selectAll().toList() }
+            val configRevisionsList = DatabaseFactory.readTransaction { ConfigRevisions.selectAll().toList() }
+            val appSettingsList = DatabaseFactory.readTransaction { AppSettings.selectAll().toList() }
+            val bannersList = DatabaseFactory.readTransaction { Banners.selectAll().toList() }
 
-            val pitConfigsList = if (config.mirror_configs || isMirrorAll) {
-                DatabaseFactory.readTransaction { PitScoutingConfigs.selectAll().toList() }
-            } else emptyList()
-
-            val qualConfigsList = if (config.mirror_configs || isMirrorAll) {
-                DatabaseFactory.readTransaction { QualitativeScoutingConfigs.selectAll().toList() }
-            } else emptyList()
-
-            val defaultConfigsList = if (config.mirror_configs || isMirrorAll) {
-                DatabaseFactory.readTransaction { DefaultConfigs.selectAll().toList() }
-            } else emptyList()
-
-            val configRevisionsList = if (config.mirror_configs || isMirrorAll) {
-                DatabaseFactory.readTransaction { ConfigRevisions.selectAll().toList() }
-            } else emptyList()
-
-            val appSettingsList = if (config.mirror_configs || isMirrorAll) {
-                DatabaseFactory.readTransaction { AppSettings.selectAll().toList() }
-            } else emptyList()
-
-            val bannersList = if (config.mirror_configs || isMirrorAll) {
-                DatabaseFactory.readTransaction { Banners.selectAll().toList() }
+            val analyticsReportsList = if (config.mirror_custom_analytics || isMirrorAll) {
+                DatabaseFactory.readTransaction { AnalyticsReports.selectAll().toList() }
             } else emptyList()
 
             val alliancesList = if (config.mirror_alliances || isMirrorAll) {
@@ -817,6 +803,25 @@ object QuorumFallbackStore {
                     }
                 }
 
+                // Custom Analytics Page Reports
+                AnalyticsReports.deleteAll()
+                for (row in analyticsReportsList) {
+                    AnalyticsReports.insert {
+                        it[id] = EntityID(row[AnalyticsReports.id].value, AnalyticsReports)
+                        it[ownerTeamNumber] = row[AnalyticsReports.ownerTeamNumber]
+                        it[program] = row[AnalyticsReports.program]
+                        it[userId] = EntityID(row[AnalyticsReports.userId].value, Users)
+                        it[title] = row[AnalyticsReports.title]
+                        it[category] = row[AnalyticsReports.category]
+                        it[description] = row[AnalyticsReports.description]
+                        it[configJson] = row[AnalyticsReports.configJson]
+                        it[isShared] = row[AnalyticsReports.isShared]
+                        it[isDefault] = row[AnalyticsReports.isDefault]
+                        it[createdAt] = row[AnalyticsReports.createdAt]
+                        it[updatedAt] = row[AnalyticsReports.updatedAt]
+                    }
+                }
+
                 // Events, Teams & Matches
                 ApiEvents.deleteAll()
                 for (row in activeEventsList) {
@@ -971,6 +976,7 @@ object QuorumFallbackStore {
                     counts["events"] = ApiEvents.selectAll().count()
                     counts["matches"] = ApiMatches.selectAll().count()
                     counts["teams"] = ApiTeams.selectAll().count()
+                    counts["analyticsReports"] = AnalyticsReports.selectAll().count()
                 }
             } catch (_: Exception) {
             } finally {
@@ -1041,6 +1047,7 @@ object QuorumFallbackStore {
                     tableCounts["fcm_config"] = FcmConfigs.selectAll().count()
                     tableCounts["fcm_device_tokens"] = FcmDeviceTokens.selectAll().count()
                     tableCounts["push_subscriptions"] = PushSubscriptions.selectAll().count()
+                    tableCounts["analytics_reports"] = AnalyticsReports.selectAll().count()
 
                     // Load mirrored events with their breakdown
                     val allEvents = ApiEvents.selectAll().toList()

@@ -830,7 +830,8 @@ data class UpdateQuorumFallbackConfigRequest(
     val mirrorConfigs: Boolean? = null,
     val mirrorAlliances: Boolean? = null,
     val mirrorChat: Boolean? = null,
-    val mirrorNotificationsSecrets: Boolean? = null
+    val mirrorNotificationsSecrets: Boolean? = null,
+    val mirrorCustomAnalytics: Boolean? = null
 )
 
 @Serializable

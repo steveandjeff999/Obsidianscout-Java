@@ -1210,8 +1210,11 @@
         const chkApi = document.getElementById("qf-chk-api-data");
         if (chkApi) chkApi.checked = cfg.mirror_api_data !== false;
 
+        const chkAnalytics = document.getElementById("qf-chk-analytics");
+        if (chkAnalytics) chkAnalytics.checked = cfg.mirror_custom_analytics !== false;
+
         const chkConfigs = document.getElementById("qf-chk-configs");
-        if (chkConfigs) chkConfigs.checked = cfg.mirror_configs !== false;
+        if (chkConfigs) chkConfigs.checked = true;
 
         const chkAlliances = document.getElementById("qf-chk-alliances");
         if (chkAlliances) chkAlliances.checked = cfg.mirror_alliances !== false;
@@ -1259,7 +1262,8 @@
             mirrorUsers: document.getElementById("qf-chk-users")?.checked ?? true,
             mirrorScouting: document.getElementById("qf-chk-scouting")?.checked ?? true,
             mirrorApiData: document.getElementById("qf-chk-api-data")?.checked ?? true,
-            mirrorConfigs: document.getElementById("qf-chk-configs")?.checked ?? true,
+            mirrorCustomAnalytics: document.getElementById("qf-chk-analytics")?.checked ?? true,
+            mirrorConfigs: true,
             mirrorAlliances: document.getElementById("qf-chk-alliances")?.checked ?? true,
             mirrorChat: document.getElementById("qf-chk-chat")?.checked ?? true,
             mirrorNotificationsSecrets: document.getElementById("qf-chk-secrets")?.checked ?? true,
