@@ -16,6 +16,7 @@ import com.obsidianscout.auth.requireSession
 import com.obsidianscout.auth.requireSuperAdmin
 import com.obsidianscout.auth.requireSuperAdminOrClusterAuth
 import com.obsidianscout.auth.EmailService
+import com.obsidianscout.auth.TeamSecretService
 import com.obsidianscout.db.PasswordResetTokens
 import com.obsidianscout.db.PushSubscriptions
 import com.obsidianscout.db.PushNotificationService
@@ -910,6 +911,14 @@ fun Application.configureRoutes() {
                     val id = call.parameters["id"] ?: throw IllegalArgumentException("Missing revision id")
                     val result = ConfigMigrationService.restoreRevision(id, session.teamNumber, session.program, session.username)
                     call.respond(result)
+                }
+            }
+
+            route("/team") {
+                get("/secret-key") {
+                    val session = call.requireSession()
+                    val secret = TeamSecretService.getOrCreateTeamSecret(session.teamNumber)
+                    call.respond(TeamSecretResponse(teamSecret = secret, teamNumber = session.teamNumber))
                 }
             }
 

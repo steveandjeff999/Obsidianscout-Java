@@ -839,6 +839,14 @@ data class TargetNodeActionRequest(
     val targetIp: String = "local"
 )
 
+@Serializable
+data class TeamSecretResponse(
+    val success: Boolean = true,
+    val teamSecret: String,
+    val teamNumber: Int
+)
+
+
 
 
 

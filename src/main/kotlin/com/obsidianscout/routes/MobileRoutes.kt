@@ -21,6 +21,7 @@ import com.obsidianscout.db.AllianceMemberships
 import com.obsidianscout.db.Users
 import com.obsidianscout.db.PasswordResetTokens
 import com.obsidianscout.auth.EmailService
+import com.obsidianscout.auth.TeamSecretService
 import org.jetbrains.exposed.sql.lowerCase
 import com.obsidianscout.integrations.IntegrationService
 import com.obsidianscout.integrations.SettingsService
@@ -1515,6 +1516,20 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 // Return a simple 1x1 transparent PNG
                 val pngBytes = java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
                 call.respondBytes(pngBytes, ContentType.Image.PNG)
+            }
+
+            // P2P Team Secret Key
+            get("/team/secret-key") {
+                val session = call.requireMobileSession(secret)
+                val teamSecret = TeamSecretService.getOrCreateTeamSecret(session.teamNumber)
+                call.respond(
+                    HttpStatusCode.OK,
+                    TeamSecretResponse(
+                        success = true,
+                        teamSecret = teamSecret,
+                        teamNumber = session.teamNumber
+                    )
+                )
             }
 
             // Events
