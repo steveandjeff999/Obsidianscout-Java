@@ -1115,7 +1115,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                             username = user.username,
                             teamNumber = user.teamNumber,
                             roles = listOf(user.role.name.lowercase()),
-                            profilePicture = "img/avatars/default.png"
+                            profilePicture = user.profilePicture ?: "img/avatars/default.png"
                         ),
                         expiresAt = expiresAt.toInstant().toString()
                     )
@@ -1495,13 +1495,15 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             // Profiles
             get("/profiles/me") {
                 val session = call.requireMobileSession(secret)
+                val user = AuthService.getUserById(session.userId)
+                val pic = user?.profilePicture ?: "img/avatars/default.png"
                 call.respond(
                     MobileProfileMe(
                         user = MobileUserWithUrl(
                             id = session.userId,
                             username = session.username,
                             teamNumber = session.teamNumber,
-                            profilePicture = "img/avatars/default.png",
+                            profilePicture = pic,
                             profilePictureUrl = "/api/mobile/profiles/me/picture"
                         )
                     )

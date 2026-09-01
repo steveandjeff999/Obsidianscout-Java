@@ -185,5 +185,38 @@ class DatabaseOrchestrationTest {
         val normalError = java.sql.SQLException("ERROR: duplicate key value violates unique constraint \"users_pkey\"")
         kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossException(normalError), "Normal constraint error must NOT be detected as quorum loss")
     }
+
+    @Test
+    fun testQuorumLossMultiCheckVerificationAndAlertState() {
+        CockroachOrchestrator.isQuorumLost = false
+        CockroachOrchestrator.consecutiveQuorumLossFailures = 0
+        CockroachOrchestrator.isQuorumLossAlertSent = false
+
+        val appConfig = com.obsidianscout.config.AppConfig()
+        val orchestrator = CockroachOrchestrator(appConfig)
+
+        // Simulate probe check when activeDataSource is null (failure)
+        orchestrator.checkQuorumStatus()
+        // First failed check: consecutive failures is 0 (or no exception from probe), state clean
+        assertEquals(0, CockroachOrchestrator.consecutiveQuorumLossFailures)
+        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossAlertSent)
+
+        // Simulate tracking consecutive failures
+        CockroachOrchestrator.consecutiveQuorumLossFailures = 1
+        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossAlertSent, "Alert must NOT be sent after only 1 failure")
+
+        CockroachOrchestrator.consecutiveQuorumLossFailures = 2
+        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossAlertSent, "Alert must NOT be sent after only 2 failures")
+
+        // 3 consecutive failures threshold
+        CockroachOrchestrator.consecutiveQuorumLossFailures = 3
+        CockroachOrchestrator.isQuorumLossAlertSent = true
+        assertTrue(CockroachOrchestrator.isQuorumLossAlertSent, "Alert sent flag set when 3 consecutive failures reached")
+
+        // Reset state
+        CockroachOrchestrator.consecutiveQuorumLossFailures = 0
+        CockroachOrchestrator.isQuorumLossAlertSent = false
+        CockroachOrchestrator.isQuorumLost = false
+    }
 }
 

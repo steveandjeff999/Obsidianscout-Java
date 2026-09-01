@@ -1120,35 +1120,63 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         return false
     }
 
-    fun checkQuorumStatus() {
-        val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return
-        try {
+    private fun executeProbe(): Pair<Boolean, Throwable?> {
+        val ds = com.obsidianscout.db.DatabaseFactory.activeDataSource ?: return Pair(false, null)
+        return try {
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
-                    try { stmt.execute("SET statement_timeout = '600ms'") } catch (_: Exception) {}
+                    try { stmt.execute("SET statement_timeout = '1500ms'") } catch (_: Exception) {}
                     stmt.executeQuery("SELECT (SELECT count(*) FROM users LIMIT 1) + (SELECT count(*) FROM app_settings LIMIT 1)").use { rs ->
                         rs.next()
                     }
                 }
             }
+            Pair(true, null)
+        } catch (e: Throwable) {
+            Pair(false, e)
+        }
+    }
+
+    fun checkQuorumStatus() {
+        val (firstSuccess, firstErr) = executeProbe()
+        val (isHealthy, error) = if (firstSuccess) {
+            Pair(true, null)
+        } else {
+            // Immediate short-delay retry to discard instantaneous micro-spikes
+            try { Thread.sleep(500) } catch (_: Exception) {}
+            val (retrySuccess, retryErr) = executeProbe()
+            if (retrySuccess) Pair(true, null) else Pair(false, retryErr ?: firstErr)
+        }
+
+        if (isHealthy) {
             if (isQuorumLost) {
                 isQuorumLost = false
                 quorumLossDetails = null
                 println("[Cockroach] ✅ Quorum restored! Resumed standard CockroachDB read/write operations.")
-                try {
-                    com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumRecoveredAlert()
-                } catch (_: Exception) {}
-            }
-        } catch (e: Throwable) {
-            if (isQuorumLossException(e)) {
-                if (!isQuorumLost) {
-                    isQuorumLost = true
-                    quorumLossDetails = e.message ?: "Database cluster quorum lost."
-                    println("[Cockroach] ⚠️ Quorum lost! Switched to local SQLite fallback mirror.")
+                if (isQuorumLossAlertSent) {
+                    isQuorumLossAlertSent = false
                     try {
-                        com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumLostAlert(quorumLossDetails)
+                        com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumRecoveredAlert()
                     } catch (_: Exception) {}
                 }
+            }
+            consecutiveQuorumLossFailures = 0
+        } else if (error != null && isQuorumLossException(error)) {
+            val failCount = ++consecutiveQuorumLossFailures
+            if (!isQuorumLost) {
+                isQuorumLost = true
+                quorumLossDetails = error.message ?: "Database cluster quorum lost."
+                println("[Cockroach] ⚠️ Quorum probe failed (check $failCount/3). Routing reads to local SQLite fallback mirror...")
+            }
+
+            // Multi-check verification guard (like Node Down alerts):
+            // Require 3 consecutive failed verification cycles (~30s) before dispatching the push/email alert to superadmins.
+            if (failCount >= 3 && !isQuorumLossAlertSent) {
+                isQuorumLossAlertSent = true
+                println("[Cockroach] 🚨 Database quorum loss confirmed after 3 consecutive failed verification cycles! Dispatching alert...")
+                try {
+                    com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumLostAlert(quorumLossDetails)
+                } catch (_: Exception) {}
             }
         }
     }
@@ -1162,6 +1190,12 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
         @Volatile
         var quorumLossDetails: String? = null
+
+        @Volatile
+        var consecutiveQuorumLossFailures: Int = 0
+
+        @Volatile
+        var isQuorumLossAlertSent: Boolean = false
 
         fun isQuorumLossException(e: Throwable): Boolean {
             var curr: Throwable? = e

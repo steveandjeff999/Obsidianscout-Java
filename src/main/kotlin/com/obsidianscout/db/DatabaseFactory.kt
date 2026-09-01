@@ -87,6 +87,13 @@ object DatabaseFactory {
             if (isCrdb && com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = false
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = null
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.consecutiveQuorumLossFailures = 0
+                if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossAlertSent) {
+                    com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossAlertSent = false
+                    try {
+                        com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumRecoveredAlert()
+                    } catch (_: Exception) {}
+                }
             }
             return result
         } catch (e: Throwable) {
