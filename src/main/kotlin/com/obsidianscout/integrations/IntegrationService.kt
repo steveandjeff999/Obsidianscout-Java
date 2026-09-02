@@ -1536,12 +1536,12 @@ object IntegrationService {
         }
         return try {
             val element = JsonSupport.json.parseToJsonElement(responseText)
-            val array = element.jsonArray
+            val array = element as? JsonArray ?: return emptyMap()
             array.mapNotNull { item ->
-                val obj = item.jsonObject
+                val obj = item as? JsonObject ?: return@mapNotNull null
                 val team = obj.readInt("team") ?: return@mapNotNull null
-                val epaObj = obj["epa"]?.jsonObject
-                val totalPointsObj = epaObj?.get("total_points")?.jsonObject
+                val epaObj = obj["epa"] as? JsonObject
+                val totalPointsObj = epaObj?.get("total_points") as? JsonObject
                 val epa = totalPointsObj?.readDouble("mean") ?: return@mapNotNull null
                 "frc${team}" to epa
             }.toMap()
@@ -1630,7 +1630,7 @@ object IntegrationService {
                 return emptyList()
             }
             val text = response.bodyAsText()
-            JsonSupport.json.parseToJsonElement(text).jsonArray
+            (JsonSupport.json.parseToJsonElement(text) as? JsonArray) ?: emptyList()
         } catch (error: Exception) {
             log.warn("Statbotics match EPA history fetch failed for $eventKey: ${error.message}")
             emptyList()

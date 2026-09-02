@@ -782,6 +782,69 @@ function initScanner() {
             stopScanning();
             const decompressedText = await Obsidianscout.decompressData(fullText);
             const entry = JSON.parse(decompressedText);
+            
+            // Check if this is an alliance bundle with multiple entries
+            const bundleData = (entry && entry.data && (entry.data.type === "qual-alliance" || Array.isArray(entry.data.entries)))
+                ? entry.data
+                : entry;
+
+            const isAllianceBundle = bundleData && (
+                bundleData.type === "qual-alliance" ||
+                (entry && entry.type === "qual-alliance") ||
+                (Array.isArray(bundleData.entries) && bundleData.entries.length > 0)
+            );
+
+            if (isAllianceBundle) {
+                const subEntries = Array.isArray(bundleData.entries)
+                    ? bundleData.entries
+                    : (Array.isArray(entry.entries) ? entry.entries : []);
+
+                let addedCount = 0;
+                let alreadyCount = 0;
+                subEntries.forEach(sub => {
+                    const payload = (sub && sub.data && typeof sub.data === "object") ? { ...sub.data } : (typeof sub === "object" && sub !== null ? { ...sub } : {});
+                    const subType = (sub && sub.type) || (payload && payload.type) || "qual-scout";
+                    const rawTeamNum = payload.targetTeamNumber || payload.teamNumber;
+                    if (!rawTeamNum) return;
+
+                    payload.targetTeamNumber = Number(rawTeamNum);
+                    if (!payload.eventKey && bundleData.eventKey) payload.eventKey = bundleData.eventKey;
+                    if (!payload.matchKey && bundleData.matchKey) payload.matchKey = bundleData.matchKey;
+                    if (payload.matchNumber == null && bundleData.matchNumber != null) payload.matchNumber = bundleData.matchNumber;
+
+                    const isDup = queue.some(item => {
+                        const itemData = item.data || item;
+                        return (item.type === subType || item.type === "qual-scout" || item.type === "qualitative-scouting") &&
+                               String(itemData.eventKey || "") === String(payload.eventKey || "") &&
+                               Number(itemData.targetTeamNumber) === Number(payload.targetTeamNumber) &&
+                               String(itemData.matchKey || "") === String(payload.matchKey || "");
+                    });
+
+                    if (isDup) {
+                        alreadyCount++;
+                    } else {
+                        queue.push({
+                            id: Date.now() + "_" + Math.random().toString(36).substr(2, 9),
+                            type: subType,
+                            data: payload,
+                            status: "pending",
+                            errorMsg: ""
+                        });
+                        addedCount++;
+                    }
+                });
+                saveQueue();
+                renderQueue();
+                updateUploadButtonState();
+                if (addedCount > 0) {
+                    const extra = alreadyCount > 0 ? ` (${alreadyCount} already in queue)` : "";
+                    Obsidianscout.showToast(`Scanned alliance: ${addedCount} team entries added to queue${extra}`, "success");
+                } else {
+                    Obsidianscout.showToast(`All ${subEntries.length || ''} alliance entries already exist in queue`, "info");
+                }
+                return;
+            }
+
             if (!entry || !entry.type || !entry.data) {
                 throw new Error("Invalid scouting QR schema");
             }
@@ -1069,11 +1132,27 @@ function initScanner() {
                 // Parse as JSON
                 let parsed = JSON.parse(decompressedText);
                 
-                // Process either a list or single entry
-                const items = Array.isArray(parsed) ? parsed : [parsed];
+                // Process either a list or single entry (flatten any alliance bundles)
+                let items = Array.isArray(parsed) ? parsed : [parsed];
+                const flattened = [];
+                items.forEach(it => {
+                    const bundle = (it && it.data && (it.data.type === 'qual-alliance' || Array.isArray(it.data.entries))) ? it.data : it;
+                    if (bundle && Array.isArray(bundle.entries)) {
+                        bundle.entries.forEach(sub => {
+                            const subObj = (typeof sub === 'object' && sub !== null) ? { ...sub } : {};
+                            if (!subObj.type) subObj.type = 'qual-scout';
+                            if (!subObj.eventKey && bundle.eventKey) subObj.eventKey = bundle.eventKey;
+                            if (!subObj.matchKey && bundle.matchKey) subObj.matchKey = bundle.matchKey;
+                            if (subObj.matchNumber == null && bundle.matchNumber != null) subObj.matchNumber = bundle.matchNumber;
+                            flattened.push(subObj);
+                        });
+                    } else {
+                        flattened.push(it);
+                    }
+                });
                 const entriesToProcess = [];
 
-                items.forEach(item => {
+                flattened.forEach(item => {
                     const normalized = normalizeImportedItem(item, "pasted_data.json");
                     if (normalized) {
                         entriesToProcess.push(normalized);

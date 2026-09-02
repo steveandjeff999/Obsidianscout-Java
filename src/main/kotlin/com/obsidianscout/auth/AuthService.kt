@@ -610,7 +610,9 @@ object AuthService {
             sessionTouchCache[sessionUuid] = nowMs
             try {
                 transaction {
-                    exec("SET statement_timeout = '1500ms';")
+                    if (com.obsidianscout.db.DatabaseFactory.isPostgresCompatible) {
+                        exec("SET statement_timeout = '1500ms';")
+                    }
                     UserSessions.update({ UserSessions.id eq sessionUuid }) {
                         it[lastActiveAt] = Instant.ofEpochMilli(nowMs)
                     }

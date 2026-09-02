@@ -33,6 +33,8 @@ object DatabaseFactory {
     @Volatile
     var isCockroach: Boolean = false
     @Volatile
+    var isPostgresCompatible: Boolean = false
+    @Volatile
     var orchestrator: com.obsidianscout.db.orchestration.CockroachOrchestrator? = null
     @Volatile
     var primaryDatabase: Database? = null
@@ -135,7 +137,8 @@ object DatabaseFactory {
             ensurePostgresDatabaseExists(config)
         }
 
-        val isPostgresCompatible = engineType == "postgres" || engineType == "cockroach" || engineType == "postgresql"
+        val isPostgresCompatible = isCockroachEngine || engineType == "postgres" || engineType == "postgresql"
+        this.isPostgresCompatible = isPostgresCompatible
 
         val hikariConfig = HikariConfig().apply {
             val jdbcUrl = when {
@@ -350,19 +353,21 @@ object DatabaseFactory {
                     SchemaUtils.createMissingTablesAndColumns(*tables.toTypedArray())
                 }
                 // Explicit column migrations for PostgreSQL (safe to run repeatedly with IF NOT EXISTS)
-                dataSource.connection.use { conn ->
-                    conn.autoCommit = true
-                    conn.createStatement().use { stmt ->
-                        val pgMigrations = listOf(
-                            "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_roles TEXT NOT NULL DEFAULT '[]'",
-                            "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'"
-                        )
-                        for (sql in pgMigrations) {
-                            try {
-                                stmt.executeUpdate(sql)
-                                println("[Database] Ran PG migration: $sql")
-                            } catch (e: Exception) {
-                                println("[Database] Note running PG migration ($sql): ${e.message}")
+                if (isPostgresCompatible) {
+                    dataSource.connection.use { conn ->
+                        conn.autoCommit = true
+                        conn.createStatement().use { stmt ->
+                            val pgMigrations = listOf(
+                                "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_roles TEXT NOT NULL DEFAULT '[]'",
+                                "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'"
+                            )
+                            for (sql in pgMigrations) {
+                                try {
+                                    stmt.executeUpdate(sql)
+                                    println("[Database] Ran PG migration: $sql")
+                                } catch (e: Exception) {
+                                    println("[Database] Note running PG migration ($sql): ${e.message}")
+                                }
                             }
                         }
                     }

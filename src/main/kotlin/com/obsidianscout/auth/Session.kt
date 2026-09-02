@@ -44,7 +44,12 @@ class ApiException(val status: HttpStatusCode, override val message: String) : R
 
 suspend fun ApplicationCall.requireSession(): UserSession {
     val session = sessions.get<UserSession>()
-        ?: throw ApiException(HttpStatusCode.Unauthorized, "Not signed in")
+    if (session == null) {
+        val cookieHeader = request.headers["Cookie"]
+        val sessionCookie = request.cookies["obsidian_session"]
+        application.environment.log.warn("[requireSession] 401 Not signed in on ${request.httpMethod.value} ${request.uri}. Cookie header: ${if (cookieHeader != null) "present (len=${cookieHeader.length}, has_session=${cookieHeader.contains("obsidian_session")})" else "null"}, sessionCookie: ${sessionCookie != null}")
+        throw ApiException(HttpStatusCode.Unauthorized, "Not signed in")
+    }
     if (DatabaseFactory.isReady) {
         val userUuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
         if (userUuid == null) {
@@ -83,10 +88,12 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         }.getOrDefault(Pair(true, true))
 
         if (!userExists) {
+            application.environment.log.warn("[requireSession] 401 User ${session.userId} does not exist in DB")
             sessions.clear<UserSession>()
             throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
         }
         if (!sessionValid) {
+            application.environment.log.warn("[requireSession] 401 Session ${session.sessionId} for user ${session.userId} is invalid or expired in DB")
             sessions.clear<UserSession>()
             throw ApiException(HttpStatusCode.Unauthorized, "Session has expired or been revoked")
         }
@@ -203,6 +210,10 @@ class KeepMeLoggedInSessionTransport(
             delegate.configuration.maxAgeInSeconds
         }
 
+        val isHttps = delegate.configuration.secure ||
+                call.request.local.scheme.equals("https", ignoreCase = true) ||
+                call.request.headers["X-Forwarded-Proto"]?.equals("https", ignoreCase = true) == true
+
         call.response.cookies.append(
             Cookie(
                 name = delegate.name,
@@ -211,7 +222,7 @@ class KeepMeLoggedInSessionTransport(
                 maxAge = maxAgeSeconds.toInt(),
                 path = delegate.configuration.path,
                 domain = delegate.configuration.domain,
-                secure = delegate.configuration.secure,
+                secure = isHttps,
                 httpOnly = delegate.configuration.httpOnly,
                 extensions = delegate.configuration.extensions
             )
@@ -219,7 +230,23 @@ class KeepMeLoggedInSessionTransport(
     }
 
     override fun clear(call: ApplicationCall) {
-        delegate.clear(call)
+        val isHttps = delegate.configuration.secure ||
+                call.request.local.scheme.equals("https", ignoreCase = true) ||
+                call.request.headers["X-Forwarded-Proto"]?.equals("https", ignoreCase = true) == true
+
+        call.response.cookies.append(
+            Cookie(
+                name = delegate.name,
+                value = "",
+                encoding = delegate.configuration.encoding,
+                maxAge = 0,
+                path = delegate.configuration.path,
+                domain = delegate.configuration.domain,
+                secure = isHttps,
+                httpOnly = delegate.configuration.httpOnly,
+                extensions = delegate.configuration.extensions
+            )
+        )
     }
 }
 

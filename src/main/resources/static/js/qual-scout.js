@@ -69,8 +69,221 @@ async function loadQualScoutPageData(me) {
 
         const dataBundle = await loadTeamsAndMatches(eventKey, teamSelect, matchSelect, settings.timezone);
         matches = dataBundle.matches;
+        const teams = dataBundle.teams;
 
         entryCache = await loadEntryCache();
+
+        let currentScope = "team"; // "team" | "red" | "blue" | "both"
+        let currentAllianceTeams = [];
+
+        const scopeButtons = document.querySelectorAll(".scope-btn");
+        const teamFieldContainer = document.getElementById("team-field-container");
+
+        function parseTeamNumber(key) {
+            if (!key) return null;
+            const cleaned = String(key).replace(/^(frc|ftc)/i, '').trim();
+            const num = parseInt(cleaned, 10);
+            return isNaN(num) ? null : num;
+        }
+
+        function getAllianceTeamsForMatch(match, scope) {
+            if (!match) return [];
+            const list = [];
+            if (scope === "red" || scope === "both") {
+                (match.redTeams || []).forEach((tKey, idx) => {
+                    const num = parseTeamNumber(tKey);
+                    if (num) {
+                        const tObj = teams.find(t => t.teamNumber === num);
+                        list.push({
+                            teamNumber: num,
+                            teamKey: tKey,
+                            alliance: "red",
+                            posLabel: `Red ${idx + 1}`,
+                            nickname: tObj ? (tObj.nickname || tObj.name || "") : ""
+                        });
+                    }
+                });
+            }
+            if (scope === "blue" || scope === "both") {
+                (match.blueTeams || []).forEach((tKey, idx) => {
+                    const num = parseTeamNumber(tKey);
+                    if (num) {
+                        const tObj = teams.find(t => t.teamNumber === num);
+                        list.push({
+                            teamNumber: num,
+                            teamKey: tKey,
+                            alliance: "blue",
+                            posLabel: `Blue ${idx + 1}`,
+                            nickname: tObj ? (tObj.nickname || tObj.name || "") : ""
+                        });
+                    }
+                });
+            }
+            return list;
+        }
+
+        const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
+        const fields = injectSections(config.fields || []);
+
+        function renderSingleTeamView() {
+            fieldContainer.innerHTML = "";
+            fieldContainer.style.display = "";
+            fields
+                .filter((field) => !reserved.has(field.id))
+                .forEach((field) => {
+                    const node = buildField(field);
+                    if (node) fieldContainer.appendChild(node);
+                });
+
+            if (config.enableRobotRoleCollection) {
+                const roleNode = buildRobotRoleCollectionField();
+                fieldContainer.appendChild(roleNode);
+            }
+        }
+
+        function renderAllianceAllTeamsView() {
+            fieldContainer.innerHTML = "";
+            fieldContainer.style.display = "block";
+            if (!currentAllianceTeams.length) return;
+
+            const gridContainer = document.createElement("div");
+            gridContainer.className = "alliance-teams-grid";
+
+            currentAllianceTeams.forEach(team => {
+                const isRed = team.alliance === "red";
+                const teamCard = document.createElement("div");
+                teamCard.className = "card alliance-team-card";
+                teamCard.dataset.teamNumber = team.teamNumber;
+                teamCard.style.background = "rgba(255, 255, 255, 0.03)";
+                teamCard.style.border = isRed ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid rgba(59, 130, 246, 0.35)";
+                teamCard.style.borderRadius = "var(--radius, 14px)";
+                teamCard.style.overflow = "hidden";
+                teamCard.style.boxShadow = isRed ? "0 4px 16px rgba(239, 68, 68, 0.08)" : "0 4px 16px rgba(59, 130, 246, 0.08)";
+
+                const header = document.createElement("div");
+                header.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:${isRed ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.12)'};border-bottom:1px solid ${isRed ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.25)'};`;
+                const nick = team.nickname ? `<span style="font-weight:normal;opacity:0.85;margin-left:4px;">(${team.nickname})</span>` : "";
+                header.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span class="badge" style="background:${isRed ? '#ef4444' : '#3b82f6'};color:#fff;font-weight:bold;font-size:12px;padding:3px 8px;border-radius:6px;">${team.posLabel}</span>
+                        <span style="font-size:15px;font-weight:bold;color:var(--text);">Team ${team.teamNumber}${nick}</span>
+                    </div>
+                `;
+                teamCard.appendChild(header);
+
+                const body = document.createElement("div");
+                body.className = "form-grid";
+                body.style.padding = "16px";
+
+                fields
+                    .filter((field) => !reserved.has(field.id))
+                    .forEach((field) => {
+                        const node = buildField(field);
+                        if (node) body.appendChild(node);
+                    });
+
+                if (config.enableRobotRoleCollection) {
+                    body.appendChild(buildRobotRoleCollectionField());
+                }
+
+                teamCard.appendChild(body);
+
+                // Populate with cached entry if present
+                const cached = findEntry(entryCache, eventKey, team.teamNumber, matchSelect.value);
+                if (cached) {
+                    applyEntryToForm(cached, fields, teamCard);
+                }
+
+                gridContainer.appendChild(teamCard);
+            });
+
+            fieldContainer.appendChild(gridContainer);
+        }
+
+        async function refreshAllianceState() {
+            const selectedMatchKey = matchSelect.value;
+            const selectedMatch = matches.find(m => m.matchKey === selectedMatchKey);
+
+            if (currentScope === "both") {
+                submitButton.textContent = Obsidianscout.t("qual_scout.save_both_alliances", "Save Both Alliances (6 teams)");
+            } else {
+                submitButton.textContent = currentScope === "red"
+                    ? Obsidianscout.t("qual_scout.save_red_alliance", "Save Red Alliance (3 teams)")
+                    : Obsidianscout.t("qual_scout.save_blue_alliance", "Save Blue Alliance (3 teams)");
+            }
+
+            if (!selectedMatch) {
+                currentAllianceTeams = [];
+                fieldContainer.innerHTML = "";
+                formBlocked.textContent = Obsidianscout.t('qual_scout.select_match_to_load_alliance', 'Select a match above to start qualitative alliance scouting.');
+                setFormEnabled(form, formBlocked, false);
+                return;
+            }
+
+            currentAllianceTeams = getAllianceTeamsForMatch(selectedMatch, currentScope);
+            if (!currentAllianceTeams.length) {
+                currentAllianceTeams = [];
+                fieldContainer.innerHTML = "";
+                formBlocked.textContent = Obsidianscout.t('qual_scout.no_teams_in_match', 'No teams found for this match alliance.');
+                setFormEnabled(form, formBlocked, false);
+                return;
+            }
+
+            setFormEnabled(form, formBlocked, true);
+            renderAllianceAllTeamsView();
+        }
+
+        function collectAllianceEntries() {
+            const selectedMatch = matches.find(m => m.matchKey === matchSelect.value);
+            const matchNumberRaw = selectedMatch ? selectedMatch.matchNumber : "";
+            const matchNum = matchNumberRaw ? Number(matchNumberRaw) : null;
+            const entries = [];
+            for (const t of currentAllianceTeams) {
+                const teamCard = fieldContainer.querySelector(`[data-team-number='${t.teamNumber}']`);
+                if (!teamCard) continue;
+                const data = buildPayload(config.fields, teamCard);
+                if (!data) return null; // Validation failed inside buildPayload
+                entries.push({
+                    ...data,
+                    eventKey: eventKey,
+                    targetTeamNumber: t.teamNumber,
+                    matchKey: matchSelect.value,
+                    matchNumber: matchNum,
+                    type: "qual-scout"
+                });
+            }
+            return entries;
+        }
+
+        if (scopeButtons && scopeButtons.length > 0) {
+            scopeButtons.forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const newScope = btn.dataset.scope;
+                    if (newScope === currentScope) return;
+
+                    currentScope = newScope;
+                    scopeButtons.forEach(b => {
+                        const isActive = b.dataset.scope === currentScope;
+                        b.classList.toggle("active", isActive);
+                        b.classList.toggle("secondary", !isActive);
+                    });
+
+                    if (currentScope === "team") {
+                        if (teamFieldContainer) teamFieldContainer.classList.remove("hidden");
+                        submitButton.textContent = Obsidianscout.t("qual_scout.save_entry", "Save entry");
+                        renderSingleTeamView();
+                        updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value);
+                        await handleSelectionChange();
+                    } else {
+                        if (teamFieldContainer) teamFieldContainer.classList.add("hidden");
+                        const currentMatchVal = matchSelect.value;
+                        updateMatchOptions(matchSelect, matches, settings.timezone, null);
+                        if (currentMatchVal) matchSelect.value = currentMatchVal;
+                        await refreshAllianceState();
+                    }
+                });
+            });
+        }
 
         teamSelect.addEventListener("change", async () => {
             updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value);
@@ -79,162 +292,139 @@ async function loadQualScoutPageData(me) {
         });
 
         matchSelect.addEventListener("change", async () => {
-            await handleSelectionChange();
+            if (currentScope === "team") {
+                await handleSelectionChange();
+            } else {
+                await refreshAllianceState();
+            }
         });
 
-        const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
-        const fields = injectSections(config.fields || []);
-        fields
-            .filter((field) => !reserved.has(field.id))
-            .forEach((field) => {
-                const node = buildField(field);
-                fieldContainer.appendChild(node);
-            });
-
-        if (config.enableRobotRoleCollection) {
-            const roleNode = buildRobotRoleCollectionField();
-            fieldContainer.appendChild(roleNode);
-        }
+        // Initialize single team fields by default
+        renderSingleTeamView();
 
         if (clearButton) {
             clearButton.addEventListener("click", () => {
                 if (!confirm(Obsidianscout.t("qual_scout.confirm_clear", "Are you sure you want to clear the form? All entered data will be reset."))) {
                     return;
                 }
-                clearFormFields(fields, form);
+                if (currentScope === "team") {
+                    clearFormFields(fields, fieldContainer);
+                } else {
+                    currentAllianceTeams.forEach(t => {
+                        const teamCard = fieldContainer.querySelector(`[data-team-number='${t.teamNumber}']`);
+                        if (teamCard) clearFormFields(fields, teamCard);
+                    });
+                }
             });
         }
 
         const exportJsonBtn = document.getElementById("scout-export-json");
         if (exportJsonBtn) {
             exportJsonBtn.addEventListener("click", () => {
-                if (!teamSelect.value || !matchSelect.value) {
-                    Obsidianscout.showToast("Select both a team and a match", "error");
-                    return;
-                }
-                const payload = buildPayload(config.fields, form);
-                if (!payload) return;
-                payload.eventKey = eventKey;
-                payload.targetTeamNumber = Number(teamSelect.value);
-                payload.matchKey = matchSelect.value;
-                const selectedMatch = matchSelect.selectedOptions[0];
-                const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
-                payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
-                payload.type = "qual-scout";
+                if (currentScope === "team") {
+                    if (!teamSelect.value || !matchSelect.value) {
+                        Obsidianscout.showToast("Select both a team and a match", "error");
+                        return;
+                    }
+                    const payload = buildPayload(config.fields, form);
+                    if (!payload) return;
+                    payload.eventKey = eventKey;
+                    payload.targetTeamNumber = Number(teamSelect.value);
+                    payload.matchKey = matchSelect.value;
+                    const selectedMatch = matchSelect.selectedOptions[0];
+                    const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+                    payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+                    payload.type = "qual-scout";
 
-                const filename = `qual_${eventKey || 'event'}_team${payload.targetTeamNumber}_match${payload.matchNumber || 'unknown'}.json`;
-                Obsidianscout.downloadJson(payload, filename);
+                    const filename = `qual_${eventKey || 'event'}_team${payload.targetTeamNumber}_match${payload.matchNumber || 'unknown'}.json`;
+                    Obsidianscout.downloadJson(payload, filename);
+                } else {
+                    if (!matchSelect.value || !currentAllianceTeams.length) {
+                        Obsidianscout.showToast("Select a match to export alliance qualitative data", "error");
+                        return;
+                    }
+                    const entriesList = collectAllianceEntries();
+                    if (!entriesList || !entriesList.length) return;
+                    const selectedMatch = matches.find(m => m.matchKey === matchSelect.value);
+                    const matchNumberRaw = selectedMatch ? selectedMatch.matchNumber : "";
+                    const matchNum = matchNumberRaw ? Number(matchNumberRaw) : null;
+                    const allianceExport = {
+                        type: "qual-alliance",
+                        scope: currentScope,
+                        matchKey: matchSelect.value,
+                        matchNumber: matchNum,
+                        eventKey: eventKey,
+                        entries: entriesList
+                    };
+                    const filename = `qual_${eventKey || 'event'}_${currentScope}_alliance_match${matchNum || 'unknown'}.json`;
+                    Obsidianscout.downloadJson(allianceExport, filename);
+                }
             });
         }
 
         const genQrBtn = document.getElementById("scout-gen-qr");
         if (genQrBtn) {
             genQrBtn.addEventListener("click", () => {
-                if (!teamSelect.value || !matchSelect.value) {
-                    Obsidianscout.showToast("Select both a team and a match", "error");
-                    return;
-                }
-                const payload = buildPayload(config.fields, form);
-                if (!payload) return;
-                payload.eventKey = eventKey;
-                payload.targetTeamNumber = Number(teamSelect.value);
-                payload.matchKey = matchSelect.value;
-                const selectedMatch = matchSelect.selectedOptions[0];
-                const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
-                payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
-                payload.type = "qual-scout";
+                if (currentScope === "team") {
+                    if (!teamSelect.value || !matchSelect.value) {
+                        Obsidianscout.showToast("Select both a team and a match", "error");
+                        return;
+                    }
+                    const payload = buildPayload(config.fields, form);
+                    if (!payload) return;
+                    payload.eventKey = eventKey;
+                    payload.targetTeamNumber = Number(teamSelect.value);
+                    payload.matchKey = matchSelect.value;
+                    const selectedMatch = matchSelect.selectedOptions[0];
+                    const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+                    payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+                    payload.type = "qual-scout";
 
-                Obsidianscout.showQrModal(payload, "Qualitative Scouting", payload.targetTeamNumber, payload.matchKey);
+                    Obsidianscout.showQrModal(payload, "Qualitative Scouting", payload.targetTeamNumber, payload.matchKey);
+                } else {
+                    if (!matchSelect.value || !currentAllianceTeams.length) {
+                        Obsidianscout.showToast("Select a match to generate alliance QR", "error");
+                        return;
+                    }
+                    const entriesList = collectAllianceEntries();
+                    if (!entriesList || !entriesList.length) return;
+                    const selectedMatch = matches.find(m => m.matchKey === matchSelect.value);
+                    const matchNumberRaw = selectedMatch ? selectedMatch.matchNumber : "";
+                    const matchNum = matchNumberRaw ? Number(matchNumberRaw) : null;
+                    const allianceQrPayload = {
+                        type: "qual-alliance",
+                        scope: currentScope,
+                        matchKey: matchSelect.value,
+                        matchNumber: matchNum,
+                        eventKey: eventKey,
+                        entries: entriesList
+                    };
+                    const scopeTitle = currentScope === "both" ? "Both Alliances" : `${currentScope.toUpperCase()} Alliance`;
+                    const allTeamNums = currentAllianceTeams.map(t => t.teamNumber).join(", ");
+                    Obsidianscout.showQrModal(allianceQrPayload, `Qual Alliance (${scopeTitle})`, allTeamNums, matchSelect.value);
+                }
             });
         }
 
         const saveOfflineButton = document.getElementById("scout-save-offline-btn");
         if (saveOfflineButton) {
             saveOfflineButton.addEventListener("click", () => {
-                if (!teamSelect.value || !matchSelect.value) {
-                    Obsidianscout.showToast("Select both a team and a match", "error");
-                    return;
-                }
-
-                const payload = buildPayload(config.fields, form);
-                if (!payload) return;
-
-                payload.eventKey = eventKey;
-                payload.targetTeamNumber = teamSelect.value ? Number(teamSelect.value) : null;
-                payload.matchKey = matchSelect.value || null;
-                const selectedMatch = matchSelect.value ? matchSelect.selectedOptions[0] : null;
-                const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
-                payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
-
-                const pending = JSON.parse(Obsidianscout.safeGetItem("pending_qualitative_entries") || "[]");
-                pending.push({
-                    data: payload,
-                    createdAt: new Date().toISOString(),
-                    ownerTeamNumber: me.teamNumber,
-                    pending: true
-                });
-                Obsidianscout.safeSetItem("pending_qualitative_entries", JSON.stringify(pending));
-
-                Obsidianscout.showToast("Saved locally (Offline mode)", "success");
-                Obsidianscout.updateConnectionStatus();
-                window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
-
-                clearFormFields(fields, form);
-                handleSelectionChange();
-            });
-        }
-
-        form.addEventListener("submit", async (event) => {
-            event.preventDefault();
-            Obsidianscout.setButtonLoading(submitButton, true, t('scout.saving', 'Saving entry...'));
-
-            if (!teamSelect.value || !matchSelect.value) {
-                Obsidianscout.showToast("Select both a team and a match", "error");
-                Obsidianscout.setButtonLoading(submitButton, false);
-                return;
-            }
-
-            const payload = buildPayload(config.fields, form);
-            if (!payload) {
-                Obsidianscout.setButtonLoading(submitButton, false);
-                return;
-            }
-
-            payload.eventKey = eventKey;
-            payload.targetTeamNumber = teamSelect.value ? Number(teamSelect.value) : null;
-            payload.matchKey = matchSelect.value || null;
-            const selectedMatch = matchSelect.value ? matchSelect.selectedOptions[0] : null;
-            const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
-            payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
-
-            try {
-                const response = await Obsidianscout.request("/api/qual-scouting", {
-                    method: "POST",
-                    json: {
-                        data: payload
+                if (currentScope === "team") {
+                    if (!teamSelect.value || !matchSelect.value) {
+                        Obsidianscout.showToast("Select both a team and a match", "error");
+                        return;
                     }
-                });
-                Obsidianscout.showToast("Entry saved", "success");
-                
-                const newEntry = (response && response.entry) ? response.entry : {
-                    eventKey: payload.eventKey,
-                    targetTeamNumber: payload.targetTeamNumber,
-                    matchKey: payload.matchKey,
-                    matchNumber: payload.matchNumber,
-                    data: payload,
-                    scoutName: me ? me.username : null,
-                    updatedAt: new Date().toISOString()
-                };
-                const existingIdx = entryCache.findIndex(e => e.eventKey === newEntry.eventKey && e.targetTeamNumber === newEntry.targetTeamNumber && e.matchKey === newEntry.matchKey);
-                if (existingIdx >= 0) {
-                    entryCache[existingIdx] = newEntry;
-                } else {
-                    entryCache.push(newEntry);
-                }
-                Obsidianscout.safeSetItem("cache:/api/qual-scouting", JSON.stringify(entryCache));
-                window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
-            } catch (error) {
-                if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+
+                    const payload = buildPayload(config.fields, form);
+                    if (!payload) return;
+
+                    payload.eventKey = eventKey;
+                    payload.targetTeamNumber = teamSelect.value ? Number(teamSelect.value) : null;
+                    payload.matchKey = matchSelect.value || null;
+                    const selectedMatch = matchSelect.value ? matchSelect.selectedOptions[0] : null;
+                    const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+                    payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+
                     const pending = JSON.parse(Obsidianscout.safeGetItem("pending_qualitative_entries") || "[]");
                     pending.push({
                         data: payload,
@@ -251,10 +441,166 @@ async function loadQualScoutPageData(me) {
                     clearFormFields(fields, form);
                     handleSelectionChange();
                 } else {
-                    Obsidianscout.showToast(error.message || "Failed to save", "error");
+                    if (!matchSelect.value || !currentAllianceTeams.length) {
+                        Obsidianscout.showToast("Select a match first", "error");
+                        return;
+                    }
+                    const entriesToSave = collectAllianceEntries();
+                    if (!entriesToSave || !entriesToSave.length) return;
+
+                    const pending = JSON.parse(Obsidianscout.safeGetItem("pending_qualitative_entries") || "[]");
+                    entriesToSave.forEach(payload => {
+                        pending.push({
+                            data: payload,
+                            createdAt: new Date().toISOString(),
+                            ownerTeamNumber: me.teamNumber,
+                            pending: true
+                        });
+                    });
+                    Obsidianscout.safeSetItem("pending_qualitative_entries", JSON.stringify(pending));
+                    Obsidianscout.showToast(`Saved locally (Offline mode) for ${entriesToSave.length} teams`, "success");
+                    Obsidianscout.updateConnectionStatus();
+                    window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
                 }
-            } finally {
-                Obsidianscout.setButtonLoading(submitButton, false);
+            });
+        }
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            Obsidianscout.setButtonLoading(submitButton, true, t('scout.saving', 'Saving entry...'));
+
+            if (currentScope === "team") {
+                if (!teamSelect.value || !matchSelect.value) {
+                    Obsidianscout.showToast("Select both a team and a match", "error");
+                    Obsidianscout.setButtonLoading(submitButton, false);
+                    return;
+                }
+
+                const payload = buildPayload(config.fields, form);
+                if (!payload) {
+                    Obsidianscout.setButtonLoading(submitButton, false);
+                    return;
+                }
+
+                payload.eventKey = eventKey;
+                payload.targetTeamNumber = teamSelect.value ? Number(teamSelect.value) : null;
+                payload.matchKey = matchSelect.value || null;
+                const selectedMatch = matchSelect.value ? matchSelect.selectedOptions[0] : null;
+                const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
+                payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+
+                try {
+                    const response = await Obsidianscout.request("/api/qual-scouting", {
+                        method: "POST",
+                        json: {
+                            data: payload
+                        }
+                    });
+                    Obsidianscout.showToast("Entry saved", "success");
+                    
+                    const newEntry = (response && response.entry) ? response.entry : {
+                        eventKey: payload.eventKey,
+                        targetTeamNumber: payload.targetTeamNumber,
+                        matchKey: payload.matchKey,
+                        matchNumber: payload.matchNumber,
+                        data: payload,
+                        scoutName: me ? me.username : null,
+                        updatedAt: new Date().toISOString()
+                    };
+                    const existingIdx = entryCache.findIndex(e => e.eventKey === newEntry.eventKey && e.targetTeamNumber === newEntry.targetTeamNumber && e.matchKey === newEntry.matchKey);
+                    if (existingIdx >= 0) {
+                        entryCache[existingIdx] = newEntry;
+                    } else {
+                        entryCache.push(newEntry);
+                    }
+                    Obsidianscout.safeSetItem("cache:/api/qual-scouting", JSON.stringify(entryCache));
+                    window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
+                } catch (error) {
+                    if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                        const pending = JSON.parse(Obsidianscout.safeGetItem("pending_qualitative_entries") || "[]");
+                        pending.push({
+                            data: payload,
+                            createdAt: new Date().toISOString(),
+                            ownerTeamNumber: me.teamNumber,
+                            pending: true
+                        });
+                        Obsidianscout.safeSetItem("pending_qualitative_entries", JSON.stringify(pending));
+
+                        Obsidianscout.showToast("Saved locally (Offline mode)", "success");
+                        Obsidianscout.updateConnectionStatus();
+                        window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
+
+                        clearFormFields(fields, form);
+                        handleSelectionChange();
+                    } else {
+                        Obsidianscout.showToast(error.message || "Failed to save", "error");
+                    }
+                } finally {
+                    Obsidianscout.setButtonLoading(submitButton, false);
+                }
+            } else {
+                // Alliance Scope Submit
+                if (!matchSelect.value || !currentAllianceTeams.length) {
+                    Obsidianscout.showToast("Select a match to save alliance data", "error");
+                    Obsidianscout.setButtonLoading(submitButton, false);
+                    return;
+                }
+
+                const entriesToSave = collectAllianceEntries();
+                if (!entriesToSave || !entriesToSave.length) {
+                    Obsidianscout.setButtonLoading(submitButton, false);
+                    return;
+                }
+
+                try {
+                    const response = await Obsidianscout.request("/api/qual-scouting/batch", {
+                        method: "POST",
+                        json: { entries: entriesToSave }
+                    });
+                    Obsidianscout.showToast(`Saved entries for ${entriesToSave.length} teams`, "success");
+
+                    entriesToSave.forEach(payload => {
+                        const newEntry = {
+                            eventKey: payload.eventKey,
+                            targetTeamNumber: payload.targetTeamNumber,
+                            matchKey: payload.matchKey,
+                            matchNumber: payload.matchNumber,
+                            data: payload,
+                            scoutName: me ? me.username : null,
+                            updatedAt: new Date().toISOString()
+                        };
+                        const existingIdx = entryCache.findIndex(e => e.eventKey === newEntry.eventKey && e.targetTeamNumber === newEntry.targetTeamNumber && e.matchKey === newEntry.matchKey);
+                        if (existingIdx >= 0) {
+                            entryCache[existingIdx] = newEntry;
+                        } else {
+                            entryCache.push(newEntry);
+                        }
+                    });
+
+                    Obsidianscout.safeSetItem("cache:/api/qual-scouting", JSON.stringify(entryCache));
+                    window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
+                } catch (error) {
+                    if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                        const pending = JSON.parse(Obsidianscout.safeGetItem("pending_qualitative_entries") || "[]");
+                        entriesToSave.forEach(payload => {
+                            pending.push({
+                                data: payload,
+                                createdAt: new Date().toISOString(),
+                                ownerTeamNumber: me.teamNumber,
+                                pending: true
+                            });
+                        });
+                        Obsidianscout.safeSetItem("pending_qualitative_entries", JSON.stringify(pending));
+
+                        Obsidianscout.showToast(`Saved locally (Offline mode) for ${entriesToSave.length} teams`, "success");
+                        Obsidianscout.updateConnectionStatus();
+                        window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
+                    } else {
+                        Obsidianscout.showToast(error.message || "Failed to save", "error");
+                    }
+                } finally {
+                    Obsidianscout.setButtonLoading(submitButton, false);
+                }
             }
         });
 
@@ -830,7 +1176,7 @@ function buildPayload(fields, form) {
     }
 
     // Role collection payload
-    const roleContainer = form.querySelector("#robot-role-collection-container");
+    const roleContainer = form.querySelector(".robot-role-collection-container") || form.querySelector("#robot-role-collection-container");
     if (roleContainer) {
         const checked = [];
         roleContainer.querySelectorAll(".robot-role-checkbox:checked").forEach(cb => {
@@ -900,7 +1246,7 @@ function applyEntryToForm(entry, fields, form) {
         }
     });
 
-    const roleContainer = form.querySelector("#robot-role-collection-container");
+    const roleContainer = form.querySelector(".robot-role-collection-container") || form.querySelector("#robot-role-collection-container");
     if (roleContainer) {
         roleContainer.querySelectorAll(".robot-role-checkbox").forEach(cb => {
             cb.checked = false;
@@ -943,7 +1289,7 @@ function clearFormFields(fields, form) {
         }
     });
 
-    const roleContainer = form.querySelector("#robot-role-collection-container");
+    const roleContainer = form.querySelector(".robot-role-collection-container") || form.querySelector("#robot-role-collection-container");
     if (roleContainer) {
         roleContainer.querySelectorAll(".robot-role-checkbox").forEach(cb => {
             cb.checked = false;
@@ -955,7 +1301,7 @@ function clearFormFields(fields, form) {
 function buildRobotRoleCollectionField() {
     const wrapper = document.createElement("div");
     wrapper.id = "robot-role-collection-container";
-    wrapper.className = "form-section mt-18";
+    wrapper.className = "form-section mt-18 robot-role-collection-container";
 
     const title = document.createElement("h3");
     title.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('qual_scout.robot_roles', 'Robot Roles') : 'Robot Roles';

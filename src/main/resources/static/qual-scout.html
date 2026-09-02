@@ -16,6 +16,36 @@
     <link rel="stylesheet" href="/css/app.css" />
 
     <link rel="manifest" href="/manifest.json" />
+
+    <style>
+        .alliance-teams-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            align-items: start;
+            width: 100%;
+        }
+        @media (max-width: 1024px) {
+            .alliance-teams-grid {
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            }
+        }
+        @media (max-width: 600px) {
+            .alliance-teams-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .alliance-team-card {
+            margin-bottom: 0 !important;
+            width: 100%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .alliance-team-card .form-grid {
+            padding: 14px;
+        }
+    </style>
 </head>
 
 <body data-page="qual-scout">
@@ -52,6 +82,24 @@
 
                 <p class="notice" data-i18n="qual-scout.pick_event_team_and_match_then">Pick event, team, and match, then capture observations, ratings, and notes from the qualitative config.</p>
 
+                <div class="field mb-18">
+                    <label data-i18n="qual_scout.scouting_scope">Scouting Target</label>
+                    <div class="row gap-8 wrap" id="scope-selector-container">
+                        <button type="button" class="btn scope-btn active" data-scope="team" id="scope-btn-team">
+                            <span data-i18n="qual_scout.scope_single_team">Single Team</span>
+                        </button>
+                        <button type="button" class="btn secondary scope-btn" data-scope="red" id="scope-btn-red" style="border-color: rgba(239, 68, 68, 0.6); color: #f87171;">
+                            <span data-i18n="qual_scout.scope_red_alliance">🔴 Red Alliance</span>
+                        </button>
+                        <button type="button" class="btn secondary scope-btn" data-scope="blue" id="scope-btn-blue" style="border-color: rgba(59, 130, 246, 0.6); color: #60a5fa;">
+                            <span data-i18n="qual_scout.scope_blue_alliance">🔵 Blue Alliance</span>
+                        </button>
+                        <button type="button" class="btn secondary scope-btn" data-scope="both" id="scope-btn-both" style="border-color: rgba(168, 85, 247, 0.6); color: #c084fc;">
+                            <span data-i18n="qual_scout.scope_both_alliances">🟣 Both Alliances</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="split mb-18">
 
                     <div class="field">
@@ -62,19 +110,19 @@
 
                     </div>
 
-                    <div class="field">
-
-                        <label for="team-select" data-i18n="all-data.team">Team</label>
-
-                        <select id="team-select"></select>
-
-                    </div>
-
-                    <div class="field">
+                    <div class="field" id="match-field-container">
 
                         <label for="match-select" data-i18n="matches.match">Match</label>
 
                         <select id="match-select" class="select-wide"></select>
+
+                    </div>
+
+                    <div class="field" id="team-field-container">
+
+                        <label for="team-select" data-i18n="all-data.team">Team</label>
+
+                        <select id="team-select"></select>
 
                     </div>
 
@@ -87,6 +135,7 @@
                     </div>
 
                 </div>
+
 
                 <form id="scouting-form" class="form-grid">
 

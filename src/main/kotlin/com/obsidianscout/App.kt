@@ -190,6 +190,9 @@ fun Application.module(appConfig: AppConfig) {
         }
 
         if (call.request.cookies["XSRF-TOKEN"] == null) {
+            val isHttps = appConfig.server.cookieSecure ||
+                    call.request.headers["X-Forwarded-Proto"]?.equals("https", ignoreCase = true) == true ||
+                    call.request.local.scheme.equals("https", ignoreCase = true)
             val csrfToken = java.util.UUID.randomUUID().toString()
             call.response.cookies.append(
                 io.ktor.http.Cookie(
@@ -198,7 +201,7 @@ fun Application.module(appConfig: AppConfig) {
                     path = "/",
                     httpOnly = false,
                     extensions = mapOf("SameSite" to "Lax"),
-                    secure = appConfig.server.cookieSecure
+                    secure = isHttps
                 )
             )
         }
@@ -389,6 +392,7 @@ fun Application.module(appConfig: AppConfig) {
             call.respond(cause.status, MobileErrorResponse(success = false, error = cause.message, errorCode = cause.errorCode))
         }
         exception<ApiException> { call, cause ->
+            call.application.environment.log.warn("[ApiException] ${cause.status} on ${call.request.local.method.value} ${call.request.path()}: ${cause.message}")
             call.respond(cause.status, ErrorResponse(cause.message))
         }
         exception<Throwable> { call, cause ->

@@ -124,10 +124,17 @@ object ProxyServer {
                                     request.headers.forEach { key, values ->
                                         if (!key.equals(HttpHeaders.Host, ignoreCase = true) &&
                                             !key.equals(HttpHeaders.ContentLength, ignoreCase = true) &&
-                                            !key.equals(HttpHeaders.TransferEncoding, ignoreCase = true)
+                                            !key.equals(HttpHeaders.TransferEncoding, ignoreCase = true) &&
+                                            !key.equals(HttpHeaders.Cookie, ignoreCase = true)
                                         ) {
                                             values.forEach { headers.append(key, it) }
                                         }
+                                    }
+
+                                    // Ensure Cookie header is forwarded cleanly as a single RFC-compliant header
+                                    val clientCookies = request.headers.getAll(HttpHeaders.Cookie)
+                                    if (!clientCookies.isNullOrEmpty()) {
+                                        headers.append(HttpHeaders.Cookie, clientCookies.joinToString("; "))
                                     }
                                     
                                     // Append proxy headers
@@ -135,8 +142,10 @@ object ProxyServer {
                                     headers.append("X-Forwarded-For", request.local.remoteAddress)
                                     headers.append("X-Forwarded-Host", request.headers[HttpHeaders.Host] ?: "")
                                     
-                                    // Stream request body
-                                    setBody(request.receiveChannel())
+                                    // Stream request body for non-GET/HEAD methods
+                                    if (request.local.method != HttpMethod.Get && request.local.method != HttpMethod.Head) {
+                                        setBody(request.receiveChannel())
+                                    }
                                 }.execute { response ->
                                     // Send back the response while streaming
                                     call.respond(object : OutgoingContent.WriteChannelContent() {
@@ -146,7 +155,18 @@ object ProxyServer {
                                                 if (!key.equals(HttpHeaders.TransferEncoding, ignoreCase = true) &&
                                                     !key.equals(HttpHeaders.ContentLength, ignoreCase = true)
                                                 ) {
-                                                    values.forEach { append(key, it) }
+                                                    if (key.equals(HttpHeaders.SetCookie, ignoreCase = true)) {
+                                                        values.forEach { cookieVal ->
+                                                            val secureCookie = if (!cookieVal.contains("Secure", ignoreCase = true)) {
+                                                                "$cookieVal; Secure"
+                                                            } else {
+                                                                cookieVal
+                                                            }
+                                                            append(key, secureCookie)
+                                                        }
+                                                    } else {
+                                                        values.forEach { append(key, it) }
+                                                    }
                                                 }
                                             }
                                         }

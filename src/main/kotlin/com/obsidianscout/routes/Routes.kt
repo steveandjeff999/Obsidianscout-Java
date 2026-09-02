@@ -50,6 +50,7 @@ import com.obsidianscout.integrations.CloudflaredSettings
 import com.obsidianscout.admin.CloudflaredService
 import com.obsidianscout.scouting.PitScoutingService
 import com.obsidianscout.scouting.QualitativeScoutingService
+import com.obsidianscout.scouting.QualitativeScoutingEntryRecord
 import com.obsidianscout.scouting.ScoutingService
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -1022,10 +1023,41 @@ fun Application.configureRoutes() {
                 }
                 post {
                     val session = call.requireSession()
-                    val request = call.receive<ScoutingEntryRequest>()
+                    val reqJson = call.receiveText()
+                    val elem = JsonSupport.json.parseToJsonElement(reqJson)
                     val config = ConfigService.getQualitativeConfig(session.teamNumber)
-                    val entry = QualitativeScoutingService.createEntry(session, request, config)
-                    call.respond(entry)
+                    if (elem is JsonObject && elem.containsKey("entries") && elem["entries"] is kotlinx.serialization.json.JsonArray) {
+                        val entriesArr = elem["entries"]!!.jsonArray
+                        val results = mutableListOf<QualitativeScoutingEntryRecord>()
+                        entriesArr.forEach { item ->
+                            val obj = item.jsonObject
+                            val entryData = obj["data"]?.jsonObject ?: obj
+                            results.add(QualitativeScoutingService.createEntry(session, ScoutingEntryRequest(entryData), config))
+                        }
+                        call.respond(results)
+                    } else {
+                        val req = JsonSupport.json.decodeFromJsonElement(ScoutingEntryRequest.serializer(), elem)
+                        val entry = QualitativeScoutingService.createEntry(session, req, config)
+                        call.respond(entry)
+                    }
+                }
+                post("/batch") {
+                    val session = call.requireSession()
+                    val reqJson = call.receiveText()
+                    val elem = JsonSupport.json.parseToJsonElement(reqJson)
+                    val config = ConfigService.getQualitativeConfig(session.teamNumber)
+                    val entriesArr = when (elem) {
+                        is kotlinx.serialization.json.JsonArray -> elem
+                        is JsonObject -> elem["entries"]?.jsonArray ?: (elem["data"]?.jsonArray ?: throw ApiException(HttpStatusCode.BadRequest, "Missing 'entries' array"))
+                        else -> throw ApiException(HttpStatusCode.BadRequest, "Invalid batch format")
+                    }
+                    val results = mutableListOf<QualitativeScoutingEntryRecord>()
+                    entriesArr.forEach { item ->
+                        val obj = item.jsonObject
+                        val entryData = obj["data"]?.jsonObject ?: obj
+                        results.add(QualitativeScoutingService.createEntry(session, ScoutingEntryRequest(entryData), config))
+                    }
+                    call.respond(results)
                 }
                 put("/{id}") {
                     val session = call.requireSession()

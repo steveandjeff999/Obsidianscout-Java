@@ -76,6 +76,17 @@ export async function showQrModal(payload, typeLabel, teamNum, matchKey) {
     }
 
     const matchHtml = matchKey ? `<p><strong data-i18n="qr.match">Match:</strong> <span>${matchKey}</span></p>` : '';
+    let displayTeams = teamNum;
+    if (payload && Array.isArray(payload.entries) && payload.entries.length > 0) {
+        const extracted = payload.entries
+            .map(e => e.targetTeamNumber || e.teamNumber)
+            .filter(Boolean);
+        if (extracted.length > 0) {
+            displayTeams = extracted.join(', ');
+        }
+    }
+    const isMultiTeam = String(displayTeams).includes(',');
+    const teamLabelText = isMultiTeam ? 'Teams:' : 'Team:';
     const optimizedPayload = await preparePayloadForQr(payload);
     const qrPayload = {
         type: optimizedPayload.type || typeLabel.toLowerCase().replace(/\s+/g, '-'),
@@ -164,7 +175,7 @@ export async function showQrModal(payload, typeLabel, teamNum, matchKey) {
                 <div class="qr-code-wrapper" id="qr-code-canvas-container" style="min-height: 320px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: center; padding: 12px;"></div>
                 <div class="qr-details" style="margin-top: 16px;">
                     <p><strong data-i18n="qr.type">Type:</strong> <span>${typeLabel}</span></p>
-                    <p><strong data-i18n="qr.team">Team:</strong> <span>${teamNum}</span></p>
+                    <p><strong>${teamLabelText}</strong> <span>${displayTeams}</span></p>
                     ${matchHtml}
                 </div>
             </div>
