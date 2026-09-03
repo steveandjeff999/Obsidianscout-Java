@@ -19,7 +19,7 @@
 </head>
 
 <body data-page="dashboard">
-        <script>
+    <script>
         (function() {
             try {
                 const saved = localStorage.getItem("obsidian-theme") || "light";
@@ -33,144 +33,309 @@
     </script>
 
     <div class="orb orb-1"></div>
-
     <div class="orb orb-2"></div>
-
-
 
     <div class="app-shell">
 
         <aside class="sidebar"></aside>
 
-
-
         <main class="main-content">
 
-            <div class="card">
-
-                <h1 data-i18n="dashboard.title">Dashboard</h1>
-
-                <p class="notice" data-i18n="dashboard.notice">Track scouting progress, sync status, and event context.</p>
-
-            </div>
-
-
-
-            <div class="metrics mt-20">
-                <div class="card metric-card">
-                    <div class="metric-card-header">
-                        <h3 data-i18n="dashboard.entries">Entries</h3>
-                        <div class="metric-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <!-- Hero Command Header -->
+            <div class="card dashboard-hero">
+                <div class="dashboard-hero-main">
+                    <div class="dashboard-hero-title-group">
+                        <h1 class="dashboard-hero-greeting">
+                            <span data-i18n="dashboard.welcome_back">Welcome back</span>, <span id="dash-username">Scout</span>!
+                        </h1>
+                        <div class="dashboard-hero-meta">
+                            <span id="dash-team-badge" class="dashboard-badge badge-team">Team</span>
+                            <span id="dash-program-badge" class="dashboard-badge badge-program">FRC</span>
+                            <span id="dash-role-badge" class="dashboard-badge badge-role">Scout</span>
+                            <span id="dash-active-event-badge" class="dashboard-badge badge-event">Event: None</span>
                         </div>
                     </div>
-                    <div id="summary-entries" class="metric-value">0</div>
-                    <div class="metric-subtext" data-i18n="dashboard.entries_subtext">Scouted match forms</div>
-                </div>
-
-                <div class="card metric-card">
-                    <div class="metric-card-header">
-                        <h3 data-i18n="dashboard.events">Events</h3>
-                        <div class="metric-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                        </div>
+                    <div class="dashboard-hero-actions">
+                        <a href="/scout" class="dash-btn-primary" id="btn-quick-scout">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            <span data-i18n="dashboard.quick_scout">Scout Match</span>
+                        </a>
+                        <a href="/pit-scout" class="dash-btn-secondary">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                            <span data-i18n="dashboard.pit_scout">Pit Scout</span>
+                        </a>
+                        <a href="/qr-scanner" class="dash-btn-secondary">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                            <span data-i18n="dashboard.qr_scanner">QR Scanner</span>
+                        </a>
+                        <a href="/predictor" class="dash-btn-secondary">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                            <span data-i18n="dashboard.predictor">Predictor</span>
+                        </a>
                     </div>
-                    <div id="summary-events" class="metric-value">0</div>
-                    <div class="metric-subtext" data-i18n="dashboard.events_subtext">Synced competitions</div>
-                </div>
-
-                <div class="card metric-card">
-                    <div class="metric-card-header">
-                        <h3 data-i18n="dashboard.teams">Teams</h3>
-                        <div class="metric-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                        </div>
-                    </div>
-                    <div id="summary-teams" class="metric-value">0</div>
-                    <div class="metric-subtext" data-i18n="dashboard.teams_subtext">Attending teams</div>
-                </div>
-
-                <div class="card metric-card">
-                    <div class="metric-card-header">
-                        <h3 data-i18n="dashboard.matches">Matches</h3>
-                        <div class="metric-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                        </div>
-                    </div>
-                    <div id="summary-matches" class="metric-value">0</div>
-                    <div class="metric-subtext" data-i18n="dashboard.matches_subtext">Event match schedule</div>
                 </div>
             </div>
 
-
-
-            <div class="split mt-24">
-
-                <div class="card">
-
-                    <h2 data-i18n="dashboard.event_context">Event context</h2>
-
-                    <p class="notice" data-i18n="dashboard.event_context_notice">Season and event settings are used for API sync and match times.</p>
-
-                    <div class="form-grid">
-
-                        <div class="field">
-
-                            <label data-i18n="dashboard.season">Season</label>
-
-                            <div id="summary-year"></div>
-
+            <!-- Dynamic Dashboard Container -->
+            <div id="dashboard-dynamic-container">
+                <!-- 6 KPI Metric Cards Grid -->
+                <div class="dashboard-metrics-grid mt-20">
+                    <a href="/all-data" class="dashboard-kpi-card" id="card-metric-entries">
+                        <div class="dashboard-kpi-header">
+                            <h3 class="dashboard-kpi-title" data-i18n="dashboard.entries">Match Entries</h3>
+                            <div class="dashboard-kpi-icon icon-blue">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            </div>
                         </div>
-
-                        <div class="field">
-
-                            <label data-i18n="dashboard.event_key">Event key</label>
-
-                            <div id="summary-event"></div>
-
+                        <div id="summary-entries" class="dashboard-kpi-value">0</div>
+                        <div class="dashboard-kpi-subtext">
+                            <span data-i18n="dashboard.entries_subtext">Scouted match forms</span>
+                            <span class="dashboard-kpi-arrow">→</span>
                         </div>
+                    </a>
 
-                        <div class="field">
-
-                            <label data-i18n="dashboard.timezone">Timezone</label>
-
-                            <div id="summary-timezone"></div>
-
+                    <a href="/pit-data" class="dashboard-kpi-card" id="card-metric-pit">
+                        <div class="dashboard-kpi-header">
+                            <h3 class="dashboard-kpi-title" data-i18n="dashboard.pit_entries">Pit Forms</h3>
+                            <div class="dashboard-kpi-icon icon-green">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                            </div>
                         </div>
+                        <div id="summary-pit-entries" class="dashboard-kpi-value">0</div>
+                        <div class="dashboard-kpi-subtext">
+                            <span data-i18n="dashboard.pit_entries_subtext">Robots inspected</span>
+                            <span class="dashboard-kpi-arrow">→</span>
+                        </div>
+                    </a>
 
-                    </div>
+                    <a href="/qual-data" class="dashboard-kpi-card" id="card-metric-qual">
+                        <div class="dashboard-kpi-header">
+                            <h3 class="dashboard-kpi-title" data-i18n="dashboard.qual_entries">Qualitative</h3>
+                            <div class="dashboard-kpi-icon icon-purple">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                            </div>
+                        </div>
+                        <div id="summary-qual-entries" class="dashboard-kpi-value">0</div>
+                        <div class="dashboard-kpi-subtext">
+                            <span data-i18n="dashboard.qual_entries_subtext">Subjective scout logs</span>
+                            <span class="dashboard-kpi-arrow">→</span>
+                        </div>
+                    </a>
 
+                    <a href="/teams" class="dashboard-kpi-card" id="card-metric-teams">
+                        <div class="dashboard-kpi-header">
+                            <h3 class="dashboard-kpi-title" data-i18n="dashboard.teams">Teams</h3>
+                            <div class="dashboard-kpi-icon icon-amber">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                            </div>
+                        </div>
+                        <div id="summary-teams" class="dashboard-kpi-value">0</div>
+                        <div class="dashboard-kpi-subtext">
+                            <span data-i18n="dashboard.teams_subtext">Attending teams</span>
+                            <span class="dashboard-kpi-arrow">→</span>
+                        </div>
+                    </a>
+
+                    <a href="/matches" class="dashboard-kpi-card" id="card-metric-matches">
+                        <div class="dashboard-kpi-header">
+                            <h3 class="dashboard-kpi-title" data-i18n="dashboard.matches">Matches</h3>
+                            <div class="dashboard-kpi-icon icon-sky">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                            </div>
+                        </div>
+                        <div id="summary-matches" class="dashboard-kpi-value">0</div>
+                        <div class="dashboard-kpi-subtext">
+                            <span data-i18n="dashboard.matches_subtext">Event match schedule</span>
+                            <span class="dashboard-kpi-arrow">→</span>
+                        </div>
+                    </a>
+
+                    <a href="/events" class="dashboard-kpi-card" id="card-metric-events">
+                        <div class="dashboard-kpi-header">
+                            <h3 class="dashboard-kpi-title" data-i18n="dashboard.events">Events</h3>
+                            <div class="dashboard-kpi-icon icon-rose">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            </div>
+                        </div>
+                        <div id="summary-events" class="dashboard-kpi-value">0</div>
+                        <div class="dashboard-kpi-subtext">
+                            <span data-i18n="dashboard.events_subtext">Synced competitions</span>
+                            <span class="dashboard-kpi-arrow">→</span>
+                        </div>
+                    </a>
                 </div>
 
-                <div class="card">
+                <!-- Two-Column Operational Hub -->
+                <div class="dashboard-content-grid mt-24">
+                    <!-- Left Column: Active Competition & Upcoming Matches -->
+                    <div class="dashboard-col">
+                        <!-- Active Event Context Card (No dropdown changer) -->
+                        <div class="card">
+                            <div class="dashboard-section-header">
+                                <h2>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-2.34c-1.2-.55-2-1.74-2-3.16V6h16v5.5c0 1.42-.8 2.61-2 3.16z"></path></svg>
+                                    <span data-i18n="dashboard.event_context">Active Competition</span>
+                                </h2>
+                                <a href="/events" class="event-link-pill">
+                                    <span data-i18n="events.title">Manage Events</span> →
+                                </a>
+                            </div>
 
-                    <h2 data-i18n="dashboard.quick_sync">Quick sync</h2>
+                            <p class="notice" data-i18n="dashboard.event_context_notice">Season and event settings are used for API sync and match times.</p>
 
-                    <p class="notice" data-i18n="dashboard.quick_sync_notice">Teams and matches auto-sync every 7.5 minutes while the server is running.</p>
+                            <div class="event-details-grid mt-12">
+                                <div class="event-detail-item">
+                                    <span class="event-detail-label" data-i18n="dashboard.season">Season</span>
+                                    <span id="summary-year" class="event-detail-value">-</span>
+                                </div>
+                                <div class="event-detail-item">
+                                    <span class="event-detail-label" data-i18n="dashboard.event_key">Event Key</span>
+                                    <span id="summary-event" class="event-detail-value">-</span>
+                                </div>
+                                <div class="event-detail-item">
+                                    <span class="event-detail-label" data-i18n="dashboard.timezone">Timezone</span>
+                                    <span id="summary-timezone" class="event-detail-value">-</span>
+                                </div>
+                                <div class="event-detail-item">
+                                    <span class="event-detail-label" data-i18n="dashboard.preferred_source">Data Source</span>
+                                    <span id="summary-source" class="event-detail-value">-</span>
+                                </div>
+                            </div>
 
-                    <p id="sync-status" class="notice mt-8"></p>
+                            <div class="event-links-row" id="event-external-links"></div>
+                        </div>
 
-                    <div class="row gap-12 wrap mt-12">
+                        <!-- Upcoming Matches Schedule Preview -->
+                        <div class="card">
+                            <div class="dashboard-section-header">
+                                <h2>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                    <span data-i18n="dashboard.upcoming_matches">Upcoming Matches</span>
+                                </h2>
+                                <a href="/matches" class="event-link-pill">
+                                    <span data-i18n="dashboard.view_all">View all →</span>
+                                </a>
+                            </div>
+                            <p class="notice" data-i18n="dashboard.upcoming_matches_notice">Next scheduled matches for the active event.</p>
 
-                        <button class="btn" id="sync-all" type="button" data-i18n="dashboard.sync_data">Sync data</button>
-
+                            <div id="dash-matches-container" class="dash-matches-container mt-16">
+                                <div class="dash-matches-empty" data-i18n="dashboard.loading_dashboard_data">Loading match schedule...</div>
+                            </div>
+                        </div>
                     </div>
 
-                </div>
+                    <!-- Right Column: Quick Team Search, Sync Station & Operations Launchpad -->
+                    <div class="dashboard-col">
+                        <!-- Quick Team Search Card -->
+                        <div class="card">
+                            <div class="dashboard-section-header">
+                                <h2>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                    <span data-i18n="dashboard.team_lookup">Quick Team Lookup</span>
+                                </h2>
+                            </div>
+                            <form id="dash-team-search-form" class="dash-search-box">
+                                <input type="number" id="dash-team-input" class="dash-search-input" placeholder="Enter team # (e.g. 254)" min="1" required />
+                                <button type="submit" class="btn primary" data-i18n="dashboard.lookup">Lookup</button>
+                            </form>
+                        </div>
 
+                        <!-- Quick Sync & Integration Card -->
+                        <div class="card">
+                            <div class="dashboard-section-header">
+                                <h2>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                                    <span data-i18n="dashboard.quick_sync">Quick sync</span>
+                                </h2>
+                            </div>
+
+                            <p class="notice" data-i18n="dashboard.quick_sync_notice">Teams and matches auto-sync every 7.5 minutes while the server is running.</p>
+
+                            <div class="dash-sync-status-box mt-12">
+                                <div class="dash-sync-indicator" id="dash-sync-indicator"></div>
+                                <div class="dash-sync-text-group">
+                                    <span id="sync-status" style="font-weight: 600;">Checking sync status...</span>
+                                    <span id="sync-subtitle" class="dash-sync-subtitle">Auto-sync active</span>
+                                </div>
+                            </div>
+
+                            <div class="dash-sync-btn-group mt-12">
+                                <button class="btn primary" id="sync-all" type="button" data-i18n="dashboard.sync_data">Sync data</button>
+                                <button class="btn secondary" id="sync-event" type="button" data-i18n="dashboard.sync_teams_matches">Sync teams & matches</button>
+                                <button class="btn secondary" id="sync-stats" type="button" data-i18n="dashboard.sync_stats">Sync stats</button>
+                            </div>
+                        </div>
+
+                        <!-- Operations Launchpad Card -->
+                        <div class="card">
+                            <div class="dashboard-section-header">
+                                <h2>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                    <span data-i18n="dashboard.launchpad">Operations Launchpad</span>
+                                </h2>
+                            </div>
+                            <p class="notice" data-i18n="dashboard.launchpad_notice">Quick access to core scouting, strategy, and management tools.</p>
+
+                            <div class="dash-launchpad-grid mt-16">
+                                <a href="/rankings" class="dash-tile">
+                                    <div class="dash-tile-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                                    </div>
+                                    <span class="dash-tile-title">Rankings</span>
+                                    <span class="dash-tile-desc">Team Stats</span>
+                                </a>
+
+                                <a href="/graphs" class="dash-tile">
+                                    <div class="dash-tile-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                                    </div>
+                                    <span class="dash-tile-title">Graphs</span>
+                                    <span class="dash-tile-desc">Visual Trends</span>
+                                </a>
+
+                                <a href="/alliance-selection" class="dash-tile">
+                                    <div class="dash-tile-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                    </div>
+                                    <span class="dash-tile-title">Draft Board</span>
+                                    <span class="dash-tile-desc">Pick List</span>
+                                </a>
+
+                                <a href="/data-validation" class="dash-tile">
+                                    <div class="dash-tile-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                                    </div>
+                                    <span class="dash-tile-title">Validation</span>
+                                    <span class="dash-tile-desc">Data Health</span>
+                                </a>
+
+                                <a href="/backup" class="dash-tile">
+                                    <div class="dash-tile-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    </div>
+                                    <span class="dash-tile-title">Data Sharing</span>
+                                    <span class="dash-tile-desc">Export / Import</span>
+                                </a>
+
+                                <a href="/config" class="dash-tile">
+                                    <div class="dash-tile-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                    </div>
+                                    <span class="dash-tile-title">Settings</span>
+                                    <span class="dash-tile-desc">Preferences</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
         </main>
 
     </div>
 
-
-
     <script type="module" src="/js/common.js"></script>
-
     <script defer src="/js/dashboard.js"></script>
-
 </body>
 
 </html>
-

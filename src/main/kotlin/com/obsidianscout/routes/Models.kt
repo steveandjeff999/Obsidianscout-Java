@@ -232,7 +232,9 @@ data class MatchRecord(
     /** IANA timezone name for the event venue (e.g. "America/New_York").
      *  All scheduledTime/actualTime values are UTC epoch seconds — this field
      *  is purely for display purposes so the browser can show a venue-time tooltip. */
-    val eventTimezone: String? = null
+    val eventTimezone: String? = null,
+    val redScore: Int? = null,
+    val blueScore: Int? = null
 )
 
 @Serializable
@@ -240,7 +242,9 @@ data class SummaryResponse(
     val entries: Int,
     val events: Int,
     val teams: Int,
-    val matches: Int
+    val matches: Int,
+    val pitEntries: Int = 0,
+    val qualEntries: Int = 0
 )
 
 @Serializable

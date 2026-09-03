@@ -47,6 +47,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.or
@@ -784,6 +786,26 @@ object IntegrationService {
                         }
                     }
                 }
+                val (rScore, bScore) = try {
+                    val rawDataJson = row[ApiMatches.dataJson]
+                    if (rawDataJson.isNotBlank()) {
+                        val json = JsonSupport.json.parseToJsonElement(rawDataJson).jsonObject
+                        val alliances = json["alliances"]?.jsonObject
+                        val red = alliances?.get("red")?.jsonObject
+                        val blue = alliances?.get("blue")?.jsonObject
+                        val r = red?.get("score")?.jsonPrimitive?.intOrNull
+                            ?: json["redScore"]?.jsonPrimitive?.intOrNull
+                            ?: json["scoreRedFinal"]?.jsonPrimitive?.intOrNull
+                        val b = blue?.get("score")?.jsonPrimitive?.intOrNull
+                            ?: json["blueScore"]?.jsonPrimitive?.intOrNull
+                            ?: json["scoreBlueFinal"]?.jsonPrimitive?.intOrNull
+                        Pair(r, b)
+                    } else {
+                        Pair(null, null)
+                    }
+                } catch (_: Exception) {
+                    Pair(null, null)
+                }
                 MatchRecord(
                     matchKey = row[ApiMatches.matchKey],
                     eventKey = row[ApiMatches.eventKey],
@@ -795,7 +817,9 @@ object IntegrationService {
                     redTeams = resolveTeams(row[ApiMatches.redTeams]),
                     blueTeams = resolveTeams(row[ApiMatches.blueTeams]),
                     label = MatchCanonical.displayLabel(compLevel, setNumber, matchNumber),
-                    eventTimezone = eventTimezone
+                    eventTimezone = eventTimezone,
+                    redScore = rScore,
+                    blueScore = bScore
                 )
             }
         }
@@ -881,11 +905,13 @@ object IntegrationService {
                     entries = ScoutingEntries.select(ScoutingEntries.id).count().toInt(),
                     events = ApiEvents.select(ApiEvents.id).count().toInt(),
                     teams = ApiTeams.select(ApiTeams.id).count().toInt(),
-                    matches = ApiMatches.select(ApiMatches.id).count().toInt()
+                    matches = ApiMatches.select(ApiMatches.id).count().toInt(),
+                    pitEntries = PitScoutingEntries.select(PitScoutingEntries.id).count().toInt(),
+                    qualEntries = QualitativeScoutingEntries.select(QualitativeScoutingEntries.id).count().toInt()
                 )
             }
         } catch (_: Throwable) {
-            SummaryResponse(entries = 0, events = 0, teams = 0, matches = 0)
+            SummaryResponse(entries = 0, events = 0, teams = 0, matches = 0, pitEntries = 0, qualEntries = 0)
         }
     }
 

@@ -154,7 +154,7 @@ async function loadPredictorData() {
         }
 
         const urlParams = new URLSearchParams(window.location.search);
-        const matchKeyParam = urlParams.get("matchKey");
+        const matchKeyParam = (urlParams.get("match") || urlParams.get("matchKey") || urlParams.get("matchNumber") || "").trim() || null;
         const eventKeyParam = urlParams.get("eventKey");
         let inferredEventKey = null;
         if (matchKeyParam) {
@@ -234,7 +234,17 @@ async function loadPredictorData() {
             let foundVal = null;
             for (let i = 0; i < matchSelect.options.length; i++) {
                 const optVal = matchSelect.options[i].value.toLowerCase().trim();
-                if (optVal === normalizedKey || optVal.endsWith(normalizedKey) || normalizedKey.endsWith(optVal)) {
+                if (!optVal) continue;
+                if (optVal === normalizedKey ||
+                    optVal.endsWith(`_${normalizedKey}`) ||
+                    optVal.endsWith(normalizedKey) ||
+                    normalizedKey.endsWith(`_${optVal}`) ||
+                    normalizedKey.endsWith(optVal)) {
+                    foundVal = matchSelect.options[i].value;
+                    break;
+                }
+                const optText = matchSelect.options[i].textContent.toLowerCase().trim();
+                if (optText === normalizedKey || optText.endsWith(` ${normalizedKey}`)) {
                     foundVal = matchSelect.options[i].value;
                     break;
                 }

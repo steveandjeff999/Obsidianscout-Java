@@ -1232,6 +1232,14 @@ fun Application.configureRoutes() {
             route("/events") {
                 get {
                     val session = call.requireSession()
+                    val eventKeyParam = call.request.queryParameters["eventKey"]
+                    if (!eventKeyParam.isNullOrBlank()) {
+                        val event = IntegrationService.getEvent(eventKeyParam)
+                        if (event != null) {
+                            call.respond(event)
+                            return@get
+                        }
+                    }
                     val year = call.request.queryParameters["year"]?.toIntOrNull()
                     val cachedOnly = call.request.queryParameters["cached"]?.let { value ->
                         value == "1" || value.equals("true", ignoreCase = true)

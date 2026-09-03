@@ -23,6 +23,7 @@
 @import url('./components/widgets.css');
 
 /* 4. Page-Specific Styles */
+@import url('./pages/dashboard.css');
 @import url('./pages/scanner.css');
 @import url('./pages/team-profile.css');
 @import url('./pages/graphs-analytics.css');
