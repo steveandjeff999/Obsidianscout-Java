@@ -3149,6 +3149,8 @@ fun Application.configureRoutes() {
             call.response.headers.append(HttpHeaders.Pragma, "no-cache")
             call.response.headers.append(HttpHeaders.Expires, "0")
             call.response.headers.append("Service-Worker-Allowed", "/")
+            call.response.headers.append("CDN-Cache-Control", "no-store")
+            call.response.headers.append("Cloudflare-CDN-Cache-Control", "no-store")
             val swBytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val fsFile = File("static/sw.js")
                 if (fsFile.exists()) fsFile.readBytes()
@@ -3215,6 +3217,9 @@ internal suspend fun ApplicationCall.respondStaticHtml(fileName: String, status:
             )
         }
     }
+    response.headers.append(HttpHeaders.CacheControl, "no-cache, must-revalidate")
+    response.headers.append("CDN-Cache-Control", "no-cache")
+    response.headers.append("Cloudflare-CDN-Cache-Control", "no-cache")
     respondText(rendered, ContentType.Text.Html, status)
 }
 

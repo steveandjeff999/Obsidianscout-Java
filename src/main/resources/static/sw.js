@@ -175,11 +175,14 @@ self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(async (cache) => {
-                console.log('[ServiceWorker] Pre-caching offline shell assets sequentially');
+                console.log(`[ServiceWorker] Pre-caching offline shell assets sequentially for ${CACHE_NAME}`);
                 for (const url of ASSETS) {
                     try {
-                        const response = await fetch(url, { cache: 'reload' });
+                        // Append version query parameter to bypass Cloudflare edge cache and intermediate CDN caches
+                        const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}_sw_ver=${encodeURIComponent(CACHE_NAME)}`;
+                        const response = await fetch(fetchUrl, { cache: 'reload' });
                         if (response.status === 200) {
+                            // Store under clean URL so normal app requests match cache keys directly
                             await cache.put(url, response);
                         }
                     } catch (err) {

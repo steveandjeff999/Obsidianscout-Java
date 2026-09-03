@@ -413,8 +413,33 @@ async function onDOMContentLoaded() {
 
     if ('serviceWorker' in navigator) {
         let refreshing = false;
+        const hadController = Boolean(navigator.serviceWorker.controller);
+
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             console.log('[ServiceWorker] Active controller changed to new version');
+            // If the page had no active controller when it loaded, this is the initial registration. Don't reload.
+            if (!hadController) return;
+            if (refreshing) return;
+            refreshing = true;
+
+            // Check if the user is actively on a scouting input screen
+            const isScoutingPath = ['/scout', '/pit-scout', '/qual-scout', '/prescout-scout', '/prescout-pit', '/prescout-qual'].some(
+                p => window.location.pathname.startsWith(p)
+            );
+            const activeForm = document.querySelector('form.scouting-form, [data-scouting-active="true"]');
+
+            if (isScoutingPath || activeForm) {
+                // To avoid discarding active scouting data during a match, alert with toast
+                const msg = 'A new version of ObsidianScout is ready. Please refresh when you finish scouting.';
+                if (typeof showToast === 'function') {
+                    showToast(msg, 'info');
+                } else if (window.Obsidianscout && typeof Obsidianscout.showToast === 'function') {
+                    Obsidianscout.showToast(msg, 'info');
+                }
+            } else {
+                // Automatically reload the page so the user receives the latest HTML/CSS/JS without hard refresh
+                window.location.reload();
+            }
         });
 
         navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
