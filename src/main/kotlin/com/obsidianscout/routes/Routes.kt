@@ -587,7 +587,6 @@ fun Application.configureRoutes() {
 
             route("/docs") {
                 get {
-                    call.requireSession()
                     val lang = call.request.queryParameters["lang"]?.lowercase() ?: "en"
                     val docsDir = findDocsDir()
                     if (!docsDir.exists()) {
@@ -617,7 +616,6 @@ fun Application.configureRoutes() {
                     call.respond(files)
                 }
                 get("/{filename}") {
-                    call.requireSession()
                     val filename = call.parameters["filename"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing filename")
                     if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid filename")
@@ -3139,6 +3137,9 @@ fun Application.configureRoutes() {
             "config-migration" to "config-migration.html",
             "schema-history" to "schema-history.html",
             "theme-editor" to "theme-editor.html",
+            "demo" to "demo.html",
+            "about" to "about.html",
+            "login" to "login.html",
             "404" to "404.html",
             "500" to "500.html",
             "503" to "503.html"

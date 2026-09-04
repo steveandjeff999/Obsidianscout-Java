@@ -157,6 +157,117 @@
                 position: static;
             }
         }
+
+        /* Public Guest Header Styles */
+        .docs-public-header {
+            display: none;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(11, 15, 25, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 14px 28px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        body.is-guest .docs-public-header {
+            display: flex;
+        }
+
+        body.is-guest .sidebar {
+            display: none !important;
+        }
+
+        body.is-guest .app-shell {
+            display: block;
+        }
+
+        body.is-guest .main-content {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 24px 24px 80px;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: #f8fafc;
+            font-weight: 700;
+            font-size: 1.15rem;
+            letter-spacing: -0.01em;
+        }
+
+        .header-brand img {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+        }
+
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-nav a.nav-link {
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.15s ease;
+        }
+
+        .header-nav a.nav-link:hover,
+        .header-nav a.nav-link.active {
+            color: #f8fafc;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-signin {
+            color: #cbd5e1;
+            text-decoration: none;
+            font-size: 13.5px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            transition: all 0.15s ease;
+        }
+
+        .btn-signin:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-primary-action {
+            background: #2563eb;
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 13.5px;
+            font-weight: 600;
+            padding: 8px 18px;
+            border-radius: 8px;
+            border: 1px solid #3b82f6;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary-action:hover {
+            background: #1d4ed8;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        }
     </style>
     <link rel="manifest" href="/manifest.json" />
 </head>
@@ -175,6 +286,24 @@
     </script>
     <div class="orb orb-1"></div>
     <div class="orb orb-2"></div>
+
+    <!-- Public Header shown when user is not signed in -->
+    <header class="docs-public-header" id="docs-public-header">
+        <a href="/" class="header-brand">
+            <img src="/assets/images/obsidian/obsidian-192.png" alt="ObsidianScout Logo" />
+            <span>ObsidianScout</span>
+        </a>
+        <nav class="header-nav">
+            <a href="/#platforms" class="nav-link">Platforms</a>
+            <a href="/#abilities" class="nav-link">Capabilities</a>
+            <a href="/#roles" class="nav-link">Roles</a>
+            <a href="/docs" class="nav-link active">Docs</a>
+        </nav>
+        <div class="header-actions">
+            <a href="/login" class="btn-signin">Sign In</a>
+            <a href="/login?mode=register" class="btn-primary-action">Get Started</a>
+        </div>
+    </header>
 
     <div class="app-shell">
         <aside class="sidebar"></aside>
@@ -204,15 +333,28 @@
     <script>
         document.addEventListener("DOMContentLoaded", async () => {
             Obsidianscout.initTheme();
-            const me = await Obsidianscout.requireAuth();
-            if (!me) {
-                return;
+
+            // Check authentication status without blocking guest access
+            let me = null;
+            try {
+                const loggedIn = await Obsidianscout.checkLoginStatus();
+                if (loggedIn) {
+                    me = await Obsidianscout.getMe();
+                }
+            } catch (e) {
+                console.warn("Auth status check error:", e);
             }
-            Obsidianscout.setUserBadge(me);
-            Obsidianscout.setActiveNav();
-            Obsidianscout.adjustNavForRole(me);
-            Obsidianscout.wireLogout();
-            Obsidianscout.wireThemeToggle();
+
+            if (me) {
+                document.body.classList.remove("is-guest");
+                Obsidianscout.setUserBadge(me);
+                Obsidianscout.setActiveNav();
+                Obsidianscout.adjustNavForRole(me);
+                Obsidianscout.wireLogout();
+                Obsidianscout.wireThemeToggle();
+            } else {
+                document.body.classList.add("is-guest");
+            }
 
             const menuContainer = document.getElementById("docs-menu");
             const viewport = document.getElementById("docs-viewport");

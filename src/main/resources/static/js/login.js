@@ -15,23 +15,44 @@ document.addEventListener("DOMContentLoaded", () => {
     const loginPanel = document.getElementById("login-panel");
     const registerPanel = document.getElementById("register-panel");
 
-    tabs.forEach((tab) => {
-        tab.addEventListener("click", () => {
-            tabs.forEach((t) => t.classList.remove("active"));
-            tab.classList.add("active");
-            if (tab.dataset.tab === "register") {
-                loginPanel.classList.add("hidden");
-                loginPanel.hidden = true;
-                registerPanel.classList.remove("hidden");
-                registerPanel.hidden = false;
+    function switchTab(targetTab) {
+        tabs.forEach((t) => {
+            if (t.dataset.tab === targetTab) {
+                t.classList.add("active");
             } else {
-                loginPanel.classList.remove("hidden");
-                loginPanel.hidden = false;
-                registerPanel.classList.add("hidden");
-                registerPanel.hidden = true;
+                t.classList.remove("active");
             }
         });
+        if (targetTab === "register") {
+            loginPanel.classList.add("hidden");
+            loginPanel.hidden = true;
+            registerPanel.classList.remove("hidden");
+            registerPanel.hidden = false;
+        } else {
+            loginPanel.classList.remove("hidden");
+            loginPanel.hidden = false;
+            registerPanel.classList.add("hidden");
+            registerPanel.hidden = true;
+        }
+    }
+
+    tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+            switchTab(tab.dataset.tab);
+        });
     });
+
+    // Check URL parameters or hash to open register tab directly
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const modeParam = (urlParams.get("mode") || urlParams.get("tab") || urlParams.get("action") || "").toLowerCase();
+        const hash = window.location.hash.toLowerCase();
+        if (["register", "signup", "create", "create-account", "new"].includes(modeParam) || ["#register", "#signup", "#create", "#create-account"].includes(hash)) {
+            switchTab("register");
+        }
+    } catch (e) {
+        console.warn("Error parsing URL tab parameter:", e);
+    }
 
     // Login
     loginForm.addEventListener("submit", async (event) => {

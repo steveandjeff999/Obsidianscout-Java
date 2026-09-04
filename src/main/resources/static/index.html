@@ -6,157 +6,818 @@
     <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ObsidianScout | Login</title>
+    <title>ObsidianScout | Robotics Scouting & Match Analytics</title>
     <link rel="stylesheet" href="/css/app.css" />
     <link rel="manifest" href="/manifest.json" />
-</head>
-<body data-page="login">
-        <script>
-        (function() {
-            try {
-                const saved = localStorage.getItem("obsidian-theme") || "light";
-                if (saved === "dark") {
-                    document.body.classList.add("theme-dark");
-                }
-            } catch (e) {
-                console.warn("Theme storage access failed:", e);
+    <style>
+        /* Professional Robotics Engineering Theme */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: #0b0f19;
+            color: #e2e8f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Top Navigation */
+        .site-header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(11, 15, 25, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 14px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: #f8fafc;
+            font-weight: 700;
+            font-size: 1.15rem;
+            letter-spacing: -0.01em;
+        }
+
+        .header-brand img {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+        }
+
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .header-nav a.nav-link {
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.15s ease;
+        }
+
+        .header-nav a.nav-link:hover {
+            color: #f8fafc;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-signin {
+            color: #cbd5e1;
+            text-decoration: none;
+            font-size: 13.5px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            transition: all 0.15s ease;
+        }
+
+        .btn-signin:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-primary-action {
+            background: #2563eb;
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 13.5px;
+            font-weight: 600;
+            padding: 8px 18px;
+            border-radius: 8px;
+            border: 1px solid #3b82f6;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary-action:hover {
+            background: #1d4ed8;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        }
+
+        .btn-primary-action:active,
+        .btn-signin:active {
+            transform: scale(0.97);
+        }
+
+        /* Container */
+        .content-wrap {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 40px 24px 80px;
+        }
+
+        /* Hero */
+        .hero-section {
+            padding: 48px 0 64px;
+            text-align: center;
+            max-width: 880px;
+            margin: 0 auto;
+        }
+
+        .hero-title {
+            font-size: clamp(2.3rem, 4.5vw, 3.4rem);
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+            color: #f8fafc;
+            margin: 0 0 20px;
+        }
+
+        .hero-lead {
+            font-size: clamp(1.05rem, 1.8vw, 1.25rem);
+            color: #94a3b8;
+            line-height: 1.6;
+            margin: 0 0 32px;
+        }
+
+        .hero-actions-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 44px;
+        }
+
+        .spec-strip {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 24px;
+            padding: 16px 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .spec-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13.5px;
+            color: #cbd5e1;
+            font-weight: 500;
+        }
+
+        .spec-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #3b82f6;
+        }
+
+        /* Dual Platform Split */
+        .platform-split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin: 64px 0;
+        }
+
+        @media (max-width: 840px) {
+            .platform-split {
+                grid-template-columns: 1fr;
             }
-        })();
-    </script>
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="orb orb-3"></div>
+        }
 
-    <main class="shell login-shell">
-        <section class="hero login-hero">
-            <div>
-                <div class="brand">ObsidianScout</div>
-                <h1 data-i18n="index.tagline">Scout smarter, move faster.</h1>
-                <p data-i18n="index.log_in_with_your_team_credenti">Log in with your team credentials to start capturing match data and live analytics.</p>
-                <div class="card soft">
-                    <strong data-i18n="index.multi_team_ready">Multi-team ready.</strong> Each team gets its own isolated data, settings, and scouting config.
-                </div>
+        .platform-panel {
+            background: #111827;
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: 16px;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .platform-panel:hover {
+            transform: translateY(-3px);
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+        }
+
+        .platform-tag-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .platform-badge {
+            font-size: 12px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 6px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .badge-app {
+            background: rgba(168, 85, 247, 0.15);
+            color: #c084fc;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        .badge-web {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        .platform-panel h3 {
+            font-size: 1.35rem;
+            color: #f8fafc;
+            margin: 0 0 8px;
+            font-weight: 700;
+        }
+
+        .platform-panel p.panel-sub {
+            color: #94a3b8;
+            font-size: 14px;
+            line-height: 1.55;
+            margin: 0 0 20px;
+        }
+
+        .feature-bullets {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .feature-bullets li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 13.5px;
+            color: #cbd5e1;
+            line-height: 1.5;
+        }
+
+        .bullet-check {
+            color: #10b981;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* Section Headings */
+        .section-header {
+            text-align: center;
+            max-width: 680px;
+            margin: 0 auto 36px;
+        }
+
+        .section-header h2 {
+            font-size: 1.85rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #f8fafc;
+            margin: 0 0 10px;
+        }
+
+        .section-header p {
+            color: #94a3b8;
+            font-size: 15px;
+            line-height: 1.55;
+            margin: 0;
+        }
+
+        /* Grid */
+        .abilities-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+            gap: 16px;
+            margin-bottom: 60px;
+        }
+
+        @media (max-width: 600px) {
+            .abilities-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .ability-box {
+            background: #111827;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s ease, box-shadow 0.18s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .ability-box:hover {
+            transform: translateY(-2px);
+            border-color: rgba(59, 130, 246, 0.35);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+        }
+
+        .ability-box:active {
+            transform: scale(0.99);
+        }
+
+        .ability-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .ability-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: rgba(37, 99, 235, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ability-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .tag-sync {
+            background: rgba(16, 185, 129, 0.12);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+
+        .tag-app {
+            background: rgba(139, 92, 246, 0.12);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.25);
+        }
+
+        .tag-web {
+            background: rgba(59, 130, 246, 0.12);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.25);
+        }
+
+        .ability-box h4 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #f8fafc;
+            margin: 0 0 6px;
+        }
+
+        .ability-box p {
+            color: #94a3b8;
+            font-size: 13.5px;
+            line-height: 1.5;
+            margin: 0;
+            flex-grow: 1;
+        }
+
+        /* Role Tabs */
+        .role-panel {
+            background: #111827;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 72px;
+        }
+
+        .role-tabs {
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 12px;
+            margin-bottom: 24px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .role-tab-btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+
+        .role-tab-btn:hover {
+            color: #f8fafc;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .role-tab-btn:active {
+            transform: scale(0.97);
+        }
+
+        .role-tab-btn.active {
+            color: #ffffff;
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .role-detail-box {
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+
+
+        /* Final CTA */
+        .final-cta {
+            background: linear-gradient(180deg, #111827 0%, #0d1320 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 48px 32px;
+            text-align: center;
+        }
+
+        .final-cta h2 {
+            font-size: 1.85rem;
+            font-weight: 800;
+            color: #f8fafc;
+            margin: 0 0 12px;
+        }
+
+        .final-cta p {
+            color: #94a3b8;
+            font-size: 15px;
+            max-width: 580px;
+            margin: 0 auto 28px;
+            line-height: 1.55;
+        }
+
+        /* Footer */
+        .site-footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 32px 24px;
+            text-align: center;
+            font-size: 13px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body data-page="landing">
+    <!-- Header -->
+    <header class="site-header">
+        <a href="/" class="header-brand">
+            <img src="/assets/images/obsidian/obsidian-192.png" alt="ObsidianScout Logo" />
+            <span>ObsidianScout</span>
+        </a>
+        <nav class="header-nav">
+            <a href="#platforms" class="nav-link">Platforms</a>
+            <a href="#abilities" class="nav-link">Capabilities</a>
+            <a href="#roles" class="nav-link">Roles</a>
+            <a href="/docs" class="nav-link">Docs</a>
+        </nav>
+        <div class="header-actions">
+            <a href="/login" class="btn-signin">Sign In</a>
+            <a href="/login?mode=register" class="btn-primary-action">Get Started</a>
+        </div>
+    </header>
+
+    <main class="content-wrap">
+
+        <!-- Hero Section -->
+        <section class="hero-section">
+            <h1 class="hero-title" style="margin-bottom: 28px;">
+                ObsidianScout
+            </h1>
+            <div class="hero-actions-row">
+                <a href="/login" class="btn-primary-action" style="padding: 12px 28px; font-size: 15px;">
+                    Access Your Team Portal →
+                </a>
+                <a href="#platforms" class="btn-signin" style="padding: 12px 24px; font-size: 15px;">
+                    Explore Capabilities
+                </a>
             </div>
-            <div class="card auth-card">
-                <div class="tab-row" id="auth-tabs">
-                    <button class="tab active" data-tab="login" type="button" data-i18n="index.sign_in_tab">Sign in</button>
-                    <button class="tab" data-tab="register" type="button" data-i18n="index.create_account_tab">Create account</button>
-                </div>
 
-                <div id="login-panel">
-                    <form id="login-form" class="form-grid" method="POST">
-                        <input type="hidden" name="csrf_token" value="" />
-                        <div class="field">
-                            <label for="username" data-i18n="index.username">Username</label>
-                            <input id="username" name="username" type="text" autocomplete="username" required />
-                        </div>
-                        <div class="field">
-                            <label for="teamNumber" data-i18n="pitdata.csv.team_number">Team Number</label>
-                            <input id="teamNumber" name="teamNumber" type="number" required />
-                        </div>
-                        <div class="field">
-                            <label for="login-program" data-i18n="index.program">Program Type</label>
-                            <select id="login-program" name="program" required>
-                                <option value="FRC">FRC (FIRST Robotics Competition)</option>
-                                <option value="FTC">FTC (FIRST Tech Challenge)</option>
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="password" data-i18n="index.password">Password</label>
-                            <input id="password" name="password" type="password" autocomplete="current-password" required />
-                            <div class="mt-6" style="text-align: right;">
-                                <a href="#" id="forgot-password-link" style="font-size: 13px; color: var(--primary);" data-i18n="index.forgot_usernamepassword">Forgot username/password?</a>
-                            </div>
-                        </div>
-                        <div class="field checkbox-field">
-                            <input id="keepMeLoggedIn" name="keepMeLoggedIn" type="checkbox" />
-                            <label for="keepMeLoggedIn" data-i18n="index.keep_me_logged_in">Keep me signed in</label>
-                        </div>
-                        <button id="login-submit" class="btn" type="submit" data-i18n="index.login_submit">Sign in</button>
-                    </form>
+            <div class="spec-strip">
+                <div class="spec-item">
+                    <span class="spec-dot"></span>
+                    <span>FIRST Robotics Competition (FRC)</span>
                 </div>
-
-                <div id="register-panel" class="hidden" hidden>
-                    <form id="register-form" class="form-grid" method="POST">
-                        <input type="hidden" name="csrf_token" value="" />
-                        <div class="field">
-                            <label for="reg-username" data-i18n="index.username">Username</label>
-                            <input id="reg-username" type="text" autocomplete="username" required />
-                        </div>
-                        <div class="field">
-                            <label for="reg-email" data-i18n="index.email">Email</label>
-                            <input id="reg-email" type="email" autocomplete="email" data-i18n-placeholder="config.placeholder_scoutexamplecom" placeholder="scout@example.com" />
-                        </div>
-                        <div class="field">
-                            <label for="reg-team" data-i18n="pitdata.csv.team_number">Team Number</label>
-                            <input id="reg-team" type="number" required min="1" />
-                        </div>
-                        <div class="field">
-                            <label for="reg-program" data-i18n="index.program">Program Type</label>
-                            <select id="reg-program" required>
-                                <option value="FRC">FRC (FIRST Robotics Competition)</option>
-                                <option value="FTC">FTC (FIRST Tech Challenge)</option>
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="reg-password" data-i18n="index.password">Password</label>
-                            <input id="reg-password" type="password" autocomplete="new-password" required minlength="4" />
-                        </div>
-                        <div class="field">
-                            <label for="reg-confirm" data-i18n="index.confirm_password">Confirm Password</label>
-                            <input id="reg-confirm" type="password" autocomplete="new-password" required minlength="4" />
-                        </div>
-                        <div class="field">
-                            <label for="reg-role" data-i18n="index.role">Role</label>
-                            <select id="reg-role" required>
-                                <option value="SCOUT">Scout</option>
-                                <option value="ANALYTICS">Analytics</option>
-                                <option value="ADMIN" data-i18n="index.admin">Admin</option>
-                            </select>
-                        </div>
-                        <div class="field checkbox-field">
-                            <input id="reg-keepMeLoggedIn" type="checkbox" />
-                            <label for="reg-keepMeLoggedIn" data-i18n="index.keep_me_logged_in">Keep me signed in</label>
-                        </div>
-                        <button id="register-submit" class="btn dark" type="submit" data-i18n="index.register_submit">Create account</button>
-                    </form>
+                <div class="spec-item">
+                    <span class="spec-dot"></span>
+                    <span>FIRST Tech Challenge (FTC)</span>
                 </div>
-
-                <div id="forgot-password-panel" class="hidden" hidden>
-                    <h2 class="mb-12" data-i18n="index.recover_password">Recover Password</h2>
-                    <div class="tab-row mb-12" id="forgot-tabs">
-                        <button class="tab active" data-tab="email" type="button" data-i18n="config.email_address">Email Address</button>
-                        <button class="tab" data-tab="credentials" type="button" data-i18n="index.username_team">Username & Team</button>
-                    </div>
-                    <p class="notice mb-18" id="forgot-notice" data-i18n="index.enter_your_registered_email_ad">Enter your registered email address. We will send you a link to reset your password.</p>
-                    <div class="card soft mb-12" style="font-size: 13px; border-left: 4px solid var(--primary); padding: 12px; margin-bottom: 16px;">
-                        <strong data-i18n="index.disclaimer">Disclaimer:</strong> Your account must have a registered email address set in order to recover or reset credentials.
-                    </div>
-                    <form id="forgot-password-form" class="form-grid" method="POST">
-                        <input type="hidden" name="csrf_token" value="" />
-                        <div id="forgot-email-field" class="field">
-                            <label for="forgot-email" data-i18n="config.email_address">Email Address</label>
-                            <input id="forgot-email" type="email" data-i18n-placeholder="config.placeholder_scoutexamplecom" placeholder="scout@example.com" required />
-                        </div>
-                        <div id="forgot-credentials-fields" class="hidden" hidden>
-                            <div class="field">
-                                <label for="forgot-username" data-i18n="index.username">Username</label>
-                                <input id="forgot-username" type="text" />
-                            </div>
-                            <div class="field">
-                                <label for="forgot-team" data-i18n="pitdata.csv.team_number">Team Number</label>
-                                <input id="forgot-team" type="number" />
-                            </div>
-                        </div>
-                        <button id="forgot-submit" class="btn" type="submit" data-i18n="index.send_reset_link">Send reset link</button>
-                        <button id="forgot-back-to-login" class="btn ghost mt-12" type="button" data-i18n="index.back_to_sign_in">Back to sign in</button>
-                    </form>
+                <div class="spec-item">
+                    <span class="spec-dot"></span>
+                    <span>Offline QR Match Synchronization</span>
+                </div>
+                <div class="spec-item">
+                    <span class="spec-dot"></span>
+                    <span>The Blue Alliance & Statbotics Sync</span>
                 </div>
             </div>
         </section>
+
+        <!-- Platform Comparison: App vs Web -->
+        <section id="platforms" class="platform-split">
+            <!-- Mobile App -->
+            <div class="platform-panel">
+                <div class="platform-tag-row">
+                    <span class="platform-badge badge-app">Bleachers & Stands</span>
+                    <span style="font-size: 12px; color: #94a3b8; font-weight: 500;">Native Mobile & Web App</span>
+                </div>
+                <h3>Mobile Scouting Interface</h3>
+                <p class="panel-sub">
+                    Designed for rapid, low-friction thumb entry during two-minute qualification matches. Operates entirely client-side with local persistence.
+                </p>
+                <ul class="feature-bullets">
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span><strong>Tactile Cycle Logging:</strong> One-tap buttons for autonomous routines, teleop scoring cycles, defense ratings, and endgame objectives.</span>
+                    </li>
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span><strong>Offline QR Sync:</strong> Encodes full match entries into high-density QR codes for optical camera scanning at the pit desk.</span>
+                    </li>
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span><strong>Pit Hardware Inspections:</strong> Capture robot dimensions, intake mechanisms, drivetrain specifications (Swerve, Tank), and direct camera photos.</span>
+                    </li>
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span><strong>Input Protection:</strong> Form validation and state isolation safeguard in-progress matches against accidental navigation or screen locks.</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Web Platform -->
+            <div class="platform-panel">
+                <div class="platform-tag-row">
+                    <span class="platform-badge badge-web">Pit Station & Strategy</span>
+                    <span style="font-size: 12px; color: #94a3b8; font-weight: 500;">Desktop Web Dashboard</span>
+                </div>
+                <h3>Strategy & Analytics</h3>
+                <p class="panel-sub">
+                    Built for drive coaches, strategy leads, and pit operations on laptops or external displays. Aggregates multi-scout entries into actionable strategy.
+                </p>
+                <ul class="feature-bullets">
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span><strong>3v3 Match Predictor:</strong> Simulates alliance matchups using scouted cycle averages, official EPA, and component breakdowns.</span>
+                    </li>
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span><strong>Alliance Selection Draft Board:</strong> Interactive pick-list tracking with live team cross-offs, defense ratings, and weighted scoring models.</span>
+                    </li>
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span><strong>API Ingestion:</strong> Continuous background sync with The Blue Alliance (TBA) and Statbotics for match schedules, official scores, and OPR.</span>
+                    </li>
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span><strong>Data Interoperability:</strong> One-click export to CSV and JSON for custom analytics scripts and team archives.</span>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Capabilities Breakdown -->
+        <section id="abilities">
+            <div class="section-header">
+                <h2>Platform Capabilities</h2>
+                <p>Essential competition tools without the clutter.</p>
+            </div>
+
+            <div class="abilities-grid" id="capabilities-grid">
+                <!-- 1: Offline QR Sync -->
+                <div class="ability-box" data-cat="sync">
+                    <div class="ability-top">
+                        <div class="ability-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        </div>
+                        <span class="ability-tag tag-sync">Offline & Sync</span>
+                    </div>
+                    <h4>Offline QR Sync</h4>
+                    <p>Transfer match logs from arena bleachers to pit desks instantly via optical QR codes—zero venue WiFi or cellular required.</p>
+                </div>
+
+                <!-- 2: Pit Inspections -->
+                <div class="ability-box" data-cat="app">
+                    <div class="ability-top">
+                        <div class="ability-icon" style="background: rgba(139, 92, 246, 0.12); border-color: rgba(139, 92, 246, 0.25); color: #a78bfa;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                        </div>
+                        <span class="ability-tag tag-app">Mobile App</span>
+                    </div>
+                    <h4>Pit Inspections & Photos</h4>
+                    <p>Record robot dimensions, drivetrain configurations, mechanism specs, and attach direct camera photos to team profiles.</p>
+                </div>
+
+                <!-- 3: Match Simulator -->
+                <div class="ability-box" data-cat="web">
+                    <div class="ability-top">
+                        <div class="ability-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                        </div>
+                        <span class="ability-tag tag-web">Web Platform</span>
+                    </div>
+                    <h4>3v3 Match Simulator</h4>
+                    <p>Evaluate alliance matchups with predicted scores, cycle distributions, and win probabilities for pre-match drive team planning.</p>
+                </div>
+
+                <!-- 4: Draft Board -->
+                <div class="ability-box" data-cat="web">
+                    <div class="ability-top">
+                        <div class="ability-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                        </div>
+                        <span class="ability-tag tag-web">Web Platform</span>
+                    </div>
+                    <h4>Alliance Draft Board</h4>
+                    <p>Dynamic playoff pick-list tracking with live team cross-offs, defense ratings, and customizable role-based rankings.</p>
+                </div>
+
+                <!-- 5: TBA Sync & Export -->
+                <div class="ability-box" data-cat="web">
+                    <div class="ability-top">
+                        <div class="ability-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        </div>
+                        <span class="ability-tag tag-web">Web Platform</span>
+                    </div>
+                    <h4>The Blue Alliance & Exports</h4>
+                    <p>Automated background sync for match schedules and official scores, plus one-click export to CSV and JSON.</p>
+                </div>
+            </div>
+        </section>
+
+
+
+        <!-- Role Breakdown -->
+        <section id="roles" class="role-panel">
+            <div style="margin-bottom: 20px;">
+                <h3 style="font-size: 1.4rem; color: #f8fafc; margin: 0 0 6px;">Designed for the Entire Robotics Team</h3>
+                <p style="color: #94a3b8; font-size: 14px; margin: 0;">Select a role to review specific workflows:</p>
+            </div>
+
+            <div class="role-tabs">
+                <button class="role-tab-btn active" data-role="scout">Student Scouts</button>
+                <button class="role-tab-btn" data-role="coach">Drive Coaches</button>
+                <button class="role-tab-btn" data-role="strategy">Strategy Leads</button>
+            </div>
+
+            <div id="role-content" class="role-detail-box">
+                <h4 id="role-title" style="font-size: 1.2rem; color: #f8fafc; margin: 0 0 10px;">For Student Scouts</h4>
+                <p id="role-desc" style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+                    Focus entirely on the robot on the field without fumbling through complex forms. Large tap targets, clear phase transitions, and offline persistence ensure reliable data collection match after match.
+                </p>
+                <ul id="role-bullets" class="feature-bullets">
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span>Fast, intuitive touch controls designed for rapid competition play.</span>
+                    </li>
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span>No data loss from screen timeouts, app restarts, or lack of cellular service.</span>
+                    </li>
+                    <li>
+                        <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span>High-contrast dark mode tailored for indoor arena lighting conditions.</span>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Final Call to Action -->
+        <section class="final-cta">
+            <h2>Ready to Deploy ObsidianScout?</h2>
+            <p>
+                Sign in with your team number or register a new team account to begin capturing structured match data and automated analytics.
+            </p>
+            <div style="display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;">
+                <a href="/login" class="btn-primary-action" style="padding: 12px 28px; font-size: 15px;">
+                    Sign In to Portal
+                </a>
+                <a href="/docs" class="btn-signin" style="padding: 12px 24px; font-size: 15px;">
+                    System Documentation
+                </a>
+            </div>
+        </section>
+
     </main>
 
-    <script type="module" src="/js/common.js"></script>
-    <script defer src="/js/login.js"></script>
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div>ObsidianScout • Competition Robotics Scouting & Strategy System</div>
+        <div style="margin-top: 6px; font-size: 12px;">Compatible with FIRST Robotics Competition (FRC) and FIRST Tech Challenge (FTC).</div>
+    </footer>
+
+    <!-- Interactive Filter & Role Switcher Script -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // Check session in background; if user is already authenticated, redirect to dashboard
+            fetch("/api/auth/status", { credentials: "same-origin" })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.loggedIn) {
+                        window.location.replace("/dashboard");
+                    }
+                })
+                .catch(() => {});
+            // Role Explorer
+            const roles = {
+                scout: {
+                    title: "For Student Scouts",
+                    desc: "Focus entirely on the robot on the field without fumbling through complex forms. Large tap targets, clear phase transitions, and offline persistence ensure reliable data collection match after match.",
+                    bullets: [
+                        "Fast, intuitive touch controls designed for rapid competition play.",
+                        "No data loss from screen timeouts, app restarts, or lack of cellular service.",
+                        "High-contrast dark mode tailored for indoor arena lighting conditions."
+                    ]
+                },
+                coach: {
+                    title: "For Drive Coaches",
+                    desc: "Review high-conviction opponent tendencies before queuing for a qualification match. Confirm opponent autonomous scoring patterns, defense vulnerability, and endgame execution reliability at a glance.",
+                    bullets: [
+                        "Simulated 3v3 match projections with component score spreads.",
+                        "Clear empirical talking points for pre-match strategy alignment with alliance partners.",
+                        "Cycle speed rankings and defensive disruption metrics."
+                    ]
+                },
+                strategy: {
+                    title: "For Strategy Leads",
+                    desc: "Eliminate manual spreadsheet consolidation on Friday night. ObsidianScout automatically aggregates all scout entries, flags human data discrepancies, and maintains an interactive playoff draft board.",
+                    bullets: [
+                        "Interactive draft board with live team crossing-off and weighted role filters.",
+                        "Continuous background sync with The Blue Alliance (TBA) and Statbotics EPA.",
+                        "One-click data pipeline export to CSV, JSON, or custom team algorithms."
+                    ]
+                }
+            };
+
+            const roleButtons = document.querySelectorAll(".role-tab-btn");
+            const roleTitle = document.getElementById("role-title");
+            const roleDesc = document.getElementById("role-desc");
+            const roleBullets = document.getElementById("role-bullets");
+            const roleBox = document.getElementById("role-content");
+
+            roleButtons.forEach(btn => {
+                btn.addEventListener("click", () => {
+                    roleButtons.forEach(b => b.classList.remove("active"));
+                    btn.classList.add("active");
+                    const roleKey = btn.dataset.role;
+                    const data = roles[roleKey];
+                    if (!data) return;
+
+                    roleBox.style.opacity = "0.3";
+                    roleBox.style.transform = "translateY(3px)";
+
+                    setTimeout(() => {
+                        roleTitle.textContent = data.title;
+                        roleDesc.textContent = data.desc;
+                        roleBullets.innerHTML = data.bullets.map(b => `
+                            <li>
+                                <svg class="bullet-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                <span>${b}</span>
+                            </li>
+                        `).join('');
+
+                        roleBox.style.opacity = "1";
+                        roleBox.style.transform = "translateY(0)";
+                    }, 120);
+                });
+            });
+        });
+    </script>
 </body>
 </html>
