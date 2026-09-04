@@ -2,13 +2,13 @@
     "server": {
         "host": "0.0.0.0",
         "port": 8080,
-        "sessionSecret": "d004d8eb17d86e707890b678e5a25ce552cd725dfe0036018a64b9ca827cbe0b",
+        "sessionSecret": "change-me",
         "cookieSecure": false,
         "https": {
             "enabled": false,
             "port": 8443,
             "keystorePath": "config/obsidianscout.jks",
-            "keystorePassword": "95407ea8458d98b87cba4214dac3e4828db056069221b9ed1501b4cae9b49f3c",
+            "keystorePassword": "change-me",
             "keyAlias": "obsidianscout"
         },
         "logging": false
@@ -44,8 +44,8 @@
         "adminPassword": "change-me"
     },
     "vapid": {
-        "publicKey": "BJS4fhqE7DWJPjCjY67gI3FN8fTplw9l9U3N6hbvxUR9zFTwI6RA1_WGh3shKDttqhHcVS2EIIiklSEgb2TknLQ",
-        "privateKey": "N0vYVHPSJK88aONruInXdpU6qTt5_oc159dTkW4UTh0",
+        "publicKey": "",
+        "privateKey": "",
         "subject": "mailto:admin@obsidianscout.com"
     },
     "database_type": "sqlite",
@@ -55,7 +55,7 @@
     "google_sheet_password": "",
     "cockroach_port": 26257,
     "site_url": "https://kotlin.obsidianscout.com",
-    "current_version": "0.5.2.0",
+    "current_version": "0.5.2.1",
     "gist_update": {
         "enabled": false,
         "gist_url": "https://gist.githubusercontent.com/steveandjeff999/41b76376d064a6893ff2644b04447d9f/raw/Public-Version.json",
