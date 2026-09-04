@@ -11,8 +11,8 @@
     <link rel="manifest" href="/manifest.json" />
     <style>
         .revision-card {
-            background: var(--surface-2, rgba(255, 255, 255, 0.03));
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: var(--surface-2);
+            border: 1px solid var(--border);
             border-radius: 12px;
             padding: 16px 20px;
             margin-bottom: 14px;
@@ -24,13 +24,13 @@
             transition: border-color 0.2s, background 0.2s;
         }
         .revision-card:hover {
-            border-color: rgba(255, 255, 255, 0.18);
-            background: var(--surface-3, rgba(255, 255, 255, 0.05));
+            border-color: var(--border-focus, rgba(59, 130, 246, 0.4));
+            background: var(--surface-3);
         }
         .revision-version-badge {
             font-size: 16px;
             font-weight: 700;
-            color: var(--accent, #6366f1);
+            color: var(--accent);
             background: rgba(99, 102, 241, 0.12);
             padding: 4px 10px;
             border-radius: 8px;
@@ -47,13 +47,13 @@
         }
         .revision-summary {
             font-size: 14px;
-            color: var(--text, #e2e8f0);
+            color: var(--ink);
             margin-top: 6px;
             line-height: 1.4;
         }
         .code-box-full {
-            background: var(--surface-1, #0f172a);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--surface-2);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 14px;
             font-family: monospace;
@@ -62,7 +62,7 @@
             max-height: 380px;
             overflow-y: auto;
             white-space: pre-wrap;
-            color: var(--text, #e2e8f0);
+            color: var(--ink);
         }
     </style>
 </head>

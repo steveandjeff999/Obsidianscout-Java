@@ -105,14 +105,26 @@ export async function withButtonLoading(button, asyncFn, loadingTextOrOptions = 
 
 export async function request(path, options = {}) {
     const method = options.method || "GET";
-    let isLoginPage = false;
+    let isPublicPage = false;
 
     if (options.button) {
         setButtonLoading(options.button, true, options.loadingText);
     }
 
     try {
-        isLoginPage = typeof document !== 'undefined' && document.body && document.body.getAttribute("data-page") === "login";
+        if (typeof document !== 'undefined') {
+            const dataPage = (document.body && document.body.getAttribute("data-page")) || "";
+            const pathname = (typeof window !== 'undefined' && window.location && window.location.pathname) || "";
+            const cleanPath = pathname.replace(/\/+$/, "");
+            isPublicPage = dataPage === "login" ||
+                           dataPage === "landing" ||
+                           dataPage === "docs" ||
+                           cleanPath === "" ||
+                           cleanPath === "/docs" ||
+                           pathname.startsWith("/docs/") ||
+                           cleanPath === "/login" ||
+                           pathname.startsWith("/login/");
+        }
     } catch (e) {}
 
     if (method === "GET" && !navigator.onLine) {
@@ -180,8 +192,12 @@ export async function request(path, options = {}) {
         const data = text ? safeParse(text) : null;
         if (!response.ok) {
             if (response.status === 401) {
-                const isAuthRequest = path.includes("/api/auth/login") || path.includes("/api/auth/register") || path.includes("/api/auth/status") || path.includes("/api/push");
-                if (!isLoginPage && !isAuthRequest) {
+                const isAuthRequest = path.includes("/api/auth/login") ||
+                                      path.includes("/api/auth/register") ||
+                                      path.includes("/api/auth/status") ||
+                                      path.includes("/api/auth/me") ||
+                                      path.includes("/api/push");
+                if (!isPublicPage && !isAuthRequest) {
                     if (window.Obsidianscout && typeof window.Obsidianscout.checkLoginStatus === 'function') {
                         window.Obsidianscout.checkLoginStatus().then(loggedIn => {
                             if (!loggedIn) {
@@ -196,6 +212,8 @@ export async function request(path, options = {}) {
                     const err = new Error("Session expired. Redirecting...");
                     err.status = 401;
                     throw err;
+                } else {
+                    safeRemoveItem("cache:/api/auth/me");
                 }
             }
             const message = data && data.error ? data.error : "Request failed";

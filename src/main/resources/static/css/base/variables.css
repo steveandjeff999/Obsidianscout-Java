@@ -32,6 +32,15 @@
     --warning: #f59e0b;
     --text-primary: var(--ink);
     --text-muted: var(--muted);
+    --text: var(--ink);
+    --text-color: var(--ink);
+    --surface-1: var(--surface);
+    --card-bg: var(--surface);
+    --bg-card: var(--surface);
+    --card-hover-bg: var(--surface-2);
+    --border-color: var(--border);
+    --primary-light: #4338ca;
+    --secondary-light: #0284c7;
     --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
     --transition-smooth: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -68,4 +77,13 @@ body.theme-dark {
     --on-primary: #09090b;
     --text-primary: var(--ink);
     --text-muted: var(--muted);
+    --text: var(--ink);
+    --text-color: var(--ink);
+    --surface-1: var(--surface-2);
+    --card-bg: var(--surface-2);
+    --bg-card: var(--surface-2);
+    --card-hover-bg: var(--surface-3);
+    --border-color: var(--border);
+    --primary-light: #a78bfa;
+    --secondary-light: #38bdf8;
 }

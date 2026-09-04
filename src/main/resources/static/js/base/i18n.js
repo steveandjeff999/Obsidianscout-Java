@@ -146,11 +146,24 @@ export function applyTranslations() {
     });
 
     // Theme toggle and logout
-    const themeBtn = document.querySelector("[data-action='toggle-theme']");
-    if (themeBtn) {
-        const text = t('btn.toggle_theme', themeBtn.textContent);
-        if (themeBtn.textContent !== text) themeBtn.textContent = text;
-    }
+    document.querySelectorAll("[data-action='toggle-theme']").forEach((btn) => {
+        const span = btn.querySelector("span");
+        if (span) {
+            const text = t('btn.toggle_theme', span.textContent.trim());
+            if (span.textContent !== text) span.textContent = text;
+            btn.setAttribute("title", text);
+            btn.setAttribute("aria-label", text);
+            return;
+        }
+        // If the button contains an icon (SVG or child element) or is an icon button, do not overwrite with plain text
+        if (btn.querySelector("svg") || btn.classList.contains("btn-theme-toggle") || btn.classList.contains("theme-toggle-btn")) {
+            btn.setAttribute("title", t('btn.toggle_theme', 'Toggle theme'));
+            btn.setAttribute("aria-label", t('btn.toggle_theme', 'Toggle theme'));
+            return;
+        }
+        const text = t('btn.toggle_theme', btn.textContent.trim());
+        if (btn.textContent !== text) btn.textContent = text;
+    });
     const logoutBtn = document.querySelector("[data-action='logout']");
     if (logoutBtn) {
         const text = t('btn.logout', logoutBtn.textContent);

@@ -43,10 +43,16 @@
             padding: 24px;
             position: relative;
             overflow: hidden;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        body.theme-dark .alliance-card {
             border: 1px solid rgba(255, 255, 255, 0.08);
             background: rgba(20, 20, 20, 0.6);
             backdrop-filter: blur(10px);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
         .alliance-card:hover {
@@ -73,10 +79,18 @@
         }
 
         .red-alliance .alliance-title {
+            color: #dc2626;
+        }
+
+        body.theme-dark .red-alliance .alliance-title {
             color: #f87171;
         }
 
         .blue-alliance .alliance-title {
+            color: #2563eb;
+        }
+
+        body.theme-dark .blue-alliance .alliance-title {
             color: #60a5fa;
         }
 
@@ -85,7 +99,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 12px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid var(--border);
         }
 
         .team-row-predictor:last-child {
@@ -101,11 +115,19 @@
 
         .red-alliance .team-number-badge {
             background: rgba(239, 68, 68, 0.15);
+            color: #dc2626;
+        }
+
+        body.theme-dark .red-alliance .team-number-badge {
             color: #ef4444;
         }
 
         .blue-alliance .team-number-badge {
             background: rgba(59, 130, 246, 0.15);
+            color: #2563eb;
+        }
+
+        body.theme-dark .blue-alliance .team-number-badge {
             color: #3b82f6;
         }
 
@@ -117,7 +139,7 @@
 
         .team-nickname {
             font-size: 0.85rem;
-            color: var(--text-muted, #94a3b8);
+            color: var(--muted, #94a3b8);
         }
 
         .metric-comparison-box {
@@ -139,7 +161,8 @@
         .comp-bar-track {
             height: 12px;
             border-radius: 6px;
-            background: rgba(255, 255, 255, 0.08);
+            background: var(--surface-2, rgba(0, 0, 0, 0.08));
+            border: 1px solid var(--border);
             display: flex;
             overflow: hidden;
         }
@@ -158,11 +181,17 @@
         }
 
         .winner-spotlight {
-            background: rgba(30, 30, 35, 0.55);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: var(--surface);
+            border: 1px solid var(--border);
             border-radius: 12px;
             padding: 20px;
             text-align: center;
+            box-shadow: var(--shadow);
+        }
+
+        body.theme-dark .winner-spotlight {
+            background: rgba(30, 30, 35, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             backdrop-filter: blur(8px);
         }
 
@@ -170,7 +199,7 @@
             font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 1.5px;
-            color: var(--text-muted, #94a3b8);
+            color: var(--muted, #94a3b8);
             margin-bottom: 8px;
         }
 
@@ -181,22 +210,32 @@
         }
 
         .winner-red {
+            color: #dc2626;
+            text-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+        }
+
+        body.theme-dark .winner-red {
             color: #f87171;
             text-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
         }
 
         .winner-blue {
+            color: #2563eb;
+            text-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+        }
+
+        body.theme-dark .winner-blue {
             color: #60a5fa;
             text-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
         }
 
         .winner-draw {
-            color: #e2e8f0;
+            color: var(--ink);
         }
 
         .winner-subtext {
             font-size: 0.9rem;
-            color: var(--text-muted, #94a3b8);
+            color: var(--muted, #94a3b8);
         }
 
         .pill-tag {

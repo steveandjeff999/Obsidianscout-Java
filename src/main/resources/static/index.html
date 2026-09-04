@@ -20,13 +20,14 @@
         }
 
         body {
-            background-color: #0b0f19;
-            color: #e2e8f0;
+            background-color: var(--bg, #09090d);
+            color: var(--ink, #f8fafc);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
             -webkit-font-smoothing: antialiased;
             overflow-x: hidden;
+            transition: background-color var(--transition-smooth, 0.25s ease);
         }
 
         /* Top Navigation */
@@ -34,14 +35,20 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(11, 15, 25, 0.9);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
             padding: 12px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 16px;
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+
+        body.theme-dark .site-header {
+            background: rgba(17, 17, 22, 0.88);
         }
 
         .header-brand {
@@ -49,7 +56,7 @@
             align-items: center;
             gap: 10px;
             text-decoration: none;
-            color: #f8fafc;
+            color: var(--ink);
             font-weight: 700;
             font-size: 1.15rem;
             letter-spacing: -0.01em;
@@ -73,7 +80,7 @@
         }
 
         .header-nav a.nav-link {
-            color: #94a3b8;
+            color: var(--muted);
             text-decoration: none;
             font-size: 14px;
             font-weight: 500;
@@ -83,7 +90,7 @@
         }
 
         .header-nav a.nav-link:hover {
-            color: #f8fafc;
+            color: var(--ink);
         }
 
         .header-actions {
@@ -101,10 +108,10 @@
             justify-content: center;
             width: 36px;
             height: 36px;
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            color: #f8fafc;
+            border-radius: var(--radius-sm, 8px);
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--ink);
             cursor: pointer;
             padding: 0;
             transition: all 0.15s ease;
@@ -112,12 +119,34 @@
         }
 
         .btn-menu-toggle:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.2);
+            background: var(--surface-3);
+            border-color: var(--border-focus, rgba(59, 130, 246, 0.4));
         }
 
         .btn-menu-toggle:active {
             transform: scale(0.96);
+        }
+
+        /* Theme Toggle Button */
+        .btn-theme-toggle {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm, 8px);
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--ink);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            padding: 0;
+            flex-shrink: 0;
+        }
+
+        .btn-theme-toggle:hover {
+            background: var(--surface-3);
+            border-color: var(--border-focus, rgba(59, 130, 246, 0.4));
         }
 
         /* Mobile / Compact Nav Drawer */
@@ -127,11 +156,17 @@
             left: 0;
             right: 0;
             z-index: 99;
-            background: rgba(11, 15, 25, 0.97);
+            background: rgba(255, 255, 255, 0.96);
             backdrop-filter: blur(16px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
             padding: 16px 20px;
             animation: drawerSlideDown 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+
+        body.theme-dark .mobile-nav-drawer {
+            background: rgba(17, 17, 22, 0.96);
         }
 
         @keyframes drawerSlideDown {
@@ -154,74 +189,82 @@
         }
 
         .drawer-link {
-            color: #cbd5e1;
+            color: var(--muted);
             text-decoration: none;
             font-size: 15px;
             font-weight: 500;
             padding: 10px 14px;
-            border-radius: 8px;
+            border-radius: var(--radius-sm, 8px);
             transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .drawer-link:hover {
-            background: rgba(255, 255, 255, 0.06);
-            color: #fff;
+            background: var(--surface-2);
+            color: var(--ink);
         }
 
         .drawer-divider {
             height: 1px;
-            background: rgba(255, 255, 255, 0.08);
+            background: var(--border);
             margin: 4px 0;
         }
 
         .drawer-btn-primary {
-            background: #2563eb;
+            background: var(--accent);
             color: #ffffff;
             text-decoration: none;
             font-size: 14px;
             font-weight: 600;
             padding: 10px 16px;
-            border-radius: 8px;
+            border-radius: var(--radius-sm, 8px);
             text-align: center;
-            border: 1px solid #3b82f6;
+            border: 1px solid rgba(255, 255, 255, 0.15);
             margin-top: 4px;
+            box-shadow: 0 2px 8px var(--accent-glow);
         }
 
         .btn-signin {
-            color: #cbd5e1;
+            color: var(--ink);
             text-decoration: none;
             font-size: 13.5px;
             font-weight: 600;
             padding: 8px 16px;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            transition: all 0.15s ease;
+            border-radius: var(--radius-sm, 10px);
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            transition: all var(--transition-fast, 0.15s ease);
         }
 
         .btn-signin:hover {
-            background: rgba(255, 255, 255, 0.06);
-            color: #fff;
-            border-color: rgba(255, 255, 255, 0.2);
+            background: var(--surface-3);
+            color: var(--ink);
+            border-color: var(--border-focus, rgba(59, 130, 246, 0.4));
+            transform: translateY(-1px);
         }
 
         .btn-primary-action {
-            background: #2563eb;
+            background: var(--accent);
             color: #ffffff;
             text-decoration: none;
             font-size: 13.5px;
             font-weight: 600;
             padding: 8px 18px;
-            border-radius: 8px;
-            border: 1px solid #3b82f6;
-            transition: all 0.15s ease;
+            border-radius: var(--radius-sm, 10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 2px 10px var(--accent-glow);
+            transition: all var(--transition-fast, 0.15s ease);
             display: inline-flex;
             align-items: center;
             gap: 6px;
         }
 
         .btn-primary-action:hover {
-            background: #1d4ed8;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+            background: #2563eb;
+            box-shadow: 0 4px 18px var(--accent-glow);
+            transform: translateY(-1px);
         }
 
         .btn-primary-action:active,
@@ -249,13 +292,13 @@
             font-weight: 800;
             line-height: 1.15;
             letter-spacing: -0.03em;
-            color: #f8fafc;
+            color: var(--ink);
             margin: 0 0 20px;
         }
 
         .hero-lead {
             font-size: clamp(1.05rem, 1.8vw, 1.25rem);
-            color: #94a3b8;
+            color: var(--muted);
             line-height: 1.6;
             margin: 0 0 32px;
         }
@@ -276,8 +319,8 @@
             flex-wrap: wrap;
             gap: 24px;
             padding: 16px 24px;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
         }
 
         .spec-item {
@@ -285,7 +328,7 @@
             align-items: center;
             gap: 8px;
             font-size: 13.5px;
-            color: #cbd5e1;
+            color: var(--muted);
             font-weight: 500;
         }
 
@@ -293,7 +336,8 @@
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: #3b82f6;
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent-glow);
         }
 
         /* Dual Platform Split */
@@ -305,13 +349,14 @@
         }
 
         .platform-panel {
-            background: #111827;
-            border: 1px solid rgba(255, 255, 255, 0.09);
-            border-radius: 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius, 18px);
+            box-shadow: var(--shadow);
             padding: 32px;
             display: flex;
             flex-direction: column;
-            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+            transition: transform var(--transition-smooth, 0.2s ease), border-color 0.2s ease, box-shadow 0.2s ease;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
         }
@@ -319,7 +364,7 @@
         .platform-panel:hover {
             transform: translateY(-3px);
             border-color: rgba(59, 130, 246, 0.4);
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--shadow-hover);
         }
 
         .platform-tag-row {
@@ -342,25 +387,33 @@
 
         .badge-app {
             background: rgba(168, 85, 247, 0.15);
-            color: #c084fc;
+            color: #7e22ce;
             border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        body.theme-dark .badge-app {
+            color: #c084fc;
         }
 
         .badge-web {
             background: rgba(56, 189, 248, 0.15);
-            color: #38bdf8;
+            color: #0284c7;
             border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        body.theme-dark .badge-web {
+            color: #38bdf8;
         }
 
         .platform-panel h3 {
             font-size: 1.35rem;
-            color: #f8fafc;
+            color: var(--ink);
             margin: 0 0 8px;
             font-weight: 700;
         }
 
         .platform-panel p.panel-sub {
-            color: #94a3b8;
+            color: var(--muted);
             font-size: 14px;
             line-height: 1.55;
             margin: 0 0 20px;
@@ -380,12 +433,12 @@
             align-items: flex-start;
             gap: 10px;
             font-size: 13.5px;
-            color: #cbd5e1;
+            color: var(--ink);
             line-height: 1.5;
         }
 
         .bullet-check {
-            color: #10b981;
+            color: var(--success, #10b981);
             flex-shrink: 0;
             margin-top: 2px;
         }
@@ -401,12 +454,12 @@
             font-size: 1.85rem;
             font-weight: 800;
             letter-spacing: -0.02em;
-            color: #f8fafc;
+            color: var(--ink);
             margin: 0 0 10px;
         }
 
         .section-header p {
-            color: #94a3b8;
+            color: var(--muted);
             font-size: 15px;
             line-height: 1.55;
             margin: 0;
@@ -421,21 +474,22 @@
         }
 
         .ability-box {
-            background: #111827;
-            border: 1px solid rgba(255, 255, 255, 0.07);
-            border-radius: 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm, 12px);
+            box-shadow: var(--shadow-sm);
             padding: 20px;
             display: flex;
             flex-direction: column;
-            transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s ease, box-shadow 0.18s ease;
+            transition: transform var(--transition-fast, 0.18s ease), border-color 0.18s ease, box-shadow 0.18s ease;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
         }
 
         .ability-box:hover {
             transform: translateY(-2px);
-            border-color: rgba(59, 130, 246, 0.35);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: var(--shadow);
         }
 
         .ability-box:active {
@@ -455,10 +509,14 @@
             border-radius: 8px;
             background: rgba(37, 99, 235, 0.12);
             border: 1px solid rgba(59, 130, 246, 0.2);
-            color: #60a5fa;
+            color: #2563eb;
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+        body.theme-dark .ability-icon {
+            color: #60a5fa;
         }
 
         .ability-tag {
@@ -472,31 +530,43 @@
 
         .tag-sync {
             background: rgba(16, 185, 129, 0.12);
-            color: #34d399;
+            color: #059669;
             border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+
+        body.theme-dark .tag-sync {
+            color: #34d399;
         }
 
         .tag-app {
             background: rgba(139, 92, 246, 0.12);
-            color: #a78bfa;
+            color: #7c3aed;
             border: 1px solid rgba(139, 92, 246, 0.25);
+        }
+
+        body.theme-dark .tag-app {
+            color: #a78bfa;
         }
 
         .tag-web {
             background: rgba(59, 130, 246, 0.12);
-            color: #60a5fa;
+            color: #2563eb;
             border: 1px solid rgba(59, 130, 246, 0.25);
+        }
+
+        body.theme-dark .tag-web {
+            color: #60a5fa;
         }
 
         .ability-box h4 {
             font-size: 1.05rem;
             font-weight: 700;
-            color: #f8fafc;
+            color: var(--ink);
             margin: 0 0 6px;
         }
 
         .ability-box p {
-            color: #94a3b8;
+            color: var(--muted);
             font-size: 13.5px;
             line-height: 1.5;
             margin: 0;
@@ -505,9 +575,10 @@
 
         /* Role Tabs */
         .role-panel {
-            background: #111827;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius, 18px);
+            box-shadow: var(--shadow);
             padding: 32px;
             margin-bottom: 72px;
         }
@@ -515,7 +586,7 @@
         .role-tabs {
             display: flex;
             gap: 8px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: 1px solid var(--border);
             padding-bottom: 12px;
             margin-bottom: 24px;
             overflow-x: auto;
@@ -524,21 +595,21 @@
 
         .role-tab-btn {
             padding: 8px 16px;
-            border-radius: 8px;
+            border-radius: var(--radius-sm, 8px);
             background: transparent;
-            border: none;
-            color: #94a3b8;
+            border: 1px solid transparent;
+            color: var(--muted);
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             white-space: nowrap;
-            transition: all 0.15s ease;
+            transition: all var(--transition-fast, 0.15s ease);
             user-select: none;
         }
 
         .role-tab-btn:hover {
-            color: #f8fafc;
-            background: rgba(255, 255, 255, 0.05);
+            color: var(--ink);
+            background: var(--surface-2);
         }
 
         .role-tab-btn:active {
@@ -547,21 +618,21 @@
 
         .role-tab-btn.active {
             color: #ffffff;
-            background: #1e293b;
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: var(--accent);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 2px 10px var(--accent-glow);
         }
 
         .role-detail-box {
             transition: opacity 0.15s ease, transform 0.15s ease;
         }
 
-
-
         /* Final CTA */
         .final-cta {
-            background: linear-gradient(180deg, #111827 0%, #0d1320 100%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
+            background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+            border: 1px solid var(--border);
+            border-radius: var(--radius, 20px);
+            box-shadow: var(--shadow);
             padding: 48px 32px;
             text-align: center;
         }
@@ -569,12 +640,12 @@
         .final-cta h2 {
             font-size: 1.85rem;
             font-weight: 800;
-            color: #f8fafc;
+            color: var(--ink);
             margin: 0 0 12px;
         }
 
         .final-cta p {
-            color: #94a3b8;
+            color: var(--muted);
             font-size: 15px;
             max-width: 580px;
             margin: 0 auto 28px;
@@ -583,11 +654,125 @@
 
         /* Footer */
         .site-footer {
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 32px 24px;
-            text-align: center;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+            padding: 48px 24px 36px;
             font-size: 13px;
-            color: #64748b;
+            color: var(--muted);
+        }
+
+        .footer-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            text-align: center;
+        }
+
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .footer-logo {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+        }
+
+        .footer-brand-title {
+            font-weight: 800;
+            font-size: 1.15rem;
+            color: var(--ink);
+            letter-spacing: -0.01em;
+        }
+
+        .footer-badge {
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            padding: 2px 8px;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .footer-badge:empty {
+            display: none !important;
+        }
+
+        .footer-description {
+            max-width: 540px;
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.55;
+            color: var(--muted);
+        }
+
+        .footer-links-grid {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 6px 0;
+        }
+
+        .footer-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            padding: 10px 18px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm, 10px);
+            color: var(--ink);
+            font-size: 13.5px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all var(--transition-fast, 0.15s ease);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .footer-btn:hover {
+            background: var(--surface-3);
+            border-color: var(--border-focus, rgba(59, 130, 246, 0.4));
+            color: var(--ink);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .footer-btn:active {
+            transform: scale(0.98);
+        }
+
+        .footer-btn:active {
+            transform: scale(0.98);
+        }
+
+        .footer-btn-releases {
+            border-color: rgba(59, 130, 246, 0.35);
+            background: rgba(59, 130, 246, 0.09);
+            color: var(--accent);
+        }
+
+        .footer-btn-releases:hover {
+            background: var(--accent);
+            color: #ffffff;
+            border-color: var(--accent);
+            box-shadow: 0 4px 14px var(--accent-glow);
+        }
+
+        .footer-meta {
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 20px;
+            width: 100%;
+            color: var(--muted);
         }
 
         /* Comprehensive Mobile Responsiveness */
@@ -830,13 +1015,39 @@
 
             /* Footer */
             .site-footer {
-                padding: 24px 16px;
+                padding: 36px 16px 28px;
                 font-size: 12px;
+            }
+
+            .footer-links-grid {
+                flex-direction: column;
+                width: 100%;
+                gap: 10px;
+            }
+
+            .footer-btn {
+                width: 100%;
+                justify-content: center;
+                padding: 10px 14px;
             }
         }
     </style>
 </head>
-<body data-page="landing">
+<body data-page="landing" class="theme-dark">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "dark";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                } else if (saved === "light") {
+                    document.body.classList.remove("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
     <!-- Header -->
     <header class="site-header">
         <a href="/" class="header-brand">
@@ -850,6 +1061,19 @@
             <a href="/docs" class="nav-link" data-priority="4">Docs</a>
         </nav>
         <div class="header-actions" id="header-actions">
+            <button class="btn-theme-toggle" id="header-theme-btn" data-action="toggle-theme" type="button" aria-label="Toggle Theme">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+            </button>
             <a href="/login" class="btn-signin" id="header-signin-btn">Sign In</a>
             <a href="/login?mode=register" class="btn-primary-action" id="header-getstarted-btn">Get Started</a>
             <button class="btn-menu-toggle" id="header-menu-btn" aria-label="Toggle Navigation Menu" aria-expanded="false">
@@ -869,6 +1093,20 @@
             <a href="#abilities" class="drawer-link">Capabilities</a>
             <a href="#roles" class="drawer-link">Roles</a>
             <a href="/docs" class="drawer-link">Docs</a>
+            <button class="drawer-link" id="drawer-theme-btn" data-action="toggle-theme" type="button" style="background: none; border: none; width: 100%; text-align: left; cursor: pointer;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <span>Toggle Light / Dark Mode</span>
+            </button>
             <div class="drawer-divider"></div>
             <a href="/login" class="drawer-link" id="drawer-signin-link">Sign In</a>
             <a href="/login?mode=register" class="drawer-btn-primary" id="drawer-getstarted-link">Get Started</a>
@@ -917,7 +1155,7 @@
             <div class="platform-panel">
                 <div class="platform-tag-row">
                     <span class="platform-badge badge-app">Bleachers & Stands</span>
-                    <span style="font-size: 12px; color: #94a3b8; font-weight: 500;">Native Mobile & Web App</span>
+                    <span style="font-size: 12px; color: var(--muted); font-weight: 500;">Native Mobile & Web App</span>
                 </div>
                 <h3>Mobile Scouting Interface</h3>
                 <p class="panel-sub">
@@ -946,8 +1184,8 @@
             <!-- Web Platform -->
             <div class="platform-panel">
                 <div class="platform-tag-row">
-                    <span class="platform-badge badge-web">Pit Station & Strategy</span>
-                    <span style="font-size: 12px; color: #94a3b8; font-weight: 500;">Desktop Web Dashboard</span>
+                    <span class="platform-badge badge-web">Strategy</span>
+                    <span style="font-size: 12px; color: var(--muted); font-weight: 500;">Desktop Web Dashboard</span>
                 </div>
                 <h3>Strategy & Analytics</h3>
                 <p class="panel-sub">
@@ -1049,8 +1287,8 @@
         <!-- Role Breakdown -->
         <section id="roles" class="role-panel">
             <div style="margin-bottom: 20px;">
-                <h3 style="font-size: 1.4rem; color: #f8fafc; margin: 0 0 6px;">Designed for the Entire Robotics Team</h3>
-                <p style="color: #94a3b8; font-size: 14px; margin: 0;">Select a role to review specific workflows:</p>
+                <h3 style="font-size: 1.4rem; color: var(--ink); margin: 0 0 6px;">Designed for the Entire Robotics Team</h3>
+                <p style="color: var(--muted); font-size: 14px; margin: 0;">Select a role to review specific workflows:</p>
             </div>
 
             <div class="role-tabs">
@@ -1060,8 +1298,8 @@
             </div>
 
             <div id="role-content" class="role-detail-box">
-                <h4 id="role-title" style="font-size: 1.2rem; color: #f8fafc; margin: 0 0 10px;">For Student Scouts</h4>
-                <p id="role-desc" style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+                <h4 id="role-title" style="font-size: 1.2rem; color: var(--ink); margin: 0 0 10px;">For Student Scouts</h4>
+                <p id="role-desc" style="color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
                     Focus entirely on the robot on the field without fumbling through complex forms. Large tap targets, clear phase transitions, and offline persistence ensure reliable data collection match after match.
                 </p>
                 <ul id="role-bullets" class="feature-bullets">
@@ -1101,8 +1339,44 @@
 
     <!-- Footer -->
     <footer class="site-footer">
-        <div>ObsidianScout • Competition Robotics Scouting & Strategy System</div>
-        <div style="margin-top: 6px; font-size: 12px;">Compatible with FIRST Robotics Competition (FRC) and FIRST Tech Challenge (FTC).</div>
+        <div class="footer-inner">
+            <div class="footer-brand">
+                <img src="/assets/images/obsidian/obsidian-192.png" alt="ObsidianScout Logo" class="footer-logo" />
+                <span class="footer-brand-title">ObsidianScout</span>
+                <span class="footer-badge" id="footer-version"></span>
+            </div>
+            <p class="footer-description">
+                Engineered for competition robotics scouting, live arena analysis, and match strategy.
+            </p>
+
+            <div class="footer-links-grid">
+                <a href="https://github.com/steveandjeff999/Obsidianscout-Java" target="_blank" rel="noopener noreferrer" class="footer-btn">
+                    <svg class="footer-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                    </svg>
+                    <span>Web Platform (GitHub)</span>
+                </a>
+                <a href="https://github.com/steveandjeff999/Obsidianscout-Java-App" target="_blank" rel="noopener noreferrer" class="footer-btn">
+                    <svg class="footer-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                    </svg>
+                    <span>Mobile App (GitHub)</span>
+                </a>
+                <a href="https://github.com/steveandjeff999/Obsidianscout-Java-App/releases" target="_blank" rel="noopener noreferrer" class="footer-btn footer-btn-releases">
+                    <svg class="footer-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <span>App Releases (.apk & packages)</span>
+                </a>
+            </div>
+
+            <div class="footer-meta">
+                <div>ObsidianScout • Competition Robotics Scouting & Strategy System</div>
+                <div style="margin-top: 6px; font-size: 12px; color: var(--muted);">Compatible with FIRST Robotics Competition (FRC) and FIRST Tech Challenge (FTC).</div>
+            </div>
+        </div>
     </footer>
 
     <!-- Interactive Filter & Role Switcher Script -->
@@ -1195,10 +1469,41 @@
                         window.location.replace("/dashboard");
                     }
                 })
-                .catch(() => {});
-
             // Initialize and observe dynamic header filtering
             autoFilterHeader();
+
+            // Dynamically load server version from app-config.json via /api/version (same as sidebar)
+            const versionBadge = document.getElementById("footer-version");
+            if (versionBadge) {
+                try {
+                    const cachedVer = localStorage.getItem("obsidianscout:server_version") || sessionStorage.getItem("obsidianscout:server_version");
+                    if (cachedVer) {
+                        const displayVer = cachedVer.startsWith("v") ? cachedVer : `v${cachedVer}`;
+                        versionBadge.textContent = displayVer;
+                    }
+                } catch (e) {}
+
+                fetch("/api/version", {
+                    method: "GET",
+                    cache: "no-store",
+                    credentials: "same-origin",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Cache-Control": "no-cache"
+                    }
+                })
+                .then(res => res.ok ? res.json() : null)
+                .then(data => {
+                    if (data && data.version) {
+                        const displayVer = data.version.startsWith("v") ? data.version : `v${data.version}`;
+                        versionBadge.textContent = displayVer;
+                        try {
+                            localStorage.setItem("obsidianscout:server_version", data.version);
+                        } catch (e) {}
+                    }
+                })
+                .catch(() => {});
+            }
             if (window.ResizeObserver) {
                 const header = document.querySelector(".site-header");
                 if (header) {
@@ -1234,6 +1539,24 @@
                     }
                 });
             }
+
+            // Theme toggle buttons (Header and Drawer)
+            const themeButtons = document.querySelectorAll('[data-action="toggle-theme"]');
+            themeButtons.forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const isDark = document.body.classList.contains("theme-dark");
+                    if (isDark) {
+                        document.body.classList.remove("theme-dark");
+                        try { localStorage.setItem("obsidian-theme", "light"); } catch(err) {}
+                    } else {
+                        document.body.classList.add("theme-dark");
+                        try { localStorage.setItem("obsidian-theme", "dark"); } catch(err) {}
+                    }
+                });
+            });
+
             // Role Explorer
             const roles = {
                 scout: {
