@@ -2312,10 +2312,14 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         val alliance = obj["alliance"]?.jsonPrimitive?.content ?: "red"
                         val timestamp = obj["timestamp"]?.jsonPrimitive?.content
                         val epaObj = obj["epa"]?.jsonObject
-                        val total = epaObj?.get("total_points")?.jsonPrimitive?.doubleOrNull ?: 0.0
-                        val auto = epaObj?.get("auto_points")?.jsonPrimitive?.doubleOrNull ?: 0.0
-                        val teleop = epaObj?.get("teleop_points")?.jsonPrimitive?.doubleOrNull ?: 0.0
-                        val endgame = epaObj?.get("endgame_points")?.jsonPrimitive?.doubleOrNull ?: 0.0
+                        val total = epaObj?.get("total_points")?.jsonPrimitive?.doubleOrNull
+                            ?: epaObj?.get("epa")?.jsonPrimitive?.doubleOrNull ?: 0.0
+                        val auto = epaObj?.get("auto_points")?.jsonPrimitive?.doubleOrNull
+                            ?: epaObj?.get("auto_epa")?.jsonPrimitive?.doubleOrNull ?: 0.0
+                        val teleop = epaObj?.get("teleop_points")?.jsonPrimitive?.doubleOrNull
+                            ?: epaObj?.get("teleop_epa")?.jsonPrimitive?.doubleOrNull ?: 0.0
+                        val endgame = epaObj?.get("endgame_points")?.jsonPrimitive?.doubleOrNull
+                            ?: epaObj?.get("endgame_epa")?.jsonPrimitive?.doubleOrNull ?: 0.0
 
                         val (level, num) = parseMatchKey(matchField)
 

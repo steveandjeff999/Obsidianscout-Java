@@ -84,4 +84,35 @@ class ApiKeyTestEndpointTest {
         assertFalse(result.success)
         assertTrue(result.message.contains("Unknown API specified"))
     }
+
+    @Test
+    fun testStatboticsApiConnection() = runBlocking {
+        val session = UserSession(
+            userId = "admin-1",
+            username = "admin",
+            teamNumber = 100,
+            program = "FRC",
+            role = UserRole.ADMIN
+        )
+        val request = TestApiRequest(api = "statbotics", statboticsBaseUrl = "https://api.statbotics.io")
+        val result = IntegrationService.testApiKey(session, request)
+        assertTrue(result.success, "Statbotics API test should succeed: ${result.message}")
+        assertTrue(result.message.contains("Statbotics API connection successful"))
+    }
+
+    @Test
+    fun testStatboticsSyncEpaAndHistory() = runBlocking {
+        val settings = ApiSettings(
+            year = 2024,
+            eventCode = "ncwak",
+            useStatboticsEpa = true,
+            statboticsBaseUrl = "https://api.statbotics.io"
+        )
+        transaction {
+            SchemaUtils.create(com.obsidianscout.db.ApiTeams, com.obsidianscout.db.EpaOprHistoryCache)
+        }
+        IntegrationService.syncEpaOprHistory(settings, "2024ncwak")
+        val (_, epaHistory) = IntegrationService.getEpaOprHistory(settings, "2024ncwak")
+        assertTrue(epaHistory.isNotEmpty(), "Statbotics EPA history should be synced and non-empty")
+    }
 }

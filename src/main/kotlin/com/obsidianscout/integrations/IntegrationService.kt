@@ -45,6 +45,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -1545,7 +1547,8 @@ object IntegrationService {
 
     private suspend fun fetchStatboticsEpas(settings: ApiSettings, eventKey: String): Map<String, Double> {
         val baseUrl = settings.statboticsBaseUrl.ifBlank { "https://api.statbotics.io" }.trimEnd('/')
-        val url = "$baseUrl/v3/team_events?event=${eventKey}&limit=1000"
+        val cleanBaseUrl = baseUrl.removeSuffix("/v3")
+        val url = "$cleanBaseUrl/v3/team_events?event=${eventKey}&limit=1000"
         val response = try {
             client.get(url)
         } catch (error: Exception) {
@@ -1567,8 +1570,10 @@ object IntegrationService {
                 val obj = item as? JsonObject ?: return@mapNotNull null
                 val team = obj.readInt("team") ?: return@mapNotNull null
                 val epaObj = obj["epa"] as? JsonObject
-                val totalPointsObj = epaObj?.get("total_points") as? JsonObject
-                val epa = totalPointsObj?.readDouble("mean") ?: return@mapNotNull null
+                val epa = epaObj?.readDouble("total_points")
+                    ?: (epaObj?.get("stats") as? JsonObject)?.readDouble("mean")
+                    ?: (epaObj?.get("breakdown") as? JsonObject)?.readDouble("total_points")
+                    ?: return@mapNotNull null
                 "frc${team}" to epa
             }.toMap()
         } catch (e: Exception) {
@@ -1648,7 +1653,8 @@ object IntegrationService {
 
     private suspend fun fetchStatboticsMatchEpaHistory(settings: ApiSettings, eventKey: String): List<JsonElement> {
         val baseUrl = settings.statboticsBaseUrl.ifBlank { "https://api.statbotics.io" }.trimEnd('/')
-        val url = "$baseUrl/v3/team_matches?event=${eventKey}&limit=1000"
+        val cleanBaseUrl = baseUrl.removeSuffix("/v3")
+        val url = "$cleanBaseUrl/v3/matches?event=${eventKey}&limit=1000"
         return try {
             val response = client.get(url)
             if (!response.status.isSuccess()) {
@@ -1656,7 +1662,53 @@ object IntegrationService {
                 return emptyList()
             }
             val text = response.bodyAsText()
-            (JsonSupport.json.parseToJsonElement(text) as? JsonArray) ?: emptyList()
+            val array = (JsonSupport.json.parseToJsonElement(text) as? JsonArray) ?: return emptyList()
+            val teamMatches = mutableListOf<JsonElement>()
+            array.forEach { matchElem ->
+                val matchObj = matchElem as? JsonObject ?: return@forEach
+                val matchKey = (matchObj["key"] as? JsonPrimitive)?.content ?: ""
+                val timestamp = (matchObj["time"] as? JsonPrimitive)?.content
+                val alliancesObj = matchObj["alliances"] as? JsonObject
+                val redTeams = (alliancesObj?.get("red") as? JsonObject)?.get("team_keys") as? JsonArray
+                val blueTeams = (alliancesObj?.get("blue") as? JsonObject)?.get("team_keys") as? JsonArray
+                val epasMap = (matchObj["epas"] as? JsonObject) ?: (matchObj["pre_epas"] as? JsonObject)
+
+                fun processTeam(teamNum: Int, alliance: String) {
+                    val epaData = epasMap?.get(teamNum.toString()) as? JsonObject
+                    val total = epaData?.readDouble("epa") ?: epaData?.readDouble("total_points") ?: 0.0
+                    val auto = epaData?.readDouble("auto_epa") ?: epaData?.readDouble("auto_points") ?: 0.0
+                    val teleop = epaData?.readDouble("teleop_epa") ?: epaData?.readDouble("teleop_points") ?: 0.0
+                    val endgame = epaData?.readDouble("endgame_epa") ?: epaData?.readDouble("endgame_points") ?: 0.0
+
+                    val teamMatchObj = buildJsonObject {
+                        put("team", teamNum)
+                        put("match", matchKey)
+                        put("alliance", alliance)
+                        if (timestamp != null) put("timestamp", timestamp)
+                        put("epa", buildJsonObject {
+                            put("total_points", total)
+                            put("auto_points", auto)
+                            put("teleop_points", teleop)
+                            put("endgame_points", endgame)
+                            put("epa", total)
+                            put("auto_epa", auto)
+                            put("teleop_epa", teleop)
+                            put("endgame_epa", endgame)
+                        })
+                    }
+                    teamMatches.add(teamMatchObj)
+                }
+
+                redTeams?.forEach { t ->
+                    val num = (t as? JsonPrimitive)?.content?.toIntOrNull()
+                    if (num != null) processTeam(num, "red")
+                }
+                blueTeams?.forEach { t ->
+                    val num = (t as? JsonPrimitive)?.content?.toIntOrNull()
+                    if (num != null) processTeam(num, "blue")
+                }
+            }
+            teamMatches
         } catch (error: Exception) {
             log.warn("Statbotics match EPA history fetch failed for $eventKey: ${error.message}")
             emptyList()
@@ -1900,9 +1952,10 @@ object IntegrationService {
             }
             "statbotics" -> {
                 val rawUrl = request.statboticsBaseUrl?.trim() ?: currentSettings.statboticsBaseUrl
-                val baseUrl = (if (rawUrl.isBlank()) "https://api.statbotics.io" else rawUrl).removeSuffix("/")
+                val baseUrl = (if (rawUrl.isBlank()) "https://api.statbotics.io" else rawUrl).trimEnd('/')
+                val cleanBaseUrl = baseUrl.removeSuffix("/v3")
                 try {
-                    val response = client.get("$baseUrl/v3/status")
+                    val response = client.get("$cleanBaseUrl/v3/")
                     if (response.status.isSuccess()) {
                         com.obsidianscout.routes.TestApiResponse(true, "Statbotics API connection successful!")
                     } else {
