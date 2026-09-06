@@ -144,7 +144,8 @@ export async function requireAuth() {
     }
 
     // Setup Wizard Auto Trigger
-    if (settings && isAdmin(me.role) && !settings.setupWizardCompleted) {
+    const wizardDismissedLocally = safeGetItem("obsidianscout:setup-wizard-dismissed") === "true";
+    if (settings && isAdmin(me.role) && !settings.setupWizardCompleted && !wizardDismissedLocally) {
         const bypassPages = ["login", "index", "reset-password", "migration"];
         if (currentPage && !bypassPages.includes(currentPage)) {
             setTimeout(() => {

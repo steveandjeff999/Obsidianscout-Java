@@ -413,6 +413,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const btnRunWizard = document.getElementById("btn-run-setup-wizard");
             if (btnRunWizard) {
                 btnRunWizard.addEventListener("click", () => {
+                    Obsidianscout.safeRemoveItem("obsidianscout:setup-wizard-dismissed");
                     Obsidianscout.showSetupWizardModal(me, loadedSettings, true);
                 });
             }
@@ -558,6 +559,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                         firstUsername: getVal("settings-first-user").trim(),
                         firstKey: getVal("settings-first-key").trim()
                     };
+                    loadedSettings.setupWizardCompleted = true;
+                    Obsidianscout.safeSetItem("obsidianscout:setup-wizard-dismissed", "true");
 
                     try {
                         const response = await Obsidianscout.request("/api/settings", {
@@ -680,6 +683,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.analyticsPages = analyticsPages;
                     loadedSettings.adminPages = adminPages;
                     loadedSettings.chatEnabled = getChecked("settings-chat");
+                    loadedSettings.setupWizardCompleted = true;
+                    Obsidianscout.safeSetItem("obsidianscout:setup-wizard-dismissed", "true");
 
                     try {
                         const response = await Obsidianscout.request("/api/settings", {

@@ -301,8 +301,10 @@ fun Application.configureRoutes() {
                         profilePicture = user.profilePicture,
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
-                        nodeAlertsEnabled = user.nodeAlertsEnabled
+                        nodeAlertsEnabled = user.nodeAlertsEnabled,
+                        sessionId = session.sessionId
                     )
+                    call.sessions.set(responseSession)
                     call.respond(MeResponse(responseSession))
                 }
                 get("/status") {
@@ -940,6 +942,11 @@ fun Application.configureRoutes() {
                     val updated = SettingsService.updateSettings(session.teamNumber, payload.toSettings())
                     call.respond(SettingsResponse(updated.toPayload()))
                 }
+                post("/dismiss-wizard") {
+                    val session = call.requireAdmin()
+                    val updated = SettingsService.dismissSetupWizard(session.teamNumber, session.program)
+                    call.respond(SettingsResponse(updated.toPayload()))
+                }
                 post("/test-api") {
                     val session = call.requireAdmin()
                     val request = call.receive<TestApiRequest>()
@@ -1347,9 +1354,20 @@ fun Application.configureRoutes() {
 
             route("/summary") {
                 get {
-                    call.requireSession()
+                    val session = call.requireSession()
+                    val teamParam = call.request.queryParameters["teamNumber"]
+                    val targetTeamNumber = when {
+                        teamParam.equals("all", ignoreCase = true) -> 0
+                        else -> teamParam?.toIntOrNull()
+                    }
+                    val eventKeyParam = call.request.queryParameters["eventKey"]
+
                     val summary = call.measure("summary-db", "Summary DB Query") {
-                        IntegrationService.summary()
+                        IntegrationService.summary(
+                            session = session,
+                            targetTeamNumber = targetTeamNumber,
+                            eventKey = eventKeyParam
+                        )
                     }
                     call.respond(summary)
                 }
@@ -1493,6 +1511,18 @@ fun Application.configureRoutes() {
                         newProfilePicture = request.profilePicture,
                         clearProfilePicture = request.clearProfilePicture
                     )
+                    if (userId == session.userId) {
+                        val updatedSession = session.copy(
+                            username = updated.username,
+                            role = updated.role,
+                            teamNumber = updated.teamNumber,
+                            email = updated.email,
+                            notificationPreference = updated.notificationPreference,
+                            tourProgress = updated.tourProgress,
+                            nodeAlertsEnabled = updated.nodeAlertsEnabled
+                        )
+                        call.sessions.set(updatedSession)
+                    }
                     call.respond(updated)
                 }
                 delete("/users/{id}") {

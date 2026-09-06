@@ -238,8 +238,11 @@ export async function request(path, options = {}) {
             safeRemoveItem("cache:" + path);
             const basePath = path.split("?")[0];
             safeRemoveItem("cache:" + basePath);
-            if (basePath.includes("scouting")) {
+            if (basePath.includes("scouting") || basePath.includes("team") || basePath.includes("event")) {
                 safeRemoveItem("cache:/api/summary");
+            }
+            if (basePath.includes("/admin/users") || basePath.includes("/user")) {
+                safeRemoveItem("cache:/api/auth/me");
             }
         }
 

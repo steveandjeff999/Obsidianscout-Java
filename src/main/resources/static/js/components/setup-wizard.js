@@ -143,27 +143,52 @@ export function showSetupWizardModal(me, settings, forceOpen = false) {
     }
 
     function closeWizard() {
+        document.removeEventListener("keydown", handleKeyDown);
         backdrop.remove();
     }
 
-    async function handleCancel() {
-        if (confirm("Are you sure you want to exit the setup wizard? This will skip the initial setup (you can still configure settings manually in Admin Settings) and prevent this wizard from showing again on every page reload.")) {
+    function handleKeyDown(e) {
+        if (e.key === "Escape") {
+            handleDismiss();
+        }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+
+    backdrop.addEventListener("click", (e) => {
+        if (e.target === backdrop) {
+            handleDismiss();
+        }
+    });
+
+    async function handleDismiss() {
+        safeSetItem("obsidianscout:setup-wizard-dismissed", "true");
+        if (settings) {
+            settings.setupWizardCompleted = true;
+        }
+        localSettings.setupWizardCompleted = true;
+        closeWizard();
+        showToast("Setup skipped. You can configure settings anytime in Admin Settings.", "info");
+
+        try {
+            let response = null;
             try {
-                localSettings.setupWizardCompleted = true;
-                const response = await request("/api/settings", {
+                response = await request("/api/settings/dismiss-wizard", {
+                    method: "POST"
+                });
+            } catch (postErr) {
+                response = await request("/api/settings", {
                     method: "PUT",
                     json: localSettings
                 });
-                safeSetItem("cache:/api/settings", JSON.stringify(response.settings || response));
-                closeWizard();
-                showToast("Setup skipped. You can configure settings anytime in Admin Settings.", "info");
-                if (forceOpen) {
-                    setTimeout(() => window.location.reload(), 1000);
-                }
-            } catch (e) {
-                console.error("Failed to mark setup wizard as completed:", e);
-                closeWizard();
             }
+            if (response) {
+                safeSetItem("cache:/api/settings", JSON.stringify(response.settings || response));
+            }
+            if (forceOpen) {
+                setTimeout(() => window.location.reload(), 1000);
+            }
+        } catch (e) {
+            console.error("Failed to mark setup wizard as completed:", e);
         }
     }
 
@@ -295,7 +320,7 @@ export function showSetupWizardModal(me, settings, forceOpen = false) {
     `;
 
     const btnCancelList = container.querySelectorAll(".btn-wizard-cancel");
-    btnCancelList.forEach(btn => btn.addEventListener("click", handleCancel));
+    btnCancelList.forEach(btn => btn.addEventListener("click", handleDismiss));
 
     const btnBack = container.querySelector(".btn-wizard-back");
     btnBack.addEventListener("click", () => {
@@ -319,11 +344,15 @@ export function showSetupWizardModal(me, settings, forceOpen = false) {
             btnNext.textContent = "Saving...";
             
             try {
+                safeSetItem("obsidianscout:setup-wizard-dismissed", "true");
+                if (settings) {
+                    settings.setupWizardCompleted = true;
+                }
                 localSettings.setupWizardCompleted = true;
                 
-                const code = localSettings.eventCode.trim();
+                const code = (localSettings.eventCode || "").trim();
                 if (code) {
-                    localSettings.eventKey = `${localSettings.year}${code}`.toLowerCase();
+                    localSettings.eventKey = `${localSettings.year || new Date().getFullYear()}${code}`.toLowerCase();
                 }
                 
                 const response = await request("/api/settings", {

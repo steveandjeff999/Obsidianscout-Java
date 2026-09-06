@@ -133,7 +133,7 @@ data class ApiKeysPayload(
 
 @Serializable
 data class ApiSettingsPayload(
-    val year: Int,
+    val year: Int = java.time.Year.now().value,
     val eventCode: String = "",
     val eventKey: String = "",
     val timezone: String = "America/New_York",
@@ -244,7 +244,9 @@ data class SummaryResponse(
     val teams: Int,
     val matches: Int,
     val pitEntries: Int = 0,
-    val qualEntries: Int = 0
+    val qualEntries: Int = 0,
+    val scoutingTeamNumber: Int? = null,
+    val availableTeams: List<Int> = emptyList()
 )
 
 @Serializable

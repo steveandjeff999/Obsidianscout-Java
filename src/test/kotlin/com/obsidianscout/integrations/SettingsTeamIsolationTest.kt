@@ -129,4 +129,121 @@ class SettingsTeamIsolationTest {
         val eventsSuperAdmin = IntegrationService.listEvents(year = 2026, session = superAdminSession)
         assertEquals(3, eventsSuperAdmin.size, "Superadmin sees all 3 events")
     }
+
+    @Test
+    fun testSummaryIsScopedPerScoutingTeam() {
+        val now = Instant.now()
+        val dummyUserId = transaction {
+            Users.insert {
+                it[id] = java.util.UUID.randomUUID()
+                it[username] = "dummyUser"
+                it[passwordHash] = "hash"
+                it[teamNumber] = 1001
+                it[role] = "SCOUT"
+                it[program] = "FRC"
+                it[createdAt] = now
+            }[Users.id]
+        }
+        transaction {
+            // Insert scouting data for Team 1001
+            ScoutingEntries.insert {
+                it[id] = java.util.UUID.randomUUID()
+                it[ownerTeamNumber] = 1001
+                it[program] = "FRC"
+                it[eventKey] = "2026txho"
+                it[matchNumber] = 1
+                it[targetTeamNumber] = 254
+                it[submittedByUserId] = dummyUserId
+                it[dataJson] = "{}"
+                it[createdAt] = now
+            }
+            PitScoutingEntries.insert {
+                it[id] = java.util.UUID.randomUUID()
+                it[ownerTeamNumber] = 1001
+                it[program] = "FRC"
+                it[eventKey] = "2026txho"
+                it[targetTeamNumber] = 254
+                it[submittedByUserId] = dummyUserId
+                it[dataJson] = "{}"
+                it[createdAt] = now
+            }
+            QualitativeScoutingEntries.insert {
+                it[id] = java.util.UUID.randomUUID()
+                it[ownerTeamNumber] = 1001
+                it[program] = "FRC"
+                it[eventKey] = "2026txho"
+                it[targetTeamNumber] = 254
+                it[submittedByUserId] = dummyUserId
+                it[dataJson] = "{}"
+                it[createdAt] = now
+            }
+
+            // Insert scouting data for Team 1002
+            ScoutingEntries.insert {
+                it[id] = java.util.UUID.randomUUID()
+                it[ownerTeamNumber] = 1002
+                it[program] = "FRC"
+                it[eventKey] = "2026txda"
+                it[matchNumber] = 2
+                it[targetTeamNumber] = 1678
+                it[submittedByUserId] = dummyUserId
+                it[dataJson] = "{}"
+                it[createdAt] = now
+            }
+        }
+
+        val sessionTeam1 = UserSession("u1", "user1", 1001, "FRC", UserRole.SCOUT)
+        val sessionTeam2 = UserSession("u2", "user2", 1002, "FRC", UserRole.SCOUT)
+        val superAdmin = UserSession("sa", "admin", 0, "FRC", UserRole.SUPERADMIN)
+
+        // 1. Team 1001 summary: only sees its 1 match entry, 1 pit entry, 1 qual entry
+        val summary1 = IntegrationService.summary(session = sessionTeam1)
+        assertEquals(1001, summary1.scoutingTeamNumber)
+        assertEquals(1, summary1.entries)
+        assertEquals(1, summary1.pitEntries)
+        assertEquals(1, summary1.qualEntries)
+
+        // 2. Team 1002 summary: only sees its 1 match entry, 0 pit entries, 0 qual entries
+        val summary2 = IntegrationService.summary(session = sessionTeam2)
+        assertEquals(1002, summary2.scoutingTeamNumber)
+        assertEquals(1, summary2.entries)
+        assertEquals(0, summary2.pitEntries)
+        assertEquals(0, summary2.qualEntries)
+
+        // 3. Team 1002 attempts to spoof targetTeamNumber=1001 -> must be ignored and fallback to team 1002
+        val spoofAttempt = IntegrationService.summary(session = sessionTeam2, targetTeamNumber = 1001)
+        assertEquals(1002, spoofAttempt.scoutingTeamNumber)
+        assertEquals(1, spoofAttempt.entries)
+        assertEquals(0, spoofAttempt.pitEntries)
+
+        // 4. SuperAdmin can view global site counts
+        val globalSummary = IntegrationService.summary(session = superAdmin, targetTeamNumber = 0)
+        assertEquals(null, globalSummary.scoutingTeamNumber)
+        assertEquals(2, globalSummary.entries)
+        assertEquals(1, globalSummary.pitEntries)
+        assertEquals(1, globalSummary.qualEntries)
+        assertTrue(globalSummary.availableTeams.containsAll(listOf(1001, 1002)))
+
+        // 5. SuperAdmin can view filtered counts for a specific team
+        val superAdminFiltered = IntegrationService.summary(session = superAdmin, targetTeamNumber = 1001)
+        assertEquals(1001, superAdminFiltered.scoutingTeamNumber)
+        assertEquals(1, superAdminFiltered.entries)
+        assertEquals(1, superAdminFiltered.pitEntries)
+        assertEquals(1, superAdminFiltered.qualEntries)
+    }
+
+    @Test
+    fun testDismissSetupWizard() {
+        val initialSettings = SettingsService.getSettings(7777, "FRC")
+        assertEquals(false, initialSettings.setupWizardCompleted)
+
+        val updated = SettingsService.dismissSetupWizard(7777, "FRC")
+        assertEquals(true, updated.setupWizardCompleted)
+
+        val fetched = SettingsService.getSettings(7777, "FRC")
+        assertEquals(true, fetched.setupWizardCompleted)
+
+        val effective = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(7777, "FRC")
+        assertEquals(true, effective.setupWizardCompleted)
+    }
 }

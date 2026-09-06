@@ -153,20 +153,21 @@ suspend fun ApplicationCall.requireMobileSession(secret: String): UserSession {
     val userUuid = UUID.fromString(session.userId)
 
     if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-        val userExists = runCatching {
+        val userRow = runCatching {
             readTransaction {
-                Users.selectAll().where { Users.id eq userUuid }.any()
+                Users.selectAll().where { Users.id eq userUuid }.firstOrNull()
             }
-        }.getOrDefault(true)
-        if (!userExists) {
+        }.getOrNull()
+        if (userRow == null) {
             throw MobileApiException(HttpStatusCode.Unauthorized, "User account no longer exists", "ACCOUNT_DELETED")
         }
-        return session
+        val dbRole = runCatching { UserRole.valueOf(userRow[Users.role]) }.getOrDefault(session.role)
+        return session.copy(role = dbRole)
     }
 
-    val (userExists, sessionValid) = runCatching {
+    val (userRow, sessionValid) = runCatching {
         readTransaction {
-            val uExists = Users.selectAll().where { Users.id eq userUuid }.any()
+            val uRow = Users.selectAll().where { Users.id eq userUuid }.firstOrNull()
             val sOk = if (!session.sessionId.isNullOrBlank()) {
                 val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
                 if (sUuid != null) {
@@ -175,19 +176,26 @@ suspend fun ApplicationCall.requireMobileSession(secret: String): UserSession {
             } else {
                 true
             }
-            Pair(uExists, sOk)
+            Pair(uRow, sOk)
         }
-    }.getOrDefault(Pair(true, true))
-    if (!userExists) {
+    }.getOrDefault(Pair(null, true))
+    if (userRow == null) {
         throw MobileApiException(HttpStatusCode.Unauthorized, "Account has been deleted", "AUTH_REQUIRED")
     }
     if (!sessionValid) {
         throw MobileApiException(HttpStatusCode.Unauthorized, "Session has been revoked", "AUTH_REVOKED")
     }
-    if (!session.sessionId.isNullOrBlank()) {
-        AuthService.touchSession(session.sessionId)
+    val dbRole = runCatching { UserRole.valueOf(userRow[Users.role]) }.getOrDefault(session.role)
+    val effectiveSession = session.copy(
+        role = dbRole,
+        teamNumber = userRow[Users.teamNumber],
+        username = userRow[Users.username],
+        program = userRow[Users.program]
+    )
+    if (!effectiveSession.sessionId.isNullOrBlank()) {
+        AuthService.touchSession(effectiveSession.sessionId)
     }
-    return session
+    return effectiveSession
 }
 
 suspend fun ApplicationCall.requireMobileAdmin(secret: String): UserSession {

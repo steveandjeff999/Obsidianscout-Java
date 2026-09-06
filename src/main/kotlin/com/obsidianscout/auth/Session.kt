@@ -5,6 +5,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.uri
 import io.ktor.server.sessions.get
+import io.ktor.server.sessions.set
 import io.ktor.server.sessions.clear
 import io.ktor.server.sessions.sessions
 import kotlinx.serialization.Serializable
@@ -59,22 +60,30 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         // If quorum is lost, trust the cryptographically HMAC-signed session cookie,
         // and only check that the user exists in Users without touching other range tables.
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-            val userExists = runCatching {
+            val userRow = runCatching {
                 com.obsidianscout.db.readTransaction {
-                    Users.selectAll().where { Users.id eq userUuid }.any()
+                    Users.selectAll().where { Users.id eq userUuid }.firstOrNull()
                 }
-            }.getOrDefault(true)
+            }.getOrNull()
 
-            if (!userExists) {
+            if (userRow == null) {
                 sessions.clear<UserSession>()
                 throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
             }
-            return session
+            val dbRole = runCatching { UserRole.valueOf(userRow[Users.role]) }.getOrDefault(session.role)
+            val effectiveSession = if (session.role != dbRole) {
+                session.copy(role = dbRole).also { updated ->
+                    runCatching { sessions.set(updated) }
+                }
+            } else {
+                session
+            }
+            return effectiveSession
         }
 
-        val (userExists, sessionValid) = runCatching {
+        val (userRow, sessionValid) = runCatching {
             com.obsidianscout.db.readTransaction {
-                val exists = Users.selectAll().where { Users.id eq userUuid }.any()
+                val row = Users.selectAll().where { Users.id eq userUuid }.firstOrNull()
                 val sessionOk = if (!session.sessionId.isNullOrBlank()) {
                     val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
                     if (sUuid != null) {
@@ -83,11 +92,11 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                 } else {
                     true
                 }
-                Pair(exists, sessionOk)
+                Pair(row, sessionOk)
             }
-        }.getOrDefault(Pair(true, true))
+        }.getOrDefault(Pair(null, true))
 
-        if (!userExists) {
+        if (userRow == null) {
             application.environment.log.warn("[requireSession] 401 User ${session.userId} does not exist in DB")
             sessions.clear<UserSession>()
             throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
@@ -98,9 +107,43 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             throw ApiException(HttpStatusCode.Unauthorized, "Session has expired or been revoked")
         }
 
-        if (!session.sessionId.isNullOrBlank()) {
-            AuthService.touchSession(session.sessionId)
+        val dbRole = runCatching { UserRole.valueOf(userRow[Users.role]) }.getOrDefault(session.role)
+        val dbTeamNumber = userRow[Users.teamNumber]
+        val dbUsername = userRow[Users.username]
+        val dbProgram = userRow[Users.program]
+        val dbEmail = userRow[Users.email]
+        val dbProfilePicture = userRow[Users.profilePicture]
+        val dbNotificationPreference = userRow[Users.notificationPreference]
+        val dbTourProgress = userRow[Users.tourProgress]
+        val dbNodeAlertsEnabled = userRow[Users.nodeAlertsEnabled]
+
+        val needsSync = session.role != dbRole ||
+                        session.teamNumber != dbTeamNumber ||
+                        session.username != dbUsername ||
+                        session.program != dbProgram
+
+        val effectiveSession = if (needsSync) {
+            session.copy(
+                role = dbRole,
+                teamNumber = dbTeamNumber,
+                username = dbUsername,
+                program = dbProgram,
+                email = dbEmail,
+                profilePicture = dbProfilePicture,
+                notificationPreference = dbNotificationPreference,
+                tourProgress = dbTourProgress,
+                nodeAlertsEnabled = dbNodeAlertsEnabled
+            ).also { updated ->
+                runCatching { sessions.set(updated) }
+            }
+        } else {
+            session
         }
+
+        if (!effectiveSession.sessionId.isNullOrBlank()) {
+            AuthService.touchSession(effectiveSession.sessionId)
+        }
+        return effectiveSession
     }
     return session
 }

@@ -10,6 +10,8 @@ import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.ScoutingEntries
+import com.obsidianscout.db.Users
+import com.obsidianscout.db.AppSettings
 import com.obsidianscout.routes.EventRecord
 import com.obsidianscout.routes.MatchRecord
 import com.obsidianscout.routes.TeamRecord
@@ -900,17 +902,163 @@ object IntegrationService {
         }
     }
 
-    fun summary(): SummaryResponse {
+    fun summary(
+        session: UserSession? = null,
+        targetTeamNumber: Int? = null,
+        eventKey: String? = null
+    ): SummaryResponse {
         return try {
             readTransaction {
-                SummaryResponse(
-                    entries = ScoutingEntries.select(ScoutingEntries.id).count().toInt(),
-                    events = ApiEvents.select(ApiEvents.id).count().toInt(),
-                    teams = ApiTeams.select(ApiTeams.id).count().toInt(),
-                    matches = ApiMatches.select(ApiMatches.id).count().toInt(),
-                    pitEntries = PitScoutingEntries.select(PitScoutingEntries.id).count().toInt(),
-                    qualEntries = QualitativeScoutingEntries.select(QualitativeScoutingEntries.id).count().toInt()
-                )
+                val isSuperAdmin = session?.role == UserRole.SUPERADMIN
+                val userTeamNumber = session?.teamNumber ?: 0
+                val program = session?.program ?: "FRC"
+
+                // Available teams calculation
+                val availableTeams: List<Int> = if (isSuperAdmin) {
+                    val teamsFromUsers = Users.select(Users.teamNumber).mapNotNull { it[Users.teamNumber].takeIf { t -> t > 0 } }
+                    val teamsFromEntries = ScoutingEntries.select(ScoutingEntries.ownerTeamNumber).mapNotNull { it[ScoutingEntries.ownerTeamNumber].takeIf { t -> t > 0 } }
+                    val teamsFromPit = PitScoutingEntries.select(PitScoutingEntries.ownerTeamNumber).mapNotNull { it[PitScoutingEntries.ownerTeamNumber].takeIf { t -> t > 0 } }
+                    val teamsFromQual = QualitativeScoutingEntries.select(QualitativeScoutingEntries.ownerTeamNumber).mapNotNull { it[QualitativeScoutingEntries.ownerTeamNumber].takeIf { t -> t > 0 } }
+                    val teamsFromSettings = AppSettings.select(AppSettings.teamNumber).mapNotNull { it[AppSettings.teamNumber].takeIf { t -> t > 0 } }
+                    (teamsFromUsers + teamsFromEntries + teamsFromPit + teamsFromQual + teamsFromSettings)
+                        .distinct()
+                        .sorted()
+                } else if (session != null && userTeamNumber > 0) {
+                    val partnerTeams = AllianceService.getAlliancePartnerTeams(userTeamNumber)
+                    (listOf(userTeamNumber) + partnerTeams).distinct().sorted()
+                } else if (targetTeamNumber != null && targetTeamNumber > 0) {
+                    listOf(targetTeamNumber)
+                } else {
+                    emptyList()
+                }
+
+                // Determine whether to run in global mode or scoped to specific scouting team(s)
+                val isGlobal = if (isSuperAdmin) {
+                    targetTeamNumber == 0 || (targetTeamNumber == null && userTeamNumber == 0)
+                } else {
+                    session == null && targetTeamNumber == null
+                }
+
+                val activeScoutingTeam: Int? = if (isGlobal) {
+                    null
+                } else if (targetTeamNumber != null && targetTeamNumber > 0) {
+                    if (isSuperAdmin || availableTeams.contains(targetTeamNumber)) targetTeamNumber else userTeamNumber
+                } else if (userTeamNumber > 0) {
+                    userTeamNumber
+                } else {
+                    availableTeams.firstOrNull()
+                }
+
+                val targetTeams = if (isGlobal) {
+                    emptyList()
+                } else if (activeScoutingTeam != null) {
+                    listOf(activeScoutingTeam)
+                } else if (availableTeams.isNotEmpty()) {
+                    availableTeams
+                } else {
+                    emptyList()
+                }
+
+                if (isGlobal) {
+                    val entriesCount = ScoutingEntries.select(ScoutingEntries.id).count().toInt()
+                    val pitCount = PitScoutingEntries.select(PitScoutingEntries.id).count().toInt()
+                    val qualCount = QualitativeScoutingEntries.select(QualitativeScoutingEntries.id).count().toInt()
+                    val eventsCount = ApiEvents.select(ApiEvents.id).count().toInt()
+                    val teamsCount = ApiTeams.select(ApiTeams.id).count().toInt()
+                    val matchesCount = ApiMatches.select(ApiMatches.id).count().toInt()
+
+                    SummaryResponse(
+                        entries = entriesCount,
+                        events = eventsCount,
+                        teams = teamsCount,
+                        matches = matchesCount,
+                        pitEntries = pitCount,
+                        qualEntries = qualCount,
+                        scoutingTeamNumber = null,
+                        availableTeams = availableTeams
+                    )
+                } else {
+                    val entriesCount = ScoutingEntries.select(ScoutingEntries.id).where {
+                        (ScoutingEntries.ownerTeamNumber inList targetTeams) and (ScoutingEntries.program eq program)
+                    }.count().toInt()
+
+                    val pitCount = PitScoutingEntries.select(PitScoutingEntries.id).where {
+                        (PitScoutingEntries.ownerTeamNumber inList targetTeams) and (PitScoutingEntries.program eq program)
+                    }.count().toInt()
+
+                    val qualCount = QualitativeScoutingEntries.select(QualitativeScoutingEntries.id).where {
+                        (QualitativeScoutingEntries.ownerTeamNumber inList targetTeams) and (QualitativeScoutingEntries.program eq program)
+                    }.count().toInt()
+
+                    // Resolve team's active event and participated/scouted events
+                    val effectiveTeam = activeScoutingTeam ?: userTeamNumber
+                    val effectiveSettings = if (effectiveTeam > 0) {
+                        AllianceService.getEffectiveSettings(effectiveTeam, program)
+                    } else null
+                    val normalizedActiveKey = (eventKey?.takeIf { it.isNotBlank() } ?: effectiveSettings?.resolvedEventKey() ?: "").lowercase().trim()
+
+                    val teamAllowedKeys = mutableSetOf<String>()
+                    if (normalizedActiveKey.isNotBlank()) {
+                        teamAllowedKeys.add(normalizedActiveKey)
+                    }
+
+                    if (targetTeams.isNotEmpty()) {
+                        val participatingKeys = ApiTeams.select(ApiTeams.eventKey).where {
+                            (ApiTeams.teamNumber inList targetTeams) or
+                            (ApiTeams.teamKey inList targetTeams.flatMap { listOf("$it", "frc$it", "ftc$it") })
+                        }.map { it[ApiTeams.eventKey].lowercase().trim() }
+                        teamAllowedKeys.addAll(participatingKeys)
+
+                        val scoutedMatchKeys = ScoutingEntries.select(ScoutingEntries.eventKey)
+                            .where { (ScoutingEntries.ownerTeamNumber inList targetTeams) and (ScoutingEntries.program eq program) }
+                            .mapNotNull { it[ScoutingEntries.eventKey]?.lowercase()?.trim() }
+                        val scoutedPitKeys = PitScoutingEntries.select(PitScoutingEntries.eventKey)
+                            .where { (PitScoutingEntries.ownerTeamNumber inList targetTeams) and (PitScoutingEntries.program eq program) }
+                            .mapNotNull { it[PitScoutingEntries.eventKey]?.lowercase()?.trim() }
+                        val scoutedQualKeys = QualitativeScoutingEntries.select(QualitativeScoutingEntries.eventKey)
+                            .where { (QualitativeScoutingEntries.ownerTeamNumber inList targetTeams) and (QualitativeScoutingEntries.program eq program) }
+                            .mapNotNull { it[QualitativeScoutingEntries.eventKey]?.lowercase()?.trim() }
+                        teamAllowedKeys.addAll(scoutedMatchKeys)
+                        teamAllowedKeys.addAll(scoutedPitKeys)
+                        teamAllowedKeys.addAll(scoutedQualKeys)
+                    }
+
+                    if (session != null) {
+                        val allianceEvents = AllianceService.listAlliances(session)
+                            .mapNotNull { it.eventKey?.lowercase()?.trim() }
+                        teamAllowedKeys.addAll(allianceEvents)
+                    }
+
+                    val validEventKeys = teamAllowedKeys.filter { it.isNotBlank() }
+                    val eventsCount = validEventKeys.size
+
+                    val teamsCount = if (normalizedActiveKey.isNotBlank()) {
+                        ApiTeams.selectAll().where { ApiTeams.eventKey eq normalizedActiveKey }.count().toInt()
+                    } else if (validEventKeys.isNotEmpty()) {
+                        ApiTeams.select(ApiTeams.teamNumber).where { ApiTeams.eventKey inList validEventKeys }.map { it[ApiTeams.teamNumber] }.distinct().size
+                    } else {
+                        0
+                    }
+
+                    val matchesCount = if (normalizedActiveKey.isNotBlank()) {
+                        ApiMatches.selectAll().where { ApiMatches.eventKey eq normalizedActiveKey }.count().toInt()
+                    } else if (validEventKeys.isNotEmpty()) {
+                        ApiMatches.select(ApiMatches.id).where { ApiMatches.eventKey inList validEventKeys }.count().toInt()
+                    } else {
+                        0
+                    }
+
+                    SummaryResponse(
+                        entries = entriesCount,
+                        events = eventsCount,
+                        teams = teamsCount,
+                        matches = matchesCount,
+                        pitEntries = pitCount,
+                        qualEntries = qualCount,
+                        scoutingTeamNumber = activeScoutingTeam,
+                        availableTeams = availableTeams
+                    )
+                }
             }
         } catch (_: Throwable) {
             SummaryResponse(entries = 0, events = 0, teams = 0, matches = 0, pitEntries = 0, qualEntries = 0)

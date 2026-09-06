@@ -228,6 +228,12 @@ object SettingsService {
         return normalized
     }
 
+    fun dismissSetupWizard(teamNumber: Int, program: String = "FRC"): ApiSettings {
+        val current = getSettings(teamNumber, program)
+        val updated = current.copy(setupWizardCompleted = true)
+        return updateSettings(teamNumber, updated)
+    }
+
     private fun normalize(settings: ApiSettings): ApiSettings {
         val eventCode = resolveEventCode(settings)
         val resolvedKey = if (eventCode.isNotBlank()) {
