@@ -103,6 +103,70 @@ export async function withButtonLoading(button, asyncFn, loadingTextOrOptions = 
     }
 }
 
+export function isScoutingDataPath(path) {
+    if (!path) return false;
+    const clean = path.split("?")[0];
+    return clean === "/api/scouting" ||
+           clean === "/api/pit-scouting" ||
+           clean === "/api/qual-scouting" ||
+           clean.startsWith("/api/prescout/") ||
+           clean === "/api/analytics" ||
+           clean === "/api/custom-analytics/dataset";
+}
+
+export function getActiveUserRole() {
+    try {
+        const meText = safeGetItem("cache:/api/auth/me");
+        if (meText) {
+            const parsed = JSON.parse(meText);
+            const user = parsed.user || parsed;
+            if (user && user.role) {
+                return String(user.role).toUpperCase();
+            }
+        }
+    } catch (e) {}
+    return null;
+}
+
+export function canRoleCacheScouting(role) {
+    return role === "SUPERADMIN" || role === "ADMIN" || role === "ANALYTICS";
+}
+
+export function getActiveEventKey() {
+    try {
+        const settingsText = safeGetItem("cache:/api/settings");
+        if (settingsText) {
+            const parsed = JSON.parse(settingsText);
+            const settings = parsed.settings || parsed;
+            if (settings) {
+                const code = (settings.eventCode || "").trim();
+                if (code) {
+                    return `${settings.year}${code}`.toLowerCase();
+                }
+                return (settings.eventKey || "").trim().toLowerCase();
+            }
+        }
+    } catch (e) {}
+    return "";
+}
+
+export function purgeScoutingCache() {
+    try {
+        if (typeof localStorage === 'undefined') return;
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("cache:")) {
+                const subPath = key.substring(6);
+                if (isScoutingDataPath(subPath)) {
+                    keysToRemove.push(key);
+                }
+            }
+        }
+        keysToRemove.forEach(k => safeRemoveItem(k));
+    } catch (e) {}
+}
+
 export async function request(path, options = {}) {
     const method = options.method || "GET";
     let isPublicPage = false;
@@ -223,7 +287,69 @@ export async function request(path, options = {}) {
         }
 
         if (opts.method === "GET") {
-            safeSetItem("cache:" + path, text);
+            const isScoutingData = isScoutingDataPath(path);
+            let shouldCache = true;
+            let textToCache = text;
+
+            if (isScoutingData) {
+                const userRole = getActiveUserRole();
+                if (!canRoleCacheScouting(userRole)) {
+                    // Do not cache scouting data on non-analytics/admin/superadmin roles (e.g. SCOUT)
+                    shouldCache = false;
+                    safeRemoveItem("cache:" + path);
+                } else {
+                    // Only cache scouting data for the current event
+                    const currentEventKey = getActiveEventKey();
+                    if (currentEventKey && data) {
+                        const cleanPath = path.split("?")[0];
+                        if (cleanPath === "/api/custom-analytics/dataset") {
+                            if (typeof data === "object" && !Array.isArray(data)) {
+                                const filtered = { ...data };
+                                if (Array.isArray(data.matchEntries)) {
+                                    filtered.matchEntries = data.matchEntries.filter(e => {
+                                        const ek = (e.eventKey || e.event_key || "").trim().toLowerCase();
+                                        return ek === currentEventKey;
+                                    });
+                                }
+                                if (Array.isArray(data.pitEntries)) {
+                                    filtered.pitEntries = data.pitEntries.filter(e => {
+                                        const ek = (e.eventKey || e.event_key || "").trim().toLowerCase();
+                                        return ek === currentEventKey;
+                                    });
+                                }
+                                if (Array.isArray(data.qualEntries)) {
+                                    filtered.qualEntries = data.qualEntries.filter(e => {
+                                        const ek = (e.eventKey || e.event_key || "").trim().toLowerCase();
+                                        return ek === currentEventKey;
+                                    });
+                                }
+                                textToCache = JSON.stringify(filtered);
+                            }
+                        } else if (Array.isArray(data)) {
+                            const filteredEntries = data.filter(entry => {
+                                if (!entry) return false;
+                                const ek = (entry.eventKey || "").trim().toLowerCase();
+                                return ek === currentEventKey;
+                            });
+                            textToCache = JSON.stringify(filteredEntries);
+                        }
+                    }
+                }
+            }
+
+            if (shouldCache) {
+                safeSetItem("cache:" + path, textToCache);
+            }
+
+            if (path && (path === "/api/auth/me" || path.startsWith("/api/auth/me?"))) {
+                try {
+                    const user = data.user || data;
+                    if (user && user.role && !canRoleCacheScouting(String(user.role).toUpperCase())) {
+                        purgeScoutingCache();
+                    }
+                } catch (e) {}
+            }
+
             if (path && (path === "/api/settings" || path.startsWith("/api/settings?"))) {
                 try {
                     const settings = data.settings || data;
@@ -238,6 +364,10 @@ export async function request(path, options = {}) {
             safeRemoveItem("cache:" + path);
             const basePath = path.split("?")[0];
             safeRemoveItem("cache:" + basePath);
+            if (basePath === "/api/auth/logout") {
+                safeRemoveItem("cache:/api/auth/me");
+                purgeScoutingCache();
+            }
             if (basePath.includes("scouting") || basePath.includes("team") || basePath.includes("event")) {
                 safeRemoveItem("cache:/api/summary");
             }

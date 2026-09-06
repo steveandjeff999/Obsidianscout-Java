@@ -51,11 +51,14 @@ data class PitScoutingEntryRecord(
 )
 
 object PitScoutingService {
-    fun listEntries(session: UserSession, includePrescout: Boolean = false, all: Boolean = false): List<PitScoutingEntryRecord> {
+    fun listEntries(session: UserSession, includePrescout: Boolean = false, all: Boolean = false, eventKey: String? = null): List<PitScoutingEntryRecord> {
         return readTransaction {
             val query = PitScoutingEntries.selectAll()
             if (!includePrescout) {
                 query.andWhere { PitScoutingEntries.isPrescout eq false }
+            }
+            if (!eventKey.isNullOrBlank()) {
+                query.andWhere { PitScoutingEntries.eventKey eq eventKey.trim() }
             }
             if (session.role != UserRole.SUPERADMIN) {
                 val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
@@ -91,10 +94,13 @@ object PitScoutingService {
         }
     }
 
-    fun listPrescoutEntries(session: UserSession, all: Boolean = false): List<PitScoutingEntryRecord> {
+    fun listPrescoutEntries(session: UserSession, all: Boolean = false, eventKey: String? = null): List<PitScoutingEntryRecord> {
         return readTransaction {
             val query = PitScoutingEntries.selectAll()
             query.andWhere { PitScoutingEntries.isPrescout eq true }
+            if (!eventKey.isNullOrBlank()) {
+                query.andWhere { PitScoutingEntries.eventKey eq eventKey.trim() }
+            }
             if (session.role != UserRole.SUPERADMIN) {
                 val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
                 val visibleTeams = partnerTeams + session.teamNumber

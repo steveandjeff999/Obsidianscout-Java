@@ -51,11 +51,14 @@ object ScoutingService {
      * SUPERADMIN sees all entries across all teams.
      * Everyone else sees their own team's entries PLUS entries from accepted alliance partner teams.
      */
-    fun listEntries(session: UserSession, includePrescout: Boolean = false, all: Boolean = false): List<ScoutingEntryRecord> {
+    fun listEntries(session: UserSession, includePrescout: Boolean = false, all: Boolean = false, eventKey: String? = null): List<ScoutingEntryRecord> {
         return readTransaction {
             val query = ScoutingEntries.selectAll()
             if (!includePrescout) {
                 query.andWhere { ScoutingEntries.isPrescout eq false }
+            }
+            if (!eventKey.isNullOrBlank()) {
+                query.andWhere { ScoutingEntries.eventKey eq eventKey.trim() }
             }
             if (session.role != UserRole.SUPERADMIN) {
                 val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
@@ -102,10 +105,13 @@ object ScoutingService {
         }
     }
 
-    fun listPrescoutEntries(session: UserSession, all: Boolean = false): List<ScoutingEntryRecord> {
+    fun listPrescoutEntries(session: UserSession, all: Boolean = false, eventKey: String? = null): List<ScoutingEntryRecord> {
         return readTransaction {
             val query = ScoutingEntries.selectAll()
             query.andWhere { ScoutingEntries.isPrescout eq true }
+            if (!eventKey.isNullOrBlank()) {
+                query.andWhere { ScoutingEntries.eventKey eq eventKey.trim() }
+            }
             if (session.role != UserRole.SUPERADMIN) {
                 val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
                 val visibleTeams = partnerTeams + session.teamNumber

@@ -968,7 +968,8 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: false
                     val all = call.request.queryParameters["all"]?.toBoolean() ?: false
-                    call.respond(ScoutingService.listEntries(session, includePrescout, all))
+                    val eventKey = call.request.queryParameters["eventKey"]
+                    call.respond(ScoutingService.listEntries(session, includePrescout, all, eventKey))
                 }
                 post {
                     val session = call.requireSession()
@@ -1000,7 +1001,8 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: false
                     val all = call.request.queryParameters["all"]?.toBoolean() ?: false
-                    call.respond(PitScoutingService.listEntries(session, includePrescout, all))
+                    val eventKey = call.request.queryParameters["eventKey"]
+                    call.respond(PitScoutingService.listEntries(session, includePrescout, all, eventKey))
                 }
                 post {
                     val session = call.requireSession()
@@ -1032,7 +1034,8 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val includePrescout = call.request.queryParameters["includePrescout"]?.toBoolean() ?: false
                     val all = call.request.queryParameters["all"]?.toBoolean() ?: false
-                    call.respond(QualitativeScoutingService.listEntries(session, includePrescout, all))
+                    val eventKey = call.request.queryParameters["eventKey"]
+                    call.respond(QualitativeScoutingService.listEntries(session, includePrescout, all, eventKey))
                 }
                 post {
                     val session = call.requireSession()
@@ -1095,7 +1098,8 @@ fun Application.configureRoutes() {
                     get {
                         val session = call.requireSession()
                         val all = call.request.queryParameters["all"]?.toBoolean() ?: false
-                        call.respond(ScoutingService.listPrescoutEntries(session, all))
+                        val eventKey = call.request.queryParameters["eventKey"]
+                        call.respond(ScoutingService.listPrescoutEntries(session, all, eventKey))
                     }
                     post {
                         val session = call.requireSession()
@@ -1109,7 +1113,8 @@ fun Application.configureRoutes() {
                     get {
                         val session = call.requireSession()
                         val all = call.request.queryParameters["all"]?.toBoolean() ?: false
-                        call.respond(PitScoutingService.listPrescoutEntries(session, all))
+                        val eventKey = call.request.queryParameters["eventKey"]
+                        call.respond(PitScoutingService.listPrescoutEntries(session, all, eventKey))
                     }
                     post {
                         val session = call.requireSession()
@@ -1123,7 +1128,8 @@ fun Application.configureRoutes() {
                     get {
                         val session = call.requireSession()
                         val all = call.request.queryParameters["all"]?.toBoolean() ?: false
-                        call.respond(QualitativeScoutingService.listPrescoutEntries(session, all))
+                        val eventKey = call.request.queryParameters["eventKey"]
+                        call.respond(QualitativeScoutingService.listPrescoutEntries(session, all, eventKey))
                     }
                     post {
                         val session = call.requireSession()

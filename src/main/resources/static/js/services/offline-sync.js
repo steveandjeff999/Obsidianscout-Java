@@ -4,7 +4,7 @@
  */
 
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../base/storage.js';
-import { request } from '../base/http.js';
+import { request, purgeScoutingCache } from '../base/http.js';
 import { showToast } from '../components/toast.js';
 import { checkLoginStatus, getMe, isAdmin } from '../base/auth.js';
 import { resolveEventKey } from '../utilities/helpers.js';
@@ -122,7 +122,9 @@ export async function syncOfflineCache(clearOldOthers = false) {
         const settings = settingsResponse.settings;
         const eventKey = resolveEventKey(settings);
         const isAdminUser = user && isAdmin(user.role);
+        const canCacheScoutingData = user && (user.role === "ANALYTICS" || user.role === "ADMIN" || user.role === "SUPERADMIN");
 
+        // Base shell and metadata endpoints cached for all authenticated users
         const endpoints = [
             "/api/auth/me",
             "/api/settings",
@@ -132,21 +134,10 @@ export async function syncOfflineCache(clearOldOthers = false) {
             "/api/qual-config",
             "/api/events?cached=1",
             "/api/summary",
-            "/api/scouting",
-            "/api/scouting?includePrescout=true",
-            "/api/pit-scouting",
-            "/api/pit-scouting?includePrescout=true",
-            "/api/qual-scouting",
-            "/api/qual-scouting?includePrescout=true",
-            "/api/prescout/scouting",
-            "/api/prescout/pit-scouting",
-            "/api/prescout/qual-scouting",
             "/api/alliances",
             "/api/alliances/invites",
             "/api/alliances/invites/count",
-            "/api/alliances/import-sources",
-            "/api/custom-analytics/reports",
-            "/api/custom-analytics/dataset"
+            "/api/alliances/import-sources"
         ];
 
         if (settings.year) {
@@ -162,6 +153,39 @@ export async function syncOfflineCache(clearOldOthers = false) {
             if (user && user.role === "SUPERADMIN") {
                 endpoints.push("/api/admin/email-settings");
             }
+        }
+
+        if (canCacheScoutingData) {
+            // Endpoints required so that offline data and analytics pages work for current event
+            endpoints.push(
+                "/api/analytics",
+                "/api/analytics?usePrescout=true",
+                "/api/custom-analytics/reports",
+                "/api/custom-analytics/dataset",
+                "/api/scouting",
+                "/api/scouting?includePrescout=true",
+                "/api/scouting?includePrescout=true&all=true",
+                "/api/pit-scouting",
+                "/api/pit-scouting?includePrescout=true",
+                "/api/pit-scouting?includePrescout=true&all=true",
+                "/api/qual-scouting",
+                "/api/qual-scouting?includePrescout=true",
+                "/api/qual-scouting?includePrescout=true&all=true",
+                "/api/prescout/scouting",
+                "/api/prescout/scouting?all=true",
+                "/api/prescout/pit-scouting",
+                "/api/prescout/pit-scouting?all=true",
+                "/api/prescout/qual-scouting",
+                "/api/prescout/qual-scouting?all=true"
+            );
+            if (eventKey) {
+                endpoints.push(`/api/custom-analytics/dataset?eventKey=${eventKey}`);
+                endpoints.push(`/api/matches/predict-all?eventKey=${eventKey}&usePrescout=false`);
+                endpoints.push(`/api/matches/predict-all?eventKey=${eventKey}&usePrescout=true`);
+            }
+        } else {
+            // Clean up any scouting data caches for non-analytics roles (e.g. SCOUT)
+            purgeScoutingCache();
         }
 
         console.log("[Offline Cache] Starting background sync of " + endpoints.length + " endpoints...");

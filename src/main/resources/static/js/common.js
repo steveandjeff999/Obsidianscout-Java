@@ -20,7 +20,10 @@ import {
     getCsrfToken,
     setButtonLoading,
     withButtonLoading,
-    safeParse
+    safeParse,
+    purgeScoutingCache,
+    isScoutingDataPath,
+    canRoleCacheScouting
 } from './base/http.js';
 
 import {
@@ -230,7 +233,10 @@ window.Obsidianscout = {
     withButtonLoading,
     processImageUpload,
     openInlineCameraModal,
-    showImageModal
+    showImageModal,
+    purgeScoutingCache,
+    isScoutingDataPath,
+    canRoleCacheScouting
 };
 
 // Re-export for ES module consumers
@@ -291,7 +297,10 @@ export {
     withButtonLoading,
     processImageUpload,
     openInlineCameraModal,
-    showImageModal
+    showImageModal,
+    purgeScoutingCache,
+    isScoutingDataPath,
+    canRoleCacheScouting
 };
 
 // ==========================================================================
