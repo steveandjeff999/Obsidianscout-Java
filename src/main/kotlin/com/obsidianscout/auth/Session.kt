@@ -129,7 +129,7 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                 username = dbUsername,
                 program = dbProgram,
                 email = dbEmail,
-                profilePicture = dbProfilePicture,
+                profilePicture = null,
                 notificationPreference = dbNotificationPreference,
                 tourProgress = dbTourProgress,
                 nodeAlertsEnabled = dbNodeAlertsEnabled

@@ -110,7 +110,10 @@ async function loadDashboardData() {
     Obsidianscout.showLoadingSpinner(dashboardContainer, t("status.loading", t('dashboard.loading_dashboard_data', "Loading dashboard data...")));
 
     try {
-        const savedTeam = localStorage.getItem("obsidian-dashboard-team");
+        let savedTeam = localStorage.getItem("obsidian-dashboard-team");
+        if (!savedTeam && currentUser && currentUser.teamNumber && currentUser.role !== "SUPERADMIN") {
+            savedTeam = String(currentUser.teamNumber);
+        }
         const summaryUrl = savedTeam ? `/api/summary?teamNumber=${encodeURIComponent(savedTeam)}` : "/api/summary";
 
         const [summary, settingsResponse, status] = await Promise.all([

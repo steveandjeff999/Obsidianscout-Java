@@ -260,6 +260,8 @@ fun Application.module(appConfig: AppConfig) {
                 path == "/api/health" ||
                 path == "/version" ||
                 path == "/api/version" ||
+                path.startsWith("/api/auth/") ||
+                path.startsWith("/api/session") ||
                 path.startsWith("/api/cluster/") ||
                 path.startsWith("/api/admin/cluster/") ||
                 path.startsWith("/cluster-management")

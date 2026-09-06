@@ -304,7 +304,15 @@ fun Application.configureRoutes() {
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         sessionId = session.sessionId
                     )
-                    call.sessions.set(responseSession)
+                    // If session attributes changed in DB (e.g. role, username, program, teamNumber), update cookie session WITHOUT bloated profilePicture
+                    val cookieNeedsUpdate = session.role != user.role ||
+                            session.username != user.username ||
+                            session.teamNumber != user.teamNumber ||
+                            session.program != user.program ||
+                            session.profilePicture != null
+                    if (cookieNeedsUpdate) {
+                        call.sessions.set(responseSession.copy(profilePicture = null))
+                    }
                     call.respond(MeResponse(responseSession))
                 }
                 get("/status") {
@@ -1517,6 +1525,7 @@ fun Application.configureRoutes() {
                             role = updated.role,
                             teamNumber = updated.teamNumber,
                             email = updated.email,
+                            profilePicture = null,
                             notificationPreference = updated.notificationPreference,
                             tourProgress = updated.tourProgress,
                             nodeAlertsEnabled = updated.nodeAlertsEnabled

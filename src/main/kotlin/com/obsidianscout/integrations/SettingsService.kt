@@ -50,6 +50,8 @@ data class LoadBalancerSettings(
     val maxExpectedLatencyMs: Double = 150.0, // latency ceiling for normalization (LAN ≈ 1–20 ms)
     val excludedPathPrefixes: List<String> = listOf(
         "/api/admin",
+        "/api/auth",
+        "/api/session",
         "/api/cluster",
         "/api/health",
         "/health",

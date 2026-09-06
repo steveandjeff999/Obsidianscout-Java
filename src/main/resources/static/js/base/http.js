@@ -241,8 +241,12 @@ export async function request(path, options = {}) {
             if (basePath.includes("scouting") || basePath.includes("team") || basePath.includes("event")) {
                 safeRemoveItem("cache:/api/summary");
             }
-            if (basePath.includes("/admin/users") || basePath.includes("/user")) {
+            if (basePath.includes("/admin/users") || basePath.includes("/user") || basePath.includes("/admin/")) {
                 safeRemoveItem("cache:/api/auth/me");
+                safeRemoveItem("cache:/api/settings");
+            }
+            if (basePath.includes("/settings") || basePath.includes("/config")) {
+                safeRemoveItem("cache:/api/settings");
             }
         }
 

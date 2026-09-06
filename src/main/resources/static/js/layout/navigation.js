@@ -148,6 +148,14 @@ export function adjustNavForRole(user) {
     const role = user.role;
     const superAdminPages = ["cluster-management", "storage-manager", "fcm-settings", "migration"];
 
+    // Reset all standard links to visible first before applying role restrictions
+    document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
+        const page = link.dataset.page;
+        if (!superAdminPages.includes(page)) {
+            link.style.display = "";
+        }
+    });
+
     // Superadmin-only pages: show only for SUPERADMIN
     superAdminPages.forEach((page) => {
         document.querySelectorAll(`.sidebar-link[data-page="${page}"]`).forEach((link) => {
