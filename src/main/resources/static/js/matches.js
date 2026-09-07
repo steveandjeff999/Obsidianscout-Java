@@ -100,10 +100,103 @@ async function initMatchesPage() {
     }
 }
 
+function renderMatchesTable(matches, eventKey, timezone) {
+    const table = document.getElementById("matches-table");
+    const body = table.querySelector("tbody");
+    currentMatches = matches;
+    const isAdmin = currentUser && Obsidianscout.isAdmin(currentUser.role);
+    const fragment = document.createDocumentFragment();
+
+    body.innerHTML = "";
+
+    if (matches.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">' + t("matches.no_matches", "No matches found for this event.") + '</td></tr>';
+        return;
+    }
+
+    matches.forEach((match) => {
+        const row = document.createElement("tr");
+        const red = match.redTeams.map(k => Obsidianscout.formatTeam(k)).join(", ");
+        const blue = match.blueTeams.map(k => Obsidianscout.formatTeam(k)).join(", ");
+        const matchCell = document.createElement("td");
+        matchCell.textContent = localize(match.label) || (match.compLevel.toUpperCase() + " " + (match.matchNumber || ""));
+        const timeCell = document.createElement("td");
+        timeCell.className = "match-time-cell";
+        const timeEl = Obsidianscout.formatTimestampWithVenueTooltip(
+            match.scheduledTime,
+            match.eventTimezone
+        );
+        timeCell.appendChild(timeEl);
+        const redCell = document.createElement("td");
+        redCell.textContent = red;
+        const blueCell = document.createElement("td");
+        blueCell.textContent = blue;
+
+        row.appendChild(matchCell);
+        row.appendChild(timeCell);
+        row.appendChild(redCell);
+        row.appendChild(blueCell);
+
+        if (isAdmin) {
+            const actionCell = document.createElement("td");
+            actionCell.className = "admin-only";
+            actionCell.style.display = "flex";
+            actionCell.style.gap = "8px";
+
+            const editButton = document.createElement("button");
+            editButton.className = "btn-icon-edit";
+            editButton.dataset.action = "edit";
+            editButton.dataset.key = match.matchKey;
+            editButton.textContent = t("common.edit", "Edit");
+
+            const deleteButton = document.createElement("button");
+            deleteButton.className = "btn-icon-edit delete";
+            deleteButton.dataset.action = "delete";
+            deleteButton.dataset.key = match.matchKey;
+            deleteButton.style.color = "#c84b31";
+            deleteButton.style.borderColor = "rgba(200, 75, 49, 0.25)";
+            deleteButton.textContent = t("common.delete", "Delete");
+
+            actionCell.appendChild(editButton);
+            actionCell.appendChild(deleteButton);
+            row.appendChild(actionCell);
+        }
+        fragment.appendChild(row);
+    });
+
+    body.appendChild(fragment);
+
+    // Wire edit & delete buttons
+    if (isAdmin) {
+        body.querySelectorAll('[data-action="edit"]').forEach(btn => {
+            btn.addEventListener("click", () => {
+                const key = btn.getAttribute("data-key");
+                const match = currentMatches.find(m => m.matchKey === key);
+                if (match) {
+                    openEditModal(match);
+                }
+            });
+        });
+        body.querySelectorAll('[data-action="delete"]').forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const key = btn.getAttribute("data-key");
+                if (confirm(t("matches.confirm_delete", "Are you sure you want to delete this match?"))) {
+                    try {
+                        await Obsidianscout.request(`/api/matches?matchKey=${key}`, { method: "DELETE" });
+                        Obsidianscout.showToast(t("matches.deleted_success", "Match deleted successfully"), "success");
+                        await loadMatches(eventKey, timezone);
+                    } catch (error) {
+                        Obsidianscout.showToast(error.message || t("matches.delete_failed", "Failed to delete match"), "error");
+                    }
+                }
+            });
+        });
+    }
+}
+
 async function loadMatches(eventKey, timezone) {
     const table = document.getElementById("matches-table");
     const body = table.querySelector("tbody");
-    body.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>' + t("status.loading", t('matches.loading_matches', "Loading matches...")) + '</div></td></tr>';
 
     if (!eventKey) {
         Obsidianscout.showToast(t("matches.set_event_key", "Set an event key in settings"), "error");
@@ -111,103 +204,30 @@ async function loadMatches(eventKey, timezone) {
         return;
     }
 
+    const cacheKey = `/api/matches?eventKey=${eventKey}`;
+    const cachedMatches = Obsidianscout.getCachedData ? Obsidianscout.getCachedData(cacheKey) : null;
+    let hasRenderedCache = false;
+
+    if (Array.isArray(cachedMatches) && cachedMatches.length > 0) {
+        renderMatchesTable(cachedMatches, eventKey, timezone);
+        hasRenderedCache = true;
+    } else {
+        body.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>' + t("status.loading", t('matches.loading_matches', "Loading matches...")) + '</div></td></tr>';
+    }
+
     try {
-        const matches = await Obsidianscout.request(`/api/matches?eventKey=${eventKey}`);
-        currentMatches = matches;
-        const isAdmin = currentUser && Obsidianscout.isAdmin(currentUser.role);
-        const fragment = document.createDocumentFragment();
-
-        body.innerHTML = "";
-
-        if (matches.length === 0) {
-            body.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">' + t("matches.no_matches", "No matches found for this event.") + '</td></tr>';
-            return;
-        }
-
-        matches.forEach((match) => {
-            const row = document.createElement("tr");
-            const red = match.redTeams.map(k => Obsidianscout.formatTeam(k)).join(", ");
-            const blue = match.blueTeams.map(k => Obsidianscout.formatTeam(k)).join(", ");
-            const matchCell = document.createElement("td");
-            matchCell.textContent = localize(match.label) || (match.compLevel.toUpperCase() + " " + (match.matchNumber || ""));
-            const timeCell = document.createElement("td");
-            timeCell.className = "match-time-cell";
-            const timeEl = Obsidianscout.formatTimestampWithVenueTooltip(
-                match.scheduledTime,
-                match.eventTimezone
-            );
-            timeCell.appendChild(timeEl);
-            const redCell = document.createElement("td");
-            redCell.textContent = red;
-            const blueCell = document.createElement("td");
-            blueCell.textContent = blue;
-
-            row.appendChild(matchCell);
-            row.appendChild(timeCell);
-            row.appendChild(redCell);
-            row.appendChild(blueCell);
-
-            if (isAdmin) {
-                const actionCell = document.createElement("td");
-                actionCell.className = "admin-only";
-                actionCell.style.display = "flex";
-                actionCell.style.gap = "8px";
-
-                const editButton = document.createElement("button");
-                editButton.className = "btn-icon-edit";
-                editButton.dataset.action = "edit";
-                editButton.dataset.key = match.matchKey;
-                editButton.textContent = t("common.edit", "Edit");
-
-                const deleteButton = document.createElement("button");
-                deleteButton.className = "btn-icon-edit delete";
-                deleteButton.dataset.action = "delete";
-                deleteButton.dataset.key = match.matchKey;
-                deleteButton.style.color = "#c84b31";
-                deleteButton.style.borderColor = "rgba(200, 75, 49, 0.25)";
-                deleteButton.textContent = t("common.delete", "Delete");
-
-                actionCell.appendChild(editButton);
-                actionCell.appendChild(deleteButton);
-                row.appendChild(actionCell);
-            }
-            fragment.appendChild(row);
-        });
-
-        body.appendChild(fragment);
-
-        // Wire edit & delete buttons
-        if (isAdmin) {
-            body.querySelectorAll('[data-action="edit"]').forEach(btn => {
-                btn.addEventListener("click", () => {
-                    const key = btn.getAttribute("data-key");
-                    const match = currentMatches.find(m => m.matchKey === key);
-                    if (match) {
-                        openEditModal(match);
-                    }
-                });
-            });
-            body.querySelectorAll('[data-action="delete"]').forEach(btn => {
-                btn.addEventListener("click", async () => {
-                    const key = btn.getAttribute("data-key");
-                    if (confirm(t("matches.confirm_delete", "Are you sure you want to delete this match?"))) {
-                        try {
-                            await Obsidianscout.request(`/api/matches?matchKey=${key}`, { method: "DELETE" });
-                            Obsidianscout.showToast(t("matches.deleted_success", "Match deleted successfully"), "success");
-                            await loadMatches(eventKey, timezone);
-                        } catch (error) {
-                            Obsidianscout.showToast(error.message || t("matches.delete_failed", "Failed to delete match"), "error");
-                        }
-                    }
-                });
-            });
+        const matches = await Obsidianscout.request(cacheKey);
+        if (Array.isArray(matches)) {
+            renderMatchesTable(matches, eventKey, timezone);
         }
     } catch (error) {
-        body.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 24px;">
-            <div class="retry-error-text" style="margin-bottom: 12px;">${t("matches.load_failed", "Unable to load matches")}: ${error.message}</div>
-            <button class="retry-btn" type="button" id="retry-matches-btn">${t("btn.retry", "Retry")}</button>
-        </td></tr>`;
-        document.getElementById("retry-matches-btn").addEventListener("click", () => loadMatches(eventKey, timezone));
+        if (!hasRenderedCache) {
+            body.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 24px;">
+                <div class="retry-error-text" style="margin-bottom: 12px;">${t("matches.load_failed", "Unable to load matches")}: ${error.message}</div>
+                <button class="retry-btn" type="button" id="retry-matches-btn">${t("btn.retry", "Retry")}</button>
+            </td></tr>`;
+            document.getElementById("retry-matches-btn").addEventListener("click", () => loadMatches(eventKey, timezone));
+        }
     }
 }
 

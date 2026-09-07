@@ -150,14 +150,24 @@ export function getActiveEventKey() {
     return "";
 }
 
+export function getCachedData(path) {
+    try {
+        const text = safeGetItem("cache:" + path);
+        if (text !== null) {
+            return safeParse(text);
+        }
+    } catch (e) {}
+    return null;
+}
+
 export function purgeScoutingCache() {
     try {
         if (typeof localStorage === 'undefined') return;
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && key.startsWith("cache:")) {
-                const subPath = key.substring(6);
+            if (key && (key.startsWith("cache:") || key.startsWith("etag:"))) {
+                const subPath = key.startsWith("cache:") ? key.substring(6) : key.substring(5);
                 if (isScoutingDataPath(subPath)) {
                     keysToRemove.push(key);
                 }
@@ -227,7 +237,10 @@ export async function request(path, options = {}) {
     }
 
     if (method === "GET") {
-        opts.cache = "no-cache";
+        const storedEtag = safeGetItem("etag:" + path);
+        if (storedEtag && !opts.headers["If-None-Match"]) {
+            opts.headers["If-None-Match"] = storedEtag;
+        }
     }
     if (options.json !== undefined) {
         opts.headers["Content-Type"] = "application/json";
@@ -246,6 +259,14 @@ export async function request(path, options = {}) {
             if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.setServerOnline === 'function') {
                 window.Obsidianscout.setServerOnline(true);
             }
+        }
+
+        if (response.status === 304) {
+            const cachedText = safeGetItem("cache:" + path);
+            if (cachedText !== null) {
+                return safeParse(cachedText);
+            }
+            return null;
         }
 
         if (response.status === 204) {
@@ -339,6 +360,12 @@ export async function request(path, options = {}) {
 
             if (shouldCache) {
                 safeSetItem("cache:" + path, textToCache);
+                try {
+                    const etag = response.headers && response.headers.get && response.headers.get("ETag");
+                    if (etag) {
+                        safeSetItem("etag:" + path, etag);
+                    }
+                } catch (e) {}
             }
 
             if (path && (path === "/api/auth/me" || path.startsWith("/api/auth/me?"))) {
@@ -362,10 +389,13 @@ export async function request(path, options = {}) {
             }
         } else {
             safeRemoveItem("cache:" + path);
+            safeRemoveItem("etag:" + path);
             const basePath = path.split("?")[0];
             safeRemoveItem("cache:" + basePath);
+            safeRemoveItem("etag:" + basePath);
             if (basePath === "/api/auth/logout") {
                 safeRemoveItem("cache:/api/auth/me");
+                safeRemoveItem("etag:/api/auth/me");
                 purgeScoutingCache();
             }
             if (basePath.includes("scouting") || basePath.includes("team") || basePath.includes("event")) {

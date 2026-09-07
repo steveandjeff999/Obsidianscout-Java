@@ -3,7 +3,7 @@
  * Fetches, renders, and manages dismissible & expandable system alert banners.
  */
 
-import { request } from '../base/http.js';
+import { request, getCachedData } from '../base/http.js';
 
 let isDelegationInitialized = false;
 
@@ -58,6 +58,61 @@ function initBannerEventDelegation() {
     });
 }
 
+function renderBanners(banners, mainContent) {
+    let container = document.querySelector(".banner-container");
+    if (!banners || banners.length === 0) {
+        if (container) container.remove();
+        return;
+    }
+
+    let dismissed = [];
+    try {
+        const saved = localStorage.getItem("obsidianscout:dismissed_banners");
+        if (saved) dismissed = JSON.parse(saved);
+    } catch (e) {
+        console.warn("Failed to load dismissed banners", e);
+    }
+
+    if (!container) {
+        container = document.createElement("div");
+        container.className = "banner-container";
+        mainContent.insertBefore(container, mainContent.firstChild);
+    }
+
+    container.innerHTML = "";
+
+    banners.forEach(banner => {
+        if (banner.isDismissible && dismissed.includes(banner.id)) {
+            return;
+        }
+
+        const item = document.createElement("div");
+        item.className = `banner-item banner-${banner.bannerType}`;
+        item.dataset.id = banner.id;
+
+        let html = `
+            <div class="banner-body">
+                <div class="banner-message">${banner.message}</div>
+        `;
+
+        if (banner.isExpandable && banner.expandableMessage) {
+            html += `
+                <div class="banner-details hidden">${banner.expandableMessage}</div>
+                <button class="btn-banner-toggle" type="button">Read More</button>
+            `;
+        }
+
+        html += `</div>`;
+
+        if (banner.isDismissible) {
+            html += `<button class="btn-banner-close" type="button" aria-label="Close banner">&times;</button>`;
+        }
+
+        item.innerHTML = html;
+        container.appendChild(item);
+    });
+}
+
 export async function loadAndRenderBanners() {
     initBannerEventDelegation();
     const mainContent = document.querySelector(".main-content") || document.querySelector(".login-shell") || document.querySelector(".shell");
@@ -67,14 +122,18 @@ export async function loadAndRenderBanners() {
         const page = document.body.dataset.page;
         if (page === "reset-password") return;
 
+        const path = (page === "login") ? "/api/banners/login" : "/api/banners";
+
+        // Render cached banners immediately if present (SWR)
+        const cachedBanners = getCachedData ? getCachedData(path) : null;
+        if (Array.isArray(cachedBanners) && cachedBanners.length > 0) {
+            renderBanners(cachedBanners, mainContent);
+        }
+
         let banners = [];
         let isQuorumLostError = false;
         try {
-            if (page === "login") {
-                banners = await request("/api/banners/login");
-            } else {
-                banners = await request("/api/banners");
-            }
+            banners = await request(path);
         } catch (err) {
             if (err.status === 503) {
                 isQuorumLostError = true;
@@ -106,58 +165,7 @@ export async function loadAndRenderBanners() {
             window._quorumBannerCheckTimer = null;
         }
 
-        let container = document.querySelector(".banner-container");
-        if (!banners || banners.length === 0) {
-            if (container) container.remove();
-            return;
-        }
-
-        let dismissed = [];
-        try {
-            const saved = localStorage.getItem("obsidianscout:dismissed_banners");
-            if (saved) dismissed = JSON.parse(saved);
-        } catch (e) {
-            console.warn("Failed to load dismissed banners", e);
-        }
-
-        if (!container) {
-            container = document.createElement("div");
-            container.className = "banner-container";
-            mainContent.insertBefore(container, mainContent.firstChild);
-        }
-
-        container.innerHTML = "";
-
-        banners.forEach(banner => {
-            if (banner.isDismissible && dismissed.includes(banner.id)) {
-                return;
-            }
-
-            const item = document.createElement("div");
-            item.className = `banner-item banner-${banner.bannerType}`;
-            item.dataset.id = banner.id;
-
-            let html = `
-                <div class="banner-body">
-                    <div class="banner-message">${banner.message}</div>
-            `;
-
-            if (banner.isExpandable && banner.expandableMessage) {
-                html += `
-                    <div class="banner-details hidden">${banner.expandableMessage}</div>
-                    <button class="btn-banner-toggle" type="button">Read More</button>
-                `;
-            }
-
-            html += `</div>`;
-
-            if (banner.isDismissible) {
-                html += `<button class="btn-banner-close" type="button" aria-label="Close banner">&times;</button>`;
-            }
-
-            item.innerHTML = html;
-            container.appendChild(item);
-        });
+        renderBanners(banners, mainContent);
     } catch (error) {
         console.error("Failed to load banners:", error);
     }

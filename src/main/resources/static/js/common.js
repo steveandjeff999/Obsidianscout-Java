@@ -17,6 +17,7 @@ import {
 
 import {
     request,
+    getCachedData,
     getCsrfToken,
     setButtonLoading,
     withButtonLoading,
@@ -180,6 +181,7 @@ window.Obsidianscout = {
     getProgram,
     getProgramPrefix,
     request,
+    getCachedData,
     getMe,
     checkLoginStatus,
     requireAuth,
@@ -244,6 +246,7 @@ export {
     getProgram,
     getProgramPrefix,
     request,
+    getCachedData,
     getMe,
     checkLoginStatus,
     requireAuth,
@@ -530,7 +533,10 @@ async function onDOMContentLoaded() {
             if (!isCacheManager) {
                 syncOfflineEntries();
             }
-            syncOfflineCache();
+            // Defer background sync so user's active page navigation gets full uncontended bandwidth
+            setTimeout(() => {
+                syncOfflineCache();
+            }, 10000);
         }
     });
 

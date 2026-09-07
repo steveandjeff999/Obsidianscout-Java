@@ -18,6 +18,9 @@ import com.obsidianscout.routes.MobileApiException
 import com.obsidianscout.routes.MobileErrorResponse
 import com.obsidianscout.routes.respondStaticHtml
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.HttpHeaders
+import io.ktor.http.content.OutgoingContent
+import io.ktor.server.response.ApplicationSendPipeline
 import io.ktor.network.tls.certificates.buildKeyStore
 import io.ktor.network.tls.certificates.saveToFile
 import java.security.Security
@@ -148,21 +151,22 @@ fun Application.module(appConfig: AppConfig) {
     }
     install(Compression) {
         gzip {
-            condition {
-                !request.path().startsWith("/api")
-            }
+            priority = 1.0
+            minimumSize(512)
         }
         deflate {
-            condition {
-                !request.path().startsWith("/api")
-            }
+            priority = 10.0
+            minimumSize(512)
         }
     }
     install(CachingHeaders) {
         options { call, _ ->
             val path = call.request.path()
+            val method = call.request.local.method.value.uppercase()
             if (path.contains("/vendor/") || path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) {
                 CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 3600 * 24 * 30, visibility = CacheControl.Visibility.Public))
+            } else if (method == "GET" && path.startsWith("/api/")) {
+                CachingOptions(CacheControl.NoCache(visibility = CacheControl.Visibility.Private))
             } else {
                 CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
             }
@@ -175,6 +179,25 @@ fun Application.module(appConfig: AppConfig) {
         }
     }
 
+    // Response interceptor for ETags and 304 Not Modified on GET /api/ endpoints
+    sendPipeline.intercept(ApplicationSendPipeline.Render) { message ->
+        val call = context
+        val path = call.request.path()
+        val method = call.request.local.method.value.uppercase()
+        if (method == "GET" && path.startsWith("/api/") && message is OutgoingContent.ByteArrayContent) {
+            val bytes = message.bytes()
+            val crc = java.util.zip.CRC32()
+            crc.update(bytes)
+            val etag = "\"${java.lang.Long.toHexString(crc.value)}\""
+            call.response.headers.append(HttpHeaders.ETag, etag)
+
+            val ifNoneMatch = call.request.headers[HttpHeaders.IfNoneMatch]
+            if (ifNoneMatch != null && (ifNoneMatch == etag || ifNoneMatch == "*")) {
+                proceedWith(HttpStatusCode.NotModified)
+            }
+        }
+    }
+
     // Pipeline Interceptor for Security Headers, Anti-CSRF Token, and Cache Controls
     intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
         val path = call.request.path()
@@ -184,9 +207,13 @@ fun Application.module(appConfig: AppConfig) {
                 path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")
 
         if (!isAsset) {
-            call.response.headers.append("Cache-Control", "no-store, no-cache, must-revalidate, private")
-            call.response.headers.append("Pragma", "no-cache")
-            call.response.headers.append("Expires", "0")
+            if (method == "GET" && path.startsWith("/api/")) {
+                call.response.headers.append("Cache-Control", "private, no-cache, must-revalidate")
+            } else {
+                call.response.headers.append("Cache-Control", "no-store, no-cache, must-revalidate, private")
+                call.response.headers.append("Pragma", "no-cache")
+                call.response.headers.append("Expires", "0")
+            }
         }
 
         if (call.request.cookies["XSRF-TOKEN"] == null) {

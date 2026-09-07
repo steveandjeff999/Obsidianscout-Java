@@ -118,10 +118,82 @@ async function initTeamsPage() {
     }
 }
 
+function renderTeamsTable(teams, eventKey) {
+    const table = document.getElementById("teams-table");
+    const body = table.querySelector("tbody");
+    currentTeams = teams;
+    const isAdmin = currentUser && Obsidianscout.isAdmin(currentUser.role);
+
+    body.innerHTML = "";
+
+    if (teams.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 24px;">No teams found for this event.</td></tr>';
+        return;
+    }
+
+    teams.forEach((team) => {
+        const row = document.createElement("tr");
+        const location = [team.city, team.state, team.country].filter(Boolean).join(", ");
+        let actionHtml = "";
+        if (isAdmin) {
+            actionHtml = `<td class="admin-only" style="display: flex; gap: 8px;">
+                <button class="btn-icon-edit" data-action="edit" data-number="${team.teamNumber}">Edit</button>
+                <button class="btn-icon-edit delete" data-action="delete" data-number="${team.teamNumber}" data-key="${team.teamKey}" style="color: #c84b31; border-color: rgba(200, 75, 49, 0.25);">Delete</button>
+            </td>`;
+        }
+        const displayNum = Obsidianscout.formatTeam(team.teamKey, team.teamNumber);
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
+            ? Obsidianscout.getProgram() === "FTC"
+            : (currentSettings && currentSettings.program === "FTC");
+        const effectiveUseEpa = !isFtc && currentSettings && currentSettings.useStatboticsEpa;
+        const effectiveUseOpr = currentSettings && currentSettings.useTbaOpr;
+
+        const oprCell = effectiveUseOpr ? `<td>${team.opr !== null ? team.opr.toFixed(2) : ""}</td>` : "";
+        const epaCell = effectiveUseEpa ? `<td>${team.epa !== null ? team.epa.toFixed(2) : ""}</td>` : "";
+        row.innerHTML = `
+            <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${displayNum}</a></td>
+            <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${team.nickname || team.name || ""}</a></td>
+            <td>${location}</td>
+            <td>${team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : ""}</td>
+            ${oprCell}
+            ${epaCell}
+            ${actionHtml}
+        `;
+        body.appendChild(row);
+    });
+
+    // Wire edit & delete buttons
+    if (isAdmin) {
+        body.querySelectorAll('[data-action="edit"]').forEach(btn => {
+            btn.addEventListener("click", () => {
+                const num = parseInt(btn.getAttribute("data-number"));
+                const team = currentTeams.find(t => t.teamNumber === num);
+                if (team) {
+                    openEditModal(team);
+                }
+            });
+        });
+        body.querySelectorAll('[data-action="delete"]').forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const num = btn.getAttribute("data-number");
+                const teamKey = btn.getAttribute("data-key");
+                if (confirm(`Are you sure you want to delete team ${num}?`)) {
+                    try {
+                        await Obsidianscout.request(`/api/teams?eventKey=${eventKey}&teamKey=${teamKey}`, { method: "DELETE" });
+                        Obsidianscout.showToast("Team deleted successfully", "success");
+                        await loadTeams(eventKey);
+                    } catch (error) {
+                        Obsidianscout.showToast(error.message || "Failed to delete team", "error");
+                    }
+                }
+            });
+        });
+    }
+}
+
 async function loadTeams(eventKey) {
     const table = document.getElementById("teams-table");
     const body = table.querySelector("tbody");
-    body.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading teams...</div></td></tr>';
 
     if (!eventKey) {
         Obsidianscout.showToast("Set year and event code in settings", "error");
@@ -129,82 +201,30 @@ async function loadTeams(eventKey) {
         return;
     }
 
+    const cacheKey = `/api/teams?eventKey=${eventKey}`;
+    const cachedTeams = Obsidianscout.getCachedData ? Obsidianscout.getCachedData(cacheKey) : null;
+    let hasRenderedCache = false;
+
+    if (Array.isArray(cachedTeams) && cachedTeams.length > 0) {
+        renderTeamsTable(cachedTeams, eventKey);
+        hasRenderedCache = true;
+    } else {
+        body.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading teams...</div></td></tr>';
+    }
+
     try {
-        const teams = await Obsidianscout.request(`/api/teams?eventKey=${eventKey}`);
-        currentTeams = teams;
-        const isAdmin = currentUser && Obsidianscout.isAdmin(currentUser.role);
-
-        body.innerHTML = "";
-
-        if (teams.length === 0) {
-            body.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 24px;">No teams found for this event.</td></tr>';
-            return;
-        }
-
-        teams.forEach((team) => {
-            const row = document.createElement("tr");
-            const location = [team.city, team.state, team.country].filter(Boolean).join(", ");
-            let actionHtml = "";
-            if (isAdmin) {
-                actionHtml = `<td class="admin-only" style="display: flex; gap: 8px;">
-                    <button class="btn-icon-edit" data-action="edit" data-number="${team.teamNumber}">Edit</button>
-                    <button class="btn-icon-edit delete" data-action="delete" data-number="${team.teamNumber}" data-key="${team.teamKey}" style="color: #c84b31; border-color: rgba(200, 75, 49, 0.25);">Delete</button>
-                </td>`;
-            }
-            const displayNum = Obsidianscout.formatTeam(team.teamKey, team.teamNumber);
-            const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
-                ? Obsidianscout.getProgram() === "FTC"
-                : (currentSettings && currentSettings.program === "FTC");
-            const effectiveUseEpa = !isFtc && currentSettings && currentSettings.useStatboticsEpa;
-            const effectiveUseOpr = currentSettings && currentSettings.useTbaOpr;
-
-            const oprCell = effectiveUseOpr ? `<td>${team.opr !== null ? team.opr.toFixed(2) : ""}</td>` : "";
-            const epaCell = effectiveUseEpa ? `<td>${team.epa !== null ? team.epa.toFixed(2) : ""}</td>` : "";
-            row.innerHTML = `
-                <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${displayNum}</a></td>
-                <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${team.nickname || team.name || ""}</a></td>
-                <td>${location}</td>
-                <td>${team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : ""}</td>
-                ${oprCell}
-                ${epaCell}
-                ${actionHtml}
-            `;
-            body.appendChild(row);
-        });
-
-        // Wire edit & delete buttons
-        if (isAdmin) {
-            body.querySelectorAll('[data-action="edit"]').forEach(btn => {
-                btn.addEventListener("click", () => {
-                    const num = parseInt(btn.getAttribute("data-number"));
-                    const team = currentTeams.find(t => t.teamNumber === num);
-                    if (team) {
-                        openEditModal(team);
-                    }
-                });
-            });
-            body.querySelectorAll('[data-action="delete"]').forEach(btn => {
-                btn.addEventListener("click", async () => {
-                    const num = btn.getAttribute("data-number");
-                    const teamKey = btn.getAttribute("data-key");
-                    if (confirm(`Are you sure you want to delete team ${num}?`)) {
-                        try {
-                            await Obsidianscout.request(`/api/teams?eventKey=${eventKey}&teamKey=${teamKey}`, { method: "DELETE" });
-                            Obsidianscout.showToast("Team deleted successfully", "success");
-                            await loadTeams(eventKey);
-                        } catch (error) {
-                            Obsidianscout.showToast(error.message || "Failed to delete team", "error");
-                        }
-                    }
-                });
-            });
+        const teams = await Obsidianscout.request(cacheKey);
+        if (Array.isArray(teams)) {
+            renderTeamsTable(teams, eventKey);
         }
     } catch (error) {
-        body.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px;">
-            <div class="retry-error-text" style="margin-bottom: 12px;">Failed to load teams: ${error.message}</div>
-            <button class="retry-btn" type="button" id="retry-teams-btn">Retry</button>
-        </td></tr>`;
-        document.getElementById("retry-teams-btn").addEventListener("click", () => loadTeams(eventKey));
+        if (!hasRenderedCache) {
+            body.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px;">
+                <div class="retry-error-text" style="margin-bottom: 12px;">Failed to load teams: ${error.message}</div>
+                <button class="retry-btn" type="button" id="retry-teams-btn">Retry</button>
+            </td></tr>`;
+            document.getElementById("retry-teams-btn").addEventListener("click", () => loadTeams(eventKey));
+        }
     }
 }
 

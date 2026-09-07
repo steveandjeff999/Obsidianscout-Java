@@ -103,12 +103,24 @@ export async function syncOfflineEntries() {
     }
 }
 
-export async function syncOfflineCache(clearOldOthers = false) {
+const LAST_SYNC_KEY = "obsidianscout:last_offline_sync_ts";
+const SYNC_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes cooldown
+
+export async function syncOfflineCache(clearOldOthers = false, force = false) {
     if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.isServerOnline === 'function') {
         if (!window.Obsidianscout.isServerOnline()) return;
     } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
         return;
     }
+
+    if (!force) {
+        const lastSync = parseInt(safeGetItem(LAST_SYNC_KEY) || "0", 10);
+        if (Date.now() - lastSync < SYNC_COOLDOWN_MS) {
+            console.log("[Offline Cache] Cooldown active, skipping background sync.");
+            return;
+        }
+    }
+
     const loggedIn = await checkLoginStatus();
     if (!loggedIn) return;
 
@@ -202,6 +214,7 @@ export async function syncOfflineCache(clearOldOthers = false) {
                 console.warn("[Offline Cache] Sync failed for " + endpoint + ":", e.message || e);
             }
         }
+        safeSetItem(LAST_SYNC_KEY, String(Date.now()));
         console.log("[Offline Cache] Background sync complete. Successfully updated " + successCount + " endpoints.");
 
         if (clearOldOthers && successCount > 0) {
