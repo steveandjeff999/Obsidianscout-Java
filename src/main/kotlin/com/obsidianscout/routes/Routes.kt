@@ -1296,7 +1296,19 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
-                    call.respond(IntegrationService.listTeams(eventKey, session))
+                    val eventKeyLower = eventKey.lowercase().trim()
+                    val count = com.obsidianscout.db.readTransaction {
+                        com.obsidianscout.db.ApiTeams.selectAll().where { com.obsidianscout.db.ApiTeams.eventKey eq eventKeyLower }.count()
+                    }
+                    if (count == 0L && !com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                        val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
+                        try {
+                            IntegrationService.syncCustomEventData(settings, eventKeyLower)
+                        } catch (e: Exception) {
+                            // ignore or log
+                        }
+                    }
+                    call.respond(IntegrationService.listTeams(eventKeyLower, session))
                 }
                 post {
                     call.requireAdmin()
@@ -2552,6 +2564,43 @@ fun Application.configureRoutes() {
                     try {
                         val dbBanners = com.obsidianscout.db.BannerService.getActive(session.teamNumber)
                         active.addAll(dbBanners)
+
+                        // If user is an admin on an affected team with an active alliance, validate the alliance configuration
+                        if (session.role.isAtLeast(com.obsidianscout.auth.UserRole.ADMIN)) {
+                            val activeAllianceId = com.obsidianscout.scouting.AllianceService.getActiveAllianceId(session.teamNumber, session.program)
+                            if (activeAllianceId != null) {
+                                val validation = com.obsidianscout.scouting.AllianceService.validateAlliance(activeAllianceId)
+                                if (validation != null && validation.isMisconfigured) {
+                                    val count = validation.issues.size
+                                    val issuesSummary = validation.issues.joinToString(", ") { it.category }
+                                    val detailsBuilder = StringBuilder()
+                                    detailsBuilder.append("Active Alliance \"${validation.allianceName}\" is missing required configuration:\n\n")
+                                    validation.issues.forEachIndexed { index, issue ->
+                                        detailsBuilder.append("${index + 1}. ${issue.category} [Location: ${issue.location}]\n")
+                                        detailsBuilder.append("   • Error: ${issue.error}\n")
+                                        detailsBuilder.append("   • Fix: ${issue.fixAction}\n")
+                                        detailsBuilder.append("   • Impact: ${issue.impact}\n\n")
+                                    }
+                                    detailsBuilder.append("👉 Go to Alliances (/alliances) to complete configuration and use shared alliance data.")
+
+                                    active.add(
+                                        0,
+                                        com.obsidianscout.routes.BannerDto(
+                                            id = "sys-alliance-misconfigured-${activeAllianceId}",
+                                            teamNumber = session.teamNumber,
+                                            message = "⚠️ Active Alliance \"${validation.allianceName}\" is not properly configured (${count} issue${if (count == 1) "" else "s"}: ${issuesSummary}). Scouting forms and schedule syncing are falling back to local team settings.",
+                                            bannerType = "warning",
+                                            isDismissible = true,
+                                            isExpandable = true,
+                                            expandableMessage = detailsBuilder.toString().trimEnd(),
+                                            isActive = true,
+                                            createdAt = java.time.Instant.now().toString(),
+                                            updatedAt = java.time.Instant.now().toString()
+                                        )
+                                    )
+                                }
+                            }
+                        }
 
                         val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                         val eventKey = settings.resolvedEventKey()

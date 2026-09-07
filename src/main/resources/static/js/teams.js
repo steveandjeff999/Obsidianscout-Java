@@ -152,7 +152,7 @@ function renderTeamsTable(teams, eventKey) {
         const epaCell = effectiveUseEpa ? `<td>${team.epa !== null ? team.epa.toFixed(2) : ""}</td>` : "";
         row.innerHTML = `
             <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${displayNum}</a></td>
-            <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-profile-link">${team.nickname || team.name || ""}</a></td>
+            <td><a href="/team?teamNumber=${team.teamNumber}&eventKey=${eventKey}" class="team-name-link">${team.nickname || team.name || ""}</a></td>
             <td>${location}</td>
             <td>${team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : ""}</td>
             ${oprCell}

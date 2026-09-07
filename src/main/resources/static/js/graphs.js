@@ -221,7 +221,7 @@ function initDatasource(state) {
         });
     } else {
         datasourceField.classList.add("hidden");
-    }    state.datasource = "scouted";
+        state.datasource = "scouted";
     }
 
     toggleFieldsForDatasource(state);
@@ -777,10 +777,6 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
                 series.push({
                     name: isFtc ? "FTC Scout OPR" : "TBA OPR",
                     x: labels,
-                    y: data.map(item => item.opr)
-                });
-            }
-        }
                     y: data.map(item => item.opr)
                 });
             }

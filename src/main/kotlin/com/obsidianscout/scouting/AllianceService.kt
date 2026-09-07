@@ -10,6 +10,9 @@ import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.Users
 import com.obsidianscout.config.ConfigService
+import com.obsidianscout.config.JsonSupport
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.dao.id.EntityID
@@ -32,6 +35,23 @@ import java.util.concurrent.ConcurrentHashMap
 // ────────────────────────────────────────
 
 @Serializable
+data class AllianceConfigIssue(
+    val category: String,
+    val location: String,
+    val error: String,
+    val fixAction: String,
+    val impact: String
+)
+
+@Serializable
+data class AllianceValidationDto(
+    val allianceId: String,
+    val allianceName: String,
+    val isMisconfigured: Boolean,
+    val issues: List<AllianceConfigIssue>
+)
+
+@Serializable
 data class AllianceMemberRecord(
     val teamNumber: Int,
     val status: String,
@@ -52,7 +72,8 @@ data class AllianceRecord(
     val createdAt: String,
     val updatedAt: String,
     val year: Int? = null,
-    val eventCode: String? = null
+    val eventCode: String? = null,
+    val validation: AllianceValidationDto? = null
 )
 
 @Serializable
@@ -728,16 +749,30 @@ object AllianceService {
             }
             .map { it[AllianceMemberships.allianceId].value }
 
-        if (myAllianceIds.isEmpty()) return@readTransaction emptySet()
+        val effAllianceIds = if (myAllianceIds.isNotEmpty()) {
+            myAllianceIds
+        } else {
+            // Fallback check across all programs if none found under specific program
+            AllianceMemberships
+                .selectAll().where {
+                    (AllianceMemberships.teamNumber eq teamNumber) and
+                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                    (AllianceMemberships.active eq true)
+                }
+                .map { it[AllianceMemberships.allianceId].value }
+        }
 
-        // Find all other ACCEPTED/ADMIN members in those alliances who are also active
+        if (effAllianceIds.isEmpty()) return@readTransaction emptySet()
+
+        // Find all other ACCEPTED/ADMIN members in those alliances who are not disabled.
+        // We do NOT require partner teams to also have active eq true, so that whenever a team
+        // enables the alliance, they can collaborate and share/view data with all accepted partners.
         AllianceMemberships
             .selectAll().where {
-                (AllianceMemberships.allianceId inList myAllianceIds) and
-                (AllianceMemberships.program eq program) and
+                (AllianceMemberships.allianceId inList effAllianceIds) and
                 (AllianceMemberships.teamNumber neq teamNumber) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
-                (AllianceMemberships.active eq true)
+                (AllianceMemberships.disabled eq false)
             }
             .map { it[AllianceMemberships.teamNumber] }
             .toSet()
@@ -748,10 +783,23 @@ object AllianceService {
      * and returns the alliance ID.
      */
     fun getActiveAllianceId(teamNumber: Int, program: String = "FRC"): UUID? = readTransaction {
-        AllianceMemberships
+        val exactMatch = AllianceMemberships
             .selectAll().where {
                 (AllianceMemberships.teamNumber eq teamNumber) and
                 (AllianceMemberships.program eq program) and
+                (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                (AllianceMemberships.active eq true)
+            }
+            .firstOrNull()
+            ?.get(AllianceMemberships.allianceId)
+            ?.value
+
+        if (exactMatch != null) return@readTransaction exactMatch
+
+        // Fallback: if team has an active alliance regardless of program, return it so admin features and data sharing stay linked
+        AllianceMemberships
+            .selectAll().where {
+                (AllianceMemberships.teamNumber eq teamNumber) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
                 (AllianceMemberships.active eq true)
             }
@@ -881,9 +929,112 @@ object AllianceService {
         }
     }
 
+    private fun countConfigFields(jsonStr: String?): Int {
+        if (jsonStr.isNullOrBlank()) return 0
+        return try {
+            val element = JsonSupport.json.parseToJsonElement(jsonStr)
+            val obj = element as? JsonObject ?: return 0
+            val fields = obj["fields"] as? JsonArray ?: return 0
+            fields.size
+        } catch (_: Throwable) {
+            0
+        }
+    }
+
+    fun validateAllianceRow(allianceRow: org.jetbrains.exposed.sql.ResultRow, members: List<AllianceMemberRecord>): AllianceValidationDto {
+        val allianceId = allianceRow[ScoutingAlliances.id].value.toString()
+        val allianceName = allianceRow[ScoutingAlliances.name]
+        val year = allianceRow[ScoutingAlliances.year]
+        val eventCode = allianceRow[ScoutingAlliances.eventCode]
+        val eventKey = allianceRow[ScoutingAlliances.eventKey]
+        val matchConfig = allianceRow[ScoutingAlliances.matchConfigJson]
+        val pitConfig = allianceRow[ScoutingAlliances.pitConfigJson]
+        val qualConfig = allianceRow[ScoutingAlliances.qualitativeConfigJson]
+
+        val issues = mutableListOf<AllianceConfigIssue>()
+
+        // 1. Event configuration
+        val hasEvent = (year != null && !eventCode.isNullOrBlank()) || !eventKey.isNullOrBlank()
+        if (!hasEvent) {
+            issues.add(
+                AllianceConfigIssue(
+                    category = "Event Details",
+                    location = "Alliance Details → Event Year & Event Code",
+                    error = "No event is configured for this alliance.",
+                    fixAction = "Go to Alliances → Edit '${allianceName}' → Alliance Details, and enter the Event Year and Event Code (e.g. 2026 and ilch).",
+                    impact = "Match schedules and team lists are falling back to each team's local event settings instead of an alliance schedule."
+                )
+            )
+        }
+
+        // 2. Match Scouting Form
+        if (countConfigFields(matchConfig) == 0) {
+            issues.add(
+                AllianceConfigIssue(
+                    category = "Match Scouting Form",
+                    location = "Alliance Configuration → Game / Match Form",
+                    error = "Match scouting form has 0 fields defined.",
+                    fixAction = "In Alliance Configuration (Game tab), add fields or click 'Import Local' to copy your team's configuration.",
+                    impact = "Match scouting forms are falling back to each team's local match configuration."
+                )
+            )
+        }
+
+        // 3. Pit Scouting Form
+        if (countConfigFields(pitConfig) == 0) {
+            issues.add(
+                AllianceConfigIssue(
+                    category = "Pit Scouting Form",
+                    location = "Alliance Configuration → Pit Form",
+                    error = "Pit scouting form has 0 fields defined.",
+                    fixAction = "In Alliance Configuration (Pit tab), add fields or click 'Import Local' to copy your team's configuration.",
+                    impact = "Pit scouting forms are falling back to each team's local pit configuration."
+                )
+            )
+        }
+
+        // 4. Qualitative Scouting Form
+        if (countConfigFields(qualConfig) == 0) {
+            issues.add(
+                AllianceConfigIssue(
+                    category = "Qualitative Scouting Form",
+                    location = "Alliance Configuration → Qualitative Form",
+                    error = "Qualitative scouting form has 0 fields defined.",
+                    fixAction = "In Alliance Configuration (Qualitative tab), add fields or click 'Import Local' to copy your team's configuration.",
+                    impact = "Qualitative scouting forms are falling back to each team's local qualitative configuration."
+                )
+            )
+        }
+
+        return AllianceValidationDto(
+            allianceId = allianceId,
+            allianceName = allianceName,
+            isMisconfigured = issues.isNotEmpty(),
+            issues = issues
+        )
+    }
+
+    fun validateAlliance(allianceId: UUID): AllianceValidationDto? = readTransaction {
+        val allianceRow = ScoutingAlliances
+            .selectAll().where { ScoutingAlliances.id eq allianceId }
+            .firstOrNull() ?: return@readTransaction null
+        val members = AllianceMemberships
+            .selectAll().where { AllianceMemberships.allianceId eq allianceId }
+            .map { m ->
+                AllianceMemberRecord(
+                    teamNumber = m[AllianceMemberships.teamNumber],
+                    status = m[AllianceMemberships.status],
+                    invitedAt = m[AllianceMemberships.invitedAt].toString(),
+                    respondedAt = m[AllianceMemberships.respondedAt]?.toString(),
+                    disabled = m[AllianceMemberships.disabled],
+                    active = m[AllianceMemberships.active]
+                )
+            }
+        validateAllianceRow(allianceRow, members)
+    }
+
     /**
-     * Builds a list of AllianceRecord including all membership rows in exactly 2 queries.
-     * Slices out the large config JSON columns to avoid performance slowdown.
+     * Builds a list of AllianceRecord including all membership rows and configuration validation in exactly 2 queries.
      * Must be called inside a transaction.
      */
     private fun buildRecords(allianceIds: List<UUID>): List<AllianceRecord> {
@@ -899,7 +1050,10 @@ object AllianceService {
                 ScoutingAlliances.createdAt,
                 ScoutingAlliances.updatedAt,
                 ScoutingAlliances.year,
-                ScoutingAlliances.eventCode
+                ScoutingAlliances.eventCode,
+                ScoutingAlliances.matchConfigJson,
+                ScoutingAlliances.pitConfigJson,
+                ScoutingAlliances.qualitativeConfigJson
             )
             .where { ScoutingAlliances.id inList allianceIds }
             .associateBy { it[ScoutingAlliances.id].value }
@@ -930,7 +1084,8 @@ object AllianceService {
                 createdAt = alliance[ScoutingAlliances.createdAt].toString(),
                 updatedAt = alliance[ScoutingAlliances.updatedAt].toString(),
                 year = alliance[ScoutingAlliances.year],
-                eventCode = alliance[ScoutingAlliances.eventCode]
+                eventCode = alliance[ScoutingAlliances.eventCode],
+                validation = validateAllianceRow(alliance, members)
             )
         }
     }

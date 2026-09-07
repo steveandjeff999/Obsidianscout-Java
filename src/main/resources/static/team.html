@@ -10,6 +10,7 @@
 
     <title>ObsidianScout | Team Profile</title>
 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="stylesheet" href="/css/app.css" />
     <link rel="manifest" href="/manifest.json" />
 </head>
@@ -35,7 +36,8 @@
         <main class="main-content">
             <!-- Back button -->
             <div class="team-back-btn" id="back-btn">
-                <span data-i18n="team.larr_back_to_teams">&larr; Back to Teams</span>
+                <i class="fa-solid fa-arrow-left"></i>
+                <span data-i18n="team.back_to_teams">Back to Teams</span>
             </div>
 
             <!-- Loading Spinner container -->
@@ -43,6 +45,23 @@
                 <div class="card" style="text-align: center; padding: 48px;">
                     <div class="spinner" style="margin: 0 auto 16px; width: 48px; height: 48px;"></div>
                     <div style="font-weight: 600; color: var(--muted);" data-i18n="team.loading_team_profile">Loading team profile...</div>
+                </div>
+            </div>
+
+            <!-- Team Not Found Container (Hidden initially) -->
+            <div id="not-found-container" class="hidden">
+                <div class="card" style="text-align: center; padding: 48px 24px; max-width: 600px; margin: 0 auto;">
+                    <div style="margin-bottom: 20px; line-height: 1;">
+                        <i class="fa-solid fa-magnifying-glass fa-search" style="font-size: 48px; color: var(--accent); opacity: 0.9;"></i>
+                    </div>
+                    <h2 id="not-found-title" style="margin: 0 0 12px; font-size: 24px; font-weight: 700;" data-i18n="team.team_not_found">Team Not Found</h2>
+                    <p id="not-found-desc" style="color: var(--muted); margin: 0 0 24px; font-size: 15px; line-height: 1.5;" data-i18n="team.team_not_found_desc">Team was not found at this event.</p>
+                    <div>
+                        <a href="/teams" id="not-found-back-link" class="btn" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none;">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            <span data-i18n="team.back_to_teams">Back to Teams</span>
+                        </a>
+                    </div>
                 </div>
             </div>
 

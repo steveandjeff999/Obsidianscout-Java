@@ -238,7 +238,8 @@ window.Obsidianscout = {
     showImageModal,
     purgeScoutingCache,
     isScoutingDataPath,
-    canRoleCacheScouting
+    canRoleCacheScouting,
+    loadAndRenderBanners
 };
 
 // Re-export for ES module consumers
@@ -303,7 +304,8 @@ export {
     showImageModal,
     purgeScoutingCache,
     isScoutingDataPath,
-    canRoleCacheScouting
+    canRoleCacheScouting,
+    loadAndRenderBanners
 };
 
 // ==========================================================================

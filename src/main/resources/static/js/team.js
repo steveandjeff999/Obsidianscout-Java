@@ -68,6 +68,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function loadTeamProfile() {
     const loadingContainer = document.getElementById("loading-container");
     const profileContainer = document.getElementById("profile-container");
+    const notFoundContainer = document.getElementById("not-found-container");
+
+    if (notFoundContainer) notFoundContainer.classList.add("hidden");
+    profileContainer.classList.add("hidden");
+    loadingContainer.classList.remove("hidden");
 
     try {
         // Fetch Settings & Event Key
@@ -106,18 +111,29 @@ async function loadTeamProfile() {
         state.configs.qualitative = qualConfig;
 
         // Find current team
-        state.team = teamsList.find(t => t.teamNumber === currentTeamNumber) || {
-            teamNumber: currentTeamNumber,
-            teamKey: currentTeamKey,
-            nickname: `Team ${currentTeamNumber}`,
-            name: `Team ${currentTeamNumber}`,
-            city: null,
-            state: null,
-            country: null,
-            opr: null,
-            epa: null,
-            averagePoints: null
-        };
+        const foundTeam = (teamsList || []).find(t => t.teamNumber === currentTeamNumber);
+        if (!foundTeam) {
+            loadingContainer.classList.add("hidden");
+            profileContainer.classList.add("hidden");
+            if (notFoundContainer) {
+                const notFoundDesc = document.getElementById("not-found-desc");
+                if (notFoundDesc) {
+                    const fallbackDesc = `Team ${currentTeamNumber} was not found at ${currentEventKey || "this event"}.`;
+                    notFoundDesc.textContent = t('team.team_not_found_desc', fallbackDesc)
+                        .replace("{teamNumber}", currentTeamNumber)
+                        .replace("{eventKey}", currentEventKey || "");
+                }
+                const notFoundBackLink = document.getElementById("not-found-back-link");
+                if (notFoundBackLink) {
+                    notFoundBackLink.href = currentEventKey ? `/teams?eventKey=${encodeURIComponent(currentEventKey)}` : "/teams";
+                }
+                notFoundContainer.classList.remove("hidden");
+            }
+            document.title = `ObsidianScout | Team ${currentTeamNumber} Not Found`;
+            return;
+        }
+
+        state.team = foundTeam;
 
         // Filter and normalize matches
         state.matches = allMatches.filter(m => {

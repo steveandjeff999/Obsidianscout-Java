@@ -162,11 +162,80 @@
             }
 
             renderMembersList();
+            renderValidationAlert(alliance.validation);
         } catch (err) {
             console.error('Failed to load alliance:', err);
             showToast('Failed to load alliance data: ' + err.message, 'error');
             setTimeout(() => window.location.href = '/alliances', 2000);
         }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function renderValidationAlert(validation) {
+        let box = document.getElementById('alliance-config-warning-box');
+        if (!validation || !validation.isMisconfigured || !validation.issues || validation.issues.length === 0) {
+            if (box) box.remove();
+            return;
+        }
+
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'alliance-config-warning-box';
+            const tabs = document.getElementById('alliance-page-tabs');
+            if (tabs && tabs.parentNode) {
+                tabs.parentNode.insertBefore(box, tabs);
+            }
+        }
+
+        box.className = 'alert alert-warning mb-24';
+        box.style.background = 'rgba(245, 158, 11, 0.12)';
+        box.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+        box.style.borderRadius = 'var(--radius-sm, 8px)';
+        box.style.padding = '16px';
+        box.style.color = 'var(--text, #1e293b)';
+
+        const issuesHtml = validation.issues.map((issue, idx) => `
+            <li style="margin-bottom: 10px;">
+                <div style="font-weight: 700; color: #b45309;">
+                    ${idx + 1}. ${escapeHtml(issue.category)} <span style="font-weight: 400; opacity: 0.85; font-size: 12px;">— ${escapeHtml(issue.location)}</span>
+                </div>
+                <div style="font-size: 13px; margin-top: 2px;">
+                    <strong style="color: #dc2626;">Error:</strong> ${escapeHtml(issue.error)}
+                </div>
+                <div style="font-size: 13px; margin-top: 2px;">
+                    <strong style="color: #059669;">Fix:</strong> ${escapeHtml(issue.fixAction)}
+                </div>
+                <div style="font-size: 12px; margin-top: 2px; color: var(--muted, #64748b);">
+                    <em>Impact:</em> ${escapeHtml(issue.impact)}
+                </div>
+            </li>
+        `).join('');
+
+        box.innerHTML = `
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+                <span style="font-size: 24px; line-height: 1;">⚠️</span>
+                <div style="flex: 1;">
+                    <div style="font-size: 15px; font-weight: 700; margin-bottom: 4px; color: #b45309;">
+                        Alliance Configuration Incomplete (${validation.issues.length} issue${validation.issues.length === 1 ? '' : 's'})
+                    </div>
+                    <p style="margin: 0 0 12px 0; font-size: 13px; line-height: 1.5; color: var(--muted, #64748b);">
+                        This alliance is active or missing required setup. Because of this, scouting forms and match schedules are automatically falling back to individual team local settings. Please resolve the following errors:
+                    </p>
+                    <ul style="margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5;">
+                        ${issuesHtml}
+                    </ul>
+                </div>
+            </div>
+        `;
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -346,6 +415,7 @@
                     renderVisualFields();
                     sendConfigEdit(text);
                     showToast("Imported local team configurations!", "success");
+                    setTimeout(loadAllianceData, 400);
                 }
             } catch (err) {
                 showToast("Failed to import local config: " + err.message, "error");
@@ -426,6 +496,7 @@
             }
             sendConfigEdit(text);
             showToast("Alliance config saved", "success");
+            setTimeout(loadAllianceData, 400);
         });
 
         // Export config
@@ -848,8 +919,9 @@
         body.appendChild(divType);
 
         // Phase Select
+        let divPhase = null;
         if (supportsPhasesConfig()) {
-            const divPhase = document.createElement("div");
+            divPhase = document.createElement("div");
             divPhase.className = "field";
             const labelPhase = document.createElement("label");
             labelPhase.textContent = 'Phase';
@@ -905,7 +977,7 @@
         if (field.type === "section") {
             divId.style.display = "none";
             divReq.style.display = "none";
-            divPhase.style.display = "none";
+            if (divPhase) divPhase.style.display = "none";
         } else {
             // Type-specific configs
             if (field.type === "number" || field.type === "counter" || field.type === "rating") {
@@ -1894,7 +1966,7 @@
         }
 
         async function loadSharedData() {
-            if (!alliance || !alliance.eventKey) {
+            if (!alliance) {
                 sharedEntries = [];
                 renderSharedEntriesList();
                 return;
@@ -1905,7 +1977,16 @@
                 else if (activeDataTab === 'qual') endpoint = '/api/qual-scouting?includePrescout=true&all=true';
 
                 const data = await request(endpoint);
-                sharedEntries = (data || []).filter(e => e.eventKey === alliance.eventKey);
+                const allEntries = data || [];
+                const memberTeams = new Set((alliance.members || []).map(m => m.teamNumber));
+
+                // If alliance has an event key set, match by eventKey or member teams.
+                // If no event key is set on alliance yet, match all entries submitted by member teams.
+                if (alliance.eventKey) {
+                    sharedEntries = allEntries.filter(e => e.eventKey === alliance.eventKey || memberTeams.has(e.ownerTeamNumber));
+                } else {
+                    sharedEntries = allEntries.filter(e => memberTeams.has(e.ownerTeamNumber));
+                }
                 renderSharedEntriesList();
             } catch (err) {
                 console.error('Failed to load shared data:', err);

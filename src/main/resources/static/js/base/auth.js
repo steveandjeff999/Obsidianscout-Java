@@ -5,6 +5,7 @@
 
 import { safeGetItem, safeRemoveItem } from './storage.js';
 import { request } from './http.js';
+import { loadAndRenderBanners } from '../components/banners.js';
 
 export const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "SCOUT"];
 
@@ -157,6 +158,9 @@ export async function requireAuth() {
             }, 400);
         }
     }
+
+    // Re-verify banners once authenticated
+    loadAndRenderBanners();
 
     return me;
 }

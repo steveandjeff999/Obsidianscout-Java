@@ -217,6 +217,17 @@
             ? `<span style="background:#2ecc71;color:white;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;">${t('alliances.active_badge', 'Active')}</span>`
             : '';
 
+        const isMisconfigured = alliance.validation && alliance.validation.isMisconfigured;
+        const configWarningBadge = (isActive && isMisconfigured)
+            ? `<span style="background:rgba(234,179,8,0.2);color:#b45309;border:1px solid rgba(234,179,8,0.4);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;" title="${escHtml(alliance.validation.issues.map(i => i.category + ': ' + i.error).join('\n'))}">⚠️ Needs Setup (${alliance.validation.issues.length})</span>`
+            : '';
+
+        const warningCardNotice = (isActive && isMisconfigured)
+            ? `<div style="background:rgba(234,179,8,0.1);border-left:3px solid #eab308;padding:8px 12px;border-radius:4px;font-size:12px;color:var(--text);margin-top:8px;">
+                 <strong>⚠️ Configuration Incomplete:</strong> ${escHtml(alliance.validation.issues.map(i => i.category).join(', '))}. Scouting forms and schedule syncing are falling back to local team settings. <a href="/alliances/${alliance.id}" style="color:var(--accent);font-weight:600;margin-left:4px;">Fix now →</a>
+               </div>`
+            : '';
+
         const cardStyle = isActive
             ? `border: 2px solid var(--accent); box-shadow: 0 0 16px rgba(99, 102, 241, 0.2), var(--shadow);`
             : '';
@@ -225,9 +236,10 @@
             <div class="alliance-card" data-alliance-id="${alliance.id}" style="${cardStyle}">
                 <div class="alliance-card-header">
                     <div>
-                        <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                             <h3 class="alliance-card-title">${escHtml(alliance.name)}</h3>
                             ${activeBadge}
+                            ${configWarningBadge}
                         </div>
                         <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             ${eventTag}
@@ -235,6 +247,7 @@
                         </div>
                     </div>
                 </div>
+                ${warningCardNotice}
                 ${alliance.notes ? `<p style="margin:0;font-size:13px;color:var(--muted);line-height:1.5;">${escHtml(alliance.notes)}</p>` : ''}
                 <div>
                     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;">${t('alliances.members', 'Members')}</div>

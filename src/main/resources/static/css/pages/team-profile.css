@@ -51,6 +51,18 @@ body.theme-dark .pit-detail-item {
     text-decoration: underline;
 }
 
+.team-name-link {
+    color: var(--text-primary);
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease, text-decoration 0.15s ease;
+}
+
+.team-name-link:hover {
+    text-decoration: underline;
+    opacity: 0.85;
+}
+
 .team-back-btn {
     display: inline-flex;
     align-items: center;
