@@ -272,13 +272,13 @@ async function loadQualScoutPageData(me) {
                         if (teamFieldContainer) teamFieldContainer.classList.remove("hidden");
                         submitButton.textContent = Obsidianscout.t("qual_scout.save_entry", "Save entry");
                         renderSingleTeamView();
-                        updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value);
+                        updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value, matchSelect.value);
+                        updateTeamOptions(teamSelect, teams, matchSelect.value, matches, teamSelect.value);
                         await handleSelectionChange();
                     } else {
                         if (teamFieldContainer) teamFieldContainer.classList.add("hidden");
                         const currentMatchVal = matchSelect.value;
-                        updateMatchOptions(matchSelect, matches, settings.timezone, null);
-                        if (currentMatchVal) matchSelect.value = currentMatchVal;
+                        updateMatchOptions(matchSelect, matches, settings.timezone, null, currentMatchVal);
                         await refreshAllianceState();
                     }
                 });
@@ -286,13 +286,26 @@ async function loadQualScoutPageData(me) {
         }
 
         teamSelect.addEventListener("change", async () => {
-            updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value);
-            matchSelect.value = "";
+            const chosenTeam = teamSelect.value;
+            const currentMatch = matchSelect.value;
+            updateMatchOptions(matchSelect, matches, settings.timezone, chosenTeam, currentMatch);
+            if (!matchSelect.value) {
+                updateTeamOptions(teamSelect, teams, "", matches, chosenTeam);
+            }
             await handleSelectionChange();
         });
 
         matchSelect.addEventListener("change", async () => {
             if (currentScope === "team") {
+                const chosenMatch = matchSelect.value;
+                const currentTeam = teamSelect.value;
+                updateTeamOptions(teamSelect, teams, chosenMatch, matches, currentTeam);
+                const activeTeam = teamSelect.value;
+                if (!chosenMatch) {
+                    updateMatchOptions(matchSelect, matches, settings.timezone, activeTeam, "");
+                } else {
+                    updateMatchOptions(matchSelect, matches, settings.timezone, activeTeam, chosenMatch);
+                }
                 await handleSelectionChange();
             } else {
                 await refreshAllianceState();
@@ -632,26 +645,74 @@ async function loadTeamsAndMatches(eventKey, teamSelect, matchSelect, timezone) 
     const teams = eventKey ? await Obsidianscout.request(`/api/teams?eventKey=${eventKey}`) : [];
     const matches = eventKey ? await Obsidianscout.request(`/api/matches?eventKey=${eventKey}`) : [];
 
+    updateTeamOptions(teamSelect, teams, matchSelect ? matchSelect.value : "", matches, teamSelect.value);
+    updateMatchOptions(matchSelect, matches, timezone, teamSelect.value, matchSelect ? matchSelect.value : "");
+
+    return { teams, matches };
+}
+
+function getMatchTeamNumbers(match) {
+    if (!match) return new Set();
+    const result = new Set();
+    const allTeamKeys = [...(match.redTeams || []), ...(match.blueTeams || [])];
+    allTeamKeys.forEach(key => {
+        if (key === null || key === undefined) return;
+        String(key).split('/').forEach(part => {
+            const clean = part.replace(/^(frc|ftc)/i, '').trim();
+            const num = parseInt(clean, 10);
+            if (!isNaN(num)) {
+                result.add(num);
+            }
+        });
+    });
+    return result;
+}
+
+function updateTeamOptions(teamSelect, teams, selectedMatchKey, matches, currentSelectedTeam) {
+    const prevSelected = currentSelectedTeam !== undefined ? currentSelectedTeam : teamSelect.value;
     teamSelect.innerHTML = "";
+
     const teamPlaceholder = document.createElement("option");
     teamPlaceholder.value = "";
     teamPlaceholder.textContent = (window.Obsidianscout && Obsidianscout.t) ? Obsidianscout.t('scout.select_team', 'Select team') : 'Select team';
     teamSelect.appendChild(teamPlaceholder);
 
-    teams.forEach((team) => {
+    const selectedMatch = selectedMatchKey ? (matches || []).find(m => m.matchKey === selectedMatchKey) : null;
+    let filteredTeams = [...(teams || [])];
+
+    if (selectedMatch) {
+        const matchTeamNums = getMatchTeamNumbers(selectedMatch);
+        filteredTeams = (teams || []).filter(team => matchTeamNums.has(Number(team.teamNumber)));
+        const foundNums = new Set(filteredTeams.map(t => Number(t.teamNumber)));
+        matchTeamNums.forEach(num => {
+            if (!foundNums.has(num)) {
+                filteredTeams.push({
+                    teamNumber: num,
+                    teamKey: `${(window.Obsidianscout && Obsidianscout.getProgramPrefix) ? Obsidianscout.getProgramPrefix() : 'frc'}${num}`,
+                    nickname: ""
+                });
+            }
+        });
+        filteredTeams.sort((a, b) => Number(a.teamNumber) - Number(b.teamNumber));
+    }
+
+    filteredTeams.forEach((team) => {
         const option = document.createElement("option");
         option.value = team.teamNumber;
-        const displayNum = Obsidianscout.formatTeam(team.teamKey, team.teamNumber);
+        const displayNum = (window.Obsidianscout && Obsidianscout.formatTeam) ? Obsidianscout.formatTeam(team.teamKey, team.teamNumber) : team.teamNumber;
         option.textContent = `${displayNum} ${team.nickname || team.name || ""}`.trim();
         teamSelect.appendChild(option);
     });
 
-    updateMatchOptions(matchSelect, matches, timezone, teamSelect.value);
-
-    return { teams, matches };
+    if (prevSelected && Array.from(teamSelect.options).some(opt => String(opt.value) === String(prevSelected))) {
+        teamSelect.value = String(prevSelected);
+    } else {
+        teamSelect.value = "";
+    }
 }
 
-function updateMatchOptions(matchSelect, matches, timezone, selectedTeam) {
+function updateMatchOptions(matchSelect, matches, timezone, selectedTeam, currentSelectedMatch) {
+    const prevSelected = currentSelectedMatch !== undefined ? currentSelectedMatch : matchSelect.value;
     matchSelect.innerHTML = "";
     const matchPlaceholder = document.createElement("option");
     matchPlaceholder.value = "";
@@ -659,13 +720,14 @@ function updateMatchOptions(matchSelect, matches, timezone, selectedTeam) {
     matchSelect.appendChild(matchPlaceholder);
 
     const teamNumber = selectedTeam ? Number(selectedTeam) : null;
-    const teamKey = teamNumber ? `${Obsidianscout.getProgramPrefix()}${teamNumber}` : null;
-    let filtered = matches;
+    const teamKey = teamNumber ? `${(window.Obsidianscout && Obsidianscout.getProgramPrefix) ? Obsidianscout.getProgramPrefix() : 'frc'}${teamNumber}` : null;
+    let filtered = matches || [];
     if (teamKey) {
-        const byTeam = matches.filter((match) =>
+        const anyMatchHasTeams = (matches || []).some(m => (m.redTeams && m.redTeams.length > 0) || (m.blueTeams && m.blueTeams.length > 0));
+        const byTeam = (matches || []).filter((match) =>
             matchHasTeam(match.redTeams, teamKey) || matchHasTeam(match.blueTeams, teamKey)
         );
-        if (byTeam.length) {
+        if (byTeam.length || anyMatchHasTeams) {
             filtered = byTeam;
         }
     }
@@ -684,6 +746,12 @@ function updateMatchOptions(matchSelect, matches, timezone, selectedTeam) {
         option.title = fullLabel;
         matchSelect.appendChild(option);
     });
+
+    if (prevSelected && Array.from(matchSelect.options).some(opt => opt.value === prevSelected)) {
+        matchSelect.value = prevSelected;
+    } else {
+        matchSelect.value = "";
+    }
 }
 
 function truncateLabel(text, maxLength) {
@@ -704,13 +772,13 @@ function formatTeamList(teamKeys) {
 
 function matchHasTeam(teams, teamKey) {
     if (!teams || !teamKey) return false;
-    const cleanTeam = teamKey.replace(/^(frc|ftc)/, "");
+    const cleanTeam = String(teamKey).replace(/^(frc|ftc)/i, "");
     return teams.some(key => {
-        const cleanKey = key.replace(/^(frc|ftc)/, "");
+        const cleanKey = String(key).replace(/^(frc|ftc)/i, "");
         if (cleanKey === cleanTeam) return true;
-        const parts = key.split('/');
+        const parts = String(key).split('/');
         return parts.some(part => {
-            return part.replace(/^(frc|ftc)/, "") === cleanTeam;
+            return part.replace(/^(frc|ftc)/i, "") === cleanTeam;
         });
     });
 }
