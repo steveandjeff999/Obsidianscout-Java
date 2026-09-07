@@ -231,6 +231,9 @@ export async function request(path, options = {}) {
         signal: controller.signal
     };
     opts.headers["X-Requested-With"] = "XMLHttpRequest";
+    if (!opts.headers["Accept"]) {
+        opts.headers["Accept"] = "application/json, text/plain, */*";
+    }
     const csrfToken = getCsrfToken();
     if (csrfToken) {
         opts.headers["X-CSRF-Token"] = csrfToken;

@@ -49,6 +49,7 @@ export async function checkServerConnection({ force = false } = {}) {
             cache: "no-store",
             credentials: "same-origin",
             headers: {
+                "Accept": "application/json",
                 "X-Requested-With": "XMLHttpRequest",
                 "Cache-Control": "no-cache"
             },

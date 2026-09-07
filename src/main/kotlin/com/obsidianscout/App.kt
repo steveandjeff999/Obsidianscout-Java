@@ -62,6 +62,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import com.obsidianscout.db.orchestration.CockroachOrchestrator
+import io.ktor.http.ContentType
 
 private var cockroachOrchestrator: CockroachOrchestrator? = null
 
@@ -152,12 +153,13 @@ fun Application.module(appConfig: AppConfig) {
     install(Compression) {
         gzip {
             priority = 1.0
-            minimumSize(512)
+            minimumSize(256)
         }
         deflate {
-            priority = 10.0
-            minimumSize(512)
+            priority = 0.9
+            minimumSize(256)
         }
+        identity()
     }
     install(CachingHeaders) {
         options { call, _ ->
@@ -193,7 +195,8 @@ fun Application.module(appConfig: AppConfig) {
 
             val ifNoneMatch = call.request.headers[HttpHeaders.IfNoneMatch]
             if (ifNoneMatch != null && (ifNoneMatch == etag || ifNoneMatch == "*")) {
-                proceedWith(HttpStatusCode.NotModified)
+                call.respond(HttpStatusCode.NotModified)
+                finish()
             }
         }
     }
@@ -359,7 +362,12 @@ fun Application.module(appConfig: AppConfig) {
         }
     }
     install(ContentNegotiation) {
-        json(JsonSupport.json)
+        json(JsonSupport.json, ContentType.Application.Json)
+        json(JsonSupport.json, ContentType.Any)
+        json(JsonSupport.json, ContentType.Text.Plain)
+        json(JsonSupport.json, ContentType.Text.Html)
+        json(JsonSupport.json, ContentType.Application.Any)
+        json(JsonSupport.json, ContentType.Text.Any)
     }
     install(Sessions) {
         cookie<UserSession>("obsidian_session") {
