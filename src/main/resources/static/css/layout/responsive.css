@@ -60,21 +60,65 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border: none;
+        border: 1px solid var(--border);
         background: var(--surface);
+        color: var(--ink);
         border-radius: 8px;
         font-size: 20px;
         padding: 6px;
         cursor: pointer;
         width: 44px;
         height: 44px;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+        box-shadow: var(--shadow-sm);
+        transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobile-menu-button:hover {
+        background: var(--surface-2);
+        color: var(--accent);
+        border-color: var(--border-focus);
+    }
+
+    .mobile-menu-button:active {
+        transform: scale(0.96);
+    }
+
+    .mobile-menu-button:focus-visible {
+        outline: 2px solid var(--border-focus);
+        outline-offset: 2px;
     }
 
     .hamburger-icon {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         line-height: 1;
         font-size: 20px;
+        color: inherit;
+    }
+
+    .hamburger-icon svg {
+        display: block;
+        width: 22px;
+        height: 22px;
+        stroke: currentColor;
+    }
+
+    body.theme-dark .mobile-menu-button {
+        background: var(--surface-2);
+        color: var(--ink);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    body.theme-dark .mobile-menu-button:hover,
+    body.theme-dark .mobile-menu-button.is-active,
+    body.theme-dark .mobile-menu-button[aria-expanded="true"] {
+        background: var(--surface-3);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.3);
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     }
 
     /* App Shell on Mobile */
