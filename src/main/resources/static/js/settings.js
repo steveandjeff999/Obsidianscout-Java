@@ -126,6 +126,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 personalUsername.value = updated.username || "";
                 try {
                     localStorage.removeItem("cache:/api/auth/me");
+                    localStorage.removeItem("etag:/api/auth/me");
                 } catch (e) {}
                 Obsidianscout.setUserBadge(currentMe);
 
@@ -227,6 +228,33 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalBugReportPrefWidget(currentMe) {
+        const personalBugPref = document.getElementById("personal-bug-report-pref");
+        if (!personalBugPref) return;
+
+        personalBugPref.value = currentMe.bugReportPreference || Obsidianscout.safeGetItem("obsidianscout:bug_report_preference") || "ask";
+
+        personalBugPref.addEventListener("change", async (e) => {
+            const val = e.target.value;
+            try {
+                Obsidianscout.safeSetItem("obsidianscout:bug_report_preference", val);
+                const updated = await Obsidianscout.request("/api/user/profile-picture", {
+                    method: "PUT",
+                    json: { bugReportPreference: val }
+                });
+                currentMe.bugReportPreference = updated.bugReportPreference || val;
+                personalBugPref.value = updated.bugReportPreference || val;
+                try {
+                    localStorage.removeItem("cache:/api/auth/me");
+                    localStorage.removeItem("etag:/api/auth/me");
+                } catch (_) {}
+                Obsidianscout.showToast("Bug reporting preference updated", "success");
+            } catch (err) {
+                Obsidianscout.showToast(err.message || "Failed to update bug reporting preference", "error");
+            }
+        });
+    }
+
     function wirePersonalDeleteAccountWidget(currentMe) {
         const deleteBtn = document.getElementById("personal-delete-account");
         if (!deleteBtn) return;
@@ -311,7 +339,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                     });
                     currentMe.nodeAlertsEnabled = updated.nodeAlertsEnabled;
                     toggle.checked = !!updated.nodeAlertsEnabled;
-                    try { localStorage.removeItem("cache:/api/auth/me"); } catch (e) {}
+                    try {
+                        localStorage.removeItem("cache:/api/auth/me");
+                        localStorage.removeItem("etag:/api/auth/me");
+                    } catch (e) {}
                     Obsidianscout.showToast(enrolled ? "Enrolled in node health alerts" : "Unsubscribed from node health alerts", "success");
                 } catch (err) {
                     toggle.checked = !enrolled;
@@ -487,6 +518,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalPasswordWidget();
     wirePersonalEmailWidget(me);
     wirePersonalNotificationPrefWidget(me);
+    wirePersonalBugReportPrefWidget(me);
     wirePersonalNodeAlertsWidget(me);
     wirePersonalDeviceSessionsWidget(me);
     wirePersonalDeleteAccountWidget(me);

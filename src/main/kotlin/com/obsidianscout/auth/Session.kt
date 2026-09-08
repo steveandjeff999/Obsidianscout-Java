@@ -38,6 +38,7 @@ data class UserSession(
     val notificationPreference: String = "all",
     val tourProgress: String? = null,
     val nodeAlertsEnabled: Boolean = false,
+    val bugReportPreference: String = "ask",
     val sessionId: String? = null
 )
 
@@ -116,11 +117,13 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         val dbNotificationPreference = userRow[Users.notificationPreference]
         val dbTourProgress = userRow[Users.tourProgress]
         val dbNodeAlertsEnabled = userRow[Users.nodeAlertsEnabled]
+        val dbBugReportPreference = userRow.getOrNull(Users.bugReportPreference) ?: "ask"
 
         val needsSync = session.role != dbRole ||
                         session.teamNumber != dbTeamNumber ||
                         session.username != dbUsername ||
-                        session.program != dbProgram
+                        session.program != dbProgram ||
+                        session.bugReportPreference != dbBugReportPreference
 
         val effectiveSession = if (needsSync) {
             session.copy(
@@ -132,7 +135,8 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                 profilePicture = null,
                 notificationPreference = dbNotificationPreference,
                 tourProgress = dbTourProgress,
-                nodeAlertsEnabled = dbNodeAlertsEnabled
+                nodeAlertsEnabled = dbNodeAlertsEnabled,
+                bugReportPreference = dbBugReportPreference
             ).also { updated ->
                 runCatching { sessions.set(updated) }
             }

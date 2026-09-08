@@ -69,6 +69,8 @@
   "nav.cluster-management": "Server Management",
   "nav.cluster_management": "Server Management",
   "nav.cluster_managment": "Server Management",
+  "nav.storage-manager": "Storage Manager",
+  "nav.error-reports": "Error Reports",
   "nav.fcm-settings": "FCM Push Settings",
   "nav.fcm_settings": "FCM Push Settings",
   "nav.default-configs": "Default Configs",

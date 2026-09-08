@@ -59,8 +59,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             dynamicContainer.innerHTML = originalHTML;
 
-            state.config = config;
-            state.fields = buildDisplayFields(config.fields || []);
+            state.config = config || {};
+            state.fields = buildDisplayFields((state.config && state.config.fields) || []);
             state.entries = (Array.isArray(entries) ? entries : []).map(e => {
                 if (e.isPrescout) {
                     return { ...e, eventKey: "prescout" };

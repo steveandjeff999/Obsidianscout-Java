@@ -11,11 +11,15 @@ export const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "SCOUT"];
 
 export async function checkLoginStatus() {
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         const response = await fetch("/api/auth/status", {
             method: "GET",
             credentials: "same-origin",
-            headers: { "Accept": "application/json" }
-        });
+            headers: { "Accept": "application/json" },
+            signal: controller.signal
+        }).finally(() => clearTimeout(timeoutId));
+
         if (response.status === 401) {
             return false;
         }
@@ -42,7 +46,7 @@ export async function checkLoginStatus() {
 export async function getMe() {
     try {
         const result = await request("/api/auth/me");
-        return result.user;
+        return result ? (result.user || result) : null;
     } catch (error) {
         return null;
     }
@@ -102,7 +106,7 @@ export async function requireAuth() {
 
     // Verify page-level access permissions
     const currentPage = typeof document !== 'undefined' && document.body && document.body.getAttribute("data-page");
-    const superAdminPages = ["cluster-management", "fcm-settings", "migration"];
+    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "fcm-settings", "migration"];
 
     const showToast = (msg, tone) => {
         if (window.Obsidianscout && typeof window.Obsidianscout.showToast === 'function') {

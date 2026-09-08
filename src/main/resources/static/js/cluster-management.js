@@ -61,6 +61,8 @@
         loadClusterNodes();
         loadNodeAlertEnrollment();
         bindNodeAlertEvents();
+        loadServerErrorAlertSettings();
+        bindServerErrorAlertEvents();
         loadLoadBalancerStatus();
         bindLoadBalancerEvents();
         loadQuorumFallbackStatus();
@@ -97,7 +99,10 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ enrolled: enrolled })
                 });
-                try { localStorage.removeItem("cache:/api/auth/me"); } catch (e) {}
+                try {
+                    localStorage.removeItem("cache:/api/auth/me");
+                    localStorage.removeItem("etag:/api/auth/me");
+                } catch (e) {}
                 showToastMsg(res.message || (enrolled ? "Enrolled in node alerts" : "Unsubscribed from node alerts"), "success");
             } catch (err) {
                 showToastMsg("Failed to update node alert enrollment: " + err.message, "error");
@@ -125,6 +130,108 @@
                     statusMsg.textContent = "Failed to dispatch test alert: " + err.message;
                 }
                 showToastMsg("Failed to dispatch test alert: " + err.message, "error");
+            } finally {
+                Obsidianscout.setButtonLoading(testBtn, false);
+            }
+        });
+    }
+
+    async function loadServerErrorAlertSettings() {
+        const card = document.getElementById("server-error-alerts-card");
+        const toggle = document.getElementById("server-error-alerts-toggle");
+        const badge = document.getElementById("error-alerts-status-badge");
+        const info = document.getElementById("server-error-alerts-info");
+        const recipients = document.getElementById("server-error-alerts-recipients");
+        if (!card) return;
+
+        try {
+            const data = await apiRequest("/api/admin/cluster/error-alerts");
+            if (data && data.success) {
+                card.classList.remove("hidden");
+                const isEnabled = !!(data.emailServerErrors ?? data.enabled ?? data.settings?.emailServerErrors ?? data.settings?.enabled);
+                if (toggle) toggle.checked = isEnabled;
+                if (badge) {
+                    if (isEnabled) {
+                        badge.textContent = "Active";
+                        badge.style.background = "rgba(239, 68, 68, 0.2)";
+                        badge.style.color = "#f87171";
+                    } else {
+                        badge.textContent = "Disabled";
+                        badge.style.background = "rgba(100, 116, 139, 0.2)";
+                        badge.style.color = "#94a3b8";
+                    }
+                }
+                if (info && recipients) {
+                    info.style.display = "block";
+                    const recList = Array.isArray(data.enrolledSuperadmins) && data.enrolledSuperadmins.length > 0
+                        ? data.enrolledSuperadmins.join(", ")
+                        : (Array.isArray(data.recipients) && data.recipients.length > 0
+                            ? data.recipients.join(", ")
+                            : "None (superadmins must enable node alerts / have valid email addresses)");
+                    const count = (data.enrolledSuperadmins || data.recipients || []).length;
+                    recipients.textContent = `Mailing List (${count}): ${recList}`;
+                }
+            }
+        } catch (e) {
+            card.classList.add("hidden");
+        }
+    }
+
+    function bindServerErrorAlertEvents() {
+        const toggle = document.getElementById("server-error-alerts-toggle");
+        const testBtn = document.getElementById("btn-test-error-alert");
+        const badge = document.getElementById("error-alerts-status-badge");
+        const statusMsg = document.getElementById("server-error-alerts-status-msg");
+
+        toggle?.addEventListener("change", async (e) => {
+            const enabled = e.target.checked;
+            try {
+                const res = await apiRequest("/api/admin/cluster/error-alerts", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        emailServerErrors: enabled,
+                        enabled: enabled
+                    })
+                });
+                if (badge) {
+                    if (enabled) {
+                        badge.textContent = "Active";
+                        badge.style.background = "rgba(239, 68, 68, 0.2)";
+                        badge.style.color = "#f87171";
+                    } else {
+                        badge.textContent = "Disabled";
+                        badge.style.background = "rgba(100, 116, 139, 0.2)";
+                        badge.style.color = "#94a3b8";
+                    }
+                }
+                showToastMsg(res.message || (enabled ? "Cluster error alerting enabled" : "Cluster error alerting disabled"), "success");
+            } catch (err) {
+                showToastMsg("Failed to update error alert settings: " + err.message, "error");
+                toggle.checked = !enabled;
+            }
+        });
+
+        testBtn?.addEventListener("click", async () => {
+            Obsidianscout.setButtonLoading(testBtn, true, "Sending test alert...");
+            if (statusMsg) {
+                statusMsg.style.display = "block";
+                statusMsg.style.color = "#cbd5e1";
+                statusMsg.textContent = "Sending test server code error alert to mailing list...";
+            }
+            try {
+                const res = await apiRequest("/api/admin/cluster/error-alerts/test", { method: "POST" });
+                if (statusMsg) {
+                    statusMsg.style.color = res.success ? "#4ade80" : "#f87171";
+                    statusMsg.textContent = res.message;
+                }
+                showToastMsg(res.message, res.success ? "success" : "error");
+            } catch (err) {
+                if (statusMsg) {
+                    statusMsg.style.color = "#f87171";
+                    statusMsg.textContent = "Failed to send test alert: " + err.message;
+                }
+                showToastMsg("Failed to send test alert: " + err.message, "error");
             } finally {
                 Obsidianscout.setButtonLoading(testBtn, false);
             }

@@ -440,4 +440,62 @@ object SettingsService {
         }
         return settings
     }
+
+    @Volatile
+    private var cachedErrorAlertSettings: Pair<com.obsidianscout.routes.ErrorAlertSettings, Long>? = null
+
+    fun getErrorAlertSettings(): com.obsidianscout.routes.ErrorAlertSettings {
+        val now = System.currentTimeMillis()
+        val cached = cachedErrorAlertSettings
+        if (cached != null && (now - cached.second) < 15_000) {
+            return cached.first
+        }
+        val jsonText = try {
+            readTransaction {
+                AppSettings
+                    .selectAll().where { AppSettings.teamNumber eq -4 }
+                    .limit(1)
+                    .firstOrNull()
+                    ?.get(AppSettings.settingsJson)
+            }
+        } catch (e: Throwable) {
+            null
+        }
+        val settings = if (jsonText.isNullOrBlank()) {
+            com.obsidianscout.routes.ErrorAlertSettings()
+        } else {
+            try {
+                JsonSupport.json.decodeFromString(com.obsidianscout.routes.ErrorAlertSettings.serializer(), jsonText)
+            } catch (e: Throwable) {
+                com.obsidianscout.routes.ErrorAlertSettings()
+            }
+        }
+        cachedErrorAlertSettings = Pair(settings, now)
+        return settings
+    }
+
+    fun updateErrorAlertSettings(settings: com.obsidianscout.routes.ErrorAlertSettings): com.obsidianscout.routes.ErrorAlertSettings {
+        val jsonText = JsonSupport.json.encodeToString(com.obsidianscout.routes.ErrorAlertSettings.serializer(), settings)
+        transaction {
+            val row = AppSettings
+                .selectAll().where { AppSettings.teamNumber eq -4 }
+                .limit(1)
+                .firstOrNull()
+            if (row == null) {
+                AppSettings.insert {
+                    it[AppSettings.teamNumber] = -4
+                    it[settingsJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            } else {
+                AppSettings.update({ AppSettings.id eq row[AppSettings.id] }) {
+                    it[settingsJson] = jsonText
+                    it[updatedAt] = Instant.now()
+                }
+            }
+        }
+        cachedErrorAlertSettings = Pair(settings, System.currentTimeMillis())
+        return settings
+    }
 }
+

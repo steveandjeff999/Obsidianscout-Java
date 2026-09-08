@@ -219,6 +219,8 @@ async function loadMatches(eventKey, timezone) {
         const matches = await Obsidianscout.request(cacheKey);
         if (Array.isArray(matches)) {
             renderMatchesTable(matches, eventKey, timezone);
+        } else if (!hasRenderedCache) {
+            body.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">' + t("matches.no_matches", "Failed to load matches.") + '</td></tr>';
         }
     } catch (error) {
         if (!hasRenderedCache) {

@@ -221,8 +221,11 @@ export async function syncOfflineCache(clearOldOthers = false, force = false) {
             const keysToRemove = [];
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (key && key.startsWith("cache:") && key !== "cache:/api/auth/me" && !updatedKeys.has(key)) {
-                    keysToRemove.push(key);
+                if (key && (key.startsWith("cache:") || key.startsWith("etag:"))) {
+                    const subKey = key.startsWith("cache:") ? key.substring(6) : key.substring(5);
+                    if (subKey !== "/api/auth/me" && !updatedKeys.has("cache:" + subKey)) {
+                        keysToRemove.push(key);
+                    }
                 }
             }
             keysToRemove.forEach(key => safeRemoveItem(key));

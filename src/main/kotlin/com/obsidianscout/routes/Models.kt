@@ -104,7 +104,115 @@ data class UpdateUserRequest(
     val profilePicture: String? = null,
     val clearProfilePicture: Boolean = false,
     val notificationPreference: String? = null,
-    val nodeAlertsEnabled: Boolean? = null
+    val nodeAlertsEnabled: Boolean? = null,
+    val bugReportPreference: String? = null
+)
+
+@Serializable
+data class ClientBugReportRequest(
+    val errorMessage: String,
+    val errorStack: String? = null,
+    val errorUrl: String? = null,
+    val lineNumber: Int? = null,
+    val columnNumber: Int? = null,
+    val teamNumber: Int? = null,
+    val program: String? = null,
+    val userRole: String? = null,
+    val username: String? = null,
+    val clientType: String = "web",
+    val userAgent: String? = null
+)
+
+@Serializable
+data class ErrorAlertSettings(
+    val emailServerErrors: Boolean = false,
+    val additionalEmails: List<String> = emptyList()
+)
+
+@Serializable
+data class ErrorAlertsResponse(
+    val success: Boolean,
+    val emailServerErrors: Boolean,
+    val enabled: Boolean = emailServerErrors,
+    val settings: ErrorAlertSettings? = null,
+    val additionalEmails: List<String> = emptyList(),
+    val enrolledSuperadmins: List<String> = emptyList(),
+    val message: String? = null
+)
+
+@Serializable
+data class UpdateErrorAlertsRequest(
+    val emailServerErrors: Boolean? = null,
+    val enabled: Boolean? = null,
+    val additionalEmails: List<String> = emptyList()
+) {
+    val isEnabled: Boolean get() = emailServerErrors ?: enabled ?: false
+}
+
+@Serializable
+data class ReportedErrorItem(
+    val id: String,
+    val errorType: String,
+    val errorMessage: String,
+    val errorStack: String? = null,
+    val requestDetails: String? = null,
+    val clientIp: String? = null,
+    val teamNumber: Int? = null,
+    val program: String? = null,
+    val userRole: String? = null,
+    val username: String? = null,
+    val status: String = "OPEN",
+    val createdAt: String,
+    val resolvedAt: String? = null,
+    val resolvedBy: String? = null
+)
+
+@Serializable
+data class ReportedErrorsListResponse(
+    val success: Boolean = true,
+    val errors: List<ReportedErrorItem>,
+    val totalCount: Long,
+    val openCount: Long,
+    val resolvedCount: Long,
+    val serverCount: Long,
+    val clientCount: Long
+)
+
+@Serializable
+data class ReportedErrorStatsResponse(
+    val success: Boolean = true,
+    val totalCount: Long,
+    val openCount: Long,
+    val resolvedCount: Long,
+    val serverCount: Long,
+    val clientCount: Long
+)
+
+@Serializable
+data class UpdateReportedErrorStatusRequest(
+    val status: String // "OPEN" | "RESOLVED"
+)
+
+@Serializable
+data class UpdateReportedErrorStatusResponse(
+    val success: Boolean = true,
+    val status: String
+)
+
+@Serializable
+data class DeleteReportedErrorResponse(
+    val success: Boolean = true
+)
+
+@Serializable
+data class ClearReportedErrorsRequest(
+    val statusFilter: String? = null // "ALL" | "RESOLVED" | "OPEN"
+)
+
+@Serializable
+data class ClearReportedErrorsResponse(
+    val success: Boolean = true,
+    val clearedCount: Int
 )
 
 @Serializable

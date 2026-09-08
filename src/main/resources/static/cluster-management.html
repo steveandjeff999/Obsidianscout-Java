@@ -277,6 +277,35 @@
                     <div id="node-alerts-status-msg" style="margin-top: 10px; font-size: 13px; color: #cbd5e1; display: none;"></div>
                 </div>
 
+                <!-- Server Code Error Email Notifications Card (Superadmin only) -->
+                <div id="server-error-alerts-card" class="card soft mb-24 hidden" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); padding: 18px; border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <h3 style="margin: 0; font-size: 16px; color: #f87171;">Server Code Error Email Notifications</h3>
+                                <span id="error-alerts-status-badge" class="badge" style="background: rgba(100, 116, 139, 0.3); color: #94a3b8; font-size: 11px;">Checking...</span>
+                            </div>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #fca5a5;">
+                                When enabled in the database, all cluster servers will read this setting and email enrolled superadmins on the mailing list about unexpected server code exceptions (excluding network and API sync errors).
+                            </p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                            <label style="color: white; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="server-error-alerts-toggle" style="width: 18px; height: 18px; cursor: pointer;" />
+                                <span>Email Superadmins on Code Errors</span>
+                            </label>
+                            <button id="btn-test-error-alert" class="btn-action logs" type="button" style="padding: 8px 14px; border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">Send Test Alert</button>
+                            <a href="/error-reports" class="btn-action config" style="padding: 8px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; background: rgba(239, 68, 68, 0.15);">
+                                <span>View Error Reports</span>
+                            </a>
+                        </div>
+                    </div>
+                    <div id="server-error-alerts-info" style="margin-top: 12px; font-size: 13px; color: #cbd5e1; display: none;">
+                        <span id="server-error-alerts-recipients">Recipients: Loading...</span>
+                    </div>
+                    <div id="server-error-alerts-status-msg" style="margin-top: 10px; font-size: 13px; color: #cbd5e1; display: none;"></div>
+                </div>
+
                 <!-- Load Balancer & Capacity-Aware Request Forwarding Card (Superadmin only) -->
                 <div id="load-balancer-card" class="card soft mb-24 hidden" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); padding: 18px; border-radius: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;">

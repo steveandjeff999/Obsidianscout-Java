@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ObsidianScout | Error Reports</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .stats-grid-errors {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card-error {
+            background: var(--surface-2);
+            padding: 18px;
+            border-radius: var(--radius-sm, 12px);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        body.theme-dark .stat-card-error {
+            background: var(--surface-3);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .stat-card-error:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .stat-label-error {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .stat-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 999px;
+            text-transform: uppercase;
+        }
+
+        .badge-open {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .badge-resolved {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+
+        .badge-server {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+        }
+
+        .badge-client {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+        }
+
+        .stat-value-error {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--ink);
+            line-height: 1.1;
+        }
+
+        .stat-subtext {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 6px;
+        }
+
+        /* Filter Controls */
+        .filter-controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .filter-group input, .filter-group select {
+            padding: 8px 12px;
+            font-size: 13px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background: var(--surface);
+            color: var(--ink);
+        }
+
+        body.theme-dark .filter-group input, body.theme-dark .filter-group select {
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Table container */
+        .errors-table-container {
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            background: var(--surface);
+        }
+
+        body.theme-dark .errors-table-container {
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .errors-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        .errors-table th, .errors-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        body.theme-dark .errors-table th, body.theme-dark .errors-table td {
+            border-bottom-color: rgba(255, 255, 255, 0.06);
+        }
+
+        .errors-table th {
+            background: var(--surface-2);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--muted);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        body.theme-dark .errors-table th {
+            background: var(--surface-3);
+        }
+
+        .errors-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .errors-table tr:hover td {
+            background: rgba(0, 0, 0, 0.015);
+        }
+
+        body.theme-dark .errors-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .type-tag {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .type-server {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .type-client {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 999px;
+            text-transform: uppercase;
+        }
+
+        .status-open {
+            background: rgba(239, 68, 68, 0.12);
+            color: #f87171;
+        }
+
+        .status-resolved {
+            background: rgba(16, 185, 129, 0.12);
+            color: #34d399;
+        }
+
+        .btn-table-action {
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-view {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            border-color: rgba(59, 130, 246, 0.2);
+        }
+        .btn-view:hover {
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        .btn-resolve {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+        .btn-resolve:hover {
+            background: rgba(16, 185, 129, 0.2);
+        }
+
+        .btn-reopen {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+            border-color: rgba(245, 158, 11, 0.2);
+        }
+        .btn-reopen:hover {
+            background: rgba(245, 158, 11, 0.2);
+        }
+
+        .btn-del {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+        .btn-del:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .stack-code-block {
+            background: #090d16;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 14px;
+            color: #fca5a5;
+            font-size: 12px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            line-height: 1.4;
+            max-height: 380px;
+        }
+    </style>
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="error-reports">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div id="superadmin-locked" class="card hidden">
+                <h2>Superadmin Access Required</h2>
+                <p class="notice">You must be logged in as a Superadmin (Site Admin) to view and manage Error Reports.</p>
+                <div class="mt-16">
+                    <a href="/admin-settings" class="btn secondary">&larr; Return to Admin Settings</a>
+                </div>
+            </div>
+
+            <div id="errors-panel" class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 16px;">
+                    <div>
+                        <h1 style="margin: 0; font-size: 24px;">Error & Bug Reports</h1>
+                        <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
+                            Review unexpected server code exceptions and client-side JavaScript bug reports submitted across the cluster.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <button id="btn-refresh-errors" class="btn secondary" type="button">
+                            Refresh Reports
+                        </button>
+                        <button id="btn-clear-errors" class="btn ghost" style="color: #ef4444;" type="button">
+                            Clear Errors
+                        </button>
+                        <a href="/cluster-management" class="btn ghost" style="text-decoration: none;">&larr; Server Management</a>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="stats-grid-errors">
+                    <div class="stat-card-error">
+                        <div class="stat-header">
+                            <span class="stat-label-error">Total Reports</span>
+                            <span class="stat-badge badge-server" id="badge-total">Active</span>
+                        </div>
+                        <div class="stat-value-error" id="stat-total-errors">0</div>
+                        <div class="stat-subtext">Logged cluster exceptions</div>
+                    </div>
+                    <div class="stat-card-error">
+                        <div class="stat-header">
+                            <span class="stat-label-error">Open Issues</span>
+                            <span class="stat-badge badge-open">Unresolved</span>
+                        </div>
+                        <div class="stat-value-error" id="stat-open-errors" style="color: #ef4444;">0</div>
+                        <div class="stat-subtext">Requiring investigation</div>
+                    </div>
+                    <div class="stat-card-error">
+                        <div class="stat-header">
+                            <span class="stat-label-error">Resolved</span>
+                            <span class="stat-badge badge-resolved">Fixed</span>
+                        </div>
+                        <div class="stat-value-error" id="stat-resolved-errors" style="color: #10b981;">0</div>
+                        <div class="stat-subtext">Marked as resolved</div>
+                    </div>
+                    <div class="stat-card-error">
+                        <div class="stat-header">
+                            <span class="stat-label-error">Server Exceptions</span>
+                            <span class="stat-badge badge-server">Backend</span>
+                        </div>
+                        <div class="stat-value-error" id="stat-server-errors">0</div>
+                        <div class="stat-subtext">Kotlin / JVM code crashes</div>
+                    </div>
+                    <div class="stat-card-error">
+                        <div class="stat-header">
+                            <span class="stat-label-error">Client JS Errors</span>
+                            <span class="stat-badge badge-client">Frontend</span>
+                        </div>
+                        <div class="stat-value-error" id="stat-client-errors">0</div>
+                        <div class="stat-subtext">Browser user bug reports</div>
+                    </div>
+                </div>
+
+                <!-- Filters & Search Row -->
+                <div class="filter-controls-row">
+                    <div class="filter-group">
+                        <select id="filter-type">
+                            <option value="ALL">All Error Types</option>
+                            <option value="SERVER">Server Exceptions Only</option>
+                            <option value="CLIENT_JS">Client JS Reports Only</option>
+                        </select>
+                        <select id="filter-status">
+                            <option value="ALL">All Statuses</option>
+                            <option value="OPEN" selected>Open Only</option>
+                            <option value="RESOLVED">Resolved Only</option>
+                        </select>
+                        <input type="text" id="input-search-errors" placeholder="Search message, URL, user..." style="min-width: 240px;" />
+                        <button id="btn-apply-filters" class="btn secondary" type="button">Filter</button>
+                        <button id="btn-reset-filters" class="btn ghost" type="button">Reset</button>
+                    </div>
+                </div>
+
+                <!-- Errors Table -->
+                <div class="errors-table-container">
+                    <table class="errors-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Error Message</th>
+                                <th>Origin / Request Details</th>
+                                <th>User Context</th>
+                                <th>Timestamp</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="errors-table-body">
+                            <tr>
+                                <td colspan="7" style="text-align: center; color: var(--muted); padding: 24px;">
+                                    Loading error reports...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: ERROR DETAIL INSPECTION -->
+    <div id="modal-error-detail" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container" style="max-width: 760px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-error-title">Error Report Details</h3>
+                <button class="modal-close" data-close-modal="modal-error-detail">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
+                    <span id="modal-detail-type" class="type-tag type-server">SERVER</span>
+                    <span id="modal-detail-status" class="status-pill status-open">OPEN</span>
+                    <span id="modal-detail-id" style="font-family: monospace; font-size: 11px; color: var(--muted);"></span>
+                </div>
+
+                <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <div id="modal-detail-msg" style="font-weight: 700; color: #f87171; font-size: 14px; word-break: break-word;"></div>
+                </div>
+
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px;">
+                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06);">
+                        <td style="padding: 6px 0; color: var(--muted); width: 140px; font-weight: 600;">Request / Location:</td>
+                        <td id="modal-detail-request" style="padding: 6px 0; font-family: monospace; word-break: break-all;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06);">
+                        <td style="padding: 6px 0; color: var(--muted); font-weight: 600;">Client IP / Type:</td>
+                        <td id="modal-detail-ip" style="padding: 6px 0; font-family: monospace;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06);">
+                        <td style="padding: 6px 0; color: var(--muted); font-weight: 600;">User Session:</td>
+                        <td id="modal-detail-user" style="padding: 6px 0;">-</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06);">
+                        <td style="padding: 6px 0; color: var(--muted); font-weight: 600;">Reported At:</td>
+                        <td id="modal-detail-created" style="padding: 6px 0;">-</td>
+                    </tr>
+                    <tr id="modal-row-resolved" style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); display: none;">
+                        <td style="padding: 6px 0; color: var(--muted); font-weight: 600;">Resolution:</td>
+                        <td id="modal-detail-resolved" style="padding: 6px 0; color: #10b981;">-</td>
+                    </tr>
+                </table>
+
+                <div>
+                    <h4 style="font-size: 13px; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted);">Stack Trace</h4>
+                    <pre id="modal-detail-stack" class="stack-code-block">No stack trace provided.</pre>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <button id="modal-btn-delete" class="btn-table-action btn-del" type="button">Delete Report</button>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="modal-btn-toggle-status" class="btn-table-action btn-resolve" type="button">Mark as Resolved</button>
+                    <button class="btn ghost" data-close-modal="modal-error-detail">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CLEAR ERRORS CONFIRMATION -->
+    <div id="modal-clear-errors" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Clear Error Reports</h3>
+                <button class="modal-close" data-close-modal="modal-clear-errors">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-top: 0; font-size: 14px; color: var(--ink);">
+                    Select which error reports you want to permanently clear from the database:
+                </p>
+                <div style="margin: 16px 0;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">Clear Target:</label>
+                    <select id="select-clear-target" style="width: 100%; padding: 8px 12px; border-radius: 8px; background: var(--surface); color: var(--ink); border: 1px solid rgba(255, 255, 255, 0.1);">
+                        <option value="RESOLVED">Resolved errors only (Safe)</option>
+                        <option value="OPEN">Open errors only</option>
+                        <option value="ALL">All error reports (Complete purge)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn ghost" data-close-modal="modal-clear-errors">Cancel</button>
+                <button id="btn-confirm-clear" class="btn warning" style="background: #ef4444; color: white;" type="button">
+                    Clear Errors
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/error-reports.js"></script>
+</body>
+</html>

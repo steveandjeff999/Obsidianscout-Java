@@ -124,7 +124,7 @@ async function loadDashboardData() {
 
         dashboardContainer.innerHTML = originalDashboardHTML;
 
-        const settings = settingsResponse.settings;
+        const settings = settingsResponse ? (settingsResponse.settings || settingsResponse) : {};
         currentSettings = settings;
         currentEventKey = Obsidianscout.resolveEventKey(settings) || "";
 

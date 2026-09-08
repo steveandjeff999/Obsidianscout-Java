@@ -216,6 +216,8 @@ async function loadTeams(eventKey) {
         const teams = await Obsidianscout.request(cacheKey);
         if (Array.isArray(teams)) {
             renderTeamsTable(teams, eventKey);
+        } else if (!hasRenderedCache) {
+            body.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 24px;">Failed to load teams.</td></tr>';
         }
     } catch (error) {
         if (!hasRenderedCache) {

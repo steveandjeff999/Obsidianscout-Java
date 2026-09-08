@@ -199,6 +199,7 @@ fun Application.configureRoutes() {
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
+                        bugReportPreference = user.bugReportPreference,
                         sessionId = sessionUuid.toString()
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
@@ -215,6 +216,7 @@ fun Application.configureRoutes() {
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
+                        bugReportPreference = user.bugReportPreference,
                         sessionId = sessionUuid.toString()
                     )
                     call.respond(LoginResponse(responseSession))
@@ -253,6 +255,7 @@ fun Application.configureRoutes() {
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
+                        bugReportPreference = user.bugReportPreference,
                         sessionId = sessionUuid.toString()
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
@@ -269,6 +272,7 @@ fun Application.configureRoutes() {
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
+                        bugReportPreference = user.bugReportPreference,
                         sessionId = sessionUuid.toString()
                     )
                     call.respond(LoginResponse(responseSession))
@@ -302,13 +306,15 @@ fun Application.configureRoutes() {
                         notificationPreference = user.notificationPreference,
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
+                        bugReportPreference = user.bugReportPreference,
                         sessionId = session.sessionId
                     )
-                    // If session attributes changed in DB (e.g. role, username, program, teamNumber), update cookie session WITHOUT bloated profilePicture
+                    // If session attributes changed in DB (e.g. role, username, program, teamNumber, bugReportPreference), update cookie session WITHOUT bloated profilePicture
                     val cookieNeedsUpdate = session.role != user.role ||
                             session.username != user.username ||
                             session.teamNumber != user.teamNumber ||
                             session.program != user.program ||
+                            session.bugReportPreference != user.bugReportPreference ||
                             session.profilePicture != null
                     if (cookieNeedsUpdate) {
                         call.sessions.set(responseSession.copy(profilePicture = null))
@@ -1911,7 +1917,8 @@ fun Application.configureRoutes() {
                     newProfilePicture = request.profilePicture,
                     clearProfilePicture = request.clearProfilePicture,
                     newNotificationPreference = request.notificationPreference,
-                    newNodeAlertsEnabled = if (session.role == UserRole.SUPERADMIN) request.nodeAlertsEnabled else null
+                    newNodeAlertsEnabled = if (session.role == UserRole.SUPERADMIN) request.nodeAlertsEnabled else null,
+                    newBugReportPreference = request.bugReportPreference
                 )
                 // Refresh the session so /api/auth/me returns the updated details
                 val updatedSession = session.copy(
@@ -1920,7 +1927,8 @@ fun Application.configureRoutes() {
                     email = updated.email,
                     notificationPreference = updated.notificationPreference,
                     tourProgress = updated.tourProgress,
-                    nodeAlertsEnabled = updated.nodeAlertsEnabled
+                    nodeAlertsEnabled = updated.nodeAlertsEnabled,
+                    bugReportPreference = updated.bugReportPreference
                 )
                 call.sessions.set(updatedSession)
                 call.respond(updated)
@@ -1939,7 +1947,8 @@ fun Application.configureRoutes() {
                     newProfilePicture = request.profilePicture,
                     clearProfilePicture = request.clearProfilePicture,
                     newNotificationPreference = request.notificationPreference,
-                    newNodeAlertsEnabled = if (session.role == UserRole.SUPERADMIN) request.nodeAlertsEnabled else null
+                    newNodeAlertsEnabled = if (session.role == UserRole.SUPERADMIN) request.nodeAlertsEnabled else null,
+                    newBugReportPreference = request.bugReportPreference
                 )
                 // Refresh the session so /api/auth/me returns the updated details
                 val updatedSession = session.copy(
@@ -1948,7 +1957,8 @@ fun Application.configureRoutes() {
                     email = updated.email,
                     notificationPreference = updated.notificationPreference,
                     tourProgress = updated.tourProgress,
-                    nodeAlertsEnabled = updated.nodeAlertsEnabled
+                    nodeAlertsEnabled = updated.nodeAlertsEnabled,
+                    bugReportPreference = updated.bugReportPreference
                 )
                 call.sessions.set(updatedSession)
                 call.respond(updated)
@@ -3022,6 +3032,54 @@ fun Application.configureRoutes() {
                             }
                         )
                     }
+                    get("/error-alerts") {
+                        call.requireSuperAdmin()
+                        val settings = SettingsService.getErrorAlertSettings()
+                        val enrolled = com.obsidianscout.admin.ServerErrorAlertService.getEnrolledSuperadminEmails()
+                        call.respond(
+                            ErrorAlertsResponse(
+                                success = true,
+                                emailServerErrors = settings.emailServerErrors,
+                                enabled = settings.emailServerErrors,
+                                settings = settings,
+                                additionalEmails = settings.additionalEmails,
+                                enrolledSuperadmins = enrolled
+                            )
+                        )
+                    }
+                    put("/error-alerts") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<UpdateErrorAlertsRequest>()
+                        val isEnabled = req.isEnabled
+                        val saved = SettingsService.updateErrorAlertSettings(
+                            ErrorAlertSettings(
+                                emailServerErrors = isEnabled,
+                                additionalEmails = req.additionalEmails.map { it.trim() }.filter { it.isNotBlank() }
+                            )
+                        )
+                        val enrolled = com.obsidianscout.admin.ServerErrorAlertService.getEnrolledSuperadminEmails()
+                        call.respond(
+                            ErrorAlertsResponse(
+                                success = true,
+                                emailServerErrors = saved.emailServerErrors,
+                                enabled = saved.emailServerErrors,
+                                settings = saved,
+                                additionalEmails = saved.additionalEmails,
+                                enrolledSuperadmins = enrolled,
+                                message = if (saved.emailServerErrors) "Cluster server error email alerts enabled." else "Cluster server error email alerts disabled."
+                            )
+                        )
+                    }
+                    post("/error-alerts/test") {
+                        call.requireSuperAdmin()
+                        val (success, msg) = com.obsidianscout.admin.ServerErrorAlertService.sendTestServerErrorAlert()
+                        call.respond(
+                            buildJsonObject {
+                                put("success", success)
+                                put("message", msg)
+                            }
+                        )
+                    }
                     get("/logs-all") {
                         call.requireAdminOrClusterAuth()
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
@@ -3165,6 +3223,61 @@ fun Application.configureRoutes() {
                         call.respond(com.obsidianscout.admin.StorageManagementService.reclaimDiskSpace())
                     }
                 }
+
+                route("/errors") {
+                    get {
+                        call.requireSuperAdmin()
+                        val type = call.request.queryParameters["type"]
+                        val status = call.request.queryParameters["status"]
+                        val search = call.request.queryParameters["search"]
+                        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
+                        val offset = call.request.queryParameters["offset"]?.toLongOrNull() ?: 0L
+                        val result = com.obsidianscout.admin.ServerErrorAlertService.listReportedErrors(
+                            typeFilter = type,
+                            statusFilter = status,
+                            search = search,
+                            limit = limit,
+                            offset = offset
+                        )
+                        call.respond(result)
+                    }
+                    get("/stats") {
+                        call.requireSuperAdmin()
+                        val stats = com.obsidianscout.admin.ServerErrorAlertService.getReportedErrorStats()
+                        call.respond(stats)
+                    }
+                    post("/{id}/status") {
+                        val session = call.requireSuperAdmin()
+                        val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing error id")
+                        val req = call.receive<UpdateReportedErrorStatusRequest>()
+                        val success = com.obsidianscout.admin.ServerErrorAlertService.updateReportedErrorStatus(
+                            id = id,
+                            newStatus = req.status,
+                            resolvedByUsername = session.username
+                        )
+                        if (success) {
+                            call.respond(UpdateReportedErrorStatusResponse(success = true, status = req.status))
+                        } else {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Reported error not found")
+                        }
+                    }
+                    delete("/{id}") {
+                        call.requireSuperAdmin()
+                        val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing error id")
+                        val success = com.obsidianscout.admin.ServerErrorAlertService.deleteReportedError(id)
+                        if (success) {
+                            call.respond(DeleteReportedErrorResponse(success = true))
+                        } else {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Reported error not found")
+                        }
+                    }
+                    post("/clear") {
+                        call.requireSuperAdmin()
+                        val req = runCatching { call.receive<ClearReportedErrorsRequest>() }.getOrNull()
+                        val cleared = com.obsidianscout.admin.ServerErrorAlertService.clearReportedErrors(req?.statusFilter)
+                        call.respond(ClearReportedErrorsResponse(success = true, clearedCount = cleared))
+                    }
+                }
             }
 
             route("/cluster") {
@@ -3181,6 +3294,16 @@ fun Application.configureRoutes() {
                         )
                     )
                 }
+            }
+
+            post("/bug-reports") {
+                val session = call.sessions.get<UserSession>()
+                val request = call.receive<ClientBugReportRequest>()
+                com.obsidianscout.admin.ServerErrorAlertService.recordClientBugReport(request, session)
+                call.respond(buildJsonObject {
+                    put("success", true)
+                    put("message", "Bug report received. Thank you!")
+                })
             }
         }
 
@@ -3218,6 +3341,7 @@ fun Application.configureRoutes() {
             "admin-settings" to "admin-settings.html",
             "cluster-management" to "cluster-management.html",
             "storage-manager" to "storage-manager.html",
+            "error-reports" to "error-reports.html",
             "fcm-settings" to "fcm-settings.html",
             "default-configs" to "default-configs.html",
             "backup" to "backup.html",

@@ -242,7 +242,8 @@ object DatabaseFactory {
                 ClusterSecrets,
                 ClusterNotificationLocks,
                 AnalyticsReports,
-                UserSessions
+                UserSessions,
+                ReportedErrors
             )
 
             if (isCockroach) {
@@ -359,7 +360,8 @@ object DatabaseFactory {
                         conn.createStatement().use { stmt ->
                             val pgMigrations = listOf(
                                 "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_roles TEXT NOT NULL DEFAULT '[]'",
-                                "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'"
+                                "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'",
+                                "ALTER TABLE users ADD COLUMN IF NOT EXISTS bug_report_preference VARCHAR(16) NOT NULL DEFAULT 'ask'"
                             )
                             for (sql in pgMigrations) {
                                 try {

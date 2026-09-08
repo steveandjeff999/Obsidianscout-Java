@@ -470,6 +470,9 @@ fun Application.module(appConfig: AppConfig) {
 
             call.application.environment.log.error("Unhandled error", cause)
             try {
+                com.obsidianscout.admin.ServerErrorAlertService.dispatchServerErrorAlert(call, cause)
+            } catch (_: Throwable) {}
+            try {
                 if (call.request.path().startsWith("/api")) {
                     call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Server error"))
                 } else {

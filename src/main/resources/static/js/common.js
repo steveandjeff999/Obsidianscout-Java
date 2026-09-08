@@ -129,6 +129,10 @@ import {
     getTourStepsForRoleAndLevel
 } from './components/tour-wizard.js';
 
+import {
+    initErrorReporter
+} from './components/error-reporter.js';
+
 // 4. Services Layer
 import {
     CACHE_CONFIGS,
@@ -175,9 +179,11 @@ import {
 } from './utilities/svg-filters.js';
 
 console.log("[CommonJS] Script initialized and loaded (Modular Architecture).");
+initErrorReporter();
 
 // Export public API to window.Obsidianscout
 window.Obsidianscout = {
+    initErrorReporter,
     getProgram,
     getProgramPrefix,
     request,

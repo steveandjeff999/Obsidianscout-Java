@@ -15,6 +15,7 @@ object Users : UUIDTable("users") {
     val notificationPreference = varchar("notification_preference", 16).default("all")
     val tourProgress = text("tour_progress").nullable()
     val nodeAlertsEnabled = bool("node_alerts_enabled").default(false)
+    val bugReportPreference = varchar("bug_report_preference", 16).default("ask")
 
     init {
         uniqueIndex("ux_users_username_team_program", username, teamNumber, program)
@@ -399,6 +400,29 @@ object UserSessions : UUIDTable("user_sessions") {
 
     init {
         index("idx_user_sessions_user", false, userId)
+    }
+}
+
+object ReportedErrors : UUIDTable("reported_errors") {
+    /** SERVER | CLIENT_JS */
+    val errorType = varchar("error_type", 32)
+    val errorMessage = text("error_message")
+    val errorStack = text("error_stack").nullable()
+    val requestDetails = text("request_details").nullable()
+    val clientIp = varchar("client_ip", 64).nullable()
+    val teamNumber = integer("team_number").nullable()
+    val program = varchar("program", 16).nullable()
+    val userRole = varchar("user_role", 32).nullable()
+    val username = varchar("username", 128).nullable()
+    /** OPEN | RESOLVED */
+    val status = varchar("status", 32).default("OPEN")
+    val createdAt = timestamp("created_at")
+    val resolvedAt = timestamp("resolved_at").nullable()
+    val resolvedBy = varchar("resolved_by", 128).nullable()
+
+    init {
+        index("idx_reported_errors_created_at", false, createdAt)
+        index("idx_reported_errors_type_status", false, errorType, status)
     }
 }
 

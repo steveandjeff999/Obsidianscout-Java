@@ -124,7 +124,8 @@ object QuorumFallbackStore {
         FcmConfigs,
         FcmDeviceTokens,
         PushSubscriptions,
-        AnalyticsReports
+        AnalyticsReports,
+        ReportedErrors
     )
 
     @Synchronized
@@ -553,6 +554,7 @@ object QuorumFallbackStore {
                         it[notificationPreference] = row[Users.notificationPreference]
                         it[tourProgress] = row[Users.tourProgress]
                         it[nodeAlertsEnabled] = row[Users.nodeAlertsEnabled]
+                        it[bugReportPreference] = row[Users.bugReportPreference]
                     }
                 }
 

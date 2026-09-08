@@ -108,10 +108,26 @@ body.theme-dark .profile-pic-remove:hover {
     margin-top: 2px;
 }
 
-.sidebar.collapsed .sidebar-footer .badge,
-.sidebar.collapsed .sidebar-footer .btn,
 .sidebar.collapsed .connection-widget {
+    display: flex;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin: 4px auto;
+    border-radius: 50%;
+    justify-content: center;
+    align-items: center;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    box-sizing: border-box;
+}
+
+.sidebar.collapsed .connection-widget span:not(.status-dot) {
     display: none;
+}
+
+.sidebar.collapsed .connection-widget .status-dot {
+    margin: 0;
 }
 
 /* Offline Connection Status Widget */

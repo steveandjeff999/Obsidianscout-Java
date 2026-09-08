@@ -76,6 +76,15 @@ export function applyTranslations() {
         const key = el.dataset.i18n;
         if (!key) return;
         const text = t(key);
+        if (el.classList.contains('sidebar-link')) {
+            const textSpan = el.querySelector('.sidebar-link-text');
+            if (textSpan && textSpan.textContent !== text) {
+                textSpan.textContent = text;
+            }
+            el.title = text;
+            el.setAttribute('aria-label', text);
+            return;
+        }
         if (el.textContent !== text) {
             el.textContent = text;
         }
@@ -139,10 +148,18 @@ export function applyTranslations() {
         const page = link.dataset.page;
         const key = `nav.${page}`;
         const text = t(key);
-        if (link.textContent !== text) {
-            link.textContent = text;
-            link.title = text;
+        const textSpan = link.querySelector('.sidebar-link-text');
+        if (textSpan) {
+            if (textSpan.textContent !== text) {
+                textSpan.textContent = text;
+            }
+        } else if (!link.querySelector('svg')) {
+            if (link.textContent !== text) {
+                link.textContent = text;
+            }
         }
+        link.title = text;
+        link.setAttribute('aria-label', text);
     });
 
     // Theme toggle and logout

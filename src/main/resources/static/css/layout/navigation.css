@@ -51,16 +51,46 @@ body.theme-dark .sidebar::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.35);
 }
 
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 20px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
 .sidebar-brand {
     text-transform: uppercase;
-    letter-spacing: 2.5px;
+    letter-spacing: 1px;
     font-weight: 800;
-    font-size: 13px;
+    font-size: 12.5px;
     color: var(--ink);
-    margin-bottom: 20px;
+    margin-bottom: 0;
     display: flex;
     align-items: center;
     gap: 8px;
+    text-decoration: none;
+    user-select: none;
+    min-width: 0;
+    flex: 1;
+}
+
+.sidebar-brand-icon {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.sidebar-brand-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 .sidebar-section-title {
@@ -71,6 +101,7 @@ body.theme-dark .sidebar::-webkit-scrollbar-thumb:hover {
     color: var(--muted);
     margin: 18px 12px 6px;
     opacity: 0.7;
+    transition: opacity var(--transition-fast);
 }
 
 body.theme-dark .sidebar-section-title {
@@ -78,28 +109,28 @@ body.theme-dark .sidebar-section-title {
     opacity: 0.85;
 }
 
-.sidebar.collapsed .sidebar-section-title {
-    display: none;
-}
-
-.sidebar-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 20px;
-}
-
 .sidebar-toggle {
     border: 1px solid var(--border);
     background: var(--surface-2);
-    border-radius: 8px;
-    padding: 4px 8px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    color: var(--ink);
+    border-radius: 6px;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
     cursor: pointer;
-    transition: transform var(--transition-fast), background var(--transition-fast);
+    flex-shrink: 0;
+    transition: transform var(--transition-fast), background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.sidebar-toggle svg {
+    width: 13px;
+    height: 13px;
+    stroke: currentColor;
+    flex-shrink: 0;
 }
 
 body.theme-dark .sidebar-toggle {
@@ -109,6 +140,9 @@ body.theme-dark .sidebar-toggle {
 
 .sidebar-toggle:hover {
     transform: translateY(-1px);
+    color: var(--ink);
+    background: var(--surface-3);
+    border-color: var(--border);
 }
 
 .sidebar-nav {
@@ -319,37 +353,240 @@ body.theme-dark .nav-avatar-initials {
     margin-top: 1px;
 }
 
+/* ── Collapsed Sidebar (Modern Icon Rail) ─────────────────────────── */
 .sidebar.collapsed {
-    width: 80px;
-    padding: 20px 10px;
+    width: 72px;
+    padding: 20px 8px 16px;
+    align-items: center;
+}
+
+.sidebar.collapsed .sidebar-header {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    width: 100%;
 }
 
 .sidebar.collapsed .sidebar-brand {
     font-size: 0;
     letter-spacing: 0;
-    margin-bottom: 12px;
+    margin-bottom: 0;
+    gap: 0;
     justify-content: center;
+    padding: 2px;
+    flex: 0 0 auto;
+}
+
+.sidebar.collapsed .sidebar-brand-text {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-brand-icon {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
 }
 
 .sidebar.collapsed .sidebar-brand::before {
-    content: attr(data-short);
-    font-size: 12px;
-    letter-spacing: 2px;
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-toggle {
+    width: 32px;
+    height: 26px;
+    border-radius: 6px;
+}
+
+.sidebar.collapsed .sidebar-nav {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 20px;
+}
+
+.sidebar.collapsed .sidebar-section-title {
+    display: block;
+    width: 32px;
+    height: 1px;
+    font-size: 0;
+    line-height: 0;
+    letter-spacing: 0;
+    margin: 10px auto;
+    padding: 0;
+    background: var(--border);
+    opacity: 0.8;
+    border: none;
+    overflow: hidden;
 }
 
 .sidebar.collapsed .sidebar-link {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    margin: 0 auto;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
     justify-content: center;
-    font-size: 0;
-    padding: 10px 8px;
     gap: 0;
+    position: relative;
+    font-size: 0 !important;
+}
+
+.sidebar.collapsed .sidebar-link-text,
+.sidebar.collapsed .sidebar-link span:not(.nav-chat-badge):not(.nav-chat-dot) {
+    display: none !important;
 }
 
 .sidebar.collapsed .sidebar-link::before {
     display: none;
 }
 
-.sidebar.collapsed .sidebar-link svg {
+.sidebar.collapsed .sidebar-link svg,
+.sidebar.collapsed .sidebar-link .sidebar-link-icon svg,
+.sidebar.collapsed .sidebar-link svg.sidebar-link-icon {
+    width: 20px;
+    height: 20px;
     opacity: 0.85;
+    margin: 0;
+}
+
+.sidebar.collapsed .sidebar-link:hover svg,
+.sidebar.collapsed .sidebar-link:hover .sidebar-link-icon svg,
+.sidebar.collapsed .sidebar-link:hover svg.sidebar-link-icon {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.sidebar.collapsed .sidebar-link.active {
+    background: var(--accent);
+    color: #ffffff;
+    box-shadow: 0 2px 10px var(--accent-glow);
+}
+
+.sidebar.collapsed .sidebar-link.active svg,
+.sidebar.collapsed .sidebar-link.active .sidebar-link-icon svg,
+.sidebar.collapsed .sidebar-link.active svg.sidebar-link-icon {
+    opacity: 1;
+    stroke: currentColor;
+}
+
+body.theme-dark .sidebar.collapsed .sidebar-link.active {
+    background: var(--accent);
+    color: #09090b;
+    box-shadow: 0 0 14px var(--accent-glow);
+}
+
+/* Footer in Collapsed Mode */
+.sidebar.collapsed .sidebar-footer {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.sidebar.collapsed #nav-user {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.sidebar.collapsed #nav-user:hover {
+    transform: scale(1.05);
+}
+
+.sidebar.collapsed #nav-user .nav-user-text {
+    display: none;
+}
+
+.sidebar.collapsed #nav-user .nav-avatar,
+.sidebar.collapsed #nav-user .nav-avatar-initials {
+    width: 36px;
+    height: 36px;
+    margin: 0;
+}
+
+.sidebar.collapsed .btn-theme-toggle-sidebar {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar.collapsed .btn-theme-toggle-sidebar .theme-toggle-text {
+    display: none;
+}
+
+.sidebar.collapsed .btn-signout-sidebar {
+    display: none;
+}
+
+.sidebar.collapsed #lang-select,
+.sidebar.collapsed .sidebar-footer .field {
+    display: none;
+}
+
+/* ── Chat Sidebar Badges ─────────────────────────────────────────── */
+.nav-chat-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #ff3b30;
+    border-radius: 50%;
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    box-shadow: 0 0 6px rgba(255, 59, 48, 0.6);
+}
+
+.nav-chat-badge {
+    background-color: #ff3b30;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 14px;
+    text-align: center;
+    line-height: 1;
+    box-shadow: 0 0 6px rgba(255, 59, 48, 0.6);
+}
+
+.sidebar.collapsed .sidebar-link .nav-chat-dot {
+    right: 6px;
+    top: 6px;
+    transform: none;
+}
+
+.sidebar.collapsed .sidebar-link .nav-chat-badge {
+    right: 2px;
+    top: 2px;
+    transform: none;
+    font-size: 0.65rem;
+    padding: 1px 4px;
+    min-width: 10px;
 }
 
 /* ── Topbar Nav Styles ────────────────────────────────────────────── */

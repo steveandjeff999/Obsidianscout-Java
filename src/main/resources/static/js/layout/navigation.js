@@ -20,8 +20,13 @@ export function setUserBadge(user) {
 
     // Update brand to show program type when in standard sidebar mode
     const brand = document.querySelector(".sidebar-brand");
-    if (brand && !document.body.classList.contains("nav-layout-topbar") && !brand.textContent.endsWith(user.program)) {
-        brand.textContent = `ObsidianScout ${user.program}`;
+    if (brand && !document.body.classList.contains("nav-layout-topbar")) {
+        const brandTextEl = brand.querySelector(".sidebar-brand-text");
+        if (brandTextEl && !brandTextEl.textContent.endsWith(user.program)) {
+            brandTextEl.textContent = `ObsidianScout ${user.program}`;
+        } else if (!brandTextEl && !brand.textContent.endsWith(user.program)) {
+            brand.textContent = `ObsidianScout ${user.program}`;
+        }
     }
 
     // Build avatar element
@@ -146,7 +151,7 @@ export function setActiveNav() {
 export function adjustNavForRole(user) {
     if (!user) return;
     const role = user.role;
-    const superAdminPages = ["cluster-management", "storage-manager", "fcm-settings", "migration"];
+    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "fcm-settings", "migration"];
 
     // Reset all standard links to visible first before applying role restrictions
     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
@@ -268,9 +273,16 @@ export async function ensureSidebarAndFooter(sidebar) {
         if (!baseHtml) {
             baseHtml = safeGetItem("obsidianscout:base_html");
         }
+        if (baseHtml && !baseHtml.includes("sidebar-link-icon")) {
+            sessionStorage.removeItem("obsidianscout:base_html");
+            try { localStorage.removeItem("obsidianscout:base_html"); } catch (e) {}
+            baseHtml = null;
+        }
         if (!baseHtml) {
             try {
-                const res = await fetch("/base.html");
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 5000);
+                const res = await fetch("/base.html", { signal: controller.signal }).finally(() => clearTimeout(timer));
                 if (res.ok) {
                     baseHtml = await res.text();
                     sessionStorage.setItem("obsidianscout:base_html", baseHtml);

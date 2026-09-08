@@ -15,14 +15,19 @@ export function safeGetItem(key) {
 export function safeSetItem(key, value) {
     try {
         localStorage.setItem(key, value);
+        return true;
     } catch (e) {
         console.warn("[Storage] Failed to write to localStorage:", e);
+        return false;
     }
 }
 
 export function safeRemoveItem(key) {
     try {
         localStorage.removeItem(key);
+        if (key && key.startsWith("cache:")) {
+            localStorage.removeItem("etag:" + key.substring(6));
+        }
     } catch (e) {
         console.warn("[Storage] Failed to remove from localStorage:", e);
     }
@@ -33,7 +38,7 @@ export function clearAllCaches() {
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && key.startsWith("cache:") && key !== "cache:/api/auth/me") {
+            if (key && (key.startsWith("cache:") || key.startsWith("etag:")) && key !== "cache:/api/auth/me" && key !== "etag:/api/auth/me") {
                 keysToRemove.push(key);
             }
         }

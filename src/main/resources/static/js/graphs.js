@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         mainContent.appendChild(mainContentWrapper);
         originalMainContentHTML = mainContentWrapper.innerHTML;
         await loadGraphsPageData();
+
     }
 });
 
@@ -707,8 +708,8 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
     });
 
     // 2. Sort the data based on state.sort
-    const sortField = state.datasource === "all" 
-        ? (effectiveUseEpa ? "epa" : (effectiveUseOpr ? "opr" : "scouted")) 
+    const sortField = state.datasource === "all"
+        ? (effectiveUseEpa ? "epa" : (effectiveUseOpr ? "opr" : "scouted"))
         : state.datasource;
 
     data.sort((a, b) => {
@@ -1386,13 +1387,13 @@ function getFilteredEntriesForTeams(state) {
     const selectedTeams = Array.from(state.selectedTeams);
     const result = [];
     selectedTeams.forEach(teamNumber => {
-        const currentEventEntries = state.entries.filter(entry => 
-            entry.targetTeamNumber === teamNumber && 
-            (!state.eventKey || entry.eventKey === state.eventKey) && 
+        const currentEventEntries = state.entries.filter(entry =>
+            entry.targetTeamNumber === teamNumber &&
+            (!state.eventKey || entry.eventKey === state.eventKey) &&
             !entry.isPrescout
         );
-        const prescoutEntries = state.entries.filter(entry => 
-            entry.targetTeamNumber === teamNumber && 
+        const prescoutEntries = state.entries.filter(entry =>
+            entry.targetTeamNumber === teamNumber &&
             entry.isPrescout
         );
         if (state.forcePrescout || currentEventEntries.length < 3) {
@@ -1412,13 +1413,13 @@ function getFilteredEntriesForEvent(state) {
     const teams = Array.from(new Set(state.entries.map(e => e.targetTeamNumber).filter(Boolean)));
     const result = [];
     teams.forEach(teamNumber => {
-        const currentEventEntries = state.entries.filter(entry => 
-            entry.targetTeamNumber === teamNumber && 
-            entry.eventKey === state.eventKey && 
+        const currentEventEntries = state.entries.filter(entry =>
+            entry.targetTeamNumber === teamNumber &&
+            entry.eventKey === state.eventKey &&
             !entry.isPrescout
         );
-        const prescoutEntries = state.entries.filter(entry => 
-            entry.targetTeamNumber === teamNumber && 
+        const prescoutEntries = state.entries.filter(entry =>
+            entry.targetTeamNumber === teamNumber &&
             entry.isPrescout
         );
         if (state.forcePrescout || currentEventEntries.length < 3) {

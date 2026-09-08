@@ -53,7 +53,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         Obsidianscout.showLoadingSpinner(dynamicContainer, t('all_data.loading_all_scouting_data', "Loading all scouting data..."));
         try {
             const settingsResponse = await Obsidianscout.request("/api/settings");
-            state.settings = settingsResponse.settings;
+            state.settings = settingsResponse ? (settingsResponse.settings || settingsResponse) : {};
             state.eventKey = Obsidianscout.resolveEventKey(state.settings);
             state.filters.eventKey = state.eventKey;
 

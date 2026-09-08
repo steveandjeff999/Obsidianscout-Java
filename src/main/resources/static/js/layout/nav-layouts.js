@@ -336,14 +336,16 @@ export function wireSidebarToggle() {
     }
 
     if (!brand.dataset.short) {
-        const brandText = (brand.textContent || "").trim();
+        const textSpan = brand.querySelector(".sidebar-brand-text");
+        const brandText = (textSpan ? textSpan.textContent : brand.textContent || "").trim();
         const compact = brandText.replace(/[^a-z0-9]/gi, "");
         brand.dataset.short = (compact.slice(0, 2) || brandText.slice(0, 2) || "OS").toUpperCase();
         brand.title = brandText;
     }
 
     sidebar.querySelectorAll(".sidebar-link").forEach((link) => {
-        const label = (link.textContent || "").trim();
+        const textSpan = link.querySelector(".sidebar-link-text");
+        const label = (textSpan ? textSpan.textContent : link.textContent || "").trim();
         if (!link.dataset.short) {
             const compact = label.replace(/[^a-z0-9]/gi, "");
             link.dataset.short = (compact.slice(0, 2) || label.slice(0, 2) || "?").toUpperCase();
@@ -361,9 +363,14 @@ export function wireSidebarToggle() {
         header.appendChild(toggle);
     }
 
+    const CHEVRON_LEFT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg>`;
+    const CHEVRON_RIGHT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>`;
+
     const applyCollapsedState = (collapsed, persist = true) => {
         sidebar.classList.toggle("collapsed", collapsed);
-        toggle.textContent = collapsed ? ">>" : "<<";
+        toggle.innerHTML = collapsed ? CHEVRON_RIGHT : CHEVRON_LEFT;
+        toggle.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+        toggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
         toggle.setAttribute("aria-expanded", (!collapsed).toString());
         if (persist) {
             safeSetItem(sidebarCollapseKey, collapsed ? "1" : "0");
@@ -374,9 +381,12 @@ export function wireSidebarToggle() {
     // If user has previously chosen a state, respect it. Otherwise default to
     // collapsed on narrow viewports for better mobile UX.
     const initial = (stored !== null) ? (stored === "1") : (window.innerWidth < 900);
-    applyCollapsedState(initial);
+    applyCollapsedState(initial, false);
 
-    toggle.addEventListener("click", () => {
-        applyCollapsedState(!sidebar.classList.contains("collapsed"), true);
-    });
+    if (!toggle.dataset.wired) {
+        toggle.dataset.wired = "true";
+        toggle.addEventListener("click", () => {
+            applyCollapsedState(!sidebar.classList.contains("collapsed"), true);
+        });
+    }
 }

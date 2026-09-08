@@ -240,9 +240,12 @@ export async function request(path, options = {}) {
     }
 
     if (method === "GET") {
+        const cachedText = safeGetItem("cache:" + path);
         const storedEtag = safeGetItem("etag:" + path);
-        if (storedEtag && !opts.headers["If-None-Match"]) {
+        if (storedEtag && cachedText !== null && !opts.headers["If-None-Match"]) {
             opts.headers["If-None-Match"] = storedEtag;
+        } else if (!cachedText && storedEtag) {
+            safeRemoveItem("etag:" + path);
         }
     }
     if (options.json !== undefined) {
@@ -267,9 +270,40 @@ export async function request(path, options = {}) {
         if (response.status === 304) {
             const cachedText = safeGetItem("cache:" + path);
             if (cachedText !== null) {
-                return safeParse(cachedText);
+                const parsed = safeParse(cachedText);
+                if (parsed !== null && parsed !== undefined) {
+                    return parsed;
+                }
             }
-            return null;
+            // 304 received, but cache was missing or corrupt:
+            // Remove orphan ETag and re-fetch unconditionally with reload to get fresh 200 OK data
+            console.warn(`[HTTP Cache] 304 Not Modified received for ${path}, but cached data is missing. Re-fetching unconditionally...`);
+            safeRemoveItem("etag:" + path);
+            safeRemoveItem("cache:" + path);
+            const retryHeaders = { ...opts.headers };
+            delete retryHeaders["If-None-Match"];
+            retryHeaders["Cache-Control"] = "no-cache";
+            const retryResponse = await fetch(path, {
+                ...opts,
+                headers: retryHeaders,
+                cache: "reload"
+            });
+            if (!retryResponse.ok) {
+                const retryText = await retryResponse.text();
+                const retryData = retryText ? safeParse(retryText) : null;
+                const message = retryData && retryData.error ? retryData.error : "Request failed";
+                const err = new Error(message);
+                err.status = retryResponse.status;
+                throw err;
+            }
+            const freshText = await retryResponse.text();
+            const freshData = freshText ? safeParse(freshText) : null;
+            const freshEtag = retryResponse.headers && retryResponse.headers.get && retryResponse.headers.get("ETag");
+            const didStore = safeSetItem("cache:" + path, freshText);
+            if (didStore && freshEtag) {
+                safeSetItem("etag:" + path, freshEtag);
+            }
+            return freshData;
         }
 
         if (response.status === 204) {
@@ -321,6 +355,7 @@ export async function request(path, options = {}) {
                     // Do not cache scouting data on non-analytics/admin/superadmin roles (e.g. SCOUT)
                     shouldCache = false;
                     safeRemoveItem("cache:" + path);
+                    safeRemoveItem("etag:" + path);
                 } else {
                     // Only cache scouting data for the current event
                     const currentEventKey = getActiveEventKey();
@@ -362,11 +397,15 @@ export async function request(path, options = {}) {
             }
 
             if (shouldCache) {
-                safeSetItem("cache:" + path, textToCache);
+                const didStore = safeSetItem("cache:" + path, textToCache);
                 try {
                     const etag = response.headers && response.headers.get && response.headers.get("ETag");
                     if (etag) {
-                        safeSetItem("etag:" + path, etag);
+                        if (didStore) {
+                            safeSetItem("etag:" + path, etag);
+                        } else {
+                            safeRemoveItem("etag:" + path);
+                        }
                     }
                 } catch (e) {}
             }
@@ -403,13 +442,17 @@ export async function request(path, options = {}) {
             }
             if (basePath.includes("scouting") || basePath.includes("team") || basePath.includes("event")) {
                 safeRemoveItem("cache:/api/summary");
+                safeRemoveItem("etag:/api/summary");
             }
             if (basePath.includes("/admin/users") || basePath.includes("/user") || basePath.includes("/admin/")) {
                 safeRemoveItem("cache:/api/auth/me");
+                safeRemoveItem("etag:/api/auth/me");
                 safeRemoveItem("cache:/api/settings");
+                safeRemoveItem("etag:/api/settings");
             }
             if (basePath.includes("/settings") || basePath.includes("/config")) {
                 safeRemoveItem("cache:/api/settings");
+                safeRemoveItem("etag:/api/settings");
             }
         }
 
