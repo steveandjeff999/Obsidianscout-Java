@@ -108,13 +108,13 @@ function populateHeroUserMeta(user) {
 async function loadDashboardData() {
     if (!dashboardContainer) return;
     Obsidianscout.showLoadingSpinner(dashboardContainer, t("status.loading", t('dashboard.loading_dashboard_data', "Loading dashboard data...")));
-
     try {
-        let savedTeam = localStorage.getItem("obsidian-dashboard-team");
-        if (!savedTeam && currentUser && currentUser.teamNumber && currentUser.role !== "SUPERADMIN") {
-            savedTeam = String(currentUser.teamNumber);
-        }
-        const summaryUrl = savedTeam ? `/api/summary?teamNumber=${encodeURIComponent(savedTeam)}` : "/api/summary";
+        try {
+            localStorage.removeItem("obsidian-dashboard-team");
+        } catch (_) {}
+
+        const currentTeam = currentUser && currentUser.teamNumber ? currentUser.teamNumber : null;
+        const summaryUrl = currentTeam ? `/api/summary?teamNumber=${encodeURIComponent(currentTeam)}` : "/api/summary";
 
         const [summary, settingsResponse, status] = await Promise.all([
             Obsidianscout.request(summaryUrl),
@@ -183,82 +183,6 @@ function populateMetrics(summary) {
     setVal("summary-teams", summary.teams);
     setVal("summary-matches", summary.matches);
     setVal("summary-events", summary.events);
-
-    // Update Scope Hint and Team Select Filter
-    const scopeHint = document.getElementById("dashboard-scope-hint");
-    const teamSelect = document.getElementById("dash-team-select");
-    const filterContainer = document.getElementById("dash-team-filter-container");
-
-    const isSuperAdmin = currentUser && currentUser.role === "SUPERADMIN";
-    const availableTeams = Array.isArray(summary.availableTeams) ? summary.availableTeams : [];
-    const activeScoutingTeam = summary.scoutingTeamNumber;
-
-    if (scopeHint) {
-        if (activeScoutingTeam) {
-            scopeHint.textContent = formatTemplate(t("dashboard.scope_filtered_team", "Filtered to Team {team}"), { team: activeScoutingTeam });
-        } else {
-            scopeHint.textContent = t("dashboard.scope_all_teams", "Global Site (All Teams)");
-        }
-    }
-
-    if (teamSelect) {
-        // If there are multiple teams or superadmin, show the dropdown; otherwise keep select enabled
-        teamSelect.innerHTML = "";
-
-        if (isSuperAdmin) {
-            const allOption = document.createElement("option");
-            allOption.value = "all";
-            allOption.textContent = t("dashboard.scope_all_teams", "Global Site (All Teams)");
-            if (activeScoutingTeam === null || activeScoutingTeam === undefined) {
-                allOption.selected = true;
-            }
-            teamSelect.appendChild(allOption);
-        }
-
-        const teamsToShow = [...availableTeams];
-        if (currentUser && currentUser.teamNumber && !teamsToShow.includes(currentUser.teamNumber)) {
-            teamsToShow.push(currentUser.teamNumber);
-        }
-        if (activeScoutingTeam && !teamsToShow.includes(activeScoutingTeam)) {
-            teamsToShow.push(activeScoutingTeam);
-        }
-        teamsToShow.sort((a, b) => a - b);
-
-        for (const tm of teamsToShow) {
-            const opt = document.createElement("option");
-            opt.value = String(tm);
-            opt.textContent = `Team ${tm}`;
-            if (activeScoutingTeam === tm) {
-                opt.selected = true;
-            }
-            teamSelect.appendChild(opt);
-        }
-
-        // Hide filter container if not superadmin and only 1 or 0 teams available
-        if (filterContainer) {
-            if (!isSuperAdmin && teamsToShow.length <= 1) {
-                filterContainer.style.display = "none";
-            } else {
-                filterContainer.style.display = "inline-flex";
-            }
-        }
-
-        // Avoid attaching multiple event listeners
-        if (!teamSelect.dataset.listenerAttached) {
-            teamSelect.dataset.listenerAttached = "true";
-            teamSelect.addEventListener("change", async (e) => {
-                const selectedVal = e.target.value;
-                if (selectedVal === "all") {
-                    localStorage.setItem("obsidian-dashboard-team", "all");
-                } else if (selectedVal) {
-                    localStorage.setItem("obsidian-dashboard-team", selectedVal);
-                } else {
-                    localStorage.removeItem("obsidian-dashboard-team");
-                }
-                await refreshSummary(selectedVal);
-            });
-        }
-    }
 }
 
 function populateEventContext(settings, eventKey) {
@@ -569,10 +493,10 @@ function setupSyncStation(status) {
     }
 }
 
-async function refreshSummary(targetTeam) {
+async function refreshSummary() {
     try {
-        const teamParam = targetTeam !== undefined ? targetTeam : localStorage.getItem("obsidian-dashboard-team");
-        const summaryUrl = teamParam ? `/api/summary?teamNumber=${encodeURIComponent(teamParam)}` : "/api/summary";
+        const currentTeam = currentUser && currentUser.teamNumber ? currentUser.teamNumber : null;
+        const summaryUrl = currentTeam ? `/api/summary?teamNumber=${encodeURIComponent(currentTeam)}` : "/api/summary";
 
         const [summary, settingsResponse] = await Promise.all([
             Obsidianscout.request(summaryUrl),
