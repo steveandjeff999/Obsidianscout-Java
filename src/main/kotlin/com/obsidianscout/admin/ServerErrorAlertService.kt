@@ -30,6 +30,7 @@ import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.time.Instant
@@ -412,7 +413,71 @@ object ServerErrorAlertService {
     }
 
     /**
+     * Extracts the primary code stack frame from a stack trace string to uniquely identify the code defect.
+     */
+    fun extractPrimaryStackFrame(errorStack: String?): String {
+        if (errorStack.isNullOrBlank()) return ""
+        val lines = errorStack.lines().map { it.trim() }
+        // 1. First priority: look for ObsidianScout application package frame
+        val appFrame = lines.firstOrNull { it.startsWith("at com.obsidianscout.") }
+        if (appFrame != null) {
+            return appFrame.removePrefix("at ").trim()
+        }
+        // 2. Second priority: any stack frame starting with "at "
+        val anyAt = lines.firstOrNull { it.startsWith("at ") }
+        if (anyAt != null) {
+            return anyAt.removePrefix("at ").trim()
+        }
+        return ""
+    }
+
+    /**
+     * Normalizes a request details / error location string (e.g. stripping dynamic hosts/ports).
+     */
+    fun normalizeRequestDetails(requestDetails: String?): String {
+        if (requestDetails.isNullOrBlank()) return ""
+        return requestDetails.replace(Regex("^https?://[^/]+"), "").trim()
+    }
+
+    /**
+     * Produces a clean human-readable origin / location for display on grouped cards and table rows.
+     */
+    fun extractDisplayLocation(errorType: String, errorStack: String?, requestDetails: String?): String {
+        val frame = extractPrimaryStackFrame(errorStack)
+        if (frame.isNotBlank()) {
+            val paren = Regex("\\(([^)]+)\\)").find(frame)
+            if (paren != null) {
+                return paren.groupValues[1]
+            }
+            return frame.take(64)
+        }
+        if (!requestDetails.isNullOrBlank()) {
+            return normalizeRequestDetails(requestDetails).take(80)
+        }
+        return if (errorType.uppercase() == "SERVER") "Server Code" else "Browser Client"
+    }
+
+    /**
+     * Computes a deterministic group key to group only identical errors together.
+     * Differentiates by errorType, the exact normalized error message, and the root code location.
+     */
+    fun computeErrorGroupKey(
+        errorType: String,
+        errorMessage: String,
+        errorStack: String?,
+        requestDetails: String?
+    ): String {
+        val normType = errorType.trim().uppercase()
+        val normMsg = errorMessage.trim().lines().firstOrNull()?.trim() ?: errorMessage.trim()
+        val primaryFrame = extractPrimaryStackFrame(errorStack)
+        val normReq = normalizeRequestDetails(requestDetails)
+        val locationPart = if (primaryFrame.isNotBlank()) primaryFrame else normReq
+        return "$normType:::$normMsg:::$locationPart"
+    }
+
+    /**
      * Lists reported errors with optional type and status filtering, search keyword, and pagination.
+     * Computes grouped error summaries aggregating identical errors across users/teams.
      */
     fun listReportedErrors(
         typeFilter: String? = null,
@@ -462,10 +527,40 @@ object ServerErrorAlertService {
                     )
                 }
 
+            val groups = items.groupBy { item ->
+                computeErrorGroupKey(item.errorType, item.errorMessage, item.errorStack, item.requestDetails)
+            }.map { (groupKey, groupItems) ->
+                val sample = groupItems.first()
+                val openCount = groupItems.count { it.status == "OPEN" }
+                val resolvedCount = groupItems.count { it.status == "RESOLVED" }
+                val overallStatus = if (openCount > 0) "OPEN" else "RESOLVED"
+                val location = extractDisplayLocation(sample.errorType, sample.errorStack, sample.requestDetails)
+                val teams = groupItems.mapNotNull { it.teamNumber }.distinct()
+                val users = groupItems.mapNotNull { it.username }.filter { it.isNotBlank() }.distinct()
+
+                com.obsidianscout.routes.ReportedErrorGroupItem(
+                    groupKey = groupKey,
+                    errorType = sample.errorType,
+                    errorMessage = sample.errorMessage,
+                    location = location,
+                    count = groupItems.size,
+                    openCount = openCount,
+                    resolvedCount = resolvedCount,
+                    status = overallStatus,
+                    latestCreatedAt = sample.createdAt,
+                    firstCreatedAt = groupItems.last().createdAt,
+                    affectedTeams = teams,
+                    affectedUsers = users,
+                    sampleError = sample,
+                    occurrences = groupItems
+                )
+            }.sortedByDescending { it.latestCreatedAt }
+
             val stats = getReportedErrorStats()
             com.obsidianscout.routes.ReportedErrorsListResponse(
                 success = true,
                 errors = items,
+                groups = groups,
                 totalCount = total,
                 openCount = stats.openCount,
                 resolvedCount = stats.resolvedCount,
@@ -526,6 +621,40 @@ object ServerErrorAlertService {
         return org.jetbrains.exposed.sql.transactions.transaction {
             val count = com.obsidianscout.db.ReportedErrors.deleteWhere { com.obsidianscout.db.ReportedErrors.id eq uuid }
             count > 0
+        }
+    }
+
+    /**
+     * Updates status for a group of reported errors by ID list.
+     */
+    fun updateErrorGroupStatus(errorIds: List<String>, newStatus: String, resolvedByUsername: String?): Int {
+        if (errorIds.isEmpty()) return 0
+        val uuids = errorIds.mapNotNull { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
+        if (uuids.isEmpty()) return 0
+        val statusUpper = if (newStatus.uppercase() == "RESOLVED") "RESOLVED" else "OPEN"
+        return org.jetbrains.exposed.sql.transactions.transaction {
+            com.obsidianscout.db.ReportedErrors.update({ com.obsidianscout.db.ReportedErrors.id inList uuids }) {
+                it[status] = statusUpper
+                if (statusUpper == "RESOLVED") {
+                    it[resolvedAt] = Instant.now()
+                    it[resolvedBy] = resolvedByUsername
+                } else {
+                    it[resolvedAt] = null
+                    it[resolvedBy] = null
+                }
+            }
+        }
+    }
+
+    /**
+     * Deletes a group of reported errors by ID list.
+     */
+    fun deleteErrorGroup(errorIds: List<String>): Int {
+        if (errorIds.isEmpty()) return 0
+        val uuids = errorIds.mapNotNull { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
+        if (uuids.isEmpty()) return 0
+        return org.jetbrains.exposed.sql.transactions.transaction {
+            com.obsidianscout.db.ReportedErrors.deleteWhere { com.obsidianscout.db.ReportedErrors.id inList uuids }
         }
     }
 

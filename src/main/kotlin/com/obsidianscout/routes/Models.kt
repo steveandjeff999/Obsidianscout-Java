@@ -168,9 +168,28 @@ data class ReportedErrorItem(
 )
 
 @Serializable
+data class ReportedErrorGroupItem(
+    val groupKey: String,
+    val errorType: String,
+    val errorMessage: String,
+    val location: String,
+    val count: Int,
+    val openCount: Int,
+    val resolvedCount: Int,
+    val status: String,
+    val latestCreatedAt: String,
+    val firstCreatedAt: String,
+    val affectedTeams: List<Int> = emptyList(),
+    val affectedUsers: List<String> = emptyList(),
+    val sampleError: ReportedErrorItem,
+    val occurrences: List<ReportedErrorItem> = emptyList()
+)
+
+@Serializable
 data class ReportedErrorsListResponse(
     val success: Boolean = true,
     val errors: List<ReportedErrorItem>,
+    val groups: List<ReportedErrorGroupItem> = emptyList(),
     val totalCount: Long,
     val openCount: Long,
     val resolvedCount: Long,
@@ -202,6 +221,30 @@ data class UpdateReportedErrorStatusResponse(
 @Serializable
 data class DeleteReportedErrorResponse(
     val success: Boolean = true
+)
+
+@Serializable
+data class UpdateErrorGroupStatusRequest(
+    val errorIds: List<String>,
+    val status: String
+)
+
+@Serializable
+data class UpdateErrorGroupStatusResponse(
+    val success: Boolean = true,
+    val updatedCount: Int,
+    val status: String
+)
+
+@Serializable
+data class DeleteErrorGroupRequest(
+    val errorIds: List<String>
+)
+
+@Serializable
+data class DeleteErrorGroupResponse(
+    val success: Boolean = true,
+    val deletedCount: Int
 )
 
 @Serializable

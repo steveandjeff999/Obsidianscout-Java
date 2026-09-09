@@ -320,4 +320,127 @@ class ServerErrorAlertServiceTest {
         assertTrue(err.errorStack?.contains("not-null constraint") == true)
         assertEquals("Table: users, Column: test_col, DDL: ALTER TABLE users ADD COLUMN test_col VARCHAR(16) NOT NULL", err.requestDetails)
     }
+
+    @Test
+    fun testErrorGroupingLogic() {
+        // Test key computation
+        val stackA = "java.lang.NullPointerException: null\n\tat com.obsidianscout.service.MatchService.updateMatch(MatchService.kt:45)\n\tat io.ktor.routing.Route.invoke(Route.kt:100)"
+        val stackB = "java.lang.NullPointerException: null\n\tat com.obsidianscout.auth.AuthService.validateToken(AuthService.kt:88)\n\tat io.ktor.routing.Route.invoke(Route.kt:100)"
+
+        val keyA1 = ServerErrorAlertService.computeErrorGroupKey("SERVER", "NullPointerException: null", stackA, "POST /api/match")
+        val keyA2 = ServerErrorAlertService.computeErrorGroupKey("SERVER", "NullPointerException: null", stackA, "POST /api/match?team=254")
+        val keyB = ServerErrorAlertService.computeErrorGroupKey("SERVER", "NullPointerException: null", stackB, "GET /api/auth")
+        val keyDiffMsg = ServerErrorAlertService.computeErrorGroupKey("SERVER", "IllegalArgumentException: invalid id", stackA, "POST /api/match")
+        val keyDiffType = ServerErrorAlertService.computeErrorGroupKey("CLIENT_JS", "NullPointerException: null", stackA, "POST /api/match")
+
+        // Same error across different requests/params groups to the same key
+        assertEquals(keyA1, keyA2)
+        // Different code location must NOT group together
+        assertNotEquals(keyA1, keyB)
+        // Different error message must NOT group together
+        assertNotEquals(keyA1, keyDiffMsg)
+        // Different error type must NOT group together
+        assertNotEquals(keyA1, keyDiffType)
+
+        // Test database persistence and grouping
+        transaction { ReportedErrors.deleteAll() }
+
+        // Insert 3 occurrences of Error A (from different teams and users)
+        transaction {
+            ReportedErrors.insert {
+                it[errorType] = "SERVER"
+                it[errorMessage] = "NullPointerException: null"
+                it[errorStack] = stackA
+                it[requestDetails] = "POST /api/match"
+                it[teamNumber] = 254
+                it[username] = "alice"
+                it[status] = "OPEN"
+                it[createdAt] = Instant.now().minusSeconds(30)
+            }
+            ReportedErrors.insert {
+                it[errorType] = "SERVER"
+                it[errorMessage] = "NullPointerException: null"
+                it[errorStack] = stackA
+                it[requestDetails] = "POST /api/match"
+                it[teamNumber] = 1678
+                it[username] = "bob"
+                it[status] = "OPEN"
+                it[createdAt] = Instant.now().minusSeconds(20)
+            }
+            ReportedErrors.insert {
+                it[errorType] = "SERVER"
+                it[errorMessage] = "NullPointerException: null"
+                it[errorStack] = stackA
+                it[requestDetails] = "POST /api/match"
+                it[teamNumber] = 971
+                it[username] = "charlie"
+                it[status] = "OPEN"
+                it[createdAt] = Instant.now().minusSeconds(10)
+            }
+
+            // Insert 1 occurrence of Error B (different stack location)
+            ReportedErrors.insert {
+                it[errorType] = "SERVER"
+                it[errorMessage] = "NullPointerException: null"
+                it[errorStack] = stackB
+                it[requestDetails] = "GET /api/auth"
+                it[teamNumber] = 254
+                it[username] = "alice"
+                it[status] = "OPEN"
+                it[createdAt] = Instant.now()
+            }
+
+            // Insert 1 occurrence of Client JS Error
+            ReportedErrors.insert {
+                it[errorType] = "CLIENT_JS"
+                it[errorMessage] = "Uncaught TypeError: Cannot read property"
+                it[errorStack] = "TypeError: Cannot read property\n\tat app.js:42:10"
+                it[requestDetails] = "/js/app.js (line 42, col 10)"
+                it[teamNumber] = 118
+                it[username] = "dave"
+                it[status] = "OPEN"
+                it[createdAt] = Instant.now()
+            }
+        }
+
+        val result = ServerErrorAlertService.listReportedErrors()
+        assertEquals(5, result.totalCount)
+        assertEquals(5, result.errors.size)
+
+        // There should be exactly 3 distinct groups
+        assertEquals(3, result.groups.size)
+
+        // Find Group A
+        val groupA = result.groups.find { it.count == 3 }
+        assertNotNull(groupA, "Group A should have 3 occurrences")
+        assertEquals("SERVER", groupA.errorType)
+        assertEquals("NullPointerException: null", groupA.errorMessage)
+        assertEquals(3, groupA.occurrences.size)
+        assertTrue(groupA.affectedTeams.containsAll(listOf(254, 1678, 971)))
+        assertTrue(groupA.affectedUsers.containsAll(listOf("alice", "bob", "charlie")))
+        assertEquals("OPEN", groupA.status)
+
+        // Test updating group status to RESOLVED
+        val updatedCount = ServerErrorAlertService.updateErrorGroupStatus(
+            errorIds = groupA.occurrences.map { it.id },
+            newStatus = "RESOLVED",
+            resolvedByUsername = "superadmin"
+        )
+        assertEquals(3, updatedCount)
+
+        val afterUpdate = ServerErrorAlertService.listReportedErrors()
+        val updatedGroupA = afterUpdate.groups.find { it.groupKey == groupA.groupKey }
+        assertNotNull(updatedGroupA)
+        assertEquals("RESOLVED", updatedGroupA.status)
+        assertEquals(0, updatedGroupA.openCount)
+        assertEquals(3, updatedGroupA.resolvedCount)
+
+        // Test deleting group
+        val deletedCount = ServerErrorAlertService.deleteErrorGroup(groupA.occurrences.map { it.id })
+        assertEquals(3, deletedCount)
+
+        val afterDelete = ServerErrorAlertService.listReportedErrors()
+        assertEquals(2, afterDelete.groups.size)
+        assertEquals(2, afterDelete.totalCount)
+    }
 }

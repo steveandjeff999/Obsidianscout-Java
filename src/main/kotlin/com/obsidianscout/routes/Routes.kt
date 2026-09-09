@@ -3277,6 +3277,22 @@ fun Application.configureRoutes() {
                         val cleared = com.obsidianscout.admin.ServerErrorAlertService.clearReportedErrors(req?.statusFilter)
                         call.respond(ClearReportedErrorsResponse(success = true, clearedCount = cleared))
                     }
+                    post("/group/status") {
+                        val session = call.requireSuperAdmin()
+                        val req = call.receive<UpdateErrorGroupStatusRequest>()
+                        val updated = com.obsidianscout.admin.ServerErrorAlertService.updateErrorGroupStatus(
+                            errorIds = req.errorIds,
+                            newStatus = req.status,
+                            resolvedByUsername = session.username
+                        )
+                        call.respond(UpdateErrorGroupStatusResponse(success = true, updatedCount = updated, status = req.status))
+                    }
+                    post("/group/delete") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<DeleteErrorGroupRequest>()
+                        val deleted = com.obsidianscout.admin.ServerErrorAlertService.deleteErrorGroup(req.errorIds)
+                        call.respond(DeleteErrorGroupResponse(success = true, deletedCount = deleted))
+                    }
                 }
             }
 
