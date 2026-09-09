@@ -136,6 +136,7 @@
         .seg-chat { background: #f59e0b; }
         .seg-accounts { background: #8b5cf6; }
         .seg-config { background: #ec4899; }
+        .seg-errors { background: #ef4444; }
 
         .storage-legend {
             display: flex;
@@ -422,6 +423,7 @@
                         <div id="bar-chat" class="progress-segment seg-chat" style="width: 0%;" title="Team Chat"></div>
                         <div id="bar-accounts" class="progress-segment seg-accounts" style="width: 0%;" title="Accounts & Sessions"></div>
                         <div id="bar-config" class="progress-segment seg-config" style="width: 0%;" title="Configs & System"></div>
+                        <div id="bar-errors" class="progress-segment seg-errors" style="width: 0%;" title="Error & Bug Reports"></div>
                     </div>
                     <div class="storage-legend">
                         <div class="legend-item"><div class="legend-dot seg-api"></div><span data-i18n="storage.legend_api">API Event Caches</span></div>
@@ -429,6 +431,7 @@
                         <div class="legend-item"><div class="legend-dot seg-chat"></div><span data-i18n="storage.legend_chat">Team Chat Messages</span></div>
                         <div class="legend-item"><div class="legend-dot seg-accounts"></div><span data-i18n="storage.legend_accounts">Accounts & Sessions</span></div>
                         <div class="legend-item"><div class="legend-dot seg-config"></div><span data-i18n="storage.legend_config">Configurations & System</span></div>
+                        <div class="legend-item"><div class="legend-dot seg-errors"></div><span data-i18n="storage.legend_errors">Error & Bug Reports</span></div>
                     </div>
                 </div>
 
@@ -565,6 +568,24 @@
                                 </p>
                             </div>
                             <button id="btn-prune-sessions" class="btn secondary" type="button" data-i18n="storage.btn_clean_sessions">Clean Expired Sessions</button>
+                        </div>
+
+                        <!-- Prune Error & Bug Reports -->
+                        <div class="maintenance-card">
+                            <div>
+                                <h3 style="margin: 0 0 8px 0; font-size: 16px;" data-i18n="storage.prune_errors_title">Prune Error & Bug Reports</h3>
+                                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;" data-i18n="storage.prune_errors_desc">
+                                    Clean up accumulated server exceptions and client bug reports to free database storage.
+                                </p>
+                                <div class="field mb-16">
+                                    <label for="select-prune-errors-scope" data-i18n="storage.prune_errors_scope_label">Deletion Scope</label>
+                                    <select id="select-prune-errors-scope">
+                                        <option value="resolved" data-i18n="storage.prune_errors_scope_resolved">Resolved Error Reports Only</option>
+                                        <option value="all" data-i18n="storage.prune_errors_scope_all">All Error Reports (Open & Resolved)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button id="btn-prune-errors" class="btn secondary" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" type="button" data-i18n="storage.btn_prune_errors">Delete Error Reports</button>
                         </div>
 
                         <!-- Database Reclaim / Vacuum -->

@@ -240,6 +240,52 @@ class StorageManagementServiceTest {
         val remainingSessions = transaction { UserSessions.selectAll().count() }
         assertEquals(0, remainingSessions)
 
+        // Seed reported errors: 1 OPEN, 2 RESOLVED
+        transaction {
+            ReportedErrors.insert {
+                it[id] = UUID.randomUUID()
+                it[errorType] = "SERVER"
+                it[errorMessage] = "Test open error"
+                it[status] = "OPEN"
+                it[createdAt] = Instant.now()
+            }
+            ReportedErrors.insert {
+                it[id] = UUID.randomUUID()
+                it[errorType] = "SERVER"
+                it[errorMessage] = "Test resolved error 1"
+                it[status] = "RESOLVED"
+                it[createdAt] = Instant.now()
+                it[resolvedAt] = Instant.now()
+            }
+            ReportedErrors.insert {
+                it[id] = UUID.randomUUID()
+                it[errorType] = "CLIENT_JS"
+                it[errorMessage] = "Test resolved error 2"
+                it[status] = "RESOLVED"
+                it[createdAt] = Instant.now()
+                it[resolvedAt] = Instant.now()
+            }
+        }
+
+        val overviewBeforePrune = StorageManagementService.getStorageOverview()
+        assertEquals(3L, overviewBeforePrune.errorReportsRecords)
+        assertTrue(overviewBeforePrune.errorReportsBytes > 0)
+        assertTrue(overviewBeforePrune.categories.any { it.category == "Error & Bug Reports" })
+
+        // Prune only resolved errors
+        val pruneResolvedRes = StorageManagementService.pruneErrorReports(deleteOnlyResolved = true)
+        assertTrue(pruneResolvedRes.success)
+        assertEquals(2, pruneResolvedRes.affectedRecords)
+        val remainingErrorsAfterResolved = transaction { ReportedErrors.selectAll().count() }
+        assertEquals(1, remainingErrorsAfterResolved)
+
+        // Prune all errors
+        val pruneAllRes = StorageManagementService.pruneErrorReports(deleteOnlyResolved = false)
+        assertTrue(pruneAllRes.success)
+        assertEquals(1, pruneAllRes.affectedRecords)
+        val remainingErrorsAfterAll = transaction { ReportedErrors.selectAll().count() }
+        assertEquals(0, remainingErrorsAfterAll)
+
         // Vacuum / Reclaim test
         val reclaimRes = StorageManagementService.reclaimDiskSpace()
         assertTrue(reclaimRes.success)

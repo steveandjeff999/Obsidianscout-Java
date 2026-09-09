@@ -3218,6 +3218,11 @@ fun Application.configureRoutes() {
                         call.requireSuperAdmin()
                         call.respond(com.obsidianscout.admin.StorageManagementService.pruneExpiredSessions())
                     }
+                    post("/prune/errors") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<PruneErrorReportsRequest>()
+                        call.respond(com.obsidianscout.admin.StorageManagementService.pruneErrorReports(req.deleteOnlyResolved))
+                    }
                     post("/maintenance/reclaim") {
                         call.requireSuperAdmin()
                         call.respond(com.obsidianscout.admin.StorageManagementService.reclaimDiskSpace())

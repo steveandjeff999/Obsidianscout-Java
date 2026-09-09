@@ -968,6 +968,11 @@ data class PruneChatMessagesRequest(
 )
 
 @Serializable
+data class PruneErrorReportsRequest(
+    val deleteOnlyResolved: Boolean = false
+)
+
+@Serializable
 data class ToggleQuorumFallbackRequest(
     val targetIp: String = "local",
     val enabled: Boolean = false

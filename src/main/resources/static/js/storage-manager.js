@@ -170,12 +170,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         const chatPct = Math.max(0, ((overviewData.chatBytes / totalEstimated) * 100)).toFixed(1);
         const accountsPct = Math.max(0, ((overviewData.accountsBytes / totalEstimated) * 100)).toFixed(1);
         const configPct = Math.max(0, ((overviewData.systemConfigBytes / totalEstimated) * 100)).toFixed(1);
+        const errorsPct = Math.max(0, (((overviewData.errorReportsBytes || 0) / totalEstimated) * 100)).toFixed(1);
 
         document.getElementById("bar-api").style.width = `${apiPct}%`;
         document.getElementById("bar-scout").style.width = `${scoutPct}%`;
         document.getElementById("bar-chat").style.width = `${chatPct}%`;
         document.getElementById("bar-accounts").style.width = `${accountsPct}%`;
         document.getElementById("bar-config").style.width = `${configPct}%`;
+        const barErrors = document.getElementById("bar-errors");
+        if (barErrors) barErrors.style.width = `${errorsPct}%`;
 
         const barSummary = document.getElementById("storage-bar-summary");
         if (barSummary) {
@@ -461,6 +464,39 @@ document.addEventListener("DOMContentLoaded", async () => {
                 Obsidianscout.showToast("Cleanup failed: " + (err.message || "Unknown error"), "error");
             } finally {
                 Obsidianscout.setButtonLoading(btnPruneSessions, false, "Clean Expired Sessions");
+            }
+        });
+    }
+
+    const btnPruneErrors = document.getElementById("btn-prune-errors");
+    if (btnPruneErrors) {
+        btnPruneErrors.addEventListener("click", async () => {
+            const scopeSelect = document.getElementById("select-prune-errors-scope");
+            const scope = scopeSelect ? scopeSelect.value : "resolved";
+            const deleteOnlyResolved = (scope === "resolved");
+            const promptText = deleteOnlyResolved
+                ? Obsidianscout.t("storage.confirm_prune_resolved_errors", "Are you sure you want to delete all resolved error reports?")
+                : Obsidianscout.t("storage.confirm_prune_all_errors", "Are you sure you want to delete all error reports, including open ones?");
+
+            if (!confirm(promptText)) {
+                return;
+            }
+
+            const deletingText = Obsidianscout.t("common.deleting", "Deleting...");
+            const defaultBtnText = Obsidianscout.t("storage.btn_prune_errors", "Delete Error Reports");
+
+            Obsidianscout.setButtonLoading(btnPruneErrors, true, deletingText);
+            try {
+                const res = await Obsidianscout.request("/api/admin/storage/prune/errors", {
+                    method: "POST",
+                    json: { deleteOnlyResolved: deleteOnlyResolved }
+                });
+                Obsidianscout.showToast(res.message || "Error reports deleted successfully.", "success");
+                loadAllStorageData();
+            } catch (err) {
+                Obsidianscout.showToast("Deletion failed: " + (err.message || "Unknown error"), "error");
+            } finally {
+                Obsidianscout.setButtonLoading(btnPruneErrors, false, defaultBtnText);
             }
         });
     }

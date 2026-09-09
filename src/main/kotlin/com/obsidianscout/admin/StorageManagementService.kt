@@ -43,6 +43,8 @@ data class StorageOverviewDto(
     val accountsRecords: Long,
     val systemConfigBytes: Long,
     val systemConfigRecords: Long,
+    val errorReportsBytes: Long = 0,
+    val errorReportsRecords: Long = 0,
     val categories: List<StorageCategoryBreakdown>
 )
 
@@ -245,14 +247,15 @@ object StorageManagementService {
         val (allianceMembershipsCount, allianceMembershipsBytes) = getTableStats("alliance_memberships", listOf())
         val (allianceSelectionsCount, allianceSelectionsBytes) = getTableStats("alliance_selections", listOf("selection_json"))
         val (bannersCount, bannersBytes) = getTableStats("banners", listOf("message", "expandable_message"))
+        val (reportedErrorsCount, reportedErrorsBytes) = getTableStats("reported_errors", listOf("error_message", "error_stack", "request_details", "client_ip", "username", "resolved_by"))
 
         val totalConfigRecords = configsCount + pitConfigsCount + qualConfigsCount + revisionsCount + defaultConfigsCount +
                 settingsCount + alliancesCount + allianceMembershipsCount + allianceSelectionsCount + bannersCount
         val totalConfigBytes = configsBytes + pitConfigsBytes + qualConfigsBytes + revisionsBytes + defaultConfigsBytes +
                 settingsBytes + alliancesBytes + allianceMembershipsBytes + allianceSelectionsBytes + bannersBytes
 
-        val totalEstimatedBytes = totalApiBytes + totalScoutingBytes + totalChatBytes + totalAccountBytes + totalConfigBytes
-        val totalRecords = totalApiRecords + totalScoutingRecords + totalChatRecords + totalAccountRecords + totalConfigRecords
+        val totalEstimatedBytes = totalApiBytes + totalScoutingBytes + totalChatBytes + totalAccountBytes + totalConfigBytes + reportedErrorsBytes
+        val totalRecords = totalApiRecords + totalScoutingRecords + totalChatRecords + totalAccountRecords + totalConfigRecords + reportedErrorsCount
 
         val qfStatus = com.obsidianscout.db.QuorumFallbackStore.getStatus()
         val qfCategory = StorageCategoryBreakdown(
@@ -299,6 +302,13 @@ object StorageManagementService {
                 recordCount = totalConfigRecords,
                 estimatedBytes = totalConfigBytes
             ),
+            StorageCategoryBreakdown(
+                category = "Error & Bug Reports",
+                description = "Logged server exceptions and client-side JavaScript bug reports submitted for cluster diagnostics.",
+                isApiCache = false,
+                recordCount = reportedErrorsCount,
+                estimatedBytes = reportedErrorsBytes
+            ),
             qfCategory
         )
 
@@ -318,6 +328,8 @@ object StorageManagementService {
             accountsRecords = totalAccountRecords,
             systemConfigBytes = totalConfigBytes,
             systemConfigRecords = totalConfigRecords,
+            errorReportsBytes = reportedErrorsBytes,
+            errorReportsRecords = reportedErrorsCount,
             categories = categories
         )
     }
@@ -878,6 +890,18 @@ object StorageManagementService {
         return StorageActionResultDto(
             success = true,
             message = "Successfully cleaned up $deletedCount expired or inactive user sessions and tokens.",
+            affectedRecords = deletedCount
+        )
+    }
+
+    fun pruneErrorReports(deleteOnlyResolved: Boolean = false): StorageActionResultDto {
+        val filter = if (deleteOnlyResolved) "RESOLVED" else "ALL"
+        val deletedCount = ServerErrorAlertService.clearReportedErrors(filter).toLong()
+        val desc = if (deleteOnlyResolved) "resolved error reports" else "error reports (both open and resolved)"
+        println("[StorageManagement] Pruned $desc: $deletedCount deleted.")
+        return StorageActionResultDto(
+            success = true,
+            message = "Successfully deleted $deletedCount $desc.",
             affectedRecords = deletedCount
         )
     }
