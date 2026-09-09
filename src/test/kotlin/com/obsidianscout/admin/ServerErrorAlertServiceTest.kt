@@ -293,4 +293,31 @@ class ServerErrorAlertServiceTest {
         assertEquals(1, cleared)
         assertEquals(0, ServerErrorAlertService.getReportedErrorStats().totalCount)
     }
+
+    @Test
+    fun testRecordServerError() {
+        transaction { ReportedErrors.deleteAll() }
+
+        ServerErrorAlertService.recordServerError(
+            errorMessage = "Database schema migration error: Failed to add column 'test_col' to table 'users'",
+            cause = RuntimeException("null value in column violates not-null constraint"),
+            requestDetails = "Table: users, Column: test_col, DDL: ALTER TABLE users ADD COLUMN test_col VARCHAR(16) NOT NULL",
+            errorType = "SERVER",
+            sync = true
+        )
+
+        val stats = ServerErrorAlertService.getReportedErrorStats()
+        assertEquals(1, stats.totalCount)
+        assertEquals(1, stats.openCount)
+        assertEquals(1, stats.serverCount)
+
+        val list = ServerErrorAlertService.listReportedErrors(typeFilter = "SERVER", statusFilter = "OPEN")
+        assertEquals(1, list.errors.size)
+        val err = list.errors.first()
+        assertEquals("Database schema migration error: Failed to add column 'test_col' to table 'users'", err.errorMessage)
+        assertEquals("SERVER", err.errorType)
+        assertEquals("OPEN", err.status)
+        assertTrue(err.errorStack?.contains("not-null constraint") == true)
+        assertEquals("Table: users, Column: test_col, DDL: ALTER TABLE users ADD COLUMN test_col VARCHAR(16) NOT NULL", err.requestDetails)
+    }
 }

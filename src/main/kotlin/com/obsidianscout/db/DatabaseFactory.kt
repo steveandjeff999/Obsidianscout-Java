@@ -214,6 +214,7 @@ object DatabaseFactory {
             dropOldIndicesIfNeeded(dataSource)
 
             val tables = listOf(
+                ReportedErrors,
                 Users,
                 ScoutingConfigs,
                 PitScoutingConfigs,
@@ -242,8 +243,7 @@ object DatabaseFactory {
                 ClusterSecrets,
                 ClusterNotificationLocks,
                 AnalyticsReports,
-                UserSessions,
-                ReportedErrors
+                UserSessions
             )
 
             if (isCockroach) {
@@ -252,6 +252,37 @@ object DatabaseFactory {
                     conn.autoCommit = true
                     val existingTables = getExistingTables(conn)
                     conn.createStatement().use { stmt ->
+                        // 0. Ensure error reporting table exists first so any subsequent errors can be logged to ReportedErrors
+                        val reportedErrorsDdl = listOf(
+                            """
+                            CREATE TABLE IF NOT EXISTS reported_errors (
+                                id UUID PRIMARY KEY,
+                                error_type VARCHAR(32) NOT NULL,
+                                error_message TEXT NOT NULL,
+                                error_stack TEXT NULL,
+                                request_details TEXT NULL,
+                                client_ip VARCHAR(64) NULL,
+                                team_number INT NULL,
+                                program VARCHAR(16) NULL,
+                                user_role VARCHAR(32) NULL,
+                                username VARCHAR(128) NULL,
+                                status VARCHAR(32) NOT NULL DEFAULT 'OPEN',
+                                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                resolved_at TIMESTAMPTZ NULL,
+                                resolved_by VARCHAR(128) NULL
+                            )
+                            """.trimIndent(),
+                            "CREATE INDEX IF NOT EXISTS idx_reported_errors_created_at ON reported_errors (created_at)",
+                            "CREATE INDEX IF NOT EXISTS idx_reported_errors_type_status ON reported_errors (error_type, status)"
+                        )
+                        for (sql in reportedErrorsDdl) {
+                            try {
+                                stmt.executeUpdate(sql)
+                            } catch (e: Exception) {
+                                println("[Database] Note ensuring reported_errors table: ${e.message}")
+                            }
+                        }
+
                         // 1. Auto-create any new tables in 'tables' list that do not exist yet
                         for (table in tables) {
                             val tableName = table.tableName.lowercase()
@@ -263,6 +294,15 @@ object DatabaseFactory {
                                         stmt.executeUpdate(sql)
                                     } catch (e: Exception) {
                                         println("[Database] Error creating table $tableName with statement ($sql): ${e.message}")
+                                        try {
+                                            com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
+                                                errorMessage = "Database error creating table $tableName: ${e.message}",
+                                                cause = e,
+                                                requestDetails = "Statement: $sql",
+                                                errorType = "SERVER",
+                                                sync = true
+                                            )
+                                        } catch (_: Exception) {}
                                     }
                                 }
                             }
@@ -299,17 +339,79 @@ object DatabaseFactory {
                                             column.columnType is org.jetbrains.exposed.sql.javatime.JavaOffsetDateTimeColumnType -> "TIMESTAMPTZ"
                                             else -> "TEXT"
                                         }
-                                        val defaultClause = when {
-                                            columnName == "program" -> " DEFAULT 'FRC' NOT NULL"
-                                            column.columnType is org.jetbrains.exposed.sql.BooleanColumnType -> " DEFAULT FALSE NOT NULL"
-                                            column.columnType.nullable -> " NULL"
-                                            else -> " NOT NULL"
+
+                                        // Resolve default value from Exposed column definition if available
+                                        val exposedDefault = try {
+                                            column.defaultValueFun?.invoke()
+                                        } catch (_: Throwable) {
+                                            null
                                         }
-                                        val sql = "ALTER TABLE $tableName ADD COLUMN $columnName $ddlType$defaultClause"
+
+                                        val defaultSql = when {
+                                            exposedDefault != null -> {
+                                                when (exposedDefault) {
+                                                    is Boolean -> if (exposedDefault) "TRUE" else "FALSE"
+                                                    is Number -> exposedDefault.toString()
+                                                    is Enum<*> -> "'${exposedDefault.name}'"
+                                                    else -> "'${exposedDefault.toString().replace("'", "''")}'"
+                                                }
+                                            }
+                                            columnName == "program" -> "'FRC'"
+                                            columnName == "bug_report_preference" -> "'ask'"
+                                            columnName == "notification_preference" -> "'all'"
+                                            column.columnType is org.jetbrains.exposed.sql.BooleanColumnType -> "FALSE"
+                                            else -> null
+                                        }
+
+                                        val defaultClause = when {
+                                            defaultSql != null -> " DEFAULT $defaultSql NOT NULL"
+                                            column.columnType.nullable -> " NULL"
+                                            // When adding a NOT NULL column to an existing table with rows, CockroachDB / PostgreSQL
+                                            // requires a default value to avoid "null value in column violates not-null constraint".
+                                            column.columnType is org.jetbrains.exposed.sql.VarCharColumnType ||
+                                            column.columnType is org.jetbrains.exposed.sql.TextColumnType -> " DEFAULT '' NOT NULL"
+                                            column.columnType is org.jetbrains.exposed.sql.IntegerColumnType ||
+                                            column.columnType is org.jetbrains.exposed.sql.LongColumnType -> " DEFAULT 0 NOT NULL"
+                                            column.columnType is org.jetbrains.exposed.sql.DoubleColumnType -> " DEFAULT 0.0 NOT NULL"
+                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaInstantColumnType ||
+                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaLocalDateTimeColumnType ||
+                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaOffsetDateTimeColumnType -> " DEFAULT CURRENT_TIMESTAMP NOT NULL"
+                                            column.columnType is org.jetbrains.exposed.sql.UUIDColumnType -> " DEFAULT gen_random_uuid() NOT NULL"
+                                            else -> " NULL"
+                                        }
+
+                                        val sql = "ALTER TABLE $tableName ADD COLUMN IF NOT EXISTS $columnName $ddlType$defaultClause"
                                         try {
                                             stmt.executeUpdate(sql)
+                                            println("[Database] Successfully added missing column $columnName to table $tableName.")
                                         } catch (e: Exception) {
                                             println("[Database] Error adding column $columnName to $tableName: ${e.message}")
+
+                                            // Fallback attempt: if not-null constraint was violated, try adding as nullable so schema is not left incomplete
+                                            var recovered = false
+                                            if (defaultClause.contains("NOT NULL", ignoreCase = true)) {
+                                                try {
+                                                    val fallbackSql = "ALTER TABLE $tableName ADD COLUMN IF NOT EXISTS $columnName $ddlType NULL"
+                                                    stmt.executeUpdate(fallbackSql)
+                                                    recovered = true
+                                                    println("[Database] Recovered adding column $columnName to table $tableName using nullable fallback.")
+                                                } catch (fallbackEx: Exception) {
+                                                    println("[Database] Fallback addition for column $columnName to $tableName failed: ${fallbackEx.message}")
+                                                }
+                                            }
+
+                                            // Log error to the error reporting interface and pass gracefully
+                                            try {
+                                                com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
+                                                    errorMessage = "Database schema migration error: Failed to add column '$columnName' to table '$tableName': ${e.message}",
+                                                    cause = e,
+                                                    requestDetails = "Table: $tableName, Column: $columnName, DDL: $sql (Recovered: $recovered)",
+                                                    errorType = "SERVER",
+                                                    sync = true
+                                                )
+                                            } catch (logEx: Exception) {
+                                                println("[Database] Note: Could not record migration error to error reporting interface: ${logEx.message}")
+                                            }
                                         }
                                     }
                                 }
@@ -320,6 +422,9 @@ object DatabaseFactory {
                         val migrations = listOf(
                             "ALTER TABLE users DROP CONSTRAINT IF EXISTS ux_users_username_team",
                             "ALTER TABLE users ADD CONSTRAINT IF NOT EXISTS ux_users_username_team_program UNIQUE (username, team_number, program)",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS bug_report_preference VARCHAR(16) NOT NULL DEFAULT 'ask'",
+                            "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_roles TEXT NOT NULL DEFAULT '[]'",
+                            "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'",
                             
                             "ALTER TABLE scouting_configs DROP CONSTRAINT IF EXISTS ux_scouting_configs_team",
                             "ALTER TABLE scouting_configs ADD CONSTRAINT IF NOT EXISTS ux_scouting_configs_team_program UNIQUE (team_number, program)",
@@ -345,6 +450,15 @@ object DatabaseFactory {
                                 stmt.executeUpdate(sql)
                             } catch (e: Exception) {
                                 println("[Database] Note/Warning running Cockroach schema migration statement: ${e.message}")
+                                try {
+                                    com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
+                                        errorMessage = "CockroachDB schema migration warning: ${e.message}",
+                                        cause = e,
+                                        requestDetails = "Migration SQL: $sql",
+                                        errorType = "SERVER",
+                                        sync = true
+                                    )
+                                } catch (_: Exception) {}
                             }
                         }
                     }
@@ -369,6 +483,15 @@ object DatabaseFactory {
                                     println("[Database] Ran PG migration: $sql")
                                 } catch (e: Exception) {
                                     println("[Database] Note running PG migration ($sql): ${e.message}")
+                                    try {
+                                        com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
+                                            errorMessage = "PostgreSQL schema migration warning: ${e.message}",
+                                            cause = e,
+                                            requestDetails = "Migration SQL: $sql",
+                                            errorType = "SERVER",
+                                            sync = true
+                                        )
+                                    } catch (_: Exception) {}
                                 }
                             }
                         }

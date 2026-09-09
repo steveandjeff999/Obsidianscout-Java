@@ -4,6 +4,7 @@ import com.obsidianscout.auth.EmailService
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.config.AppConfigLoader
+import com.obsidianscout.db.ReportedErrors
 import com.obsidianscout.db.Users
 import com.obsidianscout.db.readTransaction
 import com.obsidianscout.integrations.SettingsService
@@ -258,6 +259,79 @@ object ServerErrorAlertService {
                 )
             } catch (e: Exception) {
                 ServerLogService.appendLog("ERROR", "ServerErrorAlertService", "Failed to send server error alert email: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Records an internal server or database error directly to the error reporting interface (ReportedErrors)
+     * and logs it to the server logs. When configured, sends an email alert to superadmins.
+     */
+    fun recordServerError(
+        errorMessage: String,
+        cause: Throwable? = null,
+        requestDetails: String? = null,
+        errorType: String = "SERVER",
+        sync: Boolean = false
+    ) {
+        ServerLogService.appendLog("ERROR", "ServerErrorAlertService", "$errorMessage${cause?.let { ": ${it.message}" } ?: ""}")
+
+        val fullStackTrace = cause?.let {
+            val sw = StringWriter()
+            it.printStackTrace(PrintWriter(sw))
+            sw.toString()
+        }
+
+        fun persist() {
+            try {
+                org.jetbrains.exposed.sql.transactions.transaction {
+                    com.obsidianscout.db.ReportedErrors.insert {
+                        it[ReportedErrors.errorType] = errorType
+                        it[ReportedErrors.errorMessage] = errorMessage.take(2000)
+                        it[ReportedErrors.errorStack] = fullStackTrace
+                        it[ReportedErrors.requestDetails] = requestDetails?.take(500)
+                        it[ReportedErrors.clientIp] = "Server (Internal)"
+                        it[ReportedErrors.status] = "OPEN"
+                        it[ReportedErrors.createdAt] = Instant.now()
+                    }
+                }
+            } catch (e: Exception) {
+                ServerLogService.appendLog("ERROR", "ServerErrorAlertService", "Failed to persist server error to database: ${e.message}")
+            }
+        }
+
+        if (sync) {
+            persist()
+        } else {
+            scope.launch { persist() }
+        }
+
+        // Check if database setting is enabled across cluster for email alerts
+        val settings = try { SettingsService.getErrorAlertSettings() } catch (_: Throwable) { null }
+        if (settings?.emailServerErrors == true) {
+            val errorSig = "${cause?.javaClass?.name ?: "Error"}:${errorMessage.take(80)}:$requestDetails"
+            val now = System.currentTimeMillis()
+            val lastSent = recentAlertSignatures[errorSig]
+            if (lastSent != null && (now - lastSent) < ALERT_COOLDOWN_MS) {
+                return
+            }
+            recentAlertSignatures[errorSig] = now
+
+            scope.launch {
+                try {
+                    sendAlertEmail(
+                        subjectTitle = "Server Code Exception: ${cause?.javaClass?.simpleName ?: "Internal System Error"}",
+                        errorMessage = errorMessage,
+                        exceptionClass = cause?.javaClass?.name ?: "SystemError",
+                        requestDetails = requestDetails ?: "Internal System Routine",
+                        clientIp = "Server (Internal)",
+                        session = null,
+                        stackTrace = fullStackTrace?.lines()?.take(25)?.joinToString("\n") ?: "No stack trace available",
+                        isTest = false
+                    )
+                } catch (e: Exception) {
+                    ServerLogService.appendLog("ERROR", "ServerErrorAlertService", "Failed to send server error alert email: ${e.message}")
+                }
             }
         }
     }

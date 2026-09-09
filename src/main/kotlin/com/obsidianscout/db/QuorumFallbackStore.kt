@@ -382,6 +382,8 @@ object QuorumFallbackStore {
                 DatabaseFactory.readTransaction { AnalyticsReports.selectAll().toList() }
             } else emptyList()
 
+            val reportedErrorsList = DatabaseFactory.readTransaction { ReportedErrors.selectAll().toList() }
+
             val alliancesList = if (config.mirror_alliances || isMirrorAll) {
                 DatabaseFactory.readTransaction { ScoutingAlliances.selectAll().toList() }
             } else emptyList()
@@ -824,6 +826,27 @@ object QuorumFallbackStore {
                     }
                 }
 
+                // Reported Errors
+                ReportedErrors.deleteAll()
+                for (row in reportedErrorsList) {
+                    ReportedErrors.insert {
+                        it[id] = EntityID(row[ReportedErrors.id].value, ReportedErrors)
+                        it[errorType] = row[ReportedErrors.errorType]
+                        it[errorMessage] = row[ReportedErrors.errorMessage]
+                        it[errorStack] = row[ReportedErrors.errorStack]
+                        it[requestDetails] = row[ReportedErrors.requestDetails]
+                        it[clientIp] = row[ReportedErrors.clientIp]
+                        it[teamNumber] = row[ReportedErrors.teamNumber]
+                        it[program] = row[ReportedErrors.program]
+                        it[userRole] = row[ReportedErrors.userRole]
+                        it[username] = row[ReportedErrors.username]
+                        it[status] = row[ReportedErrors.status]
+                        it[createdAt] = row[ReportedErrors.createdAt]
+                        it[resolvedAt] = row[ReportedErrors.resolvedAt]
+                        it[resolvedBy] = row[ReportedErrors.resolvedBy]
+                    }
+                }
+
                 // Events, Teams & Matches
                 ApiEvents.deleteAll()
                 for (row in activeEventsList) {
@@ -979,6 +1002,7 @@ object QuorumFallbackStore {
                     counts["matches"] = ApiMatches.selectAll().count()
                     counts["teams"] = ApiTeams.selectAll().count()
                     counts["analyticsReports"] = AnalyticsReports.selectAll().count()
+                    counts["reportedErrors"] = ReportedErrors.selectAll().count()
                 }
             } catch (_: Exception) {
             } finally {
@@ -1050,6 +1074,7 @@ object QuorumFallbackStore {
                     tableCounts["fcm_device_tokens"] = FcmDeviceTokens.selectAll().count()
                     tableCounts["push_subscriptions"] = PushSubscriptions.selectAll().count()
                     tableCounts["analytics_reports"] = AnalyticsReports.selectAll().count()
+                    tableCounts["reported_errors"] = ReportedErrors.selectAll().count()
 
                     // Load mirrored events with their breakdown
                     val allEvents = ApiEvents.selectAll().toList()
