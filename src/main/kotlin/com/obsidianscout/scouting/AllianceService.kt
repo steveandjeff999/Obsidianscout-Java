@@ -509,22 +509,30 @@ object AllianceService {
                     importOnlyNullEvent -> ScoutingEntries
                         .selectAll().where {
                             (ScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
+                            (ScoutingEntries.program eq session.program) and
                             ScoutingEntries.eventKey.isNull()
                         }
                     selectedEventKey == null -> {
                     ScoutingEntries
-                        .selectAll().where { ScoutingEntries.ownerTeamNumber eq sourceTeamNumber }
+                        .selectAll().where {
+                            (ScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
+                            (ScoutingEntries.program eq session.program)
+                        }
                     }
                     else -> {
                     ScoutingEntries
                         .selectAll().where {
                             (ScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
+                            (ScoutingEntries.program eq session.program) and
                             (ScoutingEntries.eventKey eq selectedEventKey)
                         }
                     }
                 }).toList()
                 val existing = ScoutingEntries
-                    .selectAll().where { ScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                    .selectAll().where {
+                        (ScoutingEntries.ownerTeamNumber eq session.teamNumber) and
+                        (ScoutingEntries.program eq session.program)
+                    }
                     .map { row ->
                         scoutingFingerprint(
                             row[ScoutingEntries.targetTeamNumber],
@@ -549,6 +557,7 @@ object AllianceService {
                     if (existing.add(fingerprint)) {
                         ScoutingEntries.insertAndGetId {
                             it[ownerTeamNumber] = session.teamNumber
+                            it[program] = session.program
                             it[targetTeamNumber] = row[ScoutingEntries.targetTeamNumber]
                             it[ScoutingEntries.eventKey] = destinationEventKey
                             it[ScoutingEntries.matchKey] = row[ScoutingEntries.matchKey]
@@ -572,22 +581,30 @@ object AllianceService {
                     importOnlyNullEvent -> PitScoutingEntries
                         .selectAll().where {
                             (PitScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
+                            (PitScoutingEntries.program eq session.program) and
                             PitScoutingEntries.eventKey.isNull()
                         }
                     selectedEventKey == null -> {
                     PitScoutingEntries
-                        .selectAll().where { PitScoutingEntries.ownerTeamNumber eq sourceTeamNumber }
+                        .selectAll().where {
+                            (PitScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
+                            (PitScoutingEntries.program eq session.program)
+                        }
                     }
                     else -> {
                     PitScoutingEntries
                         .selectAll().where {
                             (PitScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
+                            (PitScoutingEntries.program eq session.program) and
                             (PitScoutingEntries.eventKey eq selectedEventKey)
                         }
                     }
                 }).toList()
                 val existing = PitScoutingEntries
-                    .selectAll().where { PitScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                    .selectAll().where {
+                        (PitScoutingEntries.ownerTeamNumber eq session.teamNumber) and
+                        (PitScoutingEntries.program eq session.program)
+                    }
                     .map { row ->
                         pitFingerprint(
                             row[PitScoutingEntries.targetTeamNumber],
@@ -608,6 +625,7 @@ object AllianceService {
                     if (existing.add(fingerprint)) {
                         PitScoutingEntries.insertAndGetId {
                             it[ownerTeamNumber] = session.teamNumber
+                            it[program] = session.program
                             it[targetTeamNumber] = row[PitScoutingEntries.targetTeamNumber]
                             it[PitScoutingEntries.eventKey] = destinationEventKey
                             it[dataJson] = row[PitScoutingEntries.dataJson]
@@ -629,22 +647,30 @@ object AllianceService {
                     importOnlyNullEvent -> QualitativeScoutingEntries
                         .selectAll().where {
                             (QualitativeScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
+                            (QualitativeScoutingEntries.program eq session.program) and
                             QualitativeScoutingEntries.eventKey.isNull()
                         }
                     selectedEventKey == null -> {
                     QualitativeScoutingEntries
-                        .selectAll().where { QualitativeScoutingEntries.ownerTeamNumber eq sourceTeamNumber }
+                        .selectAll().where {
+                            (QualitativeScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
+                            (QualitativeScoutingEntries.program eq session.program)
+                        }
                     }
                     else -> {
                     QualitativeScoutingEntries
                         .selectAll().where {
                             (QualitativeScoutingEntries.ownerTeamNumber eq sourceTeamNumber) and
+                            (QualitativeScoutingEntries.program eq session.program) and
                             (QualitativeScoutingEntries.eventKey eq selectedEventKey)
                         }
                     }
                 }).toList()
                 val existing = QualitativeScoutingEntries
-                    .selectAll().where { QualitativeScoutingEntries.ownerTeamNumber eq session.teamNumber }
+                    .selectAll().where {
+                        (QualitativeScoutingEntries.ownerTeamNumber eq session.teamNumber) and
+                        (QualitativeScoutingEntries.program eq session.program)
+                    }
                     .map { row ->
                         scoutingFingerprint(
                             row[QualitativeScoutingEntries.targetTeamNumber],
@@ -669,6 +695,7 @@ object AllianceService {
                     if (existing.add(fingerprint)) {
                         QualitativeScoutingEntries.insertAndGetId {
                             it[ownerTeamNumber] = session.teamNumber
+                            it[program] = session.program
                             it[targetTeamNumber] = row[QualitativeScoutingEntries.targetTeamNumber]
                             it[QualitativeScoutingEntries.eventKey] = destinationEventKey
                             it[QualitativeScoutingEntries.matchKey] = row[QualitativeScoutingEntries.matchKey]
@@ -704,19 +731,31 @@ object AllianceService {
         }
 
         return readTransaction {
+            val partnerTeams = getAlliancePartnerTeams(session.teamNumber, session.program)
+            if (partnerTeams.isEmpty()) return@readTransaction emptyList()
+
             val sources = mutableMapOf<Pair<Int, String?>, MutableImportSourceCounts>()
 
-            ScoutingEntries.selectAll().forEach { row ->
+            ScoutingEntries.selectAll().where {
+                (ScoutingEntries.ownerTeamNumber inList partnerTeams) and
+                (ScoutingEntries.program eq session.program)
+            }.forEach { row ->
                 sources.getOrPut(row[ScoutingEntries.ownerTeamNumber] to row[ScoutingEntries.eventKey]) {
                     MutableImportSourceCounts()
                 }.matchScoutingCount++
             }
-            PitScoutingEntries.selectAll().forEach { row ->
+            PitScoutingEntries.selectAll().where {
+                (PitScoutingEntries.ownerTeamNumber inList partnerTeams) and
+                (PitScoutingEntries.program eq session.program)
+            }.forEach { row ->
                 sources.getOrPut(row[PitScoutingEntries.ownerTeamNumber] to row[PitScoutingEntries.eventKey]) {
                     MutableImportSourceCounts()
                 }.pitScoutingCount++
             }
-            QualitativeScoutingEntries.selectAll().forEach { row ->
+            QualitativeScoutingEntries.selectAll().where {
+                (QualitativeScoutingEntries.ownerTeamNumber inList partnerTeams) and
+                (QualitativeScoutingEntries.program eq session.program)
+            }.forEach { row ->
                 sources.getOrPut(row[QualitativeScoutingEntries.ownerTeamNumber] to row[QualitativeScoutingEntries.eventKey]) {
                     MutableImportSourceCounts()
                 }.qualitativeScoutingCount++
@@ -740,7 +779,7 @@ object AllianceService {
      * to transparently include partner data in list queries.
      */
     fun getAlliancePartnerTeams(teamNumber: Int, program: String = "FRC"): Set<Int> = readTransaction {
-        // Find all alliance IDs where this team is ADMIN or ACCEPTED and active
+        // Find all alliance IDs where this team is ADMIN or ACCEPTED and active in this program
         val myAllianceIds = AllianceMemberships
             .selectAll().where {
                 (AllianceMemberships.teamNumber eq teamNumber) and
@@ -750,27 +789,15 @@ object AllianceService {
             }
             .map { it[AllianceMemberships.allianceId].value }
 
-        val effAllianceIds = if (myAllianceIds.isNotEmpty()) {
-            myAllianceIds
-        } else {
-            // Fallback check across all programs if none found under specific program
-            AllianceMemberships
-                .selectAll().where {
-                    (AllianceMemberships.teamNumber eq teamNumber) and
-                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
-                    (AllianceMemberships.active eq true)
-                }
-                .map { it[AllianceMemberships.allianceId].value }
-        }
-
-        if (effAllianceIds.isEmpty()) return@readTransaction emptySet()
+        if (myAllianceIds.isEmpty()) return@readTransaction emptySet()
 
         // Find all other ACCEPTED/ADMIN members in those alliances who are not disabled.
         // We do NOT require partner teams to also have active eq true, so that whenever a team
         // enables the alliance, they can collaborate and share/view data with all accepted partners.
         AllianceMemberships
             .selectAll().where {
-                (AllianceMemberships.allianceId inList effAllianceIds) and
+                (AllianceMemberships.allianceId inList myAllianceIds) and
+                (AllianceMemberships.program eq program) and
                 (AllianceMemberships.teamNumber neq teamNumber) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
                 (AllianceMemberships.disabled eq false)
@@ -784,23 +811,10 @@ object AllianceService {
      * and returns the alliance ID.
      */
     fun getActiveAllianceId(teamNumber: Int, program: String = "FRC"): UUID? = readTransaction {
-        val exactMatch = AllianceMemberships
-            .selectAll().where {
-                (AllianceMemberships.teamNumber eq teamNumber) and
-                (AllianceMemberships.program eq program) and
-                (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
-                (AllianceMemberships.active eq true)
-            }
-            .firstOrNull()
-            ?.get(AllianceMemberships.allianceId)
-            ?.value
-
-        if (exactMatch != null) return@readTransaction exactMatch
-
-        // Fallback: if team has an active alliance regardless of program, return it so admin features and data sharing stay linked
         AllianceMemberships
             .selectAll().where {
                 (AllianceMemberships.teamNumber eq teamNumber) and
+                (AllianceMemberships.program eq program) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
                 (AllianceMemberships.active eq true)
             }
@@ -874,7 +888,7 @@ object AllianceService {
     }
 
     /**
-     * Toggles the active status for a team's membership in an alliance, deactivating others.
+     * Toggles the active status for a team's membership in an alliance, deactivating others in the same program.
      */
     fun toggleActiveMembership(session: UserSession, allianceId: String, active: Boolean) {
         val allianceUuid = UUID.fromString(allianceId)
@@ -889,9 +903,10 @@ object AllianceService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "No accepted membership found for your team in this alliance")
 
             if (active) {
-                // Deactivate all other memberships for this team first
+                // Deactivate all other memberships for this team and program first
                 AllianceMemberships.update({
-                    (AllianceMemberships.teamNumber eq session.teamNumber)
+                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program)
                 }) {
                     it[AllianceMemberships.active] = false
                 }

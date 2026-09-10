@@ -31,11 +31,11 @@ data class AllianceSelectionUpdateResponse(
 object AllianceSelectionService {
 
     private fun resolveOwnerKey(session: UserSession): String {
-        val allianceId = AllianceService.getActiveAllianceId(session.teamNumber)
+        val allianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
         return if (allianceId != null) {
             "alliance_$allianceId"
         } else {
-            "team_${session.teamNumber}"
+            "team_${session.teamNumber}_${session.program}"
         }
     }
 
@@ -47,7 +47,15 @@ object AllianceSelectionService {
                     (AllianceSelections.ownerKey eq owner) and
                     (AllianceSelections.eventKey eq eventKey)
                 }
-                .firstOrNull()
+                .firstOrNull() ?: run {
+                    // Backward-compatibility: check legacy un-scoped team key if this is an FRC team
+                    if (owner.startsWith("team_")) {
+                        AllianceSelections.selectAll().where {
+                            (AllianceSelections.ownerKey eq "team_${session.teamNumber}") and
+                            (AllianceSelections.eventKey eq eventKey)
+                        }.firstOrNull()
+                    } else null
+                }
 
             if (row != null) {
                 AllianceSelectionResponse(

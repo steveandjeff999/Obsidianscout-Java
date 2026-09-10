@@ -72,14 +72,14 @@ object PushNotificationService {
     fun sendChatNotification(message: ChatMessageDto) {
         scope.launch {
             try {
-                // 1. Find all users in the same team except the sender
+                // 1. Find all users in the same team and program except the sender
                 val senderUuid = runCatching { UUID.fromString(message.userId) }.getOrNull()
                 val targetUsers = readTransaction {
                     val q = (PushSubscriptions innerJoin Users).selectAll()
                     val filtered = if (senderUuid != null) {
-                        q.where { (Users.teamNumber eq message.teamNumber) and (Users.id neq senderUuid) }
+                        q.where { (Users.teamNumber eq message.teamNumber) and (Users.program eq message.program) and (Users.id neq senderUuid) }
                     } else {
-                        q.where { Users.teamNumber eq message.teamNumber }
+                        q.where { (Users.teamNumber eq message.teamNumber) and (Users.program eq message.program) }
                     }
                     filtered.map { row ->
                             TargetUserNotification(
@@ -94,13 +94,13 @@ object PushNotificationService {
                         }
                 }
 
-                // 2. Dispatch to FCM devices for team users
+                // 2. Dispatch to FCM devices for team users in the same program
                 val fcmTargetUserUuids = readTransaction {
                     val q = Users.selectAll()
                     val filtered = if (senderUuid != null) {
-                        q.where { (Users.teamNumber eq message.teamNumber) and (Users.id neq senderUuid) }
+                        q.where { (Users.teamNumber eq message.teamNumber) and (Users.program eq message.program) and (Users.id neq senderUuid) }
                     } else {
-                        q.where { Users.teamNumber eq message.teamNumber }
+                        q.where { (Users.teamNumber eq message.teamNumber) and (Users.program eq message.program) }
                     }
                     filtered.map { row ->
                         val username = row[Users.username]

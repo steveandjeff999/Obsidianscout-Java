@@ -116,6 +116,7 @@ object ChatService {
             .select(
                 ChatMessages.id,
                 ChatMessages.teamNumber,
+                ChatMessages.program,
                 ChatMessages.groupName,
                 ChatMessages.userId,
                 ChatMessages.username,
@@ -152,7 +153,8 @@ object ChatService {
                     reactions = parsedReactions,
                     profilePicture = row[Users.profilePicture],
                     isEdited = row[ChatMessages.isEdited],
-                    updatedAt = row[ChatMessages.updatedAt]?.toString()
+                    updatedAt = row[ChatMessages.updatedAt]?.toString(),
+                    program = row[ChatMessages.program]
                 )
             }
             .reversed()
@@ -469,7 +471,8 @@ object ChatService {
             reactions = parsedReactions,
             profilePicture = profilePic,
             isEdited = row[ChatMessages.isEdited],
-            updatedAt = row[ChatMessages.updatedAt]?.toString()
+            updatedAt = row[ChatMessages.updatedAt]?.toString(),
+            program = row[ChatMessages.program]
         )
     }
 
@@ -496,6 +499,7 @@ object ChatService {
             .select(
                 ChatMessages.id,
                 ChatMessages.teamNumber,
+                ChatMessages.program,
                 ChatMessages.groupName,
                 ChatMessages.userId,
                 ChatMessages.username,
@@ -526,7 +530,8 @@ object ChatService {
                     reactions = parsedReactions,
                     profilePicture = r[Users.profilePicture],
                     isEdited = r[ChatMessages.isEdited],
-                    updatedAt = r[ChatMessages.updatedAt]?.toString()
+                    updatedAt = r[ChatMessages.updatedAt]?.toString(),
+                    program = r[ChatMessages.program]
                 )
             }
     }
@@ -587,6 +592,7 @@ object ChatService {
             .select(
                 ChatMessages.id,
                 ChatMessages.teamNumber,
+                ChatMessages.program,
                 ChatMessages.groupName,
                 ChatMessages.userId,
                 ChatMessages.username,
@@ -617,7 +623,8 @@ object ChatService {
                     reactions = parsedReactions,
                     profilePicture = r[Users.profilePicture],
                     isEdited = r[ChatMessages.isEdited],
-                    updatedAt = r[ChatMessages.updatedAt]?.toString()
+                    updatedAt = r[ChatMessages.updatedAt]?.toString(),
+                    program = r[ChatMessages.program]
                 )
             }
     }

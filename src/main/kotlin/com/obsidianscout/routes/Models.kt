@@ -596,7 +596,8 @@ data class ChatMessageDto(
     val reactions: Map<String, List<String>>, // maps reaction emoji to list of usernames who reacted
     val profilePicture: String? = null,
     val isEdited: Boolean = false,
-    val updatedAt: String? = null
+    val updatedAt: String? = null,
+    val program: String = "FRC"
 )
 
 @Serializable
