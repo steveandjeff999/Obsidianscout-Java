@@ -98,7 +98,8 @@ data class ScoutingAllianceBackupDto(
     val pitConfigJson: String?,
     val qualitativeConfigJson: String?,
     val year: Int?,
-    val eventCode: String?
+    val eventCode: String?,
+    val program: String = "FRC"
 )
 
 @Serializable
@@ -109,7 +110,8 @@ data class AllianceMembershipBackupDto(
     val invitedAt: Long,
     val respondedAt: Long?,
     val disabled: Boolean,
-    val active: Boolean
+    val active: Boolean,
+    val program: String = "FRC"
 )
 
 @Serializable
@@ -122,7 +124,8 @@ data class BannerBackupDto(
     val expandableMessage: String,
     val isActive: Boolean,
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val program: String = "FRC"
 )
 
 @Serializable
@@ -303,7 +306,7 @@ data class ImportReport(
 
 object BackupService {
 
-    fun exportBackup(teamNumber: Int, type: String, scope: String = "team"): ObsidianDbBackup {
+    fun exportBackup(teamNumber: Int, type: String, scope: String = "team", program: String = "FRC"): ObsidianDbBackup {
         return transaction {
             val userMap = Users.selectAll()
                 .associate { it[Users.id].value to Pair(it[Users.username], it[Users.teamNumber]) }
@@ -322,7 +325,7 @@ object BackupService {
                     )
                 }
             } else if (type == "entire") {
-                Users.selectAll().where { Users.teamNumber eq teamNumber }.map { row ->
+                Users.selectAll().where { (Users.teamNumber eq teamNumber) and (Users.program eq program) }.map { row ->
                     UserBackupDto(
                         username = row[Users.username],
                         teamNumber = row[Users.teamNumber],
@@ -341,7 +344,7 @@ object BackupService {
                     ConfigBackupDto(row[ScoutingConfigs.teamNumber], row[ScoutingConfigs.configJson], row[ScoutingConfigs.updatedAt].toEpochMilli())
                 }
             } else if (type == "entire") {
-                ScoutingConfigs.selectAll().where { ScoutingConfigs.teamNumber eq teamNumber }.map { row ->
+                ScoutingConfigs.selectAll().where { (ScoutingConfigs.teamNumber eq teamNumber) and (ScoutingConfigs.program eq program) }.map { row ->
                     ConfigBackupDto(row[ScoutingConfigs.teamNumber], row[ScoutingConfigs.configJson], row[ScoutingConfigs.updatedAt].toEpochMilli())
                 }
             } else emptyList()
@@ -351,7 +354,7 @@ object BackupService {
                     ConfigBackupDto(row[PitScoutingConfigs.teamNumber], row[PitScoutingConfigs.configJson], row[PitScoutingConfigs.updatedAt].toEpochMilli())
                 }
             } else if (type == "entire") {
-                PitScoutingConfigs.selectAll().where { PitScoutingConfigs.teamNumber eq teamNumber }.map { row ->
+                PitScoutingConfigs.selectAll().where { (PitScoutingConfigs.teamNumber eq teamNumber) and (PitScoutingConfigs.program eq program) }.map { row ->
                     ConfigBackupDto(row[PitScoutingConfigs.teamNumber], row[PitScoutingConfigs.configJson], row[PitScoutingConfigs.updatedAt].toEpochMilli())
                 }
             } else emptyList()
@@ -361,7 +364,7 @@ object BackupService {
                     ConfigBackupDto(row[QualitativeScoutingConfigs.teamNumber], row[QualitativeScoutingConfigs.configJson], row[QualitativeScoutingConfigs.updatedAt].toEpochMilli())
                 }
             } else if (type == "entire") {
-                QualitativeScoutingConfigs.selectAll().where { QualitativeScoutingConfigs.teamNumber eq teamNumber }.map { row ->
+                QualitativeScoutingConfigs.selectAll().where { (QualitativeScoutingConfigs.teamNumber eq teamNumber) and (QualitativeScoutingConfigs.program eq program) }.map { row ->
                     ConfigBackupDto(row[QualitativeScoutingConfigs.teamNumber], row[QualitativeScoutingConfigs.configJson], row[QualitativeScoutingConfigs.updatedAt].toEpochMilli())
                 }
             } else emptyList()
@@ -371,13 +374,13 @@ object BackupService {
                     AppSettingsBackupDto(row[AppSettings.teamNumber], row[AppSettings.settingsJson], row[AppSettings.updatedAt].toEpochMilli())
                 }
             } else if (type == "entire") {
-                AppSettings.selectAll().where { AppSettings.teamNumber eq teamNumber }.map { row ->
+                AppSettings.selectAll().where { (AppSettings.teamNumber eq teamNumber) and (AppSettings.program eq program) }.map { row ->
                     AppSettingsBackupDto(row[AppSettings.teamNumber], row[AppSettings.settingsJson], row[AppSettings.updatedAt].toEpochMilli())
                 }
             } else emptyList()
 
             // Scouting entries
-            val scoutingEntriesQuery = if (scope == "global") ScoutingEntries.selectAll() else ScoutingEntries.selectAll().where { ScoutingEntries.ownerTeamNumber eq teamNumber }
+            val scoutingEntriesQuery = if (scope == "global") ScoutingEntries.selectAll() else ScoutingEntries.selectAll().where { (ScoutingEntries.ownerTeamNumber eq teamNumber) and (ScoutingEntries.program eq program) }
             val scoutingEntries = scoutingEntriesQuery.map { row ->
                 val userId = row[ScoutingEntries.submittedByUserId].value
                 val username = userMap[userId]?.first ?: "unknown_scout"
@@ -396,7 +399,7 @@ object BackupService {
                 )
             }
 
-            val pitScoutingEntriesQuery = if (scope == "global") PitScoutingEntries.selectAll() else PitScoutingEntries.selectAll().where { PitScoutingEntries.ownerTeamNumber eq teamNumber }
+            val pitScoutingEntriesQuery = if (scope == "global") PitScoutingEntries.selectAll() else PitScoutingEntries.selectAll().where { (PitScoutingEntries.ownerTeamNumber eq teamNumber) and (PitScoutingEntries.program eq program) }
             val pitScoutingEntries = pitScoutingEntriesQuery.map { row ->
                 val userId = row[PitScoutingEntries.submittedByUserId].value
                 val username = userMap[userId]?.first ?: "unknown_scout"
@@ -413,7 +416,7 @@ object BackupService {
                 )
             }
 
-            val qualitativeScoutingEntriesQuery = if (scope == "global") QualitativeScoutingEntries.selectAll() else QualitativeScoutingEntries.selectAll().where { QualitativeScoutingEntries.ownerTeamNumber eq teamNumber }
+            val qualitativeScoutingEntriesQuery = if (scope == "global") QualitativeScoutingEntries.selectAll() else QualitativeScoutingEntries.selectAll().where { (QualitativeScoutingEntries.ownerTeamNumber eq teamNumber) and (QualitativeScoutingEntries.program eq program) }
             val qualitativeScoutingEntries = qualitativeScoutingEntriesQuery.map { row ->
                 val userId = row[QualitativeScoutingEntries.submittedByUserId].value
                 val username = userMap[userId]?.first ?: "unknown_scout"
@@ -432,7 +435,7 @@ object BackupService {
                 )
             }
 
-            val alliancesQuery = if (scope == "global") ScoutingAlliances.selectAll() else ScoutingAlliances.selectAll().where { ScoutingAlliances.ownerTeamNumber eq teamNumber }
+            val alliancesQuery = if (scope == "global") ScoutingAlliances.selectAll() else ScoutingAlliances.selectAll().where { (ScoutingAlliances.ownerTeamNumber eq teamNumber) and (ScoutingAlliances.program eq program) }
             val alliances = if (scope == "global" || type == "entire") {
                 alliancesQuery.map { row ->
                     ScoutingAllianceBackupDto(
@@ -447,7 +450,8 @@ object BackupService {
                         pitConfigJson = row[ScoutingAlliances.pitConfigJson],
                         qualitativeConfigJson = row[ScoutingAlliances.qualitativeConfigJson],
                         year = row[ScoutingAlliances.year],
-                        eventCode = row[ScoutingAlliances.eventCode]
+                        eventCode = row[ScoutingAlliances.eventCode],
+                        program = row[ScoutingAlliances.program]
                     )
                 }
             } else emptyList()
@@ -462,7 +466,8 @@ object BackupService {
                         invitedAt = row[AllianceMemberships.invitedAt].toEpochMilli(),
                         respondedAt = row[AllianceMemberships.respondedAt]?.toEpochMilli(),
                         disabled = row[AllianceMemberships.disabled],
-                        active = row[AllianceMemberships.active]
+                        active = row[AllianceMemberships.active],
+                        program = row[AllianceMemberships.program]
                     )
                 }
             } else if (type == "entire" && allianceIds.isNotEmpty()) {
@@ -474,12 +479,13 @@ object BackupService {
                         invitedAt = row[AllianceMemberships.invitedAt].toEpochMilli(),
                         respondedAt = row[AllianceMemberships.respondedAt]?.toEpochMilli(),
                         disabled = row[AllianceMemberships.disabled],
-                        active = row[AllianceMemberships.active]
+                        active = row[AllianceMemberships.active],
+                        program = row[AllianceMemberships.program]
                     )
                 }
             } else emptyList()
 
-            val bannersQuery = if (scope == "global") Banners.selectAll() else Banners.selectAll().where { Banners.teamNumber eq teamNumber }
+            val bannersQuery = if (scope == "global") Banners.selectAll() else Banners.selectAll().where { (Banners.teamNumber eq teamNumber) and (Banners.program eq program) }
             val banners = if (scope == "global" || type == "entire") {
                 bannersQuery.map { row ->
                     BannerBackupDto(
@@ -491,7 +497,8 @@ object BackupService {
                         expandableMessage = row[Banners.expandableMessage],
                         isActive = row[Banners.isActive],
                         createdAt = row[Banners.createdAt].toEpochMilli(),
-                        updatedAt = row[Banners.updatedAt].toEpochMilli()
+                        updatedAt = row[Banners.updatedAt].toEpochMilli(),
+                        program = row[Banners.program]
                     )
                 }
             } else emptyList()
@@ -927,6 +934,7 @@ object BackupService {
                     val assignedTeam = getTargetTeam(a.ownerTeamNumber)
                     val existingRow = ScoutingAlliances.selectAll().where {
                         (ScoutingAlliances.ownerTeamNumber eq assignedTeam) and
+                        (ScoutingAlliances.program eq a.program) and
                         (ScoutingAlliances.name eq a.name) and
                         (ScoutingAlliances.eventKey eq a.eventKey)
                     }.firstOrNull()
@@ -938,6 +946,7 @@ object BackupService {
                         val newId = ScoutingAlliances.insertAndGetId {
                             it[name] = a.name
                             it[ownerTeamNumber] = assignedTeam
+                            it[program] = a.program
                             it[eventKey] = a.eventKey
                             it[notes] = a.notes
                             it[createdAt] = Instant.ofEpochMilli(a.createdAt)
@@ -958,13 +967,15 @@ object BackupService {
                     val targetAllianceId = allianceIdMap[m.allianceId] ?: continue
                     val exists = AllianceMemberships.selectAll().where {
                         (AllianceMemberships.allianceId eq targetAllianceId) and
-                        (AllianceMemberships.teamNumber eq m.teamNumber)
+                        (AllianceMemberships.teamNumber eq m.teamNumber) and
+                        (AllianceMemberships.program eq m.program)
                     }.any()
 
                     if (!exists) {
                         AllianceMemberships.insert {
                             it[allianceId] = targetAllianceId
                             it[teamNumber] = m.teamNumber
+                            it[program] = m.program
                             it[status] = m.status
                             it[invitedAt] = Instant.ofEpochMilli(m.invitedAt)
                             it[respondedAt] = m.respondedAt?.let { Instant.ofEpochMilli(it) }
@@ -979,6 +990,7 @@ object BackupService {
                     val assignedTeam = getTargetTeam(b.teamNumber)
                     val exists = Banners.selectAll().where {
                         (Banners.teamNumber eq assignedTeam) and
+                        (Banners.program eq b.program) and
                         (Banners.message eq b.message) and
                         (Banners.createdAt eq Instant.ofEpochMilli(b.createdAt))
                     }.any()
@@ -988,6 +1000,7 @@ object BackupService {
                     } else {
                         Banners.insert {
                             it[teamNumber] = assignedTeam
+                            it[program] = b.program
                             it[message] = b.message
                             it[bannerType] = b.bannerType
                             it[isDismissible] = b.isDismissible
@@ -1275,8 +1288,8 @@ object BackupService {
         }
     }
 
-    fun exportCsv(teamNumber: Int, type: String, scope: String = "team"): ByteArray {
-        val backup = exportBackup(teamNumber, type, scope)
+    fun exportCsv(teamNumber: Int, type: String, scope: String = "team", program: String = "FRC"): ByteArray {
+        val backup = exportBackup(teamNumber, type, scope, program)
         val files = mutableMapOf<String, String>()
 
         // Serialize Scouting Entries

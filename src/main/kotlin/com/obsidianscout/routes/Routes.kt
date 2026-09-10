@@ -1677,6 +1677,7 @@ fun Application.configureRoutes() {
                     val originalId = session.userId
                     val originalUsername = userRecord[com.obsidianscout.db.Users.username]
                     val originalTeamNumber = userRecord[com.obsidianscout.db.Users.teamNumber]
+                    val originalProgram = userRecord[com.obsidianscout.db.Users.program]
                     val originalPasswordHash = userRecord[com.obsidianscout.db.Users.passwordHash]
                     val originalRole = userRecord[com.obsidianscout.db.Users.role]
                     val originalEmail = userRecord[com.obsidianscout.db.Users.email]
@@ -1734,6 +1735,7 @@ fun Application.configureRoutes() {
                             it[id] = EntityID(UUID.fromString(originalId), com.obsidianscout.db.Users)
                             it[username] = originalUsername
                             it[teamNumber] = originalTeamNumber
+                            it[program] = originalProgram
                             it[passwordHash] = originalPasswordHash
                             it[role] = originalRole
                             it[email] = originalEmail
@@ -1767,22 +1769,28 @@ fun Application.configureRoutes() {
                     }
 
                     transaction {
-                        // Delete ALL scouting entries completely
-                        com.obsidianscout.db.ScoutingEntries.deleteWhere { com.obsidianscout.db.ScoutingEntries.id.isNotNull() }
-                        com.obsidianscout.db.PitScoutingEntries.deleteWhere { com.obsidianscout.db.PitScoutingEntries.id.isNotNull() }
-                        com.obsidianscout.db.QualitativeScoutingEntries.deleteWhere { com.obsidianscout.db.QualitativeScoutingEntries.id.isNotNull() }
+                        // Delete scouting entries only for this team and program
+                        com.obsidianscout.db.ScoutingEntries.deleteWhere { 
+                            (com.obsidianscout.db.ScoutingEntries.ownerTeamNumber eq session.teamNumber) and
+                            (com.obsidianscout.db.ScoutingEntries.program eq session.program)
+                        }
+                        com.obsidianscout.db.PitScoutingEntries.deleteWhere { 
+                            (com.obsidianscout.db.PitScoutingEntries.ownerTeamNumber eq session.teamNumber) and
+                            (com.obsidianscout.db.PitScoutingEntries.program eq session.program)
+                        }
+                        com.obsidianscout.db.QualitativeScoutingEntries.deleteWhere { 
+                            (com.obsidianscout.db.QualitativeScoutingEntries.ownerTeamNumber eq session.teamNumber) and
+                            (com.obsidianscout.db.QualitativeScoutingEntries.program eq session.program)
+                        }
 
-                        
-                        // Delete ALL cached global events, teams, matches, stats, and selection data
-                        com.obsidianscout.db.ApiEvents.deleteWhere { com.obsidianscout.db.ApiEvents.id.isNotNull() }
-                        com.obsidianscout.db.ApiTeams.deleteWhere { com.obsidianscout.db.ApiTeams.id.isNotNull() }
-                        com.obsidianscout.db.ApiMatches.deleteWhere { com.obsidianscout.db.ApiMatches.id.isNotNull() }
-                        com.obsidianscout.db.EpaOprHistoryCache.deleteWhere { com.obsidianscout.db.EpaOprHistoryCache.id.isNotNull() }
-                        com.obsidianscout.db.AllianceSelections.deleteWhere { com.obsidianscout.db.AllianceSelections.id.isNotNull() }
+                        // Delete team's alliance selection data
+                        val ownerKey = "${session.program}_${session.teamNumber}"
+                        com.obsidianscout.db.AllianceSelections.deleteWhere { 
+                            com.obsidianscout.db.AllianceSelections.ownerKey inList listOf(ownerKey, session.teamNumber.toString())
+                        }
 
-
-                        // Clear the active event and setup wizard state in the settings for this team
-                        val settings = SettingsService.getSettings(session.teamNumber)
+                        // Clear the active event and setup wizard state in the settings for this team and program
+                        val settings = SettingsService.getSettings(session.teamNumber, session.program)
                         val clearedSettings = settings.copy(
                             eventCode = "",
                             eventKey = "",
@@ -1847,13 +1855,13 @@ fun Application.configureRoutes() {
                     }
 
                     if (format == "obsidiandb") {
-                        val backup = com.obsidianscout.db.BackupService.exportBackup(session.teamNumber, type, scope)
+                        val backup = com.obsidianscout.db.BackupService.exportBackup(session.teamNumber, type, scope, session.program)
                         val jsonString = JsonSupport.json.encodeToString(com.obsidianscout.db.ObsidianDbBackup.serializer(), backup)
                         val filename = if (scope == "global") "global_backup_${type}.obsidiandb" else "team_${session.teamNumber}_backup_${type}.obsidiandb"
                         call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"$filename\"")
                         call.respondText(jsonString, ContentType.Application.Json)
                     } else if (format == "csv") {
-                        val zipBytes = com.obsidianscout.db.BackupService.exportCsv(session.teamNumber, type, scope)
+                        val zipBytes = com.obsidianscout.db.BackupService.exportCsv(session.teamNumber, type, scope, session.program)
                         val filename = if (scope == "global") "global_backup_${type}.zip" else "team_${session.teamNumber}_backup_${type}.zip"
                         call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"$filename\"")
                         call.respondBytes(zipBytes, ContentType.Application.Zip)
@@ -2583,7 +2591,7 @@ fun Application.configureRoutes() {
                     }
 
                     try {
-                        val dbBanners = com.obsidianscout.db.BannerService.getActive(session.teamNumber)
+                        val dbBanners = com.obsidianscout.db.BannerService.getActive(session.teamNumber, session.program)
                         active.addAll(dbBanners)
 
                         // If user is an admin on an affected team with an active alliance, validate the alliance configuration
@@ -2698,9 +2706,9 @@ fun Application.configureRoutes() {
                 get {
                     val session = call.requireAdmin()
                     val all = if (session.role == com.obsidianscout.auth.UserRole.SUPERADMIN) {
-                        com.obsidianscout.db.BannerService.getAll()
+                        com.obsidianscout.db.BannerService.getAll(program = session.program)
                     } else {
-                        com.obsidianscout.db.BannerService.getAll(session.teamNumber)
+                        com.obsidianscout.db.BannerService.getAll(session.teamNumber, program = session.program)
                     }
                     call.respond(all)
                 }
@@ -2719,7 +2727,7 @@ fun Application.configureRoutes() {
                         }
                     }
 
-                    val created = com.obsidianscout.db.BannerService.create(request)
+                    val created = com.obsidianscout.db.BannerService.create(request, defaultProgram = session.program)
                     call.respond(created)
                 }
                 put("/{id}") {
@@ -2730,6 +2738,10 @@ fun Application.configureRoutes() {
 
                     val existing = com.obsidianscout.db.BannerService.getById(id)
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Banner not found")
+
+                    if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && existing.program != session.program) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only modify banners for your own program")
+                    }
 
                     if (existing.teamNumber == 0) {
                         if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
@@ -2765,6 +2777,10 @@ fun Application.configureRoutes() {
 
                     val existing = com.obsidianscout.db.BannerService.getById(id)
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Banner not found")
+
+                    if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && existing.program != session.program) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "You can only delete banners for your own program")
+                    }
 
                     if (existing.teamNumber == 0) {
                         if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {

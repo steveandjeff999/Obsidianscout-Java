@@ -549,6 +549,7 @@ data class SmtpTestConnectionRequest(
 data class BannerDto(
     val id: String,
     val teamNumber: Int,
+    val program: String = "FRC",
     val message: String,
     val bannerType: String,
     val isDismissible: Boolean,
@@ -563,6 +564,7 @@ data class BannerDto(
 @Serializable
 data class BannerCreateRequest(
     val teamNumber: Int? = 0,
+    val program: String? = "FRC",
     val message: String,
     val bannerType: String? = "info",
     val isDismissible: Boolean? = true,
@@ -575,6 +577,7 @@ data class BannerCreateRequest(
 @Serializable
 data class BannerUpdateRequest(
     val teamNumber: Int? = null,
+    val program: String? = null,
     val message: String? = null,
     val bannerType: String? = null,
     val isDismissible: Boolean? = null,

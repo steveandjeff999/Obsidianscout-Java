@@ -376,8 +376,8 @@ object QualitativeScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Qualitative scouting entry not found")
 
             val ownerTeam = row[QualitativeScoutingEntries.ownerTeamNumber]
-            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber)
-            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam)
+            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
+            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
                                   AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)
@@ -443,8 +443,8 @@ object QualitativeScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Qualitative scouting entry not found")
 
             val ownerTeam = row[QualitativeScoutingEntries.ownerTeamNumber]
-            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber)
-            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam)
+            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
+            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
                                   AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)

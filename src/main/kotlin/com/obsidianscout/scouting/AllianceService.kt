@@ -393,6 +393,7 @@ object AllianceService {
             if (accept) {
                 val hasAnyActive = AllianceMemberships.selectAll().where {
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program) and
                     (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
                     (AllianceMemberships.active eq true)
                 }.any()

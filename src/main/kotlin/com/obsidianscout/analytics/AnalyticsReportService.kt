@@ -154,10 +154,13 @@ object AnalyticsReportService {
         val reportUserId = row[AnalyticsReports.userId].value
         val isShared = row[AnalyticsReports.isShared]
 
+        val isSameProgram = row[AnalyticsReports.program] == session.program
         val canView = session.role == UserRole.SUPERADMIN ||
-                reportOwnerTeam == session.teamNumber ||
-                (userUuid != null && reportUserId == userUuid) ||
-                isShared
+                (isSameProgram && (
+                    reportOwnerTeam == session.teamNumber ||
+                    (userUuid != null && reportUserId == userUuid) ||
+                    isShared
+                ))
 
         if (!canView) {
             throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to view this report")
@@ -243,7 +246,13 @@ object AnalyticsReportService {
             ?: throw ApiException(HttpStatusCode.NotFound, "Report not found")
 
         val reportUserId = row[AnalyticsReports.userId].value
-        val isOwner = (reportUserId == userUuid) || session.role.isAtLeast(UserRole.ADMIN)
+        val reportOwnerTeam = row[AnalyticsReports.ownerTeamNumber]
+        val reportProgram = row[AnalyticsReports.program]
+        val isOwner = session.role == UserRole.SUPERADMIN ||
+                (reportProgram == session.program && (
+                    reportUserId == userUuid ||
+                    (session.role.isAtLeast(UserRole.ADMIN) && reportOwnerTeam == session.teamNumber)
+                ))
 
         if (!isOwner) {
             throw ApiException(HttpStatusCode.Forbidden, "Only the author or an admin can update this report")
@@ -282,7 +291,13 @@ object AnalyticsReportService {
             ?: throw ApiException(HttpStatusCode.NotFound, "Report not found")
 
         val reportUserId = row[AnalyticsReports.userId].value
-        val isOwner = (reportUserId == userUuid) || session.role.isAtLeast(UserRole.ADMIN)
+        val reportOwnerTeam = row[AnalyticsReports.ownerTeamNumber]
+        val reportProgram = row[AnalyticsReports.program]
+        val isOwner = session.role == UserRole.SUPERADMIN ||
+                (reportProgram == session.program && (
+                    reportUserId == userUuid ||
+                    (session.role.isAtLeast(UserRole.ADMIN) && reportOwnerTeam == session.teamNumber)
+                ))
 
         if (!isOwner) {
             throw ApiException(HttpStatusCode.Forbidden, "Only the author or an admin can delete this report")

@@ -72,8 +72,34 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                 throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
             }
             val dbRole = runCatching { UserRole.valueOf(userRow[Users.role]) }.getOrDefault(session.role)
-            val effectiveSession = if (session.role != dbRole) {
-                session.copy(role = dbRole).also { updated ->
+            val dbTeamNumber = userRow[Users.teamNumber]
+            val dbUsername = userRow[Users.username]
+            val dbProgram = userRow[Users.program]
+            val dbEmail = userRow[Users.email]
+            val dbNotificationPreference = userRow[Users.notificationPreference]
+            val dbTourProgress = userRow[Users.tourProgress]
+            val dbNodeAlertsEnabled = userRow[Users.nodeAlertsEnabled]
+            val dbBugReportPreference = userRow.getOrNull(Users.bugReportPreference) ?: "ask"
+
+            val needsSync = session.role != dbRole ||
+                            session.teamNumber != dbTeamNumber ||
+                            session.username != dbUsername ||
+                            session.program != dbProgram ||
+                            session.bugReportPreference != dbBugReportPreference
+
+            val effectiveSession = if (needsSync) {
+                session.copy(
+                    role = dbRole,
+                    teamNumber = dbTeamNumber,
+                    username = dbUsername,
+                    program = dbProgram,
+                    email = dbEmail,
+                    profilePicture = null,
+                    notificationPreference = dbNotificationPreference,
+                    tourProgress = dbTourProgress,
+                    nodeAlertsEnabled = dbNodeAlertsEnabled,
+                    bugReportPreference = dbBugReportPreference
+                ).also { updated ->
                     runCatching { sessions.set(updated) }
                 }
             } else {

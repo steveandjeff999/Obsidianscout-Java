@@ -383,8 +383,8 @@ object ScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Scouting entry not found")
 
             val ownerTeam = row[ScoutingEntries.ownerTeamNumber]
-            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber)
-            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam)
+            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
+            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
                                   AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)
@@ -451,8 +451,8 @@ object ScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Scouting entry not found")
 
             val ownerTeam = row[ScoutingEntries.ownerTeamNumber]
-            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber)
-            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam)
+            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
+            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
                                   AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)

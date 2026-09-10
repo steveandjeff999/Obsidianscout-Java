@@ -2511,6 +2511,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val allianceList = AllianceService.listAlliances(session)
                 val invitesList = AllianceService.listInvites(session)
 
+                val activeAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)?.toString()
+
                 val details = allianceList.map { item ->
                     val memberCount = readTransaction {
                         AllianceMemberships.selectAll().where { 
@@ -2518,7 +2520,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                             (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED")) 
                         }.count().toInt()
                     }
-                    val isActive = false
+                    val isActive = (item.id == activeAllianceId)
                     MobileAllianceDetail(
                         id = item.id,
                         name = item.name,
@@ -2544,8 +2546,6 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         )
                     }
                 }
-
-                val activeAllianceId = AllianceService.getActiveAllianceId(session.teamNumber)?.toString()
 
                 call.respond(
                     MobileAlliancesResponse(
@@ -2590,10 +2590,12 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             }
 
             post("/alliances/{alliance_id}/toggle") {
-                call.requireMobileAdmin(secret)
+                val session = call.requireMobileAdmin(secret)
                 val allianceId = call.parameters["alliance_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing alliance_id", "MISSING_DATA")
                 val req = call.receive<MobileToggleAllianceRequest>()
+
+                AllianceService.toggleActiveMembership(session, allianceId, req.activate)
 
                 call.respond(
                     MobileToggleAllianceResponse(
@@ -2608,9 +2610,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val allianceId = call.parameters["alliance_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing alliance_id", "MISSING_DATA")
                 
-                transaction {
-                    AllianceMemberships.deleteWhere { (AllianceMemberships.allianceId eq UUID.fromString(allianceId)) and (AllianceMemberships.teamNumber eq session.teamNumber) }
-                }
+                AllianceService.removeMember(session, allianceId, session.teamNumber)
 
                 call.respond(MobileLeaveAllianceResponse(message = "Successfully left alliance", allianceDeleted = false))
             }
@@ -2624,7 +2624,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
 
                 val teamNumber = session.teamNumber
-                val chatDir = File("instance/chat/users/$teamNumber")
+                val program = session.program
+                val chatDir = File("instance/chat/users/$program/$teamNumber")
 
                 val messages = if (type == "dm") {
                     if (otherUserId != null) {
@@ -2642,10 +2643,10 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                             .flatMap { loadMessages(it) }
                     }
                 } else {
-                    val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                    val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                         ?: throw MobileApiException(HttpStatusCode.Forbidden, "Not in an active alliance", "USER_NOT_IN_SCOPE")
 
-                    val groupFile = File("instance/chat/groups/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
+                    val groupFile = File("instance/chat/groups/$program/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
                     loadMessages(groupFile)
                 }
 
@@ -2691,14 +2692,14 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     } ?: throw MobileApiException(HttpStatusCode.NotFound, "Recipient not found", "USER_NOT_IN_SCOPE")
 
                     val key = listOf(session.username, otherUser.username).sorted().joinToString("_")
-                    val file = File("instance/chat/users/$teamNumber/${key}_chat_history.json")
+                    val file = File("instance/chat/users/${session.program}/$teamNumber/${key}_chat_history.json")
                     
                     val list = loadMessages(file).toMutableList()
                     val fullMsg = msg.copy(recipient = otherUser.username, recipient_id = otherUser.id, conversation_id = otherUser.id)
                     list.add(fullMsg)
                     saveMessages(file, list)
 
-                    val stateFile = File("instance/chat/users/$teamNumber/chat_state_${otherUser.username}.json")
+                    val stateFile = File("instance/chat/users/${session.program}/$teamNumber/chat_state_${otherUser.username}.json")
                     val state = loadChatState(stateFile)
                     val newState = state.copy(unreadCount = state.unreadCount + 1)
                     saveChatState(stateFile, newState)
@@ -2707,13 +2708,13 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 } else if (req.conversationType == "alliance" || req.group != null) {
                     val file = if (req.conversationType == "alliance") {
-                        val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                        val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, session.program)
                             ?: throw MobileApiException(HttpStatusCode.Forbidden, "Not in an active alliance", "USER_NOT_IN_SCOPE")
                         
-                        File("instance/chat/groups/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
+                        File("instance/chat/groups/${session.program}/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
                     } else {
                         val groupName = req.group!!.trim().replace("/", "_")
-                        File("instance/chat/groups/$teamNumber/${groupName}_group_chat_history.json")
+                        File("instance/chat/groups/${session.program}/$teamNumber/${groupName}_group_chat_history.json")
                     }
 
                     val list = loadMessages(file).toMutableList()
@@ -2730,7 +2731,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             get("/chat/conversations") {
                 val session = call.requireMobileSession(secret)
                 val teamNumber = session.teamNumber
-                val chatDir = File("instance/chat/users/$teamNumber")
+                val program = session.program
+                val chatDir = File("instance/chat/users/$program/$teamNumber")
                 val stateFile = File(chatDir, "chat_state_${session.username}.json")
                 val state = loadChatState(stateFile)
 
@@ -2774,9 +2776,9 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         }
                     }
 
-                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                 if (activeAllianceId != null) {
-                    val groupFile = File("instance/chat/groups/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
+                    val groupFile = File("instance/chat/groups/$program/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
                     val messages = loadMessages(groupFile)
                     val last = messages.lastOrNull()
                     val unreadKey = "alliance:$activeAllianceId"
@@ -2803,7 +2805,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     )
                 }
 
-                val groupDir = File("instance/chat/groups/$teamNumber")
+                val groupDir = File("instance/chat/groups/$program/$teamNumber")
                 val groupFiles = groupDir.listFiles() ?: emptyArray()
                 groupFiles.filter { it.name.endsWith("_members.json") }.forEach { file ->
                     val groupName = file.name.removeSuffix("_members.json")
@@ -2840,10 +2842,11 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
 
                 val teamNumber = session.teamNumber
-                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber)
+                val program = session.program
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
 
                 val messages = if (activeAllianceId != null && activeAllianceId.toString() == conversationId) {
-                    val file = File("instance/chat/groups/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
+                    val file = File("instance/chat/groups/$program/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
                     loadMessages(file)
                 } else {
                     val otherUser = transaction {
@@ -2852,7 +2855,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     }
                     if (otherUser != null) {
                         val key = listOf(session.username, otherUser.username).sorted().joinToString("_")
-                        val file = File("instance/chat/users/$teamNumber/${key}_chat_history.json")
+                        val file = File("instance/chat/users/$program/$teamNumber/${key}_chat_history.json")
                         loadMessages(file)
                     } else {
                         emptyList()
@@ -2868,7 +2871,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val req = call.receive<MobileChatReadRequest>()
 
                 val teamNumber = session.teamNumber
-                val stateFile = File("instance/chat/users/$teamNumber/chat_state_${session.username}.json")
+                val program = session.program
+                val stateFile = File("instance/chat/users/$program/$teamNumber/chat_state_${session.username}.json")
                 val state = loadChatState(stateFile)
 
                 val key = "${req.type}:${req.id}"
@@ -2885,7 +2889,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val session = call.requireMobileSession(secret)
                 val req = call.receive<MobileEditMessageRequest>()
                 
-                val found = editMessageInFiles(session.teamNumber, req.messageId, req.text, session.username)
+                val found = editMessageInFiles(session.teamNumber, req.messageId, req.text, session.username, session.program)
                 if (!found) {
                     throw MobileApiException(HttpStatusCode.NotFound, "Message not found or not sender", "NOT_FOUND")
                 }
@@ -2896,7 +2900,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val session = call.requireMobileSession(secret)
                 val req = call.receive<MobileDeleteMessageRequest>()
 
-                val found = deleteMessageInFiles(session.teamNumber, req.messageId, session.username)
+                val found = deleteMessageInFiles(session.teamNumber, req.messageId, session.username, session.program)
                 if (!found) {
                     throw MobileApiException(HttpStatusCode.NotFound, "Message not found or not sender", "NOT_FOUND")
                 }
@@ -2907,7 +2911,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val session = call.requireMobileSession(secret)
                 val req = call.receive<MobileReactMessageRequest>()
 
-                val reactions = reactMessageInFiles(session.teamNumber, req.messageId, req.emoji, session.username)
+                val reactions = reactMessageInFiles(session.teamNumber, req.messageId, req.emoji, session.username, session.program)
                 if (reactions == null) {
                     throw MobileApiException(HttpStatusCode.NotFound, "Message not found", "NOT_FOUND")
                 }
@@ -2916,7 +2920,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             get("/chat/state") {
                 val session = call.requireMobileSession(secret)
-                val stateFile = File("instance/chat/users/${session.teamNumber}/chat_state_${session.username}.json")
+                val stateFile = File("instance/chat/users/${session.program}/${session.teamNumber}/chat_state_${session.username}.json")
                 val state = loadChatState(stateFile)
                 call.respond(MobileChatStateResponse(state = state))
             }
@@ -2925,7 +2929,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             get("/chat/groups") {
                 val session = call.requireMobileSession(secret)
                 val teamNumber = session.teamNumber
-                val groupDir = File("instance/chat/groups/$teamNumber")
+                val program = session.program
+                val groupDir = File("instance/chat/groups/$program/$teamNumber")
                 
                 val files = groupDir.listFiles() ?: emptyArray()
                 val groups = files.filter { it.name.endsWith("_members.json") }.map { file ->
@@ -2946,6 +2951,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val req = call.receive<MobileCreateGroupRequest>()
 
                 val teamNumber = session.teamNumber
+                val program = session.program
                 val groupName = req.group.trim().replace("/", "_")
                 
                 val teamUsers = transaction {
@@ -2957,11 +2963,11 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     throw MobileApiException(HttpStatusCode.Forbidden, "All members must belong to team", "USER_NOT_IN_SCOPE")
                 }
 
-                val membersFile = File("instance/chat/groups/$teamNumber/${groupName}_members.json")
+                val membersFile = File("instance/chat/groups/$program/$teamNumber/${groupName}_members.json")
                 membersFile.parentFile.mkdirs()
                 membersFile.writeText(JsonSupport.json.encodeToString(validMembers))
 
-                val histFile = File("instance/chat/groups/$teamNumber/${groupName}_group_chat_history.json")
+                val histFile = File("instance/chat/groups/$program/$teamNumber/${groupName}_group_chat_history.json")
                 if (!histFile.exists()) {
                     histFile.writeText("[]")
                 }
@@ -2977,7 +2983,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             get("/chat/groups/{group}/members") {
                 val session = call.requireMobileSession(secret)
                 val group = call.parameters["group"]!!.trim().replace("/", "_")
-                val file = File("instance/chat/groups/${session.teamNumber}/${group}_members.json")
+                val file = File("instance/chat/groups/${session.program}/${session.teamNumber}/${group}_members.json")
                 
                 if (!file.exists()) {
                     throw MobileApiException(HttpStatusCode.NotFound, "Group not found", "NOT_FOUND")
@@ -2989,7 +2995,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             post("/chat/groups/{group}/members") {
                 val session = call.requireMobileSession(secret)
                 val group = call.parameters["group"]!!.trim().replace("/", "_")
-                val file = File("instance/chat/groups/${session.teamNumber}/${group}_members.json")
+                val file = File("instance/chat/groups/${session.program}/${session.teamNumber}/${group}_members.json")
                 val req = call.receive<MobileManageGroupMembersRequest>()
 
                 val currentMembers = if (file.exists()) {
@@ -3014,7 +3020,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             delete("/chat/groups/{group}/members") {
                 val session = call.requireMobileSession(secret)
                 val group = call.parameters["group"]!!.trim().replace("/", "_")
-                val file = File("instance/chat/groups/${session.teamNumber}/${group}_members.json")
+                val file = File("instance/chat/groups/${session.program}/${session.teamNumber}/${group}_members.json")
                 val req = try { call.receive<MobileManageGroupMembersRequest>() } catch (_: Exception) { MobileManageGroupMembersRequest() }
 
                 val currentMembers = if (file.exists()) {
@@ -3044,7 +3050,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             get("/notifications/unread") {
                 val session = call.requireMobileSession(secret)
-                val stateFile = File("instance/chat/users/${session.teamNumber}/chat_state_${session.username}.json")
+                val stateFile = File("instance/chat/users/${session.program}/${session.teamNumber}/chat_state_${session.username}.json")
                 val state = loadChatState(stateFile)
                 call.respond(
                     MobileNotificationsUnreadResponse(
@@ -3470,8 +3476,8 @@ fun saveChatState(file: File, state: ChatState) {
     file.writeText(JsonSupport.json.encodeToString(state))
 }
 
-fun editMessageInFiles(teamNumber: Int, messageId: String, newText: String, username: String): Boolean {
-    val userDir = File("instance/chat/users/$teamNumber")
+fun editMessageInFiles(teamNumber: Int, messageId: String, newText: String, username: String, program: String = "FRC"): Boolean {
+    val userDir = File("instance/chat/users/$program/$teamNumber")
     val userFiles = userDir.listFiles() ?: emptyArray()
     for (file in userFiles.filter { it.name.endsWith("_chat_history.json") }) {
         val messages = loadMessages(file)
@@ -3487,7 +3493,7 @@ fun editMessageInFiles(teamNumber: Int, messageId: String, newText: String, user
         }
     }
 
-    val groupDir = File("instance/chat/groups/$teamNumber")
+    val groupDir = File("instance/chat/groups/$program/$teamNumber")
     val groupFiles = groupDir.listFiles() ?: emptyArray()
     for (file in groupFiles.filter { it.name.endsWith("_chat_history.json") }) {
         val messages = loadMessages(file)
@@ -3505,8 +3511,8 @@ fun editMessageInFiles(teamNumber: Int, messageId: String, newText: String, user
     return false
 }
 
-fun deleteMessageInFiles(teamNumber: Int, messageId: String, username: String): Boolean {
-    val userDir = File("instance/chat/users/$teamNumber")
+fun deleteMessageInFiles(teamNumber: Int, messageId: String, username: String, program: String = "FRC"): Boolean {
+    val userDir = File("instance/chat/users/$program/$teamNumber")
     val userFiles = userDir.listFiles() ?: emptyArray()
     for (file in userFiles.filter { it.name.endsWith("_chat_history.json") }) {
         val messages = loadMessages(file)
@@ -3522,7 +3528,7 @@ fun deleteMessageInFiles(teamNumber: Int, messageId: String, username: String): 
         }
     }
 
-    val groupDir = File("instance/chat/groups/$teamNumber")
+    val groupDir = File("instance/chat/groups/$program/$teamNumber")
     val groupFiles = groupDir.listFiles() ?: emptyArray()
     for (file in groupFiles.filter { it.name.endsWith("_chat_history.json") }) {
         val messages = loadMessages(file)
@@ -3540,7 +3546,7 @@ fun deleteMessageInFiles(teamNumber: Int, messageId: String, username: String): 
     return false
 }
 
-fun reactMessageInFiles(teamNumber: Int, messageId: String, emoji: String, username: String): List<ReactionSummary>? {
+fun reactMessageInFiles(teamNumber: Int, messageId: String, emoji: String, username: String, program: String = "FRC"): List<ReactionSummary>? {
     val updateReactionList = { messages: List<ChatMessage>, idx: Int ->
         val msg = messages[idx]
         val currentReactions = msg.reactions
@@ -3554,7 +3560,7 @@ fun reactMessageInFiles(teamNumber: Int, messageId: String, emoji: String, usern
         Pair(msg.copy(reactions = newReactions, reactions_summary = summary), summary)
     }
 
-    val userDir = File("instance/chat/users/$teamNumber")
+    val userDir = File("instance/chat/users/$program/$teamNumber")
     val userFiles = userDir.listFiles() ?: emptyArray()
     for (file in userFiles.filter { it.name.endsWith("_chat_history.json") }) {
         val messages = loadMessages(file)
@@ -3568,7 +3574,7 @@ fun reactMessageInFiles(teamNumber: Int, messageId: String, emoji: String, usern
         }
     }
 
-    val groupDir = File("instance/chat/groups/$teamNumber")
+    val groupDir = File("instance/chat/groups/$program/$teamNumber")
     val groupFiles = groupDir.listFiles() ?: emptyArray()
     for (file in groupFiles.filter { it.name.endsWith("_chat_history.json") }) {
         val messages = loadMessages(file)

@@ -17,10 +17,17 @@ import java.util.UUID
 
 object BannerService {
 
-    fun getAll(teamNumber: Int? = null): List<BannerDto> = try {
+    fun getAll(teamNumber: Int? = null, program: String? = null): List<BannerDto> = try {
         readTransaction {
-            val query = if (teamNumber != null) {
-                Banners.selectAll().where { (Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0) }
+            val conditions = mutableListOf<org.jetbrains.exposed.sql.Op<Boolean>>()
+            if (teamNumber != null) {
+                conditions.add((Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0))
+            }
+            if (!program.isNullOrBlank()) {
+                conditions.add(Banners.program eq program)
+            }
+            val query = if (conditions.isNotEmpty()) {
+                Banners.selectAll().where { conditions.reduce { a, b -> a and b } }
             } else {
                 Banners.selectAll()
             }
@@ -30,7 +37,7 @@ object BannerService {
         emptyList()
     }
 
-    private fun createQuorumLossBanner(): BannerDto {
+    private fun createQuorumLossBanner(program: String = "FRC"): BannerDto {
         val storeStatus = if (QuorumFallbackStore.isEnabled && QuorumFallbackStore.isAvailable) {
             "Served from Local SQLite Snapshot"
         } else {
@@ -39,6 +46,7 @@ object BannerService {
         return BannerDto(
             id = "system-quorum-lost-fallback",
             teamNumber = 0,
+            program = program,
             message = "⚠️ Cluster Quorum Lost: Operating in Read-Only Mode ($storeStatus). Recent scouting entries, team stats, and match schedules remain available. New submissions are temporarily paused.",
             bannerType = "warning",
             isDismissible = false,
@@ -51,39 +59,39 @@ object BannerService {
         )
     }
 
-    fun getActive(teamNumber: Int): List<BannerDto> = try {
+    fun getActive(teamNumber: Int, program: String = "FRC"): List<BannerDto> = try {
         val list = readTransaction {
             Banners.selectAll().where { 
-                (Banners.isActive eq true) and ((Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0))
+                (Banners.isActive eq true) and (Banners.program eq program) and ((Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0))
             }.map { it.toDto() }
         }.toMutableList()
 
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-            list.add(0, createQuorumLossBanner())
+            list.add(0, createQuorumLossBanner(program))
         }
         list
     } catch (_: Throwable) {
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-            listOf(createQuorumLossBanner())
+            listOf(createQuorumLossBanner(program))
         } else {
             emptyList()
         }
     }
 
-    fun getLoginBanners(): List<BannerDto> = try {
+    fun getLoginBanners(program: String = "FRC"): List<BannerDto> = try {
         val list = readTransaction {
             Banners.selectAll().where { 
-                (Banners.isActive eq true) and (Banners.showOnLogin eq true)
+                (Banners.isActive eq true) and (Banners.showOnLogin eq true) and (Banners.program eq program)
             }.map { it.toDto() }
         }.toMutableList()
 
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-            list.add(0, createQuorumLossBanner())
+            list.add(0, createQuorumLossBanner(program))
         }
         list
     } catch (_: Throwable) {
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-            listOf(createQuorumLossBanner())
+            listOf(createQuorumLossBanner(program))
         } else {
             emptyList()
         }
@@ -98,9 +106,11 @@ object BannerService {
         null
     }
 
-    fun create(dto: BannerCreateRequest): BannerDto = transaction {
+    fun create(dto: BannerCreateRequest, defaultProgram: String = "FRC"): BannerDto = transaction {
+        val bannerProgram = dto.program?.trim()?.takeIf { it.isNotBlank() } ?: defaultProgram
         val id = Banners.insertAndGetId {
             it[teamNumber] = dto.teamNumber ?: 0
+            it[program] = bannerProgram
             it[message] = dto.message
             it[bannerType] = dto.bannerType ?: "info"
             it[isDismissible] = dto.isDismissible ?: true
@@ -118,6 +128,7 @@ object BannerService {
         val uuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction null
         val count = Banners.update({ Banners.id eq uuid }) {
             dto.teamNumber?.let { v -> it[teamNumber] = v }
+            dto.program?.let { v -> it[program] = v }
             dto.message?.let { v -> it[message] = v }
             dto.bannerType?.let { v -> it[bannerType] = v }
             dto.isDismissible?.let { v -> it[isDismissible] = v }
@@ -142,6 +153,7 @@ object BannerService {
     private fun ResultRow.toDto(): BannerDto = BannerDto(
         id = this[Banners.id].value.toString(),
         teamNumber = this[Banners.teamNumber],
+        program = this[Banners.program],
         message = this[Banners.message],
         bannerType = this[Banners.bannerType],
         isDismissible = this[Banners.isDismissible],

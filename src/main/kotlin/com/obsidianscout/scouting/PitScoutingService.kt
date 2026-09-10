@@ -331,8 +331,8 @@ object PitScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Pit scouting entry not found")
 
             val ownerTeam = row[PitScoutingEntries.ownerTeamNumber]
-            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber)
-            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam)
+            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
+            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
                                   AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)
@@ -385,8 +385,8 @@ object PitScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Pit scouting entry not found")
 
             val ownerTeam = row[PitScoutingEntries.ownerTeamNumber]
-            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber)
-            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam)
+            val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
+            val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
                                   AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)
