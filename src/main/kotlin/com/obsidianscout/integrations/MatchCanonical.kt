@@ -165,12 +165,18 @@ object MatchCanonical {
     fun mergeRecords(existing: MatchSyncRecord, incoming: MatchSyncRecord): MatchSyncRecord {
         val preferred = if (recordScore(incoming) >= recordScore(existing)) incoming else existing
         val other = if (preferred === incoming) existing else incoming
+        val chosenJson = when {
+            hasScores(preferred) -> preferred.dataJson
+            hasScores(other) -> other.dataJson
+            preferred.dataJson.length >= other.dataJson.length -> preferred.dataJson
+            else -> other.dataJson
+        }
         return preferred.copy(
             scheduledTime = preferred.scheduledTime ?: other.scheduledTime,
             actualTime = preferred.actualTime ?: other.actualTime,
             redTeams = preferred.redTeams.ifEmpty { other.redTeams },
             blueTeams = preferred.blueTeams.ifEmpty { other.blueTeams },
-            dataJson = if (preferred.dataJson.length >= other.dataJson.length) preferred.dataJson else other.dataJson
+            dataJson = chosenJson
         ).let { canonicalize(it) }
     }
 
@@ -335,8 +341,18 @@ object MatchCanonical {
         }
     }
 
+    private fun hasScores(record: MatchSyncRecord): Boolean {
+        val json = record.dataJson
+        return json.contains("\"scoreRedFinal\"") ||
+               json.contains("\"scoreBlueFinal\"") ||
+               json.contains("\"redScore\"") ||
+               json.contains("\"blueScore\"") ||
+               json.contains("\"score\":")
+    }
+
     private fun recordScore(record: MatchSyncRecord): Int {
         var score = 0
+        if (hasScores(record)) score += 10
         if (record.source == "tba") score += 4
         if (record.redTeams.isNotEmpty() && record.blueTeams.isNotEmpty()) score += 3
         if (record.scheduledTime != null) score += 2

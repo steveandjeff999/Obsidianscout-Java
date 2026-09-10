@@ -432,16 +432,21 @@ object SyncScheduler {
         }
     }
 
-    private fun getSourcesLabel(settings: ApiSettings): String {
+    fun getSourcesLabel(settings: ApiSettings): String {
         val hasFirst = settings.apiKeys.firstUsername.isNotBlank() && settings.apiKeys.firstKey.isNotBlank()
+        val pref = settings.preferredSource?.lowercase()
         return if (settings.program == "FTC") {
-            if (hasFirst) "FTC Scout & FIRST FTC API" else "FTC Scout API"
+            when {
+                (hasFirst && settings.apiKeys.tbaKey.isNotBlank()) || pref == "both" -> "FTC Scout & FIRST FTC API"
+                hasFirst || pref == "first" -> "FIRST FTC API"
+                else -> "FTC Scout API"
+            }
         } else {
             val hasTba = settings.apiKeys.tbaKey.isNotBlank()
             when {
-                hasTba && hasFirst -> "TBA & FIRST Robotics API"
-                hasTba -> "The Blue Alliance API"
-                hasFirst -> "FIRST Robotics API"
+                (hasTba && hasFirst) || pref == "both" -> "TBA & FIRST Robotics API"
+                (hasFirst && !hasTba) || pref == "first" -> "FIRST Robotics API"
+                (hasTba && !hasFirst) || pref == "tba" -> "The Blue Alliance API"
                 else -> "preferred source fallback (${settings.preferredSource ?: "tba"})"
             }
         }

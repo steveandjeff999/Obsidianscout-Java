@@ -185,6 +185,31 @@ function populateMetrics(summary) {
     setVal("summary-events", summary.events);
 }
 
+function getEffectiveSourceLabel(settings, user) {
+    const isFtc = (user && user.program === "FTC") || (settings && settings.program === "FTC");
+    const apiKeys = (settings && settings.apiKeys) || {};
+    const hasTba = Boolean(apiKeys.tbaKey && apiKeys.tbaKey.trim());
+    const hasFirst = Boolean(apiKeys.firstUsername && apiKeys.firstUsername.trim() && apiKeys.firstKey && apiKeys.firstKey.trim());
+    const pref = (settings && settings.preferredSource ? settings.preferredSource.toLowerCase() : "").trim();
+
+    if (isFtc) {
+        if ((hasFirst && hasTba) || pref === "both") return "Both (FTC Scout + FIRST)";
+        if (hasFirst || pref === "first") return "FIRST FTC";
+        return "FTC Scout";
+    }
+
+    if ((hasTba && hasFirst) || pref === "both") {
+        return "Both (TBA + FIRST)";
+    }
+    if ((hasFirst && !hasTba) || pref === "first") {
+        return "FIRST";
+    }
+    if ((hasTba && !hasFirst) || pref === "tba") {
+        return "TBA";
+    }
+    return "TBA";
+}
+
 function populateEventContext(settings, eventKey) {
     const yearEl = document.getElementById("summary-year");
     if (yearEl) yearEl.textContent = settings.year || "-";
@@ -197,9 +222,7 @@ function populateEventContext(settings, eventKey) {
 
     const sourceEl = document.getElementById("summary-source");
     if (sourceEl) {
-        sourceEl.textContent = settings.preferredSource
-            ? settings.preferredSource.toUpperCase()
-            : (currentUser && currentUser.program === "FTC" ? "FTC Scout" : "The Blue Alliance");
+        sourceEl.textContent = getEffectiveSourceLabel(settings, currentUser);
     }
 }
 
@@ -261,15 +284,38 @@ function renderEventExternalLinks(settings, eventKey) {
 }
 
 function isEventPassedPlusOneDay(event) {
-    if (!event || !event.endDate) return false;
-    const datePart = event.endDate.split("T")[0]; // YYYY-MM-DD
-    const parts = datePart.split("-").map(p => parseInt(p, 10));
-    if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
-        return false;
+    if (Array.isArray(event)) {
+        event = event.find(e => e && e.eventKey && currentEventKey && e.eventKey.toLowerCase() === currentEventKey.toLowerCase()) || event[0];
     }
+    if (!event) return false;
+
+    // Check year: if event year is prior to current calendar year, it has passed
+    const currentYear = new Date().getFullYear();
+    if (event.year && typeof event.year === "number" && event.year < currentYear) {
+        return true;
+    }
+
     // End of the day after endDate
-    const cutoff = new Date(parts[0], parts[1] - 1, parts[2] + 1, 23, 59, 59, 999);
-    return Date.now() > cutoff.getTime();
+    if (event.endDate) {
+        const datePart = event.endDate.split("T")[0]; // YYYY-MM-DD
+        const parts = datePart.split("-").map(p => parseInt(p, 10));
+        if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+            const cutoff = new Date(parts[0], parts[1] - 1, parts[2] + 1, 23, 59, 59, 999);
+            return Date.now() > cutoff.getTime();
+        }
+    }
+
+    // Fallback if endDate missing but startDate present: event is passed 7 days after start
+    if (event.startDate) {
+        const datePart = event.startDate.split("T")[0];
+        const parts = datePart.split("-").map(p => parseInt(p, 10));
+        if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+            const cutoff = new Date(parts[0], parts[1] - 1, parts[2] + 7, 23, 59, 59, 999);
+            return Date.now() > cutoff.getTime();
+        }
+    }
+
+    return false;
 }
 
 async function loadUpcomingMatches(eventKey) {
@@ -316,24 +362,33 @@ async function loadUpcomingMatches(eventKey) {
 
         const ONE_DAY_MS = 24 * 60 * 60 * 1000;
         const nowMs = Date.now();
+        const currentYear = new Date().getFullYear();
 
         function hasApiScore(m) {
             return (m.redScore !== null && m.redScore !== undefined && m.redScore >= 0 &&
                     m.blueScore !== null && m.blueScore !== undefined && m.blueScore >= 0);
         }
 
-        // Filter for matches that the API does NOT have a score for, and check scheduled dates
+        // Filter for matches that the API does NOT have a score for, and check scheduled/actual dates
         const upcomingMatches = matches.filter(m => {
             // Exclude matches that already have an API score
             if (hasApiScore(m)) return false;
 
-            // Check scheduled dates: if a match was scheduled more than 1 day in the past, it has already passed
-            if (m.scheduledTime && m.scheduledTime > 0) {
-                const matchTimeMs = m.scheduledTime * 1000;
+            // Check match time: if scheduled or actual time was more than 1 day in the past, it has already passed
+            const matchTimestamp = (m.actualTime && m.actualTime > 0) ? m.actualTime : ((m.scheduledTime && m.scheduledTime > 0) ? m.scheduledTime : null);
+            if (matchTimestamp) {
+                const matchTimeMs = matchTimestamp * 1000;
                 if (nowMs - matchTimeMs > ONE_DAY_MS) {
                     return false;
                 }
             }
+
+            // Check year: matches from past years are not upcoming
+            const matchYear = parseInt(m.eventKey?.substring(0, 4), 10) || currentSettings?.year;
+            if (matchYear && matchYear < currentYear) {
+                return false;
+            }
+
             return true;
         });
 

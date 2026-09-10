@@ -340,6 +340,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const firstHeading = document.getElementById("settings-first-heading") || document.querySelector('h3[data-i18n="config.first_api"]');
             const firstOption = document.querySelector('#settings-source option[value="first"]');
+            const bothOption = document.querySelector('#settings-source option[value="both"]');
 
             if (isFtc) {
                 if (tbaCard) tbaCard.style.display = "";
@@ -351,6 +352,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 if (firstHeading) firstHeading.textContent = "FIRST FTC API";
                 if (firstOption) firstOption.textContent = "FIRST FTC API";
+                if (bothOption) bothOption.textContent = "Both (FTC Scout + FIRST)";
 
                 const epaCheckbox = document.getElementById("settings-epa");
                 if (epaCheckbox && epaCheckbox.parentElement) {

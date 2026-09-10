@@ -1122,7 +1122,16 @@ object IntegrationService {
     fun getEvent(eventKey: String): EventRecord? {
         return readTransaction {
             val key = eventKey.lowercase().trim()
-            ApiEvents.selectAll().where { ApiEvents.eventKey eq key }.limit(1).map { row ->
+            val parsedYear = if (key.length >= 4 && key.take(4).all { it.isDigit() }) key.take(4).toIntOrNull() else null
+            val parsedCode = if (parsedYear != null && key.length > 4) key.drop(4) else null
+
+            ApiEvents.selectAll().where {
+                var cond = (ApiEvents.eventKey eq key) or (ApiEvents.eventCode eq key)
+                if (parsedYear != null && parsedCode != null) {
+                    cond = cond or ((ApiEvents.year eq parsedYear) and (ApiEvents.eventCode eq parsedCode))
+                }
+                cond
+            }.limit(1).map { row ->
                 val storedCode = row[ApiEvents.eventCode]
                 val computedKey = if (!storedCode.isNullOrBlank()) {
                     "${row[ApiEvents.year]}${storedCode}".lowercase()
@@ -1477,6 +1486,10 @@ object IntegrationService {
         if (events.isEmpty()) {
             when (settings.preferredSource) {
                 "first" -> events.addAll(fetchFirstEvents(settings))
+                "both" -> {
+                    events.addAll(fetchTbaEvents(settings))
+                    events.addAll(fetchFirstEvents(settings))
+                }
                 else -> events.addAll(fetchTbaEvents(settings))
             }
         }
@@ -1508,6 +1521,7 @@ object IntegrationService {
             log.info("FRC Team Sync: No custom credentials. Fetching team roster for event $eventKey from preferred source '$source' fallback...")
             val fallbackTeams = when (source) {
                 "first" -> fetchFirstTeams(settings, eventKey)
+                "both" -> (fetchTbaTeams(settings, eventKey) + fetchFirstTeams(settings, eventKey))
                 else -> fetchTbaTeams(settings, eventKey)
             }
             teams.addAll(fallbackTeams)
@@ -1537,6 +1551,8 @@ object IntegrationService {
             log.info("FRC Match Sync: No custom credentials. Fetching match schedule for event $eventKey from preferred source '$source' fallback...")
             val fallbackMatches = when (source) {
                 "first" -> fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") }
+                "both" -> (fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") } +
+                           fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") })
                 else -> fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") }
             }
             matches.addAll(fallbackMatches)
@@ -1980,13 +1996,13 @@ object IntegrationService {
 
         val normalizedEventKey = eventKey.lowercase()
         val matchLevels = listOf(
-            "qual" to "Qualification",
-            "playoff" to "Playoff"
+            "Qualification" to "Qualification",
+            "Playoff" to "Playoff"
         )
         val scheduleLevels = listOf(
-            "practice" to "Practice",
-            "qual" to "Qualification",
-            "playoff" to "Playoff"
+            "Practice" to "Practice",
+            "Qualification" to "Qualification",
+            "Playoff" to "Playoff"
         )
         val results = linkedMapOf<String, MatchSyncRecord>()
 
@@ -2361,16 +2377,31 @@ private fun JsonObject.readFirstAlliances(): Pair<List<String>, List<String>> {
     return redTeams to blueTeams
 }
 
-private fun JsonObject.readEpochSeconds(key: String): Long? {
+internal fun JsonObject.readEpochSeconds(key: String): Long? {
     val primitive = this[key] as? JsonPrimitive ?: return null
-    val content = primitive.content
+    val content = primitive.content.trim()
+    if (content.isBlank()) return null
     content.toLongOrNull()?.let { value ->
         return if (content.length >= 13) value / 1000 else value
     }
     return try {
         java.time.Instant.parse(content).epochSecond
     } catch (_: Exception) {
-        null
+        try {
+            java.time.OffsetDateTime.parse(content).toEpochSecond()
+        } catch (_: Exception) {
+            try {
+                val normalized = if (!content.contains('T') && content.contains(' ')) {
+                    content.replace(' ', 'T')
+                } else {
+                    content
+                }
+                val ldt = java.time.LocalDateTime.parse(normalized, java.time.format.DateTimeFormatter.ISO_DATE_TIME)
+                ldt.toEpochSecond(java.time.ZoneOffset.UTC)
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 }
 

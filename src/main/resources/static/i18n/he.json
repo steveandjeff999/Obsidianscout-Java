@@ -596,6 +596,7 @@
   "config.preferred_source": "מקור מועדף",
   "config.the_blue_alliance": "The Blue Alliance",
   "config.first_api": "FIRST API",
+  "config.both_sources": "שניהם (TBA + FIRST)",
   "config.optional_stats": "סטטיסטיקות אופציונליות",
   "config.tba_key": "מפתח TBA",
   "config.first_username": "שם משתמש FIRST",

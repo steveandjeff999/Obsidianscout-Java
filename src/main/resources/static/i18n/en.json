@@ -638,6 +638,7 @@
   "config.preferred_source": "Preferred source",
   "config.the_blue_alliance": "The Blue Alliance / FTC Scout",
   "config.first_api": "FIRST API",
+  "config.both_sources": "Both (TBA + FIRST / FTC Scout + FIRST)",
   "config.optional_stats": "Optional stats",
   "config.tba_key": "TBA key",
   "config.first_username": "FIRST username",

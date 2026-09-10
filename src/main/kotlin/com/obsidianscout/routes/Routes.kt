@@ -1452,7 +1452,7 @@ fun Application.configureRoutes() {
                     val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val queued = SyncScheduler.enqueueEventSync(session.teamNumber, settings)
                     if (queued) {
-                        call.respond(HttpStatusCode.Accepted, SyncResponse(0, settings.preferredSource, settings.resolvedEventKey(), queued, "Event sync started"))
+                        call.respond(HttpStatusCode.Accepted, SyncResponse(0, SyncScheduler.getSourcesLabel(settings), settings.resolvedEventKey(), queued, "Event sync started"))
                     } else {
                         call.respond(HttpStatusCode.Conflict, mapOf("error" to "Sync is already running for team ${session.teamNumber}"))
                     }
@@ -1462,7 +1462,7 @@ fun Application.configureRoutes() {
                     val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val queued = SyncScheduler.enqueueEventDataSync(session.teamNumber, settings)
                     if (queued) {
-                        call.respond(HttpStatusCode.Accepted, SyncResponse(0, settings.preferredSource, settings.resolvedEventKey(), queued, "Teams and matches sync started"))
+                        call.respond(HttpStatusCode.Accepted, SyncResponse(0, SyncScheduler.getSourcesLabel(settings), settings.resolvedEventKey(), queued, "Teams and matches sync started"))
                     } else {
                         call.respond(HttpStatusCode.Conflict, mapOf("error" to "Sync is already running for team ${session.teamNumber}"))
                     }

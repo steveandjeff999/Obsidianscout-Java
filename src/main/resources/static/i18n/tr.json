@@ -599,6 +599,7 @@
   "config.preferred_source": "Tercih edilen kaynak",
   "config.the_blue_alliance": "The Blue Alliance",
   "config.first_api": "FIRST API",
+  "config.both_sources": "Her İkisi (TBA + FIRST)",
   "config.optional_stats": "İsteğe bağlı istatistikler",
   "config.tba_key": "TBA anahtarı",
   "config.first_username": "FIRST kullanıcı adı",

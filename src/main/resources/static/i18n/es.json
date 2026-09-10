@@ -617,6 +617,7 @@
   "config.preferred_source": "Origen preferido",
   "config.the_blue_alliance": "The Blue Alliance",
   "config.first_api": "FIRST API",
+  "config.both_sources": "Ambos (TBA + FIRST)",
   "config.optional_stats": "Estadísticas opcionales",
   "config.tba_key": "Clave TBA",
   "config.first_username": "Usuario FIRST",
