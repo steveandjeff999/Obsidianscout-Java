@@ -106,6 +106,7 @@ object JwtHelper {
             .withClaim("userId", session.userId)
             .withClaim("username", session.username)
             .withClaim("teamNumber", session.teamNumber)
+            .withClaim("program", session.program)
             .withClaim("role", session.role.name)
             .withClaim("email", session.email)
             .withExpiresAt(expiresAt)
@@ -122,6 +123,7 @@ object JwtHelper {
             val userId = jwt.getClaim("userId").asString() ?: return null
             val username = jwt.getClaim("username").asString() ?: return null
             val teamNumber = jwt.getClaim("teamNumber").asInt() ?: return null
+            val program = jwt.getClaim("program").asString() ?: "FRC"
             val roleStr = jwt.getClaim("role").asString() ?: return null
             val role = try { UserRole.valueOf(roleStr) } catch (_: Exception) { return null }
             val email = jwt.getClaim("email").asString()
@@ -130,6 +132,7 @@ object JwtHelper {
                 userId = userId,
                 username = username,
                 teamNumber = teamNumber,
+                program = program,
                 role = role,
                 email = email,
                 sessionId = sessionId
@@ -162,7 +165,12 @@ suspend fun ApplicationCall.requireMobileSession(secret: String): UserSession {
             throw MobileApiException(HttpStatusCode.Unauthorized, "User account no longer exists", "ACCOUNT_DELETED")
         }
         val dbRole = runCatching { UserRole.valueOf(userRow[Users.role]) }.getOrDefault(session.role)
-        return session.copy(role = dbRole)
+        return session.copy(
+            role = dbRole,
+            teamNumber = userRow[Users.teamNumber],
+            username = userRow[Users.username],
+            program = userRow[Users.program]
+        )
     }
 
     val (userRow, sessionValid) = runCatching {

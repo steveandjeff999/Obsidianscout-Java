@@ -198,13 +198,14 @@ object AllianceService {
             val now = Instant.now()
             
             // Get current configurations to initialize the alliance configs
-            val creatorMatch = ConfigService.getConfigJson(session.teamNumber)
-            val creatorPit = ConfigService.getPitConfigJson(session.teamNumber)
-            val creatorQual = ConfigService.getQualitativeConfigJson(session.teamNumber)
+            val creatorMatch = ConfigService.getConfigJson(session.teamNumber, session.program)
+            val creatorPit = ConfigService.getPitConfigJson(session.teamNumber, session.program)
+            val creatorQual = ConfigService.getQualitativeConfigJson(session.teamNumber, session.program)
 
-            // Deactivate all other memberships for this team first
+            // Deactivate all other memberships for this team and program first
             AllianceMemberships.update({
-                (AllianceMemberships.teamNumber eq session.teamNumber)
+                (AllianceMemberships.teamNumber eq session.teamNumber) and
+                (AllianceMemberships.program eq session.program)
             }) {
                 it[AllianceMemberships.active] = false
             }

@@ -54,6 +54,7 @@ object ScoutingService {
     fun listEntries(session: UserSession, includePrescout: Boolean = false, all: Boolean = false, eventKey: String? = null): List<ScoutingEntryRecord> {
         return readTransaction {
             val query = ScoutingEntries.selectAll()
+            query.andWhere { ScoutingEntries.program eq session.program }
             if (!includePrescout) {
                 query.andWhere { ScoutingEntries.isPrescout eq false }
             }
@@ -61,7 +62,7 @@ object ScoutingService {
                 query.andWhere { ScoutingEntries.eventKey eq eventKey.trim() }
             }
             if (session.role != UserRole.SUPERADMIN) {
-                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
@@ -108,12 +109,12 @@ object ScoutingService {
     fun listPrescoutEntries(session: UserSession, all: Boolean = false, eventKey: String? = null): List<ScoutingEntryRecord> {
         return readTransaction {
             val query = ScoutingEntries.selectAll()
-            query.andWhere { ScoutingEntries.isPrescout eq true }
+            query.andWhere { (ScoutingEntries.program eq session.program) and (ScoutingEntries.isPrescout eq true) }
             if (!eventKey.isNullOrBlank()) {
                 query.andWhere { ScoutingEntries.eventKey eq eventKey.trim() }
             }
             if (session.role != UserRole.SUPERADMIN) {
-                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
@@ -239,10 +240,11 @@ object ScoutingService {
         }
 
         val duplicate = transaction {
-            val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+            val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
             val visibleTeams = partnerTeams + session.teamNumber
             ScoutingEntries.selectAll().where {
                 (ScoutingEntries.ownerTeamNumber inList visibleTeams) and
+                (ScoutingEntries.program eq session.program) and
                 (ScoutingEntries.targetTeamNumber eq meta.targetTeamNumber) and
                 (ScoutingEntries.eventKey eq meta.eventKey) and
                 (ScoutingEntries.matchKey eq meta.matchKey) and
@@ -289,6 +291,7 @@ object ScoutingService {
         val id = transaction {
             ScoutingEntries.insertAndGetId {
                 it[ownerTeamNumber] = session.teamNumber
+                it[program] = session.program
                 it[targetTeamNumber] = meta.targetTeamNumber
                 it[eventKey] = meta.eventKey
                 it[matchKey] = meta.matchKey

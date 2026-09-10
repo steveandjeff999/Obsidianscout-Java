@@ -122,15 +122,16 @@ object ValidationService {
                 teamInfoMap[rowCanonical] = row
             }
 
-            val config = ConfigService.getConfig(session.teamNumber)
+            val config = ConfigService.getConfig(session.teamNumber, session.program)
 
             // Fetch scouter usernames map
             val usersMap = Users.selectAll().associate { it[Users.id].value to it[Users.username] }
 
             // Fetch scouting entries
             val entriesQuery = ScoutingEntries.selectAll()
+            entriesQuery.andWhere { ScoutingEntries.program eq session.program }
             if (session.role != UserRole.SUPERADMIN) {
-                val partnerTeams = com.obsidianscout.scouting.AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val partnerTeams = com.obsidianscout.scouting.AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
                 val visibleTeams = partnerTeams + session.teamNumber
                 entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }

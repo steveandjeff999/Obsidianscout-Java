@@ -38,6 +38,7 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.callloging.CallLogging
 import io.ktor.server.plugins.compression.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.doublereceive.DoubleReceive
 import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.plugins.cachingheaders.CachingHeaders
@@ -134,6 +135,7 @@ fun Application.module(appConfig: AppConfig) {
 
     com.obsidianscout.auth.ClusterSecretService.initFromConfig(appConfig)
 
+    install(DoubleReceive)
     install(com.obsidianscout.utils.ServerTimingPlugin)
     install(DefaultHeaders) {
         header("X-Frame-Options", "DENY")

@@ -2052,7 +2052,7 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val groupName = call.request.queryParameters["group"] ?: "general"
                     try {
-                        val messages = ChatService.getMessages(session.teamNumber, groupName, session.userId, session.role)
+                        val messages = ChatService.getMessages(session.teamNumber, session.program, groupName, session.userId, session.role)
                         call.respond(messages)
                     } catch (e: IllegalArgumentException) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, e.message ?: "Access denied")
@@ -2064,6 +2064,7 @@ fun Application.configureRoutes() {
                     try {
                         val message = ChatService.sendMessage(
                             teamNumber = session.teamNumber,
+                            program = session.program,
                             groupName = request.groupName,
                             userId = session.userId,
                             username = session.username,
@@ -2126,12 +2127,12 @@ fun Application.configureRoutes() {
                 }
                 get("/groups") {
                     val session = call.requireSession()
-                    val groups = ChatService.getGroups(session.teamNumber, session.userId, session.role)
+                    val groups = ChatService.getGroups(session.teamNumber, session.program, session.userId, session.role)
                     call.respond(groups)
                 }
                 get("/groups/details") {
                     val session = call.requireSession()
-                    val details = ChatService.getAllGroupDetails(session.teamNumber, session.userId, session.role)
+                    val details = ChatService.getAllGroupDetails(session.teamNumber, session.program, session.userId, session.role)
                     call.respond(details)
                 }
                 get("/groups/{name}/details") {
@@ -2139,7 +2140,7 @@ fun Application.configureRoutes() {
                     val groupName = call.parameters["name"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing channel name")
                     try {
-                        val details = ChatService.getGroupDetails(session.teamNumber, groupName, session.userId, session.role)
+                        val details = ChatService.getGroupDetails(session.teamNumber, session.program, groupName, session.userId, session.role)
                             ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Channel not found")
                         call.respond(details)
                     } catch (e: IllegalArgumentException) {
@@ -2154,6 +2155,7 @@ fun Application.configureRoutes() {
                     try {
                         val success = ChatService.updateGroupPermissions(
                             teamNumber = session.teamNumber,
+                            program = session.program,
                             groupName = groupName,
                             allowedRoles = request.allowedRoles,
                             allowedUserIds = request.allowedUserIds,
@@ -2169,7 +2171,7 @@ fun Application.configureRoutes() {
                     val groupName = call.parameters["name"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing channel name")
                     try {
-                        val success = ChatService.clearGroupMessages(session.teamNumber, groupName, session.role)
+                        val success = ChatService.clearGroupMessages(session.teamNumber, session.program, groupName, session.role)
                         call.respond(buildJsonObject { put("success", success) })
                     } catch (e: IllegalArgumentException) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, e.message ?: "Cannot clear channel")
@@ -2180,6 +2182,7 @@ fun Application.configureRoutes() {
                     val request = call.receive<CreateGroupRequest>()
                     val success = ChatService.createGroup(
                         teamNumber = session.teamNumber,
+                        program = session.program,
                         groupName = request.groupName,
                         userId = session.userId,
                         allowedRoles = request.allowedRoles,
@@ -2195,7 +2198,7 @@ fun Application.configureRoutes() {
                     val groupName = call.parameters["name"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing channel name")
                     try {
-                        val deleted = ChatService.deleteGroup(session.teamNumber, groupName, session.role)
+                        val deleted = ChatService.deleteGroup(session.teamNumber, session.program, groupName, session.role)
                         if (!deleted) {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Channel not found")
                         }
@@ -2206,7 +2209,7 @@ fun Application.configureRoutes() {
                 }
                 get("/unread-status") {
                     val session = call.requireSession()
-                    val status = ChatService.getUnreadStatus(session.userId, session.teamNumber, session.username, session.role)
+                    val status = ChatService.getUnreadStatus(session.userId, session.teamNumber, session.username, session.role, session.program)
                     call.respond(status)
                 }
                 post("/read") {
@@ -2219,7 +2222,11 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val usernames = com.obsidianscout.db.readTransaction {
                         com.obsidianscout.db.Users.selectAll()
-                            .where { (com.obsidianscout.db.Users.teamNumber eq session.teamNumber) and (com.obsidianscout.db.Users.username neq "Deleted User") }
+                            .where {
+                                (com.obsidianscout.db.Users.teamNumber eq session.teamNumber) and
+                                (com.obsidianscout.db.Users.program eq session.program) and
+                                (com.obsidianscout.db.Users.username neq "Deleted User")
+                            }
                             .map { it[com.obsidianscout.db.Users.username] }
                             .sorted()
                     }
@@ -2229,7 +2236,11 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val members = com.obsidianscout.db.readTransaction {
                         com.obsidianscout.db.Users.selectAll()
-                            .where { (com.obsidianscout.db.Users.teamNumber eq session.teamNumber) and (com.obsidianscout.db.Users.username neq "Deleted User") }
+                            .where {
+                                (com.obsidianscout.db.Users.teamNumber eq session.teamNumber) and
+                                (com.obsidianscout.db.Users.program eq session.program) and
+                                (com.obsidianscout.db.Users.username neq "Deleted User")
+                            }
                             .map {
                                 ChatTeamMemberDto(
                                     userId = it[com.obsidianscout.db.Users.id].value.toString(),

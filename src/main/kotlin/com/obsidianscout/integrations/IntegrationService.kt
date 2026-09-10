@@ -556,7 +556,7 @@ object IntegrationService {
 
             if (session != null && session.role != UserRole.SUPERADMIN) {
                 val teamNumber = session.teamNumber
-                val partnerTeams = AllianceService.getAlliancePartnerTeams(teamNumber)
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(teamNumber, session.program)
                 val visibleTeams = partnerTeams + teamNumber
 
                 val teamAllowedKeys = mutableSetOf<String>()
@@ -605,12 +605,15 @@ object IntegrationService {
 
             val teamNumbers = teamRows.map { it[ApiTeams.teamNumber] }
 
-            val config = ConfigService.getConfig(session.teamNumber)
-            val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+            val config = ConfigService.getConfig(session.teamNumber, session.program)
+            val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
             val visibleTeams = partnerTeams + session.teamNumber
 
             val groupedEntries = if (teamNumbers.isNotEmpty()) {
-                val entriesQuery = ScoutingEntries.selectAll().where { ScoutingEntries.targetTeamNumber inList teamNumbers }
+                val entriesQuery = ScoutingEntries.selectAll().where {
+                    (ScoutingEntries.program eq session.program) and
+                    (ScoutingEntries.targetTeamNumber inList teamNumbers)
+                }
                 if (session.role != UserRole.SUPERADMIN) {
                     entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
                 }
@@ -924,7 +927,7 @@ object IntegrationService {
                         .distinct()
                         .sorted()
                 } else if (session != null && userTeamNumber > 0) {
-                    val partnerTeams = AllianceService.getAlliancePartnerTeams(userTeamNumber)
+                    val partnerTeams = AllianceService.getAlliancePartnerTeams(userTeamNumber, session.program)
                     (listOf(userTeamNumber) + partnerTeams).distinct().sorted()
                 } else if (targetTeamNumber != null && targetTeamNumber > 0) {
                     listOf(targetTeamNumber)

@@ -173,13 +173,14 @@ object PredictorService {
                 teamInfoMap[rowCanonical] = row
             }
 
-            val config = ConfigService.getConfig(session.teamNumber)
+            val config = ConfigService.getConfig(session.teamNumber, session.program)
 
             val entriesQuery = ScoutingEntries.selectAll().where {
-                ScoutingEntries.targetTeamNumber inList teamNumbers
+                (ScoutingEntries.program eq session.program) and
+                (ScoutingEntries.targetTeamNumber inList teamNumbers)
             }
             if (session.role != UserRole.SUPERADMIN) {
-                val partnerTeams = com.obsidianscout.scouting.AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val partnerTeams = com.obsidianscout.scouting.AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
                 val visibleTeams = partnerTeams + session.teamNumber
                 entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
@@ -371,13 +372,14 @@ object PredictorService {
             }
 
             val teamNumbers = allTeamsInEvent.map { it[ApiTeams.teamNumber] }
-            val config = ConfigService.getConfig(session.teamNumber)
+            val config = ConfigService.getConfig(session.teamNumber, session.program)
 
             val entriesQuery = ScoutingEntries.selectAll().where {
-                ScoutingEntries.targetTeamNumber inList teamNumbers
+                (ScoutingEntries.program eq session.program) and
+                (ScoutingEntries.targetTeamNumber inList teamNumbers)
             }
             if (session.role != UserRole.SUPERADMIN) {
-                val partnerTeams = com.obsidianscout.scouting.AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val partnerTeams = com.obsidianscout.scouting.AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
                 val visibleTeams = partnerTeams + session.teamNumber
                 entriesQuery.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }

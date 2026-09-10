@@ -68,11 +68,13 @@ object DeduplicationScheduler {
         // 1. ScoutingEntries
         val matchRows = transaction { ScoutingEntries.selectAll().toList() }
         val matchGrouped = matchRows.groupBy { row ->
+            val owner = row[ScoutingEntries.ownerTeamNumber]
+            val prog = row[ScoutingEntries.program]
             val target = row[ScoutingEntries.targetTeamNumber]
             val event = row[ScoutingEntries.eventKey]
             val match = row[ScoutingEntries.matchKey]
             val isPrescout = row[ScoutingEntries.isPrescout]
-            MatchGroupKey(event, match, target, isPrescout)
+            MatchGroupKey(owner, prog, event, match, target, isPrescout)
         }
         matchGrouped.forEach { (key, group) ->
             val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
@@ -101,10 +103,12 @@ object DeduplicationScheduler {
         // 2. PitScoutingEntries
         val pitRows = transaction { PitScoutingEntries.selectAll().toList() }
         val pitGrouped = pitRows.groupBy { row ->
+            val owner = row[PitScoutingEntries.ownerTeamNumber]
+            val prog = row[PitScoutingEntries.program]
             val target = row[PitScoutingEntries.targetTeamNumber]
             val event = row[PitScoutingEntries.eventKey]
             val isPrescout = row[PitScoutingEntries.isPrescout]
-            PitGroupKey(event, target, isPrescout)
+            PitGroupKey(owner, prog, event, target, isPrescout)
         }
         pitGrouped.forEach { (key, group) ->
             val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
@@ -133,11 +137,13 @@ object DeduplicationScheduler {
         // 3. QualitativeScoutingEntries
         val qualRows = transaction { QualitativeScoutingEntries.selectAll().toList() }
         val qualGrouped = qualRows.groupBy { row ->
+            val owner = row[QualitativeScoutingEntries.ownerTeamNumber]
+            val prog = row[QualitativeScoutingEntries.program]
             val target = row[QualitativeScoutingEntries.targetTeamNumber]
             val event = row[QualitativeScoutingEntries.eventKey]
             val match = row[QualitativeScoutingEntries.matchKey]
             val isPrescout = row[QualitativeScoutingEntries.isPrescout]
-            QualitativeGroupKey(event, match, target, isPrescout)
+            QualitativeGroupKey(owner, prog, event, match, target, isPrescout)
         }
         qualGrouped.forEach { (key, group) ->
             val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
@@ -195,6 +201,8 @@ object DeduplicationScheduler {
 
 
 private data class MatchGroupKey(
+    val ownerTeamNumber: Int,
+    val program: String,
     val eventKey: String?,
     val matchKey: String?,
     val targetTeamNumber: Int?,
@@ -202,12 +210,16 @@ private data class MatchGroupKey(
 )
 
 private data class PitGroupKey(
+    val ownerTeamNumber: Int,
+    val program: String,
     val eventKey: String?,
     val targetTeamNumber: Int?,
     val isPrescout: Boolean
 )
 
 private data class QualitativeGroupKey(
+    val ownerTeamNumber: Int,
+    val program: String,
     val eventKey: String?,
     val matchKey: String?,
     val targetTeamNumber: Int?,

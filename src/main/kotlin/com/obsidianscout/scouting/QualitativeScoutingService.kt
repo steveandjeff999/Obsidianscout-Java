@@ -50,6 +50,7 @@ object QualitativeScoutingService {
     fun listEntries(session: UserSession, includePrescout: Boolean = false, all: Boolean = false, eventKey: String? = null): List<QualitativeScoutingEntryRecord> {
         return readTransaction {
             val query = QualitativeScoutingEntries.selectAll()
+            query.andWhere { QualitativeScoutingEntries.program eq session.program }
             if (!includePrescout) {
                 query.andWhere { QualitativeScoutingEntries.isPrescout eq false }
             }
@@ -57,7 +58,7 @@ object QualitativeScoutingService {
                 query.andWhere { QualitativeScoutingEntries.eventKey eq eventKey.trim() }
             }
             if (session.role != UserRole.SUPERADMIN) {
-                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
@@ -104,12 +105,12 @@ object QualitativeScoutingService {
     fun listPrescoutEntries(session: UserSession, all: Boolean = false, eventKey: String? = null): List<QualitativeScoutingEntryRecord> {
         return readTransaction {
             val query = QualitativeScoutingEntries.selectAll()
-            query.andWhere { QualitativeScoutingEntries.isPrescout eq true }
+            query.andWhere { (QualitativeScoutingEntries.program eq session.program) and (QualitativeScoutingEntries.isPrescout eq true) }
             if (!eventKey.isNullOrBlank()) {
                 query.andWhere { QualitativeScoutingEntries.eventKey eq eventKey.trim() }
             }
             if (session.role != UserRole.SUPERADMIN) {
-                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
@@ -235,10 +236,11 @@ object QualitativeScoutingService {
         }
 
         val duplicate = transaction {
-            val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber)
+            val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
             val visibleTeams = partnerTeams + session.teamNumber
             QualitativeScoutingEntries.selectAll().where {
                 (QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams) and
+                (QualitativeScoutingEntries.program eq session.program) and
                 (QualitativeScoutingEntries.targetTeamNumber eq meta.targetTeamNumber) and
                 (QualitativeScoutingEntries.eventKey eq meta.eventKey) and
                 (QualitativeScoutingEntries.matchKey eq meta.matchKey) and
@@ -284,6 +286,7 @@ object QualitativeScoutingService {
         val id = transaction {
             QualitativeScoutingEntries.insertAndGetId {
                 it[ownerTeamNumber] = session.teamNumber
+                it[program] = session.program
                 it[targetTeamNumber] = meta.targetTeamNumber
                 it[eventKey] = meta.eventKey
                 it[matchKey] = meta.matchKey
