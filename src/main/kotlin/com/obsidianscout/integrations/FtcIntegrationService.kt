@@ -155,6 +155,20 @@ object FtcIntegrationService {
 
     suspend fun syncCustomEventData(settings: ApiSettings, eventKey: String): SyncCounts {
         val (year, code) = extractYearAndCode(eventKey)
+
+        // Guard: FTC event codes from FTC Scout are bare alphanumeric strings (e.g. "MNMI2",
+        // "OHOW"). If the code portion itself starts with 4 digits it almost certainly means
+        // the user typed a full TBA/FRC event key (e.g. "2026arc") into the FTC event code
+        // field. Reject it early so we don't query FTC Scout with an FRC-program code and
+        // potentially find a coincidentally matching FTC event.
+        if (code.length > 4 && code.take(4).all { it.isDigit() }) {
+            log.warn(
+                "FTC syncCustomEventData rejected event key '$eventKey' — code '$code' looks like " +
+                "an FRC/TBA event key. Please verify the correct FTC event code is configured."
+            )
+            return SyncCounts(0, 0)
+        }
+
         log.info("Syncing FTC event data for $eventKey (season $year, code $code)")
 
         val scoresFragment = when (year) {

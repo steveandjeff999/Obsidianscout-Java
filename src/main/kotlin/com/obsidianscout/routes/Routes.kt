@@ -1350,7 +1350,7 @@ fun Application.configureRoutes() {
                             // ignore or log
                         }
                     }
-                    call.respond(IntegrationService.listMatches(eventKeyLower))
+                    call.respond(IntegrationService.listMatches(eventKeyLower, session.program))
                 }
                 get("/predict") {
                     val session = call.requireSession()

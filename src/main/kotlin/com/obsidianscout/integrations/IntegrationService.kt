@@ -191,6 +191,16 @@ object IntegrationService {
             Triple(eventDeferred.await(), teamsDeferred.await(), matchesDeferred.await())
         }
 
+        // Guard: if every team returned by the FRC APIs has an "ftc"-prefixed key, we
+        // accidentally matched an FTC event. Abort rather than polluting the database.
+        if (teams.isNotEmpty() && teams.all { it.teamKey.lowercase().startsWith("ftc") }) {
+            log.warn(
+                "FRC syncEventData for $eventKey received only FTC-prefixed team keys — " +
+                "the event code likely belongs to the FTC program. Aborting write."
+            )
+            return SyncCounts(0, 0)
+        }
+
         val now = Instant.now()
         withContext(Dispatchers.IO) {
             transaction {
@@ -310,6 +320,16 @@ object IntegrationService {
             val teamsDeferred = async { fetchMergedTeams(settings, key) }
             val matchesDeferred = async { fetchMergedMatches(settings, key) }
             Triple(eventDeferred.await(), teamsDeferred.await(), matchesDeferred.await())
+        }
+
+        // Guard: if every team returned by the FRC APIs has an "ftc"-prefixed key, the
+        // configured event code matches an FTC event. Abort rather than polluting the database.
+        if (teams.isNotEmpty() && teams.all { it.teamKey.lowercase().startsWith("ftc") }) {
+            log.warn(
+                "FRC syncCustomEventData for $key received only FTC-prefixed team keys — " +
+                "the event code likely belongs to the FTC program. Aborting write."
+            )
+            return SyncCounts(0, 0)
         }
 
         val now = Instant.now()
@@ -469,7 +489,14 @@ object IntegrationService {
             }
 
             if (cachedOnly) {
+                val isFtcSession = session?.program?.equals("FTC", ignoreCase = true) == true
+                // Only collect event keys that have teams belonging to the correct program.
+                // FTC sessions see events with ftc-prefixed teams; FRC sessions see events
+                // with non-ftc-prefixed teams. This prevents cross-program contamination when
+                // an FRC and FTC event share the same event key in the database.
+                val teamKeyPrefix = if (isFtcSession) "ftc%" else "frc%"
                 val teamKeys = ApiTeams.select(ApiTeams.eventKey)
+                    .where { ApiTeams.teamKey like teamKeyPrefix }
                     .withDistinct()
                     .map { it[ApiTeams.eventKey].lowercase().trim() }
                 val matchKeys = ApiMatches.select(ApiMatches.eventKey)
@@ -599,9 +626,17 @@ object IntegrationService {
             val bbotMappings = getBBotMappings(eventKey)
             val placeholderToBBot = bbotMappings.associate { it.placeholderKey.lowercase().trim() to it.bbotKey }
 
-            val teamRows = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }
+            val isFtcSession = session.program.equals("FTC", ignoreCase = true)
+            val allTeamRows = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }
                 .orderBy(ApiTeams.teamNumber, SortOrder.ASC)
                 .toList()
+            // Filter by program: FTC sessions only see ftc-prefixed team keys; FRC sessions only
+            // see non-ftc-prefixed keys. This prevents cross-program contamination when an FRC
+            // and FTC event share the same resolved event key string in the database.
+            val teamRows = allTeamRows.filter { row ->
+                val key = row[ApiTeams.teamKey].lowercase().trim()
+                if (isFtcSession) key.startsWith("ftc") else !key.startsWith("ftc")
+            }
 
             val teamNumbers = teamRows.map { it[ApiTeams.teamNumber] }
 
@@ -699,7 +734,7 @@ object IntegrationService {
         }
     }
 
-    fun listMatches(eventKey: String): List<MatchRecord> {
+    fun listMatches(eventKey: String, program: String = "FRC"): List<MatchRecord> {
         return readTransaction {
             // Fetch the event venue timezone once so every MatchRecord can carry it.
             // All scheduledTime/actualTime values stored in the DB are UTC epoch seconds.
@@ -709,10 +744,14 @@ object IntegrationService {
                 .firstOrNull()
                 ?.get(ApiEvents.timezone)
 
+            val isFtcProgram = program.equals("FTC", ignoreCase = true)
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
             val bbotMappings = getBBotMappings(eventKey)
-            
-            val isFtcEvent = eventKey.contains("ftc") || allTeams.any { it[ApiTeams.teamKey].startsWith("ftc") }
+
+            // Use the caller's program to determine the correct prefix. Fall back to
+            // the heuristic (event key contains "ftc" or teams have ftc keys) only
+            // when program is ambiguous. This prevents cross-program key pollution.
+            val isFtcEvent = isFtcProgram || eventKey.contains("ftc") || allTeams.any { it[ApiTeams.teamKey].startsWith("ftc") }
             val defaultPrefix = if (isFtcEvent) "ftc" else "frc"
 
             // Build bidirectional resolution maps for B-bots and normal teams
@@ -756,7 +795,19 @@ object IntegrationService {
                 }
             }
 
-            val rows = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
+            val allMatchRows = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
+            // Filter match rows by program: only include matches that contain at least one
+            // team key with the correct prefix. This prevents cross-program match leakage
+            // when an FRC and FTC event share the same event key in the database.
+            val wrongPrefix = if (isFtcProgram) "frc" else "ftc"
+            val rows = allMatchRows.filter { row ->
+                val redKeys = decodeTeams(row[ApiMatches.redTeams])
+                val blueKeys = decodeTeams(row[ApiMatches.blueTeams])
+                val allKeys = (redKeys + blueKeys).map { it.trim().lowercase() }
+                // Keep the match if NOT all team keys belong to the wrong program.
+                // An empty match (no team keys) is kept as-is.
+                allKeys.isEmpty() || !allKeys.all { it.startsWith(wrongPrefix) }
+            }
             rows.sortedWith(
                 compareBy(
                     { compLevelRank(it[ApiMatches.compLevel]) },

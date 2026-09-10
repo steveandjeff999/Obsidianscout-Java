@@ -1698,7 +1698,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val teamNumber = call.request.queryParameters["team_number"]?.toIntOrNull()
 
                 val eventKey = resolveEventKey(eventIdParam, session.teamNumber)
-                var matches = IntegrationService.listMatches(eventKey)
+                var matches = IntegrationService.listMatches(eventKey, session.program)
 
                 if (!matchType.isNullOrBlank()) {
                     matches = matches.filter { mapMatchType(it.compLevel).equals(matchType, ignoreCase = true) }
@@ -1753,7 +1753,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val teamNumber = call.request.queryParameters["team_number"]?.toIntOrNull()
 
                 val eventKey = resolveEventKey(null, session.teamNumber)
-                var matches = IntegrationService.listMatches(eventKey)
+                var matches = IntegrationService.listMatches(eventKey, session.program)
 
                 if (!matchType.isNullOrBlank()) {
                     matches = matches.filter { mapMatchType(it.compLevel).equals(matchType, ignoreCase = true) }
@@ -2185,7 +2185,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val eventDbId = eventRow?.get(ApiEvents.id)?.value?.toString() ?: ""
 
                 val teamsList = IntegrationService.listTeams(eventKey, session)
-                val matchesList = IntegrationService.listMatches(eventKey)
+                val matchesList = IntegrationService.listMatches(eventKey, session.program)
                 
                 val scoutedEntries = ScoutingService.listEntries(session, includePrescout = false)
                 val config = ConfigService.getConfig(session.teamNumber)
