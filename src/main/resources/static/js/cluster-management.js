@@ -67,6 +67,8 @@
         bindLoadBalancerEvents();
         loadQuorumFallbackStatus();
         bindQuorumFallbackEvents();
+        loadSnapshotsStatus();
+        bindSnapshotEvents();
     }
 
     async function loadNodeAlertEnrollment() {
@@ -1573,6 +1575,471 @@
         } finally {
             if (btn) btn.disabled = false;
         }
+    }
+
+    // =========================================================================
+    // Superadmin Automated Database Snapshots & System Disaster Recovery
+    // =========================================================================
+    let pendingRestoreType = null; // "named" | "upload"
+    let pendingRestoreFileName = null;
+    let pendingRestoreFile = null;
+
+    async function loadSnapshotsStatus() {
+        const section = document.getElementById("auto-backup-section");
+        if (!section) return;
+
+        try {
+            const status = await apiRequest("/api/admin/snapshots");
+            section.classList.remove("hidden");
+            renderLocalSnapshotStatus(status);
+        } catch (err) {
+            // Not superadmin or error
+            console.warn("[ClusterManagement] Snapshot status load error:", err);
+            section.classList.add("hidden");
+            return;
+        }
+
+        try {
+            const cluster = await apiRequest("/api/admin/cluster/auto-backup");
+            renderClusterSnapshotStatus(cluster);
+        } catch (err) {
+            console.warn("[ClusterManagement] Failed to load cluster auto-backup status:", err);
+        }
+    }
+
+    function renderLocalSnapshotStatus(status) {
+        if (!status) return;
+
+        const chkAutoBackup = document.getElementById("chk-auto-backup-enabled");
+        const inputRetention = document.getElementById("input-retention-days");
+        const autoBackupBadge = document.getElementById("auto-backup-badge");
+        const scheduleInfo = document.getElementById("snapshot-schedule-info");
+        const snapshotsTbody = document.getElementById("snapshots-table-body");
+
+        if (chkAutoBackup) chkAutoBackup.checked = !!status.enabled;
+        if (inputRetention) inputRetention.value = status.retentionDays || 30;
+
+        if (autoBackupBadge) {
+            if (status.enabled) {
+                autoBackupBadge.textContent = "Daily Active (02:54 UTC)";
+                autoBackupBadge.style.background = "rgba(16, 185, 129, 0.2)";
+                autoBackupBadge.style.color = "var(--success)";
+            } else {
+                autoBackupBadge.textContent = "Auto-Backup Disabled";
+                autoBackupBadge.style.background = "rgba(100, 116, 139, 0.2)";
+                autoBackupBadge.style.color = "var(--muted)";
+            }
+        }
+
+        if (scheduleInfo) {
+            if (status.enabled && status.nextScheduledRunUtc) {
+                scheduleInfo.textContent = `Next Run: ${status.nextScheduledRunUtc} UTC`;
+            } else if (!status.enabled) {
+                scheduleInfo.textContent = "Auto-backup disabled on this server.";
+            } else {
+                scheduleInfo.textContent = "Scheduled daily at 02:54 UTC.";
+            }
+        }
+
+        if (snapshotsTbody) {
+            snapshotsTbody.innerHTML = "";
+            const snapshots = status.snapshots || [];
+            if (snapshots.length === 0) {
+                snapshotsTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 16px;">No local SQLite snapshots created yet.</td></tr>`;
+                return;
+            }
+
+            snapshots.forEach(s => {
+                const tr = document.createElement("tr");
+
+                const tdName = document.createElement("td");
+                tdName.innerHTML = `<strong style="font-family: monospace; color: var(--ink);">${escapeHtml(s.fileName)}</strong>`;
+
+                const tdCreated = document.createElement("td");
+                tdCreated.textContent = s.createdAtUtc || "--";
+
+                const tdSize = document.createElement("td");
+                tdSize.textContent = formatBytes(s.sizeBytes);
+
+                const tdTrigger = document.createElement("td");
+                if (s.isAutoBackup) {
+                    tdTrigger.innerHTML = `<span class="badge" style="background: rgba(59, 130, 246, 0.15); color: var(--accent);">Auto (02:54 UTC)</span>`;
+                } else {
+                    tdTrigger.innerHTML = `<span class="badge ghost">Manual</span>`;
+                }
+
+                const tdActions = document.createElement("td");
+                tdActions.style.textAlign = "right";
+
+                // Download link
+                const btnDownload = document.createElement("a");
+                btnDownload.href = `/api/admin/snapshots/download/${encodeURIComponent(s.fileName)}`;
+                btnDownload.className = "btn ghost";
+                btnDownload.style.padding = "4px 8px";
+                btnDownload.style.fontSize = "12px";
+                btnDownload.style.marginRight = "6px";
+                btnDownload.textContent = "⬇️ Download";
+                btnDownload.download = s.fileName;
+
+                // Restore button
+                const btnRestore = document.createElement("button");
+                btnRestore.type = "button";
+                btnRestore.className = "btn danger";
+                btnRestore.style.padding = "4px 8px";
+                btnRestore.style.fontSize = "12px";
+                btnRestore.style.marginRight = "6px";
+                btnRestore.textContent = "🔄 Restore";
+                btnRestore.addEventListener("click", () => {
+                    openRestoreModal("named", s.fileName);
+                });
+
+                // Delete button
+                const btnDelete = document.createElement("button");
+                btnDelete.type = "button";
+                btnDelete.className = "btn ghost";
+                btnDelete.style.padding = "4px 8px";
+                btnDelete.style.fontSize = "12px";
+                btnDelete.style.color = "var(--danger)";
+                btnDelete.textContent = "🗑️";
+                btnDelete.title = "Delete Snapshot";
+                btnDelete.addEventListener("click", async () => {
+                    if (confirm(`Delete snapshot file "${s.fileName}"?`)) {
+                        try {
+                            await apiRequest(`/api/admin/snapshots/${encodeURIComponent(s.fileName)}`, {
+                                method: "DELETE"
+                            });
+                            showToastMsg("Snapshot deleted", "success");
+                            loadSnapshotsStatus();
+                        } catch (e) {
+                            showToastMsg("Failed to delete snapshot: " + e.message, "error");
+                        }
+                    }
+                });
+
+                tdActions.appendChild(btnDownload);
+                tdActions.appendChild(btnRestore);
+                tdActions.appendChild(btnDelete);
+
+                tr.appendChild(tdName);
+                tr.appendChild(tdCreated);
+                tr.appendChild(tdSize);
+                tr.appendChild(tdTrigger);
+                tr.appendChild(tdActions);
+
+                snapshotsTbody.appendChild(tr);
+            });
+        }
+    }
+
+    function renderClusterSnapshotStatus(cluster) {
+        const clusterTbody = document.getElementById("cluster-backup-nodes-tbody");
+        if (!cluster || !clusterTbody) return;
+        const nodes = cluster.nodes || [];
+        clusterTbody.innerHTML = "";
+
+        if (nodes.length === 0) {
+            clusterTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 16px;">No cluster nodes detected.</td></tr>`;
+            return;
+        }
+
+        nodes.forEach(n => {
+            const tr = document.createElement("tr");
+
+            const tdNode = document.createElement("td");
+            tdNode.innerHTML = `<strong>${escapeHtml(n.nodeIp)}</strong> ${n.isLocal ? '<span class="badge ghost" style="font-size: 10px; margin-left: 4px;">Local</span>' : ''}`;
+
+            const tdDaily = document.createElement("td");
+            const toggle = document.createElement("input");
+            toggle.type = "checkbox";
+            toggle.checked = !!n.enabled;
+            toggle.style.cursor = "pointer";
+            toggle.addEventListener("change", async () => {
+                const wantEnabled = toggle.checked;
+                try {
+                    await apiRequest("/api/admin/cluster/auto-backup/toggle", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ targetIp: n.nodeIp, enabled: wantEnabled })
+                    });
+                    showToastMsg(`Auto-backup ${wantEnabled ? "enabled" : "disabled"} on ${n.nodeIp}`, "success");
+                    loadSnapshotsStatus();
+                } catch (e) {
+                    showToastMsg("Failed to toggle auto-backup: " + e.message, "error");
+                    toggle.checked = !wantEnabled;
+                }
+            });
+            const label = document.createElement("label");
+            label.style.display = "inline-flex";
+            label.style.alignItems = "center";
+            label.style.gap = "6px";
+            label.style.cursor = "pointer";
+            label.appendChild(toggle);
+            label.appendChild(document.createTextNode(n.enabled ? "02:54 UTC" : "Disabled"));
+            tdDaily.appendChild(label);
+
+            const tdRetention = document.createElement("td");
+            tdRetention.textContent = `${n.retentionDays || 30} days`;
+
+            const tdCount = document.createElement("td");
+            tdCount.textContent = n.snapshotsCount ?? (n.snapshots ? n.snapshots.length : 0);
+
+            const tdStorage = document.createElement("td");
+            tdStorage.textContent = formatBytes(n.totalSnapshotsSizeBytes || 0);
+
+            const tdLast = document.createElement("td");
+            tdLast.textContent = n.lastBackupTimeUtc || "--";
+
+            const tdActions = document.createElement("td");
+            tdActions.style.textAlign = "right";
+
+            const btnNodeSnap = document.createElement("button");
+            btnNodeSnap.type = "button";
+            btnNodeSnap.className = "btn secondary";
+            btnNodeSnap.style.padding = "4px 8px";
+            btnNodeSnap.style.fontSize = "11px";
+            btnNodeSnap.textContent = "📸 Snapshot";
+            btnNodeSnap.addEventListener("click", async () => {
+                if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                    Obsidianscout.setButtonLoading(btnNodeSnap, true, "Saving...");
+                }
+                try {
+                    const res = await apiRequest("/api/admin/cluster/auto-backup/create", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ targetIp: n.nodeIp })
+                    });
+                    showToastMsg(res.message || `Snapshot created on ${n.nodeIp}`, res.success ? "success" : "error");
+                    loadSnapshotsStatus();
+                } catch (e) {
+                    showToastMsg("Failed to trigger snapshot: " + e.message, "error");
+                } finally {
+                    if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                        Obsidianscout.setButtonLoading(btnNodeSnap, false);
+                    }
+                }
+            });
+
+            tdActions.appendChild(btnNodeSnap);
+
+            tr.appendChild(tdNode);
+            tr.appendChild(tdDaily);
+            tr.appendChild(tdRetention);
+            tr.appendChild(tdCount);
+            tr.appendChild(tdStorage);
+            tr.appendChild(tdLast);
+            tr.appendChild(tdActions);
+
+            clusterTbody.appendChild(tr);
+        });
+    }
+
+    function bindSnapshotEvents() {
+        const btnSaveConfig = document.getElementById("btn-save-backup-config");
+        const btnCreateSnapshot = document.getElementById("btn-create-manual-snapshot");
+        const btnRefreshSnapshots = document.getElementById("btn-refresh-snapshots");
+        const chkAutoBackup = document.getElementById("chk-auto-backup-enabled");
+        const inputRetention = document.getElementById("input-retention-days");
+
+        // Restore upload elements
+        const restoreDropZone = document.getElementById("restore-drop-zone");
+        const restoreFileInput = document.getElementById("restore-file-input");
+        const restoreFileInfo = document.getElementById("restore-file-info");
+        const btnExecuteUploadRestore = document.getElementById("btn-execute-upload-restore");
+
+        // Restore confirm modal elements
+        const inputRestoreConfirmText = document.getElementById("input-restore-confirm-text");
+        const btnConfirmExecuteRestore = document.getElementById("btn-confirm-execute-restore");
+        const btnCancelRestore = document.getElementById("btn-cancel-restore");
+        const btnCloseRestoreModal = document.getElementById("btn-close-restore-modal");
+
+        // Save local configuration
+        btnSaveConfig?.addEventListener("click", async () => {
+            const enabled = chkAutoBackup.checked;
+            const retentionDays = parseInt(inputRetention.value, 10) || 30;
+
+            if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                Obsidianscout.setButtonLoading(btnSaveConfig, true, "Saving...");
+            }
+            try {
+                const res = await apiRequest("/api/admin/snapshots/config", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        enabled: enabled,
+                        retentionDays: retentionDays
+                    })
+                });
+                renderLocalSnapshotStatus(res);
+                showToastMsg("Auto-backup settings saved", "success");
+                loadSnapshotsStatus();
+            } catch (err) {
+                showToastMsg("Failed to save settings: " + err.message, "error");
+            } finally {
+                if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                    Obsidianscout.setButtonLoading(btnSaveConfig, false);
+                }
+            }
+        });
+
+        // Trigger manual snapshot on this node
+        btnCreateSnapshot?.addEventListener("click", async () => {
+            if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                Obsidianscout.setButtonLoading(btnCreateSnapshot, true, "Creating snapshot...");
+            }
+            try {
+                const snapshot = await apiRequest("/api/admin/snapshots/create", {
+                    method: "POST"
+                });
+                showToastMsg(`Snapshot created: ${snapshot.fileName}`, "success");
+                loadSnapshotsStatus();
+            } catch (err) {
+                showToastMsg("Failed to create snapshot: " + err.message, "error");
+            } finally {
+                if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                    Obsidianscout.setButtonLoading(btnCreateSnapshot, false);
+                }
+            }
+        });
+
+        btnRefreshSnapshots?.addEventListener("click", async () => {
+            if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                Obsidianscout.setButtonLoading(btnRefreshSnapshots, true, "Refreshing...");
+            }
+            await loadSnapshotsStatus();
+            if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                Obsidianscout.setButtonLoading(btnRefreshSnapshots, false);
+            }
+            showToastMsg("Snapshots refreshed", "info");
+        });
+
+        // Restore file drag & drop
+        restoreDropZone?.addEventListener("click", (e) => {
+            if (e.target !== restoreFileInput) {
+                restoreFileInput.click();
+            }
+        });
+
+        restoreDropZone?.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            restoreDropZone.classList.add("dragover");
+        });
+
+        restoreDropZone?.addEventListener("dragleave", () => {
+            restoreDropZone.classList.remove("dragover");
+        });
+
+        restoreDropZone?.addEventListener("drop", (e) => {
+            e.preventDefault();
+            restoreDropZone.classList.remove("dragover");
+            if (e.dataTransfer.files.length > 0) {
+                restoreFileInput.files = e.dataTransfer.files;
+                handleRestoreFileSelected();
+            }
+        });
+
+        restoreFileInput?.addEventListener("change", () => {
+            handleRestoreFileSelected();
+        });
+
+        function handleRestoreFileSelected() {
+            const file = restoreFileInput.files[0];
+            if (file) {
+                restoreFileInfo.textContent = `Selected snapshot: ${file.name} (${formatBytes(file.size)})`;
+                restoreFileInfo.classList.remove("hidden");
+                btnExecuteUploadRestore.disabled = false;
+            } else {
+                restoreFileInfo.classList.add("hidden");
+                btnExecuteUploadRestore.disabled = true;
+            }
+        }
+
+        btnExecuteUploadRestore?.addEventListener("click", () => {
+            const file = restoreFileInput.files[0];
+            if (!file) return;
+            openRestoreModal("upload", file.name, file);
+        });
+
+        // Confirmation Modal Logic
+        inputRestoreConfirmText?.addEventListener("input", () => {
+            const val = inputRestoreConfirmText.value.trim().toUpperCase();
+            btnConfirmExecuteRestore.disabled = val !== "RESTORE DATABASE";
+        });
+
+        btnCancelRestore?.addEventListener("click", closeRestoreModal);
+        btnCloseRestoreModal?.addEventListener("click", closeRestoreModal);
+
+        btnConfirmExecuteRestore?.addEventListener("click", async () => {
+            if (inputRestoreConfirmText.value.trim().toUpperCase() !== "RESTORE DATABASE") return;
+
+            if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                Obsidianscout.setButtonLoading(btnConfirmExecuteRestore, true, "Restoring database...");
+            }
+            try {
+                let report;
+                if (pendingRestoreType === "named") {
+                    report = await apiRequest(`/api/admin/snapshots/restore/${encodeURIComponent(pendingRestoreFileName)}`, {
+                        method: "POST"
+                    });
+                } else if (pendingRestoreType === "upload" && pendingRestoreFile) {
+                    const formData = new FormData();
+                    formData.append("file", pendingRestoreFile);
+                    if (window.Obsidianscout && typeof Obsidianscout.request === "function") {
+                        report = await Obsidianscout.request("/api/admin/snapshots/restore-upload", {
+                            method: "POST",
+                            body: formData
+                        });
+                    } else {
+                        const res = await fetch("/api/admin/snapshots/restore-upload", {
+                            method: "POST",
+                            body: formData
+                        });
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        report = await res.json();
+                    }
+                }
+
+                closeRestoreModal();
+                if (report) {
+                    showToastMsg(`Database restored successfully! ${report.totalRowsRestored} records restored.`, "success");
+                    alert(`Database restoration complete!\n\nSource: ${report.sourceFile}\nDuration: ${report.durationMs}ms\nTotal Records Restored: ${report.totalRowsRestored}\nSeed Superadmin Preserved: ${report.superadminPreserved ? 'Yes' : 'No'}\n\nThe page will now refresh.`);
+                    window.location.reload();
+                }
+            } catch (err) {
+                console.error("Restoration failed:", err);
+                showToastMsg("Database restoration failed: " + err.message, "error");
+                alert("Database restoration failed: " + err.message);
+            } finally {
+                if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                    Obsidianscout.setButtonLoading(btnConfirmExecuteRestore, false);
+                }
+            }
+        });
+    }
+
+    function openRestoreModal(type, targetName, file = null) {
+        pendingRestoreType = type;
+        pendingRestoreFileName = targetName;
+        pendingRestoreFile = file;
+
+        const restoreModal = document.getElementById("restore-confirm-modal");
+        const targetSnapshotLabel = document.getElementById("restore-target-snapshot-name");
+        const inputRestoreConfirmText = document.getElementById("input-restore-confirm-text");
+        const btnConfirmExecuteRestore = document.getElementById("btn-confirm-execute-restore");
+
+        if (targetSnapshotLabel) targetSnapshotLabel.textContent = targetName;
+        if (inputRestoreConfirmText) inputRestoreConfirmText.value = "";
+        if (btnConfirmExecuteRestore) btnConfirmExecuteRestore.disabled = true;
+
+        restoreModal?.classList.add("show");
+        setTimeout(() => inputRestoreConfirmText?.focus(), 150);
+    }
+
+    function closeRestoreModal() {
+        const restoreModal = document.getElementById("restore-confirm-modal");
+        restoreModal?.classList.remove("show");
+        pendingRestoreType = null;
+        pendingRestoreFileName = null;
+        pendingRestoreFile = null;
     }
 
     function formatBytes(bytes) {

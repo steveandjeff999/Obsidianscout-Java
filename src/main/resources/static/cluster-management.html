@@ -10,18 +10,20 @@
     <link rel="stylesheet" href="/css/app.css" />
     <link rel="manifest" href="/manifest.json" />
     <style>
-        .server-table-card {
-            background: var(--surface-1, #121216);
-            border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-            border-radius: 12px;
-            padding: 20px;
+        .cluster-section-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
             margin-bottom: 24px;
+            box-shadow: var(--shadow);
+            transition: border-color var(--transition-fast);
         }
 
         .server-item {
-            background: var(--surface-2, rgba(255, 255, 255, 0.04));
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 10px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
             padding: 16px;
             margin-bottom: 12px;
             display: flex;
@@ -29,17 +31,17 @@
             justify-content: space-between;
             flex-wrap: wrap;
             gap: 16px;
-            transition: border-color 0.15s ease, background 0.15s ease;
+            transition: border-color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast);
         }
 
         .server-item:hover {
-            border-color: var(--accent, #3b82f6);
-            background: rgba(59, 130, 246, 0.04);
+            border-color: var(--accent);
+            background: var(--surface-3);
         }
 
         .server-item.active-selected {
-            border-color: var(--accent, #3b82f6);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-glow);
         }
 
         .server-info-col {
@@ -55,6 +57,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            color: var(--ink);
         }
 
         .status-dot {
@@ -65,13 +68,13 @@
         }
 
         .status-dot.online {
-            background: #22c55e;
-            box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+            background: var(--success);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
         }
 
         .status-dot.offline {
-            background: #ef4444;
-            box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+            background: var(--danger);
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
         }
 
         .node-badge {
@@ -83,15 +86,20 @@
         }
 
         .node-badge.local {
+            background: rgba(37, 99, 235, 0.12);
+            color: var(--accent);
+            border: 1px solid rgba(37, 99, 235, 0.25);
+        }
+        body.theme-dark .node-badge.local {
             background: rgba(59, 130, 246, 0.2);
             color: #60a5fa;
-            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-color: rgba(59, 130, 246, 0.3);
         }
 
         .node-badge.remote {
-            background: rgba(156, 163, 175, 0.2);
-            color: #d1d5db;
-            border: 1px solid rgba(156, 163, 175, 0.3);
+            background: var(--surface-3);
+            color: var(--muted);
+            border: 1px solid var(--border);
         }
 
         .server-actions-col {
@@ -102,67 +110,123 @@
         }
 
         .btn-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
             padding: 6px 12px;
             border-radius: 6px;
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             border: 1px solid transparent;
-            transition: all 0.15s ease;
+            transition: all var(--transition-fast);
+            user-select: none;
+            text-decoration: none;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-1px);
         }
 
         .btn-action.logs {
+            background: rgba(37, 99, 235, 0.1);
+            color: #1d4ed8;
+            border-color: rgba(37, 99, 235, 0.25);
+        }
+        body.theme-dark .btn-action.logs {
             background: rgba(59, 130, 246, 0.15);
             color: #60a5fa;
             border-color: rgba(59, 130, 246, 0.3);
         }
-
         .btn-action.logs:hover {
-            background: rgba(59, 130, 246, 0.3);
+            background: rgba(37, 99, 235, 0.2);
+        }
+        body.theme-dark .btn-action.logs:hover {
+            background: rgba(59, 130, 246, 0.28);
         }
 
         .btn-action.config {
+            background: rgba(124, 58, 237, 0.1);
+            color: #7c3aed;
+            border-color: rgba(124, 58, 237, 0.25);
+        }
+        body.theme-dark .btn-action.config {
             background: rgba(168, 85, 247, 0.15);
             color: #c084fc;
             border-color: rgba(168, 85, 247, 0.3);
         }
-
         .btn-action.config:hover {
-            background: rgba(168, 85, 247, 0.3);
+            background: rgba(124, 58, 237, 0.2);
+        }
+        body.theme-dark .btn-action.config:hover {
+            background: rgba(168, 85, 247, 0.28);
         }
 
         .btn-action.reinstall {
+            background: rgba(245, 158, 11, 0.12);
+            color: #b45309;
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+        body.theme-dark .btn-action.reinstall {
             background: rgba(245, 158, 11, 0.15);
             color: #fbbf24;
             border-color: rgba(245, 158, 11, 0.3);
         }
-
         .btn-action.reinstall:hover {
-            background: rgba(245, 158, 11, 0.3);
+            background: rgba(245, 158, 11, 0.22);
+        }
+        body.theme-dark .btn-action.reinstall:hover {
+            background: rgba(245, 158, 11, 0.28);
         }
 
         .btn-action.reboot {
+            background: rgba(239, 68, 68, 0.1);
+            color: #dc2626;
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+        body.theme-dark .btn-action.reboot {
             background: rgba(239, 68, 68, 0.15);
             color: #f87171;
             border-color: rgba(239, 68, 68, 0.3);
         }
-
         .btn-action.reboot:hover {
-            background: rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.2);
+        }
+        body.theme-dark .btn-action.reboot:hover {
+            background: rgba(239, 68, 68, 0.28);
         }
 
+        .btn-action.success {
+            background: rgba(16, 185, 129, 0.1);
+            color: #059669;
+            border-color: rgba(16, 185, 129, 0.25);
+        }
+        body.theme-dark .btn-action.success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+        .btn-action.success:hover {
+            background: rgba(16, 185, 129, 0.2);
+        }
+        body.theme-dark .btn-action.success:hover {
+            background: rgba(16, 185, 129, 0.28);
+        }
+
+        /* Modernized Log Console */
         .log-console-card {
-            background: #090d16;
+            background: #0f172a;
             border: 1px solid #1e293b;
-            border-radius: 12px;
+            border-radius: var(--radius);
             overflow: hidden;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--shadow);
             margin-top: 24px;
         }
 
         .log-console-header {
             background: #1e293b;
-            padding: 12px 20px;
+            padding: 14px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -183,7 +247,7 @@
         .log-terminal {
             height: 440px;
             overflow-y: auto;
-            padding: 16px;
+            padding: 16px 20px;
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 12px;
             line-height: 1.6;
@@ -196,8 +260,8 @@
         .log-line {
             display: flex;
             gap: 10px;
-            padding: 2px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
         }
 
         .log-time { color: #64748b; flex-shrink: 0; }
@@ -205,6 +269,92 @@
         .log-level.INFO { color: #38bdf8; }
         .log-level.WARN { color: #fbbf24; }
         .log-level.ERROR { color: #f87171; }
+
+        /* Themed Feature Card Variations */
+        .feature-card-purple {
+            background: rgba(124, 58, 237, 0.04);
+            border: 1px solid rgba(124, 58, 237, 0.2);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+        body.theme-dark .feature-card-purple {
+            background: rgba(168, 85, 247, 0.07);
+            border-color: rgba(168, 85, 247, 0.25);
+        }
+
+        .feature-card-blue {
+            background: rgba(37, 99, 235, 0.04);
+            border: 1px solid rgba(37, 99, 235, 0.2);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+        body.theme-dark .feature-card-blue {
+            background: rgba(59, 130, 246, 0.07);
+            border-color: rgba(59, 130, 246, 0.25);
+        }
+
+        .feature-card-red {
+            background: rgba(239, 68, 68, 0.04);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+        body.theme-dark .feature-card-red {
+            background: rgba(239, 68, 68, 0.07);
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+
+        .feature-card-green {
+            background: rgba(16, 185, 129, 0.04);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+        body.theme-dark .feature-card-green {
+            background: rgba(16, 185, 129, 0.07);
+            border-color: rgba(16, 185, 129, 0.25);
+        }
+
+        .feature-card-amber {
+            background: rgba(245, 158, 11, 0.04);
+            border: 1px solid rgba(245, 158, 11, 0.22);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+        body.theme-dark .feature-card-amber {
+            background: rgba(245, 158, 11, 0.07);
+            border-color: rgba(245, 158, 11, 0.28);
+        }
+
+        /* Modern Import / Restore Dropzone */
+        .import-dropzone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--surface-2);
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .import-dropzone:hover,
+        .import-dropzone.dragover {
+            border-color: var(--accent);
+            background: var(--surface-3);
+        }
+        .import-icon {
+            font-size: 24px;
+        }
+        .import-text {
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .input-hidden {
+            display: none;
+        }
     </style>
 </head>
 <body data-page="cluster-management">
@@ -244,11 +394,11 @@
                 </div>
 
                 <!-- Cluster-Wide Action Header Card -->
-                <div class="card soft mb-24" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3); padding: 18px; border-radius: 12px;">
+                <div class="feature-card-purple mb-24">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div>
-                            <h3 style="margin: 0; font-size: 16px; color: #c084fc;" data-i18n="cluster.wide_actions_title">🌐 Cluster-Wide Actions (All Servers)</h3>
-                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #e9d5ff;" data-i18n="cluster.wide_actions_notice">Perform maintenance or force updates across every node in the CockroachDB cluster at once.</p>
+                            <h3 style="margin: 0; font-size: 16px; color: var(--accent-3);" data-i18n="cluster.wide_actions_title">🌐 Cluster-Wide Actions (All Servers)</h3>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;" data-i18n="cluster.wide_actions_notice">Perform maintenance or force updates across every node in the CockroachDB cluster at once.</p>
                         </div>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <button id="btn-cluster-logs" class="btn-action logs" type="button" style="padding: 8px 14px;" data-i18n="cluster.btn_view_logs">View All Cluster Logs</button>
@@ -260,66 +410,66 @@
                 </div>
 
                 <!-- Node Health Alerts & Enrollment Card (Superadmin only) -->
-                <div id="node-alerts-card" class="card soft mb-24 hidden" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); padding: 18px; border-radius: 12px;">
+                <div id="node-alerts-card" class="feature-card-blue mb-24 hidden">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div>
-                            <h3 style="margin: 0; font-size: 16px; color: #60a5fa;">🔔 Cluster Node Down Notifications</h3>
-                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #93c5fd;">Receive instant FCM Push and Email alerts if any node in the CockroachDB / App cluster goes offline.</p>
+                            <h3 style="margin: 0; font-size: 16px; color: var(--accent);">🔔 Cluster Node Down Notifications</h3>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;">Receive instant FCM Push and Email alerts if any node in the CockroachDB / App cluster goes offline.</p>
                         </div>
                         <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
-                            <label style="color: white; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <label style="color: var(--ink); font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="node-alerts-enroll-toggle" style="width: 18px; height: 18px; cursor: pointer;" />
                                 <span>Enroll in Node Health Alerts</span>
                             </label>
                             <button id="btn-test-node-alert" class="btn-action logs" type="button" style="padding: 8px 14px;">Send Test Alert</button>
                         </div>
                     </div>
-                    <div id="node-alerts-status-msg" style="margin-top: 10px; font-size: 13px; color: #cbd5e1; display: none;"></div>
+                    <div id="node-alerts-status-msg" style="margin-top: 10px; font-size: 13px; color: var(--muted); display: none;"></div>
                 </div>
 
                 <!-- Server Code Error Email Notifications Card (Superadmin only) -->
-                <div id="server-error-alerts-card" class="card soft mb-24 hidden" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); padding: 18px; border-radius: 12px;">
+                <div id="server-error-alerts-card" class="feature-card-red mb-24 hidden">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <h3 style="margin: 0; font-size: 16px; color: #f87171;">Server Code Error Email Notifications</h3>
-                                <span id="error-alerts-status-badge" class="badge" style="background: rgba(100, 116, 139, 0.3); color: #94a3b8; font-size: 11px;">Checking...</span>
+                                <h3 style="margin: 0; font-size: 16px; color: var(--danger);">Server Code Error Email Notifications</h3>
+                                <span id="error-alerts-status-badge" class="badge" style="background: rgba(100, 116, 139, 0.3); color: var(--muted); font-size: 11px;">Checking...</span>
                             </div>
-                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #fca5a5;">
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
                                 When enabled in the database, all cluster servers will read this setting and email enrolled superadmins on the mailing list about unexpected server code exceptions (excluding network and API sync errors).
                             </p>
                         </div>
                         <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
-                            <label style="color: white; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <label style="color: var(--ink); font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="server-error-alerts-toggle" style="width: 18px; height: 18px; cursor: pointer;" />
                                 <span>Email Superadmins on Code Errors</span>
                             </label>
-                            <button id="btn-test-error-alert" class="btn-action logs" type="button" style="padding: 8px 14px; border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">Send Test Alert</button>
-                            <a href="/error-reports" class="btn-action config" style="padding: 8px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; background: rgba(239, 68, 68, 0.15);">
+                            <button id="btn-test-error-alert" class="btn-action logs" type="button" style="padding: 8px 14px;">Send Test Alert</button>
+                            <a href="/error-reports" class="btn-action config" style="padding: 8px 14px;">
                                 <span>View Error Reports</span>
                             </a>
                         </div>
                     </div>
-                    <div id="server-error-alerts-info" style="margin-top: 12px; font-size: 13px; color: #cbd5e1; display: none;">
+                    <div id="server-error-alerts-info" style="margin-top: 12px; font-size: 13px; color: var(--muted); display: none;">
                         <span id="server-error-alerts-recipients">Recipients: Loading...</span>
                     </div>
-                    <div id="server-error-alerts-status-msg" style="margin-top: 10px; font-size: 13px; color: #cbd5e1; display: none;"></div>
+                    <div id="server-error-alerts-status-msg" style="margin-top: 10px; font-size: 13px; color: var(--muted); display: none;"></div>
                 </div>
 
                 <!-- Load Balancer & Capacity-Aware Request Forwarding Card (Superadmin only) -->
-                <div id="load-balancer-card" class="card soft mb-24 hidden" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); padding: 18px; border-radius: 12px;">
+                <div id="load-balancer-card" class="feature-card-green mb-24 hidden">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;">
                         <div>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <h3 style="margin: 0; font-size: 16px; color: #34d399;">⚡ Peer Request Forwarding & Load Balancer</h3>
-                                <span id="lb-status-pill" class="badge" style="background: rgba(100, 116, 139, 0.3); color: #94a3b8; font-size: 11px;">Checking...</span>
+                                <h3 style="margin: 0; font-size: 16px; color: var(--success);">⚡ Peer Request Forwarding & Load Balancer</h3>
+                                <span id="lb-status-pill" class="badge" style="background: rgba(100, 116, 139, 0.3); color: var(--muted); font-size: 11px;">Checking...</span>
                             </div>
-                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #a7f3d0;">
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
                                 Automatically routes incoming requests to the best available server node across the network based on heap availability, CPU load, and network latency.
                             </p>
                         </div>
                         <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                            <label style="color: white; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <label style="color: var(--ink); font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="lb-enable-toggle" style="width: 18px; height: 18px; cursor: pointer;" />
                                 <span>Enable Load Balancing</span>
                             </label>
@@ -334,36 +484,36 @@
                     </div>
 
                     <!-- 30-Minute Activity Timeline & Statistics -->
-                    <div id="lb-activity-card" style="margin-top: 14px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
+                    <div id="lb-activity-card" class="card soft" style="margin-top: 14px; background: var(--surface-2); padding: 14px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 13px; font-weight: 700; color: #f1f5f9;">📊 Last ~30 Min Activity & Load Offloading History</span>
-                                <span id="lb-30m-summary-pill" class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 11px;">0 forwarded</span>
+                                <span style="font-size: 13px; font-weight: 700; color: var(--ink);">📊 Last ~30 Min Activity & Load Offloading History</span>
+                                <span id="lb-30m-summary-pill" class="badge" style="background: rgba(16, 185, 129, 0.2); color: var(--success); font-size: 11px;">0 forwarded</span>
                             </div>
-                            <span style="font-size: 11px; color: #94a3b8;">Rolling 30-minute window</span>
+                            <span style="font-size: 11px; color: var(--muted);">Rolling 30-minute window</span>
                         </div>
                         <div id="lb-activity-list" style="max-height: 220px; overflow-y: auto; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px;">
-                            <div style="color: #64748b; text-align: center; padding: 16px;">No load balancing activity recorded yet in the last 30 minutes.</div>
+                            <div style="color: var(--muted); text-align: center; padding: 16px;">No load balancing activity recorded yet in the last 30 minutes.</div>
                         </div>
                     </div>
 
                     <!-- Overload Simulation Testing Section (Superadmin Only) -->
-                    <div id="lb-stress-card" style="margin-top: 14px; background: rgba(239, 68, 68, 0.07); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 14px;">
+                    <div id="lb-stress-card" class="card soft" style="margin-top: 14px; background: var(--danger-surface); border: 1px solid rgba(239, 68, 68, 0.25); padding: 14px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                             <div>
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 13px; font-weight: 700; color: #f87171;">🔥 Overload Simulation & Load Balancer Verification</span>
-                                    <span id="lb-stress-status-pill" class="badge" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8; font-size: 11px;">Idle</span>
+                                    <span style="font-size: 13px; font-weight: 700; color: var(--danger);">🔥 Overload Simulation & Load Balancer Verification</span>
+                                    <span id="lb-stress-status-pill" class="badge" style="background: rgba(100, 116, 139, 0.2); color: var(--muted); font-size: 11px;">Idle</span>
                                 </div>
-                                <div style="font-size: 12px; color: #fca5a5; margin-top: 2px;">
+                                <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
                                     Simulates high CPU & memory utilization on this server to verify automatic traffic offloading to cluster peers. Automatically stops after 60s max.
                                 </div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <button id="btn-lb-stress-start" class="btn-action" type="button" style="background: #dc2626; color: white; border: none; padding: 8px 14px; font-weight: 600; cursor: pointer; border-radius: 6px;">
+                                <button id="btn-lb-stress-start" class="btn danger" type="button" style="padding: 6px 14px; font-size: 12px;">
                                     Simulate Overload (60s)
                                 </button>
-                                <button id="btn-lb-stress-stop" class="btn-action hidden" type="button" style="background: #475569; color: white; border: none; padding: 8px 14px; font-weight: 600; cursor: pointer; border-radius: 6px;">
+                                <button id="btn-lb-stress-stop" class="btn secondary hidden" type="button" style="padding: 6px 14px; font-size: 12px;">
                                     Stop Overload
                                 </button>
                             </div>
@@ -372,14 +522,14 @@
                 </div>
 
                 <!-- Local Quorum Fallback Mirror Manager Card (Superadmin only) -->
-                <div id="quorum-fallback-card" class="card soft mb-24 hidden" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); padding: 18px; border-radius: 12px;">
+                <div id="quorum-fallback-card" class="feature-card-amber mb-24 hidden">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;">
                         <div>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <h3 style="margin: 0; font-size: 16px; color: #fbbf24;">🛡️ Local Quorum Loss Fallback Mirror Manager</h3>
-                                <span id="qf-global-status-pill" class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fde68a; font-size: 11px;">Active Mirroring</span>
+                                <h3 style="margin: 0; font-size: 16px; color: var(--warning);">🛡️ Local Quorum Loss Fallback Mirror Manager</h3>
+                                <span id="qf-global-status-pill" class="badge" style="background: rgba(245, 158, 11, 0.2); color: var(--warning); font-size: 11px;">Active Mirroring</span>
                             </div>
-                            <p class="notice" style="margin-top: 4px; margin-bottom: 0; color: #fef3c7;">
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
                                 Continually mirrors critical data (Users, scouting data from the last 7 days, settings, and secrets) into local SQLite storage. If CockroachDB cluster quorum is lost, servers automatically serve real-time reads from this local snapshot. Storage can be enabled/disabled per server.
                             </p>
                         </div>
@@ -390,31 +540,151 @@
 
                     <!-- Quorum Fallback Server Nodes Table -->
                     <div style="overflow-x: auto; margin-top: 12px;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <table class="table" style="font-size: 13px;">
                             <thead>
-                                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); color: #94a3b8; text-align: left;">
-                                    <th style="padding: 8px 10px;">Server Node</th>
-                                    <th style="padding: 8px 10px;">Fallback Status</th>
-                                    <th style="padding: 8px 10px;">Snapshot DB Size</th>
-                                    <th style="padding: 8px 10px;">Available Disk Space</th>
-                                    <th style="padding: 8px 10px;">Last Synced</th>
-                                    <th style="padding: 8px 10px; text-align: right;">Per-Server Actions</th>
+                                <tr>
+                                    <th>Server Node</th>
+                                    <th>Fallback Status</th>
+                                    <th>Snapshot DB Size</th>
+                                    <th>Available Disk Space</th>
+                                    <th>Last Synced</th>
+                                    <th style="text-align: right;">Per-Server Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="qf-nodes-tbody">
                                 <tr>
-                                    <td colspan="6" style="padding: 16px; text-align: center; color: #64748b;">Loading Quorum Fallback status...</td>
+                                    <td colspan="6" style="padding: 16px; text-align: center; color: var(--muted);">Loading Quorum Fallback status...</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
+                <!-- Superadmin Automated SQLite Backups & Entire Database Recovery -->
+                <div id="auto-backup-section" class="feature-card-amber mb-24 hidden">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--warning);">
+                                    <span>🛡️</span> Database Snapshots & System Recovery
+                                </h2>
+                                <span id="auto-backup-badge" class="badge" style="background: rgba(100, 116, 139, 0.2); color: var(--muted); font-size: 11px;">Loading...</span>
+                                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--danger); font-size: 11px; font-weight: 700;">SUPERADMIN</span>
+                            </div>
+                            <p class="notice" style="margin-top: 8px; margin-bottom: 0;">
+                                Creates an exact point-in-time snapshot of the entire database stored locally as standalone SQLite files.
+                                Runs automatically at <strong>02:54 UTC daily</strong> when enabled per server node, with configurable automatic deletion of old snapshots.
+                                If the database is ever corrupted or damaged, you can restore all 30 tables directly from any snapshot file.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <button id="btn-create-manual-snapshot" class="btn secondary" type="button" style="font-size: 13px; padding: 6px 14px;">
+                                📸 Create Snapshot Now
+                            </button>
+                            <button id="btn-refresh-snapshots" class="btn ghost" type="button" style="font-size: 13px; padding: 6px 14px;">
+                                🔄 Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Configuration Controls -->
+                    <div class="split mt-20" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+                        <div class="card soft" style="background: var(--surface);">
+                            <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 15px;">Auto-Backup Settings (This Server)</h4>
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px;">
+                                <div>
+                                    <label for="chk-auto-backup-enabled" style="font-weight: 600; display: block; font-size: 14px; cursor: pointer;">Enable Daily Auto-Backup</label>
+                                    <small class="text-muted" style="font-size: 12px;">Trigger daily full snapshot at 02:54 UTC on this node.</small>
+                                </div>
+                                <input type="checkbox" id="chk-auto-backup-enabled" style="width: 20px; height: 20px; cursor: pointer;" />
+                            </div>
+
+                            <div class="field">
+                                <label for="input-retention-days" style="font-size: 13px;">Auto-Deletion Retention (Days)</label>
+                                <input type="number" id="input-retention-days" class="input-wide" min="1" max="3650" value="30" style="padding: 8px 12px;" />
+                                <small class="text-muted" style="display: block; margin-top: 4px; font-size: 11.5px;">Snapshots older than this number of days will be deleted automatically.</small>
+                            </div>
+
+                            <div class="mt-16" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                                <span id="snapshot-schedule-info" style="font-size: 12px; color: var(--muted);">Next run: --</span>
+                                <button id="btn-save-backup-config" class="btn" type="button" style="padding: 6px 14px; font-size: 13px;">Save Settings</button>
+                            </div>
+                        </div>
+
+                        <!-- Restore from Upload Card -->
+                        <div class="card soft" style="background: var(--surface);">
+                            <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 15px; color: var(--danger);">Emergency Restore from File</h4>
+                            <p class="notice" style="margin-bottom: 14px; font-size: 12px;">
+                                Upload any valid ObsidianScout <code>.db</code> snapshot file to restore the entire database.
+                            </p>
+                            <div class="import-dropzone" id="restore-drop-zone" style="padding: 16px; min-height: 80px;">
+                                <span class="import-icon">⚠️</span>
+                                <span class="import-text">Drop .db snapshot file to restore or click to browse</span>
+                                <input type="file" id="restore-file-input" class="input-hidden" accept=".db,.sqlite,.sqlite3" />
+                            </div>
+                            <div id="restore-file-info" class="mt-8 font-medium hidden" style="color: var(--accent); font-size: 12px;"></div>
+                            <div class="mt-12" style="text-align: right;">
+                                <button id="btn-execute-upload-restore" class="btn danger" type="button" disabled style="padding: 6px 16px; font-size: 13px;">
+                                    Restore Database from File
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Available Snapshots Table -->
+                    <div class="mt-24">
+                        <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 15px;">Stored Database Snapshots (Local Server)</h4>
+                        <div style="overflow-x: auto;">
+                            <table class="table" style="font-size: 13px;">
+                                <thead>
+                                    <tr>
+                                        <th>Snapshot File</th>
+                                        <th>Created At (UTC)</th>
+                                        <th>Size</th>
+                                        <th>Trigger</th>
+                                        <th style="text-align: right;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="snapshots-table-body">
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; color: var(--muted); padding: 16px;">Loading snapshots...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Cluster Nodes Auto-Backup Status Table -->
+                    <div class="mt-24" id="cluster-backup-nodes-container">
+                        <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 15px;">Cluster Nodes Backup Status (Per-Server)</h4>
+                        <div style="overflow-x: auto;">
+                            <table class="table" style="font-size: 13px;">
+                                <thead>
+                                    <tr>
+                                        <th>Node IP / Host</th>
+                                        <th>Daily Auto-Backup</th>
+                                        <th>Retention</th>
+                                        <th>Snapshots Count</th>
+                                        <th>Total Storage</th>
+                                        <th>Last Backup</th>
+                                        <th style="text-align: right;">Node Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cluster-backup-nodes-tbody">
+                                    <tr>
+                                        <td colspan="7" style="text-align: center; color: var(--muted); padding: 16px;">Loading cluster status...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Server List Table -->
-                <div class="server-table-card">
+                <div class="cluster-section-card">
                     <h2 style="font-size: 17px; margin-top: 0; margin-bottom: 16px;" data-i18n="cluster.servers_title">Discovered Cluster Servers</h2>
                     <div id="server-list-container">
-                        <div style="color: var(--text-muted); padding: 10px;" data-i18n="cluster.loading_servers">Loading cluster servers...</div>
+                        <div style="color: var(--muted); padding: 10px;" data-i18n="cluster.loading_servers">Loading cluster servers...</div>
                     </div>
                 </div>
 
@@ -451,21 +721,21 @@
     <div id="app-config-modal" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container" style="max-width: 720px; width: 90%;">
             <div class="modal-header">
-                <h2 class="modal-title" style="color: #c084fc;" data-i18n="cluster.modal_config_title">⚙️ Edit app-config.json</h2>
+                <h2 class="modal-title" style="color: var(--accent-3);" data-i18n="cluster.modal_config_title">⚙️ Edit app-config.json</h2>
                 <button type="button" class="modal-close" id="modal-config-cancel-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px;">
-                <p id="modal-config-subtitle" style="margin: 0 0 12px 0; font-size: 13px; color: var(--text-muted, #94a3b8);" data-i18n="cluster.modal_config_subtitle">
+                <p id="modal-config-subtitle" style="margin: 0 0 12px 0; font-size: 13px; color: var(--muted);" data-i18n="cluster.modal_config_subtitle">
                     Editing <strong>config/app-config.json</strong> for target server node.
                 </p>
                 <div style="margin-bottom: 12px;">
                     <textarea id="app-config-editor" spellcheck="false" style="width: 100%; height: 380px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 1.5; background: #090d16; color: #38bdf8; border: 1px solid #334155; padding: 14px; border-radius: 8px; resize: vertical; box-sizing: border-box;"></textarea>
                 </div>
-                <p id="modal-config-error" style="color: #ef4444; font-size: 12px; margin: 0; display: none;"></p>
+                <p id="modal-config-error" style="color: var(--danger); font-size: 12px; margin: 0; display: none;"></p>
             </div>
             <div class="modal-footer">
                 <button id="modal-config-cancel" class="btn ghost" type="button" data-i18n="btn.cancel">Cancel</button>
-                <button id="modal-config-save" class="btn secondary" style="background: #a855f7; color: white;" type="button" data-i18n="cluster.modal_config_save">Save App Config</button>
+                <button id="modal-config-save" class="btn secondary" style="background: var(--accent-3); color: white;" type="button" data-i18n="cluster.modal_config_save">Save App Config</button>
             </div>
         </div>
     </div>
@@ -474,7 +744,7 @@
     <div id="reboot-modal" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container">
             <div class="modal-header">
-                <h2 class="modal-title" style="color: #ef4444;" data-i18n="cluster.modal_reboot_title">⚠️ Confirm Server Reboot</h2>
+                <h2 class="modal-title" style="color: var(--danger);" data-i18n="cluster.modal_reboot_title">⚠️ Confirm Server Reboot</h2>
                 <button type="button" class="modal-close" id="modal-reboot-cancel-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px;">
@@ -493,7 +763,7 @@
     <div id="reinstall-modal" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container">
             <div class="modal-header">
-                <h2 class="modal-title" style="color: #f59e0b;" data-i18n="cluster.modal_reinstall_title">🔄 Confirm Force Reinstall / Update</h2>
+                <h2 class="modal-title" style="color: var(--warning);" data-i18n="cluster.modal_reinstall_title">🔄 Confirm Force Reinstall / Update</h2>
                 <button type="button" class="modal-close" id="modal-reinstall-cancel-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px;">
@@ -503,7 +773,7 @@
             </div>
             <div class="modal-footer">
                 <button id="modal-reinstall-cancel" class="btn ghost" type="button" data-i18n="btn.cancel">Cancel</button>
-                <button id="modal-reinstall-confirm" class="btn secondary" style="background: #f59e0b; color: white;" type="button" data-i18n="cluster.modal_reinstall_confirm">Force Reinstall</button>
+                <button id="modal-reinstall-confirm" class="btn secondary" style="background: var(--warning); color: white;" type="button" data-i18n="cluster.modal_reinstall_confirm">Force Reinstall</button>
             </div>
         </div>
     </div>
@@ -512,44 +782,44 @@
     <div id="load-balancer-modal" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container" style="max-width: 600px; width: 90%;">
             <div class="modal-header">
-                <h2 class="modal-title" style="color: #34d399;">⚙️ Configure Cluster Load Balancer</h2>
+                <h2 class="modal-title" style="color: var(--success);">⚙️ Configure Cluster Load Balancer</h2>
                 <button type="button" class="modal-close" id="modal-lb-cancel-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px;">
-                <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-muted, #94a3b8);">
+                <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--muted);">
                     Settings are stored in CockroachDB and shared by every server node across the cluster.
                 </p>
                 <div style="display: flex; flex-direction: column; gap: 14px;">
                     <div>
-                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Local Preference Margin (Tie Breaker)</label>
-                        <input type="number" id="lb-input-margin" step="0.01" min="0" max="1" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
-                        <small style="color: #94a3b8; font-size: 11px;">Peers must beat local score by at least this margin (e.g. 0.10) to trigger a remote forward.</small>
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Local Preference Margin (Tie Breaker)</label>
+                        <input type="number" id="lb-input-margin" step="0.01" min="0" max="1" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                        <small style="color: var(--muted); font-size: 11px;">Peers must beat local score by at least this margin (e.g. 0.10) to trigger a remote forward.</small>
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Max Expected Latency Ceiling (ms)</label>
-                        <input type="number" id="lb-input-latency" step="1" min="10" max="5000" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
-                        <small style="color: #94a3b8; font-size: 11px;">Latency normalization ceiling for score calculation (default: 150ms).</small>
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Max Expected Latency Ceiling (ms)</label>
+                        <input type="number" id="lb-input-latency" step="1" min="10" max="5000" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                        <small style="color: var(--muted); font-size: 11px;">Latency normalization ceiling for score calculation (default: 150ms).</small>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div>
-                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Probe Interval (s)</label>
-                            <input type="number" id="lb-input-probe" step="1" min="5" max="300" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Probe Interval (s)</label>
+                            <input type="number" id="lb-input-probe" step="1" min="5" max="300" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
                         </div>
                         <div>
-                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Forward Timeout (s)</label>
-                            <input type="number" id="lb-input-timeout" step="1" min="5" max="120" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Forward Timeout (s)</label>
+                            <input type="number" id="lb-input-timeout" step="1" min="5" max="120" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
                         </div>
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Excluded Path Prefixes (comma-separated)</label>
-                        <input type="text" id="lb-input-excluded" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
-                        <small style="color: #94a3b8; font-size: 11px;">Path prefixes that should never be forwarded (e.g. /api/admin, /api/cluster, /cluster-management).</small>
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Excluded Path Prefixes (comma-separated)</label>
+                        <input type="text" id="lb-input-excluded" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
+                        <small style="color: var(--muted); font-size: 11px;">Path prefixes that should never be forwarded (e.g. /api/admin, /api/cluster, /cluster-management).</small>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button id="modal-lb-cancel" class="btn ghost" type="button">Cancel</button>
-                <button id="modal-lb-save" class="btn secondary" style="background: #10b981; color: white;" type="button">Save Cluster Settings</button>
+                <button id="modal-lb-save" class="btn secondary" style="background: var(--success); color: white;" type="button">Save Cluster Settings</button>
             </div>
         </div>
     </div>
@@ -559,13 +829,13 @@
         <div class="modal-container" style="max-width: 900px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <h2 class="modal-title" style="color: #fbbf24; font-size: 16px;">🔍 Fallback SQLite Database Inspector</h2>
-                    <span id="inspect-node-pill" class="badge" style="background: rgba(100, 116, 139, 0.3); color: #94a3b8; font-size: 11px;">Node: -</span>
+                    <h2 class="modal-title" style="color: var(--warning); font-size: 16px;">🔍 Fallback SQLite Database Inspector</h2>
+                    <span id="inspect-node-pill" class="badge" style="background: rgba(100, 116, 139, 0.3); color: var(--muted); font-size: 11px;">Node: -</span>
                 </div>
                 <button type="button" class="modal-close" id="modal-inspect-close-x" aria-label="Close">&#x2715;</button>
             </div>
             <div id="inspect-modal-body" style="padding: 20px; overflow-y: auto; flex: 1;">
-                <div style="text-align: center; color: #94a3b8; padding: 30px;">Loading database contents...</div>
+                <div style="text-align: center; color: var(--muted); padding: 30px;">Loading database contents...</div>
             </div>
             <div class="modal-footer">
                 <button id="modal-inspect-close-btn" class="btn ghost" type="button">Close</button>
@@ -578,70 +848,70 @@
         <div class="modal-container" style="max-width: 650px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <h2 class="modal-title" style="color: #fbbf24; font-size: 16px;">⚙️ Customize Fallback Mirror Cache</h2>
-                    <span id="qf-config-node-pill" class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; font-size: 11px;">Node: -</span>
+                    <h2 class="modal-title" style="color: var(--warning); font-size: 16px;">⚙️ Customize Fallback Mirror Cache</h2>
+                    <span id="qf-config-node-pill" class="badge" style="background: rgba(245, 158, 11, 0.2); color: var(--warning); font-size: 11px;">Node: -</span>
                 </div>
                 <button type="button" class="modal-close" id="modal-qf-config-close-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px; overflow-y: auto; flex: 1;">
-                <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-muted, #94a3b8);">
+                <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--muted);">
                     Customize what datasets and event ranges this specific server node stores locally in SQLite for quorum loss fallback.
                 </p>
 
                 <!-- Mode Selection -->
-                <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
-                    <div style="font-size: 13px; font-weight: 700; color: #f1f5f9; margin-bottom: 10px;">Cache Mode</div>
+                <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                    <div style="font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 10px;">Cache Mode</div>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: #f8fafc; font-size: 13px;">
+                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: var(--ink); font-size: 13px;">
                             <input type="radio" name="qf-mode" id="qf-mode-everything" value="everything" style="margin-top: 3px; cursor: pointer;" />
                             <div>
-                                <span style="font-weight: 700; color: #34d399;">🌐 Mirror Everything (Full Replica)</span>
-                                <div style="font-size: 11px; color: #94a3b8;">Caches all historical competition data, all match/pit/qualitative scouting entries, all teams/matches, users, chat, and configs without date cutoffs. Best for high-storage servers.</div>
+                                <span style="font-weight: 700; color: var(--success);">🌐 Mirror Everything (Full Replica)</span>
+                                <div style="font-size: 11px; color: var(--muted);">Caches all historical competition data, all match/pit/qualitative scouting entries, all teams/matches, users, chat, and configs without date cutoffs. Best for high-storage servers.</div>
                             </div>
                         </label>
-                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: #f8fafc; font-size: 13px;">
+                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: var(--ink); font-size: 13px;">
                             <input type="radio" name="qf-mode" id="qf-mode-selective" value="selective" checked style="margin-top: 3px; cursor: pointer;" />
                             <div>
-                                <span style="font-weight: 700; color: #fbbf24;">🎯 Customized Selective Cache</span>
-                                <div style="font-size: 11px; color: #94a3b8;">Selectively choose specific data categories and time retention windows to conserve disk space.</div>
+                                <span style="font-weight: 700; color: var(--warning);">🎯 Customized Selective Cache</span>
+                                <div style="font-size: 11px; color: var(--muted);">Selectively choose specific data categories and time retention windows to conserve disk space.</div>
                             </div>
                         </label>
                     </div>
                 </div>
 
                 <!-- Selective Categories (Enabled when selective mode is active) -->
-                <div id="qf-selective-options" style="background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
-                    <div style="font-size: 13px; font-weight: 700; color: #f1f5f9; margin-bottom: 10px;">Included Data Categories</div>
+                <div id="qf-selective-options" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                    <div style="font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 10px;">Included Data Categories</div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 12px; cursor: pointer;">
                             <input type="checkbox" id="qf-chk-users" checked />
                             <span>Users & Active Sessions</span>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: default;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 12px; cursor: default;">
                             <input type="checkbox" id="qf-chk-configs" checked disabled />
-                            <span style="color: #34d399; font-weight: 600;">Game, Pit & Qual Form Configs <small style="color: #94a3b8;">(Always)</small></span>
+                            <span style="color: var(--success); font-weight: 600;">Game, Pit & Qual Form Configs <small style="color: var(--muted);">(Always)</small></span>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 12px; cursor: pointer;">
                             <input type="checkbox" id="qf-chk-scouting" checked />
                             <span>Scouting Submissions</span>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 12px; cursor: pointer;">
                             <input type="checkbox" id="qf-chk-api-data" checked />
                             <span>API Schedule & Teams</span>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 12px; cursor: pointer;">
                             <input type="checkbox" id="qf-chk-analytics" checked />
                             <span>Custom Analytics Page Reports</span>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 12px; cursor: pointer;">
                             <input type="checkbox" id="qf-chk-alliances" checked />
                             <span>Alliances & Selections</span>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 12px; cursor: pointer;">
                             <input type="checkbox" id="qf-chk-chat" checked />
                             <span>Chat Groups & History</span>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 12px; cursor: pointer;">
+                        <label style="display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 12px; cursor: pointer;">
                             <input type="checkbox" id="qf-chk-secrets" checked />
                             <span>FCM & Notification Secrets</span>
                         </label>
@@ -649,33 +919,65 @@
 
                     <!-- Retention Window Dropdown -->
                     <div style="margin-top: 14px;">
-                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Competition Event & Scouting Window</label>
-                        <select id="qf-select-retention" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px; font-size: 13px;">
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Competition Event & Scouting Window</label>
+                        <select id="qf-select-retention" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; font-size: 13px;">
                             <option value="7">±7 Days (1 Week Window - Recommended)</option>
                             <option value="14">±14 Days (2 Weeks Window)</option>
                             <option value="30">±30 Days (1 Month Window)</option>
                             <option value="90">±90 Days (Quarter Season)</option>
                             <option value="365">±365 Days (Full Year)</option>
                         </select>
-                        <small style="color: #94a3b8; font-size: 11px;">Mirrors all event schedules, team rosters, and scouting entries occurring within this window of today.</small>
+                        <small style="color: var(--muted); font-size: 11px;">Mirrors all event schedules, team rosters, and scouting entries occurring within this window of today.</small>
                     </div>
                 </div>
 
                 <!-- Sync Interval & Advanced -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div>
-                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">Sync Interval (seconds)</label>
-                        <input type="number" id="qf-input-interval" min="5" max="3600" step="1" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">Sync Interval (seconds)</label>
+                        <input type="number" id="qf-input-interval" min="5" max="3600" step="1" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #f1f5f9;">SQLite File Path</label>
-                        <input type="text" id="qf-input-sqlite-file" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: #090d16; border: 1px solid #334155; color: white; border-radius: 6px;" />
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--ink);">SQLite File Path</label>
+                        <input type="text" id="qf-input-sqlite-file" style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); border-radius: 6px;" />
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button id="modal-qf-config-cancel" class="btn ghost" type="button">Cancel</button>
-                <button id="modal-qf-config-save" class="btn secondary" style="background: #f59e0b; color: white;" type="button">Save Node Configuration</button>
+                <button id="modal-qf-config-save" class="btn secondary" style="background: var(--warning); color: white;" type="button">Save Node Configuration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restore Confirmation Modal -->
+    <div id="restore-confirm-modal" class="modal-backdrop" role="dialog" aria-modal="true">
+        <div class="modal-container" style="border: 2px solid var(--danger); max-width: 500px;">
+            <div class="modal-header">
+                <h3 class="modal-title" style="color: var(--danger); display: flex; align-items: center; gap: 8px; font-size: 18px;">
+                    <span>⚠️</span> Confirm Full Database Restoration
+                </h3>
+                <button id="btn-close-restore-modal" class="modal-close" type="button" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" style="font-size: 13.5px; line-height: 1.5; padding: 0 4px;">
+                <p style="color: var(--danger); font-weight: 600; margin-top: 0;">
+                    WARNING: This operation will completely replace the current contents of all 30 database tables with the records from the selected snapshot.
+                </p>
+                <div class="notice" style="margin-bottom: 16px; background: var(--danger-surface); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-sm); padding: 10px 14px;">
+                    <div>Target snapshot: <strong id="restore-target-snapshot-name" style="font-family: monospace; color: var(--ink);">--</strong></div>
+                </div>
+                <p style="color: var(--ink);">
+                    To verify this action, type <strong style="color: var(--danger); user-select: all;">RESTORE DATABASE</strong> into the box below:
+                </p>
+                <div class="field mt-12">
+                    <input type="text" id="input-restore-confirm-text" class="input-wide" placeholder="Type RESTORE DATABASE here" style="border: 1px solid var(--danger); padding: 8px 12px; font-weight: 600; width: 100%; box-sizing: border-box;" autocomplete="off" />
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
+                <button id="btn-cancel-restore" class="btn ghost" type="button">Cancel</button>
+                <button id="btn-confirm-execute-restore" class="btn danger" type="button" disabled>
+                    Yes, Restore Database
+                </button>
             </div>
         </div>
     </div>
