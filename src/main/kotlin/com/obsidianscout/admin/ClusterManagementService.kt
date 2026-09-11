@@ -993,4 +993,180 @@ object ClusterManagementService {
             }
         }
     }
+
+    suspend fun getClusterAutoBackupStatus(): List<com.obsidianscout.db.AutoBackupNodeStatusDto> = withContext(Dispatchers.IO) {
+        val cluster = getClusterNodes()
+        val localIp = getLocalTailscaleIp()
+
+        coroutineScope {
+            cluster.nodes.map { node ->
+                async {
+                    if (node.isLocal || node.ip == localIp) {
+                        com.obsidianscout.db.SnapshotService.getLocalNodeStatus(localIp).copy(isLocal = true, nodeIp = localIp)
+                    } else {
+                        val appConfig = AppConfigLoader.load()
+                        val appPort = appConfig.server.port
+                        val url = "http://${node.ip}:$appPort/api/admin/cluster/nodes/local/auto-backup/status"
+                        try {
+                            val req = buildSignedClusterRequest(url, "GET")
+                                .timeout(Duration.ofSeconds(4))
+                                .GET()
+                                .build()
+                            val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                            if (resp.statusCode() == 200) {
+                                val remoteStatus = JsonSupport.json.decodeFromString<com.obsidianscout.db.AutoBackupNodeStatusDto>(resp.body())
+                                remoteStatus.copy(isLocal = false, nodeIp = node.ip)
+                            } else {
+                                com.obsidianscout.db.AutoBackupNodeStatusDto(
+                                    nodeIp = node.ip,
+                                    isLocal = false,
+                                    enabled = false,
+                                    isAvailable = false,
+                                    lastBackupStatus = "Unreachable (HTTP ${resp.statusCode()})"
+                                )
+                            }
+                        } catch (e: Exception) {
+                            com.obsidianscout.db.AutoBackupNodeStatusDto(
+                                nodeIp = node.ip,
+                                isLocal = false,
+                                enabled = false,
+                                isAvailable = false,
+                                lastBackupStatus = "Offline (${e.message})"
+                            )
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
+    suspend fun toggleNodeAutoBackup(targetIp: String, enabled: Boolean): ActionResultResponse = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        if (isLocal) {
+            val current = AppConfigLoader.load(forceReload = true).auto_backup
+            val updated = current.copy(enabled = enabled)
+            AppConfigLoader.saveAutoBackupConfig(updated)
+            val msg = if (enabled) "Local auto backup enabled (02:54 UTC daily)." else "Local auto backup disabled."
+            ActionResultResponse(true, msg, localIp)
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/auto-backup/toggle?enabled=$enabled"
+            try {
+                val req = buildSignedClusterRequest(url, "POST")
+                    .timeout(Duration.ofSeconds(6))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build()
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    JsonSupport.json.decodeFromString<ActionResultResponse>(resp.body())
+                } else {
+                    ActionResultResponse(false, "Remote server returned HTTP ${resp.statusCode()}", targetIp)
+                }
+            } catch (e: Exception) {
+                ActionResultResponse(false, "Failed to toggle on $targetIp: ${e.message}", targetIp)
+            }
+        }
+    }
+
+    suspend fun updateNodeAutoBackupConfig(req: com.obsidianscout.routes.UpdateAutoBackupConfigRequest): ActionResultResponse = withContext(Dispatchers.IO) {
+        val targetIp = req.targetIp ?: "local"
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        if (isLocal) {
+            val current = AppConfigLoader.load(forceReload = true).auto_backup
+            val updated = current.copy(
+                enabled = req.enabled ?: current.enabled,
+                retention_days = req.retentionDays?.coerceAtLeast(0) ?: current.retention_days
+            )
+            AppConfigLoader.saveAutoBackupConfig(updated)
+            com.obsidianscout.db.SnapshotService.pruneOldSnapshots(updated.retention_days)
+            ActionResultResponse(true, "Auto backup config updated on $localIp.", localIp)
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val queryParams = mutableListOf<String>()
+            if (req.enabled != null) queryParams.add("enabled=${req.enabled}")
+            if (req.retentionDays != null) queryParams.add("retentionDays=${req.retentionDays}")
+            val qStr = if (queryParams.isNotEmpty()) "?" + queryParams.joinToString("&") else ""
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/auto-backup/config$qStr"
+            try {
+                val reqHttp = buildSignedClusterRequest(url, "PUT")
+                    .timeout(Duration.ofSeconds(6))
+                    .header("Content-Type", "application/json")
+                    .PUT(HttpRequest.BodyPublishers.ofString(JsonSupport.json.encodeToString(com.obsidianscout.routes.UpdateAutoBackupConfigRequest.serializer(), req)))
+                    .build()
+                val resp = getHttpClient().send(reqHttp, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    JsonSupport.json.decodeFromString<ActionResultResponse>(resp.body())
+                } else {
+                    ActionResultResponse(false, "Remote server returned HTTP ${resp.statusCode()}", targetIp)
+                }
+            } catch (e: Exception) {
+                ActionResultResponse(false, "Failed to update configuration on $targetIp: ${e.message}", targetIp)
+            }
+        }
+    }
+
+    suspend fun updateNodeAutoBackupConfig(targetIp: String, retentionDays: Int): ActionResultResponse = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        if (isLocal) {
+            val current = AppConfigLoader.load(forceReload = true).auto_backup
+            val updated = current.copy(retention_days = retentionDays.coerceAtLeast(0))
+            AppConfigLoader.saveAutoBackupConfig(updated)
+            com.obsidianscout.db.SnapshotService.pruneOldSnapshots(updated.retention_days)
+            ActionResultResponse(true, "Auto backup retention updated to $retentionDays days on $localIp.", localIp)
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/auto-backup/config?retentionDays=$retentionDays"
+            try {
+                val req = buildSignedClusterRequest(url, "POST")
+                    .timeout(Duration.ofSeconds(6))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build()
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    JsonSupport.json.decodeFromString<ActionResultResponse>(resp.body())
+                } else {
+                    ActionResultResponse(false, "Remote server returned HTTP ${resp.statusCode()}", targetIp)
+                }
+            } catch (e: Exception) {
+                ActionResultResponse(false, "Failed to update configuration on $targetIp: ${e.message}", targetIp)
+            }
+        }
+    }
+
+    suspend fun createNodeSnapshot(targetIp: String): com.obsidianscout.db.SnapshotResult = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())
+
+        if (isLocal) {
+            com.obsidianscout.db.SnapshotService.createSnapshot(isAutoBackup = false)
+        } else {
+            val appConfig = AppConfigLoader.load()
+            val appPort = appConfig.server.port
+            val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/auto-backup/create"
+            try {
+                val req = buildSignedClusterRequest(url, "POST")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build()
+                val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+                if (resp.statusCode() == 200) {
+                    JsonSupport.json.decodeFromString<com.obsidianscout.db.SnapshotResult>(resp.body())
+                } else {
+                    com.obsidianscout.db.SnapshotResult(false, "Remote server returned HTTP ${resp.statusCode()}")
+                }
+            } catch (e: Exception) {
+                com.obsidianscout.db.SnapshotResult(false, "Failed to create snapshot on $targetIp: ${e.message}")
+            }
+        }
+    }
 }
+

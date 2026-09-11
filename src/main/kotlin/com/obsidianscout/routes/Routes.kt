@@ -72,6 +72,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.response.respondBytes
+import io.ktor.server.response.respondFile
 import io.ktor.server.request.receiveMultipart
 import io.ktor.http.content.PartData
 import io.ktor.http.content.streamProvider
@@ -1501,6 +1502,8 @@ fun Application.configureRoutes() {
                     }
                     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
                     val offset = call.request.queryParameters["offset"]?.toLongOrNull() ?: 0L
+                    val sortBy = call.request.queryParameters["sortBy"]
+                    val sortDir = call.request.queryParameters["sortDir"]
 
                     call.respond(
                         AuthService.listUsers(
@@ -1510,7 +1513,9 @@ fun Application.configureRoutes() {
                             roleFilter = role,
                             programFilter = program,
                             limit = limit,
-                            offset = offset
+                            offset = offset,
+                            sortBy = sortBy,
+                            sortDir = sortDir
                         )
                     )
                 }
@@ -1908,6 +1913,99 @@ fun Application.configureRoutes() {
                     }
 
                     call.respond(report)
+                }
+
+                // SQLite Automated & Manual Snapshots and Database Restoration (Superadmin only)
+                route("/snapshots") {
+                    get {
+                        call.requireSuperAdmin()
+                        call.respond(com.obsidianscout.db.SnapshotService.getLocalNodeStatus())
+                    }
+
+                    put("/config") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<UpdateAutoBackupConfigRequest>()
+                        val currentConfig = AppConfigLoader.load()
+                        val prevBackupConfig = currentConfig.auto_backup ?: com.obsidianscout.config.AutoBackupConfig()
+                        val updatedBackupConfig = prevBackupConfig.copy(
+                            enabled = req.enabled ?: prevBackupConfig.enabled,
+                            retention_days = req.retentionDays?.coerceAtLeast(1) ?: prevBackupConfig.retention_days
+                        )
+                        AppConfigLoader.saveAutoBackupConfig(updatedBackupConfig)
+                        com.obsidianscout.db.SnapshotService.pruneOldSnapshots()
+                        call.respond(com.obsidianscout.db.SnapshotService.getLocalNodeStatus())
+                    }
+
+                    post("/create") {
+                        call.requireSuperAdmin()
+                        val snapshot = com.obsidianscout.db.SnapshotService.createSnapshot(isAutoBackup = false)
+                        call.respond(snapshot)
+                    }
+
+                    get("/download/{fileName}") {
+                        call.requireSuperAdmin()
+                        val fileName = call.parameters["fileName"]
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing fileName")
+                        val file = com.obsidianscout.db.SnapshotService.getSnapshotFile(fileName)
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Snapshot file not found")
+                        call.response.headers.append(
+                            HttpHeaders.ContentDisposition,
+                            "attachment; filename=\"${file.name}\""
+                        )
+                        call.respondFile(file)
+                    }
+
+                    delete("/{fileName}") {
+                        call.requireSuperAdmin()
+                        val fileName = call.parameters["fileName"]
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing fileName")
+                        val success = com.obsidianscout.db.SnapshotService.deleteSnapshot(fileName)
+                        if (!success) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Snapshot file not found or could not be deleted")
+                        }
+                        call.respond(mapOf("success" to true))
+                    }
+
+                    post("/restore/{fileName}") {
+                        call.requireSuperAdmin()
+                        val fileName = call.parameters["fileName"]
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing fileName")
+                        val file = com.obsidianscout.db.SnapshotService.getSnapshotFile(fileName)
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Snapshot file not found")
+                        val report = com.obsidianscout.db.SnapshotService.restoreFromSnapshot(file)
+                        call.respond(report)
+                    }
+
+                    post("/restore-upload") {
+                        call.requireSuperAdmin()
+                        val multipart = call.receiveMultipart()
+                        var uploadedFile: File? = null
+                        while (true) {
+                            val part = multipart.readPart() ?: break
+                            if (part is PartData.FileItem) {
+                                val tempFile = File.createTempFile("restore-upload-", ".db")
+                                part.streamProvider().use { input ->
+                                    tempFile.outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                                uploadedFile = tempFile
+                            }
+                            part.dispose()
+                        }
+
+                        val file = uploadedFile ?: throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.BadRequest,
+                            "No SQLite backup file uploaded"
+                        )
+
+                        try {
+                            val report = com.obsidianscout.db.SnapshotService.restoreFromSnapshot(file)
+                            call.respond(report)
+                        } finally {
+                            file.delete()
+                        }
+                    }
                 }
             } // end /admin route
 
@@ -2803,14 +2901,14 @@ fun Application.configureRoutes() {
 
             route("/contact") {
                 post {
-                    val session = call.requireSession()
+                    val session = call.sessions.get<UserSession>()
                     val request = call.receive<ContactRequest>()
                     
                     val smtp = SettingsService.getSmtpSettings()
                     if (smtp.host.isBlank()) {
                         throw com.obsidianscout.auth.ApiException(
                             HttpStatusCode.ServiceUnavailable,
-                            "SMTP email settings are not configured. Please contact a superadmin."
+                            "SMTP email settings are not configured. Please contact obsidianscoutfrc@gmail.com directly."
                         )
                     }
                     
@@ -2821,9 +2919,13 @@ fun Application.configureRoutes() {
                         else -> request.type
                     }
                     
-                    val subject = "ObsidianScout: ${formattedType} from ${session.username} (Team ${session.teamNumber})"
-                    val userEmailInfo = session.email?.let { "<strong>Account Email:</strong> ${it}<br/>" } ?: ""
+                    val teamDisplay = session?.let { "Team ${it.teamNumber}" } 
+                        ?: (request.teamNumber?.let { "Team $it" } ?: "Unauthenticated / Locked Out")
+                    val senderDisplay = session?.username ?: request.name.ifBlank { "Visitor" }
+                    val subject = "ObsidianScout: ${formattedType} from ${senderDisplay} (${teamDisplay})"
+                    val userEmailInfo = session?.email?.let { "<strong>Account Email:</strong> ${it}<br/>" } ?: ""
                     val replyToInfo = if (request.replyToEmail.isNullOrBlank()) "" else "<strong>Reply-To Email:</strong> ${request.replyToEmail}<br/>"
+                    val loggedInInfo = session?.let { "${it.username} (Team ${it.teamNumber})" } ?: "None (Unauthenticated / Locked Out Visitor)"
                     
                     val body = """
                         <html>
@@ -2832,7 +2934,7 @@ fun Application.configureRoutes() {
                                 <h2 style="color: #4f46e5; border-bottom: 2px solid #edf2f7; padding-bottom: 10px;">New Contact Form Submission</h2>
                                 <p><strong>Type:</strong> ${formattedType}</p>
                                 <p><strong>Sender Name:</strong> ${request.name}</p>
-                                <p><strong>Logged-in Account:</strong> ${session.username} (Team ${session.teamNumber})</p>
+                                <p><strong>Logged-in Account:</strong> ${loggedInInfo}</p>
                                 <p>${userEmailInfo}</p>
                                 <p>${replyToInfo}</p>
                                 <p><strong>Message:</strong></p>
@@ -3175,6 +3277,49 @@ fun Application.configureRoutes() {
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.syncQuorumFallback(localIp))
                     }
+
+                    // Automated SQLite Backup Management (Per-Server / Cluster-Wide)
+                    get("/auto-backup") {
+                        call.requireAdminOrClusterAuth()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterAutoBackupStatus())
+                    }
+                    post("/auto-backup/toggle") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<ToggleAutoBackupRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.toggleNodeAutoBackup(req.targetIp, req.enabled))
+                    }
+                    put("/auto-backup/config") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<UpdateAutoBackupConfigRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.updateNodeAutoBackupConfig(req))
+                    }
+                    post("/auto-backup/create") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<TargetNodeActionRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.createNodeSnapshot(req.targetIp))
+                    }
+                    get("/nodes/local/auto-backup/status") {
+                        call.requireAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.db.SnapshotService.getLocalNodeStatus().copy(isLocal = true, nodeIp = localIp))
+                    }
+                    post("/nodes/local/auto-backup/toggle") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val enabled = call.request.queryParameters["enabled"]?.toBooleanStrictOrNull() ?: true
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.toggleNodeAutoBackup(localIp, enabled))
+                    }
+                    put("/nodes/local/auto-backup/config") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<UpdateAutoBackupConfigRequest>()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.updateNodeAutoBackupConfig(req.copy(targetIp = localIp)))
+                    }
+                    post("/nodes/local/auto-backup/create") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.createNodeSnapshot(localIp))
+                    }
                 }
 
                 route("/storage") {
@@ -3513,6 +3658,7 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         themes = themes,
         activeThemeName = activeThemeName,
         setupWizardCompleted = setupWizardCompleted,
+        registrationLocked = registrationLocked,
         program = program
     )
 }
@@ -3538,6 +3684,7 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         themes = themes,
         activeThemeName = activeThemeName,
         setupWizardCompleted = setupWizardCompleted,
+        registrationLocked = registrationLocked,
         program = program
     )
 }

@@ -9,6 +9,8 @@ let currentSearch = "";
 let currentTeamFilter = "";
 let currentRoleFilter = "";
 let currentProgramFilter = "";
+let currentSortBy = "team";
+let currentSortDir = "asc";
 let loadUsersController = null;
 let currentUsers = [];
 
@@ -351,6 +353,40 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // ── Sorting wiring ────────────────────────────────────────────────────────
+    function updateHeaderSortIndicators() {
+        document.querySelectorAll("#user-table th.sortable").forEach((th) => {
+            const col = th.getAttribute("data-sort");
+            const indicator = th.querySelector(".sort-indicator i");
+            if (col === currentSortBy) {
+                th.classList.add("sorted");
+                if (indicator) {
+                    indicator.className = currentSortDir === "asc" ? "fa-solid fa-arrow-up" : "fa-solid fa-arrow-down";
+                }
+            } else {
+                th.classList.remove("sorted");
+                if (indicator) {
+                    indicator.className = "fa-solid fa-sort";
+                }
+            }
+        });
+    }
+
+    document.querySelectorAll("#user-table th.sortable").forEach((th) => {
+        th.addEventListener("click", () => {
+            const col = th.getAttribute("data-sort");
+            if (currentSortBy === col) {
+                currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+            } else {
+                currentSortBy = col;
+                currentSortDir = (col === "created" || col === "lastLogin") ? "desc" : "asc";
+            }
+            updateHeaderSortIndicators();
+            loadUsers(me, openModal, false);
+        });
+    });
+    updateHeaderSortIndicators();
+
     await loadUsers(me, openModal);
 });
 
@@ -359,7 +395,7 @@ async function loadUsers(me, openModal, append = false) {
     if (!tbody) return;
 
     if (!append) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading users...</div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading users...</div></td></tr>';
         offset = 0;
         currentUsers = [];
     }
@@ -378,6 +414,8 @@ async function loadUsers(me, openModal, append = false) {
         if (currentTeamFilter) params.append("teamNumber", currentTeamFilter);
         if (currentRoleFilter) params.append("role", currentRoleFilter);
         if (currentProgramFilter) params.append("program", currentProgramFilter);
+        if (currentSortBy) params.append("sortBy", currentSortBy);
+        if (currentSortDir) params.append("sortDir", currentSortDir);
 
         const users = await Obsidianscout.request(`/api/admin/users?${params.toString()}`, {
             signal: signal
@@ -388,7 +426,7 @@ async function loadUsers(me, openModal, append = false) {
         }
 
         if (users.length === 0 && !append) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 24px;">No users found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 24px;">No users found.</td></tr>';
             return;
         }
 
@@ -402,6 +440,9 @@ async function loadUsers(me, openModal, append = false) {
                 || (user.role !== "SUPERADMIN" && Number(user.teamNumber) === Number(me.teamNumber));
 
             const emailDisplay = user.email || `<span style="color: var(--muted); font-style: italic;">None</span>`;
+            const lastLoginDisplay = user.lastLogin 
+                ? new Date(user.lastLogin).toLocaleString() 
+                : `<span style="color: var(--muted); font-style: italic;">${t("users.never", "Never")}</span>`;
 
             const row = document.createElement("tr");
             const teamDisplay = Obsidianscout.isSuperAdmin(me.role) ? `[${user.program}] ${user.teamNumber}` : user.teamNumber;
@@ -411,6 +452,7 @@ async function loadUsers(me, openModal, append = false) {
                 <td>${teamDisplay}</td>
                 <td>${roleLabel}</td>
                 <td>${new Date(user.createdAt).toLocaleDateString()}</td>
+                <td>${lastLoginDisplay}</td>
                 <td>
                     ${canEdit ? `<button class="edit-btn" data-action="edit" data-id="${user.id}">Edit</button>` : ""}
                     ${canEdit ? `<button class="delete-btn" data-action="delete" data-id="${user.id}" style="margin-left: 8px;">Delete</button>` : ""}
@@ -435,7 +477,7 @@ async function loadUsers(me, openModal, append = false) {
         }
         console.error("Failed to load users:", error);
         if (!append) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 24px;">
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px;">
                 <div class="retry-error-text" style="margin-bottom: 12px;">Failed to load users: ${error.message}</div>
                 <button class="retry-btn" type="button" id="retry-users-btn">Retry</button>
             </td></tr>`;

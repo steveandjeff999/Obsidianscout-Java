@@ -306,4 +306,67 @@ class AuthServiceTest {
         }
         assertEquals(HttpStatusCode.Forbidden, ex.status)
     }
+
+    @Test
+    fun testTeamRegistrationLockBlocksSelfRegistration() {
+        // 1. Initial admin registers on new team (allowed)
+        val admin = AuthService.register(
+            username = "admin5555",
+            teamNumber = 5555,
+            password = "Password123!",
+            program = "FRC",
+            role = UserRole.ADMIN
+        )
+        assertNotNull(admin)
+
+        // 2. Admin locks registration for team 5555
+        val settings = com.obsidianscout.integrations.SettingsService.getSettings(5555, "FRC")
+        com.obsidianscout.integrations.SettingsService.updateSettings(5555, settings.copy(registrationLocked = true))
+
+        // 3. Self-registration attempt on team 5555 should fail with Forbidden
+        val ex = assertFailsWith<ApiException> {
+            AuthService.register(
+                username = "new_scout",
+                teamNumber = 5555,
+                password = "Password123!",
+                program = "FRC",
+                role = UserRole.SCOUT
+            )
+        }
+        assertEquals(HttpStatusCode.Forbidden, ex.status)
+        assertEquals("Registration is locked for this team. Please contact a team administrator to create an account.", ex.message)
+
+        // 4. Admin can still create user on team 5555 via createUser
+        val adminSession = UserSession(
+            userId = admin.id,
+            username = admin.username,
+            teamNumber = admin.teamNumber,
+            program = admin.program,
+            role = admin.role
+        )
+        val adminCreatedUser = AuthService.createUser(
+            callerSession = adminSession,
+            username = "admin_added_scout",
+            teamNumber = 5555,
+            password = "Password123!",
+            program = "FRC",
+            role = UserRole.SCOUT
+        )
+        assertNotNull(adminCreatedUser)
+        assertEquals("admin_added_scout", adminCreatedUser.username)
+
+        // 5. Admin unlocks registration
+        com.obsidianscout.integrations.SettingsService.updateSettings(5555, settings.copy(registrationLocked = false))
+
+        // 6. Self-registration now succeeds
+        val unlockedScout = AuthService.register(
+            username = "unlocked_scout",
+            teamNumber = 5555,
+            password = "Password123!",
+            program = "FRC",
+            role = UserRole.SCOUT
+        )
+        assertNotNull(unlockedScout)
+        assertEquals("unlocked_scout", unlockedScout.username)
+    }
 }

@@ -300,6 +300,7 @@ data class ApiSettingsPayload(
     val themes: List<com.obsidianscout.integrations.ThemeSettings> = emptyList(),
     val activeThemeName: String = "",
     val setupWizardCompleted: Boolean = false,
+    val registrationLocked: Boolean = false,
     val program: String = "FRC"
 )
 
@@ -686,6 +687,7 @@ data class ContactRequest(
     val type: String,
     val name: String,
     val replyToEmail: String? = null,
+    val teamNumber: Int? = null,
     val message: String
 )
 
@@ -1010,6 +1012,19 @@ data class TeamSecretResponse(
     val success: Boolean = true,
     val teamSecret: String,
     val teamNumber: Int
+)
+
+@Serializable
+data class UpdateAutoBackupConfigRequest(
+    val enabled: Boolean? = null,
+    val retentionDays: Int? = null,
+    val targetIp: String? = null
+)
+
+@Serializable
+data class ToggleAutoBackupRequest(
+    val targetIp: String = "local",
+    val enabled: Boolean = true
 )
 
 

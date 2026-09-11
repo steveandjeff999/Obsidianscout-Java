@@ -49,6 +49,30 @@
             color: var(--muted);
             margin-top: .2rem;
         }
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.15s, background-color 0.15s;
+            white-space: nowrap;
+        }
+        th.sortable:hover {
+            color: var(--accent);
+            background: var(--surface-2);
+        }
+        th.sortable .sort-indicator {
+            display: inline-block;
+            margin-left: 6px;
+            font-size: 11px;
+            opacity: 0.4;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        th.sortable:hover .sort-indicator {
+            opacity: 0.8;
+        }
+        th.sortable.sorted .sort-indicator {
+            opacity: 1;
+            color: var(--accent);
+        }
     </style>
     <link rel="manifest" href="/manifest.json" />
 </head>
@@ -147,11 +171,12 @@
                         <table id="user-table" class="table">
                             <thead>
                                 <tr>
-                                    <th data-i18n="index.username">Username</th>
-                                    <th data-i18n="index.email">Email</th>
-                                    <th data-i18n="all-data.team">Team</th>
-                                    <th data-i18n="index.role">Role</th>
-                                    <th data-i18n="users.created">Created</th>
+                                    <th class="sortable" data-sort="username"><span data-i18n="index.username">Username</span><span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                                    <th class="sortable" data-sort="email"><span data-i18n="index.email">Email</span><span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                                    <th class="sortable" data-sort="team"><span data-i18n="all-data.team">Team</span><span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                                    <th class="sortable" data-sort="role"><span data-i18n="index.role">Role</span><span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                                    <th class="sortable" data-sort="created"><span data-i18n="users.created">Created</span><span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                                    <th class="sortable" data-sort="lastLogin"><span data-i18n="users.last_login">Last Login</span><span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
                                     <th></th>
                                 </tr>
                             </thead>

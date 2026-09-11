@@ -1152,6 +1152,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         role = UserRole.SCOUT,
                         email = req.email
                     )
+                } catch (e: com.obsidianscout.auth.ApiException) {
+                    throw MobileApiException(e.status, e.message ?: "Registration failed", if (e.status == HttpStatusCode.Forbidden) "REGISTRATION_LOCKED" else "REGISTRATION_FAILED")
                 } catch (e: Exception) {
                     throw MobileApiException(HttpStatusCode.Conflict, e.message ?: "Username exists", "USERNAME_EXISTS")
                 }

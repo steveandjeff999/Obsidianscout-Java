@@ -323,6 +323,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             setChecked("settings-epa", loadedSettings.useStatboticsEpa);
             setChecked("settings-opr", loadedSettings.useTbaOpr);
             setChecked("settings-chat", loadedSettings.chatEnabled);
+            setChecked("settings-lock-registration", loadedSettings.registrationLocked || false);
 
             const isFtc = me.program === "FTC";
             const yearNote = document.getElementById("settings-year-note");
@@ -555,6 +556,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.useStatboticsEpa = getChecked("settings-epa");
                     loadedSettings.useTbaOpr = getChecked("settings-opr");
                     loadedSettings.chatEnabled = getChecked("settings-chat");
+                    loadedSettings.registrationLocked = getChecked("settings-lock-registration");
                     loadedSettings.statboticsBaseUrl = getVal("settings-statbotics-url").trim() || "https://api.statbotics.io";
                     loadedSettings.apiKeys = {
                         tbaKey: getVal("settings-tba-key").trim(),
@@ -685,6 +687,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.analyticsPages = analyticsPages;
                     loadedSettings.adminPages = adminPages;
                     loadedSettings.chatEnabled = getChecked("settings-chat");
+                    loadedSettings.registrationLocked = getChecked("settings-lock-registration");
                     loadedSettings.setupWizardCompleted = true;
                     Obsidianscout.safeSetItem("obsidianscout:setup-wizard-dismissed", "true");
 

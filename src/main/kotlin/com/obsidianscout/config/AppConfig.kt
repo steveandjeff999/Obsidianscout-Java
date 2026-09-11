@@ -24,7 +24,8 @@ data class AppConfig(
     val site_url: String = "https://kotlin.obsidianscout.com",
     val current_version: String = "0.5.4.3", // The version this server is running — update this on each release
     val gist_update: GistUpdateConfig = GistUpdateConfig(),
-    val quorum_fallback: QuorumFallbackConfig = QuorumFallbackConfig()
+    val quorum_fallback: QuorumFallbackConfig = QuorumFallbackConfig(),
+    val auto_backup: AutoBackupConfig = AutoBackupConfig()
 ) {
     fun getEffectiveSiteUrl(): String {
         val trimmed = site_url.trim()
@@ -53,6 +54,14 @@ data class QuorumFallbackConfig(
     val mirror_chat: Boolean = true,
     val mirror_notifications_secrets: Boolean = true,
     val mirror_custom_analytics: Boolean = true
+)
+
+@Serializable
+data class AutoBackupConfig(
+    val enabled: Boolean = false,
+    val target_time_utc: String = "02:54",
+    val retention_days: Int = 30,
+    val storage_directory: String = "data/snapshots"
 )
 
 @Serializable
@@ -181,6 +190,9 @@ object AppConfigLoader {
             if (!text.contains("quorum_fallback")) {
                 needsWrite = true
             }
+            if (!text.contains("auto_backup")) {
+                needsWrite = true
+            }
             if (needsWrite) {
                 val updatedText = JsonSupport.json.encodeToString(config)
                 Files.writeString(path, updatedText)
@@ -198,6 +210,23 @@ object AppConfigLoader {
 
     fun updateCache(config: AppConfig) {
         cachedConfig = config
+    }
+
+    fun saveAutoBackupConfig(newConfig: AutoBackupConfig, path: Path = defaultPath) {
+        synchronized(this) {
+            try {
+                val current = load(path, forceReload = true)
+                val updated = current.copy(auto_backup = newConfig)
+                val updatedText = JsonSupport.json.encodeToString(updated)
+                Files.writeString(path, updatedText)
+                if (path == defaultPath) {
+                    cachedConfig = updated
+                }
+                println("[ObsidianScout] Saved updated auto backup configuration to ${path.toAbsolutePath()}")
+            } catch (e: Exception) {
+                println("[ObsidianScout] Warning: Failed to save auto backup configuration: ${e.message}")
+            }
+        }
     }
 
     /**

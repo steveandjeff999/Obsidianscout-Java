@@ -59,7 +59,8 @@ data class UserRecord(
     val notificationPreference: String = "all",
     val tourProgress: String? = null,
     val nodeAlertsEnabled: Boolean = false,
-    val bugReportPreference: String = "ask"
+    val bugReportPreference: String = "ask",
+    val lastLogin: String? = null
 )
 
 @Serializable
@@ -146,7 +147,21 @@ object AuthService {
             // so it does not hold a HikariCP connection for its full duration.
             BCrypt.verifyer().verify(password.toCharArray(), hash).verified
         }
-        return if (verified) record else null
+        if (verified) {
+            val userUuid = runCatching { UUID.fromString(record.id) }.getOrNull()
+            val now = Instant.now()
+            if (userUuid != null && !com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                try {
+                    transaction {
+                        Users.update({ Users.id eq userUuid }) {
+                            it[lastLogin] = now
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+            return record.copy(lastLogin = now.toString())
+        }
+        return null
     }
 
     private val selfRegisterRoles = setOf(UserRole.ADMIN, UserRole.ANALYTICS, UserRole.SCOUT)
@@ -168,6 +183,20 @@ object AuthService {
         // does not hold a HikariCP connection.
         val hash = hashPassword(password)
         return transaction {
+            val teamHasUsers = Users
+                .selectAll().where { (Users.teamNumber eq teamNumber) and (Users.program eq program) }
+                .limit(1)
+                .any()
+            if (teamHasUsers) {
+                val teamSettings = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber, program)
+                if (teamSettings.registrationLocked) {
+                    throw ApiException(
+                        HttpStatusCode.Forbidden,
+                        "Registration is locked for this team. Please contact a team administrator to create an account."
+                    )
+                }
+            }
+
             val existing = Users
                 .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) and (Users.program eq program) }
                 .limit(1)
@@ -182,6 +211,7 @@ object AuthService {
                 it[Users.passwordHash] = hash
                 it[Users.role] = role.name
                 it[Users.createdAt] = Instant.now()
+                it[Users.lastLogin] = Instant.now()
                 it[Users.email] = email?.takeIf { it.isNotBlank() }
             }
 
@@ -217,9 +247,11 @@ object AuthService {
         roleFilter: UserRole? = null,
         programFilter: String? = null,
         limit: Int = 50,
-        offset: Long = 0L
+        offset: Long = 0L,
+        sortBy: String? = null,
+        sortDir: String? = null
     ): List<UserRecord> {
-        println("listUsers: search=$search, teamFilter=$teamFilter, roleFilter=$roleFilter, programFilter=$programFilter, limit=$limit, offset=$offset")
+        println("listUsers: search=$search, teamFilter=$teamFilter, roleFilter=$roleFilter, programFilter=$programFilter, limit=$limit, offset=$offset, sortBy=$sortBy, sortDir=$sortDir")
         return readTransaction {
             addLogger(StdOutSqlLogger)
             val query = when (callerSession.role) {
@@ -252,8 +284,30 @@ object AuthService {
                 query.andWhere { Users.role eq roleFilter.name }
             }
 
+            val isDesc = sortDir?.equals("desc", ignoreCase = true) == true
+            val order = if (isDesc) SortOrder.DESC else SortOrder.ASC
+
+            val orderPairs = mutableListOf<Pair<org.jetbrains.exposed.sql.Expression<*>, SortOrder>>()
+            when (sortBy?.lowercase()) {
+                "username" -> orderPairs.add(Users.username.lowerCase() to order)
+                "email" -> orderPairs.add(Users.email.lowerCase() to order)
+                "team", "teamnumber" -> {
+                    orderPairs.add(Users.teamNumber to order)
+                    orderPairs.add(Users.username.lowerCase() to SortOrder.ASC)
+                }
+                "role" -> orderPairs.add(Users.role to order)
+                "created", "createdat" -> orderPairs.add(Users.createdAt to order)
+                "lastlogin" -> orderPairs.add(Users.lastLogin to order)
+                else -> {
+                    orderPairs.add(Users.teamNumber to SortOrder.ASC)
+                    orderPairs.add(Users.username.lowerCase() to SortOrder.ASC)
+                }
+            }
+            // Always append primary key id as tie-breaker for deterministic pagination
+            orderPairs.add(Users.id to SortOrder.ASC)
+
             query
-                .orderBy(Users.teamNumber to SortOrder.ASC, Users.username to SortOrder.ASC)
+                .orderBy(*orderPairs.toTypedArray())
                 .limit(limit, offset = offset)
                 .map { rowToUser(it) }
         }
@@ -698,7 +752,8 @@ object AuthService {
             notificationPreference = row[Users.notificationPreference],
             tourProgress = row[Users.tourProgress],
             nodeAlertsEnabled = row.getOrNull(Users.nodeAlertsEnabled) ?: false,
-            bugReportPreference = row.getOrNull(Users.bugReportPreference) ?: "ask"
+            bugReportPreference = row.getOrNull(Users.bugReportPreference) ?: "ask",
+            lastLogin = row.getOrNull(Users.lastLogin)?.toString()
         )
     }
 

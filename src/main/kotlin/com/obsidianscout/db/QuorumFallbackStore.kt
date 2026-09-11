@@ -557,6 +557,7 @@ object QuorumFallbackStore {
                         it[tourProgress] = row[Users.tourProgress]
                         it[nodeAlertsEnabled] = row[Users.nodeAlertsEnabled]
                         it[bugReportPreference] = row[Users.bugReportPreference]
+                        it[lastLogin] = row[Users.lastLogin]
                     }
                 }
 

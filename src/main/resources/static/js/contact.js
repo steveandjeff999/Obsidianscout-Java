@@ -1,14 +1,35 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    Obsidianscout.initTheme();
-    const me = await Obsidianscout.requireAuth();
-    if (!me) {
-        return;
+    if (window.Obsidianscout && typeof Obsidianscout.initTheme === 'function') {
+        Obsidianscout.initTheme();
     }
-    Obsidianscout.setUserBadge(me);
-    Obsidianscout.setActiveNav();
-    Obsidianscout.adjustNavForRole(me);
-    Obsidianscout.wireLogout();
-    Obsidianscout.wireThemeToggle();
+
+    let me = null;
+    try {
+        if (window.Obsidianscout && typeof Obsidianscout.checkLoginStatus === 'function') {
+            const loggedIn = await Obsidianscout.checkLoginStatus();
+            if (loggedIn) {
+                me = await Obsidianscout.getMe();
+            }
+        }
+    } catch (e) {
+        console.warn("Contact auth check failed:", e);
+    }
+
+    if (window.Obsidianscout && typeof Obsidianscout.wireThemeToggle === 'function') {
+        Obsidianscout.wireThemeToggle();
+    }
+
+    if (me) {
+        document.body.classList.remove("is-guest");
+        if (window.Obsidianscout) {
+            Obsidianscout.setUserBadge(me);
+            Obsidianscout.setActiveNav();
+            Obsidianscout.adjustNavForRole(me);
+            Obsidianscout.wireLogout();
+        }
+    } else {
+        document.body.classList.add("is-guest");
+    }
 
     // Populate pre-filled fields
     const nameInput = document.getElementById("contact-name");
@@ -19,9 +40,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     const submitSpinner = document.getElementById("submit-spinner");
     const btnText = document.getElementById("btn-text");
 
-    if (nameInput) nameInput.value = me.username || "";
-    if (emailInput) emailInput.value = me.email || "";
-    if (teamInput) teamInput.value = me.teamNumber || "";
+    if (nameInput) nameInput.value = me ? (me.username || "") : "";
+    if (emailInput) emailInput.value = me ? (me.email || "") : "";
+    if (teamInput) {
+        if (me) {
+            teamInput.value = me.teamNumber || "";
+        } else {
+            teamInput.removeAttribute("readonly");
+            teamInput.removeAttribute("disabled");
+            teamInput.setAttribute("placeholder", "e.g. 5454 (optional)");
+        }
+    }
 
     if (form) {
         form.addEventListener("submit", async (e) => {
@@ -38,12 +67,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             const message = document.getElementById("contact-message").value;
 
             try {
+                const teamVal = teamInput && teamInput.value ? parseInt(teamInput.value.trim(), 10) : null;
                 const response = await Obsidianscout.request("/api/contact", {
                     method: "POST",
                     json: {
                         type: type,
                         name: name,
                         replyToEmail: replyToEmail || null,
+                        teamNumber: isNaN(teamVal) ? null : teamVal,
                         message: message
                     }
                 });

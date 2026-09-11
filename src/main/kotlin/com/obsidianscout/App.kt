@@ -543,6 +543,7 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.admin.PeerLoadRouter.start(appConfig)
                 com.obsidianscout.db.QuorumFallbackStore.init(appConfig)
                 com.obsidianscout.db.QuorumFallbackStore.start()
+                com.obsidianscout.db.AutoBackupScheduler.start(appConfig)
                 println("[Database] Background database initialization completed successfully.")
                 
                 // Mark update boot successful once startup completes
@@ -563,6 +564,7 @@ fun Application.module(appConfig: AppConfig) {
     }
 
     environment.monitor.subscribe(ApplicationStopped) {
+        com.obsidianscout.db.AutoBackupScheduler.stop()
         com.obsidianscout.db.QuorumFallbackStore.stop()
         com.obsidianscout.admin.PeerLoadRouter.stop()
         com.obsidianscout.admin.NodeMonitoringService.stop()

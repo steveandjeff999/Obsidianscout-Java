@@ -110,6 +110,12 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        const lockedNotice = document.getElementById("register-locked-notice");
+        if (lockedNotice) {
+            lockedNotice.style.display = "none";
+            lockedNotice.classList.add("hidden");
+        }
+
         try {
             await Obsidianscout.request("/api/auth/register", {
                 method: "POST",
@@ -126,7 +132,12 @@ document.addEventListener("DOMContentLoaded", () => {
             Obsidianscout.showToast("Account created!", "success");
             window.location.href = "/dashboard";
         } catch (error) {
-            Obsidianscout.showToast(error.message || "Registration failed", "error");
+            const errorMsg = error.message || "Registration failed";
+            Obsidianscout.showToast(errorMsg, "error");
+            if (lockedNotice && (errorMsg.toLowerCase().includes("locked") || error.status === 403)) {
+                lockedNotice.style.display = "block";
+                lockedNotice.classList.remove("hidden");
+            }
         } finally {
             Obsidianscout.setButtonLoading(registerButton, false);
         }

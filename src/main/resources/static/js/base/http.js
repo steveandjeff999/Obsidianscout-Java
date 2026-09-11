@@ -193,9 +193,12 @@ export async function request(path, options = {}) {
             isPublicPage = dataPage === "login" ||
                            dataPage === "landing" ||
                            dataPage === "docs" ||
+                           dataPage === "contact" ||
                            cleanPath === "" ||
                            cleanPath === "/docs" ||
                            pathname.startsWith("/docs/") ||
+                           cleanPath === "/contact" ||
+                           pathname.startsWith("/contact/") ||
                            cleanPath === "/login" ||
                            pathname.startsWith("/login/");
         }

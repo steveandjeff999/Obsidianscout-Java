@@ -128,6 +128,7 @@ data class ApiSettings(
     val themes: List<ThemeSettings> = emptyList(),
     val activeThemeName: String = "",
     val setupWizardCompleted: Boolean = false,
+    val registrationLocked: Boolean = false,
     val program: String = "FRC",
     val statboticsBaseUrl: String = "https://api.statbotics.io"
 ) {

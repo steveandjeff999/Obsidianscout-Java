@@ -16,6 +16,7 @@ object Users : UUIDTable("users") {
     val tourProgress = text("tour_progress").nullable()
     val nodeAlertsEnabled = bool("node_alerts_enabled").default(false)
     val bugReportPreference = varchar("bug_report_preference", 16).default("ask")
+    val lastLogin = timestamp("last_login").nullable()
 
     init {
         uniqueIndex("ux_users_username_team_program", username, teamNumber, program)
