@@ -1658,7 +1658,16 @@
                 tdName.innerHTML = `<strong style="font-family: monospace; color: var(--ink);">${escapeHtml(s.fileName)}</strong>`;
 
                 const tdCreated = document.createElement("td");
-                tdCreated.textContent = s.createdAtUtc || "--";
+                let createdDisplay = s.createdAtUtc;
+                if (!createdDisplay && s.createdAtEpochMs && s.createdAtEpochMs > 0) {
+                    try {
+                        const d = new Date(s.createdAtEpochMs);
+                        if (!isNaN(d.getTime())) {
+                            createdDisplay = d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+                        }
+                    } catch (_) {}
+                }
+                tdCreated.textContent = createdDisplay || "--";
 
                 const tdSize = document.createElement("td");
                 tdSize.textContent = formatBytes(s.sizeBytes);
@@ -1747,8 +1756,11 @@
                 isLocal: !!cn.isLocal,
                 enabled: false,
                 retentionDays: 30,
+                snapshotCount: 0,
                 snapshotsCount: 0,
+                totalStorageBytes: 0,
                 totalSnapshotsSizeBytes: 0,
+                lastBackupTimestamp: null,
                 lastBackupTimeUtc: null,
                 isAvailable: cn.status === "online"
             }));
@@ -1762,8 +1774,11 @@
                         isLocal: !!cn.isLocal,
                         enabled: false,
                         retentionDays: 30,
+                        snapshotCount: 0,
                         snapshotsCount: 0,
+                        totalStorageBytes: 0,
                         totalSnapshotsSizeBytes: 0,
+                        lastBackupTimestamp: null,
                         lastBackupTimeUtc: null,
                         isAvailable: cn.status === "online"
                     });
@@ -1827,13 +1842,45 @@
             tdRetention.appendChild(retentionBadge);
 
             const tdCount = document.createElement("td");
-            tdCount.textContent = n.snapshotsCount ?? (n.snapshots ? n.snapshots.length : 0);
+            const snapCount = n.snapshotCount ?? n.snapshotsCount ?? (n.snapshots ? n.snapshots.length : 0);
+            tdCount.textContent = snapCount;
 
             const tdStorage = document.createElement("td");
-            tdStorage.textContent = formatBytes(n.totalSnapshotsSizeBytes || 0);
+            let storageBytes = n.totalStorageBytes ?? n.totalSnapshotsSizeBytes;
+            if (storageBytes === undefined || storageBytes === null || storageBytes === 0) {
+                if (n.snapshots && n.snapshots.length > 0) {
+                    storageBytes = n.snapshots.reduce((acc, s) => acc + (s.sizeBytes || 0), 0);
+                }
+            }
+            tdStorage.textContent = formatBytes(storageBytes || 0);
 
             const tdLast = document.createElement("td");
-            tdLast.textContent = n.lastBackupTimeUtc || "--";
+            let lastDisplay = null;
+            const rawTimestamp = n.lastBackupTimestamp || n.lastBackupTimeUtc;
+            if (rawTimestamp) {
+                try {
+                    const d = new Date(rawTimestamp);
+                    if (!isNaN(d.getTime())) {
+                        lastDisplay = d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+                    } else {
+                        lastDisplay = rawTimestamp;
+                    }
+                } catch (_) {
+                    lastDisplay = rawTimestamp;
+                }
+            }
+            if (!lastDisplay && n.snapshots && n.snapshots.length > 0) {
+                const latestEpoch = Math.max(...n.snapshots.map(s => s.createdAtEpochMs || 0));
+                if (latestEpoch > 0) {
+                    try {
+                        const d = new Date(latestEpoch);
+                        if (!isNaN(d.getTime())) {
+                            lastDisplay = d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+                        }
+                    } catch (_) {}
+                }
+            }
+            tdLast.textContent = lastDisplay || "--";
 
             const tdActions = document.createElement("td");
             tdActions.style.textAlign = "right";

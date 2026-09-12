@@ -21,7 +21,8 @@ data class SnapshotInfoDto(
     val fileName: String,
     val sizeBytes: Long,
     val createdAtEpochMs: Long,
-    val isAutoBackup: Boolean = false
+    val isAutoBackup: Boolean = false,
+    val createdAtUtc: String = ""
 )
 
 @Serializable
@@ -54,10 +55,13 @@ data class AutoBackupNodeStatusDto(
     val retentionDays: Int = 30,
     val storageDirectory: String = "data/snapshots",
     val lastBackupTimestamp: String? = null,
+    val lastBackupTimeUtc: String? = null,
     val lastBackupStatus: String = "None",
     val nextScheduledRunUtc: String? = null,
     val snapshotCount: Int = 0,
+    val snapshotsCount: Int = 0,
     val totalStorageBytes: Long = 0L,
+    val totalSnapshotsSizeBytes: Long = 0L,
     val snapshots: List<SnapshotInfoDto> = emptyList()
 )
 
@@ -1279,20 +1283,33 @@ object SnapshotService {
         return files.map { file ->
             val isAuto = file.name.startsWith("auto_snapshot")
             val epochMs = try {
-                val timestampPart = file.nameWithoutExtension.substringAfterLast("_")
-                val datePart = file.nameWithoutExtension.substringBeforeLast("_").substringAfter("_")
-                val combined = "${datePart}_${timestampPart}"
-                val parsed = java.time.LocalDateTime.parse(combined, DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"))
-                parsed.toInstant(ZoneOffset.UTC).toEpochMilli()
+                val parts = file.nameWithoutExtension.split("_")
+                if (parts.size >= 2) {
+                    val datePart = parts[parts.size - 2]
+                    val timePart = parts[parts.size - 1]
+                    val combined = "${datePart}_${timePart}"
+                    val parsed = java.time.LocalDateTime.parse(combined, DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"))
+                    parsed.toInstant(ZoneOffset.UTC).toEpochMilli()
+                } else {
+                    file.lastModified()
+                }
             } catch (_: Exception) {
                 file.lastModified()
+            }
+
+            val utcFormatted = try {
+                val instant = Instant.ofEpochMilli(epochMs)
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'UTC'").withZone(ZoneOffset.UTC).format(instant)
+            } catch (_: Exception) {
+                ""
             }
 
             SnapshotInfoDto(
                 fileName = file.name,
                 sizeBytes = file.length(),
                 createdAtEpochMs = epochMs,
-                isAutoBackup = isAuto
+                isAutoBackup = isAuto,
+                createdAtUtc = utcFormatted
             )
         }.sortedByDescending { it.createdAtEpochMs }
     }
@@ -1375,6 +1392,9 @@ object SnapshotService {
         val snapshots = listSnapshots()
         val totalBytes = snapshots.sumOf { it.sizeBytes }
 
+        val lastBackup = AutoBackupScheduler.lastBackupInstant?.toString()
+            ?: snapshots.firstOrNull()?.createdAtEpochMs?.let { Instant.ofEpochMilli(it).toString() }
+
         return AutoBackupNodeStatusDto(
             nodeIp = nodeIp,
             isLocal = true,
@@ -1383,11 +1403,14 @@ object SnapshotService {
             targetTimeUtc = config.target_time_utc,
             retentionDays = config.retention_days,
             storageDirectory = config.storage_directory,
-            lastBackupTimestamp = AutoBackupScheduler.lastBackupInstant?.toString(),
+            lastBackupTimestamp = lastBackup,
+            lastBackupTimeUtc = lastBackup,
             lastBackupStatus = AutoBackupScheduler.lastBackupStatus,
             nextScheduledRunUtc = AutoBackupScheduler.computeNextRunUtc(config.target_time_utc),
             snapshotCount = snapshots.size,
+            snapshotsCount = snapshots.size,
             totalStorageBytes = totalBytes,
+            totalSnapshotsSizeBytes = totalBytes,
             snapshots = snapshots
         )
     }
