@@ -1814,7 +1814,17 @@
             tdDaily.appendChild(label);
 
             const tdRetention = document.createElement("td");
-            tdRetention.textContent = `${n.retentionDays || 30} days`;
+            const retentionBadge = document.createElement("span");
+            retentionBadge.style.display = "inline-flex";
+            retentionBadge.style.alignItems = "center";
+            retentionBadge.style.gap = "4px";
+            retentionBadge.style.cursor = "pointer";
+            retentionBadge.title = `Click to edit retention for ${n.nodeIp}`;
+            retentionBadge.innerHTML = `<span>${n.retentionDays || 30} days</span> <span style="font-size: 10px; opacity: 0.7;">✏️</span>`;
+            retentionBadge.addEventListener("click", () => {
+                openNodeBackupConfigModal(n);
+            });
+            tdRetention.appendChild(retentionBadge);
 
             const tdCount = document.createElement("td");
             tdCount.textContent = n.snapshotsCount ?? (n.snapshots ? n.snapshots.length : 0);
@@ -1827,6 +1837,18 @@
 
             const tdActions = document.createElement("td");
             tdActions.style.textAlign = "right";
+
+            const btnNodeConfig = document.createElement("button");
+            btnNodeConfig.type = "button";
+            btnNodeConfig.className = "btn-action config";
+            btnNodeConfig.style.padding = "4px 8px";
+            btnNodeConfig.style.fontSize = "11px";
+            btnNodeConfig.style.marginRight = "6px";
+            btnNodeConfig.textContent = "⚙️ Configure";
+            btnNodeConfig.title = `Configure auto-backup & retention for ${n.nodeIp}`;
+            btnNodeConfig.addEventListener("click", () => {
+                openNodeBackupConfigModal(n);
+            });
 
             const btnNodeSnap = document.createElement("button");
             btnNodeSnap.type = "button";
@@ -1855,6 +1877,7 @@
                 }
             });
 
+            tdActions.appendChild(btnNodeConfig);
             tdActions.appendChild(btnNodeSnap);
 
             tr.appendChild(tdNode);
@@ -2050,6 +2073,88 @@
                 }
             }
         });
+
+        // Node Auto-Backup Config Modal Handlers
+        document.getElementById("modal-node-backup-cancel")?.addEventListener("click", closeNodeBackupConfigModal);
+        document.getElementById("modal-node-backup-cancel-x")?.addEventListener("click", closeNodeBackupConfigModal);
+        document.getElementById("node-backup-config-modal")?.addEventListener("click", (e) => {
+            if (e.target.id === "node-backup-config-modal") closeNodeBackupConfigModal();
+        });
+        document.getElementById("modal-node-backup-save")?.addEventListener("click", saveNodeBackupConfig);
+    }
+
+    let currentNodeBackupConfigTarget = null;
+
+    function openNodeBackupConfigModal(node) {
+        currentNodeBackupConfigTarget = node;
+        const modal = document.getElementById("node-backup-config-modal");
+        const pill = document.getElementById("node-backup-target-pill");
+        const chkEnabled = document.getElementById("modal-node-backup-enabled");
+        const inputRetention = document.getElementById("modal-node-backup-retention");
+
+        if (!modal) return;
+
+        if (pill) {
+            pill.textContent = `Node: ${node.nodeIp} ${node.isLocal ? '(Local Server)' : '(Remote Peer)'}`;
+        }
+        if (chkEnabled) {
+            chkEnabled.checked = !!node.enabled;
+        }
+        if (inputRetention) {
+            inputRetention.value = node.retentionDays || 30;
+        }
+
+        modal.classList.add("show");
+        setTimeout(() => inputRetention?.focus(), 150);
+    }
+
+    function closeNodeBackupConfigModal() {
+        const modal = document.getElementById("node-backup-config-modal");
+        modal?.classList.remove("show");
+        currentNodeBackupConfigTarget = null;
+    }
+
+    async function saveNodeBackupConfig() {
+        if (!currentNodeBackupConfigTarget) return;
+
+        const saveBtn = document.getElementById("modal-node-backup-save");
+        const chkEnabled = document.getElementById("modal-node-backup-enabled");
+        const inputRetention = document.getElementById("modal-node-backup-retention");
+
+        const targetIp = currentNodeBackupConfigTarget.nodeIp;
+        const enabled = chkEnabled?.checked ?? false;
+        const retentionDays = parseInt(inputRetention?.value, 10) || 30;
+
+        if (retentionDays < 1) {
+            showToastMsg("Retention days must be at least 1 day", "error");
+            return;
+        }
+
+        if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+            Obsidianscout.setButtonLoading(saveBtn, true, "Saving...");
+        }
+
+        try {
+            const res = await apiRequest("/api/admin/cluster/auto-backup/config", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    targetIp: targetIp,
+                    enabled: enabled,
+                    retentionDays: retentionDays
+                })
+            });
+
+            showToastMsg(res.message || `Auto-backup configuration updated on ${targetIp}`, res.success ? "success" : "error");
+            closeNodeBackupConfigModal();
+            await loadSnapshotsStatus();
+        } catch (e) {
+            showToastMsg("Failed to save node backup configuration: " + e.message, "error");
+        } finally {
+            if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
+                Obsidianscout.setButtonLoading(saveBtn, false);
+            }
+        }
     }
 
     function openRestoreModal(type, targetName, file = null) {

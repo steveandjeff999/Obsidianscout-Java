@@ -1050,8 +1050,9 @@ object ClusterManagementService {
             val msg = if (enabled) "Local auto backup enabled (02:54 UTC daily)." else "Local auto backup disabled."
             ActionResultResponse(true, msg, localIp)
         } else {
-            val appConfig = AppConfigLoader.load()
-            val appPort = appConfig.server.port
+            val cluster = getClusterNodes()
+            val remoteNode = cluster.nodes.find { it.ip == targetIp }
+            val appPort = if (remoteNode != null && remoteNode.appPort > 0) remoteNode.appPort else AppConfigLoader.load().server.port
             val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/auto-backup/toggle?enabled=$enabled"
             try {
                 val req = buildSignedClusterRequest(url, "POST")
@@ -1085,8 +1086,9 @@ object ClusterManagementService {
             com.obsidianscout.db.SnapshotService.pruneOldSnapshots(updated.retention_days)
             ActionResultResponse(true, "Auto backup config updated on $localIp.", localIp)
         } else {
-            val appConfig = AppConfigLoader.load()
-            val appPort = appConfig.server.port
+            val cluster = getClusterNodes()
+            val remoteNode = cluster.nodes.find { it.ip == targetIp }
+            val appPort = if (remoteNode != null && remoteNode.appPort > 0) remoteNode.appPort else AppConfigLoader.load().server.port
             val queryParams = mutableListOf<String>()
             if (req.enabled != null) queryParams.add("enabled=${req.enabled}")
             if (req.retentionDays != null) queryParams.add("retentionDays=${req.retentionDays}")
@@ -1121,8 +1123,9 @@ object ClusterManagementService {
             com.obsidianscout.db.SnapshotService.pruneOldSnapshots(updated.retention_days)
             ActionResultResponse(true, "Auto backup retention updated to $retentionDays days on $localIp.", localIp)
         } else {
-            val appConfig = AppConfigLoader.load()
-            val appPort = appConfig.server.port
+            val cluster = getClusterNodes()
+            val remoteNode = cluster.nodes.find { it.ip == targetIp }
+            val appPort = if (remoteNode != null && remoteNode.appPort > 0) remoteNode.appPort else AppConfigLoader.load().server.port
             val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/auto-backup/config?retentionDays=$retentionDays"
             try {
                 val req = buildSignedClusterRequest(url, "POST")
@@ -1148,8 +1151,9 @@ object ClusterManagementService {
         if (isLocal) {
             com.obsidianscout.db.SnapshotService.createSnapshot(isAutoBackup = false)
         } else {
-            val appConfig = AppConfigLoader.load()
-            val appPort = appConfig.server.port
+            val cluster = getClusterNodes()
+            val remoteNode = cluster.nodes.find { it.ip == targetIp }
+            val appPort = if (remoteNode != null && remoteNode.appPort > 0) remoteNode.appPort else AppConfigLoader.load().server.port
             val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/auto-backup/create"
             try {
                 val req = buildSignedClusterRequest(url, "POST")
