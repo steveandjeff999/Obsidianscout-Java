@@ -677,6 +677,7 @@
 
             renderServerList(currentNodes, localIp);
             fetchNodeLogs();
+            loadSnapshotsStatus();
         } catch (e) {
             console.error("[ClusterManagement] Failed to fetch cluster nodes:", e);
             currentNodes = [
@@ -684,6 +685,7 @@
             ];
             renderServerList(currentNodes, "127.0.0.1");
             fetchNodeLogs();
+            loadSnapshotsStatus();
         }
     }
 
@@ -1733,8 +1735,42 @@
 
     function renderClusterSnapshotStatus(cluster) {
         const clusterTbody = document.getElementById("cluster-backup-nodes-tbody");
-        if (!cluster || !clusterTbody) return;
-        const nodes = cluster.nodes || [];
+        if (!clusterTbody) return;
+
+        // Backend returns List<AutoBackupNodeStatusDto> directly (JSON Array) or an object with .nodes
+        let nodes = Array.isArray(cluster) ? cluster : (cluster && Array.isArray(cluster.nodes) ? cluster.nodes : []);
+
+        // If cluster probe returned empty or failed to detect peers, merge with currentNodes so all servers are visible
+        if (nodes.length === 0 && Array.isArray(currentNodes) && currentNodes.length > 0) {
+            nodes = currentNodes.map(cn => ({
+                nodeIp: cn.ip,
+                isLocal: !!cn.isLocal,
+                enabled: false,
+                retentionDays: 30,
+                snapshotsCount: 0,
+                totalSnapshotsSizeBytes: 0,
+                lastBackupTimeUtc: null,
+                isAvailable: cn.status === "online"
+            }));
+        } else if (Array.isArray(currentNodes) && currentNodes.length > 0) {
+            // Ensure any node in currentNodes that wasn't in the cluster response is still present
+            const presentIps = new Set(nodes.map(n => n.nodeIp));
+            currentNodes.forEach(cn => {
+                if (!presentIps.has(cn.ip)) {
+                    nodes.push({
+                        nodeIp: cn.ip,
+                        isLocal: !!cn.isLocal,
+                        enabled: false,
+                        retentionDays: 30,
+                        snapshotsCount: 0,
+                        totalSnapshotsSizeBytes: 0,
+                        lastBackupTimeUtc: null,
+                        isAvailable: cn.status === "online"
+                    });
+                }
+            });
+        }
+
         clusterTbody.innerHTML = "";
 
         if (nodes.length === 0) {

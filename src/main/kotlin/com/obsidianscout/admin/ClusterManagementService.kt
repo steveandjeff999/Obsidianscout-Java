@@ -1004,8 +1004,7 @@ object ClusterManagementService {
                     if (node.isLocal || node.ip == localIp) {
                         com.obsidianscout.db.SnapshotService.getLocalNodeStatus(localIp).copy(isLocal = true, nodeIp = localIp)
                     } else {
-                        val appConfig = AppConfigLoader.load()
-                        val appPort = appConfig.server.port
+                        val appPort = if (node.appPort > 0) node.appPort else AppConfigLoader.load().server.port
                         val url = "http://${node.ip}:$appPort/api/admin/cluster/nodes/local/auto-backup/status"
                         try {
                             val req = buildSignedClusterRequest(url, "GET")
