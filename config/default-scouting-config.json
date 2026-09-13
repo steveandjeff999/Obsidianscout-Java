@@ -1,93 +1,163 @@
 {
-  "title": "Rebuilt Match Scouting",
-  "version": 1,
-  "fields": [
-    {
-      "id": "sec_auto",
-      "label": "Autonomous",
-      "type": "section",
-      "phase": "auto"
-    },
-    {
-      "id": "auto_scored",
-      "label": "Auto Fuel Scored",
-      "type": "counter",
-      "required": false,
-      "phase": "auto",
-      "doubleStep": 5,
-      "pointsPer": 1
-    },
-    {
-      "id": "field_1110",
-      "label": "Auto Climb",
-      "type": "select",
-      "required": true,
-      "phase": "auto",
-      "options": [
+    "version": 3,
+    "title": "ObsidianScout",
+    "fields": [
         {
-          "label": "No Climb",
-          "value": "n",
-          "points": 0
+            "id": "sectionAuto",
+            "label": "Auto",
+            "type": "section",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
         },
         {
-          "label": "L1",
-          "value": "u",
-          "points": 15
+            "id": "autoScore",
+            "label": "Auto Score",
+            "type": "counter",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": 0,
+            "max": 10,
+            "step": 1,
+            "doubleStep": null,
+            "pointsPer": 3.0
+        },
+        {
+            "id": "sectionTeleop",
+            "label": "Teleop",
+            "type": "section",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
+        },
+        {
+            "id": "teleopCycles",
+            "label": "Teleop Cycles",
+            "type": "counter",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": 0,
+            "max": 30,
+            "step": 1,
+            "doubleStep": null,
+            "pointsPer": 1.0
+        },
+        {
+            "id": "sectionEndgame",
+            "label": "Endgame",
+            "type": "section",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
+        },
+        {
+            "id": "endgame",
+            "label": "Endgame Result",
+            "type": "select",
+            "required": false,
+            "phase": null,
+            "options": [
+                {
+                    "label": "Park",
+                    "value": "Park",
+                    "points": 5.0
+                },
+                {
+                    "label": "Climb",
+                    "value": "Climb",
+                    "points": 12.0
+                },
+                {
+                    "label": "Fail",
+                    "value": "Fail",
+                    "points": 0.0
+                }
+            ],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
+        },
+        {
+            "id": "driverRating",
+            "label": "Driver Rating",
+            "type": "rating",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": 1,
+            "max": 5,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": 2.0
+        },
+        {
+            "id": "notes",
+            "label": "Notes",
+            "type": "text",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
         }
-      ]
-    },
-    {
-      "id": "field_3098",
-      "label": "Teleop",
-      "type": "section",
-      "phase": "teleop"
-    },
-    {
-      "id": "field_2445",
-      "label": "Teleop Fuel",
-      "type": "counter",
-      "required": false,
-      "phase": "auto",
-      "min": 0,
-      "step": 1,
-      "doubleStep": 5,
-      "pointsPer": 1
-    },
-    {
-      "id": "field_9901",
-      "label": "Endgame",
-      "type": "section",
-      "phase": "endgame"
-    },
-    {
-      "id": "field_7057",
-      "label": "Climb",
-      "type": "select",
-      "required": true,
-      "phase": "endgame",
-      "options": [
+    ],
+    "analytics": [
         {
-          "label": "None",
-          "value": "n",
-          "points": 0
+            "id": "entryCount",
+            "title": "Entries Collected",
+            "type": "count",
+            "fieldId": null
         },
         {
-          "label": "L1",
-          "value": "l1",
-          "points": 10
+            "id": "avgScore",
+            "title": "Average Score",
+            "type": "score_avg",
+            "fieldId": null
         },
         {
-          "label": "L2",
-          "value": "l2",
-          "points": 20
+            "id": "autoAvg",
+            "title": "Auto Score Avg",
+            "type": "avg",
+            "fieldId": "autoScore"
         },
         {
-          "label": "L3",
-          "value": "l3",
-          "points": 30
+            "id": "teleopAvg",
+            "title": "Teleop Cycles Avg",
+            "type": "avg",
+            "fieldId": "teleopCycles"
+        },
+        {
+            "id": "totalScore",
+            "title": "Total Points",
+            "type": "score_total",
+            "fieldId": null
         }
-      ]
-    }
-  ],
-  "analytics": []
+    ],
+    "tba_key": null,
+    "first_username": null,
+    "first_key": null,
+    "event_code": null,
+    "enable_robot_role_collection": false
 }
