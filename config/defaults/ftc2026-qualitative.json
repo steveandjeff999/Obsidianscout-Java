@@ -1,0 +1,103 @@
+{
+    "version": 1,
+    "title": "FTC 2026 Into The Deep Qualitative Scouting",
+    "fields": [
+        {
+            "id": "sectionObservations",
+            "label": "Observations",
+            "type": "section",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
+        },
+        {
+            "id": "overallRating",
+            "label": "Overall Rating",
+            "type": "rating",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": 1,
+            "max": 5,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
+        },
+        {
+            "id": "driveNotes",
+            "label": "Drive Notes",
+            "type": "textarea",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
+        },
+        {
+            "id": "autoNotes",
+            "label": "Auto Notes",
+            "type": "textarea",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
+        },
+        {
+            "id": "teleopNotes",
+            "label": "Teleop Notes",
+            "type": "textarea",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
+        },
+        {
+            "id": "endgameNotes",
+            "label": "Endgame Notes",
+            "type": "textarea",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
+        },
+        {
+            "id": "recommendation",
+            "label": "Recommendation",
+            "type": "textarea",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
+        }
+    ],
+    "analytics": [],
+    "tba_key": null,
+    "first_username": null,
+    "first_key": null,
+    "event_code": null,
+    "enable_robot_role_collection": false
+}

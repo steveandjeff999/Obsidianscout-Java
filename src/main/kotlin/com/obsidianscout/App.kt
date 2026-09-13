@@ -530,6 +530,8 @@ fun Application.module(appConfig: AppConfig) {
                     isCockroach = isCockroach
                 )
                 ConfigService.ensureDefaultConfig()
+                ConfigService.syncFromDatabaseToLocalDisk()
+                ConfigService.startBackgroundClusterSync(30)
                 SettingsService.ensureDefaultSettings()
                 AuthService.ensureSeedSuperAdmin(appConfig.seed)
 

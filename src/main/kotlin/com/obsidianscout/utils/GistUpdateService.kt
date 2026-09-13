@@ -433,7 +433,11 @@ object GistUpdateService {
             val userFile = File(destConfig, relPath)
             userFile.parentFile?.mkdirs()
 
-            if (srcFile.name.endsWith(".json")) {
+            val isDefaultConfigFile = srcFile.name.startsWith("default-") || relPath.startsWith("defaults") || relPath.startsWith("defaults/") || relPath.startsWith("defaults\\")
+            if (isDefaultConfigFile) {
+                log.info("[GistUpdate] Updating default configuration file to latest from source: config/$relPath")
+                srcFile.copyTo(userFile, overwrite = true)
+            } else if (srcFile.name.endsWith(".json")) {
                 if (userFile.exists() && userFile.length() > 0) {
                     try {
                         val userJson = lenientJson.parseToJsonElement(userFile.readText())

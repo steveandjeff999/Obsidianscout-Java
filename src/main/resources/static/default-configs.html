@@ -172,7 +172,7 @@
             color: var(--ink);
             border: 1px solid var(--border);
             border-radius: 16px;
-            max-width: 780px;
+            max-width: 920px;
             width: 100%;
             max-height: 90vh;
             overflow-y: auto;
@@ -180,6 +180,43 @@
             box-shadow: 0 20px 40px rgba(0,0,0,0.3);
         }
         .hidden { display: none !important; }
+
+        /* Options builder styling */
+        .options-builder {
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 8px;
+        }
+        .options-builder-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .options-builder-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--ink);
+        }
+        .options-builder-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .option-item-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .option-item-row input[type="text"] {
+            flex: 2;
+        }
+        .option-item-row input[type="number"] {
+            flex: 1;
+            max-width: 110px;
+        }
     </style>
 </head>
 
@@ -435,17 +472,72 @@
             }
         }
 
+        function supportsPointsConfig() {
+            const configType = document.getElementById('preset-type')?.value || 'match';
+            return configType !== 'qualitative';
+        }
+
+        function supportsPhasesConfig() {
+            const configType = document.getElementById('preset-type')?.value || 'match';
+            return configType === 'match';
+        }
+
+        function cleanPresetConfigForSave(raw) {
+            const supportsPts = supportsPointsConfig();
+            const supportsPhs = supportsPhasesConfig();
+
+            const cleanedFields = (raw.fields || []).map(f => {
+                const cleaned = {
+                    id: f.id || `field_${Date.now().toString().slice(-4)}`,
+                    label: typeof f.label === 'object' ? (f.label.en || Object.values(f.label)[0] || '') : (f.label || ''),
+                    type: f.type || 'number'
+                };
+                if (f.type !== 'text' && f.type !== 'section') {
+                    cleaned.required = !!f.required;
+                }
+                if (supportsPhs) {
+                    cleaned.phase = f.phase || 'teleop';
+                }
+                if (f.type === 'number' || f.type === 'counter' || f.type === 'rating') {
+                    if (f.min !== undefined && f.min !== null && f.min !== '') cleaned.min = Number(f.min);
+                    if (f.max !== undefined && f.max !== null && f.max !== '') cleaned.max = Number(f.max);
+                    if (f.step !== undefined && f.step !== null && f.step !== '') cleaned.step = Number(f.step);
+                    const dStep = f.doubleStep !== undefined ? f.doubleStep : f.double_step;
+                    if (dStep !== undefined && dStep !== null && dStep !== '') cleaned.doubleStep = Number(dStep);
+                }
+                if (supportsPts && (f.type === 'number' || f.type === 'counter' || f.type === 'rating' || f.type === 'checkbox')) {
+                    if (f.pointsPer !== undefined && f.pointsPer !== null && f.pointsPer !== '') {
+                        cleaned.pointsPer = Number(f.pointsPer);
+                    }
+                }
+                if (f.type === 'select') {
+                    cleaned.options = (f.options || []).map(opt => ({
+                        label: typeof opt.label === 'object' ? (opt.label.en || Object.values(opt.label)[0] || '') : (opt.label || ''),
+                        value: opt.value ? opt.value.trim() : (typeof opt.label === 'string' ? opt.label.trim() : ''),
+                        ...(supportsPts ? { points: opt.points !== undefined && opt.points !== null && opt.points !== '' ? Number(opt.points) : 0 } : {})
+                    }));
+                }
+                return cleaned;
+            });
+
+            return {
+                title: (document.getElementById('config-title')?.value || raw.title || "ObsidianScout").trim(),
+                version: Number(document.getElementById('config-version')?.value || raw.version || 1),
+                fields: cleanedFields,
+                analytics: raw.analytics || []
+            };
+        }
+
         function updateRawFromVisual() {
-            currentPresetConfig.title = document.getElementById('config-title').value.trim() || "Scouting Config";
-            currentPresetConfig.version = Number(document.getElementById('config-version').value) || 1;
+            currentPresetConfig = cleanPresetConfigForSave(currentPresetConfig);
             document.getElementById('preset-json').value = JSON.stringify(currentPresetConfig, null, 2);
         }
 
         function renderVisualFields() {
             const list = document.getElementById('visual-fields-list');
             const fields = currentPresetConfig.fields || [];
-            const configType = document.getElementById('preset-type')?.value || 'match';
-            const supportsPhases = configType === 'match';
+            const supportsPts = supportsPointsConfig();
+            const supportsPhs = supportsPhasesConfig();
 
             if (fields.length === 0) {
                 list.innerHTML = `<p class="notice" style="text-align: center; padding: 16px;">No fields configured. Click "+ Add Field" above.</p>`;
@@ -455,63 +547,241 @@
             list.innerHTML = fields.map((field, idx) => {
                 const labelVal = typeof field.label === 'object' ? (field.label.en || Object.values(field.label)[0] || '') : (field.label || '');
                 const typeVal = field.type || 'text';
-                const phaseVal = field.phase || '';
-
-                const isSelect = typeVal === 'select' || typeVal === 'multiselect';
-                const optionsVal = isSelect ? (field.options || []).map(o => typeof o === 'object' ? o.value : o).join(', ') : '';
+                const phaseVal = field.phase || (supportsPhs ? 'teleop' : '');
+                const isNumeric = typeVal === 'counter' || typeVal === 'number' || typeVal === 'rating';
+                const isCheckbox = typeVal === 'checkbox';
+                const isSelect = typeVal === 'select';
+                const hasDoubleStep = (field.doubleStep !== undefined && field.doubleStep !== null && field.doubleStep !== '') ||
+                                      (field.double_step !== undefined && field.double_step !== null && field.double_step !== '');
+                const counterHasNoLimit = typeVal === 'counter' && (field.max === undefined || field.max === null || field.max === '');
 
                 return `
                     <div class="visual-field-card" data-index="${idx}">
                         <div class="visual-field-header">
                             <strong>Field #${idx + 1}: ${escapeHtml(labelVal || field.id || 'Untitled')}</strong>
-                            <div style="display: flex; gap: 6px;">
-                                <button type="button" class="btn ghost btn-sm" onclick="moveVisualField(${idx}, -1)" ${idx === 0 ? 'disabled' : ''}>⬆</button>
-                                <button type="button" class="btn ghost btn-sm" onclick="moveVisualField(${idx}, 1)" ${idx === fields.length - 1 ? 'disabled' : ''}>⬇</button>
-                                <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" onclick="removeVisualField(${idx})">🗑️</button>
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                <button type="button" class="btn ghost btn-sm" title="Duplicate Field" onclick="duplicateVisualField(${idx})">📑 Duplicate</button>
+                                <button type="button" class="btn ghost btn-sm" title="Move Up" onclick="moveVisualField(${idx}, -1)" ${idx === 0 ? 'disabled' : ''}>⬆</button>
+                                <button type="button" class="btn ghost btn-sm" title="Move Down" onclick="moveVisualField(${idx}, 1)" ${idx === fields.length - 1 ? 'disabled' : ''}>⬇</button>
+                                <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" title="Delete Field" onclick="removeVisualField(${idx})">🗑️</button>
                             </div>
                         </div>
+
                         <div class="visual-field-grid">
                             <div class="field">
                                 <label style="font-size:0.8rem;">Field Label</label>
-                                <input type="text" class="input" value="${escapeHtml(labelVal)}" onchange="updateVisualField(${idx}, 'label', this.value)" placeholder="e.g. Teleop Coral Scored" />
+                                <input type="text" class="input" value="${escapeHtml(labelVal)}" oninput="updateVisualField(${idx}, 'label', this.value)" placeholder="e.g. Teleop Coral Scored" />
                             </div>
                             <div class="field">
                                 <label style="font-size:0.8rem;">Field ID (Key)</label>
-                                <input type="text" class="input" value="${escapeHtml(field.id || '')}" onchange="updateVisualField(${idx}, 'id', this.value)" placeholder="e.g. teleop_coral" />
+                                <input type="text" class="input" value="${escapeHtml(field.id || '')}" oninput="updateVisualField(${idx}, 'id', this.value)" placeholder="e.g. teleop_coral" />
                             </div>
                             <div class="field">
                                 <label style="font-size:0.8rem;">Type</label>
-                                <select class="input" onchange="updateVisualField(${idx}, 'type', this.value)">
+                                <select class="input" onchange="onFieldTypeChange(${idx}, this.value)">
                                     <option value="counter" ${typeVal === 'counter' ? 'selected' : ''}>Counter (+ / -)</option>
                                     <option value="number" ${typeVal === 'number' ? 'selected' : ''}>Number</option>
                                     <option value="rating" ${typeVal === 'rating' ? 'selected' : ''}>Rating (1-5)</option>
-                                    <option value="toggle" ${typeVal === 'toggle' || typeVal === 'checkbox' || typeVal === 'boolean' ? 'selected' : ''}>Toggle / Checkbox</option>
+                                    <option value="checkbox" ${typeVal === 'checkbox' || typeVal === 'toggle' || typeVal === 'boolean' ? 'selected' : ''}>Checkbox / Toggle</option>
                                     <option value="select" ${typeVal === 'select' ? 'selected' : ''}>Dropdown Options</option>
+                                    <option value="section" ${typeVal === 'section' ? 'selected' : ''}>Section Header</option>
                                     <option value="text" ${typeVal === 'text' ? 'selected' : ''}>Text (Static Display)</option>
                                     <option value="textarea" ${typeVal === 'textarea' || typeVal === 'notes' ? 'selected' : ''}>Text Area (Input)</option>
+                                    <option value="image" ${typeVal === 'image' || typeVal === 'photo' || typeVal === 'image_upload' ? 'selected' : ''}>Image (Photo Upload)</option>
                                 </select>
                             </div>
-                            ${supportsPhases ? `
+                            ${supportsPhs ? `
                             <div class="field">
                                 <label style="font-size:0.8rem;">Section / Phase</label>
                                 <select class="input" onchange="updateVisualField(${idx}, 'phase', this.value)">
                                     <option value="auto" ${phaseVal === 'auto' ? 'selected' : ''}>Autonomous</option>
                                     <option value="teleop" ${(!phaseVal || phaseVal === 'teleop' || phaseVal === 'general') ? 'selected' : ''}>Teleop</option>
                                     <option value="endgame" ${phaseVal === 'endgame' ? 'selected' : ''}>Endgame</option>
-                                    <option value="pit" ${phaseVal === 'pit' ? 'selected' : ''}>Pit Scouting</option>
+                                    <option value="postmatch" ${phaseVal === 'postmatch' ? 'selected' : ''}>Post Match</option>
                                 </select>
                             </div>
                             ` : ''}
-                        </div>
-                        ${isSelect ? `
-                            <div class="field" style="margin-top: 6px;">
-                                <label style="font-size:0.8rem;">Options (comma-separated)</label>
-                                <input type="text" class="input" value="${escapeHtml(optionsVal)}" onchange="updateVisualFieldOptions(${idx}, this.value)" placeholder="e.g. None, Low, Medium, High" />
+                            ${typeVal !== 'text' && typeVal !== 'section' ? `
+                            <div class="field">
+                                <label style="font-size:0.8rem;">Required</label>
+                                <label style="display: flex; align-items: center; gap: 8px; height: 38px; cursor: pointer; margin: 0;">
+                                    <input type="checkbox" ${field.required ? 'checked' : ''} onchange="updateVisualField(${idx}, 'required', this.checked)" />
+                                    <span style="font-size: 0.85rem;">Is Required</span>
+                                </label>
                             </div>
+                            ` : ''}
+                        </div>
+
+                        ${isNumeric ? `
+                        <div class="visual-field-grid" style="margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--border);">
+                            <div class="field">
+                                <label style="font-size:0.8rem;">Min</label>
+                                <input type="number" class="input" value="${field.min !== undefined && field.min !== null ? field.min : ''}" oninput="updateVisualField(${idx}, 'min', this.value !== '' ? Number(this.value) : null)" placeholder="0" />
+                            </div>
+                            <div class="field">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label style="font-size:0.8rem;">Max</label>
+                                    ${typeVal === 'counter' ? `
+                                    <label style="display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--muted); cursor: pointer;">
+                                        <input type="checkbox" ${counterHasNoLimit ? 'checked' : ''} onchange="toggleCounterNoLimit(${idx}, this.checked)" /> No limit
+                                    </label>
+                                    ` : ''}
+                                </div>
+                                <input type="number" id="field-${idx}-max" class="input" ${counterHasNoLimit ? 'disabled' : ''} value="${field.max !== undefined && field.max !== null ? field.max : ''}" oninput="updateVisualField(${idx}, 'max', this.value !== '' ? Number(this.value) : null)" placeholder="10" />
+                            </div>
+                            <div class="field">
+                                <label style="font-size:0.8rem;">Step</label>
+                                <input type="number" class="input" value="${field.step !== undefined && field.step !== null ? field.step : 1}" oninput="updateVisualField(${idx}, 'step', this.value !== '' ? Number(this.value) : null)" placeholder="1" />
+                            </div>
+                            ${typeVal === 'counter' ? `
+                            <div class="field">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label style="font-size:0.8rem;">Double Step</label>
+                                    <label style="display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--muted); cursor: pointer;">
+                                        <input type="checkbox" ${hasDoubleStep ? 'checked' : ''} onchange="toggleCounterDoubleStep(${idx}, this.checked)" /> Enable
+                                    </label>
+                                </div>
+                                <input type="number" id="field-${idx}-doubleStep" class="input" ${!hasDoubleStep ? 'disabled' : ''} value="${hasDoubleStep ? (field.doubleStep ?? field.double_step) : ''}" oninput="updateVisualField(${idx}, 'doubleStep', this.value !== '' ? Number(this.value) : null)" placeholder="e.g. 5" />
+                            </div>
+                            ` : ''}
+                            ${supportsPts ? `
+                            <div class="field">
+                                <label style="font-size:0.8rem; font-weight: 700; color: var(--accent, #6366f1);">Points per action</label>
+                                <input type="number" step="any" class="input" value="${field.pointsPer !== undefined && field.pointsPer !== null ? field.pointsPer : ''}" oninput="updateVisualField(${idx}, 'pointsPer', this.value !== '' ? Number(this.value) : null)" placeholder="e.g. 3.0" style="border-color: rgba(99, 102, 241, 0.4);" />
+                            </div>
+                            ` : ''}
+                        </div>
+                        ` : ''}
+
+                        ${isCheckbox && supportsPts ? `
+                        <div class="visual-field-grid" style="margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--border);">
+                            <div class="field" style="max-width: 250px;">
+                                <label style="font-size:0.8rem; font-weight: 700; color: var(--accent, #6366f1);">Points per action</label>
+                                <input type="number" step="any" class="input" value="${field.pointsPer !== undefined && field.pointsPer !== null ? field.pointsPer : ''}" oninput="updateVisualField(${idx}, 'pointsPer', this.value !== '' ? Number(this.value) : null)" placeholder="e.g. 5.0" style="border-color: rgba(99, 102, 241, 0.4);" />
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${isSelect ? `
+                        <div class="options-builder">
+                            <div class="options-builder-header">
+                                <span class="options-builder-title">${supportsPts ? 'Options (Label | Value | Points)' : 'Options (Label | Value)'}</span>
+                                <button type="button" class="btn secondary btn-sm" onclick="addSelectOption(${idx})">+ Add Option</button>
+                            </div>
+                            <div class="options-builder-list">
+                                ${(field.options && field.options.length > 0) ? field.options.map((opt, optIdx) => {
+                                    const optLabel = typeof opt.label === 'object' ? (opt.label.en || Object.values(opt.label)[0] || '') : (opt.label || '');
+                                    const optVal = opt.value || '';
+                                    const optPts = opt.points !== undefined && opt.points !== null ? opt.points : 0;
+                                    return `
+                                        <div class="option-item-row">
+                                            <input type="text" class="input" value="${escapeHtml(optLabel)}" placeholder="Label (e.g. High)" oninput="updateSelectOption(${idx}, ${optIdx}, 'label', this.value)" />
+                                            <input type="text" class="input" value="${escapeHtml(optVal)}" placeholder="Value" oninput="updateSelectOption(${idx}, ${optIdx}, 'value', this.value)" />
+                                            ${supportsPts ? `
+                                            <input type="number" step="any" class="input" value="${optPts}" placeholder="Pts" oninput="updateSelectOption(${idx}, ${optIdx}, 'points', Number(this.value))" title="Point Value" />
+                                            ` : ''}
+                                            <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" title="Delete Option" onclick="removeSelectOption(${idx}, ${optIdx})">🗑️</button>
+                                        </div>
+                                    `;
+                                }).join('') : `<p class="notice" style="margin: 4px 0; font-size: 0.8rem;">No options defined. Click "+ Add Option" above.</p>`}
+                            </div>
+                        </div>
                         ` : ''}
                     </div>
                 `;
             }).join('');
+        }
+
+        function onFieldTypeChange(idx, newType) {
+            const field = currentPresetConfig.fields[idx];
+            if (!field) return;
+            field.type = newType;
+            if (newType === 'text' || newType === 'section') {
+                field.required = false;
+                delete field.min;
+                delete field.max;
+                delete field.step;
+                delete field.doubleStep;
+                delete field.pointsPer;
+            } else if (newType === 'counter' || newType === 'number' || newType === 'rating') {
+                if (field.min === undefined) field.min = newType === 'rating' ? 1 : 0;
+                if (field.max === undefined) field.max = newType === 'rating' ? 5 : (newType === 'counter' ? null : 10);
+                if (field.step === undefined) field.step = 1;
+                if (newType !== 'counter') {
+                    delete field.doubleStep;
+                    delete field.double_step;
+                }
+            } else if (newType === 'select') {
+                if (!field.options || !Array.isArray(field.options)) {
+                    field.options = [
+                        { label: "Option 1", value: "option_1", points: 0 }
+                    ];
+                }
+            }
+            renderVisualFields();
+        }
+
+        function toggleCounterNoLimit(idx, isNoLimit) {
+            const field = currentPresetConfig.fields[idx];
+            if (!field) return;
+            if (isNoLimit) {
+                field.max = null;
+            } else {
+                field.max = 10;
+            }
+            renderVisualFields();
+        }
+
+        function toggleCounterDoubleStep(idx, isEnabled) {
+            const field = currentPresetConfig.fields[idx];
+            if (!field) return;
+            if (isEnabled) {
+                field.doubleStep = 5;
+            } else {
+                field.doubleStep = null;
+                delete field.double_step;
+            }
+            renderVisualFields();
+        }
+
+        function addSelectOption(fieldIdx) {
+            const field = currentPresetConfig.fields[fieldIdx];
+            if (!field) return;
+            if (!field.options) field.options = [];
+            const optNumber = field.options.length + 1;
+            field.options.push({
+                label: `Option ${optNumber}`,
+                value: `option_${optNumber}`,
+                points: 0
+            });
+            renderVisualFields();
+        }
+
+        function updateSelectOption(fieldIdx, optIdx, prop, val) {
+            const field = currentPresetConfig.fields[fieldIdx];
+            if (!field || !field.options || !field.options[optIdx]) return;
+            field.options[optIdx][prop] = val;
+            if (prop === 'label' && (!field.options[optIdx].value || field.options[optIdx].value.startsWith('option_'))) {
+                field.options[optIdx].value = val.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            }
+        }
+
+        function removeSelectOption(fieldIdx, optIdx) {
+            const field = currentPresetConfig.fields[fieldIdx];
+            if (!field || !field.options) return;
+            field.options.splice(optIdx, 1);
+            renderVisualFields();
+        }
+
+        function duplicateVisualField(idx) {
+            const field = currentPresetConfig.fields[idx];
+            if (!field) return;
+            const copy = JSON.parse(JSON.stringify(field));
+            copy.id = `${field.id}_copy_${Date.now().toString().slice(-4)}`;
+            const labelVal = typeof field.label === 'object' ? (field.label.en || Object.values(field.label)[0] || '') : (field.label || '');
+            copy.label = `${labelVal} (Copy)`;
+            currentPresetConfig.fields.splice(idx + 1, 0, copy);
+            renderVisualFields();
         }
 
         function updateVisualField(idx, prop, val) {
@@ -520,24 +790,19 @@
             if (prop === 'label' && !currentPresetConfig.fields[idx].id) {
                 currentPresetConfig.fields[idx].id = val.toLowerCase().replace(/[^a-z0-9]/g, '_');
             }
-            renderVisualFields();
-        }
-
-        function updateVisualFieldOptions(idx, valString) {
-            if (!currentPresetConfig.fields[idx]) return;
-            const opts = valString.split(',').map(s => s.trim()).filter(Boolean);
-            currentPresetConfig.fields[idx].options = opts.map(o => ({ label: o, value: o }));
         }
 
         function addVisualField() {
             if (!currentPresetConfig.fields) currentPresetConfig.fields = [];
-            const configType = document.getElementById('preset-type')?.value || 'match';
-            const supportsPhases = configType === 'match';
+            const supportsPhs = supportsPhasesConfig();
             currentPresetConfig.fields.push({
                 id: `field_${Date.now().toString().slice(-4)}`,
                 label: "New Field",
-                type: "number",
-                ...(supportsPhases ? { phase: "auto" } : {})
+                type: "counter",
+                min: 0,
+                step: 1,
+                pointsPer: 1.0,
+                ...(supportsPhs ? { phase: "auto" } : {})
             });
             renderVisualFields();
         }
@@ -674,8 +939,10 @@
             const isDefault = document.getElementById('preset-is-default').checked;
             const rawJson = document.getElementById('preset-json').value;
 
+            let finalJson = rawJson;
             try {
-                JSON.parse(rawJson);
+                const parsed = JSON.parse(rawJson);
+                finalJson = JSON.stringify(cleanPresetConfigForSave(parsed), null, 2);
             } catch (err) {
                 const errDiv = document.getElementById('json-error');
                 errDiv.textContent = `JSON Error: ${err.message}`;
@@ -690,7 +957,7 @@
                 name,
                 program,
                 configType,
-                configJson: rawJson,
+                configJson: finalJson,
                 isDefault
             };
 

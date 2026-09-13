@@ -3,7 +3,9 @@ package com.obsidianscout.config
 import com.obsidianscout.db.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 import kotlin.test.AfterTest
@@ -143,4 +145,166 @@ class DefaultConfigsTest {
         assertNotNull(migratedNotes)
         assertEquals("teleop", migratedNotes.phase)
     }
+
+    @Test
+    fun testDefaultConfigPointValuesAssignmentAndSerialization() {
+        val configWithPoints = """
+            {
+                "version": 1,
+                "title": "FTC Match Points Config",
+                "fields": [
+                    {
+                        "id": "autoSampleScored",
+                        "label": "Auto Sample Scored",
+                        "type": "counter",
+                        "phase": "auto",
+                        "min": 0,
+                        "max": 10,
+                        "step": 1,
+                        "pointsPer": 4.0
+                    },
+                    {
+                        "id": "parkBonus",
+                        "label": "Park Bonus",
+                        "type": "checkbox",
+                        "phase": "endgame",
+                        "pointsPer": 3.0
+                    },
+                    {
+                        "id": "ascentLevel",
+                        "label": "Ascent Level",
+                        "type": "select",
+                        "phase": "endgame",
+                        "options": [
+                            { "label": "None", "value": "none", "points": 0.0 },
+                            { "label": "Level 1", "value": "lvl1", "points": 3.0 },
+                            { "label": "Level 2", "value": "lvl2", "points": 15.0 },
+                            { "label": "Level 3", "value": "lvl3", "points": 30.0 }
+                        ]
+                    }
+                ]
+            }
+        """.trimIndent()
+
+        val dto = DefaultConfigDTO(
+            name = "test_points_preset",
+            program = "FTC",
+            configType = "match",
+            configJson = configWithPoints,
+            isDefault = false
+        )
+
+        val created = ConfigService.createDefaultConfig(dto)
+        assertNotNull(created.id)
+
+        // Verify deserialization into ScoutingConfig preserves points
+        val parsed = JsonSupport.json.decodeFromString<ScoutingConfig>(created.configJson)
+        val counterField = parsed.fields.find { it.id == "autoSampleScored" }
+        assertNotNull(counterField)
+        assertEquals(4.0, counterField.pointsPer)
+
+        val checkboxField = parsed.fields.find { it.id == "parkBonus" }
+        assertNotNull(checkboxField)
+        assertEquals(3.0, checkboxField.pointsPer)
+
+        val selectField = parsed.fields.find { it.id == "ascentLevel" }
+        assertNotNull(selectField)
+        assertEquals(4, selectField.options.size)
+        assertEquals(30.0, selectField.options.find { it.value == "lvl3" }?.points)
+
+        // Clean up
+        ConfigService.deleteDefaultConfig(created.id)
+    }
+
+    @Test
+    fun testDefaultConfigsStoredOnDisk() {
+        val dto = DefaultConfigDTO(
+            name = "disk_store_test",
+            program = "FRC",
+            configType = "match",
+            configJson = """{"version":1,"title":"Disk Store Preset","fields":[]}""",
+            isDefault = false
+        )
+
+        val created = ConfigService.createDefaultConfig(dto)
+        assertNotNull(created.id)
+
+        val defaultsDir = ConfigService.getDefaultsDirectory()
+        val expectedFile = defaultsDir.resolve("disk_store_test-match.json").toFile()
+        assertTrue(expectedFile.exists(), "Preset file should be created on server disk")
+        assertTrue(expectedFile.readText().contains("Disk Store Preset"), "Disk file should contain preset content")
+
+        // Clean up
+        ConfigService.deleteDefaultConfig(created.id)
+        assertFalse(expectedFile.exists(), "Preset file should be deleted from server disk when preset is deleted")
+    }
+
+    @Test
+    fun testDefaultConfigsUpdatedFromSourceWithoutOverwritingTeamConfigs() {
+        val teamNum = 5454
+        val prog = "FRC"
+
+        // 1. Team 5454 has a customized configuration
+        val customTeamConfig = """{"version":1,"title":"Team 5454 Custom Match Config","fields":[{"id":"custom_metric","label":"Custom Metric","type":"counter"}]}"""
+        ConfigService.updateConfig(teamNum, prog, customTeamConfig)
+
+        // Verify team config is in place
+        val beforeUpdate = ConfigService.getConfigJson(teamNum, prog, local = true)
+        assertTrue(beforeUpdate.contains("Team 5454 Custom Match Config"))
+
+        // 2. Simulate an update by calling ensureDefaultConfig()
+        ConfigService.ensureDefaultConfig()
+
+        // 3. Team config MUST be completely untouched!
+        val afterUpdate = ConfigService.getConfigJson(teamNum, prog, local = true)
+        assertTrue(afterUpdate.contains("Team 5454 Custom Match Config"), "Team config must NEVER be overwritten by update from source!")
+        assertTrue(afterUpdate.contains("custom_metric"), "Team customized fields must be fully preserved!")
+    }
+
+    @Test
+    fun testMultiServerClusterCloningFromDatabaseToLocalDisk() {
+        val defaultsDir = ConfigService.getDefaultsDirectory()
+        val clusterFile = defaultsDir.resolve("cluster_node_b_test-match.json").toFile()
+        if (clusterFile.exists()) clusterFile.delete()
+
+        // Simulate Node A writing directly to shared CockroachDB
+        var insertedId: String? = null
+        transaction {
+            insertedId = DefaultConfigs.insert {
+                it[name] = "cluster_node_b_test"
+                it[program] = "FRC"
+                it[configType] = "match"
+                it[configJson] = """{"version":1,"title":"Node A Created Config","fields":[]}"""
+                it[isDefault] = false
+                it[updatedAt] = java.time.Instant.now()
+            }[DefaultConfigs.id].value.toString()
+        }
+
+        assertFalse(clusterFile.exists(), "Before sync, Node B local disk should not have the file")
+
+        // Simulate Node B running syncFromDatabaseToLocalDisk()
+        ConfigService.syncFromDatabaseToLocalDisk()
+
+        assertTrue(clusterFile.exists(), "After cluster sync, Node B local disk should have cloned the file from the database")
+        assertTrue(clusterFile.readText().contains("Node A Created Config"))
+
+        // Simulate Node A updating the config in the database
+        transaction {
+            DefaultConfigs.update({ DefaultConfigs.name eq "cluster_node_b_test" }) {
+                it[configJson] = """{"version":2,"title":"Node A Updated Config","fields":[]}"""
+                it[updatedAt] = java.time.Instant.now()
+            }
+        }
+
+        // Simulate Node B running sync again
+        ConfigService.syncFromDatabaseToLocalDisk()
+        assertTrue(clusterFile.readText().contains("Node A Updated Config"), "After cluster sync, Node B local disk should have updated file content")
+
+        // Clean up
+        if (insertedId != null) {
+            ConfigService.deleteDefaultConfig(insertedId!!)
+        }
+        if (clusterFile.exists()) clusterFile.delete()
+    }
 }
+

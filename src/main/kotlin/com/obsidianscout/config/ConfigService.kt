@@ -23,11 +23,20 @@ import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.deleteWhere
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.Instant
 import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 @Serializable
 data class DefaultConfigDTO(
@@ -88,15 +97,20 @@ object ConfigService {
     private val defaultPitConfigPath = Paths.get("config", "default-pit-scouting-config.json")
     private val defaultQualitativeConfigPath = Paths.get("config", "default-qualitative-scouting-config.json")
 
-    fun ensureDefaultConfig() {
-        val defaultsDir = listOf(
+    fun getDefaultsDirectory(): java.nio.file.Path {
+        val dir = listOf(
             Paths.get("config", "defaults"),
             Paths.get("Obsidianscout", "config", "defaults"),
             Paths.get("..", "config", "defaults")
         ).firstOrNull { Files.exists(it) } ?: Paths.get("config", "defaults")
-        if (!Files.exists(defaultsDir)) {
-            try { Files.createDirectories(defaultsDir) } catch (_: Exception) {}
+        if (!Files.exists(dir)) {
+            try { Files.createDirectories(dir) } catch (_: Exception) {}
         }
+        return dir
+    }
+
+    fun ensureDefaultConfig() {
+        val defaultsDir = getDefaultsDirectory()
 
         val presetFiles = listOf(
             Triple("frc2026", "FRC", "match"),
@@ -125,6 +139,7 @@ object ConfigService {
                     "qualitative" -> loadDefaultQualitativeConfigText(prog)
                     else -> loadDefaultConfigText(prog)
                 }
+                val normalizedSourceJson = normalizeConfigJson(jsonText)
 
                 val existing = DefaultConfigs
                     .selectAll().where { (DefaultConfigs.name eq presetName) and (DefaultConfigs.configType eq type) }
@@ -134,9 +149,18 @@ object ConfigService {
                         it[name] = presetName
                         it[program] = prog
                         it[configType] = type
-                        it[configJson] = jsonText
+                        it[configJson] = normalizedSourceJson
                         it[isDefault] = presetName.endsWith("2026")
                         it[updatedAt] = Instant.now()
+                    }
+                } else {
+                    // Update default config in DB to latest from source if changed
+                    val existingNormalized = normalizeConfigJson(existing[DefaultConfigs.configJson])
+                    if (existingNormalized != normalizedSourceJson) {
+                        DefaultConfigs.update({ DefaultConfigs.id eq existing[DefaultConfigs.id] }) {
+                            it[configJson] = normalizedSourceJson
+                            it[updatedAt] = Instant.now()
+                        }
                     }
                 }
             }
@@ -144,52 +168,79 @@ object ConfigService {
             listOf("FRC", "FTC").forEach { prog ->
                 val defaultMatchJson = DefaultConfigs
                     .selectAll().where { (DefaultConfigs.program eq prog) and (DefaultConfigs.configType eq "match") and (DefaultConfigs.isDefault eq true) }
-                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultConfigText()
+                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultConfigText(prog)
 
                 val existingScouting = ScoutingConfigs
                     .selectAll().where { (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq prog) }
                     .limit(1)
-                    .firstOrNull() != null
-                if (!existingScouting) {
+                    .firstOrNull()
+                if (existingScouting == null) {
                     ScoutingConfigs.insert {
                         it[teamNumber] = 0
                         it[program] = prog
                         it[configJson] = defaultMatchJson
                         it[updatedAt] = Instant.now()
                     }
+                } else {
+                    val existingNorm = normalizeConfigJson(existingScouting[ScoutingConfigs.configJson])
+                    val targetNorm = normalizeConfigJson(defaultMatchJson)
+                    if (existingNorm != targetNorm) {
+                        ScoutingConfigs.update({ (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq prog) }) {
+                            it[configJson] = targetNorm
+                            it[updatedAt] = Instant.now()
+                        }
+                    }
                 }
 
                 val defaultPitJson = DefaultConfigs
                     .selectAll().where { (DefaultConfigs.program eq prog) and (DefaultConfigs.configType eq "pit") and (DefaultConfigs.isDefault eq true) }
-                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultPitConfigText()
+                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultPitConfigText(prog)
 
                 val existingPit = PitScoutingConfigs
                     .selectAll().where { (PitScoutingConfigs.teamNumber eq 0) and (PitScoutingConfigs.program eq prog) }
                     .limit(1)
-                    .firstOrNull() != null
-                if (!existingPit) {
+                    .firstOrNull()
+                if (existingPit == null) {
                     PitScoutingConfigs.insert {
                         it[teamNumber] = 0
                         it[program] = prog
                         it[configJson] = defaultPitJson
                         it[updatedAt] = Instant.now()
                     }
+                } else {
+                    val existingNorm = normalizeConfigJson(existingPit[PitScoutingConfigs.configJson])
+                    val targetNorm = normalizeConfigJson(defaultPitJson)
+                    if (existingNorm != targetNorm) {
+                        PitScoutingConfigs.update({ (PitScoutingConfigs.teamNumber eq 0) and (PitScoutingConfigs.program eq prog) }) {
+                            it[configJson] = targetNorm
+                            it[updatedAt] = Instant.now()
+                        }
+                    }
                 }
 
                 val defaultQualJson = DefaultConfigs
                     .selectAll().where { (DefaultConfigs.program eq prog) and (DefaultConfigs.configType eq "qualitative") and (DefaultConfigs.isDefault eq true) }
-                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultQualitativeConfigText()
+                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultQualitativeConfigText(prog)
 
                 val existingQualitative = QualitativeScoutingConfigs
                     .selectAll().where { (QualitativeScoutingConfigs.teamNumber eq 0) and (QualitativeScoutingConfigs.program eq prog) }
                     .limit(1)
-                    .firstOrNull() != null
-                if (!existingQualitative) {
+                    .firstOrNull()
+                if (existingQualitative == null) {
                     QualitativeScoutingConfigs.insert {
                         it[teamNumber] = 0
                         it[program] = prog
                         it[configJson] = defaultQualJson
                         it[updatedAt] = Instant.now()
+                    }
+                } else {
+                    val existingNorm = normalizeConfigJson(existingQualitative[QualitativeScoutingConfigs.configJson])
+                    val targetNorm = normalizeConfigJson(defaultQualJson)
+                    if (existingNorm != targetNorm) {
+                        QualitativeScoutingConfigs.update({ (QualitativeScoutingConfigs.teamNumber eq 0) and (QualitativeScoutingConfigs.program eq prog) }) {
+                            it[configJson] = targetNorm
+                            it[updatedAt] = Instant.now()
+                        }
                     }
                 }
             }
@@ -266,6 +317,9 @@ object ConfigService {
                 }
             } catch (ignored: Exception) {}
         }
+
+        // Clone/sync all default configs from the database onto the local server disk
+        syncFromDatabaseToLocalDisk()
     }
 
     fun getDefaultConfigs(program: String, configType: String? = null): List<DefaultConfigDTO> {
@@ -356,22 +410,132 @@ object ConfigService {
         }
     }
 
-    private fun savePresetFileOnDisk(name: String, configType: String, jsonText: String) {
+    private fun savePresetFileOnDisk(name: String, configType: String, jsonText: String, isDefault: Boolean = false, program: String = "FRC") {
         try {
-            val defaultsDir = Paths.get("config", "defaults")
-            if (!Files.exists(defaultsDir)) {
-                Files.createDirectories(defaultsDir)
-            }
+            val defaultsDir = getDefaultsDirectory()
             val targetType = when (configType.lowercase()) {
                 "game", "match" -> "match"
                 "qual", "qualitative" -> "qualitative"
                 else -> configType.lowercase()
             }
             val filePath = defaultsDir.resolve("$name-$targetType.json")
-            Files.writeString(filePath, jsonText + "\n")
+            Files.writeString(filePath, jsonText.trim() + "\n")
+
+            if (isDefault && program.equals("FRC", ignoreCase = true)) {
+                val primaryFile = when (targetType) {
+                    "match" -> defaultConfigPath
+                    "pit" -> defaultPitConfigPath
+                    "qualitative" -> defaultQualitativeConfigPath
+                    else -> null
+                }
+                if (primaryFile != null) {
+                    primaryFile.parent?.let { if (!Files.exists(it)) Files.createDirectories(it) }
+                    Files.writeString(primaryFile, jsonText.trim() + "\n")
+                }
+            }
         } catch (e: Exception) {
             println("Warning: Could not save preset file to disk: ${e.message}")
         }
+    }
+
+    /**
+     * Reads all default configs from the database and clones any added or modified presets to local disk.
+     * Used on initial boot and in multi-server cluster replication.
+     */
+    fun syncFromDatabaseToLocalDisk() {
+        try {
+            val defaultsDir = getDefaultsDirectory()
+            val dbPresets = readTransaction {
+                DefaultConfigs.selectAll().map { row ->
+                    Triple(
+                        "${row[DefaultConfigs.name]}-${row[DefaultConfigs.configType]}.json",
+                        row[DefaultConfigs.configJson],
+                        row[DefaultConfigs.isDefault] to (row[DefaultConfigs.program] to row[DefaultConfigs.configType])
+                    )
+                }
+            }
+
+            dbPresets.forEach { (fileName, jsonContent, meta) ->
+                val filePath = defaultsDir.resolve(fileName)
+                val needsWrite = if (!Files.exists(filePath)) {
+                    true
+                } else {
+                    try {
+                        Files.readString(filePath).trim() != jsonContent.trim()
+                    } catch (_: Exception) {
+                        true
+                    }
+                }
+
+                if (needsWrite) {
+                    Files.writeString(filePath, jsonContent.trim() + "\n")
+                    println("[ClusterConfigSync] Cloned/Updated default config '$fileName' to local disk.")
+                }
+
+                val (isDefault, progType) = meta
+                val (prog, type) = progType
+                if (isDefault && prog.equals("FRC", ignoreCase = true)) {
+                    val primaryFile = when (type.lowercase()) {
+                        "match" -> defaultConfigPath
+                        "pit" -> defaultPitConfigPath
+                        "qualitative" -> defaultQualitativeConfigPath
+                        else -> null
+                    }
+                    if (primaryFile != null) {
+                        val primaryNeedsWrite = if (!Files.exists(primaryFile)) {
+                            true
+                        } else {
+                            try {
+                                Files.readString(primaryFile).trim() != jsonContent.trim()
+                            } catch (_: Exception) {
+                                true
+                            }
+                        }
+                        if (primaryNeedsWrite) {
+                            try {
+                                primaryFile.parent?.let { if (!Files.exists(it)) Files.createDirectories(it) }
+                                Files.writeString(primaryFile, jsonContent.trim() + "\n")
+                                println("[ClusterConfigSync] Synced active default config '${primaryFile.fileName}' to local disk.")
+                            } catch (e: Exception) {
+                                println("Warning: Could not sync active default config to $primaryFile: ${e.message}")
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            println("[ClusterConfigSync] Warning: Failed to sync default configs from database to local disk: ${e.message}")
+        }
+    }
+
+    @Volatile
+    private var clusterSyncJob: Job? = null
+
+    /**
+     * Starts background polling of CockroachDB/PostgreSQL default_configs table for multi-server clusters.
+     * Automatically clones new or changed default configs across all cluster nodes to their local disk.
+     */
+    fun startBackgroundClusterSync(intervalSeconds: Long = 30) {
+        if (clusterSyncJob?.isActive == true) return
+
+        clusterSyncJob = CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            println("[ClusterConfigSync] Background cluster default configs sync monitor started (polling every $intervalSeconds seconds)...")
+            while (isActive) {
+                try {
+                    delay(intervalSeconds * 1000)
+                    syncFromDatabaseToLocalDisk()
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Exception) {
+                    // Suppress and retry next cycle
+                }
+            }
+        }
+    }
+
+    fun stopBackgroundClusterSync() {
+        clusterSyncJob?.cancel()
+        clusterSyncJob = null
     }
 
     fun createDefaultConfig(dto: DefaultConfigDTO): DefaultConfigDTO {
@@ -400,7 +564,7 @@ object ConfigService {
                 it[updatedAt] = Instant.now()
             }[DefaultConfigs.id].value
         }
-        savePresetFileOnDisk(dto.name, dto.configType, normalizedJson)
+        savePresetFileOnDisk(dto.name, dto.configType, normalizedJson, dto.isDefault, dto.program)
         return dto.copy(id = newId.toString(), configJson = normalizedJson, updatedAt = Instant.now().toString())
     }
 
@@ -431,7 +595,7 @@ object ConfigService {
                 it[updatedAt] = Instant.now()
             }
         }
-        savePresetFileOnDisk(dto.name, dto.configType, normalizedJson)
+        savePresetFileOnDisk(dto.name, dto.configType, normalizedJson, dto.isDefault, dto.program)
         return dto.copy(id = id, configJson = normalizedJson, updatedAt = Instant.now().toString())
     }
 
@@ -443,7 +607,7 @@ object ConfigService {
                 val name = existing[DefaultConfigs.name]
                 val type = existing[DefaultConfigs.configType]
                 try {
-                    val filePath = Paths.get("config", "defaults", "$name-$type.json")
+                    val filePath = getDefaultsDirectory().resolve("$name-$type.json")
                     Files.deleteIfExists(filePath)
                 } catch (_: Exception) {}
             }

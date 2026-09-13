@@ -277,7 +277,11 @@ fun runUpdateHelper() {
                 
                 userFile.parentFile?.mkdirs()
                 
-                if (srcFile.name.endsWith(".json")) {
+                val isDefaultConfigFile = srcFile.name.startsWith("default-") || relPath.startsWith("defaults") || relPath.startsWith("defaults/") || relPath.startsWith("defaults\\")
+                if (isDefaultConfigFile) {
+                    println("Updating default configuration file to latest from source: config/$relPath")
+                    srcFile.copyTo(userFile, overwrite = true)
+                } else if (srcFile.name.endsWith(".json")) {
                     if (userFile.exists() && userFile.length() > 0) {
                         println("Merging configuration schema changes for config/$relPath...")
                         try {
@@ -301,7 +305,7 @@ fun runUpdateHelper() {
                              srcFile.copyTo(userFile, overwrite = true)
                          }
                     } else {
-                        println("Adding new default config file config/$relPath...")
+                        println("Adding new configuration file config/$relPath...")
                         srcFile.copyTo(userFile)
                     }
                 } else {
