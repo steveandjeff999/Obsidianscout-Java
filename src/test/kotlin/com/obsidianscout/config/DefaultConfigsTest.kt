@@ -4,7 +4,9 @@ import com.obsidianscout.db.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
@@ -42,30 +44,86 @@ class DefaultConfigsTest {
     }
 
     @Test
+    fun testDefaultConfigsAutoLoadedFromDiskOnBoot() {
+        val allDefaults = ConfigService.getAllDefaultConfigs()
+        assertTrue(allDefaults.isNotEmpty(), "Default config presets from update bundle on disk should be loaded")
+        assertTrue(allDefaults.any { it.name == "frc2026" && it.configType == "match" })
+        assertTrue(allDefaults.any { it.name == "ftc2026" && it.configType == "match" })
+    }
+
+    @Test
     fun testProgramIsolationForDefaultConfigs() {
-        val ftcDefaults = ConfigService.getDefaultConfigs("FTC")
-        val frcDefaults = ConfigService.getDefaultConfigs("FRC")
+        val ftcPreset = ConfigService.createDefaultConfig(
+            DefaultConfigDTO(
+                name = "test_ftc_manual_1",
+                program = "FTC",
+                configType = "match",
+                configJson = """{"version":1,"title":"FTC Manual 1","fields":[]}""",
+                isDefault = false
+            )
+        )
+        val frcPreset = ConfigService.createDefaultConfig(
+            DefaultConfigDTO(
+                name = "test_frc_manual_1",
+                program = "FRC",
+                configType = "match",
+                configJson = """{"version":1,"title":"FRC Manual 1","fields":[]}""",
+                isDefault = false
+            )
+        )
 
-        assertTrue(ftcDefaults.isNotEmpty(), "FTC default configs should not be empty")
-        assertTrue(frcDefaults.isNotEmpty(), "FRC default configs should not be empty")
+        try {
+            val ftcDefaults = ConfigService.getDefaultConfigs("FTC")
+            val frcDefaults = ConfigService.getDefaultConfigs("FRC")
 
-        // Assert all FTC returned defaults belong to FTC
-        assertTrue(ftcDefaults.all { it.program == "FTC" }, "All FTC default configs must have program FTC")
+            assertTrue(ftcDefaults.isNotEmpty(), "FTC default configs should not be empty")
+            assertTrue(frcDefaults.isNotEmpty(), "FRC default configs should not be empty")
 
-        // Assert all FRC returned defaults belong to FRC
-        assertTrue(frcDefaults.all { it.program == "FRC" }, "All FRC default configs must have program FRC")
+            // Assert all FTC returned defaults belong to FTC
+            assertTrue(ftcDefaults.all { it.program == "FTC" }, "All FTC default configs must have program FTC")
+
+            // Assert all FRC returned defaults belong to FRC
+            assertTrue(frcDefaults.all { it.program == "FRC" }, "All FRC default configs must have program FRC")
+        } finally {
+            ftcPreset.id?.let { ConfigService.deleteDefaultConfig(it) }
+            frcPreset.id?.let { ConfigService.deleteDefaultConfig(it) }
+        }
     }
 
     @Test
     fun testCrossProgramPresetApplicationRejection() {
-        assertFailsWith<IllegalArgumentException> {
-            // Team in FTC program trying to apply FRC preset
-            ConfigService.applyDefaultConfig(teamNumber = 9999, program = "FTC", configType = "match", presetName = "frc2026")
-        }
+        val frcPreset = ConfigService.createDefaultConfig(
+            DefaultConfigDTO(
+                name = "test_frc_cross",
+                program = "FRC",
+                configType = "match",
+                configJson = """{"version":1,"title":"FRC 2026 Reefscape","fields":[]}""",
+                isDefault = false
+            )
+        )
+        val ftcPreset = ConfigService.createDefaultConfig(
+            DefaultConfigDTO(
+                name = "test_ftc_cross",
+                program = "FTC",
+                configType = "match",
+                configJson = """{"version":1,"title":"FTC 2026 Into The Deep","fields":[]}""",
+                isDefault = false
+            )
+        )
 
-        assertFailsWith<IllegalArgumentException> {
-            // Team in FRC program trying to apply FTC preset
-            ConfigService.applyDefaultConfig(teamNumber = 9999, program = "FRC", configType = "match", presetName = "ftc2026")
+        try {
+            assertFailsWith<IllegalArgumentException> {
+                // Team in FTC program trying to apply FRC preset
+                ConfigService.applyDefaultConfig(teamNumber = 9999, program = "FTC", configType = "match", presetName = "test_frc_cross")
+            }
+
+            assertFailsWith<IllegalArgumentException> {
+                // Team in FRC program trying to apply FTC preset
+                ConfigService.applyDefaultConfig(teamNumber = 9999, program = "FRC", configType = "match", presetName = "test_ftc_cross")
+            }
+        } finally {
+            frcPreset.id?.let { ConfigService.deleteDefaultConfig(it) }
+            ftcPreset.id?.let { ConfigService.deleteDefaultConfig(it) }
         }
     }
 
@@ -74,25 +132,69 @@ class DefaultConfigsTest {
         val teamNum = 1111
         val prog = "FTC"
 
-        // 1. Update initial pit config to custom value
-        ConfigService.updatePitConfig(teamNum, prog, """{"version":1,"title":"Custom Pit"}""")
+        val preset = ConfigService.createDefaultConfig(
+            DefaultConfigDTO(
+                name = "test_ftc_independent",
+                program = "FTC",
+                configType = "match",
+                configJson = """{"version":1,"title":"FTC 2026 Into The Deep Scouting","fields":[]}""",
+                isDefault = true
+            )
+        )
 
-        // 2. Apply match preset ftc2026
-        val matchResult = ConfigService.applyDefaultConfig(teamNum, prog, "match", "ftc2026")
-        assertNotNull(matchResult)
-        assertEquals("FTC 2026 Into The Deep Scouting", matchResult.title)
+        try {
+            // 1. Update initial pit config to custom value
+            ConfigService.updatePitConfig(teamNum, prog, """{"version":1,"title":"Custom Pit"}""")
 
-        // 3. Verify Pit config was NOT cleared or overwritten!
-        val pitResult = ConfigService.getPitConfigJson(teamNum, prog, local = true)
-        assertTrue("Custom Pit" in pitResult, "Applying match default config should leave pit config untouched")
+            // 2. Apply match preset
+            val matchResult = ConfigService.applyDefaultConfig(teamNum, prog, "match", "test_ftc_independent")
+            assertNotNull(matchResult)
+            assertEquals("FTC 2026 Into The Deep Scouting", matchResult.title)
 
-        // 4. Reset match config to default
-        val resetMatch = ConfigService.resetToDefaultConfig(teamNum, prog, "match")
-        assertNotNull(resetMatch)
+            // 3. Verify Pit config was NOT cleared or overwritten!
+            val pitResult = ConfigService.getPitConfigJson(teamNum, prog, local = true)
+            assertTrue("Custom Pit" in pitResult, "Applying match default config should leave pit config untouched")
 
-        // 5. Verify Pit config is still intact
-        val pitResult2 = ConfigService.getPitConfigJson(teamNum, prog, local = true)
-        assertTrue("Custom Pit" in pitResult2, "Resetting match config should leave pit config untouched")
+            // 4. Reset match config to default
+            val resetMatch = ConfigService.resetToDefaultConfig(teamNum, prog, "match")
+            assertNotNull(resetMatch)
+
+            // 5. Verify Pit config is still intact
+            val pitResult2 = ConfigService.getPitConfigJson(teamNum, prog, local = true)
+            assertTrue("Custom Pit" in pitResult2, "Resetting match config should leave pit config untouched")
+        } finally {
+            preset.id?.let { ConfigService.deleteDefaultConfig(it) }
+        }
+    }
+
+    @Test
+    fun testActiveDefaultPresetSyncsToTeamZero() {
+        val prog = "FRC"
+        val customDefaultTitle = "Manually Created Active Default"
+        val preset = ConfigService.createDefaultConfig(
+            DefaultConfigDTO(
+                name = "frc_manual_active",
+                program = prog,
+                configType = "match",
+                configJson = """{"version":1,"title":"$customDefaultTitle","fields":[]}""",
+                isDefault = true
+            )
+        )
+
+        // Verify team 0 in ScoutingConfigs was updated
+        val teamZeroConfig = transaction {
+            ScoutingConfigs.selectAll()
+                .where { (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq prog) }
+                .firstOrNull()?.get(ScoutingConfigs.configJson)
+        }
+        assertNotNull(teamZeroConfig)
+        assertTrue(teamZeroConfig.contains(customDefaultTitle))
+
+        // Verify unconfigured team automatically receives this active default
+        val unconfiguredTeamJson = ConfigService.getConfigJson(8888, prog, local = true)
+        assertTrue(unconfiguredTeamJson.contains(customDefaultTitle))
+
+        ConfigService.deleteDefaultConfig(preset.id!!)
     }
 
     @Test

@@ -55,7 +55,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let currentConfig = { version: 1, title: "ObsidianScout", fields: [], analytics: [] };
 
     function supportsPointsConfig() {
-        return activeConfigKind !== "qual";
+        return activeConfigKind === "game";
     }
 
     function supportsPhasesConfig() {

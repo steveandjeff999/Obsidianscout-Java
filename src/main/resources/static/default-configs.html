@@ -401,7 +401,11 @@
 
             const container = document.getElementById('preset-list');
             if (filtered.length === 0) {
-                container.innerHTML = `<div class="card soft" style="grid-column: 1/-1; text-align: center; padding: 40px;"><p class="notice">No default config presets match your filters.</p></div>`;
+                if (allPresets.length === 0) {
+                    container.innerHTML = `<div class="card soft" style="grid-column: 1/-1; text-align: center; padding: 40px;"><p class="notice" style="font-size: 1.05rem;">No default config presets exist yet. All default configurations are manually created.<br><br><button class="btn primary" onclick="openModal()">+ Create Your First Preset</button></p></div>`;
+                } else {
+                    container.innerHTML = `<div class="card soft" style="grid-column: 1/-1; text-align: center; padding: 40px;"><p class="notice">No default config presets match your filters.</p></div>`;
+                }
                 return;
             }
 
@@ -424,6 +428,7 @@
                             </div>
                         </div>
                         <div class="preset-actions">
+                            ${!p.isDefault ? `<button class="btn ghost btn-sm" style="color:var(--accent); font-weight:600;" onclick="setActivePreset('${p.id}')">★ Set Active</button>` : ''}
                             <button class="btn ghost btn-sm" onclick="editPreset('${p.id}')">Edit</button>
                             <button class="btn ghost btn-sm" onclick="duplicatePreset('${p.id}')">Duplicate</button>
                             <button class="btn ghost btn-sm" style="color:#ef4444;" onclick="deletePreset('${p.id}', '${escapeHtml(p.name)}')">Delete</button>
@@ -474,7 +479,7 @@
 
         function supportsPointsConfig() {
             const configType = document.getElementById('preset-type')?.value || 'match';
-            return configType !== 'qualitative';
+            return configType === 'match';
         }
 
         function supportsPhasesConfig() {
@@ -794,6 +799,7 @@
 
         function addVisualField() {
             if (!currentPresetConfig.fields) currentPresetConfig.fields = [];
+            const supportsPts = supportsPointsConfig();
             const supportsPhs = supportsPhasesConfig();
             currentPresetConfig.fields.push({
                 id: `field_${Date.now().toString().slice(-4)}`,
@@ -801,7 +807,7 @@
                 type: "counter",
                 min: 0,
                 step: 1,
-                pointsPer: 1.0,
+                ...(supportsPts ? { pointsPer: 1.0 } : {}),
                 ...(supportsPhs ? { phase: "auto" } : {})
             });
             renderVisualFields();
@@ -880,6 +886,34 @@
                     name: `${p.name}_copy`,
                     isDefault: false
                 });
+            }
+        }
+
+        async function setActivePreset(id) {
+            const preset = allPresets.find(item => item.id === id);
+            if (!preset) return;
+            try {
+                const updated = {
+                    ...preset,
+                    isDefault: true
+                };
+                if (window.Obsidianscout) {
+                    await Obsidianscout.request(`/api/admin/default-configs/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updated)
+                    });
+                } else {
+                    const res = await fetch(`/api/admin/default-configs/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updated)
+                    });
+                    if (!res.ok) throw new Error('Failed to set active default preset');
+                }
+                await loadPresets();
+            } catch (err) {
+                alert(`Error setting active default: ${err.message}`);
             }
         }
 

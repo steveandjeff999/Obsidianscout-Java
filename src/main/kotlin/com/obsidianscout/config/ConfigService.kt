@@ -112,135 +112,79 @@ object ConfigService {
     fun ensureDefaultConfig() {
         val defaultsDir = getDefaultsDirectory()
 
-        val presetFiles = listOf(
-            Triple("frc2026", "FRC", "match"),
-            Triple("frc2026", "FRC", "pit"),
-            Triple("frc2026", "FRC", "qualitative"),
-            Triple("frc2025", "FRC", "match"),
-            Triple("frc2025", "FRC", "pit"),
-            Triple("frc2025", "FRC", "qualitative"),
-            Triple("ftc2026", "FTC", "match"),
-            Triple("ftc2026", "FTC", "pit"),
-            Triple("ftc2026", "FTC", "qualitative"),
-            Triple("ftc2025", "FTC", "match"),
-            Triple("ftc2025", "FTC", "pit"),
-            Triple("ftc2025", "FTC", "qualitative")
-        )
-
         transaction {
             SchemaUtils.createMissingTablesAndColumns(DefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs)
-            presetFiles.forEach { (presetName, prog, type) ->
-                val filePath = defaultsDir.resolve("$presetName-$type.json")
-                val jsonText = if (Files.exists(filePath)) {
-                    Files.readString(filePath)
-                } else when (type) {
-                    "match" -> loadDefaultConfigText(prog)
-                    "pit" -> loadDefaultPitConfigText(prog)
-                    "qualitative" -> loadDefaultQualitativeConfigText(prog)
-                    else -> loadDefaultConfigText(prog)
-                }
-                val normalizedSourceJson = normalizeConfigJson(jsonText)
 
-                val existing = DefaultConfigs
-                    .selectAll().where { (DefaultConfigs.name eq presetName) and (DefaultConfigs.configType eq type) }
-                    .firstOrNull()
-                if (existing == null) {
-                    DefaultConfigs.insert {
-                        it[name] = presetName
-                        it[program] = prog
-                        it[configType] = type
-                        it[configJson] = normalizedSourceJson
-                        it[isDefault] = presetName.endsWith("2026")
-                        it[updatedAt] = Instant.now()
+            // Auto-update default presets from files physically included in the update bundle (config/defaults/*.json)
+            if (Files.exists(defaultsDir) && Files.isDirectory(defaultsDir)) {
+                val diskFiles = try {
+                    Files.list(defaultsDir).use { stream ->
+                        stream.filter { it.toString().endsWith(".json") }.toList()
                     }
-                } else {
-                    // Update default config in DB to latest from source if changed
-                    val existingNormalized = normalizeConfigJson(existing[DefaultConfigs.configJson])
-                    if (existingNormalized != normalizedSourceJson) {
-                        DefaultConfigs.update({ DefaultConfigs.id eq existing[DefaultConfigs.id] }) {
-                            it[configJson] = normalizedSourceJson
-                            it[updatedAt] = Instant.now()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+
+                diskFiles.forEach { filePath ->
+                    try {
+                        val fileName = filePath.fileName.toString()
+                        val baseName = fileName.removeSuffix(".json")
+                        val lastDash = baseName.lastIndexOf('-')
+                        if (lastDash > 0) {
+                            val presetName = baseName.substring(0, lastDash)
+                            val type = baseName.substring(lastDash + 1).lowercase()
+                            if (type == "match" || type == "pit" || type == "qualitative") {
+                                val prog = if (presetName.startsWith("ftc", ignoreCase = true)) "FTC" else "FRC"
+                                val fileJson = Files.readString(filePath)
+                                val normalizedSourceJson = normalizeConfigJson(fileJson)
+
+                                val existing = DefaultConfigs
+                                    .selectAll().where { (DefaultConfigs.name eq presetName) and (DefaultConfigs.configType eq type) }
+                                    .firstOrNull()
+
+                                if (existing == null) {
+                                    val isDef = presetName.endsWith("2026")
+                                    DefaultConfigs.insert {
+                                        it[name] = presetName
+                                        it[program] = prog
+                                        it[configType] = type
+                                        it[configJson] = normalizedSourceJson
+                                        it[isDefault] = isDef
+                                        it[updatedAt] = Instant.now()
+                                    }
+                                    if (isDef) {
+                                        syncActiveDefaultToTeamZero(prog, type, normalizedSourceJson)
+                                    }
+                                } else {
+                                    val existingNormalized = normalizeConfigJson(existing[DefaultConfigs.configJson])
+                                    if (existingNormalized != normalizedSourceJson) {
+                                        DefaultConfigs.update({ DefaultConfigs.id eq existing[DefaultConfigs.id] }) {
+                                            it[configJson] = normalizedSourceJson
+                                            it[updatedAt] = Instant.now()
+                                        }
+                                        println("[ConfigService] Updated default config '$presetName' ($type) to latest from update bundle.")
+                                        if (existing[DefaultConfigs.isDefault]) {
+                                            syncActiveDefaultToTeamZero(prog, type, normalizedSourceJson)
+                                        }
+                                    }
+                                }
+                            }
                         }
+                    } catch (e: Exception) {
+                        println("[ConfigService] Warning reading bundle file $filePath: ${e.message}")
                     }
                 }
             }
 
+            // Ensure active defaults in DefaultConfigs are synced to team 0
             listOf("FRC", "FTC").forEach { prog ->
-                val defaultMatchJson = DefaultConfigs
-                    .selectAll().where { (DefaultConfigs.program eq prog) and (DefaultConfigs.configType eq "match") and (DefaultConfigs.isDefault eq true) }
-                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultConfigText(prog)
-
-                val existingScouting = ScoutingConfigs
-                    .selectAll().where { (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq prog) }
-                    .limit(1)
-                    .firstOrNull()
-                if (existingScouting == null) {
-                    ScoutingConfigs.insert {
-                        it[teamNumber] = 0
-                        it[program] = prog
-                        it[configJson] = defaultMatchJson
-                        it[updatedAt] = Instant.now()
-                    }
-                } else {
-                    val existingNorm = normalizeConfigJson(existingScouting[ScoutingConfigs.configJson])
-                    val targetNorm = normalizeConfigJson(defaultMatchJson)
-                    if (existingNorm != targetNorm) {
-                        ScoutingConfigs.update({ (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq prog) }) {
-                            it[configJson] = targetNorm
-                            it[updatedAt] = Instant.now()
-                        }
-                    }
-                }
-
-                val defaultPitJson = DefaultConfigs
-                    .selectAll().where { (DefaultConfigs.program eq prog) and (DefaultConfigs.configType eq "pit") and (DefaultConfigs.isDefault eq true) }
-                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultPitConfigText(prog)
-
-                val existingPit = PitScoutingConfigs
-                    .selectAll().where { (PitScoutingConfigs.teamNumber eq 0) and (PitScoutingConfigs.program eq prog) }
-                    .limit(1)
-                    .firstOrNull()
-                if (existingPit == null) {
-                    PitScoutingConfigs.insert {
-                        it[teamNumber] = 0
-                        it[program] = prog
-                        it[configJson] = defaultPitJson
-                        it[updatedAt] = Instant.now()
-                    }
-                } else {
-                    val existingNorm = normalizeConfigJson(existingPit[PitScoutingConfigs.configJson])
-                    val targetNorm = normalizeConfigJson(defaultPitJson)
-                    if (existingNorm != targetNorm) {
-                        PitScoutingConfigs.update({ (PitScoutingConfigs.teamNumber eq 0) and (PitScoutingConfigs.program eq prog) }) {
-                            it[configJson] = targetNorm
-                            it[updatedAt] = Instant.now()
-                        }
-                    }
-                }
-
-                val defaultQualJson = DefaultConfigs
-                    .selectAll().where { (DefaultConfigs.program eq prog) and (DefaultConfigs.configType eq "qualitative") and (DefaultConfigs.isDefault eq true) }
-                    .firstOrNull()?.get(DefaultConfigs.configJson) ?: loadDefaultQualitativeConfigText(prog)
-
-                val existingQualitative = QualitativeScoutingConfigs
-                    .selectAll().where { (QualitativeScoutingConfigs.teamNumber eq 0) and (QualitativeScoutingConfigs.program eq prog) }
-                    .limit(1)
-                    .firstOrNull()
-                if (existingQualitative == null) {
-                    QualitativeScoutingConfigs.insert {
-                        it[teamNumber] = 0
-                        it[program] = prog
-                        it[configJson] = defaultQualJson
-                        it[updatedAt] = Instant.now()
-                    }
-                } else {
-                    val existingNorm = normalizeConfigJson(existingQualitative[QualitativeScoutingConfigs.configJson])
-                    val targetNorm = normalizeConfigJson(defaultQualJson)
-                    if (existingNorm != targetNorm) {
-                        QualitativeScoutingConfigs.update({ (QualitativeScoutingConfigs.teamNumber eq 0) and (QualitativeScoutingConfigs.program eq prog) }) {
-                            it[configJson] = targetNorm
-                            it[updatedAt] = Instant.now()
-                        }
+                listOf("match", "pit", "qualitative").forEach { type ->
+                    val activeRow = DefaultConfigs
+                        .selectAll().where { (DefaultConfigs.program eq prog) and (DefaultConfigs.configType eq type) and (DefaultConfigs.isDefault eq true) }
+                        .firstOrNull()
+                    if (activeRow != null) {
+                        val activeJson = activeRow[DefaultConfigs.configJson]
+                        syncActiveDefaultToTeamZero(prog, type, activeJson)
                     }
                 }
             }
@@ -538,6 +482,64 @@ object ConfigService {
         clusterSyncJob = null
     }
 
+    private fun syncActiveDefaultToTeamZero(program: String, configType: String, json: String) {
+        val targetType = when (configType.lowercase()) {
+            "game", "match" -> "match"
+            "qual", "qualitative" -> "qualitative"
+            else -> configType.lowercase()
+        }
+        when (targetType) {
+            "match" -> {
+                val existing = ScoutingConfigs.selectAll().where { (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq program) }.firstOrNull()
+                if (existing == null) {
+                    ScoutingConfigs.insert {
+                        it[teamNumber] = 0
+                        it[ScoutingConfigs.program] = program
+                        it[configJson] = json
+                        it[updatedAt] = Instant.now()
+                    }
+                } else {
+                    ScoutingConfigs.update({ (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq program) }) {
+                        it[configJson] = json
+                        it[updatedAt] = Instant.now()
+                    }
+                }
+            }
+            "pit" -> {
+                val existing = PitScoutingConfigs.selectAll().where { (PitScoutingConfigs.teamNumber eq 0) and (PitScoutingConfigs.program eq program) }.firstOrNull()
+                if (existing == null) {
+                    PitScoutingConfigs.insert {
+                        it[teamNumber] = 0
+                        it[PitScoutingConfigs.program] = program
+                        it[configJson] = json
+                        it[updatedAt] = Instant.now()
+                    }
+                } else {
+                    PitScoutingConfigs.update({ (PitScoutingConfigs.teamNumber eq 0) and (PitScoutingConfigs.program eq program) }) {
+                        it[configJson] = json
+                        it[updatedAt] = Instant.now()
+                    }
+                }
+            }
+            "qualitative" -> {
+                val existing = QualitativeScoutingConfigs.selectAll().where { (QualitativeScoutingConfigs.teamNumber eq 0) and (QualitativeScoutingConfigs.program eq program) }.firstOrNull()
+                if (existing == null) {
+                    QualitativeScoutingConfigs.insert {
+                        it[teamNumber] = 0
+                        it[QualitativeScoutingConfigs.program] = program
+                        it[configJson] = json
+                        it[updatedAt] = Instant.now()
+                    }
+                } else {
+                    QualitativeScoutingConfigs.update({ (QualitativeScoutingConfigs.teamNumber eq 0) and (QualitativeScoutingConfigs.program eq program) }) {
+                        it[configJson] = json
+                        it[updatedAt] = Instant.now()
+                    }
+                }
+            }
+        }
+    }
+
     fun createDefaultConfig(dto: DefaultConfigDTO): DefaultConfigDTO {
         val normalizedJson = normalizeConfigJson(dto.configJson)
         val newId = transaction {
@@ -554,6 +556,7 @@ object ConfigService {
                 DefaultConfigs.update({ (DefaultConfigs.program eq dto.program) and (DefaultConfigs.configType eq dto.configType) }) {
                     it[isDefault] = false
                 }
+                syncActiveDefaultToTeamZero(dto.program, dto.configType, normalizedJson)
             }
             DefaultConfigs.insert {
                 it[name] = dto.name
@@ -585,6 +588,7 @@ object ConfigService {
                 DefaultConfigs.update({ (DefaultConfigs.program eq dto.program) and (DefaultConfigs.configType eq dto.configType) }) {
                     it[isDefault] = false
                 }
+                syncActiveDefaultToTeamZero(dto.program, dto.configType, normalizedJson)
             }
             DefaultConfigs.update({ DefaultConfigs.id eq uuid }) {
                 it[name] = dto.name
@@ -641,13 +645,22 @@ object ConfigService {
                 return@readTransaction teamConfig
             }
 
+            // Fall back to active default preset if set
+            val activeDefault = DefaultConfigs
+                .selectAll().where { (DefaultConfigs.program eq program) and (DefaultConfigs.configType eq "match") and (DefaultConfigs.isDefault eq true) }
+                .firstOrNull()
+                ?.get(DefaultConfigs.configJson)
+            if (activeDefault != null) {
+                return@readTransaction activeDefault
+            }
+
             // Fall back to team 0 (global default)
             ScoutingConfigs
                 .selectAll().where { (ScoutingConfigs.teamNumber eq 0) and (ScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(ScoutingConfigs.configJson)
-        } } catch (_: Throwable) { null } ?: loadDefaultConfigText()
+        } } catch (_: Throwable) { null } ?: loadDefaultConfigText(program)
     }
 
     fun getConfig(teamNumber: Int, program: String = "FRC", local: Boolean = false): ScoutingConfig {
@@ -706,12 +719,21 @@ object ConfigService {
                 return@readTransaction teamConfig
             }
 
+            // Fall back to active default preset if set
+            val activeDefault = DefaultConfigs
+                .selectAll().where { (DefaultConfigs.program eq program) and (DefaultConfigs.configType eq "pit") and (DefaultConfigs.isDefault eq true) }
+                .firstOrNull()
+                ?.get(DefaultConfigs.configJson)
+            if (activeDefault != null) {
+                return@readTransaction activeDefault
+            }
+
             PitScoutingConfigs
                 .selectAll().where { (PitScoutingConfigs.teamNumber eq 0) and (PitScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(PitScoutingConfigs.configJson)
-        } } catch (_: Throwable) { null } ?: loadDefaultPitConfigText()
+        } } catch (_: Throwable) { null } ?: loadDefaultPitConfigText(program)
     }
 
     fun getPitConfig(teamNumber: Int, program: String = "FRC", local: Boolean = false): ScoutingConfig {
@@ -746,7 +768,7 @@ object ConfigService {
     }
 
     fun getQualitativeConfigJson(teamNumber: Int, program: String = "FRC", local: Boolean = false): String {
-        return readTransaction {
+        return try { readTransaction {
             if (!local) {
                 val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
                 if (activeAllianceId != null) {
@@ -770,12 +792,21 @@ object ConfigService {
                 return@readTransaction teamConfig
             }
 
+            // Fall back to active default preset if set
+            val activeDefault = DefaultConfigs
+                .selectAll().where { (DefaultConfigs.program eq program) and (DefaultConfigs.configType eq "qualitative") and (DefaultConfigs.isDefault eq true) }
+                .firstOrNull()
+                ?.get(DefaultConfigs.configJson)
+            if (activeDefault != null) {
+                return@readTransaction activeDefault
+            }
+
             QualitativeScoutingConfigs
                 .selectAll().where { (QualitativeScoutingConfigs.teamNumber eq 0) and (QualitativeScoutingConfigs.program eq program) }
                 .limit(1)
                 .firstOrNull()
                 ?.get(QualitativeScoutingConfigs.configJson)
-        } ?: loadDefaultQualitativeConfigText()
+        } } catch (_: Throwable) { null } ?: loadDefaultQualitativeConfigText(program)
     }
 
     fun getQualitativeConfig(teamNumber: Int, program: String = "FRC", local: Boolean = false): ScoutingConfig {

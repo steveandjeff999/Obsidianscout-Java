@@ -43,7 +43,7 @@
     };
 
     function supportsPointsConfig() {
-        return activeConfigKind !== "qual";
+        return activeConfigKind === "game";
     }
 
     function supportsPhasesConfig() {
