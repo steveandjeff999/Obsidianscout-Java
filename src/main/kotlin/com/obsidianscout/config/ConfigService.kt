@@ -4,6 +4,7 @@ import com.obsidianscout.db.PitScoutingConfigs
 import com.obsidianscout.db.ScoutingConfigs
 import com.obsidianscout.db.QualitativeScoutingConfigs
 import com.obsidianscout.db.DefaultConfigs
+import com.obsidianscout.db.DeletedDefaultConfigs
 import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.scouting.AllianceService
 import kotlinx.serialization.Serializable
@@ -113,7 +114,15 @@ object ConfigService {
         val defaultsDir = getDefaultsDirectory()
 
         transaction {
-            SchemaUtils.createMissingTablesAndColumns(DefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs)
+            SchemaUtils.createMissingTablesAndColumns(DefaultConfigs, DeletedDefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs)
+
+            val deletedPresets = DeletedDefaultConfigs.selectAll().map { row ->
+                Triple(
+                    row[DeletedDefaultConfigs.name].lowercase(),
+                    row[DeletedDefaultConfigs.program].uppercase(),
+                    row[DeletedDefaultConfigs.configType].lowercase()
+                )
+            }.toSet()
 
             // Auto-update default presets from files physically included in the update bundle (config/defaults/*.json)
             if (Files.exists(defaultsDir) && Files.isDirectory(defaultsDir)) {
@@ -135,6 +144,16 @@ object ConfigService {
                             val type = baseName.substring(lastDash + 1).lowercase()
                             if (type == "match" || type == "pit" || type == "qualitative") {
                                 val prog = if (presetName.startsWith("ftc", ignoreCase = true)) "FTC" else "FRC"
+
+                                // If this preset was explicitly deleted via the Web UI, do not re-insert it and delete from disk!
+                                if (deletedPresets.contains(Triple(presetName.lowercase(), prog.uppercase(), type.lowercase()))) {
+                                    try {
+                                        Files.deleteIfExists(filePath)
+                                        println("[ConfigService] Removed deleted preset file '$fileName' from disk on startup.")
+                                    } catch (_: Exception) {}
+                                    return@forEach
+                                }
+
                                 val fileJson = Files.readString(filePath)
                                 val normalizedSourceJson = normalizeConfigJson(fileJson)
 
@@ -250,7 +269,10 @@ object ConfigService {
                     val matchNorm = matchOld?.let { normalizeConfigJson(it) }
                     val pitNorm = pitOld?.let { normalizeConfigJson(it) }
                     val qualNorm = qualOld?.let { normalizeConfigJson(it) }
-                    if (matchNorm != matchOld || pitNorm != pitOld || qualNorm != qualOld) {
+
+                    if ((matchNorm != null && matchNorm != matchOld) ||
+                        (pitNorm != null && pitNorm != pitOld) ||
+                        (qualNorm != null && qualNorm != qualOld)) {
                         ScoutingAlliances.update({ ScoutingAlliances.id eq row[ScoutingAlliances.id] }) {
                             if (matchNorm != null) it[matchConfigJson] = matchNorm
                             if (pitNorm != null) it[pitConfigJson] = pitNorm
@@ -261,19 +283,24 @@ object ConfigService {
                 }
             } catch (ignored: Exception) {}
         }
-
-        // Clone/sync all default configs from the database onto the local server disk
-        syncFromDatabaseToLocalDisk()
     }
 
-    fun getDefaultConfigs(program: String, configType: String? = null): List<DefaultConfigDTO> {
-        return readTransaction {
-            var query = DefaultConfigs.selectAll().where { DefaultConfigs.program eq program }
-            if (!configType.isNullOrBlank()) {
-                val filterType = if (configType.equals("game", ignoreCase = true)) "match" else if (configType.equals("qual", ignoreCase = true)) "qualitative" else configType.lowercase()
-                query = DefaultConfigs.selectAll().where { (DefaultConfigs.program eq program) and (DefaultConfigs.configType eq filterType) }
+    fun getDefaultConfigs(program: String = "FRC", configType: String? = null): List<DefaultConfigDTO> {
+        val targetType = configType?.let {
+            when (it.lowercase()) {
+                "game", "match" -> "match"
+                "qual", "qualitative" -> "qualitative"
+                else -> it.lowercase()
             }
-            query.orderBy(DefaultConfigs.name to SortOrder.ASC).map { row ->
+        }
+        return readTransaction {
+            val query = if (targetType != null) {
+                DefaultConfigs.selectAll().where { (DefaultConfigs.program eq program) and (DefaultConfigs.configType eq targetType) }
+            } else {
+                DefaultConfigs.selectAll().where { DefaultConfigs.program eq program }
+            }
+
+            query.orderBy(DefaultConfigs.isDefault to SortOrder.DESC, DefaultConfigs.name to SortOrder.ASC).map { row ->
                 DefaultConfigDTO(
                     id = row[DefaultConfigs.id].value.toString(),
                     name = row[DefaultConfigs.name],
@@ -384,21 +411,50 @@ object ConfigService {
 
     /**
      * Reads all default configs from the database and clones any added or modified presets to local disk.
+     * Also detects if any presets were deleted from the database and removes them locally across all cluster nodes.
      * Used on initial boot and in multi-server cluster replication.
      */
     fun syncFromDatabaseToLocalDisk() {
         try {
             val defaultsDir = getDefaultsDirectory()
-            val dbPresets = readTransaction {
-                DefaultConfigs.selectAll().map { row ->
+            val (dbPresets, deletedPresets) = readTransaction {
+                val active = DefaultConfigs.selectAll().map { row ->
                     Triple(
                         "${row[DefaultConfigs.name]}-${row[DefaultConfigs.configType]}.json",
                         row[DefaultConfigs.configJson],
                         row[DefaultConfigs.isDefault] to (row[DefaultConfigs.program] to row[DefaultConfigs.configType])
                     )
                 }
+                val deleted = DeletedDefaultConfigs.selectAll().map { row ->
+                    "${row[DeletedDefaultConfigs.name]}-${row[DeletedDefaultConfigs.configType]}.json"
+                }.toSet()
+                active to deleted
             }
 
+            val activeFileNames = dbPresets.map { it.first }.toSet()
+
+            // 1. Purge deleted/orphaned files from disk on this cluster node
+            if (Files.exists(defaultsDir) && Files.isDirectory(defaultsDir)) {
+                try {
+                    Files.list(defaultsDir).use { stream ->
+                        stream.filter { it.toString().endsWith(".json") }.forEach { diskFilePath ->
+                            val fName = diskFilePath.fileName.toString()
+                            if (deletedPresets.contains(fName) || (!activeFileNames.contains(fName) && deletedPresets.any { it.equals(fName, ignoreCase = true) })) {
+                                try {
+                                    Files.deleteIfExists(diskFilePath)
+                                    println("[ClusterConfigSync] Purged deleted default config '$fName' from local disk.")
+                                } catch (e: Exception) {
+                                    println("[ClusterConfigSync] Warning deleting preset file $fName: ${e.message}")
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    println("[ClusterConfigSync] Warning scanning defaults directory: ${e.message}")
+                }
+            }
+
+            // 2. Clone or update active presets
             dbPresets.forEach { (fileName, jsonContent, meta) ->
                 val filePath = defaultsDir.resolve(fileName)
                 val needsWrite = if (!Files.exists(filePath)) {
@@ -457,7 +513,8 @@ object ConfigService {
 
     /**
      * Starts background polling of CockroachDB/PostgreSQL default_configs table for multi-server clusters.
-     * Automatically clones new or changed default configs across all cluster nodes to their local disk.
+     * Automatically clones new or changed default configs across all cluster nodes to their local disk,
+     * and automatically purges deleted presets across all nodes.
      */
     fun startBackgroundClusterSync(intervalSeconds: Long = 30) {
         if (clusterSyncJob?.isActive == true) return
@@ -552,6 +609,13 @@ object ConfigService {
                     "A default config preset named '${dto.name}' already exists for ${dto.program} ${dto.configType}"
                 )
             }
+            // If the preset was previously deleted, remove it from DeletedDefaultConfigs
+            DeletedDefaultConfigs.deleteWhere {
+                (DeletedDefaultConfigs.name eq dto.name) and
+                (DeletedDefaultConfigs.program eq dto.program) and
+                (DeletedDefaultConfigs.configType eq dto.configType)
+            }
+
             if (dto.isDefault) {
                 DefaultConfigs.update({ (DefaultConfigs.program eq dto.program) and (DefaultConfigs.configType eq dto.configType) }) {
                     it[isDefault] = false
@@ -584,6 +648,13 @@ object ConfigService {
                     "A default config preset named '${dto.name}' already exists for ${dto.program} ${dto.configType}"
                 )
             }
+            // If the preset was previously deleted, remove it from DeletedDefaultConfigs
+            DeletedDefaultConfigs.deleteWhere {
+                (DeletedDefaultConfigs.name eq dto.name) and
+                (DeletedDefaultConfigs.program eq dto.program) and
+                (DeletedDefaultConfigs.configType eq dto.configType)
+            }
+
             if (dto.isDefault) {
                 DefaultConfigs.update({ (DefaultConfigs.program eq dto.program) and (DefaultConfigs.configType eq dto.configType) }) {
                     it[isDefault] = false
@@ -609,11 +680,30 @@ object ConfigService {
             val existing = DefaultConfigs.selectAll().where { DefaultConfigs.id eq uuid }.firstOrNull()
             if (existing != null) {
                 val name = existing[DefaultConfigs.name]
+                val prog = existing[DefaultConfigs.program]
                 val type = existing[DefaultConfigs.configType]
+
+                // Record deletion in DeletedDefaultConfigs tombstone so reboots and updates don't re-create it
+                DeletedDefaultConfigs.deleteWhere {
+                    (DeletedDefaultConfigs.name eq name) and
+                    (DeletedDefaultConfigs.program eq prog) and
+                    (DeletedDefaultConfigs.configType eq type)
+                }
+                DeletedDefaultConfigs.insert {
+                    it[DeletedDefaultConfigs.name] = name
+                    it[DeletedDefaultConfigs.program] = prog
+                    it[DeletedDefaultConfigs.configType] = type
+                    it[DeletedDefaultConfigs.deletedAt] = Instant.now()
+                }
+
+                // Delete local file immediately on this server
                 try {
                     val filePath = getDefaultsDirectory().resolve("$name-$type.json")
                     Files.deleteIfExists(filePath)
-                } catch (_: Exception) {}
+                    println("[ConfigService] Deleted default config file on local disk: $name-$type.json")
+                } catch (e: Exception) {
+                    println("[ConfigService] Warning deleting local preset file: ${e.message}")
+                }
             }
             DefaultConfigs.deleteWhere { DefaultConfigs.id eq uuid } > 0
         }

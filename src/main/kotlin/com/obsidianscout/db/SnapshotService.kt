@@ -80,6 +80,7 @@ object SnapshotService {
         QualitativeScoutingConfigs,
         ConfigRevisions,
         DefaultConfigs,
+        DeletedDefaultConfigs,
         ScoutingEntries,
         PitScoutingEntries,
         QualitativeScoutingEntries,

@@ -1,6 +1,7 @@
 package com.obsidianscout.db
 
 import org.jetbrains.exposed.dao.id.UUIDTable
+import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.javatime.timestamp
 
 object Users : UUIDTable("users") {
@@ -83,6 +84,15 @@ object DefaultConfigs : UUIDTable("default_configs") {
     init {
         uniqueIndex("ux_default_configs_name_program_type", name, program, configType)
     }
+}
+
+object DeletedDefaultConfigs : Table("deleted_default_configs") {
+    val name = varchar("name", 64)
+    val program = varchar("program", 8).default("FRC")
+    val configType = varchar("config_type", 16).default("match")
+    val deletedAt = timestamp("deleted_at")
+
+    override val primaryKey = PrimaryKey(name, program, configType)
 }
 
 object ScoutingEntries : UUIDTable("scouting_entries") {

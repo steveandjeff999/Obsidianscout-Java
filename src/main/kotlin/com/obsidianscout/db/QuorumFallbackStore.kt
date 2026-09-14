@@ -105,6 +105,7 @@ object QuorumFallbackStore {
         PitScoutingConfigs,
         QualitativeScoutingConfigs,
         DefaultConfigs,
+        DeletedDefaultConfigs,
         ConfigRevisions,
         AppSettings,
         ApiEvents,

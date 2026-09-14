@@ -31,7 +31,7 @@ class DefaultConfigsTest {
         }
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
         transaction {
-            SchemaUtils.create(DefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs, ScoutingAlliances)
+            SchemaUtils.create(DefaultConfigs, DeletedDefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs, ScoutingAlliances)
         }
         ConfigService.ensureDefaultConfig()
     }
@@ -407,6 +407,106 @@ class DefaultConfigsTest {
             ConfigService.deleteDefaultConfig(insertedId!!)
         }
         if (clusterFile.exists()) clusterFile.delete()
+    }
+
+    @Test
+    fun testDeleteDefaultConfigClusterSynchronizationAndRebootPersistence() {
+        val defaultsDir = ConfigService.getDefaultsDirectory()
+        val presetName = "cluster_del_test"
+        val expectedFile = defaultsDir.resolve("$presetName-match.json").toFile()
+
+        // 1. Create a default preset on Node A
+        val created = ConfigService.createDefaultConfig(
+            DefaultConfigDTO(
+                name = presetName,
+                program = "FRC",
+                configType = "match",
+                configJson = """{"version":1,"title":"Cluster Delete Test Preset","fields":[]}""",
+                isDefault = false
+            )
+        )
+        assertNotNull(created.id)
+        assertTrue(expectedFile.exists(), "Local file should be created upon preset creation")
+
+        // Verify tombstone does not exist initially
+        val initialTombstone = transaction {
+            DeletedDefaultConfigs.selectAll().where {
+                (DeletedDefaultConfigs.name eq presetName) and
+                (DeletedDefaultConfigs.program eq "FRC") and
+                (DeletedDefaultConfigs.configType eq "match")
+            }.count()
+        }
+        assertEquals(0, initialTombstone, "DeletedDefaultConfigs should not have tombstone before deletion")
+
+        // 2. Node A deletes the preset via ConfigService.deleteDefaultConfig()
+        ConfigService.deleteDefaultConfig(created.id!!)
+
+        // Verify local file is immediately removed on the node executing the delete
+        assertFalse(expectedFile.exists(), "Local file should be deleted immediately upon deleteDefaultConfig()")
+
+        // Verify tombstone is recorded in the database
+        val tombstoneCount = transaction {
+            DeletedDefaultConfigs.selectAll().where {
+                (DeletedDefaultConfigs.name eq presetName) and
+                (DeletedDefaultConfigs.program eq "FRC") and
+                (DeletedDefaultConfigs.configType eq "match")
+            }.count()
+        }
+        assertEquals(1, tombstoneCount, "Tombstone must be recorded in DeletedDefaultConfigs")
+
+        // 3. Simulate another cluster node (Node B) that still had the file on disk
+        expectedFile.writeText("""{"version":1,"title":"Simulated stale file on Node B"}""")
+        assertTrue(expectedFile.exists(), "Simulated file on Node B disk exists")
+
+        // Node B runs syncFromDatabaseToLocalDisk()
+        ConfigService.syncFromDatabaseToLocalDisk()
+
+        // Verify Node B purged the file from disk because it's tombstoned/missing
+        assertFalse(expectedFile.exists(), "syncFromDatabaseToLocalDisk() must purge tombstoned/missing files from other cluster nodes")
+
+        // 4. Simulate server reboot or update bundle re-introducing the file on disk
+        expectedFile.writeText("""{"version":1,"title":"Stale bundle file after reboot"}""")
+        assertTrue(expectedFile.exists(), "Simulated bundle file reappeared on disk")
+
+        // Server reboots and calls ensureDefaultConfig()
+        ConfigService.ensureDefaultConfig()
+
+        // Verify ensureDefaultConfig() purges the file and does NOT re-create the preset in the DB
+        assertFalse(expectedFile.exists(), "ensureDefaultConfig() on boot must delete disk file if it was previously tombstoned")
+        val reloadedInDb = transaction {
+            DefaultConfigs.selectAll().where {
+                (DefaultConfigs.name eq presetName) and
+                (DefaultConfigs.program eq "FRC") and
+                (DefaultConfigs.configType eq "match")
+            }.count()
+        }
+        assertEquals(0, reloadedInDb, "ensureDefaultConfig() must not re-create deleted presets in DB on reboot")
+
+        // 5. Test recreating the preset intentionally: verify tombstone is cleared
+        val recreated = ConfigService.createDefaultConfig(
+            DefaultConfigDTO(
+                name = presetName,
+                program = "FRC",
+                configType = "match",
+                configJson = """{"version":2,"title":"Intentionally Recreated Preset","fields":[]}""",
+                isDefault = false
+            )
+        )
+        assertNotNull(recreated.id)
+        assertTrue(expectedFile.exists(), "Local file should exist after intentional recreation")
+
+        val tombstoneAfterRecreate = transaction {
+            DeletedDefaultConfigs.selectAll().where {
+                (DeletedDefaultConfigs.name eq presetName) and
+                (DeletedDefaultConfigs.program eq "FRC") and
+                (DeletedDefaultConfigs.configType eq "match")
+            }.count()
+        }
+        assertEquals(0, tombstoneAfterRecreate, "Tombstone must be cleared when preset is intentionally recreated")
+
+        // Cleanup
+        ConfigService.deleteDefaultConfig(recreated.id!!)
+        if (expectedFile.exists()) expectedFile.delete()
     }
 }
 

@@ -221,6 +221,7 @@ object DatabaseFactory {
                 QualitativeScoutingConfigs,
                 ConfigRevisions,
                 DefaultConfigs,
+                DeletedDefaultConfigs,
                 ScoutingEntries,
                 PitScoutingEntries,
                 QualitativeScoutingEntries,
