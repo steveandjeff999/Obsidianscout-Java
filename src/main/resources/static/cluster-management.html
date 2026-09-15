@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ObsidianScout | Server Management</title>
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="manifest" href="/manifest.json" />
     <style>
         .cluster-section-card {
@@ -397,7 +398,7 @@
                 <div class="feature-card-purple mb-24">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div>
-                            <h3 style="margin: 0; font-size: 16px; color: var(--accent-3);" data-i18n="cluster.wide_actions_title">🌐 Cluster-Wide Actions (All Servers)</h3>
+                            <h3 style="margin: 0; font-size: 16px; color: var(--accent-3);" data-i18n="cluster.wide_actions_title"><i class="fa-solid fa-globe"></i> Cluster-Wide Actions (All Servers)</h3>
                             <p class="notice" style="margin-top: 4px; margin-bottom: 0;" data-i18n="cluster.wide_actions_notice">Perform maintenance or force updates across every node in the CockroachDB cluster at once.</p>
                         </div>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -413,7 +414,7 @@
                 <div id="node-alerts-card" class="feature-card-blue mb-24 hidden">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                         <div>
-                            <h3 style="margin: 0; font-size: 16px; color: var(--accent);">🔔 Cluster Node Down Notifications</h3>
+                            <h3 style="margin: 0; font-size: 16px; color: var(--accent);"><i class="fa-solid fa-bell"></i> Cluster Node Down Notifications</h3>
                             <p class="notice" style="margin-top: 4px; margin-bottom: 0;">Receive instant FCM Push and Email alerts if any node in the CockroachDB / App cluster goes offline.</p>
                         </div>
                         <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
@@ -461,7 +462,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;">
                         <div>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <h3 style="margin: 0; font-size: 16px; color: var(--success);">⚡ Peer Request Forwarding & Load Balancer</h3>
+                                <h3 style="margin: 0; font-size: 16px; color: var(--success);"><i class="fa-solid fa-bolt"></i> Peer Request Forwarding &amp; Load Balancer</h3>
                                 <span id="lb-status-pill" class="badge" style="background: rgba(100, 116, 139, 0.3); color: var(--muted); font-size: 11px;">Checking...</span>
                             </div>
                             <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
@@ -487,7 +488,7 @@
                     <div id="lb-activity-card" class="card soft" style="margin-top: 14px; background: var(--surface-2); padding: 14px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 13px; font-weight: 700; color: var(--ink);">📊 Last ~30 Min Activity & Load Offloading History</span>
+                                <span style="font-size: 13px; font-weight: 700; color: var(--ink);"><i class="fa-solid fa-chart-bar"></i> Last ~30 Min Activity &amp; Load Offloading History</span>
                                 <span id="lb-30m-summary-pill" class="badge" style="background: rgba(16, 185, 129, 0.2); color: var(--success); font-size: 11px;">0 forwarded</span>
                             </div>
                             <span style="font-size: 11px; color: var(--muted);">Rolling 30-minute window</span>
@@ -502,7 +503,7 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                             <div>
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 13px; font-weight: 700; color: var(--danger);">🔥 Overload Simulation & Load Balancer Verification</span>
+                                    <span style="font-size: 13px; font-weight: 700; color: var(--danger);"><i class="fa-solid fa-fire"></i> Overload Simulation &amp; Load Balancer Verification</span>
                                     <span id="lb-stress-status-pill" class="badge" style="background: rgba(100, 116, 139, 0.2); color: var(--muted); font-size: 11px;">Idle</span>
                                 </div>
                                 <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
@@ -526,7 +527,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;">
                         <div>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <h3 style="margin: 0; font-size: 16px; color: var(--warning);">🛡️ Local Quorum Loss Fallback Mirror Manager</h3>
+                                <h3 style="margin: 0; font-size: 16px; color: var(--warning);"><i class="fa-solid fa-shield-halved"></i> Local Quorum Loss Fallback Mirror Manager</h3>
                                 <span id="qf-global-status-pill" class="badge" style="background: rgba(245, 158, 11, 0.2); color: var(--warning); font-size: 11px;">Active Mirroring</span>
                             </div>
                             <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
@@ -566,7 +567,7 @@
                         <div>
                             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                                 <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--warning);">
-                                    <span>🛡️</span> Database Snapshots & System Recovery
+                                    <i class="fa-solid fa-shield-halved"></i> Database Snapshots &amp; System Recovery
                                 </h2>
                                 <span id="auto-backup-badge" class="badge" style="background: rgba(100, 116, 139, 0.2); color: var(--muted); font-size: 11px;">Loading...</span>
                                 <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--danger); font-size: 11px; font-weight: 700;">SUPERADMIN</span>
@@ -579,10 +580,10 @@
                         </div>
                         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                             <button id="btn-create-manual-snapshot" class="btn secondary" type="button" style="font-size: 13px; padding: 6px 14px;">
-                                📸 Create Snapshot Now
+                                <i class="fa-solid fa-camera"></i> Create Snapshot Now
                             </button>
                             <button id="btn-refresh-snapshots" class="btn ghost" type="button" style="font-size: 13px; padding: 6px 14px;">
-                                🔄 Refresh
+                                <i class="fa-solid fa-rotate"></i> Refresh
                             </button>
                         </div>
                     </div>
@@ -618,7 +619,7 @@
                                 Upload any valid ObsidianScout <code>.db</code> snapshot file to restore the entire database.
                             </p>
                             <div class="import-dropzone" id="restore-drop-zone" style="padding: 16px; min-height: 80px;">
-                                <span class="import-icon">⚠️</span>
+                                <span class="import-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
                                 <span class="import-text">Drop .db snapshot file to restore or click to browse</span>
                                 <input type="file" id="restore-file-input" class="input-hidden" accept=".db,.sqlite,.sqlite3" />
                             </div>
@@ -692,7 +693,7 @@
                 <div class="log-console-card">
                     <div class="log-console-header">
                         <div class="log-console-title">
-                            <span>🖥️</span>
+                            <span><i class="fa-solid fa-desktop"></i></span>
                             <span id="selected-node-title" data-i18n="cluster.logs_title">Server Log Console</span>
                             <span id="log-count-badge" class="badge" style="margin-left: 8px; font-size: 11px;">0 entries</span>
                         </div>
@@ -721,7 +722,7 @@
     <div id="app-config-modal" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container" style="max-width: 720px; width: 90%;">
             <div class="modal-header">
-                <h2 class="modal-title" style="color: var(--accent-3);" data-i18n="cluster.modal_config_title">⚙️ Edit app-config.json</h2>
+                <h2 class="modal-title" style="color: var(--accent-3);" data-i18n="cluster.modal_config_title"><i class="fa-solid fa-gear"></i> Edit app-config.json</h2>
                 <button type="button" class="modal-close" id="modal-config-cancel-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px;">
@@ -744,7 +745,7 @@
     <div id="reboot-modal" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container">
             <div class="modal-header">
-                <h2 class="modal-title" style="color: var(--danger);" data-i18n="cluster.modal_reboot_title">⚠️ Confirm Server Reboot</h2>
+                <h2 class="modal-title" style="color: var(--danger);" data-i18n="cluster.modal_reboot_title"><i class="fa-solid fa-triangle-exclamation"></i> Confirm Server Reboot</h2>
                 <button type="button" class="modal-close" id="modal-reboot-cancel-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px;">
@@ -763,7 +764,7 @@
     <div id="reinstall-modal" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container">
             <div class="modal-header">
-                <h2 class="modal-title" style="color: var(--warning);" data-i18n="cluster.modal_reinstall_title">🔄 Confirm Force Reinstall / Update</h2>
+                <h2 class="modal-title" style="color: var(--warning);" data-i18n="cluster.modal_reinstall_title"><i class="fa-solid fa-rotate"></i> Confirm Force Reinstall / Update</h2>
                 <button type="button" class="modal-close" id="modal-reinstall-cancel-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px;">
@@ -782,7 +783,7 @@
     <div id="load-balancer-modal" class="modal-backdrop" role="dialog" aria-modal="true">
         <div class="modal-container" style="max-width: 600px; width: 90%;">
             <div class="modal-header">
-                <h2 class="modal-title" style="color: var(--success);">⚙️ Configure Cluster Load Balancer</h2>
+                <h2 class="modal-title" style="color: var(--success);"><i class="fa-solid fa-gear"></i> Configure Cluster Load Balancer</h2>
                 <button type="button" class="modal-close" id="modal-lb-cancel-x" aria-label="Close">&#x2715;</button>
             </div>
             <div style="padding: 20px;">
@@ -829,7 +830,7 @@
         <div class="modal-container" style="max-width: 900px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <h2 class="modal-title" style="color: var(--warning); font-size: 16px;">🔍 Fallback SQLite Database Inspector</h2>
+                    <h2 class="modal-title" style="color: var(--warning); font-size: 16px;"><i class="fa-solid fa-magnifying-glass"></i> Fallback SQLite Database Inspector</h2>
                     <span id="inspect-node-pill" class="badge" style="background: rgba(100, 116, 139, 0.3); color: var(--muted); font-size: 11px;">Node: -</span>
                 </div>
                 <button type="button" class="modal-close" id="modal-inspect-close-x" aria-label="Close">&#x2715;</button>
@@ -848,7 +849,7 @@
         <div class="modal-container" style="max-width: 650px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
             <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <h2 class="modal-title" style="color: var(--warning); font-size: 16px;">⚙️ Customize Fallback Mirror Cache</h2>
+                    <h2 class="modal-title" style="color: var(--warning); font-size: 16px;"><i class="fa-solid fa-gear"></i> Customize Fallback Mirror Cache</h2>
                     <span id="qf-config-node-pill" class="badge" style="background: rgba(245, 158, 11, 0.2); color: var(--warning); font-size: 11px;">Node: -</span>
                 </div>
                 <button type="button" class="modal-close" id="modal-qf-config-close-x" aria-label="Close">&#x2715;</button>
@@ -865,14 +866,14 @@
                         <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: var(--ink); font-size: 13px;">
                             <input type="radio" name="qf-mode" id="qf-mode-everything" value="everything" style="margin-top: 3px; cursor: pointer;" />
                             <div>
-                                <span style="font-weight: 700; color: var(--success);">🌐 Mirror Everything (Full Replica)</span>
+                                <span style="font-weight: 700; color: var(--success);"><i class="fa-solid fa-globe"></i> Mirror Everything (Full Replica)</span>
                                 <div style="font-size: 11px; color: var(--muted);">Caches all historical competition data, all match/pit/qualitative scouting entries, all teams/matches, users, chat, and configs without date cutoffs. Best for high-storage servers.</div>
                             </div>
                         </label>
                         <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: var(--ink); font-size: 13px;">
                             <input type="radio" name="qf-mode" id="qf-mode-selective" value="selective" checked style="margin-top: 3px; cursor: pointer;" />
                             <div>
-                                <span style="font-weight: 700; color: var(--warning);">🎯 Customized Selective Cache</span>
+                                <span style="font-weight: 700; color: var(--warning);"><i class="fa-solid fa-sliders"></i> Customized Selective Cache</span>
                                 <div style="font-size: 11px; color: var(--muted);">Selectively choose specific data categories and time retention windows to conserve disk space.</div>
                             </div>
                         </label>
@@ -955,7 +956,7 @@
         <div class="modal-container" style="max-width: 480px;">
             <div class="modal-header">
                 <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px; font-size: 17px;">
-                    <span>⚙️</span> Configure Node Auto-Backup
+                    <i class="fa-solid fa-gear"></i> Configure Node Auto-Backup
                 </h3>
                 <button id="modal-node-backup-cancel-x" class="modal-close" type="button" aria-label="Close">&times;</button>
             </div>
@@ -996,7 +997,7 @@
         <div class="modal-container" style="border: 2px solid var(--danger); max-width: 500px;">
             <div class="modal-header">
                 <h3 class="modal-title" style="color: var(--danger); display: flex; align-items: center; gap: 8px; font-size: 18px;">
-                    <span>⚠️</span> Confirm Full Database Restoration
+                    <i class="fa-solid fa-triangle-exclamation"></i> Confirm Full Database Restoration
                 </h3>
                 <button id="btn-close-restore-modal" class="modal-close" type="button" aria-label="Close">&times;</button>
             </div>

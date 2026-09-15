@@ -19,35 +19,51 @@
 .field.checkbox-field {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex-direction: row;
-    margin-top: 4px;
-    margin-bottom: 4px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
 }
 
 .field.checkbox-field input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    padding: 0;
     cursor: pointer;
-    accent-color: var(--primary);
+    accent-color: var(--accent);
+    flex-shrink: 0;
+    box-shadow: none;
+    border: none;
+    background: transparent;
 }
 
 .field.checkbox-field label {
     cursor: pointer;
     font-size: 14px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
     user-select: none;
-    color: var(--ink-muted);
+    color: var(--ink);
+    margin: 0;
 }
 
 .form-section {
     grid-column: 1 / -1;
-    margin-top: 10px;
+    margin-top: 14px;
+    margin-bottom: 4px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
 }
 
 .form-section h3 {
     margin: 0;
     font-size: 18px;
-    letter-spacing: 0.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: var(--ink);
 }
 
 label {
@@ -58,7 +74,7 @@ label {
     letter-spacing: 0.06em;
 }
 
-input, select, textarea {
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea {
     padding: 10px 14px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
@@ -71,7 +87,7 @@ input, select, textarea {
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
 }
 
-body.theme-dark input,
+body.theme-dark input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
 body.theme-dark select,
 body.theme-dark textarea {
     border: 1px solid var(--border);
@@ -80,7 +96,7 @@ body.theme-dark textarea {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
-input:disabled,
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):disabled,
 select:disabled,
 textarea:disabled {
     opacity: 0.7;
@@ -89,21 +105,21 @@ textarea:disabled {
     color: var(--muted);
 }
 
-body.theme-dark input:disabled,
+body.theme-dark input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):disabled,
 body.theme-dark select:disabled,
 body.theme-dark textarea:disabled {
     background: rgba(255, 255, 255, 0.04);
     color: var(--muted);
 }
 
-input:focus, select:focus, textarea:focus {
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus, select:focus, textarea:focus {
     border-color: var(--accent);
     background: var(--surface);
     box-shadow: 0 0 0 3px var(--accent-glow);
     outline: none;
 }
 
-body.theme-dark input:focus,
+body.theme-dark input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
 body.theme-dark select:focus,
 body.theme-dark textarea:focus {
     background: var(--surface-2);

@@ -508,5 +508,96 @@ class DefaultConfigsTest {
         ConfigService.deleteDefaultConfig(recreated.id!!)
         if (expectedFile.exists()) expectedFile.delete()
     }
+
+    @Test
+    fun testResetToDefaultPreservesSectionHeadersAndAllFieldTypes() {
+        val testTeam = 9999
+        val configWithAllTypes = """
+        {
+            "version": 1,
+            "title": "Config With All Element Types",
+            "fields": [
+                { "id": "sec_auto", "label": "Autonomous Phase", "type": "section", "phase": "auto" },
+                { "id": "auto_notes", "label": "Auto Notes", "type": "counter", "min": 0, "max": 10, "step": 1, "phase": "auto" },
+                { "id": "teleop_header", "label": "Teleoperated Phase", "type": "section", "phase": "teleop" },
+                { "id": "teleop_score", "label": "Teleop Score", "type": "number", "min": 0, "max": 100, "step": 1, "phase": "teleop" },
+                { "id": "driver_rating", "label": "Driver Skill", "type": "rating", "min": 1, "max": 5, "step": 1, "phase": "teleop" },
+                { "id": "coopertition", "label": "Coopertition Met", "type": "checkbox", "phase": "teleop" },
+                { "id": "climb_level", "label": "Climb Level", "type": "select", "options": [{"label": "None", "value": "none"}, {"label": "Deep", "value": "deep"}], "phase": "endgame" },
+                { "id": "robot_photo", "label": "Robot Photo", "type": "image", "phase": "teleop" },
+                { "id": "scout_comments", "label": "Comments", "type": "textarea", "phase": "teleop" },
+                { "id": "static_notice", "label": "Inspection Complete", "type": "text", "phase": "teleop" }
+            ]
+        }
+        """.trimIndent()
+
+        val preset = ConfigService.createDefaultConfig(
+            DefaultConfigDTO(
+                name = "test_all_types_preset",
+                program = "FRC",
+                configType = "match",
+                configJson = configWithAllTypes,
+                isDefault = true
+            )
+        )
+
+        try {
+            // Reset team 9999 match config to default
+            val resetConfig = ConfigService.resetToDefaultConfig(testTeam, "FRC", "match")
+            assertNotNull(resetConfig, "Reset config should not be null")
+            val fields = resetConfig.fields
+            assertEquals(10, fields.size, "Should have all 10 fields preserved")
+
+            // Verify Section Header 1
+            val secAuto = fields.first { it.id == "sec_auto" }
+            assertEquals("section", secAuto.type, "Section header type must be preserved as 'section'")
+            assertEquals("Autonomous Phase", secAuto.label)
+            assertEquals("auto", secAuto.phase)
+
+            // Verify Counter
+            val autoNotes = fields.first { it.id == "auto_notes" }
+            assertEquals("counter", autoNotes.type)
+            assertEquals(0, autoNotes.min)
+            assertEquals(10, autoNotes.max)
+            assertEquals(1, autoNotes.step)
+
+            // Verify Section Header 2
+            val secTeleop = fields.first { it.id == "teleop_header" }
+            assertEquals("section", secTeleop.type, "Section header type must be preserved as 'section'")
+            assertEquals("Teleoperated Phase", secTeleop.label)
+            assertEquals("teleop", secTeleop.phase)
+
+            // Verify Number
+            val teleopScore = fields.first { it.id == "teleop_score" }
+            assertEquals("number", teleopScore.type)
+
+            // Verify Rating
+            val driverRating = fields.first { it.id == "driver_rating" }
+            assertEquals("rating", driverRating.type)
+
+            // Verify Checkbox
+            val coopertition = fields.first { it.id == "coopertition" }
+            assertEquals("checkbox", coopertition.type)
+
+            // Verify Select
+            val climbLevel = fields.first { it.id == "climb_level" }
+            assertEquals("select", climbLevel.type)
+            assertEquals(2, climbLevel.options?.size)
+
+            // Verify Image
+            val robotPhoto = fields.first { it.id == "robot_photo" }
+            assertEquals("image", robotPhoto.type)
+
+            // Verify Textarea
+            val scoutComments = fields.first { it.id == "scout_comments" }
+            assertEquals("textarea", scoutComments.type)
+
+            // Verify Text
+            val staticNotice = fields.first { it.id == "static_notice" }
+            assertEquals("text", staticNotice.type)
+        } finally {
+            preset.id?.let { ConfigService.deleteDefaultConfig(it) }
+        }
+    }
 }
 

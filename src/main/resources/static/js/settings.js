@@ -383,12 +383,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         function getDeviceIcon(clientType, deviceName) {
             const name = (deviceName || "").toLowerCase();
             if (clientType === "mobile" || name.includes("iphone") || name.includes("ipad") || name.includes("android") || name.includes("mobile")) {
-                return "📱";
+                return '<i class="fa-solid fa-mobile-screen"></i>';
             }
             if (name.includes("windows") || name.includes("mac") || name.includes("linux") || name.includes("chromeos")) {
-                return "💻";
+                return '<i class="fa-solid fa-laptop"></i>';
             }
-            return "🌐";
+            return '<i class="fa-solid fa-globe"></i>';
         }
 
         async function loadSessions() {
@@ -439,9 +439,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                                     ${s.isCurrent ? `<span style="background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 600;">This Device (Active)</span>` : ""}
                                 </div>
                                 <div style="font-size: 13px; color: var(--text-muted, #888); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 12px;">
-                                    ${escapedIp ? `<span>🌐 ${escapedIp}</span>` : ""}
-                                    <span>🕒 Last active: ${lastActive}</span>
-                                    ${createdAt ? `<span>📅 Signed in: ${createdAt}</span>` : ""}
+                                    ${escapedIp ? `<span><i class="fa-solid fa-globe"></i> ${escapedIp}</span>` : ""}
+                                    <span><i class="fa-solid fa-clock"></i> Last active: ${lastActive}</span>
+                                    ${createdAt ? `<span><i class="fa-solid fa-calendar-days"></i> Signed in: ${createdAt}</span>` : ""}
                                 </div>
                             </div>
                         </div>

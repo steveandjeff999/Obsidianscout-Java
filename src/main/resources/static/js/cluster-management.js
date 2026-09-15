@@ -737,10 +737,10 @@
                         </div>
                     </div>
                     <div class="server-actions-col">
-                        <button class="btn-action logs btn-server-logs" data-ip="${escapeHtml(node.ip)}" type="button">🔍 View Logs</button>
-                        <button class="btn-action config btn-server-config" data-ip="${escapeHtml(node.ip)}" type="button">⚙️ Edit app-config.json</button>
-                        <button class="btn-action reinstall btn-server-reinstall" data-ip="${escapeHtml(node.ip)}" type="button">🔄 Force Reinstall</button>
-                        <button class="btn-action reboot btn-server-reboot" data-ip="${escapeHtml(node.ip)}" type="button">⚠️ Reboot</button>
+                        <button class="btn-action logs btn-server-logs" data-ip="${escapeHtml(node.ip)}" type="button"><i class="fa-solid fa-magnifying-glass"></i> View Logs</button>
+                        <button class="btn-action config btn-server-config" data-ip="${escapeHtml(node.ip)}" type="button"><i class="fa-solid fa-gear"></i> Edit app-config.json</button>
+                        <button class="btn-action reinstall btn-server-reinstall" data-ip="${escapeHtml(node.ip)}" type="button"><i class="fa-solid fa-rotate"></i> Force Reinstall</button>
+                        <button class="btn-action reboot btn-server-reboot" data-ip="${escapeHtml(node.ip)}" type="button"><i class="fa-solid fa-triangle-exclamation"></i> Reboot</button>
                     </div>
                 </div>
             `;
@@ -1177,7 +1177,7 @@
             configBtn.style.padding = "4px 8px";
             configBtn.style.fontSize = "11px";
             configBtn.style.marginRight = "6px";
-            configBtn.textContent = "⚙️ Configure";
+            configBtn.innerHTML = '<i class="fa-solid fa-gear"></i> Configure';
             configBtn.addEventListener("click", () => {
                 openConfigureQuorumFallbackModal(node);
             });
@@ -1187,7 +1187,7 @@
             inspectBtn.style.padding = "4px 8px";
             inspectBtn.style.fontSize = "11px";
             inspectBtn.style.marginRight = "6px";
-            inspectBtn.textContent = "🔍 Inspect DB";
+            inspectBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Inspect DB';
             inspectBtn.disabled = !node.enabled && node.databaseSizeBytes === 0;
             inspectBtn.addEventListener("click", () => {
                 openInspectQuorumFallbackModal(node.nodeIp);
@@ -1235,7 +1235,7 @@
             if (anyActive) {
                 globalPill.style.background = "rgba(239, 68, 68, 0.2)";
                 globalPill.style.color = "#f87171";
-                globalPill.textContent = "⚠️ Active (Quorum Lost / Offline Reads)";
+                globalPill.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Active (Quorum Lost / Offline Reads)';
             } else if (allEnabled) {
                 globalPill.style.background = "rgba(16, 185, 129, 0.2)";
                 globalPill.style.color = "#34d399";
@@ -1505,7 +1505,7 @@
             <!-- Mirrored Events (±1 Week Window) -->
             <div style="margin-bottom: 20px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h3 style="font-size: 14px; color: #fbbf24; margin: 0;">📅 Mirrored Events (±1 Week Competition Window)</h3>
+                    <h3 style="font-size: 14px; color: #fbbf24; margin: 0;"><i class="fa-solid fa-calendar-days"></i> Mirrored Events (±1 Week Competition Window)</h3>
                     <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; font-size: 11px;">${activeEvents.length} events</span>
                 </div>
                 <p style="font-size: 12px; color: #94a3b8; margin: 0 0 10px 0;">
@@ -1517,7 +1517,7 @@
             <!-- Mirrored Database Tables & Row Counts -->
             <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h3 style="font-size: 14px; color: #38bdf8; margin: 0;">🗄️ SQLite Table Records Breakdown</h3>
+                    <h3 style="font-size: 14px; color: #38bdf8; margin: 0;"><i class="fa-solid fa-database"></i> SQLite Table Records Breakdown</h3>
                     <span class="badge" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; font-size: 11px;">${tableEntries.length} tables</span>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-top: 10px;">
@@ -1699,7 +1699,7 @@
                 btnRestore.style.padding = "4px 8px";
                 btnRestore.style.fontSize = "12px";
                 btnRestore.style.marginRight = "6px";
-                btnRestore.textContent = "🔄 Restore";
+                btnRestore.innerHTML = '<i class="fa-solid fa-rotate"></i> Restore';
                 btnRestore.addEventListener("click", () => {
                     openRestoreModal("named", s.fileName);
                 });
@@ -1711,7 +1711,7 @@
                 btnDelete.style.padding = "4px 8px";
                 btnDelete.style.fontSize = "12px";
                 btnDelete.style.color = "var(--danger)";
-                btnDelete.textContent = "🗑️";
+                btnDelete.innerHTML = '<i class="fa-solid fa-trash"></i>';
                 btnDelete.title = "Delete Snapshot";
                 btnDelete.addEventListener("click", async () => {
                     if (confirm(`Delete snapshot file "${s.fileName}"?`)) {
@@ -1835,7 +1835,7 @@
             retentionBadge.style.gap = "4px";
             retentionBadge.style.cursor = "pointer";
             retentionBadge.title = `Click to edit retention for ${n.nodeIp}`;
-            retentionBadge.innerHTML = `<span>${n.retentionDays || 30} days</span> <span style="font-size: 10px; opacity: 0.7;">✏️</span>`;
+            retentionBadge.innerHTML = `<span>${n.retentionDays || 30} days</span> <span style="font-size: 10px; opacity: 0.7;"><i class="fa-solid fa-pen"></i></span>`;
             retentionBadge.addEventListener("click", () => {
                 openNodeBackupConfigModal(n);
             });
@@ -1891,7 +1891,7 @@
             btnNodeConfig.style.padding = "4px 8px";
             btnNodeConfig.style.fontSize = "11px";
             btnNodeConfig.style.marginRight = "6px";
-            btnNodeConfig.textContent = "⚙️ Configure";
+            btnNodeConfig.innerHTML = '<i class="fa-solid fa-gear"></i> Configure';
             btnNodeConfig.title = `Configure auto-backup & retention for ${n.nodeIp}`;
             btnNodeConfig.addEventListener("click", () => {
                 openNodeBackupConfigModal(n);
@@ -1902,7 +1902,7 @@
             btnNodeSnap.className = "btn secondary";
             btnNodeSnap.style.padding = "4px 8px";
             btnNodeSnap.style.fontSize = "11px";
-            btnNodeSnap.textContent = "📸 Snapshot";
+            btnNodeSnap.innerHTML = '<i class="fa-solid fa-camera"></i> Snapshot';
             btnNodeSnap.addEventListener("click", async () => {
                 if (window.Obsidianscout && typeof Obsidianscout.setButtonLoading === "function") {
                     Obsidianscout.setButtonLoading(btnNodeSnap, true, "Saving...");

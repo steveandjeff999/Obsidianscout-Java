@@ -785,7 +785,33 @@ function matchHasTeam(teams, teamKey) {
 
 function buildField(field) {
     if (field.type === "section") {
-        return null;
+        const sectionWrapper = document.createElement("div");
+        sectionWrapper.className = "form-section";
+        const h3 = document.createElement("h3");
+        h3.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
+        sectionWrapper.appendChild(h3);
+        return sectionWrapper;
+    }
+
+    if (field.type === "checkbox") {
+        const wrapper = document.createElement("div");
+        wrapper.className = "field checkbox-field";
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.id = `field-${field.id}`;
+        input.name = field.id;
+        if (field.required) {
+            input.required = true;
+        }
+
+        const label = document.createElement("label");
+        label.htmlFor = `field-${field.id}`;
+        label.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
+
+        wrapper.appendChild(input);
+        wrapper.appendChild(label);
+        return wrapper;
     }
 
     const wrapper = document.createElement("div");
@@ -845,10 +871,6 @@ function buildField(field) {
         case "photo":
             ({ wrapper: input, input: actualInput } = buildImageUpload(field));
             break;
-        case "checkbox":
-            input = document.createElement("input");
-            input.type = "checkbox";
-            break;
         case "textarea":
         case "notes":
             input = document.createElement("textarea");
@@ -874,7 +896,7 @@ function buildField(field) {
 }
 
 function injectSections(fields) {
-    return (fields || []).filter((field) => field.type !== "section");
+    return (fields || []);
 }
 
 function getFieldPhase(field) {

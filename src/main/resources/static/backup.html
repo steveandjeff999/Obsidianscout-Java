@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ObsidianScout | Data Sharing</title>
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="manifest" href="/manifest.json" />
 </head>
 <body data-page="backup">
@@ -89,7 +90,7 @@
                         <div class="field">
                             <label>Select Backup File</label>
                             <div class="import-dropzone" id="drop-zone">
-                                <span class="import-icon">📁</span>
+                                <span class="import-icon"><i class="fa-solid fa-folder-open"></i></span>
                                 <span class="import-text">Drag backup file here or click to browse</span>
                                 <span class="import-subtext">Supports .obsidiandb, .json, and .zip formats</span>
                                 <input type="file" id="import-file" class="input-hidden" accept=".obsidiandb,.json,.zip" />

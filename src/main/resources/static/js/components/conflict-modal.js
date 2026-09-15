@@ -110,7 +110,7 @@ export function openConflictResolutionModal(options) {
     header.innerHTML = `
         <div>
             <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #fbbf24; display: flex; align-items: center; gap: 8px;">
-                <span>⚠️</span> Resolve Discrepancy: Team ${teamNum}${matchNum ? ` (Match ${matchNum})` : ''}
+                <span><i class="fa-solid fa-triangle-exclamation"></i></span> Resolve Discrepancy: Team ${teamNum}${matchNum ? ` (Match ${matchNum})` : ''}
             </h3>
             <p style="margin: 4px 0 0 0; font-size: 0.82rem; color: #a1a1aa;">
                 ${conflictingEntries.length} conflicting submissions found. Compare side-by-side or save a merged consensus.
@@ -169,7 +169,7 @@ export function openConflictResolutionModal(options) {
 
         tbodyHtml += `<tr style="${rowStyle}">
             <td style="padding: 8px 14px; color: ${isDiff ? '#fde047' : '#cbd5e1'};">
-                ${isDiff ? '⚠️ ' : ''}${label}
+                ${isDiff ? '<i class="fa-solid fa-triangle-exclamation"></i> ' : ''}${label}
             </td>`;
 
         vals.forEach(v => {
@@ -209,7 +209,7 @@ export function openConflictResolutionModal(options) {
                 Or combine them into a single consensus entry with numeric averages and boolean consensus.
             </div>
             <button id="btn-save-consensus" class="btn primary" style="background: #eab308; color: #0f172a; font-weight: 700; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
-                ⚡ Save Merged Consensus
+                <i class="fa-solid fa-bolt"></i> Save Merged Consensus
             </button>
         </div>
         <div id="modal-status-msg" style="font-size: 0.8rem; color: #38bdf8; display: none;"></div>

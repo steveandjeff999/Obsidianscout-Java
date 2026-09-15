@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ObsidianScout | Database Migration</title>
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="manifest" href="/manifest.json" />
 </head>
 <body data-page="migration">
@@ -133,7 +134,7 @@
                         </p>
                         
                         <div id="migration-idle" class="empty-state">
-                            <div class="empty-state-icon">💤</div>
+                            <div class="empty-state-icon"><i class="fa-solid fa-moon"></i></div>
                             <div class="empty-state-text" data-i18n="migration.idle_title">No active migration</div>
                             <div class="empty-state-subtext" data-i18n="migration.idle_subtext">Configure parameters on the left and start to migrate.</div>
                         </div>
@@ -183,7 +184,7 @@
                 <!-- Danger Zone: Reset Database -->
                 <div id="reset-database-panel" class="card mt-24" style="border: 1px solid var(--danger); background: rgba(223, 56, 44, 0.03);">
                     <h2 style="color: var(--danger); display: flex; align-items: center; gap: 8px;">
-                        <span>⚠️</span> Danger Zone: Reset Database
+                        <span><i class="fa-solid fa-triangle-exclamation"></i></span> Danger Zone: Reset Database
                     </h2>
                     <p class="notice mt-8">
                         This will completely delete all data in the database, including users, scouting records, configurations, settings, matches, and alliances.

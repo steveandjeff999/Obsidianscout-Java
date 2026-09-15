@@ -253,14 +253,14 @@ function renderDetail(state) {
         warnBanner.style.border = "1px solid #eab308";
         warnBanner.innerHTML = `
             <div style="display:flex; align-items:flex-start; gap:10px;">
-                <span class="icon" style="font-size:1.2rem;">⚠️</span>
+                <span class="icon" style="font-size:1.2rem;"><i class="fa-solid fa-triangle-exclamation"></i></span>
                 <div style="flex:1;">
                     <div style="font-weight:700; color:#fbbf24;">Discrepancy Detected</div>
                     <div style="font-size:0.85rem; margin-top:2px; color:#cbd5e1;">
                         Different pit scouting data exists for this team from partner teams: <strong>${(selected.entry.conflictingTeams || []).join(", ")}</strong>.
                     </div>
                     <button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
-                        ⚡ Resolve Discrepancy
+                        <i class="fa-solid fa-bolt"></i> Resolve Discrepancy
                     </button>
                 </div>
             </div>
@@ -327,7 +327,7 @@ function renderDetail(state) {
                 });
                 const hint = document.createElement("span");
                 hint.style.cssText = "font-size:0.75rem;color:#38bdf8;cursor:pointer;";
-                hint.textContent = "🔍 Tap image to zoom";
+                hint.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Tap image to zoom';
                 hint.addEventListener("click", () => {
                     Obsidianscout.showImageModal(val, `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function' ? Obsidianscout.localize(field.label) : field.label)} - Team ${selected.teamNumber}`);
                 });

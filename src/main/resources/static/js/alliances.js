@@ -136,7 +136,7 @@
             grid.innerHTML = `
                 <div class="card" style="grid-column:1/-1;">
                     <div class="empty-state">
-                        <div class="empty-icon">🤝</div>
+                        <div class="empty-icon"><i class="fa-solid fa-handshake"></i></div>
                         <p>${t('alliances.no_alliances', 'No alliances yet. Create one and invite partner teams to start sharing data.')}</p>
                         ${isAdmin(currentUser?.role) ? `<button class="btn" onclick="document.getElementById('btn-create-alliance').click()">${t('alliances.new_alliance', '+ New Alliance')}</button>` : ''}
                     </div>

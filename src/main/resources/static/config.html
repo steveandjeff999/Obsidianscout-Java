@@ -14,6 +14,7 @@
     <title>ObsidianScout | Settings</title>
 
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
 
     <link rel="manifest" href="/manifest.json" />
 </head>
@@ -57,7 +58,7 @@
                                 <input type="file" id="personal-avatar-input" accept="image/*" style="display:none" aria-label="Upload profile picture" />
                             </div>
                             <div class="profile-pic-actions">
-                                <label for="personal-avatar-input" class="profile-pic-label" data-i18n="config.upload_photo">📷 Upload photo</label>
+                                <label for="personal-avatar-input" class="profile-pic-label" data-i18n="config.upload_photo"><i class="fa-solid fa-camera"></i> Upload photo</label>
                                 <button type="button" id="personal-avatar-remove" class="profile-pic-remove" data-i18n="config.remove">Remove</button>
                                 <p class="profile-pic-hint" data-i18n="config.auto_resized_to_9696_px">Auto-resized to 96×96 px</p>
                             </div>
@@ -238,7 +239,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
                         <div>
                             <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">
-                                <span>📱</span> Logged-in Devices & Authorizations
+                                <i class="fa-solid fa-mobile-screen"></i> Logged-in Devices &amp; Authorizations
                             </h2>
                             <p class="notice mt-6" style="margin-bottom: 0;">
                                 Manage active sessions and devices authorized to access your account. Revoke access from unrecognized or obsolete devices.

@@ -140,7 +140,7 @@ export function openInlineCameraModal(options = {}) {
             };
         } catch (err) {
             console.error("Camera access error:", err);
-            loadingOverlay.innerHTML = `<span style="color:#ef4444;text-align:center;padding:12px;">⚠️ Camera permission denied or device not found.<br/><small style="color:#94a3b8;">${err.message || ""}</small></span>`;
+            loadingOverlay.innerHTML = `<span style="color:#ef4444;text-align:center;padding:12px;"><i class="fa-solid fa-triangle-exclamation"></i> Camera permission denied or device not found.<br/><small style="color:#94a3b8;">${err.message || ""}</small></span>`;
         }
     }
 

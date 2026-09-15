@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ObsidianScout | Edit Alliance</title>
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="manifest" href="/manifest.json" />
 </head>
 <body data-page="alliances">
@@ -148,10 +149,12 @@
                                 </div>
                             </div>
 
-                            <!-- Add Field Button -->
                             <div class="row justify-between align-center mt-12">
                                 <h3 style="margin: 0; font-size: 18px;" data-i18n="alliance-edit.form_fields">Form Fields</h3>
-                                <button id="btn-add-field" class="btn secondary" style="padding: 8px 16px; font-size: 13px;" type="button" data-i18n="settings.add_field">+ Add Field</button>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <button id="btn-add-section" class="btn ghost" style="padding: 8px 16px; font-size: 13px;" type="button">+ Add Section Header</button>
+                                    <button id="btn-add-field" class="btn secondary" style="padding: 8px 16px; font-size: 13px;" type="button" data-i18n="settings.add_field">+ Add Field</button>
+                                </div>
                             </div>
 
                             <!-- Fields list -->

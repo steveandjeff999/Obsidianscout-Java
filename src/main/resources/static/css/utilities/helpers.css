@@ -115,14 +115,16 @@ body.theme-dark .code-input {
 }
 
 .counter button {
-    width: 38px;
+    min-width: 38px;
     height: 38px;
+    padding: 0 6px;
+    box-sizing: border-box;
     border-radius: 10px;
     border: 1px solid rgba(0, 0, 0, 0.18);
     background: var(--surface-2);
     color: var(--ink);
     font-weight: 700;
-    font-size: 16px;
+    font-size: 15px;
     cursor: pointer;
     transition: all 0.2s ease;
     display: inline-flex;
@@ -163,7 +165,7 @@ body.theme-dark .counter button {
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 /* Utility classes */
@@ -181,22 +183,3 @@ body.theme-dark .counter button {
     align-items: center;
     gap: 8px;
 }
-
-.counter button {
-    min-width: 38px;
-    height: 38px;
-    padding: 0 6px;
-    box-sizing: border-box;
-    border-radius: 10px;
-    border: 1px solid rgba(0, 0, 0, 0.18);
-    background: var(--surface-2);
-    color: var(--ink);
-    font-weight: 700;
-    font-size: 15px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-

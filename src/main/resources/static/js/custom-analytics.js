@@ -408,7 +408,7 @@
                 document.documentElement.requestFullscreen().catch(() => {});
             }
         } else {
-            if (btnKiosk) btnKiosk.textContent = "📺 Kiosk";
+            if (btnKiosk) btnKiosk.innerHTML = '<i class="fa-solid fa-tv"></i> Kiosk';
             if (kioskTimer) clearInterval(kioskTimer);
             if (document.exitFullscreen) {
                 document.exitFullscreen().catch(() => {});
@@ -429,7 +429,7 @@
         if (!banner) return;
         if (activeCrossFilterTeam !== null) {
             banner.style.display = "flex";
-            if (textEl) textEl.textContent = `📌 Interactive Cross-Filter Active: Team ${activeCrossFilterTeam}`;
+            if (textEl) textEl.innerHTML = `<i class="fa-solid fa-thumbtack"></i> Interactive Cross-Filter Active: Team ${activeCrossFilterTeam}`;
         } else {
             banner.style.display = "none";
         }

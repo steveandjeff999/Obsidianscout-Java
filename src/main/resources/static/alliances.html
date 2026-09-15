@@ -9,6 +9,7 @@
     <title>ObsidianScout | Alliances</title>
     <meta name="description" content="Create and manage scouting alliances. Invite partner teams to share match, pit, and qualitative scouting data in real time." />
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <style>
         /* ── Alliance-specific styles ──────────────────── */
         .alliance-grid {
@@ -338,7 +339,7 @@
 
             <!-- Sharing info -->
             <div class="sharing-notice mt-20">
-                <span class="icon">🔗</span>
+                <span class="icon"><i class="fa-solid fa-link"></i></span>
                 <span>
                     <strong data-i18n="alliances.how_data_sharing_works">How data sharing works:</strong> <span data-i18n="alliances.sharing_explanation">Once a team accepts your invite, their match scouting, pit scouting, and qualitative scouting data will automatically appear in your Analytics, Graphs, and all data views — in real time, no exports needed.</span>
                 </span>
@@ -348,7 +349,7 @@
             <div id="invites-section" class="mt-20" style="display:none;">
                 <div class="invite-panel">
                     <h2 style="margin:0 0 14px; font-size:16px; font-family:inherit; font-weight:700; text-transform:uppercase; letter-spacing:1px; color: #7a4f00;">
-                        📬 Pending Invites
+                        <i class="fa-solid fa-envelope-open-text"></i> Pending Invites
                     </h2>
                     <div id="invites-list"></div>
                 </div>
@@ -363,7 +364,7 @@
                 <div id="alliances-grid" class="alliance-grid">
                     <div class="card" style="grid-column:1/-1;">
                         <div class="empty-state">
-                            <div class="empty-icon">🤝</div>
+                            <div class="empty-icon"><i class="fa-solid fa-handshake"></i></div>
                             <p data-i18n="alliances.loading_alliances">Loading alliances…</p>
                         </div>
                     </div>

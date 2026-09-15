@@ -266,6 +266,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (btnAddField) {
                 btnAddField.addEventListener("click", addField);
             }
+            const btnAddSection = document.getElementById("btn-add-section");
+            if (btnAddSection) {
+                btnAddSection.addEventListener("click", addSectionHeader);
+            }
 
             configModeButtons.forEach((button) => {
                 button.addEventListener("click", async () => {
@@ -991,11 +995,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    function canonicalizeFieldType(rawType) {
+        if (!rawType) return "text";
+        const t = String(rawType).toLowerCase().trim();
+        if (t === "counter") return "counter";
+        if (t === "number" || t === "int" || t === "integer" || t === "float") return "number";
+        if (t === "rating" || t === "stars" || t === "star") return "rating";
+        if (t === "checkbox" || t === "toggle" || t === "bool" || t === "boolean") return "checkbox";
+        if (t === "select" || t === "dropdown" || t === "choice") return "select";
+        if (t === "section" || t === "section_header" || t === "header") return "section";
+        if (t === "textarea" || t === "notes" || t === "note" || t === "paragraph") return "textarea";
+        if (t === "text" || t === "static" || t === "label") return "text";
+        if (t === "image" || t === "photo" || t === "image_upload") return "image";
+        return t;
+    }
+
     function normalizeConfig(config, defaultTitle) {
         const parsed = typeof config === "string" ? JSON.parse(config) : (config || {});
         const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
         const fields = (Array.isArray(parsed.fields) ? parsed.fields : [])
-            .filter((field) => field && !reserved.has(field.id));
+            .filter((field) => field && !reserved.has(field.id))
+            .map((field) => ({
+                ...field,
+                type: canonicalizeFieldType(field.type)
+            }));
         return {
             title: parsed.title || defaultTitle,
             version: Number(parsed.version) || 1,
@@ -1044,7 +1067,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         container.innerHTML = `
             <div class="modal-header">
                 <h2 class="modal-title" style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px;">
-                    <span>🔄</span> Form Changes Detected - Data Migration
+                    <span><i class="fa-solid fa-rotate"></i></span> Form Changes Detected - Data Migration
                 </h2>
                 <button class="modal-close btn-prompt-close" aria-label="Close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted);">&times;</button>
             </div>
@@ -1097,7 +1120,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 </details>
             </div>
             <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
-                <a href="/schema-history?kind=${kind}" class="btn ghost" style="text-decoration: none; font-size: 12px;">📜 Schema History</a>
+                <a href="/schema-history?kind=${kind}" class="btn ghost" style="text-decoration: none; font-size: 12px;"><i class="fa-solid fa-scroll"></i> Schema History</a>
                 <div style="display: flex; gap: 10px;">
                     <button type="button" class="btn ghost btn-prompt-close">Dismiss / Later</button>
                     <button id="modal-btn-execute-migration" type="button" class="btn" style="font-weight: 600;">Migrate Records Now &rarr;</button>
@@ -1337,7 +1360,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        const hasManualSections = fields.some((field) => field.type === "section");
+        const hasManualSections = fields.some((field) => canonicalizeFieldType(field.type) === "section");
         if (hasManualSections || !supportsPhasesConfig()) {
             fields.forEach((field, index) => {
                 const cardNode = createFieldCard(field, index);
@@ -1385,6 +1408,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         const card = document.createElement("div");
         card.className = "field-card";
         
+        const canonicalType = canonicalizeFieldType(field.type);
+        field.type = canonicalType;
+        if (canonicalType === "section") {
+            card.classList.add("field-card-section");
+        }
+
         // Header
         const header = document.createElement("div");
         header.className = "field-card-header";
@@ -1397,7 +1426,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         const typeBadge = document.createElement("span");
         typeBadge.className = "type-badge";
-        typeBadge.textContent = field.type || "text";
+        typeBadge.textContent = canonicalType === "section" ? "section header" : canonicalType;
         controls.appendChild(typeBadge);
         
         // Move Up
@@ -1424,7 +1453,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const btnDel = document.createElement("button");
         btnDel.type = "button";
         btnDel.className = "btn-control-icon delete";
-        btnDel.innerHTML = "🗑️";
+        btnDel.innerHTML = '<i class="fa-solid fa-trash"></i>';
         btnDel.title = "Delete Field";
         btnDel.addEventListener("click", () => deleteField(index));
         controls.appendChild(btnDel);
@@ -1441,11 +1470,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         const divLabel = document.createElement("div");
         divLabel.className = "field";
         const labelTag = document.createElement("label");
-        labelTag.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.field_label','Field Label') : 'Field Label';
+        labelTag.textContent = canonicalType === "section"
+            ? ((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.section_title','Section Title') : 'Section Title')
+            : ((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.field_label','Field Label') : 'Field Label');
         const inputLabel = document.createElement("input");
         inputLabel.type = "text";
         inputLabel.value = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
-        inputLabel.placeholder = "e.g. Teleop Cycles";
+        inputLabel.placeholder = canonicalType === "section" ? "e.g. Autonomous, Teleop, Endgame" : "e.g. Teleop Cycles";
         inputLabel.addEventListener("input", (e) => {
             const lang = Obsidianscout.safeGetItem('obsidianscout:lang') || 'en';
             const val = e.target.value;
@@ -1494,27 +1525,34 @@ document.addEventListener("DOMContentLoaded", async () => {
         const labelType = document.createElement("label");
         labelType.textContent = (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('settings.type','Type') : 'Type';
         const selectType = document.createElement("select");
-        const types = [
-            { value: "counter", label: "COUNTER" },
+        const standardTypes = [
+            { value: "counter", label: "COUNTER (+ / -)" },
             { value: "number", label: "NUMBER" },
-            { value: "rating", label: "RATING" },
-            { value: "checkbox", label: "CHECKBOX" },
-            { value: "select", label: "SELECT" },
+            { value: "rating", label: "RATING (1-5)" },
+            { value: "checkbox", label: "CHECKBOX / TOGGLE" },
+            { value: "select", label: "DROPDOWN (SELECT)" },
+            { value: "section", label: "SECTION HEADER" },
             { value: "text", label: "TEXT (STATIC DISPLAY)" },
             { value: "textarea", label: "TEXTAREA (INPUT)" },
             { value: "image", label: "IMAGE (PHOTO UPLOAD)" }
         ];
-        types.forEach((t) => {
+
+        const typesList = [...standardTypes];
+        if (!typesList.some(t => t.value === canonicalType)) {
+            typesList.push({ value: canonicalType, label: String(field.type).toUpperCase() });
+        }
+
+        typesList.forEach((t) => {
             const opt = document.createElement("option");
             opt.value = t.value;
             opt.textContent = t.label;
-            opt.selected = field.type === t.value || (t.value === "image" && (field.type === "image_upload" || field.type === "photo"));
+            opt.selected = canonicalType === t.value;
             selectType.appendChild(opt);
         });
         selectType.addEventListener("change", (e) => {
-            field.type = e.target.value;
+            field.type = canonicalizeFieldType(e.target.value);
             
-            if (field.type === "text") {
+            if (field.type === "text" || field.type === "section") {
                 field.required = false;
             }
             if (field.type === "select" && !field.options) {
@@ -1529,11 +1567,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                 delete field.doubleStep;
                 delete field.double_step;
             }
-            if (field.type === "image" || field.type === "text") {
+            if (field.type === "image" || field.type === "text" || field.type === "section" || field.type === "textarea" || field.type === "checkbox") {
                 delete field.min;
                 delete field.max;
                 delete field.step;
+                delete field.doubleStep;
+                delete field.double_step;
+            }
+            if (field.type !== "number" && field.type !== "counter" && field.type !== "rating" && field.type !== "checkbox") {
                 delete field.pointsPer;
+            }
+            if (field.type !== "select") {
+                delete field.options;
             }
             updateRawFromVisual();
             renderVisualFields();
@@ -1572,8 +1617,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             body.appendChild(divPhase);
         }
         
-        // 5. Required Checkbox (Only for interactive fields, not static text)
-        if (field.type !== "text") {
+        // 5. Required Checkbox (Only for interactive fields, not static text or section headers)
+        if (canonicalType !== "text" && canonicalType !== "section") {
             const divReq = document.createElement("div");
             divReq.className = "field";
             const labelReq = document.createElement("label");
@@ -1649,9 +1694,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             const inputMax = document.createElement("input");
             inputMax.type = "number";
             inputMax.value = field.max !== undefined && field.max !== null ? field.max : "";
-            const counterHasNoLimit = field.type === "counter" && (field.max === undefined || field.max === null || field.max === "");
+            const supportsNoLimit = field.type === "counter" || field.type === "number";
+            const isNoLimit = supportsNoLimit && (field.max === undefined || field.max === null || field.max === "");
             let inputNoLimit = null;
-            inputMax.disabled = counterHasNoLimit;
+            inputMax.disabled = isNoLimit;
             inputMax.addEventListener("input", (e) => {
                 field.max = e.target.value !== "" ? Number(e.target.value) : null;
                 if (inputNoLimit && e.target.value !== "") {
@@ -1661,7 +1707,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 updateRawFromVisual();
             });
 
-            if (field.type === "counter") {
+            if (supportsNoLimit) {
                 const noLimitWrap = document.createElement("label");
                 noLimitWrap.style.display = "flex";
                 noLimitWrap.style.alignItems = "center";
@@ -1673,7 +1719,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 noLimitWrap.style.margin = "0";
                 inputNoLimit = document.createElement("input");
                 inputNoLimit.type = "checkbox";
-                inputNoLimit.checked = counterHasNoLimit;
+                inputNoLimit.checked = isNoLimit;
                 inputNoLimit.addEventListener("change", (e) => {
                     if (e.target.checked) {
                         field.max = null;
@@ -1916,7 +1962,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 btnDelOpt.style.width = "32px";
                 btnDelOpt.style.height = "32px";
                 btnDelOpt.style.borderRadius = "8px";
-                btnDelOpt.innerHTML = "🗑️";
+                btnDelOpt.innerHTML = '<i class="fa-solid fa-trash"></i>';
                 btnDelOpt.title = "Delete Option";
                 btnDelOpt.addEventListener("click", () => {
                     options.splice(optIdx, 1);
@@ -2010,6 +2056,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    function addSectionHeader() {
+        const baseId = ensureUniqueSlug(supportsPhasesConfig() ? "sec_teleop" : "sec_header", collectFieldIds());
+        const newSection = {
+            id: baseId,
+            _autoId: baseId,
+            label: "New Section",
+            type: "section",
+            ...(supportsPhasesConfig() ? { phase: "teleop" } : {}),
+            required: false
+        };
+        currentConfig.fields.push(newSection);
+        updateRawFromVisual();
+        renderVisualFields();
+        
+        if (visualFieldsList) {
+            setTimeout(() => {
+                visualFieldsList.lastElementChild?.scrollIntoView({ behavior: "smooth" });
+            }, 50);
+        }
+    }
+
     function slugify(text) {
         if (!text) return "";
         return text
@@ -2090,6 +2157,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentConfig.version = versionVal;
 
         const cleanedFields = (currentConfig.fields || []).map((field) => {
+            const rawType = field.type || "text";
+            const canonicalType = canonicalizeFieldType(rawType);
+
             let normalizedLabel = "";
             if (field.label !== undefined && field.label !== null) {
                 if (typeof field.label === 'string') {
@@ -2107,8 +2177,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const cleaned = {
                 id: field.id ? field.id.trim() : "",
                 label: normalizedLabel,
-                type: field.type || "text",
-                required: (field.type === "text" || field.type === "section") ? false : !!field.required
+                type: canonicalType,
+                required: (canonicalType === "text" || canonicalType === "section") ? false : !!field.required
             };
             
             const type = cleaned.type;
@@ -2142,6 +2212,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (field.pointsPer !== undefined && field.pointsPer !== null && field.pointsPer !== "") {
                     cleaned.pointsPer = Number(field.pointsPer);
                 }
+            }
+            
+            if (type === "section" || type === "text" || type === "image") {
+                delete cleaned.min;
+                delete cleaned.max;
+                delete cleaned.step;
+                delete cleaned.doubleStep;
+                delete cleaned.pointsPer;
+                delete cleaned.options;
             }
             
             if (type === "select") {

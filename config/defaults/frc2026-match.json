@@ -47,7 +47,7 @@
       "label": "Teleop Fuel",
       "type": "counter",
       "required": false,
-      "phase": "auto",
+      "phase": "teleop",
       "min": 0,
       "step": 1,
       "doubleStep": 5,

@@ -100,28 +100,40 @@ async function loadScoutPageData(me) {
 
         const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
         const fields = injectSections(config.fields || []);
+        const phaseCounts = {};
         
         fields
             .filter((field) => !reserved.has(field.id))
             .forEach((field) => {
-                if (field.type === "section") {
-                    return;
+                const phase = getFieldPhase(field);
+                if (field.type !== "section") {
+                    phaseCounts[phase] = (phaseCounts[phase] || 0) + 1;
                 }
                 const node = buildField(field);
-                node.dataset.phase = getFieldPhase(field);
-                fieldContainer.appendChild(node);
+                if (node) {
+                    node.dataset.phase = phase;
+                    fieldContainer.appendChild(node);
+                }
             });
 
         const tabsRow = document.getElementById("scouting-tabs");
         if (tabsRow) {
             const tabs = tabsRow.querySelectorAll(".tab");
             tabs.forEach(tab => {
+                const phase = tab.dataset.tab;
+                const count = phaseCounts[phase] || 0;
+                if (count === 0) {
+                    tab.classList.add("hidden");
+                } else {
+                    tab.classList.remove("hidden");
+                }
                 tab.addEventListener("click", () => {
                     switchTab(tab.dataset.tab);
                 });
             });
         }
-        switchTab("auto");
+        const firstVisibleTab = tabsRow ? tabsRow.querySelector(".tab:not(.hidden)") : null;
+        switchTab(firstVisibleTab ? firstVisibleTab.dataset.tab : "auto");
 
         const pointsPreview = {
             auto: document.getElementById("points-auto"),
@@ -129,6 +141,16 @@ async function loadScoutPageData(me) {
             endgame: document.getElementById("points-endgame"),
             total: document.getElementById("points-total")
         };
+
+        if (pointsPreview.auto && (phaseCounts["auto"] || 0) === 0) {
+            pointsPreview.auto.parentElement?.classList.add("hidden");
+        }
+        if (pointsPreview.teleop && (phaseCounts["teleop"] || 0) === 0) {
+            pointsPreview.teleop.parentElement?.classList.add("hidden");
+        }
+        if (pointsPreview.endgame && (phaseCounts["endgame"] || 0) === 0) {
+            pointsPreview.endgame.parentElement?.classList.add("hidden");
+        }
 
         fieldContainer.addEventListener("input", () => updatePointsPreview(fields, form, pointsPreview));
         fieldContainer.addEventListener("change", () => updatePointsPreview(fields, form, pointsPreview));
@@ -462,7 +484,33 @@ function matchHasTeam(teams, teamKey) {
 
 function buildField(field) {
     if (field.type === "section") {
-        return null;
+        const sectionWrapper = document.createElement("div");
+        sectionWrapper.className = "form-section";
+        const h3 = document.createElement("h3");
+        h3.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
+        sectionWrapper.appendChild(h3);
+        return sectionWrapper;
+    }
+
+    if (field.type === "checkbox") {
+        const wrapper = document.createElement("div");
+        wrapper.className = "field checkbox-field";
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.id = `field-${field.id}`;
+        input.name = field.id;
+        if (field.required) {
+            input.required = true;
+        }
+
+        const label = document.createElement("label");
+        label.htmlFor = `field-${field.id}`;
+        label.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
+
+        wrapper.appendChild(input);
+        wrapper.appendChild(label);
+        return wrapper;
     }
 
     const wrapper = document.createElement("div");
@@ -522,10 +570,6 @@ function buildField(field) {
         case "photo":
             ({ wrapper: input, input: actualInput } = buildImageUpload(field));
             break;
-        case "checkbox":
-            input = document.createElement("input");
-            input.type = "checkbox";
-            break;
         case "textarea":
         case "notes":
             input = document.createElement("textarea");
@@ -551,7 +595,7 @@ function buildField(field) {
 }
 
 function injectSections(fields) {
-    return (fields || []).filter((field) => field.type !== "section");
+    return (fields || []);
 }
 
 function getFieldPhase(field) {
@@ -1049,7 +1093,8 @@ function setFormEnabled(form, notice, pointsCard, enabled) {
     }
     const tabsRow = document.getElementById("scouting-tabs");
     if (tabsRow) {
-        tabsRow.classList.toggle("hidden", !enabled);
+        const hasVisibleTabs = Boolean(tabsRow.querySelector(".tab:not(.hidden)"));
+        tabsRow.classList.toggle("hidden", !enabled || !hasVisibleTabs);
     }
     const fieldContainer = document.getElementById("form-fields");
     if (fieldContainer) {
@@ -1075,23 +1120,32 @@ function setFormEnabled(form, notice, pointsCard, enabled) {
         input.disabled = !enabled;
     });
     if (enabled) {
-        switchTab("auto");
+        const firstVisibleTab = document.querySelector("#scouting-tabs .tab:not(.hidden)");
+        switchTab(firstVisibleTab ? firstVisibleTab.dataset.tab : "auto");
     }
 }
 
 function switchTab(activeTab) {
-    const tabs = document.querySelectorAll("#scouting-tabs .tab");
+    const tabs = Array.from(document.querySelectorAll("#scouting-tabs .tab"));
+    const visibleTabs = tabs.filter(tab => !tab.classList.contains("hidden"));
+
+    let targetTab = activeTab;
+    const targetEl = visibleTabs.find(tab => tab.dataset.tab === targetTab);
+    if (!targetEl && visibleTabs.length > 0) {
+        targetTab = visibleTabs[0].dataset.tab;
+    }
+
     tabs.forEach(tab => {
-        if (tab.dataset.tab === activeTab) {
+        if (tab.dataset.tab === targetTab && !tab.classList.contains("hidden")) {
             tab.classList.add("active");
         } else {
             tab.classList.remove("active");
         }
     });
 
-    const fields = document.querySelectorAll("#form-fields .field");
+    const fields = document.querySelectorAll("#form-fields > [data-phase]");
     fields.forEach(field => {
-        if (field.dataset.phase === activeTab) {
+        if (field.dataset.phase === targetTab) {
             field.classList.remove("hidden");
         } else {
             field.classList.add("hidden");

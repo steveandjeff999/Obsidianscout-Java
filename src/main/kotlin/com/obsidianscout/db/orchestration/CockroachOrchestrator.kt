@@ -505,9 +505,9 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     val wasLost = isQuorumLost
                     checkQuorumStatus()
                     if (!wasLost && isQuorumLost) {
-                        println("[Cockroach] ⚠️ Cluster quorum loss proactively detected by health probe! Switched read transactions to AS OF SYSTEM TIME offline mode.")
+                        println("[Cockroach] Cluster quorum loss proactively detected by health probe! Switched read transactions to AS OF SYSTEM TIME offline mode.")
                     } else if (wasLost && !isQuorumLost) {
-                        println("[Cockroach] ✅ Cluster quorum restored! Resumed live read/write mode.")
+                        println("[Cockroach] Cluster quorum restored! Resumed live read/write mode.")
                     }
                 } catch (_: Exception) {}
                 delay(if (isQuorumLost) 5000L else 3000L)
@@ -531,7 +531,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     val localProcess = process
                     if (localProcess != null && !localProcess.isAlive) {
                         val exitCode = localProcess.exitValue()
-                        println("[ProcessMonitor] ⚠️ Local CockroachDB process has died (exit=$exitCode). Preserving data directory and restarting...")
+                        println("[ProcessMonitor] Local CockroachDB process has died (exit=$exitCode). Preserving data directory and restarting...")
                         try {
                             val peers = try {
                                 GoogleSheetsManager.fetchPeers(appConfig.google_sheet_url, appConfig.google_sheet_password)
@@ -542,7 +542,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                             val newProc = startCockroachProcess(tailscaleIp, port, joinPeers, isInsecure)
                             process = newProc
                             isDbActive = true
-                            println("[ProcessMonitor] ✅ CockroachDB restarted. Waiting for port to open...")
+                            println("[ProcessMonitor] CockroachDB restarted. Waiting for port to open...")
                             waitForPort(tailscaleIp, port, 45)
                             println("[ProcessMonitor] CockroachDB port open. Node rejoining cluster with preserved identity.")
                         } catch (e: Exception) {
@@ -581,11 +581,11 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                             val allInvalid = totalLeaders > 0 && leaseholders == 0L && invalidLeases >= totalLeaders
                             if (allInvalid) {
                                 consecutiveInvalidLeaseRounds++
-                                println("[LeaseHealer] ⚠️ All $invalidLeases leases are invalid (round $consecutiveInvalidLeaseRounds). Leaseholders=0. Triggering lease re-acquisition...")
+                                println("[LeaseHealer] All $invalidLeases leases are invalid (round $consecutiveInvalidLeaseRounds). Leaseholders=0. Triggering lease re-acquisition...")
                                 healInvalidLeases()
                             } else {
                                 if (consecutiveInvalidLeaseRounds > 0)
-                                    println("[LeaseHealer] ✅ Leases recovered. Leaseholders=$leaseholders, Invalid=$invalidLeases")
+                                    println("[LeaseHealer] Leases recovered. Leaseholders=$leaseholders, Invalid=$invalidLeases")
                                 consecutiveInvalidLeaseRounds = 0
                             }
                         }
@@ -601,10 +601,10 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                         if (pending != null && addReplica != null && snapshots != null && underRep != null) {
                             val queueFrozen = pending > 0 && addReplica == 0L && snapshots == 0L && underRep > 0
                             if (queueFrozen) {
-                                println("[QueueHealer] ⚠️ Replicate queue frozen: pending=$pending, addreplica=0, snapshots=0, underRep=$underRep. Applying remediation...")
+                                println("[QueueHealer] Replicate queue frozen: pending=$pending, addreplica=0, snapshots=0, underRep=$underRep. Applying remediation...")
                                 healFrozenReplicateQueue()
                             } else if (underRep == 0L) {
-                                println("[QueueHealer] ✅ Cluster fully replicated.")
+                                println("[QueueHealer] Cluster fully replicated.")
                             }
                         }
                         lastQueueHealTime = now
@@ -768,9 +768,9 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             val exited = p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
             val output = p.inputStream.bufferedReader().use { it.readText() }.trim()
             if (exited && p.exitValue() == 0) {
-                println("[ClockHealer] ✅ NTP resync succeeded: $output")
+                println("[ClockHealer] NTP resync succeeded: $output")
             } else {
-                println("[ClockHealer] ⚠️ NTP resync exited=${if(exited) p.exitValue() else -1}: $output")
+                println("[ClockHealer] NTP resync exited=${if(exited) p.exitValue() else -1}: $output")
             }
         } catch (e: Exception) {
             println("[ClockHealer] Failed to run NTP resync: ${e.message}")
@@ -1152,7 +1152,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             if (isQuorumLost) {
                 isQuorumLost = false
                 quorumLossDetails = null
-                println("[Cockroach] ✅ Quorum restored! Resumed standard CockroachDB read/write operations.")
+                println("[Cockroach] Quorum restored! Resumed standard CockroachDB read/write operations.")
                 if (isQuorumLossAlertSent) {
                     isQuorumLossAlertSent = false
                     try {
@@ -1173,7 +1173,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             // Require 3 consecutive failed verification cycles (~30s) before dispatching the push/email alert to superadmins.
             if (failCount >= 3 && !isQuorumLossAlertSent) {
                 isQuorumLossAlertSent = true
-                println("[Cockroach] 🚨 Database quorum loss confirmed after 3 consecutive failed verification cycles! Dispatching alert...")
+                println("[Cockroach] Database quorum loss confirmed after 3 consecutive failed verification cycles! Dispatching alert...")
                 try {
                     com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumLostAlert(quorumLossDetails)
                 } catch (_: Exception) {}

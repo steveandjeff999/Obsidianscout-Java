@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ObsidianScout | FCM Push Settings</title>
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="manifest" href="/manifest.json" />
     <style>
         .fcm-grid {
@@ -83,7 +84,7 @@
             <div id="fcm-panel" class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 24px;">
                     <div>
-                        <h1 style="margin: 0;" data-i18n="fcm.title">🔥 Firebase Push Notifications (FCM)</h1>
+                        <h1 style="margin: 0;" data-i18n="fcm.title"><i class="fa-solid fa-fire"></i> Firebase Push Notifications (FCM)</h1>
                         <p style="color: var(--muted); margin-top: 4px; font-size: 14px;" data-i18n="fcm.notice">
                             Configure Google Firebase Cloud Messaging credentials for real-time mobile & browser chat alerts. Saved to database for cluster-wide synchronization.
                         </p>
@@ -116,7 +117,7 @@
                         </p>
 
                         <div class="dropzone" id="json-dropzone">
-                            <span style="font-size: 28px;">📄</span>
+                            <span style="font-size: 28px;"><i class="fa-solid fa-file-code"></i></span>
                             <p style="margin: 8px 0 4px 0; font-weight: 600;" data-i18n="fcm.dropzone_title">Click or drag & drop <code>service-account.json</code> here</p>
                             <span style="color: var(--muted); font-size: 12px;" data-i18n="fcm.dropzone_subtext">Private Key file generated in Firebase Console -> Project Settings -> Service Accounts.</span>
                             <input type="file" id="json-file-input" accept=".json" style="display: none;" />
@@ -138,7 +139,7 @@
                                 </p>
                             </div>
                             <button type="button" id="btn-upload-google-services" class="btn secondary" style="font-size: 12px; padding: 6px 12px;">
-                                <span data-i18n="fcm.btn_upload_google_services">📱 Upload google-services.json</span>
+                                <span data-i18n="fcm.btn_upload_google_services"><i class="fa-solid fa-mobile-screen"></i> Upload google-services.json</span>
                             </button>
                             <input type="file" id="google-services-file-input" accept=".json" style="display: none;" />
                         </div>
@@ -171,10 +172,10 @@
                     <!-- Action Buttons -->
                     <div style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;">
                         <button type="button" id="btn-test-fcm" class="btn secondary" style="display: inline-flex; align-items: center; gap: 6px;">
-                            <span>🔔</span> <span data-i18n="fcm.btn_test">Send Test Notification</span>
+                            <span><i class="fa-solid fa-bell"></i></span> <span data-i18n="fcm.btn_test">Send Test Notification</span>
                         </button>
                         <button type="submit" id="btn-save-fcm" class="btn primary" style="display: inline-flex; align-items: center; gap: 6px;">
-                            <span>💾</span> <span data-i18n="fcm.btn_save">Save to Database</span>
+                            <span><i class="fa-solid fa-floppy-disk"></i></span> <span data-i18n="fcm.btn_save">Save to Database</span>
                         </button>
                     </div>
                 </form>

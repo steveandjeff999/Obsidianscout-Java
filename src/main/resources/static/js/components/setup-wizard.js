@@ -221,7 +221,7 @@ export function showSetupWizardModal(me, settings, forceOpen = false) {
         <div class="wizard-body" style="margin-bottom: 24px; min-height: 250px;">
             <div class="wizard-step-content active" data-step="1">
                 <div class="wizard-welcome-card">
-                    <span class="wizard-welcome-icon">🚀</span>
+                    <span class="wizard-welcome-icon"><i class="fa-solid fa-rocket"></i></span>
                     <h3 class="wizard-welcome-title">Welcome to ObsidianScout!</h3>
                     <p class="wizard-welcome-desc">Let's configure your team's scouting workspace in a few quick steps. We'll set up your event configurations, API keys, and confirm your scouting forms.</p>
                     
@@ -231,7 +231,7 @@ export function showSetupWizardModal(me, settings, forceOpen = false) {
                         We highly recommend reviewing our Getting Started Guide first to learn how the database, syncing, and roles operate.
                     </p>
                     <a href="/docs" target="_blank" class="btn" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; width: 100%; max-width: 320px; margin: 0 auto 12px;">
-                        📖 Read Getting Started Tutorial
+                        <i class="fa-solid fa-book-open"></i> Read Getting Started Tutorial
                     </a>
                 </div>
             </div>
@@ -297,7 +297,7 @@ export function showSetupWizardModal(me, settings, forceOpen = false) {
                 
                 <div class="field">
                     <label class="btn ghost btn-file" style="display: inline-flex; width: 100%; justify-content: center; padding: 12px; margin-bottom: 12px; cursor: pointer;">
-                        📁 Import Custom Game Form JSON
+                        <i class="fa-solid fa-folder-open"></i> Import Custom Game Form JSON
                         <input id="wizard-config-import" class="input-hidden" type="file" accept="application/json" />
                     </label>
                     <div id="wizard-import-status" class="notice" style="text-align: center; color: var(--accent-2); font-weight: 600;"></div>

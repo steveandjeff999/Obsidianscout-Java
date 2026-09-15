@@ -83,7 +83,7 @@ async function loadEvents() {
         const defaultEventKey = Obsidianscout.resolveEventKey(settings);
 
         const events = await Obsidianscout.request(`/api/events?year=${settings.year}&cached=1`);
-        
+
         eventSelect.innerHTML = '<option value="">-- Select an Event --</option>';
         if (!events || events.length === 0) {
             eventSelect.innerHTML = '<option value="">No events synced in database</option>';
@@ -330,7 +330,7 @@ function createMatchStatusBadge(match) {
     if (match.hasAnomaly) {
         const badge = document.createElement("span");
         badge.className = "status-badge anomaly";
-        badge.innerHTML = `🚨 Score Anomaly`;
+        badge.innerHTML = `Score Anomaly`;
         container.appendChild(badge);
     }
 
@@ -447,7 +447,7 @@ function renderTeamsTable() {
         // Anomaly Status
         const statusTd = document.createElement("td");
         if (team.isAnomaly) {
-            statusTd.innerHTML = `<span class="status-badge anomaly" title="${escapeHtml(team.anomalyReason || 'Anomaly detected')}">🚨 ${escapeHtml(team.anomalyReason || 'Anomaly')}</span>`;
+            statusTd.innerHTML = `<span class="status-badge anomaly" title="${escapeHtml(team.anomalyReason || 'Anomaly detected')}">${escapeHtml(team.anomalyReason || 'Anomaly')}</span>`;
         } else if (team.scoutedMatchCount > 0) {
             statusTd.innerHTML = `<span class="status-badge complete">✓ In Range</span>`;
         } else {

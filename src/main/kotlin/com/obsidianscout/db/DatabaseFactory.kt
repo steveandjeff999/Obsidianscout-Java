@@ -102,7 +102,7 @@ object DatabaseFactory {
             if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = true
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = e.message ?: "Database cluster quorum lost."
-                println("[Database] ⚠️ CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Routing read to local SQLite fallback snapshot...")
+                println("[Database] CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Routing read to local SQLite fallback snapshot...")
                 if (QuorumFallbackStore.isEnabled && QuorumFallbackStore.isAvailable) {
                     return QuorumFallbackStore.executeRead(statement)
                 }

@@ -238,7 +238,7 @@ object NodeMonitoringService {
         ServerLogService.appendLog("WARN", "NodeMonitoringService", "Dispatching Node Down FCM & Email alerts to ${enrolledUuids.size} enrolled superadmin(s).")
 
         // 1. FCM Push Notifications
-        val fcmTitle = "🚨 Cluster Node Down Alert"
+        val fcmTitle = "Cluster Node Down Alert"
         val fcmBody = "Node ${node.ip} (${node.nodeId}) is offline or unreachable."
         try {
             FcmService.sendNotificationToUsers(
@@ -264,13 +264,13 @@ object NodeMonitoringService {
                 val appConfig = AppConfigLoader.load()
                 val siteUrl = appConfig.getEffectiveSiteUrl()
                 val clusterUrl = "$siteUrl/cluster-management"
-                val emailSubject = "🚨 [ObsidianScout Alert] Cluster Node Down: ${node.ip}"
+                val emailSubject = "[ObsidianScout Alert] Cluster Node Down: ${node.ip}"
                 val emailHtml = """
                     <html>
                     <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #0f172a; padding: 20px;">
                         <div style="max-width: 600px; margin: 0 auto; background: #1e293b; border: 1px solid #ef4444; border-radius: 12px; padding: 24px; color: #f8fafc;">
                             <h2 style="color: #ef4444; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-top: 0;">
-                                🚨 Cluster Node Offline Alert
+                                Cluster Node Offline Alert
                             </h2>
                             <p style="font-size: 16px;">
                                 Node <strong>${node.ip}</strong> (${node.nodeId}) on port <strong>${node.appPort}</strong> has gone <strong>OFFLINE</strong> or is unreachable.
@@ -341,7 +341,7 @@ object NodeMonitoringService {
         ServerLogService.appendLog("INFO", "NodeMonitoringService", "Dispatching Node Recovered FCM & Email alerts to ${enrolledUuids.size} enrolled superadmin(s).")
 
         // 1. FCM Push Notifications
-        val fcmTitle = "🟢 Cluster Node Recovered"
+        val fcmTitle = "Cluster Node Recovered"
         val fcmBody = "Node ${node.ip} (${node.nodeId}) is back online and healthy."
         try {
             FcmService.sendNotificationToUsers(
@@ -361,14 +361,14 @@ object NodeMonitoringService {
             val appConfig = AppConfigLoader.load()
             val siteUrl = appConfig.getEffectiveSiteUrl()
             val clusterUrl = "$siteUrl/cluster-management"
-            val emailSubject = "🟢 [RECOVERED] Cluster Node Back Online: Node ${node.ip}"
+            val emailSubject = "[RECOVERED] Cluster Node Back Online: Node ${node.ip}"
             val emailHtml = """
                 <!DOCTYPE html>
                 <html>
                 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #0f172a; padding: 20px;">
                     <div style="max-width: 600px; margin: 0 auto; background: #1e293b; border: 1px solid #22c55e; border-radius: 12px; padding: 24px; color: #f8fafc;">
                         <h2 style="color: #4ade80; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-top: 0;">
-                            🟢 Cluster Node Recovered
+                            Cluster Node Recovered
                         </h2>
                         <p style="font-size: 16px;">
                             Cluster node <strong>${node.nodeId}</strong> at IP <strong>${node.ip}</strong> has recovered and is back online.
@@ -520,7 +520,7 @@ object NodeMonitoringService {
         try {
             FcmService.sendNotificationToUsers(
                 targetUserUuids = enrolledUuids,
-                title = "🚨 Database Quorum Lost",
+                title = "Database Quorum Lost",
                 body = "CockroachDB majority quorum lost on node $localIp. Node is serving from local SQLite mirror in read-only mode.",
                 groupName = "cluster-alerts",
                 url = "/cluster-management"
@@ -540,13 +540,13 @@ object NodeMonitoringService {
                 val appConfig = AppConfigLoader.load()
                 val siteUrl = appConfig.getEffectiveSiteUrl()
                 val clusterUrl = "$siteUrl/cluster-management"
-                val emailSubject = "🚨 [ObsidianScout Alert] CockroachDB Quorum Lost on $localIp"
+                val emailSubject = "[ObsidianScout Alert] CockroachDB Quorum Lost on $localIp"
                 val emailHtml = """
                     <html>
                     <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #0f172a; padding: 20px;">
                         <div style="max-width: 600px; margin: 0 auto; background: #1e293b; border: 1px solid #ef4444; border-radius: 12px; padding: 24px; color: #f8fafc;">
                             <h2 style="color: #ef4444; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-top: 0;">
-                                🚨 Database Quorum Lost
+                                Database Quorum Lost
                             </h2>
                             <p style="font-size: 16px;">
                                 Server node <strong>$localIp</strong> has lost CockroachDB cluster majority consensus.
@@ -599,7 +599,7 @@ object NodeMonitoringService {
         try {
             FcmService.sendNotificationToUsers(
                 targetUserUuids = enrolledUuids,
-                title = "✅ Database Quorum Restored",
+                title = "Database Quorum Restored",
                 body = "CockroachDB cluster consensus restored on node $localIp. Normal read/write operations have resumed.",
                 groupName = "cluster-alerts",
                 url = "/cluster-management"
@@ -619,13 +619,13 @@ object NodeMonitoringService {
                 val appConfig = AppConfigLoader.load()
                 val siteUrl = appConfig.getEffectiveSiteUrl()
                 val clusterUrl = "$siteUrl/cluster-management"
-                val emailSubject = "✅ [ObsidianScout] CockroachDB Quorum Restored on $localIp"
+                val emailSubject = "[ObsidianScout] CockroachDB Quorum Restored on $localIp"
                 val emailHtml = """
                     <html>
                     <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #0f172a; padding: 20px;">
                         <div style="max-width: 600px; margin: 0 auto; background: #1e293b; border: 1px solid #22c55e; border-radius: 12px; padding: 24px; color: #f8fafc;">
                             <h2 style="color: #22c55e; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-top: 0;">
-                                ✅ Database Quorum Restored
+                                Database Quorum Restored
                             </h2>
                             <p style="font-size: 16px;">
                                 CockroachDB majority consensus has been re-established on node <strong>$localIp</strong>.

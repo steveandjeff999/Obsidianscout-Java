@@ -650,7 +650,7 @@ function generateGraphs(state) {
         warnBanner.style.borderRadius = "6px";
         warnBanner.style.border = "1px solid";
         warnBanner.innerHTML = `
-            <span class="icon">⚠️</span>
+            <span class="icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
             <div style="flex:1;">
                 <strong>Discrepancy Warning:</strong> Some of the data used in these graphs contains conflicting inputs from partner teams. You can review or resolve this in the Alliance Scouting Data page.
             </div>

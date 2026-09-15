@@ -68,7 +68,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!revisions || revisions.length === 0) {
                 revisionsList.innerHTML = `
                     <div class="card soft" style="text-align: center; padding: 40px 20px;">
-                        <div style="font-size: 32px; margin-bottom: 8px;">📜</div>
+                        <div style="font-size: 32px; margin-bottom: 8px;"><i class="fa-solid fa-scroll"></i></div>
                         <h3 style="margin: 0 0 6px 0;">No Historical Snapshots Recorded Yet</h3>
                         <p class="notice" style="max-width: 460px; margin: 0 auto 16px auto;">
                             Revisions are automatically captured whenever you save changes to your scouting form in Admin Settings.
@@ -104,9 +104,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                         ${isLatest ? '<span class="matched-key-badge" style="font-size: 11px; padding: 2px 6px;">Latest Active</span>' : ''}
                     </div>
                     <div class="revision-meta">
-                        <span>📅 ${dateStr}</span>
-                        <span>👤 Saved by <strong>${rev.savedByUsername || 'admin'}</strong></span>
-                        <span>📊 ${rev.fieldCount} fields</span>
+                        <span><i class="fa-solid fa-calendar-days"></i> ${dateStr}</span>
+                        <span><i class="fa-solid fa-user"></i> Saved by <strong>${rev.savedByUsername || 'admin'}</strong></span>
+                        <span><i class="fa-solid fa-chart-column"></i> ${rev.fieldCount} fields</span>
                     </div>
                     <div class="revision-summary">
                         ${rev.changeSummary ? `<em>Summary:</em> ${rev.changeSummary}` : '<em>No change description</em>'}

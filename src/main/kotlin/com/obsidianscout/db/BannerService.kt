@@ -47,7 +47,7 @@ object BannerService {
             id = "system-quorum-lost-fallback",
             teamNumber = 0,
             program = program,
-            message = "⚠️ Cluster Quorum Lost: Operating in Read-Only Mode ($storeStatus). Recent scouting entries, team stats, and match schedules remain available. New submissions are temporarily paused.",
+            message = "Cluster Quorum Lost: Operating in Read-Only Mode ($storeStatus). Recent scouting entries, team stats, and match schedules remain available. New submissions are temporarily paused.",
             bannerType = "warning",
             isDismissible = false,
             isExpandable = true,

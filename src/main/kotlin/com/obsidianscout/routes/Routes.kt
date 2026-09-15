@@ -2676,7 +2676,7 @@ fun Application.configureRoutes() {
                             BannerDto(
                                 id = "sys-db-quorum-lost",
                                 teamNumber = session.teamNumber,
-                                message = "🚨 Database Quorum Lost: CockroachDB cluster has lost quorum (majority of nodes offline). Database read/write operations are temporarily restricted until quorum is restored.",
+                                message = "Database Quorum Lost: CockroachDB cluster has lost quorum (majority of nodes offline). Database read/write operations are temporarily restricted until quorum is restored.",
                                 bannerType = "danger",
                                 isDismissible = false,
                                 isExpandable = true,
@@ -2782,7 +2782,7 @@ fun Application.configureRoutes() {
                                     BannerDto(
                                         id = "sys-db-quorum-lost",
                                         teamNumber = session.teamNumber,
-                                        message = "🚨 Database Quorum Lost: CockroachDB cluster has lost quorum (majority of nodes offline). Database read/write operations are temporarily restricted until quorum is restored.",
+                                        message = "Database Quorum Lost: CockroachDB cluster has lost quorum (majority of nodes offline). Database read/write operations are temporarily restricted until quorum is restored.",
                                         bannerType = "danger",
                                         isDismissible = false,
                                         isExpandable = true,

@@ -20,7 +20,7 @@
     let memberChipsList, inviteFormContainer, formInviteTeam, inviteTeamNumberInput;
     let editor, saveButton, exportButton, importInput;
     let btnVisual, btnRaw, containerVisual, containerRaw;
-    let configTitleInput, configVersionInput, btnAddField, visualFieldsList;
+    let configTitleInput, configVersionInput, btnAddField, btnAddSection, visualFieldsList;
     let configModeButtons;
     let allianceActiveToggle, btnImportLocal;
 
@@ -48,6 +48,21 @@
 
     function supportsPhasesConfig() {
         return activeConfigKind === "game";
+    }
+
+    function canonicalizeFieldType(rawType) {
+        if (!rawType) return "text";
+        const t = String(rawType).toLowerCase().trim();
+        if (t === "counter") return "counter";
+        if (t === "number" || t === "int" || t === "integer" || t === "float") return "number";
+        if (t === "rating" || t === "stars" || t === "star") return "rating";
+        if (t === "checkbox" || t === "toggle" || t === "bool" || t === "boolean") return "checkbox";
+        if (t === "select" || t === "dropdown" || t === "choice") return "select";
+        if (t === "section" || t === "section_header" || t === "header") return "section";
+        if (t === "textarea" || t === "notes" || t === "note" || t === "paragraph") return "textarea";
+        if (t === "text" || t === "static" || t === "label") return "text";
+        if (t === "image" || t === "photo" || t === "image_upload") return "image";
+        return t;
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -99,6 +114,7 @@
         configTitleInput = document.getElementById("config-title");
         configVersionInput = document.getElementById("config-version");
         btnAddField = document.getElementById("btn-add-field");
+        btnAddSection = document.getElementById("btn-add-section");
         visualFieldsList = document.getElementById("visual-fields-list");
         configModeButtons = document.querySelectorAll("[data-config-kind]");
 
@@ -155,6 +171,7 @@
                     saveButton.textContent = "Alliance Config (ReadOnly)";
                 }
                 if (btnAddField) btnAddField.style.display = 'none';
+                if (btnAddSection) btnAddSection.style.display = 'none';
                 if (configTitleInput) configTitleInput.disabled = true;
                 if (configVersionInput) configVersionInput.disabled = true;
                 if (importInput) importInput.parentElement.style.display = 'none';
@@ -484,8 +501,9 @@
         if (configTitleInput) configTitleInput.addEventListener("input", updateRawFromVisual);
         if (configVersionInput) configVersionInput.addEventListener("input", updateRawFromVisual);
 
-        // Add Field
+        // Add Field and Add Section
         if (btnAddField) btnAddField.addEventListener("click", addField);
+        if (btnAddSection) btnAddSection.addEventListener("click", addSectionHeader);
 
         // Manual Save Configuration (Sends current state over WS)
         saveButton?.addEventListener("click", () => {
@@ -779,6 +797,12 @@
         const card = document.createElement("div");
         card.className = "field-card";
         
+        const canonicalType = canonicalizeFieldType(field.type);
+        field.type = canonicalType;
+        if (canonicalType === "section") {
+            card.classList.add("field-card-section");
+        }
+
         // Header
         const header = document.createElement("div");
         header.className = "field-card-header";
@@ -791,7 +815,7 @@
         
         const typeBadge = document.createElement("span");
         typeBadge.className = "type-badge";
-        typeBadge.textContent = field.type || "text";
+        typeBadge.textContent = canonicalType === "section" ? "section header" : canonicalType;
         controls.appendChild(typeBadge);
         
         // Move Up
@@ -818,7 +842,7 @@
         const btnDel = document.createElement("button");
         btnDel.type = "button";
         btnDel.className = "btn-control-icon delete";
-        btnDel.innerHTML = "🗑️";
+        btnDel.innerHTML = '<i class="fa-solid fa-trash"></i>';
         btnDel.title = "Delete Field";
         btnDel.addEventListener("click", () => deleteField(index));
         controls.appendChild(btnDel);
@@ -835,11 +859,11 @@
         const divLabel = document.createElement("div");
         divLabel.className = "field";
         const labelTag = document.createElement("label");
-        labelTag.textContent = 'Field Label';
+        labelTag.textContent = canonicalType === "section" ? 'Section Title' : 'Field Label';
         const inputLabel = document.createElement("input");
         inputLabel.type = "text";
         inputLabel.value = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
-        inputLabel.placeholder = "e.g. Teleop Cycles";
+        inputLabel.placeholder = canonicalType === "section" ? "e.g. Autonomous, Teleop, Endgame" : "e.g. Teleop Cycles";
         inputLabel.addEventListener("input", (e) => {
             const lang = (window.Obsidianscout && typeof Obsidianscout.safeGetItem === 'function') ? (Obsidianscout.safeGetItem('obsidianscout:lang') || 'en') : 'en';
             const val = e.target.value;
@@ -873,7 +897,7 @@
         const inputId = document.createElement("input");
         inputId.type = "text";
         inputId.value = field.id || "";
-        inputId.placeholder = "e.g. teleopCycles";
+        inputId.placeholder = canonicalType === "section" ? "e.g. sec_teleop" : "e.g. teleopCycles";
         inputId.addEventListener("input", (e) => {
             field.id = e.target.value;
             field._autoId = null;
@@ -889,16 +913,35 @@
         const labelType = document.createElement("label");
         labelType.textContent = 'Type';
         const selectType = document.createElement("select");
-        const types = ["text", "textarea", "number", "counter", "rating", "checkbox", "select", "section"];
-        types.forEach((t) => {
+        const standardTypes = [
+            { value: "counter", label: "COUNTER (+ / -)" },
+            { value: "number", label: "NUMBER" },
+            { value: "rating", label: "RATING (1-5)" },
+            { value: "checkbox", label: "CHECKBOX / TOGGLE" },
+            { value: "select", label: "DROPDOWN (SELECT)" },
+            { value: "section", label: "SECTION HEADER" },
+            { value: "text", label: "TEXT (STATIC DISPLAY)" },
+            { value: "textarea", label: "TEXTAREA (INPUT)" },
+            { value: "image", label: "IMAGE (PHOTO UPLOAD)" }
+        ];
+
+        const typesList = [...standardTypes];
+        if (!typesList.some(t => t.value === canonicalType)) {
+            typesList.push({ value: canonicalType, label: String(field.type).toUpperCase() });
+        }
+
+        typesList.forEach((t) => {
             const opt = document.createElement("option");
-            opt.value = t;
-            opt.textContent = t.toUpperCase();
-            opt.selected = field.type === t;
+            opt.value = t.value;
+            opt.textContent = t.label;
+            opt.selected = canonicalType === t.value;
             selectType.appendChild(opt);
         });
         selectType.addEventListener("change", (e) => {
-            field.type = e.target.value;
+            field.type = canonicalizeFieldType(e.target.value);
+            if (field.type === "text" || field.type === "section") {
+                field.required = false;
+            }
             if (field.type === "select" && !field.options) {
                 field.options = [];
             }
@@ -910,6 +953,19 @@
             if (field.type !== "counter") {
                 delete field.doubleStep;
                 delete field.double_step;
+            }
+            if (field.type === "image" || field.type === "text" || field.type === "section" || field.type === "textarea" || field.type === "checkbox") {
+                delete field.min;
+                delete field.max;
+                delete field.step;
+                delete field.doubleStep;
+                delete field.double_step;
+            }
+            if (field.type !== "number" && field.type !== "counter" && field.type !== "rating" && field.type !== "checkbox") {
+                delete field.pointsPer;
+            }
+            if (field.type !== "select") {
+                delete field.options;
             }
             updateRawFromVisual();
             renderVisualFields();
@@ -948,37 +1004,35 @@
             body.appendChild(divPhase);
         }
         
-        // Required Checkbox
-        const divReq = document.createElement("div");
-        divReq.className = "field";
-        const labelReq = document.createElement("label");
-        labelReq.textContent = 'Required';
-        const labelWrap = document.createElement("label");
-        labelWrap.style.display = "flex";
-        labelWrap.style.alignItems = "center";
-        labelWrap.style.gap = "8px";
-        labelWrap.style.cursor = "pointer";
-        labelWrap.style.height = "38px";
-        labelWrap.style.margin = "0";
-        labelWrap.style.boxSizing = "border-box";
-        const inputReq = document.createElement("input");
-        inputReq.type = "checkbox";
-        inputReq.checked = !!field.required;
-        inputReq.addEventListener("change", (e) => {
-            field.required = e.target.checked;
-            updateRawFromVisual();
-        });
-        labelWrap.appendChild(inputReq);
-        labelWrap.appendChild(document.createTextNode(' Is Required'));
-        divReq.appendChild(labelReq);
-        divReq.appendChild(labelWrap);
-        body.appendChild(divReq);
+        // Required Checkbox (Only for interactive fields, not static text or section headers)
+        if (canonicalType !== "text" && canonicalType !== "section") {
+            const divReq = document.createElement("div");
+            divReq.className = "field";
+            const labelReq = document.createElement("label");
+            labelReq.textContent = 'Required';
+            const labelWrap = document.createElement("label");
+            labelWrap.style.display = "flex";
+            labelWrap.style.alignItems = "center";
+            labelWrap.style.gap = "8px";
+            labelWrap.style.cursor = "pointer";
+            labelWrap.style.height = "38px";
+            labelWrap.style.margin = "0";
+            labelWrap.style.boxSizing = "border-box";
+            const inputReq = document.createElement("input");
+            inputReq.type = "checkbox";
+            inputReq.checked = !!field.required;
+            inputReq.addEventListener("change", (e) => {
+                field.required = e.target.checked;
+                updateRawFromVisual();
+            });
+            labelWrap.appendChild(inputReq);
+            labelWrap.appendChild(document.createTextNode(' Is Required'));
+            divReq.appendChild(labelReq);
+            divReq.appendChild(labelWrap);
+            body.appendChild(divReq);
+        }
         
-        if (field.type === "section") {
-            divId.style.display = "none";
-            divReq.style.display = "none";
-            if (divPhase) divPhase.style.display = "none";
-        } else {
+        if (canonicalType !== "section") {
             // Type-specific configs
             if (field.type === "number" || field.type === "counter" || field.type === "rating") {
                 const boundsDiv = document.createElement("div");
@@ -995,7 +1049,8 @@
                 });
                 boundsDiv.appendChild(divMin);
 
-                const counterHasNoLimit = field.type === "counter" && (field.max === undefined || field.max === null || field.max === "");
+                const supportsNoLimit = field.type === "counter" || field.type === "number";
+                const isNoLimit = supportsNoLimit && (field.max === undefined || field.max === null || field.max === "");
                 const divMax = document.createElement("div");
                 divMax.className = "field";
                 const headerMax = document.createElement("div");
@@ -1012,7 +1067,7 @@
                 const inputMax = document.createElement("input");
                 inputMax.type = "number";
                 inputMax.value = (field.max !== undefined && field.max !== null) ? field.max : "";
-                inputMax.disabled = counterHasNoLimit;
+                inputMax.disabled = isNoLimit;
                 let inputNoLimit = null;
                 inputMax.addEventListener("input", (e) => {
                     field.max = e.target.value !== "" ? Number(e.target.value) : null;
@@ -1023,7 +1078,7 @@
                     updateRawFromVisual();
                 });
 
-                if (field.type === "counter") {
+                if (supportsNoLimit) {
                     const noLimitWrap = document.createElement("label");
                     noLimitWrap.style.display = "flex";
                     noLimitWrap.style.alignItems = "center";
@@ -1035,7 +1090,7 @@
                     noLimitWrap.style.margin = "0";
                     inputNoLimit = document.createElement("input");
                     inputNoLimit.type = "checkbox";
-                    inputNoLimit.checked = counterHasNoLimit;
+                    inputNoLimit.checked = isNoLimit;
                     inputNoLimit.addEventListener("change", (e) => {
                         if (e.target.checked) {
                             field.max = null;
@@ -1234,6 +1289,33 @@
         }, 80);
     }
 
+    function addSectionHeader() {
+        const fields = currentConfig.fields || [];
+        const baseSlug = supportsPhasesConfig() ? "sec_teleop" : "sec_header";
+        const uniqueSlug = ensureUniqueSlug(baseSlug, collectFieldIds());
+        
+        const newSection = {
+            id: uniqueSlug,
+            _autoId: uniqueSlug,
+            label: "New Section",
+            type: "section",
+            ...(supportsPhasesConfig() ? { phase: "teleop" } : {}),
+            required: false
+        };
+        
+        fields.push(newSection);
+        renderVisualFields();
+        updateRawFromVisual();
+
+        setTimeout(() => {
+            const cards = visualFieldsList.querySelectorAll(".field-card");
+            if (cards.length) {
+                cards[cards.length - 1].scrollIntoView({ behavior: 'smooth' });
+                cards[cards.length - 1].querySelector("input")?.focus();
+            }
+        }, 80);
+    }
+
     function moveField(index, dir) {
         const fields = currentConfig.fields || [];
         const target = index + dir;
@@ -1262,6 +1344,9 @@
         const fields = currentConfig.fields || [];
 
         const cleanedFields = fields.map((field) => {
+            const rawType = field.type || "text";
+            const canonicalType = canonicalizeFieldType(rawType);
+
             let normalizedLabel = "";
             if (field.label !== undefined && field.label !== null) {
                 if (typeof field.label === 'string') {
@@ -1279,16 +1364,11 @@
             const cleaned = {
                 id: field.id ? field.id.trim() : "",
                 label: normalizedLabel,
-                type: field.type || "text",
-                required: !!field.required
+                type: canonicalType,
+                required: (canonicalType === "text" || canonicalType === "section") ? false : !!field.required
             };
             
             const type = cleaned.type;
-            
-            if (type === "section") {
-                delete cleaned.required;
-                return cleaned;
-            }
 
             if (supportsPhasesConfig() && field.phase) {
                 cleaned.phase = String(field.phase);
@@ -1314,6 +1394,15 @@
                 if (field.pointsPer !== undefined && field.pointsPer !== null && field.pointsPer !== "") {
                     cleaned.pointsPer = Number(field.pointsPer);
                 }
+            }
+            
+            if (type === "section" || type === "text" || type === "image") {
+                delete cleaned.min;
+                delete cleaned.max;
+                delete cleaned.step;
+                delete cleaned.doubleStep;
+                delete cleaned.pointsPer;
+                delete cleaned.options;
             }
             
             if (type === "select") {

@@ -489,14 +489,14 @@ function renderEntryDetail(state, ui, entry) {
         warnBanner.style.border = "1px solid #eab308";
         warnBanner.innerHTML = `
             <div style="display:flex; align-items:flex-start; gap:10px;">
-                <span class="icon" style="font-size:1.2rem;">⚠️</span>
+                <span class="icon" style="font-size:1.2rem;"><i class="fa-solid fa-triangle-exclamation"></i></span>
                 <div style="flex:1;">
                     <div style="font-weight:700; color:#fbbf24;">Discrepancy Detected</div>
                     <div style="font-size:0.85rem; margin-top:2px; color:#cbd5e1;">
                         Different qualitative scouting data exists for this match from partner teams: <strong>${(entry.conflictingTeams || []).join(", ")}</strong>.
                     </div>
                     <button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
-                        ⚡ Resolve Discrepancy
+                        <i class="fa-solid fa-bolt"></i> Resolve Discrepancy
                     </button>
                 </div>
             </div>

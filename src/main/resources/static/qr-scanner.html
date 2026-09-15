@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ObsidianScout | QR Scanner</title>
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="manifest" href="/manifest.json" />
 </head>
 <body data-page="qr-scanner">
@@ -38,7 +39,7 @@
                     
                     <!-- Camera Warning Banner -->
                     <div class="alert alert-warning" style="display: flex; gap: 12px; align-items: flex-start;">
-                        <span style="font-size: 16px;">⚠️</span>
+                        <span style="font-size: 16px;"><i class="fa-solid fa-triangle-exclamation"></i></span>
                         <div>
                             <strong data-i18n="qr-scanner.camera_quality_notice">Camera Quality Notice:</strong> This scanner processes highly dense data. It requires a clear, well-focused camera feed to scan successfully. If you have webcam quality issues, please use the **Paste QR Data** section below.
                         </div>
@@ -65,7 +66,7 @@
                         <p class="notice" style="margin-bottom: 8px;" data-i18n="qr-scanner.upload_scout_json_files_or_pas">Upload scout JSON files or paste QR/JSON data directly below.</p>
                         
                         <div class="import-dropzone" id="import-dropzone" style="margin-bottom: 12px;">
-                            <span class="import-icon">📥</span>
+                            <span class="import-icon"><i class="fa-solid fa-file-import"></i></span>
                             <span class="import-text" data-i18n="qr-scanner.select_json_files_or_drag_them">Select JSON files or drag them here</span>
                             <span class="import-subtext" data-i18n="qr-scanner.supports_single_or_multiple_sc">Supports single or multiple scout JSON file imports</span>
                             <input type="file" id="import-file-input" accept=".json" multiple class="sr-only" />
