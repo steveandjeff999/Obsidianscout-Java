@@ -775,7 +775,7 @@ function renderScoutingRecords() {
                     
                     const valEl = document.createElement("span");
                     valEl.className = "record-field-value";
-                    valEl.textContent = formatFieldValue(field, value);
+                    valEl.textContent = formatFieldValue(field, value, (entry.type || "").toLowerCase() === "match");
 
                     item.appendChild(label);
                     item.appendChild(valEl);
@@ -864,20 +864,61 @@ function groupFields(fields) {
     return groups;
 }
 
-function formatFieldValue(field, value) {
+function calculateFieldPoints(field, value) {
+    if (!field || value === null || value === undefined || value === "") {
+        return 0;
+    }
+    const type = String(field.type || "").toLowerCase();
+    if (type === "counter" || type === "number" || type === "rating") {
+        const num = Number(value);
+        if (isNaN(num)) return 0;
+        const ptsPer = Number(field.pointsPer || 0);
+        return num * ptsPer;
+    }
+    if (type === "checkbox") {
+        const enabled = value === true || value === "true" || value === 1 || value === "1";
+        if (!enabled) return 0;
+        return Number(field.pointsPer || 0);
+    }
+    if (type === "select") {
+        const options = field.options || [];
+        const opt = options.find(o => o.value === value || o.label === value);
+        if (!opt || opt.points === undefined || opt.points === null) return 0;
+        return Number(opt.points) || 0;
+    }
+    return 0;
+}
+
+function formatFieldValue(field, value, isMatch = false) {
     if (value === null || value === undefined || value === "") {
         return "--";
     }
-    if (field.type === "checkbox") {
-        return value ? "Yes" : "No";
+    if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/"))) {
+        return "📷 [Photo]";
     }
-    if (field.type === "select") {
+    let displayVal;
+    if (field.type === "checkbox") {
+        displayVal = value ? "Yes" : "No";
+    } else if (field.type === "select") {
         const options = field.options || [];
         const opt = options.find(o => o.value === value || o.label === value);
         if (opt) {
-            return localize(opt.label);
+            displayVal = localize(opt.label);
+        } else {
+            displayVal = String(value);
         }
-        return String(value);
+    } else {
+        displayVal = String(value);
     }
-    return String(value);
+
+    if (isMatch) {
+        const pts = calculateFieldPoints(field, value);
+        if (pts !== 0) {
+            const formattedPts = Number.isInteger(pts) ? String(pts) : String(Number(pts.toFixed(2)));
+            const unit = Math.abs(pts) === 1 ? "pt" : "pts";
+            return `${displayVal} (${formattedPts} ${unit})`;
+        }
+    }
+
+    return displayVal;
 }

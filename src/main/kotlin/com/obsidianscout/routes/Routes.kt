@@ -3511,6 +3511,7 @@ fun Application.configureRoutes() {
             "prescout-pit" to "prescout-pit.html",
             "prescout-qual" to "prescout-qual.html",
             "prescout" to "prescout.html",
+            "match-data" to "match-data.html",
             "qual-data" to "qual-data.html",
             "pit-data" to "pit-data.html",
             "all-data" to "all-data.html",

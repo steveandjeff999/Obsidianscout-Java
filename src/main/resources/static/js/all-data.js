@@ -614,7 +614,7 @@ function renderDetail(state, entry) {
             } else {
                 const item = buildDetailItem(
                     (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label,
-                    formatFieldValue(field, value)
+                    formatFieldValue(field, value, (entry.type || "").toLowerCase() === "match")
                 );
                 groupNode.appendChild(item);
             }
@@ -650,25 +650,63 @@ function groupFields(fields) {
     return groups;
 }
 
-function formatFieldValue(field, value) {
+function calculateFieldPoints(field, value) {
+    if (!field || value === null || value === undefined || value === "") {
+        return 0;
+    }
+    const type = String(field.type || "").toLowerCase();
+    if (type === "counter" || type === "number" || type === "rating") {
+        const num = Number(value);
+        if (isNaN(num)) return 0;
+        const ptsPer = Number(field.pointsPer || 0);
+        return num * ptsPer;
+    }
+    if (type === "checkbox") {
+        const enabled = value === true || value === "true" || value === 1 || value === "1";
+        if (!enabled) return 0;
+        return Number(field.pointsPer || 0);
+    }
+    if (type === "select") {
+        const options = field.options || [];
+        const opt = options.find(o => o.value === value || o.label === value);
+        if (!opt || opt.points === undefined || opt.points === null) return 0;
+        return Number(opt.points) || 0;
+    }
+    return 0;
+}
+
+function formatFieldValue(field, value, isMatch = false) {
     if (value === null || value === undefined || value === "") {
         return "--";
     }
     if (field.type === "image" || field.type === "image_upload" || field.type === "photo" || (typeof value === "string" && value.startsWith("data:image/"))) {
         return "📷 [Photo]";
     }
+    let displayVal;
     if (field.type === "checkbox") {
-        return value ? "Yes" : "No";
-    }
-    if (field.type === "select") {
+        displayVal = value ? "Yes" : "No";
+    } else if (field.type === "select") {
         const options = field.options || [];
         const opt = options.find(o => o.value === value || o.label === value);
         if (opt) {
-            return (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(opt.label) : opt.label;
+            displayVal = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(opt.label) : opt.label;
+        } else {
+            displayVal = String(value);
         }
-        return String(value);
+    } else {
+        displayVal = String(value);
     }
-    return String(value);
+
+    if (isMatch) {
+        const pts = calculateFieldPoints(field, value);
+        if (pts !== 0) {
+            const formattedPts = Number.isInteger(pts) ? String(pts) : String(Number(pts.toFixed(2)));
+            const unit = Math.abs(pts) === 1 ? "pt" : "pts";
+            return `${displayVal} (${formattedPts} ${unit})`;
+        }
+    }
+
+    return displayVal;
 }
 
 function buildDetailItem(label, value) {
@@ -744,7 +782,7 @@ function exportCsv(state) {
                     const val = row.data ? row.data[field.id] : undefined;
                     if (val !== undefined && val !== null && val !== "") {
                         const label = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
-                        const formatted = formatFieldValue(field, val);
+                        const formatted = formatFieldValue(field, val, (row.type || "").toLowerCase() === "match");
                         detailsList.push(`${label}: ${formatted}`);
                     }
                 }

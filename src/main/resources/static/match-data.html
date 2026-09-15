@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Match Data</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="match-data">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div class="card">
+                <h1 data-i18n="match_data.title">Match Scouting Data</h1>
+                <p class="notice" data-i18n="match_data.notice">Review match scouting entries, search by team and match, and inspect detailed score breakdowns per element.</p>
+
+                <div class="metrics mt-20">
+                    <div>
+                        <h4 data-i18n="dashboard.entries">Entries</h4>
+                        <div id="match-entry-count" class="metric-value">0</div>
+                    </div>
+                    <div>
+                        <h4 data-i18n="match_data.teams_scouted">Teams Scouted</h4>
+                        <div id="match-team-count" class="metric-value">0</div>
+                    </div>
+                    <div>
+                        <h4 data-i18n="match_data.avg_score">Avg Score</h4>
+                        <div id="match-avg-score" class="metric-value">0.0</div>
+                    </div>
+                    <div>
+                        <h4 data-i18n="pit-data.last_update">Last Update</h4>
+                        <div id="match-last-updated" class="metric-value text-compact">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-20">
+                <div class="split">
+                    <div class="field">
+                        <label for="event-filter" data-i18n="events.event">Event</label>
+                        <select id="event-filter" class="select-wide"></select>
+                    </div>
+                    <div class="field">
+                        <label for="team-search" data-i18n="all-data.search_teams">Search teams</label>
+                        <input id="team-search" type="search" data-i18n-placeholder="all-data.placeholder_team_number_or_name" placeholder="Team number or name" />
+                    </div>
+                    <div class="field">
+                        <label for="match-filter" data-i18n="all-data.match_number">Match number</label>
+                        <input id="match-filter" type="number" min="1" data-i18n-placeholder="all-data.placeholder_eg_12" placeholder="e.g. 12" />
+                    </div>
+                    <div class="field">
+                        <label for="sort-select" data-i18n="all-data.sort_by">Sort By</label>
+                        <select id="sort-select" class="select-wide">
+                            <option value="match-asc" data-i18n="match_data.sort_match_asc">Match Number (Asc)</option>
+                            <option value="match-desc" data-i18n="match_data.sort_match_desc">Match Number (Desc)</option>
+                            <option value="newest" data-i18n="all-data.newest_first">Newest First</option>
+                            <option value="oldest" data-i18n="all-data.oldest_first">Oldest First</option>
+                            <option value="team" data-i18n="all-data.team_number">Team Number</option>
+                            <option value="score-desc" data-i18n="match_data.highest_score">Highest Score</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row gap-12 wrap mt-18 align-center">
+                    <button id="export-match-csv" class="btn ghost" type="button" data-i18n="pitdata.export_csv">Export CSV</button>
+                    <button id="reset-filters" class="btn ghost" type="button" data-i18n="all-data.reset_filters">Reset Filters</button>
+                    <div style="flex-grow: 1;"></div>
+                    <span id="match-filter-status" class="badge" data-i18n="all-data.showing_all_entries">Showing all entries</span>
+                </div>
+            </div>
+
+            <div class="split mt-20">
+                <div class="card">
+                    <div class="row justify-between align-center wrap gap-12">
+                        <h2 class="section-title" data-i18n="match_data.match_entries">Match Entries</h2>
+                        <span id="match-table-count" class="badge">0 entries</span>
+                    </div>
+                    <div class="table-scroll mt-12">
+                        <table class="table" id="match-data-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="all-data.team">Team</th>
+                                    <th data-i18n="matches.match">Match</th>
+                                    <th data-i18n="match_data.score">Score</th>
+                                    <th data-i18n="all-data.scouter">Scouter</th>
+                                    <th data-i18n="pitdata.updated">Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="row justify-between align-center wrap gap-12">
+                        <h2 id="match-detail-title" class="section-title" data-i18n="all-data.select_an_entry">Select an entry</h2>
+                        <span id="match-detail-status" class="badge" data-i18n="all-data.no_entry_selected">No entry selected</span>
+                    </div>
+                    <div id="match-detail" class="pit-detail mt-12">
+                        <p class="notice" data-i18n="all-data.choose_an_entry_from_the_list_">Choose an entry from the list to inspect its configuration-driven answers, element points, and notes.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/match-data.js"></script>
+</body>
+</html>
