@@ -102,6 +102,17 @@ async function loadPitScoutPageData(me) {
 
                 const filename = `pit_${eventKey || 'event'}_team${payload.targetTeamNumber}.json`;
                 Obsidianscout.downloadJson(payload, filename);
+                Obsidianscout.recordDeviceHistory({
+                    action: "json_export",
+                    formType: "pit-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: null,
+                    matchNumber: null,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: false
+                });
             });
         }
 
@@ -119,6 +130,17 @@ async function loadPitScoutPageData(me) {
                 payload.type = "pit-scout";
 
                 Obsidianscout.showQrModal(payload, "Pit Scouting", payload.targetTeamNumber, null);
+                Obsidianscout.recordDeviceHistory({
+                    action: "qr_generated",
+                    formType: "pit-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: null,
+                    matchNumber: null,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: false
+                });
             });
         }
 
@@ -138,11 +160,25 @@ async function loadPitScoutPageData(me) {
                 payload.eventKey = eventKey;
                 payload.targetTeamNumber = Number(teamSelect.value);
 
+                const createdAt = new Date().toISOString();
                 const pending = JSON.parse(Obsidianscout.safeGetItem("pending_pit_scouting_entries") || "[]");
                 pending.push({
-                    data: payload
+                    data: payload,
+                    createdAt
                 });
                 Obsidianscout.safeSetItem("pending_pit_scouting_entries", JSON.stringify(pending));
+
+                Obsidianscout.recordDeviceHistory({
+                    action: "offline_save",
+                    formType: "pit-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: null,
+                    matchNumber: null,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: false
+                });
 
                 Obsidianscout.showToast("Saved locally (Offline mode)", "success");
                 Obsidianscout.updateConnectionStatus();
@@ -180,6 +216,19 @@ async function loadPitScoutPageData(me) {
                 });
                 Obsidianscout.showToast("Pit entry saved", "success");
                 
+                Obsidianscout.recordDeviceHistory({
+                    action: "upload",
+                    formType: "pit-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: null,
+                    matchNumber: null,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: true,
+                    syncedAt: new Date().toISOString()
+                });
+
                 const newEntry = (response && response.entry) ? response.entry : {
                     eventKey: payload.eventKey,
                     targetTeamNumber: payload.targetTeamNumber,
@@ -196,11 +245,26 @@ async function loadPitScoutPageData(me) {
                 Obsidianscout.safeSetItem("cache:/api/pit-scouting", JSON.stringify(entryCache));
             } catch (error) {
                 if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                    const createdAt = new Date().toISOString();
                     const pending = JSON.parse(Obsidianscout.safeGetItem("pending_pit_scouting_entries") || "[]");
                     pending.push({
-                        data: payload
+                        data: payload,
+                        createdAt
                     });
                     Obsidianscout.safeSetItem("pending_pit_scouting_entries", JSON.stringify(pending));
+
+                    Obsidianscout.recordDeviceHistory({
+                        action: "offline_save",
+                        actionLabel: "Offline Fallback",
+                        formType: "pit-scouting",
+                        eventKey: payload.eventKey,
+                        teamNumber: payload.targetTeamNumber,
+                        matchKey: null,
+                        matchNumber: null,
+                        scoutName: me ? me.username : null,
+                        payload,
+                        serverSynced: false
+                    });
 
                     Obsidianscout.showToast("Saved locally (Offline mode)", "success");
                     Obsidianscout.updateConnectionStatus();

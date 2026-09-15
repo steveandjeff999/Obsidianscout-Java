@@ -351,6 +351,17 @@ async function loadQualScoutPageData(me) {
 
                     const filename = `qual_${eventKey || 'event'}_team${payload.targetTeamNumber}_match${payload.matchNumber || 'unknown'}.json`;
                     Obsidianscout.downloadJson(payload, filename);
+                    Obsidianscout.recordDeviceHistory({
+                        action: "json_export",
+                        formType: "qual-scouting",
+                        eventKey: payload.eventKey,
+                        teamNumber: payload.targetTeamNumber,
+                        matchKey: payload.matchKey,
+                        matchNumber: payload.matchNumber,
+                        scoutName: me ? me.username : null,
+                        payload,
+                        serverSynced: false
+                    });
                 } else {
                     if (!matchSelect.value || !currentAllianceTeams.length) {
                         Obsidianscout.showToast("Select a match to export alliance qualitative data", "error");
@@ -371,6 +382,20 @@ async function loadQualScoutPageData(me) {
                     };
                     const filename = `qual_${eventKey || 'event'}_${currentScope}_alliance_match${matchNum || 'unknown'}.json`;
                     Obsidianscout.downloadJson(allianceExport, filename);
+
+                    entriesList.forEach(entry => {
+                        Obsidianscout.recordDeviceHistory({
+                            action: "json_export",
+                            formType: "qual-scouting",
+                            eventKey: entry.eventKey,
+                            teamNumber: entry.targetTeamNumber,
+                            matchKey: entry.matchKey,
+                            matchNumber: entry.matchNumber,
+                            scoutName: me ? me.username : null,
+                            payload: entry,
+                            serverSynced: false
+                        });
+                    });
                 }
             });
         }
@@ -394,6 +419,17 @@ async function loadQualScoutPageData(me) {
                     payload.type = "qual-scout";
 
                     Obsidianscout.showQrModal(payload, "Qualitative Scouting", payload.targetTeamNumber, payload.matchKey);
+                    Obsidianscout.recordDeviceHistory({
+                        action: "qr_generated",
+                        formType: "qual-scouting",
+                        eventKey: payload.eventKey,
+                        teamNumber: payload.targetTeamNumber,
+                        matchKey: payload.matchKey,
+                        matchNumber: payload.matchNumber,
+                        scoutName: me ? me.username : null,
+                        payload,
+                        serverSynced: false
+                    });
                 } else {
                     if (!matchSelect.value || !currentAllianceTeams.length) {
                         Obsidianscout.showToast("Select a match to generate alliance QR", "error");
@@ -415,6 +451,20 @@ async function loadQualScoutPageData(me) {
                     const scopeTitle = currentScope === "both" ? "Both Alliances" : `${currentScope.toUpperCase()} Alliance`;
                     const allTeamNums = currentAllianceTeams.map(t => t.teamNumber).join(", ");
                     Obsidianscout.showQrModal(allianceQrPayload, `Qual Alliance (${scopeTitle})`, allTeamNums, matchSelect.value);
+
+                    entriesList.forEach(entry => {
+                        Obsidianscout.recordDeviceHistory({
+                            action: "qr_generated",
+                            formType: "qual-scouting",
+                            eventKey: entry.eventKey,
+                            teamNumber: entry.targetTeamNumber,
+                            matchKey: entry.matchKey,
+                            matchNumber: entry.matchNumber,
+                            scoutName: me ? me.username : null,
+                            payload: entry,
+                            serverSynced: false
+                        });
+                    });
                 }
             });
         }
@@ -447,6 +497,18 @@ async function loadQualScoutPageData(me) {
                     });
                     Obsidianscout.safeSetItem("pending_qualitative_entries", JSON.stringify(pending));
 
+                    Obsidianscout.recordDeviceHistory({
+                        action: "offline_save",
+                        formType: "qual-scouting",
+                        eventKey: payload.eventKey,
+                        teamNumber: payload.targetTeamNumber,
+                        matchKey: payload.matchKey,
+                        matchNumber: payload.matchNumber,
+                        scoutName: me ? me.username : null,
+                        payload,
+                        serverSynced: false
+                    });
+
                     Obsidianscout.showToast("Saved locally (Offline mode)", "success");
                     Obsidianscout.updateConnectionStatus();
                     window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
@@ -468,6 +530,17 @@ async function loadQualScoutPageData(me) {
                             createdAt: new Date().toISOString(),
                             ownerTeamNumber: me.teamNumber,
                             pending: true
+                        });
+                        Obsidianscout.recordDeviceHistory({
+                            action: "offline_save",
+                            formType: "qual-scouting",
+                            eventKey: payload.eventKey,
+                            teamNumber: payload.targetTeamNumber,
+                            matchKey: payload.matchKey,
+                            matchNumber: payload.matchNumber,
+                            scoutName: me ? me.username : null,
+                            payload,
+                            serverSynced: false
                         });
                     });
                     Obsidianscout.safeSetItem("pending_qualitative_entries", JSON.stringify(pending));
@@ -510,6 +583,19 @@ async function loadQualScoutPageData(me) {
                         }
                     });
                     Obsidianscout.showToast("Entry saved", "success");
+
+                    Obsidianscout.recordDeviceHistory({
+                        action: "upload",
+                        formType: "qual-scouting",
+                        eventKey: payload.eventKey,
+                        teamNumber: payload.targetTeamNumber,
+                        matchKey: payload.matchKey,
+                        matchNumber: payload.matchNumber,
+                        scoutName: me ? me.username : null,
+                        payload,
+                        serverSynced: true,
+                        syncedAt: new Date().toISOString()
+                    });
                     
                     const newEntry = (response && response.entry) ? response.entry : {
                         eventKey: payload.eventKey,
@@ -538,6 +624,19 @@ async function loadQualScoutPageData(me) {
                             pending: true
                         });
                         Obsidianscout.safeSetItem("pending_qualitative_entries", JSON.stringify(pending));
+
+                        Obsidianscout.recordDeviceHistory({
+                            action: "offline_save",
+                            actionLabel: "Offline Fallback",
+                            formType: "qual-scouting",
+                            eventKey: payload.eventKey,
+                            teamNumber: payload.targetTeamNumber,
+                            matchKey: payload.matchKey,
+                            matchNumber: payload.matchNumber,
+                            scoutName: me ? me.username : null,
+                            payload,
+                            serverSynced: false
+                        });
 
                         Obsidianscout.showToast("Saved locally (Offline mode)", "success");
                         Obsidianscout.updateConnectionStatus();
@@ -573,6 +672,19 @@ async function loadQualScoutPageData(me) {
                     Obsidianscout.showToast(`Saved entries for ${entriesToSave.length} teams`, "success");
 
                     entriesToSave.forEach(payload => {
+                        Obsidianscout.recordDeviceHistory({
+                            action: "upload",
+                            formType: "qual-scouting",
+                            eventKey: payload.eventKey,
+                            teamNumber: payload.targetTeamNumber,
+                            matchKey: payload.matchKey,
+                            matchNumber: payload.matchNumber,
+                            scoutName: me ? me.username : null,
+                            payload,
+                            serverSynced: true,
+                            syncedAt: new Date().toISOString()
+                        });
+
                         const newEntry = {
                             eventKey: payload.eventKey,
                             targetTeamNumber: payload.targetTeamNumber,
@@ -601,6 +713,18 @@ async function loadQualScoutPageData(me) {
                                 createdAt: new Date().toISOString(),
                                 ownerTeamNumber: me.teamNumber,
                                 pending: true
+                            });
+                            Obsidianscout.recordDeviceHistory({
+                                action: "offline_save",
+                                actionLabel: "Offline Fallback",
+                                formType: "qual-scouting",
+                                eventKey: payload.eventKey,
+                                teamNumber: payload.targetTeamNumber,
+                                matchKey: payload.matchKey,
+                                matchNumber: payload.matchNumber,
+                                scoutName: me ? me.username : null,
+                                payload,
+                                serverSynced: false
                             });
                         });
                         Obsidianscout.safeSetItem("pending_qualitative_entries", JSON.stringify(pending));

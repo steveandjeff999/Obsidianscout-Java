@@ -151,6 +151,18 @@ import {
     initChatUnreadPolling
 } from './services/chat-poller.js';
 
+import {
+    recordDeviceHistory,
+    getDeviceHistory,
+    markEntryAsSynced,
+    markMatchingEntryAsSynced,
+    deleteDeviceHistoryEntry,
+    clearDeviceHistory,
+    exportDeviceHistory,
+    importDeviceHistory,
+    HISTORY_STORAGE_KEY
+} from './services/device-history.js';
+
 // 5. Utilities Layer
 import {
     formatTimestamp,
@@ -245,7 +257,16 @@ window.Obsidianscout = {
     purgeScoutingCache,
     isScoutingDataPath,
     canRoleCacheScouting,
-    loadAndRenderBanners
+    loadAndRenderBanners,
+    recordDeviceHistory,
+    getDeviceHistory,
+    markEntryAsSynced,
+    markMatchingEntryAsSynced,
+    deleteDeviceHistoryEntry,
+    clearDeviceHistory,
+    exportDeviceHistory,
+    importDeviceHistory,
+    HISTORY_STORAGE_KEY
 };
 
 // Re-export for ES module consumers
@@ -611,16 +632,5 @@ if (document.readyState === 'loading') {
     onDOMContentLoaded();
 }
 
-window.addEventListener("beforeunload", (event) => {
-    let count = 0;
-    for (const type in CACHE_CONFIGS) {
-        const config = CACHE_CONFIGS[type];
-        const pending = JSON.parse(safeGetItem(config.key) || "[]");
-        count += pending.length;
-    }
-    if (count > 0) {
-        const message = (typeof t === 'function') ? t('unsynced_entries','You have unsynced offline scouting entries! If you leave, they might not be synced to the server.') : "You have unsynced offline scouting entries! If you leave, they might not be synced to the server.";
-        event.returnValue = message;
-        return message;
-    }
-});
+
+

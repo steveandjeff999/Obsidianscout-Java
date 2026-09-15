@@ -8,6 +8,7 @@ import { request, purgeScoutingCache } from '../base/http.js';
 import { showToast } from '../components/toast.js';
 import { checkLoginStatus, getMe, isAdmin } from '../base/auth.js';
 import { resolveEventKey } from '../utilities/helpers.js';
+import { markMatchingEntryAsSynced } from './device-history.js';
 
 export const CACHE_CONFIGS = {
     "match-scouting": {
@@ -84,6 +85,12 @@ export async function syncOfflineEntries() {
                     json: item
                 });
                 successCount++;
+                try {
+                    const itemData = item.data || item;
+                    markMatchingEntryAsSynced(type, itemData.eventKey, itemData.targetTeamNumber || itemData.teamNumber, itemData.matchKey || itemData.matchNumber);
+                } catch (histErr) {
+                    console.warn("[Offline Sync] Failed to update history sync status:", histErr);
+                }
             } catch (error) {
                 console.error(`[Offline Sync] Failed to sync ${config.label}:`, error);
                 remaining.push(item);

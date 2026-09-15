@@ -193,6 +193,17 @@ async function initPrescoutQual(me) {
 
                 const filename = `prescout_qual_${payload.eventKey}_team${payload.targetTeamNumber}_match${payload.matchNumber}.json`;
                 Obsidianscout.downloadJson(payload, filename);
+                Obsidianscout.recordDeviceHistory({
+                    action: "json_export",
+                    formType: "prescout-qual-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: false
+                });
             });
         }
 
@@ -203,6 +214,17 @@ async function initPrescoutQual(me) {
                 if (!payload) return;
 
                 Obsidianscout.showQrModal(payload, "Qualitative Prescouting", payload.targetTeamNumber, payload.matchKey);
+                Obsidianscout.recordDeviceHistory({
+                    action: "qr_generated",
+                    formType: "prescout-qual-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: false
+                });
             });
         }
 
@@ -212,11 +234,25 @@ async function initPrescoutQual(me) {
                 const payload = resolvePayload();
                 if (!payload) return;
 
+                const createdAt = new Date().toISOString();
                 const pending = JSON.parse(Obsidianscout.safeGetItem("pending_prescout_qualitative_entries") || "[]");
                 pending.push({
-                    data: payload
+                    data: payload,
+                    createdAt
                 });
                 Obsidianscout.safeSetItem("pending_prescout_qualitative_entries", JSON.stringify(pending));
+
+                Obsidianscout.recordDeviceHistory({
+                    action: "offline_save",
+                    formType: "prescout-qual-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: false
+                });
 
                 Obsidianscout.showToast(`Saved locally (Offline mode) - Match #${payload.matchNumber}`, "success");
                 Obsidianscout.updateConnectionStatus();
@@ -244,6 +280,19 @@ async function initPrescoutQual(me) {
                 });
                 Obsidianscout.showToast(`Qualitative prescout entry saved for Team ${payload.targetTeamNumber} (Match #${payload.matchNumber})`, "success");
                 
+                Obsidianscout.recordDeviceHistory({
+                    action: "upload",
+                    formType: "prescout-qual-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: true,
+                    syncedAt: new Date().toISOString()
+                });
+
                 const newEntry = (response && response.entry) ? response.entry : {
                     eventKey: payload.eventKey,
                     targetTeamNumber: payload.targetTeamNumber,
@@ -267,11 +316,26 @@ async function initPrescoutQual(me) {
                 clearFormFields(fields, form);
             } catch (error) {
                 if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                    const createdAt = new Date().toISOString();
                     const pending = JSON.parse(Obsidianscout.safeGetItem("pending_prescout_qualitative_entries") || "[]");
                     pending.push({
-                        data: payload
+                        data: payload,
+                        createdAt
                     });
                     Obsidianscout.safeSetItem("pending_prescout_qualitative_entries", JSON.stringify(pending));
+
+                    Obsidianscout.recordDeviceHistory({
+                        action: "offline_save",
+                        actionLabel: "Offline Fallback",
+                        formType: "prescout-qual-scouting",
+                        eventKey: payload.eventKey,
+                        teamNumber: payload.targetTeamNumber,
+                        matchKey: payload.matchKey,
+                        matchNumber: payload.matchNumber,
+                        scoutName: me ? me.username : null,
+                        payload,
+                        serverSynced: false
+                    });
 
                     Obsidianscout.showToast(`Saved locally (Offline mode) - Match #${payload.matchNumber}`, "success");
                     Obsidianscout.updateConnectionStatus();

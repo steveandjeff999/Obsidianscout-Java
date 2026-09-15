@@ -185,6 +185,17 @@ async function loadScoutPageData(me) {
 
                 const filename = `scout_${eventKey || 'event'}_team${payload.targetTeamNumber}_match${payload.matchNumber || 'unknown'}.json`;
                 Obsidianscout.downloadJson(payload, filename);
+                Obsidianscout.recordDeviceHistory({
+                    action: "json_export",
+                    formType: "match-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: false
+                });
             });
         }
 
@@ -206,6 +217,17 @@ async function loadScoutPageData(me) {
                 payload.type = "scout";
 
                 Obsidianscout.showQrModal(payload, "Match Scouting", payload.targetTeamNumber, payload.matchKey);
+                Obsidianscout.recordDeviceHistory({
+                    action: "qr_generated",
+                    formType: "match-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: false
+                });
             });
         }
 
@@ -229,11 +251,25 @@ async function loadScoutPageData(me) {
                 const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
                 payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
 
+                const createdAt = new Date().toISOString();
                 const pending = JSON.parse(Obsidianscout.safeGetItem("pending_scouting_entries") || "[]");
                 pending.push({
-                    data: payload
+                    data: payload,
+                    createdAt
                 });
                 Obsidianscout.safeSetItem("pending_scouting_entries", JSON.stringify(pending));
+
+                Obsidianscout.recordDeviceHistory({
+                    action: "offline_save",
+                    formType: "match-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: false
+                });
 
                 Obsidianscout.showToast("Saved locally (Offline mode)", "success");
                 Obsidianscout.updateConnectionStatus();
@@ -276,6 +312,19 @@ async function loadScoutPageData(me) {
                 });
                 Obsidianscout.showToast("Entry saved", "success");
                 
+                Obsidianscout.recordDeviceHistory({
+                    action: "upload",
+                    formType: "match-scouting",
+                    eventKey: payload.eventKey,
+                    teamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    scoutName: me ? me.username : null,
+                    payload,
+                    serverSynced: true,
+                    syncedAt: new Date().toISOString()
+                });
+
                 const newEntry = (response && response.entry) ? response.entry : {
                     eventKey: payload.eventKey,
                     targetTeamNumber: payload.targetTeamNumber,
@@ -294,12 +343,27 @@ async function loadScoutPageData(me) {
                 Obsidianscout.safeSetItem("cache:/api/scouting", JSON.stringify(entryCache));
             } catch (error) {
                 if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                    const createdAt = new Date().toISOString();
                     const pending = JSON.parse(Obsidianscout.safeGetItem("pending_scouting_entries") || "[]");
                     pending.push({
-                        data: payload
+                        data: payload,
+                        createdAt
                     });
                     Obsidianscout.safeSetItem("pending_scouting_entries", JSON.stringify(pending));
                     
+                    Obsidianscout.recordDeviceHistory({
+                        action: "offline_save",
+                        actionLabel: "Offline Fallback",
+                        formType: "match-scouting",
+                        eventKey: payload.eventKey,
+                        teamNumber: payload.targetTeamNumber,
+                        matchKey: payload.matchKey,
+                        matchNumber: payload.matchNumber,
+                        scoutName: me ? me.username : null,
+                        payload,
+                        serverSynced: false
+                    });
+
                     Obsidianscout.showToast("Saved locally (Offline mode)", "success");
                     Obsidianscout.updateConnectionStatus();
                     

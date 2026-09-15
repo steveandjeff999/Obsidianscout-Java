@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
@@ -8,14 +9,66 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>ObsidianScout | Cache Manager</title>
+    <title>ObsidianScout | Cache & Device History</title>
 
     <link rel="stylesheet" href="/css/app.css" />
     <style>
         /* Custom Cache Manager specific styling */
+        .tab-nav {
+            display: flex;
+            gap: 12px;
+            border-bottom: 2px solid rgba(0, 0, 0, 0.08);
+            margin-bottom: 24px;
+            padding-bottom: 2px;
+        }
+
+        body.theme-dark .tab-nav {
+            border-bottom-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .tab-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: -2px;
+        }
+
+        .tab-btn:hover {
+            color: var(--ink);
+        }
+
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-count-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            background: var(--surface-3);
+            color: var(--ink);
+        }
+
+        .tab-btn.active .tab-count-badge {
+            background: var(--accent);
+            color: white;
+        }
+
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 16px;
             margin-bottom: 24px;
         }
@@ -55,7 +108,7 @@
         }
 
         .cache-table-wrapper {
-            margin-top: 24px;
+            margin-top: 20px;
             overflow-x: auto;
             border-radius: var(--radius-sm);
             border: 1px solid rgba(0, 0, 0, 0.06);
@@ -72,12 +125,15 @@
             text-align: left;
         }
 
-        .cache-table th, .cache-table td {
-            padding: 14px 16px;
+        .cache-table th,
+        .cache-table td {
+            padding: 12px 14px;
             border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+            vertical-align: middle;
         }
 
-        body.theme-dark .cache-table th, body.theme-dark .cache-table td {
+        body.theme-dark .cache-table th,
+        body.theme-dark .cache-table td {
             border-bottom-color: rgba(255, 255, 255, 0.06);
         }
 
@@ -88,6 +144,7 @@
             letter-spacing: 1px;
             color: var(--muted);
             font-weight: 700;
+            white-space: nowrap;
         }
 
         body.theme-dark .cache-table th {
@@ -99,11 +156,11 @@
         }
 
         .cache-table tr:hover td {
-            background: rgba(0, 0, 0, 0.01);
+            background: rgba(0, 0, 0, 0.015);
         }
 
         body.theme-dark .cache-table tr:hover td {
-            background: rgba(255, 255, 255, 0.01);
+            background: rgba(255, 255, 255, 0.015);
         }
 
         .badge-type {
@@ -116,26 +173,98 @@
             letter-spacing: 0.5px;
         }
 
-        .badge-match { background-color: rgba(11, 143, 136, 0.15); color: var(--accent); }
-        .badge-pit { background-color: rgba(37, 90, 156, 0.15); color: var(--accent-3); }
-        .badge-qual { background-color: rgba(242, 139, 53, 0.15); color: var(--accent-2); }
-        .badge-prescout-match { background-color: rgba(76, 175, 80, 0.15); color: #4CAF50; }
-        .badge-prescout-pit { background-color: rgba(156, 39, 176, 0.15); color: #9C27B0; }
-        .badge-prescout-qual { background-color: rgba(233, 30, 99, 0.15); color: #E91E63; }
+        .badge-match {
+            background-color: rgba(11, 143, 136, 0.15);
+            color: var(--accent);
+        }
+
+        .badge-pit {
+            background-color: rgba(37, 90, 156, 0.15);
+            color: var(--accent-3);
+        }
+
+        .badge-qual {
+            background-color: rgba(242, 139, 53, 0.15);
+            color: var(--accent-2);
+        }
+
+        .badge-prescout-match {
+            background-color: rgba(76, 175, 80, 0.15);
+            color: #4CAF50;
+        }
+
+        .badge-prescout-pit {
+            background-color: rgba(156, 39, 176, 0.15);
+            color: #9C27B0;
+        }
+
+        .badge-prescout-qual {
+            background-color: rgba(233, 30, 99, 0.15);
+            color: #E91E63;
+        }
+
+        /* Server status badges */
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .badge-status.badge-pending {
+            background-color: rgba(244, 67, 54, 0.15);
+            color: #d32f2f;
+            border: 1px solid rgba(244, 67, 54, 0.3);
+        }
+
+        body.theme-dark .badge-status.badge-pending {
+            color: #ef5350;
+            background-color: rgba(244, 67, 54, 0.25);
+        }
+
+        .badge-status.badge-synced {
+            background-color: rgba(76, 175, 80, 0.15);
+            color: #2e7d32;
+            border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+
+        body.theme-dark .badge-status.badge-synced {
+            color: #66bb6a;
+            background-color: rgba(76, 175, 80, 0.25);
+        }
+
+        .badge-action {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            background: var(--surface-3);
+            color: var(--muted);
+            margin-top: 3px;
+        }
 
         .action-cell {
             display: flex;
-            gap: 8px;
+            flex-wrap: wrap;
+            gap: 6px;
         }
 
         .btn-mini {
-            padding: 6px 12px;
+            padding: 5px 10px;
             border-radius: 999px;
             font-size: 12px;
             font-weight: 600;
             border: none;
             cursor: pointer;
             transition: all 0.2s ease;
+            white-space: nowrap;
         }
 
         .btn-mini.view {
@@ -146,6 +275,20 @@
         .btn-mini.sync {
             background: var(--accent);
             color: white;
+        }
+
+        .btn-mini.qr {
+            background: #6366f1;
+            color: white;
+        }
+
+        .btn-mini.qr:hover {
+            background: #4f46e5;
+        }
+
+        .btn-mini.export {
+            background: var(--surface-3);
+            color: var(--ink);
         }
 
         .btn-mini.delete {
@@ -170,7 +313,8 @@
             margin-bottom: 20px;
         }
 
-        .filter-row input, .filter-row select {
+        .filter-row input,
+        .filter-row select {
             padding: 8px 12px;
             font-size: 14px;
         }
@@ -195,11 +339,12 @@
     </style>
     <link rel="manifest" href="/manifest.json" />
 </head>
+
 <body data-page="cache-manager">
     <script>
-        (function() {
+        (function () {
             try {
-                const saved = localStorage.getItem("obsidian-theme") || "light";
+                const saved = localStorage.getItem("obsidianscout-theme") || "light";
                 if (saved === "dark") {
                     document.body.classList.add("theme-dark");
                 }
@@ -217,92 +362,257 @@
 
         <main class="main-content">
             <div class="card">
-                <h1 data-i18n="cache-manager.data_cache_manager">Data Cache Manager</h1>
-                <p class="notice" data-i18n="cache-manager.view_upload_exportimport_or_de">View, upload, export/import, or delete locally cached scouting entries before uploading them to the server.</p>
+                <h1 data-i18n="cache-manager.data_cache_manager">Data Cache & Device History</h1>
+                <p class="notice" data-i18n="cache-manager.view_upload_exportimport_or_de">View, upload, generate QR
+                    codes, export/import, or delete locally cached scouting entries and device activity backups.</p>
 
-                <!-- Statistics Grid -->
-                <div class="stats-grid">
-                    <div class="stat-card" data-type="match">
-                        <div class="stat-number" id="count-match">0</div>
-                        <div class="stat-label" data-i18n="cache-manager.match_scout">Match Scout</div>
+                <!-- Navigation Tabs -->
+                <div class="tab-nav">
+                    <button id="tab-btn-history" class="tab-btn active" type="button">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span data-i18n="cache-manager.tab_history">Device History & Backup</span>
+                        <span id="history-badge-total" class="tab-count-badge">0</span>
+                    </button>
+                    <button id="tab-btn-pending" class="tab-btn" type="button">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <span data-i18n="cache-manager.tab_pending">Pending Offline Cache</span>
+                        <span id="pending-badge-total" class="tab-count-badge">0</span>
+                    </button>
+                </div>
+
+                <!-- ================= TAB 2: PENDING OFFLINE CACHE ================= -->
+                <div id="section-pending" class="tab-pane hidden">
+                    <!-- Statistics Grid -->
+                    <div class="stats-grid">
+                        <div class="stat-card" data-type="match">
+                            <div class="stat-number" id="count-match">0</div>
+                            <div class="stat-label" data-i18n="cache-manager.match_scout">Match Scout</div>
+                        </div>
+                        <div class="stat-card" data-type="pit">
+                            <div class="stat-number" id="count-pit">0</div>
+                            <div class="stat-label">Pit Scout</div>
+                        </div>
+                        <div class="stat-card" data-type="qual">
+                            <div class="stat-number" id="count-qual">0</div>
+                            <div class="stat-label">Qualitative</div>
+                        </div>
+                        <div class="stat-card" data-type="prescout-match">
+                            <div class="stat-number" id="count-prescout-match">0</div>
+                            <div class="stat-label" data-i18n="cache-manager.pre_match">Pre Match</div>
+                        </div>
+                        <div class="stat-card" data-type="prescout-pit">
+                            <div class="stat-number" id="count-prescout-pit">0</div>
+                            <div class="stat-label" data-i18n="cache-manager.pre_pit">Pre Pit</div>
+                        </div>
+                        <div class="stat-card" data-type="prescout-qual">
+                            <div class="stat-number" id="count-prescout-qual">0</div>
+                            <div class="stat-label" data-i18n="cache-manager.pre_qual">Pre Qual</div>
+                        </div>
                     </div>
-                    <div class="stat-card" data-type="pit">
-                        <div class="stat-number" id="count-pit">0</div>
-                        <div class="stat-label">Pit Scout</div>
+
+                    <!-- Global Cache Actions -->
+                    <div class="row gap-12 wrap mb-18">
+                        <button id="btn-sync-all" class="btn" type="button"
+                            data-i18n="cache-manager.upload_all_caches">Upload All Caches</button>
+                        <button id="btn-export-cache" class="btn secondary" type="button"
+                            data-i18n="cache-manager.export_cache_json">Export Cache JSON</button>
+                        <button id="btn-import-cache" class="btn secondary" type="button"
+                            data-i18n="cache-manager.import_cache_json">Import Cache JSON</button>
+                        <button id="btn-clear-cache" class="btn ghost" type="button"
+                            style="color: #f44336; border-color: rgba(244, 67, 54, 0.3);"
+                            data-i18n="cache-manager.clear_all_caches">Clear All Caches</button>
+
+                        <input type="file" id="cache-import-file" class="input-hidden" accept=".json" />
                     </div>
-                    <div class="stat-card" data-type="qual">
-                        <div class="stat-number" id="count-qual">0</div>
-                        <div class="stat-label">Qualitative</div>
+
+                    <hr style="border: none; border-top: 1px solid rgba(0, 0, 0, 0.08); margin: 24px 0;" />
+
+                    <!-- Pending Filters -->
+                    <div class="filter-row">
+                        <div class="field">
+                            <label for="filter-type" data-i18n="cache-manager.form_type">Form Type</label>
+                            <select id="filter-type">
+                                <option value="" data-i18n="cache-manager.all_forms">All Forms</option>
+                                <option value="match-scouting" data-i18n="all-data.match_scouting">Match Scouting
+                                </option>
+                                <option value="pit-scouting" data-i18n="all-data.pit_scouting">Pit Scouting</option>
+                                <option value="qual-scouting" data-i18n="all-data.qualitative_scouting">Qualitative
+                                    Scouting</option>
+                                <option value="prescout-scouting" data-i18n="cache-manager.prescout_match">Prescout
+                                    Match</option>
+                                <option value="prescout-pit-scouting" data-i18n="cache-manager.prescout_pit">Prescout
+                                    Pit</option>
+                                <option value="prescout-qual-scouting" data-i18n="cache-manager.prescout_qualitative">
+                                    Prescout Qualitative</option>
+                            </select>
+                        </div>
+                        <div class="field" style="flex: 1; min-width: 140px;">
+                            <label for="filter-team" data-i18n="cache-manager.search_team">Search Team</label>
+                            <input id="filter-team" type="number"
+                                data-i18n-placeholder="alliance-edit.placeholder_eg_254" placeholder="e.g. 254" />
+                        </div>
+                        <div class="field" style="flex: 1; min-width: 140px;">
+                            <label for="filter-event" data-i18n="cache-manager.search_event">Search Event</label>
+                            <input id="filter-event" type="text"
+                                data-i18n-placeholder="cache-manager.placeholder_eg_2026micmp"
+                                placeholder="e.g. 2026micmp" />
+                        </div>
                     </div>
-                    <div class="stat-card" data-type="prescout-match">
-                        <div class="stat-number" id="count-prescout-match">0</div>
-                        <div class="stat-label" data-i18n="cache-manager.pre_match">Pre Match</div>
-                    </div>
-                    <div class="stat-card" data-type="prescout-pit">
-                        <div class="stat-number" id="count-prescout-pit">0</div>
-                        <div class="stat-label" data-i18n="cache-manager.pre_pit">Pre Pit</div>
-                    </div>
-                    <div class="stat-card" data-type="prescout-qual">
-                        <div class="stat-number" id="count-prescout-qual">0</div>
-                        <div class="stat-label" data-i18n="cache-manager.pre_qual">Pre Qual</div>
+
+                    <!-- Cached Entries List -->
+                    <div id="cache-empty-notice" class="notice"
+                        data-i18n="cache-manager.no_pending_cached_entries_foun">No pending cached entries found. You
+                        are fully synced!</div>
+
+                    <div id="cache-table-container" class="cache-table-wrapper hidden">
+                        <table class="cache-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="cache-manager.server_status">Server Status</th>
+                                    <th data-i18n="settings.type">Type</th>
+                                    <th data-i18n="events.event">Event</th>
+                                    <th data-i18n="all-data.team">Team</th>
+                                    <th data-i18n="matches.match">Match</th>
+                                    <th data-i18n="cache-manager.timestamp">Timestamp</th>
+                                    <th data-i18n="cache-manager.actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cache-entries-body">
+                                <!-- Dynamic Pending Entries -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <!-- Global Cache Actions -->
-                <div class="row gap-12 wrap mb-18">
-                    <button id="btn-sync-all" class="btn" type="button" data-i18n="cache-manager.upload_all_caches">Upload All Caches</button>
-                    <button id="btn-export-cache" class="btn secondary" type="button" data-i18n="cache-manager.export_cache_json">Export Cache JSON</button>
-                    <button id="btn-import-cache" class="btn secondary" type="button" data-i18n="cache-manager.import_cache_json">Import Cache JSON</button>
-                    <button id="btn-clear-cache" class="btn ghost" type="button" style="color: #f44336; border-color: rgba(244, 67, 54, 0.3);" data-i18n="cache-manager.clear_all_caches">Clear All Caches</button>
-                    
-                    <input type="file" id="cache-import-file" class="input-hidden" accept=".json" />
-                </div>
-
-                <hr style="border: none; border-top: 1px solid rgba(0, 0, 0, 0.08); margin: 24px 0;" />
-
-                <!-- Filters -->
-                <div class="filter-row">
-                    <div class="field">
-                        <label for="filter-type" data-i18n="cache-manager.form_type">Form Type</label>
-                        <select id="filter-type">
-                            <option value="" data-i18n="cache-manager.all_forms">All Forms</option>
-                            <option value="match-scouting" data-i18n="all-data.match_scouting">Match Scouting</option>
-                            <option value="pit-scouting" data-i18n="all-data.pit_scouting">Pit Scouting</option>
-                            <option value="qual-scouting" data-i18n="all-data.qualitative_scouting">Qualitative Scouting</option>
-                            <option value="prescout-scouting" data-i18n="cache-manager.prescout_match">Prescout Match</option>
-                            <option value="prescout-pit-scouting" data-i18n="cache-manager.prescout_pit">Prescout Pit</option>
-                            <option value="prescout-qual-scouting" data-i18n="cache-manager.prescout_qualitative">Prescout Qualitative</option>
-                        </select>
+                <!-- ================= TAB 1: DEVICE HISTORY & BACKUP ================= -->
+                <div id="section-history" class="tab-pane">
+                    <!-- History Statistics Grid -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number" id="hist-count-total">0</div>
+                            <div class="stat-label" data-i18n="cache-manager.total_device_records">Total Records</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="hist-count-pending" style="color: #d32f2f;">0</div>
+                            <div class="stat-label" data-i18n="cache-manager.not_on_server">Not on Server</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="hist-count-synced" style="color: #2e7d32;">0</div>
+                            <div class="stat-label" data-i18n="cache-manager.synced_to_server">Synced to Server</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="hist-count-qr" style="color: #6366f1;">0</div>
+                            <div class="stat-label" data-i18n="cache-manager.qr_generated">QR Generated</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="hist-count-export">0</div>
+                            <div class="stat-label" data-i18n="cache-manager.exported_json">Exported JSON</div>
+                        </div>
                     </div>
-                    <div class="field" style="flex: 1; min-width: 140px;">
-                        <label for="filter-team" data-i18n="cache-manager.search_team">Search Team</label>
-                        <input id="filter-team" type="number" data-i18n-placeholder="alliance-edit.placeholder_eg_254" placeholder="e.g. 254" />
-                    </div>
-                    <div class="field" style="flex: 1; min-width: 140px;">
-                        <label for="filter-event" data-i18n="cache-manager.search_event">Search Event</label>
-                        <input id="filter-event" type="text" data-i18n-placeholder="cache-manager.placeholder_eg_2026micmp" placeholder="e.g. 2026micmp" />
-                    </div>
-                </div>
 
-                <!-- Cached Entries List -->
-                <div id="cache-empty-notice" class="notice" data-i18n="cache-manager.no_pending_cached_entries_foun">No pending cached entries found. You are fully synced!</div>
-                
-                <div id="cache-table-container" class="cache-table-wrapper hidden">
-                    <table class="cache-table">
-                        <thead>
-                            <tr>
-                                <th data-i18n="settings.type">Type</th>
-                                <th data-i18n="events.event">Event</th>
-                                <th data-i18n="all-data.team">Team</th>
-                                <th data-i18n="matches.match">Match</th>
-                                <th data-i18n="cache-manager.timestamp">Timestamp</th>
-                                <th data-i18n="cache-manager.actions">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="cache-entries-body">
-                            <!-- Dynamic Entries -->
-                        </tbody>
-                    </table>
+                    <!-- Global History Actions -->
+                    <div class="row gap-12 wrap mb-18">
+                        <button id="btn-export-history" class="btn secondary" type="button"
+                            data-i18n="cache-manager.export_device_history_backup">Export History Backup (JSON)</button>
+                        <button id="btn-import-history" class="btn secondary" type="button"
+                            data-i18n="cache-manager.import_device_history_backup">Import History Backup</button>
+                        <button id="btn-clear-history" class="btn ghost" type="button"
+                            style="color: #f44336; border-color: rgba(244, 67, 54, 0.3);"
+                            data-i18n="cache-manager.clear_all_history">Clear History</button>
+
+                        <input type="file" id="history-import-file" class="input-hidden" accept=".json" />
+                    </div>
+
+                    <hr style="border: none; border-top: 1px solid rgba(0, 0, 0, 0.08); margin: 24px 0;" />
+
+                    <!-- History Filters -->
+                    <div class="filter-row">
+                        <div class="field">
+                            <label for="hist-filter-status" data-i18n="cache-manager.server_status">Server
+                                Status</label>
+                            <select id="hist-filter-status">
+                                <option value="" data-i18n="cache-manager.all_statuses">All Statuses</option>
+                                <option value="unsynced" data-i18n="cache-manager.not_on_server">Not on Server</option>
+                                <option value="synced" data-i18n="cache-manager.synced_to_server">Synced to Server
+                                </option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="hist-filter-action" data-i18n="cache-manager.action_type">Action</label>
+                            <select id="hist-filter-action">
+                                <option value="" data-i18n="cache-manager.all_actions">All Actions</option>
+                                <option value="upload" data-i18n="cache-manager.action_upload">Online Upload</option>
+                                <option value="offline_save" data-i18n="cache-manager.action_offline">Saved Offline
+                                </option>
+                                <option value="qr_generated" data-i18n="cache-manager.action_qr">QR Generated</option>
+                                <option value="json_export" data-i18n="cache-manager.action_export">Exported JSON
+                                </option>
+                                <option value="qr_scanned" data-i18n="cache-manager.action_qr_scanned">QR Scanned
+                                </option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="hist-filter-type" data-i18n="cache-manager.form_type">Form Type</label>
+                            <select id="hist-filter-type">
+                                <option value="" data-i18n="cache-manager.all_forms">All Forms</option>
+                                <option value="match-scouting" data-i18n="all-data.match_scouting">Match Scouting
+                                </option>
+                                <option value="pit-scouting" data-i18n="all-data.pit_scouting">Pit Scouting</option>
+                                <option value="qual-scouting" data-i18n="all-data.qualitative_scouting">Qualitative
+                                    Scouting</option>
+                                <option value="prescout-scouting" data-i18n="cache-manager.prescout_match">Prescout
+                                    Match</option>
+                                <option value="prescout-pit-scouting" data-i18n="cache-manager.prescout_pit">Prescout
+                                    Pit</option>
+                                <option value="prescout-qual-scouting" data-i18n="cache-manager.prescout_qualitative">
+                                    Prescout Qualitative</option>
+                            </select>
+                        </div>
+                        <div class="field" style="flex: 1; min-width: 140px;">
+                            <label for="hist-filter-team" data-i18n="cache-manager.search_team">Search Team</label>
+                            <input id="hist-filter-team" type="number"
+                                data-i18n-placeholder="alliance-edit.placeholder_eg_254" placeholder="e.g. 254" />
+                        </div>
+                        <div class="field" style="flex: 1; min-width: 140px;">
+                            <label for="hist-filter-event" data-i18n="cache-manager.search_event">Search Event</label>
+                            <input id="hist-filter-event" type="text"
+                                data-i18n-placeholder="cache-manager.placeholder_eg_2026micmp"
+                                placeholder="e.g. 2026micmp" />
+                        </div>
+                    </div>
+
+                    <!-- History Entries List -->
+                    <div id="hist-empty-notice" class="notice hidden"
+                        data-i18n="cache-manager.no_history_records_found">No history records found matching your
+                        filter.</div>
+
+                    <div id="hist-table-container" class="cache-table-wrapper">
+                        <table class="cache-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="cache-manager.server_status">Server Status</th>
+                                    <th data-i18n="cache-manager.action_and_form">Action & Form</th>
+                                    <th data-i18n="events.event">Event</th>
+                                    <th data-i18n="all-data.team">Team</th>
+                                    <th data-i18n="matches.match">Match</th>
+                                    <th data-i18n="cache-manager.device_timestamp">Device Timestamp</th>
+                                    <th data-i18n="cache-manager.actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hist-entries-body">
+                                <!-- Dynamic History Entries -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
             </div>
@@ -313,19 +623,24 @@
     <div id="payload-modal-backdrop" class="modal-backdrop">
         <div class="modal-container">
             <div class="modal-header">
-                <h3 class="modal-title" id="payload-modal-title" data-i18n="cache-manager.scouting_entry_payload">Scouting Entry Payload</h3>
+                <h3 class="modal-title" id="payload-modal-title" data-i18n="cache-manager.scouting_entry_payload">
+                    Scouting Entry Payload</h3>
                 <button class="modal-close" id="payload-modal-close-btn">&times;</button>
             </div>
             <div class="modal-body">
                 <pre class="payload-modal-content" id="payload-modal-body-content"></pre>
             </div>
             <div class="modal-footer">
-                <button class="btn ghost" id="payload-modal-close-footer-btn" data-i18n="alliance-selection.close">Close</button>
+                <button class="btn ghost" id="payload-modal-close-footer-btn"
+                    data-i18n="alliance-selection.close">Close</button>
             </div>
         </div>
     </div>
 
     <script type="module" src="/js/common.js"></script>
+    <script defer src="/vendor/qrcode.min.js"></script>
+    <script type="module" src="/vendor/jabcodeJSLib.min.js"></script>
     <script defer src="/js/cache-manager.js"></script>
 </body>
+
 </html>

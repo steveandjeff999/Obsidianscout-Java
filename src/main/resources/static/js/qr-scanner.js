@@ -19,10 +19,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    initScanner();
+    initScanner(me);
 });
 
-function initScanner() {
+function initScanner(me) {
     const cameraSelect = document.getElementById("camera-select");
     const toggleScanBtn = document.getElementById("btn-toggle-scan");
     const uploadQueueBtn = document.getElementById("btn-upload-queue");
@@ -831,6 +831,24 @@ function initScanner() {
                             errorMsg: ""
                         });
                         addedCount++;
+
+                        try {
+                            if (window.Obsidianscout && typeof Obsidianscout.recordDeviceHistory === "function") {
+                                Obsidianscout.recordDeviceHistory({
+                                    action: "qr_scanned",
+                                    formType: subType,
+                                    eventKey: payload.eventKey,
+                                    teamNumber: payload.targetTeamNumber,
+                                    matchKey: payload.matchKey,
+                                    matchNumber: payload.matchNumber,
+                                    scoutName: me ? me.username : null,
+                                    payload,
+                                    serverSynced: false
+                                });
+                            }
+                        } catch (e) {
+                            console.warn("Failed to record scanned alliance entry in history:", e);
+                        }
                     }
                 });
                 saveQueue();
@@ -876,6 +894,24 @@ function initScanner() {
             saveQueue();
             renderQueue();
             updateUploadButtonState();
+
+            try {
+                if (window.Obsidianscout && typeof Obsidianscout.recordDeviceHistory === "function") {
+                    Obsidianscout.recordDeviceHistory({
+                        action: "qr_scanned",
+                        formType: entry.type,
+                        eventKey: payload.eventKey,
+                        teamNumber: payload.targetTeamNumber,
+                        matchKey: payload.matchKey,
+                        matchNumber: payload.matchNumber,
+                        scoutName: me ? me.username : null,
+                        payload,
+                        serverSynced: false
+                    });
+                }
+            } catch (e) {
+                console.warn("Failed to record scanned entry in history:", e);
+            }
 
             Obsidianscout.showToast(`Scanned: Team ${payload.targetTeamNumber}`, "success");
         } catch (err) {
@@ -1041,6 +1077,20 @@ function initScanner() {
                 item.status = "success";
                 item.errorMsg = "";
                 successCount++;
+
+                try {
+                    if (window.Obsidianscout && typeof Obsidianscout.markMatchingEntryAsSynced === "function") {
+                        const payload = rawData;
+                        Obsidianscout.markMatchingEntryAsSynced(
+                            item.type,
+                            payload.eventKey,
+                            payload.targetTeamNumber || payload.teamNumber,
+                            payload.matchKey
+                        );
+                    }
+                } catch (e) {
+                    console.warn("Failed to mark history entry as synced from queue upload:", e);
+                }
             } catch (err) {
                 console.error("Upload failed for item:", item, err);
                 item.status = "error";
