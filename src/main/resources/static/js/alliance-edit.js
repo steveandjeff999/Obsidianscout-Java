@@ -1796,10 +1796,12 @@
             const fields = config.fields || [];
 
             fields
-                .filter(field => !reserved.has(field.id) && field.type !== 'section')
+                .filter(field => !reserved.has(field.id))
                 .forEach(field => {
                     const node = buildSharedField(field);
-                    sharedEntryFieldsContainer.appendChild(node);
+                    if (node) {
+                        sharedEntryFieldsContainer.appendChild(node);
+                    }
                 });
 
             // Populate form fields with current values
@@ -1815,6 +1817,36 @@
 
         // Render dynamic field
         function buildSharedField(field) {
+            if (field.type === "section") {
+                const sectionWrapper = document.createElement("div");
+                sectionWrapper.className = "form-section";
+                const h3 = document.createElement("h3");
+                h3.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
+                sectionWrapper.appendChild(h3);
+                return sectionWrapper;
+            }
+
+            if (field.type === "checkbox") {
+                const wrapper = document.createElement("div");
+                wrapper.className = "field checkbox-field";
+
+                const input = document.createElement("input");
+                input.type = "checkbox";
+                input.id = `shared-field-${field.id}`;
+                input.name = field.id;
+                if (field.required) {
+                    input.required = true;
+                }
+
+                const label = document.createElement("label");
+                label.htmlFor = `shared-field-${field.id}`;
+                label.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
+
+                wrapper.appendChild(input);
+                wrapper.appendChild(label);
+                return wrapper;
+            }
+
             const wrapper = document.createElement("div");
             wrapper.className = "field";
 
@@ -1851,11 +1883,24 @@
                         input.appendChild(optionNode);
                     });
                     break;
-                case "checkbox":
-                    input = document.createElement("input");
-                    input.type = "checkbox";
-                    break;
+                case "text":
+                case "static_text":
+                case "label":
+                case "info": {
+                    const staticDisplay = document.createElement("div");
+                    staticDisplay.className = "static-text-display";
+                    staticDisplay.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : (field.label || "");
+                    if (field.placeholder) {
+                        const sub = document.createElement("div");
+                        sub.className = "static-text-sub";
+                        sub.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.placeholder) : field.placeholder;
+                        staticDisplay.appendChild(sub);
+                    }
+                    wrapper.appendChild(staticDisplay);
+                    return wrapper;
+                }
                 case "textarea":
+                case "notes":
                     input = document.createElement("textarea");
                     break;
                 default:
