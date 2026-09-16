@@ -349,6 +349,7 @@ fun Application.configureRoutes() {
                         val request = call.receive<PasskeyRegisterFinishRequest>()
                         val origin = call.request.headers["Origin"]
                         val host = call.request.headers["Host"]
+                        val userAgent = call.request.headers["User-Agent"]
                         val cred = com.obsidianscout.auth.PasskeyService.finishRegistration(
                             userSession = session,
                             credentialId = request.credentialId,
@@ -356,7 +357,8 @@ fun Application.configureRoutes() {
                             attestationObjectBase64 = request.attestationObject,
                             friendlyName = request.friendlyName,
                             clientOrigin = origin,
-                            hostHeader = host
+                            hostHeader = host,
+                            userAgent = userAgent
                         )
                         call.respond(cred)
                     }

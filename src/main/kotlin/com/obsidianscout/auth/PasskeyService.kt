@@ -173,7 +173,8 @@ object PasskeyService {
         attestationObjectBase64: String,
         friendlyName: String? = null,
         clientOrigin: String? = null,
-        hostHeader: String? = null
+        hostHeader: String? = null,
+        userAgent: String? = null
     ): PasskeyCredentialDto {
         purgeExpiredChallenges()
 
@@ -233,7 +234,8 @@ object PasskeyService {
         val coseKeyBytes = cborConverter.writeValueAsBytes(attestedCredentialData.coseKey)
         val coseKeyBase64Url = Base64.getUrlEncoder().withoutPadding().encodeToString(coseKeyBytes)
         val aaguidStr = attestedCredentialData.aaguid.value.toString()
-        val name = friendlyName?.takeIf { it.isNotBlank() } ?: "Passkey (${Instant.now().toString().take(10)})"
+        val defaultDeviceName = userAgent?.takeIf { it.isNotBlank() }?.let { AuthService.parseDeviceName(it) } ?: "Passkey"
+        val name = friendlyName?.takeIf { it.isNotBlank() } ?: defaultDeviceName
 
         val now = Instant.now()
         val insertedId = transaction {

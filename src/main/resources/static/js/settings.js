@@ -545,6 +545,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
         }
 
+        function getPasskeyIcon(name) {
+            const n = (name || "").toLowerCase();
+            if (n.includes("yubikey") || n.includes("titan") || n.includes("fido") || n.includes("key")) {
+                return '<i class="fa-solid fa-key" style="color: var(--primary);"></i>';
+            }
+            if (n.includes("iphone") || n.includes("ipad") || n.includes("android") || n.includes("phone") || n.includes("mobile")) {
+                return '<i class="fa-solid fa-mobile-screen" style="color: var(--primary);"></i>';
+            }
+            if (n.includes("mac") || n.includes("windows") || n.includes("pc") || n.includes("laptop") || n.includes("desktop") || n.includes("linux") || n.includes("chromebook")) {
+                return '<i class="fa-solid fa-laptop" style="color: var(--primary);"></i>';
+            }
+            return '<i class="fa-solid fa-fingerprint" style="color: var(--primary);"></i>';
+        }
+
         async function loadPasskeys() {
             passkeysLoading.style.display = "block";
             passkeysList.innerHTML = "";
@@ -565,7 +579,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <div class="card soft" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-radius: 8px; border: 1px solid var(--border-color, rgba(255,255,255,0.08));">
                         <div>
                             <div style="font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px;">
-                                <i class="fa-solid fa-fingerprint" style="color: var(--primary);"></i> ${Obsidianscout.escapeHtml(c.friendlyName || "Passkey")}
+                                ${getPasskeyIcon(c.friendlyName)} ${Obsidianscout.escapeHtml(c.friendlyName || "Passkey")}
                             </div>
                             <div style="font-size: 12px; color: var(--text-muted, #888); margin-top: 4px;">
                                 Created: ${new Date(c.createdAt).toLocaleDateString()} ${new Date(c.createdAt).toLocaleTimeString()}
@@ -603,8 +617,34 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
 
+        function getDefaultDeviceName() {
+            const ua = navigator.userAgent || "";
+            let os = "Device";
+            if (/iPhone/i.test(ua)) os = "iPhone";
+            else if (/iPad/i.test(ua)) os = "iPad";
+            else if (/Android/i.test(ua)) os = "Android Device";
+            else if (/Macintosh|Mac OS/i.test(ua)) os = "Mac";
+            else if (/Windows/i.test(ua)) os = "Windows PC";
+            else if (/CrOS/i.test(ua)) os = "Chromebook";
+            else if (/Linux/i.test(ua)) os = "Linux PC";
+
+            let browser = "";
+            if (/Edg\//i.test(ua)) browser = "Edge";
+            else if (/OPR\//i.test(ua) || /Opera/i.test(ua)) browser = "Opera";
+            else if (/SamsungBrowser/i.test(ua)) browser = "Samsung Internet";
+            else if (/Chrome/i.test(ua) && !/Chromium/i.test(ua)) browser = "Chrome";
+            else if (/Firefox/i.test(ua)) browser = "Firefox";
+            else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = "Safari";
+
+            if (browser) {
+                return `${os} (${browser})`;
+            }
+            return os;
+        }
+
         addPasskeyBtn.addEventListener("click", async () => {
-            const friendlyName = prompt("Give this passkey a name (e.g., 'MacBook Touch ID', 'iPhone Face ID', 'YubiKey'):", "My Passkey");
+            const defaultDevice = getDefaultDeviceName();
+            const friendlyName = prompt("Give this passkey a name (e.g., 'MacBook Touch ID', 'iPhone Face ID', 'YubiKey'):", defaultDevice);
             if (friendlyName === null) return;
 
             Obsidianscout.setButtonLoading(addPasskeyBtn, true, "Registering...");
@@ -645,7 +685,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     credentialId: credential.id,
                     clientDataJSON: arrayBufferToBase64Url(credential.response.clientDataJSON),
                     attestationObject: arrayBufferToBase64Url(credential.response.attestationObject),
-                    friendlyName: friendlyName.trim() || "Passkey"
+                    friendlyName: friendlyName.trim() || defaultDevice
                 };
 
                 await Obsidianscout.request("/api/auth/passkey/register/finish", {
