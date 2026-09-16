@@ -80,6 +80,31 @@ fun main() {
 
     println("Discovered ${discoveredClassNames.size} compiled project classes.")
 
+    // Scan WebAuthn4J jar files in classpath to ensure 100% of WebAuthn data/attestation models are registered
+    val webauthnJarClasses = mutableSetOf<String>()
+    val classpathEntries = System.getProperty("java.class.path", "").split(File.pathSeparator)
+    for (cp in classpathEntries) {
+        val file = File(cp)
+        if (file.isFile && file.name.contains("webauthn4j") && file.name.endsWith(".jar")) {
+            try {
+                java.util.jar.JarFile(file).use { jar ->
+                    val entries = jar.entries()
+                    while (entries.hasMoreElements()) {
+                        val entry = entries.nextElement()
+                        val name = entry.name
+                        if (name.startsWith("com/webauthn4j/") && name.endsWith(".class") && !name.contains("$")) {
+                            val className = name.replace('/', '.').removeSuffix(".class")
+                            webauthnJarClasses.add(className)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                println("Warning: Failed to inspect WebAuthn4J JAR ${file.name}: ${e.message}")
+            }
+        }
+    }
+    println("Discovered ${webauthnJarClasses.size} WebAuthn4J library classes from classpath.")
+
     // 3. Known third-party reflection targets required for native image
     val staticReflectionTargets = listOf(
         // Exposed Database Framework
@@ -157,6 +182,7 @@ fun main() {
         "com.webauthn4j.data.client.TokenBindingStatus" to true,
         "com.webauthn4j.data.client.challenge.Challenge" to true,
         "com.webauthn4j.data.client.challenge.DefaultChallenge" to true,
+        "com.webauthn4j.data.attestation.AttestationObject" to true,
         "com.webauthn4j.data.attestation.statement.AttestationStatement" to true,
         "com.webauthn4j.data.attestation.statement.NoneAttestationStatement" to true,
         "com.webauthn4j.data.attestation.statement.FIDOU2FAttestationStatement" to true,
@@ -164,6 +190,11 @@ fun main() {
         "com.webauthn4j.data.attestation.statement.AndroidKeyAttestationStatement" to true,
         "com.webauthn4j.data.attestation.statement.AndroidSafetyNetAttestationStatement" to true,
         "com.webauthn4j.data.attestation.statement.AppleAnonymousAttestationStatement" to true,
+        "com.webauthn4j.data.attestation.statement.TPMAttestationStatement" to true,
+        "com.webauthn4j.data.attestation.statement.TPMDeviceOrderInfo" to true,
+        "com.webauthn4j.data.attestation.statement.CertificateBaseAttestationStatement" to true,
+        "com.webauthn4j.data.attestation.statement.AttestationType" to true,
+        "com.webauthn4j.data.attestation.statement.AttestationStatementEnvelope" to true,
         "com.webauthn4j.data.attestation.authenticator.AttestationData" to true,
         "com.webauthn4j.data.attestation.authenticator.AttestedCredentialData" to true,
         "com.webauthn4j.data.attestation.authenticator.AuthenticatorData" to true,
@@ -173,6 +204,25 @@ fun main() {
         "com.webauthn4j.data.attestation.authenticator.EdDSARSACOSEKey" to true,
         "com.webauthn4j.data.attestation.authenticator.AAGUID" to true,
         "com.webauthn4j.data.attestation.authenticator.AbstractCOSEKey" to true,
+        "com.webauthn4j.data.RegistrationData" to true,
+        "com.webauthn4j.data.RegistrationParameters" to true,
+        "com.webauthn4j.data.RegistrationRequest" to true,
+        "com.webauthn4j.data.AuthenticationData" to true,
+        "com.webauthn4j.data.AuthenticationParameters" to true,
+        "com.webauthn4j.data.AuthenticationRequest" to true,
+        "com.webauthn4j.data.PublicKeyCredentialParameters" to true,
+        "com.webauthn4j.data.PublicKeyCredentialDescriptor" to true,
+        "com.webauthn4j.data.PublicKeyCredentialUserEntity" to true,
+        "com.webauthn4j.data.PublicKeyCredentialRpEntity" to true,
+        "com.webauthn4j.data.PublicKeyCredentialCreationOptions" to true,
+        "com.webauthn4j.data.PublicKeyCredentialRequestOptions" to true,
+        "com.webauthn4j.data.PublicKeyCredentialType" to true,
+        "com.webauthn4j.data.AuthenticatorAttachment" to true,
+        "com.webauthn4j.data.AuthenticatorSelectionCriteria" to true,
+        "com.webauthn4j.data.AuthenticatorTransport" to true,
+        "com.webauthn4j.data.UserVerificationRequirement" to true,
+        "com.webauthn4j.data.ResidentKeyRequirement" to true,
+        "com.webauthn4j.data.AttestationConveyancePreference" to true,
         "com.webauthn4j.data.extension.client.AuthenticationExtensionClientInput" to true,
         "com.webauthn4j.data.extension.client.AuthenticationExtensionClientOutput" to true,
         "com.webauthn4j.data.extension.client.AuthenticationExtensionsClientInputs" to true,
@@ -195,6 +245,20 @@ fun main() {
                 allPublicMethods = true,
                 allDeclaredFields = if (includeFields) true else null,
                 allPublicFields = if (includeFields) true else null
+            )
+        }
+    }
+
+    for (target in webauthnJarClasses) {
+        if (!existingEntries.containsKey(target)) {
+            existingEntries[target] = ReflectionEntry(
+                name = target,
+                allDeclaredConstructors = true,
+                allPublicConstructors = true,
+                allDeclaredMethods = true,
+                allPublicMethods = true,
+                allDeclaredFields = true,
+                allPublicFields = true
             )
         }
     }
