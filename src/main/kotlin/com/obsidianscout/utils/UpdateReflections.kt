@@ -147,7 +147,42 @@ fun main() {
         "java.security.spec.RSAPrivateCrtKeySpec" to true,
         "java.security.spec.RSAPrivateKeySpec" to true,
         "java.security.interfaces.RSAPrivateKey" to true,
-        "java.security.interfaces.RSAPrivateCrtKey" to true
+        "java.security.interfaces.RSAPrivateCrtKey" to true,
+
+        // WebAuthn4J Data Models & Jackson Deserialization Targets
+        "com.webauthn4j.data.client.CollectedClientData" to true,
+        "com.webauthn4j.data.client.ClientDataType" to true,
+        "com.webauthn4j.data.client.Origin" to true,
+        "com.webauthn4j.data.client.TokenBinding" to true,
+        "com.webauthn4j.data.client.TokenBindingStatus" to true,
+        "com.webauthn4j.data.client.challenge.Challenge" to true,
+        "com.webauthn4j.data.client.challenge.DefaultChallenge" to true,
+        "com.webauthn4j.data.attestation.statement.AttestationStatement" to true,
+        "com.webauthn4j.data.attestation.statement.NoneAttestationStatement" to true,
+        "com.webauthn4j.data.attestation.statement.FIDOU2FAttestationStatement" to true,
+        "com.webauthn4j.data.attestation.statement.PackedAttestationStatement" to true,
+        "com.webauthn4j.data.attestation.statement.AndroidKeyAttestationStatement" to true,
+        "com.webauthn4j.data.attestation.statement.AndroidSafetyNetAttestationStatement" to true,
+        "com.webauthn4j.data.attestation.statement.AppleAnonymousAttestationStatement" to true,
+        "com.webauthn4j.data.attestation.authenticator.AttestationData" to true,
+        "com.webauthn4j.data.attestation.authenticator.AttestedCredentialData" to true,
+        "com.webauthn4j.data.attestation.authenticator.AuthenticatorData" to true,
+        "com.webauthn4j.data.attestation.authenticator.COSEKey" to true,
+        "com.webauthn4j.data.attestation.authenticator.EC2COSEKey" to true,
+        "com.webauthn4j.data.attestation.authenticator.RSACOSEKey" to true,
+        "com.webauthn4j.data.attestation.authenticator.EdDSARSACOSEKey" to true,
+        "com.webauthn4j.data.attestation.authenticator.AAGUID" to true,
+        "com.webauthn4j.data.attestation.authenticator.AbstractCOSEKey" to true,
+        "com.webauthn4j.data.extension.client.AuthenticationExtensionClientInput" to true,
+        "com.webauthn4j.data.extension.client.AuthenticationExtensionClientOutput" to true,
+        "com.webauthn4j.data.extension.client.AuthenticationExtensionsClientInputs" to true,
+        "com.webauthn4j.data.extension.client.AuthenticationExtensionsClientOutputs" to true,
+        "com.webauthn4j.data.extension.authenticator.AuthenticationExtensionAuthenticatorInput" to true,
+        "com.webauthn4j.data.extension.authenticator.AuthenticationExtensionAuthenticatorOutput" to true,
+        "com.webauthn4j.data.extension.authenticator.AuthenticationExtensionsAuthenticatorInputs" to true,
+        "com.webauthn4j.data.extension.authenticator.AuthenticationExtensionsAuthenticatorOutputs" to true,
+        "com.webauthn4j.data.extension.HMACGetSecretInput" to true,
+        "com.webauthn4j.data.extension.HMACGetSecretOutput" to true
     )
 
     for ((target, includeFields) in staticReflectionTargets) {
