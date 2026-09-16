@@ -244,7 +244,9 @@ object DatabaseFactory {
                 ClusterSecrets,
                 ClusterNotificationLocks,
                 AnalyticsReports,
-                UserSessions
+                UserSessions,
+                PasskeyCredentials,
+                PasskeyChallenges
             )
 
             if (isCockroach) {
@@ -656,7 +658,9 @@ object DatabaseFactory {
                             Banners,
                             ChatMessages,
                             UserChatLastRead,
-                            PushSubscriptions
+                            PushSubscriptions,
+                            PasskeyCredentials,
+                            PasskeyChallenges
                         )
                     } else {
                         SchemaUtils.createMissingTablesAndColumns(
@@ -679,7 +683,9 @@ object DatabaseFactory {
                             Banners,
                             ChatMessages,
                             UserChatLastRead,
-                            PushSubscriptions
+                            PushSubscriptions,
+                            PasskeyCredentials,
+                            PasskeyChallenges
                         )
                     }
                 }

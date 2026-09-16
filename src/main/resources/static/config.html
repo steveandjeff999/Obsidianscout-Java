@@ -234,6 +234,33 @@
 
                 </div>
 
+                <!-- Passkeys & Biometric Security -->
+                <div class="card soft mt-24" id="personal-passkeys-card" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 20px; border-radius: 12px; margin-top: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                        <div>
+                            <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-key"></i> Passkeys &amp; Biometrics
+                            </h2>
+                            <p class="notice mt-6" style="margin-bottom: 0;">
+                                Sign in instantly and securely using your device's fingerprint, Face ID, Windows Hello, or security key.
+                            </p>
+                        </div>
+                        <div>
+                            <button id="add-passkey-btn" class="btn" type="button" style="padding: 8px 16px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-plus"></i> Add Passkey
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="passkeys-loading" style="padding: 16px 0; color: var(--text-muted, #888); font-size: 14px;">
+                        Loading registered passkeys...
+                    </div>
+
+                    <div id="passkeys-list" class="grid gap-12" style="display: grid; gap: 12px;">
+                        <!-- Dynamically populated passkeys -->
+                    </div>
+                </div>
+
                 <!-- Logged-in Devices & Authorizations -->
                 <div class="card soft mt-24" id="personal-devices-card" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 20px; border-radius: 12px; margin-top: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">

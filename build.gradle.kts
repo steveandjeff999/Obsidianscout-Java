@@ -57,6 +57,7 @@ dependencies {
     implementation("com.google.firebase:firebase-admin:9.4.1")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78")
     implementation("org.apache.httpcomponents:httpclient:4.5.14")
+    implementation("com.webauthn4j:webauthn4j-core:0.22.2.RELEASE")
     testImplementation(kotlin("test"))
 }
 

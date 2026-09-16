@@ -735,7 +735,7 @@ object AuthService {
         }
     }
 
-    private fun rowToUser(row: ResultRow): UserRecord {
+    internal fun rowToUser(row: ResultRow): UserRecord {
         return UserRecord(
             id = row[Users.id].value.toString(),
             username = row[Users.username],

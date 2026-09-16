@@ -513,6 +513,161 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadSessions();
     }
 
+    function wirePersonalPasskeysWidget() {
+        const passkeysCard = document.getElementById("personal-passkeys-card");
+        const passkeysList = document.getElementById("passkeys-list");
+        const passkeysLoading = document.getElementById("passkeys-loading");
+        const addPasskeyBtn = document.getElementById("add-passkey-btn");
+        if (!passkeysCard || !passkeysList || !addPasskeyBtn) return;
+
+        if (!window.PublicKeyCredential) {
+            passkeysCard.style.display = "none";
+            return;
+        }
+
+        function base64UrlToUint8Array(base64Url) {
+            const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
+            const base64 = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const raw = window.atob(base64);
+            const output = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; ++i) {
+                output[i] = raw.charCodeAt(i);
+            }
+            return output;
+        }
+
+        function arrayBufferToBase64Url(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+
+        async function loadPasskeys() {
+            passkeysLoading.style.display = "block";
+            passkeysList.innerHTML = "";
+            try {
+                const creds = await Obsidianscout.request("/api/auth/passkey/credentials");
+                passkeysLoading.style.display = "none";
+
+                if (!creds || creds.length === 0) {
+                    passkeysList.innerHTML = `
+                        <div style="padding: 16px; border: 1px dashed var(--border-color, #444); border-radius: 8px; text-align: center; color: var(--text-muted, #888); font-size: 14px;">
+                            No passkeys registered yet. Click <strong>Add Passkey</strong> to enroll your current device or security key.
+                        </div>
+                    `;
+                    return;
+                }
+
+                passkeysList.innerHTML = creds.map(c => `
+                    <div class="card soft" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-radius: 8px; border: 1px solid var(--border-color, rgba(255,255,255,0.08));">
+                        <div>
+                            <div style="font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-fingerprint" style="color: var(--primary);"></i> ${Obsidianscout.escapeHtml(c.friendlyName || "Passkey")}
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-muted, #888); margin-top: 4px;">
+                                Created: ${new Date(c.createdAt).toLocaleDateString()} ${new Date(c.createdAt).toLocaleTimeString()}
+                                ${c.lastUsedAt ? ` · Last used: ${new Date(c.lastUsedAt).toLocaleDateString()}` : ''}
+                            </div>
+                        </div>
+                        <div>
+                            <button class="btn ghost delete-passkey-btn" data-id="${c.id}" style="color: #dc3545; border-color: rgba(220,53,69,0.3); padding: 6px 12px; font-size: 12px;">
+                                <i class="fa-solid fa-trash"></i> Remove
+                            </button>
+                        </div>
+                    </div>
+                `).join("");
+
+                passkeysList.querySelectorAll(".delete-passkey-btn").forEach(btn => {
+                    btn.addEventListener("click", async (e) => {
+                        const credId = e.currentTarget.dataset.id;
+                        if (!confirm("Are you sure you want to remove this passkey?")) return;
+                        try {
+                            btn.disabled = true;
+                            await Obsidianscout.request(`/api/auth/passkey/credentials/${credId}`, {
+                                method: "DELETE"
+                            });
+                            Obsidianscout.showToast("Passkey removed", "success");
+                            await loadPasskeys();
+                        } catch (err) {
+                            Obsidianscout.showToast(err.message || "Failed to remove passkey", "error");
+                            btn.disabled = false;
+                        }
+                    });
+                });
+            } catch (err) {
+                passkeysLoading.style.display = "none";
+                passkeysList.innerHTML = `<div style="color: #dc3545; font-size: 14px;">Failed to load passkeys: ${Obsidianscout.escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        addPasskeyBtn.addEventListener("click", async () => {
+            const friendlyName = prompt("Give this passkey a name (e.g., 'MacBook Touch ID', 'iPhone Face ID', 'YubiKey'):", "My Passkey");
+            if (friendlyName === null) return;
+
+            Obsidianscout.setButtonLoading(addPasskeyBtn, true, "Registering...");
+            try {
+                // 1. Begin registration
+                const options = await Obsidianscout.request("/api/auth/passkey/register/begin", {
+                    method: "POST"
+                });
+
+                const publicKey = {
+                    challenge: base64UrlToUint8Array(options.challenge),
+                    rp: options.rp,
+                    user: {
+                        id: base64UrlToUint8Array(options.user.id),
+                        name: options.user.name,
+                        displayName: options.user.displayName
+                    },
+                    pubKeyCredParams: options.pubKeyCredParams,
+                    timeout: options.timeout || 60000,
+                    attestation: options.attestation || "none",
+                    authenticatorSelection: options.authenticatorSelection || {}
+                };
+
+                if (options.excludeCredentials && options.excludeCredentials.length > 0) {
+                    publicKey.excludeCredentials = options.excludeCredentials.map(c => ({
+                        type: "public-key",
+                        id: base64UrlToUint8Array(c.id),
+                        transports: c.transports
+                    }));
+                }
+
+                const credential = await navigator.credentials.create({ publicKey });
+                if (!credential) {
+                    throw new Error("No credential was created");
+                }
+
+                const finishPayload = {
+                    credentialId: credential.id,
+                    clientDataJSON: arrayBufferToBase64Url(credential.response.clientDataJSON),
+                    attestationObject: arrayBufferToBase64Url(credential.response.attestationObject),
+                    friendlyName: friendlyName.trim() || "Passkey"
+                };
+
+                await Obsidianscout.request("/api/auth/passkey/register/finish", {
+                    method: "POST",
+                    json: finishPayload
+                });
+
+                Obsidianscout.showToast("Passkey added successfully!", "success");
+                await loadPasskeys();
+            } catch (err) {
+                if (err.name !== "NotAllowedError") {
+                    console.error("Passkey registration error:", err);
+                    Obsidianscout.showToast(err.message || "Failed to register passkey", "error");
+                }
+            } finally {
+                Obsidianscout.setButtonLoading(addPasskeyBtn, false);
+            }
+        });
+
+        loadPasskeys();
+    }
+
     wirePersonalAvatarWidget(me);
     wirePersonalUsernameWidget(me);
     wirePersonalPasswordWidget();
@@ -521,6 +676,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalBugReportPrefWidget(me);
     wirePersonalNodeAlertsWidget(me);
     wirePersonalDeviceSessionsWidget(me);
+    wirePersonalPasskeysWidget();
     wirePersonalDeleteAccountWidget(me);
     wirePersonalHapticPrefWidget();
     wirePersonalNavLayoutWidget();

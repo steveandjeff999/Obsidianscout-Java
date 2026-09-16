@@ -84,6 +84,102 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // Passkey Login
+    const passkeyLoginBtn = document.getElementById("passkey-login-btn");
+    if (passkeyLoginBtn) {
+        if (!window.PublicKeyCredential) {
+            passkeyLoginBtn.style.display = "none";
+            const divider = document.getElementById("passkey-divider");
+            if (divider) divider.style.display = "none";
+        } else {
+            passkeyLoginBtn.addEventListener("click", async () => {
+                Obsidianscout.setButtonLoading(passkeyLoginBtn, true, t('login.authenticating_passkey', 'Authenticating...'));
+                try {
+                    const username = document.getElementById("username") ? document.getElementById("username").value.trim() : "";
+                    const teamNumRaw = document.getElementById("teamNumber") ? document.getElementById("teamNumber").value.trim() : "";
+                    const teamNumber = teamNumRaw ? parseInt(teamNumRaw, 10) : null;
+                    const program = document.getElementById("login-program") ? document.getElementById("login-program").value : "FRC";
+                    const keepMeLoggedIn = document.getElementById("keepMeLoggedIn") ? document.getElementById("keepMeLoggedIn").checked : false;
+
+                    // 1. Get options from server
+                    const options = await Obsidianscout.request("/api/auth/passkey/authenticate/begin", {
+                        method: "POST",
+                        json: {
+                            username: username || null,
+                            teamNumber: teamNumber && teamNumber > 0 ? teamNumber : null,
+                            program: program || "FRC"
+                        }
+                    });
+
+                    // Helper to convert base64url to Uint8Array
+                    function base64UrlToUint8Array(base64Url) {
+                        const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
+                        const base64 = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
+                        const raw = window.atob(base64);
+                        const output = new Uint8Array(raw.length);
+                        for (let i = 0; i < raw.length; ++i) {
+                            output[i] = raw.charCodeAt(i);
+                        }
+                        return output;
+                    }
+
+                    // Helper to convert ArrayBuffer to base64url
+                    function arrayBufferToBase64Url(buffer) {
+                        const bytes = new Uint8Array(buffer);
+                        let binary = '';
+                        for (let i = 0; i < bytes.byteLength; i++) {
+                            binary += String.fromCharCode(bytes[i]);
+                        }
+                        return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+                    }
+
+                    // Format publicKey credential request options
+                    const publicKey = {
+                        challenge: base64UrlToUint8Array(options.challenge),
+                        timeout: options.timeout || 60000,
+                        rpId: options.rpId,
+                        userVerification: options.userVerification || "preferred"
+                    };
+
+                    if (options.allowCredentials && options.allowCredentials.length > 0) {
+                        publicKey.allowCredentials = options.allowCredentials.map(c => ({
+                            type: "public-key",
+                            id: base64UrlToUint8Array(c.id)
+                        }));
+                    }
+
+                    const credential = await navigator.credentials.get({ publicKey });
+                    if (!credential) {
+                        throw new Error("No credential returned");
+                    }
+
+                    const finishPayload = {
+                        credentialId: credential.id,
+                        clientDataJSON: arrayBufferToBase64Url(credential.response.clientDataJSON),
+                        authenticatorData: arrayBufferToBase64Url(credential.response.authenticatorData),
+                        signature: arrayBufferToBase64Url(credential.response.signature),
+                        userHandle: credential.response.userHandle ? arrayBufferToBase64Url(credential.response.userHandle) : null,
+                        keepMeLoggedIn: keepMeLoggedIn
+                    };
+
+                    await Obsidianscout.request("/api/auth/passkey/authenticate/finish", {
+                        method: "POST",
+                        json: finishPayload
+                    });
+
+                    window.location.href = "/dashboard";
+                } catch (err) {
+                    if (err.name !== "NotAllowedError") {
+                        console.error("Passkey auth error:", err);
+                        Obsidianscout.showToast(err.message || "Passkey authentication failed", "error");
+                    }
+                } finally {
+                    Obsidianscout.setButtonLoading(passkeyLoginBtn, false);
+                }
+            });
+        }
+    }
+
     // Register
     registerForm.addEventListener("submit", async (event) => {
         event.preventDefault();

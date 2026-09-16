@@ -437,3 +437,30 @@ object ReportedErrors : UUIDTable("reported_errors") {
     }
 }
 
+object PasskeyCredentials : UUIDTable("passkey_credentials") {
+    val userId = reference("user_id", Users)
+    val credentialId = text("credential_id")          // Base64url-encoded credential ID
+    val publicKeyCose = text("public_key_cose")        // Base64url-encoded COSE public key
+    val signCount = long("sign_count").default(0)
+    val aaguid = varchar("aaguid", 64).default("")
+    val friendlyName = varchar("friendly_name", 128).default("Passkey")
+    val createdAt = timestamp("created_at")
+    val lastUsedAt = timestamp("last_used_at").nullable()
+
+    init {
+        uniqueIndex("ux_passkey_credentials_credid", credentialId)
+        index("idx_passkey_credentials_user", false, userId)
+    }
+}
+
+object PasskeyChallenges : UUIDTable("passkey_challenges") {
+    val challenge = varchar("challenge", 256)   // Base64url random challenge string
+    val userId = reference("user_id", Users).nullable()
+    val flow = varchar("flow", 16)             // "register" | "authenticate"
+    val expiresAt = timestamp("expires_at")
+
+    init {
+        index("idx_passkey_challenges_challenge", false, challenge)
+    }
+}
+

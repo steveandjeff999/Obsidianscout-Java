@@ -329,9 +329,133 @@ fun Application.configureRoutes() {
                 get("/providers") {
                     val providers = listOf(
                         AuthProviderInfo("local", true),
+                        AuthProviderInfo("passkey", true),
                         AuthProviderInfo("oauth", false)
                     )
                     call.respond(AuthProvidersResponse(providers))
+                }
+
+                route("/passkey") {
+                    post("/register/begin") {
+                        val session = call.requireSession()
+                        val origin = call.request.headers["Origin"]
+                        val host = call.request.headers["Host"]
+                        val optionsJson = com.obsidianscout.auth.PasskeyService.beginRegistrationJson(session, clientOrigin = origin, hostHeader = host)
+                        call.respondText(optionsJson, io.ktor.http.ContentType.Application.Json)
+                    }
+
+                    post("/register/finish") {
+                        val session = call.requireSession()
+                        val request = call.receive<PasskeyRegisterFinishRequest>()
+                        val origin = call.request.headers["Origin"]
+                        val host = call.request.headers["Host"]
+                        val cred = com.obsidianscout.auth.PasskeyService.finishRegistration(
+                            userSession = session,
+                            credentialId = request.credentialId,
+                            clientDataJSONBase64 = request.clientDataJSON,
+                            attestationObjectBase64 = request.attestationObject,
+                            friendlyName = request.friendlyName,
+                            clientOrigin = origin,
+                            hostHeader = host
+                        )
+                        call.respond(cred)
+                    }
+
+                    post("/authenticate/begin") {
+                        val request = try {
+                            call.receive<PasskeyAuthBeginRequest>()
+                        } catch (_: Exception) {
+                            PasskeyAuthBeginRequest()
+                        }
+                        val origin = call.request.headers["Origin"]
+                        val host = call.request.headers["Host"]
+                        val optionsJson = com.obsidianscout.auth.PasskeyService.beginAuthenticationJson(
+                            username = request.username,
+                            teamNumber = request.teamNumber,
+                            program = request.program,
+                            clientOrigin = origin,
+                            hostHeader = host
+                        )
+                        call.respondText(optionsJson, io.ktor.http.ContentType.Application.Json)
+                    }
+
+                    post("/authenticate/finish") {
+                        val request = call.receive<PasskeyAuthFinishRequest>()
+                        val origin = call.request.headers["Origin"]
+                        val host = call.request.headers["Host"]
+                        val user = com.obsidianscout.auth.PasskeyService.finishAuthentication(
+                            credentialId = request.credentialId,
+                            clientDataJSONBase64 = request.clientDataJSON,
+                            authenticatorDataBase64 = request.authenticatorData,
+                            signatureBase64 = request.signature,
+                            userHandleBase64 = request.userHandle,
+                            clientOrigin = origin,
+                            hostHeader = host
+                        )
+
+                        val userUuid = UUID.fromString(user.id)
+                        val ipAddress = call.request.headers["CF-Connecting-IP"]
+                            ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
+                            ?: call.request.local.remoteHost
+                        val userAgent = call.request.headers["User-Agent"] ?: ""
+                        val sessionUuid = AuthService.createSession(
+                            userId = userUuid,
+                            clientType = "web",
+                            userAgent = userAgent,
+                            ipAddress = ipAddress
+                        )
+
+                        val session = UserSession(
+                            userId = user.id,
+                            username = user.username,
+                            teamNumber = user.teamNumber,
+                            program = user.program,
+                            role = user.role,
+                            email = user.email,
+                            profilePicture = null,
+                            notificationPreference = user.notificationPreference,
+                            tourProgress = user.tourProgress,
+                            nodeAlertsEnabled = user.nodeAlertsEnabled,
+                            bugReportPreference = user.bugReportPreference,
+                            sessionId = sessionUuid.toString()
+                        )
+                        call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
+                        call.sessions.set(session)
+
+                        val responseSession = UserSession(
+                            userId = user.id,
+                            username = user.username,
+                            teamNumber = user.teamNumber,
+                            program = user.program,
+                            role = user.role,
+                            email = user.email,
+                            profilePicture = user.profilePicture,
+                            notificationPreference = user.notificationPreference,
+                            tourProgress = user.tourProgress,
+                            nodeAlertsEnabled = user.nodeAlertsEnabled,
+                            bugReportPreference = user.bugReportPreference,
+                            sessionId = sessionUuid.toString()
+                        )
+                        call.respond(LoginResponse(responseSession))
+                    }
+
+                    get("/credentials") {
+                        val session = call.requireSession()
+                        val creds = com.obsidianscout.auth.PasskeyService.listCredentials(session)
+                        call.respond(creds)
+                    }
+
+                    delete("/credentials/{id}") {
+                        val session = call.requireSession()
+                        val credId = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.BadRequest, "Missing credential ID"
+                        )
+                        val deleted = com.obsidianscout.auth.PasskeyService.deleteCredential(session, credId)
+                        if (!deleted) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Credential not found")
+                        }
+                        call.respond(HttpStatusCode.NoContent)
+                    }
                 }
 
                 post("/forgot-password") {

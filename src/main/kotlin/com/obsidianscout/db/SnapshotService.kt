@@ -103,7 +103,9 @@ object SnapshotService {
         ClusterSecrets,
         ClusterNotificationLocks,
         AnalyticsReports,
-        ReportedErrors
+        ReportedErrors,
+        PasskeyCredentials,
+        PasskeyChallenges
     )
 
     var customStorageDirectory: File? = null

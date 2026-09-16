@@ -174,7 +174,8 @@ import {
     showLoadingSpinner,
     showRetryButton,
     getProgram,
-    getProgramPrefix
+    getProgramPrefix,
+    escapeHtml
 } from './utilities/helpers.js';
 
 import {
@@ -196,6 +197,7 @@ initErrorReporter();
 // Export public API to window.Obsidianscout
 window.Obsidianscout = {
     initErrorReporter,
+    escapeHtml,
     getProgram,
     getProgramPrefix,
     request,
@@ -271,6 +273,7 @@ window.Obsidianscout = {
 
 // Re-export for ES module consumers
 export {
+    escapeHtml,
     getProgram,
     getProgramPrefix,
     request,

@@ -36,6 +36,31 @@ data class LoginResponse(
 )
 
 @Serializable
+data class PasskeyAuthBeginRequest(
+    val username: String? = null,
+    val teamNumber: Int? = null,
+    val program: String = "FRC"
+)
+
+@Serializable
+data class PasskeyRegisterFinishRequest(
+    val credentialId: String,
+    val clientDataJSON: String,
+    val attestationObject: String,
+    val friendlyName: String? = null
+)
+
+@Serializable
+data class PasskeyAuthFinishRequest(
+    val credentialId: String,
+    val clientDataJSON: String,
+    val authenticatorData: String,
+    val signature: String,
+    val userHandle: String? = null,
+    val keepMeLoggedIn: Boolean = false
+)
+
+@Serializable
 data class MeResponse(
     val user: UserSession
 )
