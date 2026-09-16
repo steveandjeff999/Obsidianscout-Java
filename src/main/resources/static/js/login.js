@@ -76,7 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     keepMeLoggedIn
                 }
             });
-            window.location.href = "/dashboard";
+            await handlePostLoginPasskeyCheck();
         } catch (error) {
             Obsidianscout.showToast(error.message || "Sign in failed", "error");
         } finally {
@@ -110,28 +110,6 @@ document.addEventListener("DOMContentLoaded", () => {
                             program: program || "FRC"
                         }
                     });
-
-                    // Helper to convert base64url to Uint8Array
-                    function base64UrlToUint8Array(base64Url) {
-                        const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
-                        const base64 = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
-                        const raw = window.atob(base64);
-                        const output = new Uint8Array(raw.length);
-                        for (let i = 0; i < raw.length; ++i) {
-                            output[i] = raw.charCodeAt(i);
-                        }
-                        return output;
-                    }
-
-                    // Helper to convert ArrayBuffer to base64url
-                    function arrayBufferToBase64Url(buffer) {
-                        const bytes = new Uint8Array(buffer);
-                        let binary = '';
-                        for (let i = 0; i < bytes.byteLength; i++) {
-                            binary += String.fromCharCode(bytes[i]);
-                        }
-                        return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-                    }
 
                     // Format publicKey credential request options
                     const publicKey = {
@@ -177,6 +155,223 @@ document.addEventListener("DOMContentLoaded", () => {
                     Obsidianscout.setButtonLoading(passkeyLoginBtn, false);
                 }
             });
+        }
+    }
+
+    // Helper functions for WebAuthn Base64URL conversions
+    function base64UrlToUint8Array(base64Url) {
+        const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
+        const base64 = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const raw = window.atob(base64);
+        const output = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; ++i) {
+            output[i] = raw.charCodeAt(i);
+        }
+        return output;
+    }
+
+    function arrayBufferToBase64Url(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    }
+
+    function getDefaultDeviceName() {
+        const ua = navigator.userAgent || "";
+        let os = "Device";
+        if (/iPhone/i.test(ua)) os = "iPhone";
+        else if (/iPad/i.test(ua)) os = "iPad";
+        else if (/Android/i.test(ua)) os = "Android Device";
+        else if (/Macintosh|Mac OS/i.test(ua)) os = "Mac";
+        else if (/Windows/i.test(ua)) os = "Windows PC";
+        else if (/CrOS/i.test(ua)) os = "Chromebook";
+        else if (/Linux/i.test(ua)) os = "Linux PC";
+
+        let browser = "";
+        if (/Edg\//i.test(ua)) browser = "Edge";
+        else if (/OPR\//i.test(ua) || /Opera/i.test(ua)) browser = "Opera";
+        else if (/SamsungBrowser/i.test(ua)) browser = "Samsung Internet";
+        else if (/Chrome/i.test(ua) && !/Chromium/i.test(ua)) browser = "Chrome";
+        else if (/Firefox/i.test(ua)) browser = "Firefox";
+        else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = "Safari";
+
+        if (browser) {
+            return `${os} (${browser})`;
+        }
+        return os;
+    }
+
+    const PASSKEY_DISMISSED_KEY = "obsidianscout_passkey_prompt_dismissed";
+
+    async function promptPasskeyEnrollment() {
+        return new Promise((resolve) => {
+            let backdrop = document.getElementById("passkey-enroll-modal-backdrop");
+            if (!backdrop) {
+                backdrop = document.createElement("div");
+                backdrop.id = "passkey-enroll-modal-backdrop";
+                backdrop.className = "modal-backdrop";
+                document.body.appendChild(backdrop);
+            }
+
+            const defaultDevice = getDefaultDeviceName();
+
+            backdrop.innerHTML = `
+                <div class="modal-container" style="max-width: 460px;">
+                    <div class="modal-header">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="background: rgba(99, 102, 241, 0.15); color: var(--primary, #6366f1); width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="modal-title" style="font-size: 1.15rem;">Set up a Passkey</h3>
+                        </div>
+                        <button class="modal-close" id="passkey-prompt-close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="color: var(--text-muted, #94a3b8); font-size: 0.95rem; line-height: 1.5; margin-bottom: 16px;">
+                            Sign in faster and more securely next time using Windows Hello, Touch ID, Face ID, or your security key instead of entering your password.
+                        </p>
+                        <div class="field" style="margin-bottom: 8px;">
+                            <label for="passkey-prompt-name" style="font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; display: block;">Device Name</label>
+                            <input id="passkey-prompt-name" type="text" value="${defaultDevice}" style="width: 100%; box-sizing: border-box;" />
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
+                        <button class="btn ghost" id="passkey-prompt-skip-btn" type="button">Not Now</button>
+                        <button class="btn" id="passkey-prompt-add-btn" type="button" style="display: flex; align-items: center; gap: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                            <span>Add Passkey</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            const closeDialog = (dismissedPermanently = false) => {
+                if (dismissedPermanently) {
+                    try {
+                        localStorage.setItem(PASSKEY_DISMISSED_KEY, "true");
+                    } catch (e) {
+                        console.warn("Could not save passkey dismissal to localStorage:", e);
+                    }
+                }
+                backdrop.classList.remove("show");
+                setTimeout(() => {
+                    if (backdrop.parentElement) backdrop.parentElement.removeChild(backdrop);
+                    resolve();
+                }, 200);
+            };
+
+            const closeBtn = backdrop.querySelector("#passkey-prompt-close-btn");
+            const skipBtn = backdrop.querySelector("#passkey-prompt-skip-btn");
+            const addBtn = backdrop.querySelector("#passkey-prompt-add-btn");
+            const nameInput = backdrop.querySelector("#passkey-prompt-name");
+
+            if (closeBtn) {
+                closeBtn.addEventListener("click", () => closeDialog(false));
+            }
+            if (skipBtn) {
+                skipBtn.addEventListener("click", () => closeDialog(true));
+            }
+
+            if (addBtn) {
+                addBtn.addEventListener("click", async () => {
+                    const friendlyName = (nameInput && nameInput.value.trim()) || defaultDevice;
+                    Obsidianscout.setButtonLoading(addBtn, true, "Registering...");
+                    try {
+                        const options = await Obsidianscout.request("/api/auth/passkey/register/begin", {
+                            method: "POST"
+                        });
+
+                        const publicKey = {
+                            challenge: base64UrlToUint8Array(options.challenge),
+                            rp: options.rp,
+                            user: {
+                                id: base64UrlToUint8Array(options.user.id),
+                                name: options.user.name,
+                                displayName: options.user.displayName
+                            },
+                            pubKeyCredParams: options.pubKeyCredParams,
+                            timeout: options.timeout || 60000,
+                            attestation: options.attestation || "none",
+                            authenticatorSelection: options.authenticatorSelection || {}
+                        };
+
+                        if (options.excludeCredentials && options.excludeCredentials.length > 0) {
+                            publicKey.excludeCredentials = options.excludeCredentials.map(c => ({
+                                type: "public-key",
+                                id: base64UrlToUint8Array(c.id),
+                                transports: c.transports
+                            }));
+                        }
+
+                        const credential = await navigator.credentials.create({ publicKey });
+                        if (!credential) {
+                            throw new Error("No credential was created");
+                        }
+
+                        const finishPayload = {
+                            credentialId: credential.id,
+                            clientDataJSON: arrayBufferToBase64Url(credential.response.clientDataJSON),
+                            attestationObject: arrayBufferToBase64Url(credential.response.attestationObject),
+                            friendlyName: friendlyName
+                        };
+
+                        await Obsidianscout.request("/api/auth/passkey/register/finish", {
+                            method: "POST",
+                            json: finishPayload
+                        });
+
+                        Obsidianscout.showToast("Passkey added successfully!", "success");
+                        closeDialog(false);
+                    } catch (err) {
+                        if (err.name !== "NotAllowedError") {
+                            console.error("Passkey registration error:", err);
+                            Obsidianscout.showToast(err.message || "Failed to register passkey", "error");
+                        }
+                        Obsidianscout.setButtonLoading(addBtn, false);
+                    }
+                });
+            }
+
+            backdrop.classList.add("show");
+        });
+    }
+
+    async function handlePostLoginPasskeyCheck() {
+        try {
+            if (!window.PublicKeyCredential) {
+                window.location.href = "/dashboard";
+                return;
+            }
+
+            const dismissed = localStorage.getItem(PASSKEY_DISMISSED_KEY);
+            if (dismissed === "true") {
+                window.location.href = "/dashboard";
+                return;
+            }
+
+            // Check if user already has credentials registered
+            const credentials = await Obsidianscout.request("/api/auth/passkey/credentials");
+            if (Array.isArray(credentials) && credentials.length > 0) {
+                // User already has passkeys registered
+                window.location.href = "/dashboard";
+                return;
+            }
+
+            // Prompt user to enroll passkey
+            await promptPasskeyEnrollment();
+            window.location.href = "/dashboard";
+        } catch (e) {
+            console.warn("Passkey check failed, continuing to dashboard:", e);
+            window.location.href = "/dashboard";
         }
     }
 
