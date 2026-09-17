@@ -7,6 +7,19 @@ import { safeGetItem, safeSetItem, safeRemoveItem } from './storage.js';
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
 
+export function getOrCreateDeviceId() {
+    let deviceId = safeGetItem("obsidian_device_id");
+    if (!deviceId) {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            deviceId = crypto.randomUUID();
+        } else {
+            deviceId = 'dev-' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+        }
+        safeSetItem("obsidian_device_id", deviceId);
+    }
+    return deviceId;
+}
+
 export function getCsrfToken() {
     try {
         if (typeof document === 'undefined') return null;
@@ -240,6 +253,10 @@ export async function request(path, options = {}) {
     const csrfToken = getCsrfToken();
     if (csrfToken) {
         opts.headers["X-CSRF-Token"] = csrfToken;
+    }
+    const devId = getOrCreateDeviceId();
+    if (devId && !opts.headers["X-Device-Id"]) {
+        opts.headers["X-Device-Id"] = devId;
     }
 
     if (method === "GET") {

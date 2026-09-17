@@ -405,12 +405,14 @@ object UserSessions : UUIDTable("user_sessions") {
     val deviceName = varchar("device_name", 255).default("Unknown Device")
     val userAgent = text("user_agent").default("")
     val ipAddress = varchar("ip_address", 64).default("")
+    val deviceId = varchar("device_id", 128).nullable()
     val createdAt = timestamp("created_at")
     val lastActiveAt = timestamp("last_active_at")
     val expiresAt = timestamp("expires_at").nullable()
 
     init {
         index("idx_user_sessions_user", false, userId)
+        index("idx_user_sessions_user_device", false, userId, deviceId)
     }
 }
 

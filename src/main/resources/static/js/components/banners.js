@@ -73,18 +73,26 @@ function renderBanners(banners, mainContent) {
         console.warn("Failed to load dismissed banners", e);
     }
 
+    const visibleBanners = banners.filter(banner => !(banner.isDismissible && dismissed.includes(banner.id)));
+    if (visibleBanners.length === 0) {
+        if (container) container.remove();
+        return;
+    }
+
+    const currentKey = JSON.stringify(visibleBanners);
+    if (container && container.dataset.renderedKey === currentKey) {
+        return;
+    }
+
     if (!container) {
         container = document.createElement("div");
         container.className = "banner-container";
         mainContent.insertBefore(container, mainContent.firstChild);
     }
-
+    container.dataset.renderedKey = currentKey;
     container.innerHTML = "";
 
-    banners.forEach(banner => {
-        if (banner.isDismissible && dismissed.includes(banner.id)) {
-            return;
-        }
+    visibleBanners.forEach(banner => {
 
         const item = document.createElement("div");
         item.className = `banner-item banner-${banner.bannerType}`;
@@ -118,6 +126,12 @@ export async function loadAndRenderBanners() {
     const mainContent = document.querySelector(".main-content") || document.querySelector(".login-shell") || document.querySelector(".shell");
     if (!mainContent) return;
 
+    if (!window._bannerPeriodicTimer) {
+        window._bannerPeriodicTimer = setInterval(() => {
+            loadAndRenderBanners();
+        }, 10000);
+    }
+
     try {
         const page = document.body.dataset.page;
         if (page === "reset-password") return;
@@ -131,12 +145,10 @@ export async function loadAndRenderBanners() {
         }
 
         let banners = [];
-        let isQuorumLostError = false;
         try {
             banners = await request(path);
         } catch (err) {
             if (err.status === 503) {
-                isQuorumLostError = true;
                 banners = [{
                     id: "sys-db-quorum-lost",
                     teamNumber: 0,
@@ -151,18 +163,6 @@ export async function loadAndRenderBanners() {
                 console.error("Failed to load banners:", err);
                 return;
             }
-        }
-
-        const hasQuorumBanner = Array.isArray(banners) && banners.some(b => b.id === "sys-db-quorum-lost");
-        if (hasQuorumBanner || isQuorumLostError) {
-            if (!window._quorumBannerCheckTimer) {
-                window._quorumBannerCheckTimer = setInterval(() => {
-                    loadAndRenderBanners();
-                }, 15000);
-            }
-        } else if (window._quorumBannerCheckTimer) {
-            clearInterval(window._quorumBannerCheckTimer);
-            window._quorumBannerCheckTimer = null;
         }
 
         renderBanners(banners, mainContent);

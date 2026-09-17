@@ -69,6 +69,8 @@ import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
 import org.jetbrains.exposed.sql.transactions.transaction
 import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.dao.id.EntityID
@@ -179,7 +181,12 @@ suspend fun ApplicationCall.requireMobileSession(secret: String): UserSession {
             val sOk = if (!session.sessionId.isNullOrBlank()) {
                 val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
                 if (sUuid != null) {
-                    com.obsidianscout.db.UserSessions.selectAll().where { (com.obsidianscout.db.UserSessions.id eq sUuid) and (com.obsidianscout.db.UserSessions.userId eq userUuid) }.any()
+                    val now = Instant.now()
+                    com.obsidianscout.db.UserSessions.selectAll().where {
+                        (com.obsidianscout.db.UserSessions.id eq sUuid) and
+                        (com.obsidianscout.db.UserSessions.userId eq userUuid) and
+                        (com.obsidianscout.db.UserSessions.expiresAt.isNull() or (com.obsidianscout.db.UserSessions.expiresAt greater now))
+                    }.any()
                 } else false
             } else {
                 true
@@ -1103,12 +1110,18 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
                     ?: call.request.local.remoteHost
                 val userAgent = call.request.headers["User-Agent"] ?: ""
+                val deviceId = call.request.headers["X-Device-Id"]
+                val deviceName = call.request.headers["X-Device-Name"]
+                val sessionExpiresAt = Instant.now().plus(7, java.time.temporal.ChronoUnit.DAYS)
                 val userUuid = UUID.fromString(user.id)
                 val sessionUuid = AuthService.createSession(
                     userId = userUuid,
                     clientType = "mobile",
                     userAgent = userAgent,
-                    ipAddress = ipAddress
+                    ipAddress = ipAddress,
+                    customDeviceName = deviceName,
+                    expiresAt = sessionExpiresAt,
+                    deviceId = deviceId
                 )
 
                 val session = UserSession(
@@ -1121,7 +1134,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     sessionId = sessionUuid.toString()
                 )
 
-                val expiresAt = Date(System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000)
+                val expiresAt = Date(sessionExpiresAt.toEpochMilli())
                 val token = JwtHelper.generateToken(session, secret, expiresAt, sessionUuid.toString())
 
                 call.respond(
@@ -1162,12 +1175,18 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
                     ?: call.request.local.remoteHost
                 val userAgent = call.request.headers["User-Agent"] ?: ""
+                val deviceId = call.request.headers["X-Device-Id"]
+                val deviceName = call.request.headers["X-Device-Name"]
+                val sessionExpiresAt = Instant.now().plus(7, java.time.temporal.ChronoUnit.DAYS)
                 val userUuid = UUID.fromString(user.id)
                 val sessionUuid = AuthService.createSession(
                     userId = userUuid,
                     clientType = "mobile",
                     userAgent = userAgent,
-                    ipAddress = ipAddress
+                    ipAddress = ipAddress,
+                    customDeviceName = deviceName,
+                    expiresAt = sessionExpiresAt,
+                    deviceId = deviceId
                 )
 
                 val session = UserSession(
@@ -1180,7 +1199,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     sessionId = sessionUuid.toString()
                 )
 
-                val expiresAt = Date(System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000)
+                val expiresAt = Date(sessionExpiresAt.toEpochMilli())
                 val token = JwtHelper.generateToken(session, secret, expiresAt, sessionUuid.toString())
 
                 call.respond(

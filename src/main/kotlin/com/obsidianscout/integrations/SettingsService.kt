@@ -62,21 +62,21 @@ data class LoadBalancerSettings(
 )
 
 val DEFAULT_SCOUT_PAGES = listOf(
-    "dashboard", "chat", "scout", "pit-scout", "qual-scout", "qr-scanner", "contact"
+    "dashboard", "chat", "scout", "pit-scout", "qual-scout", "qr-scanner", "contact", "scout-history"
 )
 
 val DEFAULT_ANALYTICS_PAGES = listOf(
     "dashboard", "events", "scout", "pit-scout", "qual-scout", "qr-scanner",
-    "all-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
+    "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "teams", "rankings", "qual-rankings", "matches", "predictor",
-    "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact"
+    "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact", "scout-history"
 )
 
 val DEFAULT_ADMIN_PAGES = listOf(
     "dashboard", "admin-settings", "users", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
-    "all-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
+    "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "events", "teams", "rankings", "qual-rankings", "matches", "predictor",
-    "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact"
+    "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact", "scout-history"
 )
 
 fun canonicalTbaEventCode(code: String): String = code.trim().lowercase().removePrefix("frc")

@@ -358,6 +358,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const listEl = document.getElementById("personal-sessions-list");
         const loadingEl = document.getElementById("personal-sessions-loading");
         const revokeOthersBtn = document.getElementById("revoke-other-sessions-btn");
+        const cleanupDuplicatesBtn = document.getElementById("cleanup-duplicate-sessions-btn");
         if (!listEl) return;
 
         function formatRelativeTime(dateStr) {
@@ -485,6 +486,30 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (loadingEl) loadingEl.style.display = "none";
                 listEl.innerHTML = `<div style="padding: 12px; color: var(--danger, #ef4444); font-size: 14px;">Failed to load active sessions: ${err.message || "Network error"}</div>`;
             }
+        }
+
+        if (cleanupDuplicatesBtn) {
+            cleanupDuplicatesBtn.addEventListener("click", async () => {
+                try {
+                    cleanupDuplicatesBtn.disabled = true;
+                    cleanupDuplicatesBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Cleaning...`;
+                    const res = await Obsidianscout.request("/api/user/sessions?duplicatesOnly=true", {
+                        method: "DELETE"
+                    });
+                    const count = (res && res.revokedCount !== undefined) ? res.revokedCount : 0;
+                    if (count > 0) {
+                        Obsidianscout.showToast(`Cleaned up ${count} duplicate or stale device session(s)`, "success");
+                    } else {
+                        Obsidianscout.showToast("No duplicate sessions found. Everything is tidy!", "info");
+                    }
+                    await loadSessions();
+                } catch (err) {
+                    Obsidianscout.showToast(err.message || "Failed to clean duplicate sessions", "error");
+                } finally {
+                    cleanupDuplicatesBtn.disabled = false;
+                    cleanupDuplicatesBtn.innerHTML = `<i class="fa-solid fa-broom"></i> Clean Up Duplicates`;
+                }
+            });
         }
 
         if (revokeOthersBtn) {

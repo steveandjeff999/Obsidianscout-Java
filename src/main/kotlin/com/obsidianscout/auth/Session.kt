@@ -25,6 +25,10 @@ import java.util.UUID
 
 import com.obsidianscout.db.UserSessions
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.or
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
+import java.time.Instant
 
 @Serializable
 data class UserSession(
@@ -114,7 +118,12 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                 val sessionOk = if (!session.sessionId.isNullOrBlank()) {
                     val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
                     if (sUuid != null) {
-                        UserSessions.selectAll().where { (UserSessions.id eq sUuid) and (UserSessions.userId eq userUuid) }.any()
+                        val now = Instant.now()
+                        UserSessions.selectAll().where {
+                            (UserSessions.id eq sUuid) and
+                            (UserSessions.userId eq userUuid) and
+                            (UserSessions.expiresAt.isNull() or (UserSessions.expiresAt greater now))
+                        }.any()
                     } else false
                 } else {
                     true

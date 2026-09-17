@@ -21,6 +21,12 @@ import org.jetbrains.exposed.sql.StdOutSqlLogger
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
+import org.jetbrains.exposed.sql.or
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNotNull
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import com.obsidianscout.db.AppSettings
 import com.obsidianscout.integrations.ApiSettings
 import com.obsidianscout.config.JsonSupport
@@ -31,6 +37,7 @@ import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.UserSessions
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -72,7 +79,9 @@ data class UserSessionInfo(
     val ipAddress: String,
     val createdAt: String,
     val lastActiveAt: String,
-    val isCurrent: Boolean
+    val isCurrent: Boolean,
+    val deviceId: String? = null,
+    val expiresAt: String? = null
 )
 
 object AuthService {
@@ -580,7 +589,8 @@ object AuthService {
         userAgent: String = "",
         ipAddress: String = "",
         customDeviceName: String? = null,
-        expiresAt: Instant? = null
+        expiresAt: Instant? = null,
+        deviceId: String? = null
     ): UUID {
         val device = customDeviceName?.takeIf { it.isNotBlank() } ?: parseDeviceName(userAgent, clientType)
         val now = Instant.now()
@@ -590,6 +600,28 @@ object AuthService {
         }
         return try {
             transaction {
+                // 1. Clean up already expired sessions for this user
+                UserSessions.deleteWhere {
+                    (UserSessions.userId eq userId) and (UserSessions.expiresAt.isNotNull() and (UserSessions.expiresAt lessEq now))
+                }
+
+                // 2. Deduplicate / supersede previous session for this physical device
+                val cleanDeviceId = deviceId?.trim()?.takeIf { it.isNotBlank() }
+                if (cleanDeviceId != null) {
+                    UserSessions.deleteWhere {
+                        (UserSessions.userId eq userId) and (UserSessions.deviceId eq cleanDeviceId)
+                    }
+                } else if (ipAddress.isNotBlank()) {
+                    // Fallback heuristic: supersede previous session with same clientType, deviceName, and IP
+                    UserSessions.deleteWhere {
+                        (UserSessions.userId eq userId) and
+                        (UserSessions.clientType eq clientType) and
+                        (UserSessions.deviceName eq device) and
+                        (UserSessions.ipAddress eq ipAddress)
+                    }
+                }
+
+                // 3. Insert new active session
                 UserSessions.insertAndGetId {
                     it[UserSessions.id] = generatedId
                     it[UserSessions.userId] = userId
@@ -597,6 +629,7 @@ object AuthService {
                     it[UserSessions.deviceName] = device
                     it[UserSessions.userAgent] = userAgent
                     it[UserSessions.ipAddress] = ipAddress
+                    it[UserSessions.deviceId] = cleanDeviceId
                     it[UserSessions.createdAt] = now
                     it[UserSessions.lastActiveAt] = now
                     it[UserSessions.expiresAt] = expiresAt
@@ -608,22 +641,79 @@ object AuthService {
     }
 
     fun listSessions(userId: UUID, currentSessionId: String?): List<UserSessionInfo> {
+        val now = Instant.now()
         return readTransaction {
-            UserSessions.selectAll().where { UserSessions.userId eq userId }
-                .orderBy(UserSessions.lastActiveAt to SortOrder.DESC)
-                .map { row ->
-                    val sId = row[UserSessions.id].value.toString()
-                    UserSessionInfo(
-                        id = sId,
-                        clientType = row[UserSessions.clientType],
-                        deviceName = row[UserSessions.deviceName],
-                        userAgent = row[UserSessions.userAgent],
-                        ipAddress = row[UserSessions.ipAddress],
-                        createdAt = row[UserSessions.createdAt].toString(),
-                        lastActiveAt = row[UserSessions.lastActiveAt].toString(),
-                        isCurrent = (sId == currentSessionId)
+            val rows = UserSessions.selectAll().where {
+                (UserSessions.userId eq userId) and
+                (UserSessions.expiresAt.isNull() or (UserSessions.expiresAt greater now))
+            }
+            .orderBy(UserSessions.lastActiveAt to SortOrder.DESC)
+            .toList()
+
+            val seenKeys = mutableSetOf<String>()
+            val result = mutableListOf<UserSessionInfo>()
+
+            for (row in rows) {
+                val sId = row[UserSessions.id].value.toString()
+                val isCurr = (sId == currentSessionId)
+                val dId = row[UserSessions.deviceId]?.trim()?.takeIf { it.isNotBlank() }
+                val devKey = when {
+                    dId != null -> "id:$dId"
+                    else -> "legacy:${row[UserSessions.clientType]}:${row[UserSessions.deviceName]}:${row[UserSessions.ipAddress]}"
+                }
+
+                if (isCurr || seenKeys.add(devKey)) {
+                    if (isCurr) seenKeys.add(devKey)
+                    result.add(
+                        UserSessionInfo(
+                            id = sId,
+                            clientType = row[UserSessions.clientType],
+                            deviceName = row[UserSessions.deviceName],
+                            userAgent = row[UserSessions.userAgent],
+                            ipAddress = row[UserSessions.ipAddress],
+                            createdAt = row[UserSessions.createdAt].toString(),
+                            lastActiveAt = row[UserSessions.lastActiveAt].toString(),
+                            isCurrent = isCurr,
+                            deviceId = dId,
+                            expiresAt = row[UserSessions.expiresAt]?.toString()
+                        )
                     )
                 }
+            }
+            result
+        }
+    }
+
+    fun cleanDuplicateSessions(userId: UUID): Int {
+        val now = Instant.now()
+        return transaction {
+            var deleted = UserSessions.deleteWhere {
+                (UserSessions.userId eq userId) and (UserSessions.expiresAt.isNotNull() and (UserSessions.expiresAt lessEq now))
+            }
+
+            val rows = UserSessions.selectAll().where { UserSessions.userId eq userId }
+                .orderBy(UserSessions.lastActiveAt to SortOrder.DESC)
+                .toList()
+
+            val seenKeys = mutableSetOf<String>()
+            val toDelete = mutableListOf<UUID>()
+
+            for (row in rows) {
+                val sUuid = row[UserSessions.id].value
+                val dId = row[UserSessions.deviceId]?.trim()?.takeIf { it.isNotBlank() }
+                val key = when {
+                    dId != null -> "id:$dId"
+                    else -> "legacy:${row[UserSessions.clientType]}:${row[UserSessions.deviceName]}:${row[UserSessions.ipAddress]}"
+                }
+                if (!seenKeys.add(key)) {
+                    toDelete.add(sUuid)
+                }
+            }
+
+            if (toDelete.isNotEmpty()) {
+                deleted += UserSessions.deleteWhere { UserSessions.id inList toDelete }
+            }
+            deleted
         }
     }
 
@@ -670,8 +760,25 @@ object AuthService {
                     if (com.obsidianscout.db.DatabaseFactory.isPostgresCompatible) {
                         exec("SET statement_timeout = '1500ms';")
                     }
-                    UserSessions.update({ UserSessions.id eq sessionUuid }) {
-                        it[lastActiveAt] = Instant.ofEpochMilli(nowMs)
+                    val row = UserSessions.selectAll().where { UserSessions.id eq sessionUuid }.firstOrNull()
+                    if (row != null) {
+                        val currentExpires = row[UserSessions.expiresAt]
+                        val nowInstant = Instant.ofEpochMilli(nowMs)
+                        val newExpires = if (currentExpires != null) {
+                            val durationHours = java.time.Duration.between(row[UserSessions.createdAt], currentExpires).toHours()
+                            if (durationHours > 48) {
+                                nowInstant.plus(30, ChronoUnit.DAYS)
+                            } else {
+                                nowInstant.plus(12, ChronoUnit.HOURS)
+                            }
+                        } else null
+
+                        UserSessions.update({ UserSessions.id eq sessionUuid }) {
+                            it[lastActiveAt] = nowInstant
+                            if (newExpires != null) {
+                                it[expiresAt] = newExpires
+                            }
+                        }
                     }
                 }
             } catch (e: Throwable) {

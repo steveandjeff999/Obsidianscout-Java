@@ -37,6 +37,7 @@ import org.jetbrains.exposed.sql.and
 
 import org.jetbrains.exposed.sql.lowerCase
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 import org.jetbrains.exposed.dao.id.EntityID
 import com.obsidianscout.config.ConfigService
@@ -182,11 +183,21 @@ fun Application.configureRoutes() {
                         ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
                         ?: call.request.local.remoteHost
                     val userAgent = call.request.headers["User-Agent"] ?: ""
+                    val deviceId = call.request.headers["X-Device-Id"]
+                    val deviceName = call.request.headers["X-Device-Name"]
+                    val sessionExpiresAt = if (request.keepMeLoggedIn) {
+                        Instant.now().plus(30, ChronoUnit.DAYS)
+                    } else {
+                        Instant.now().plus(12, ChronoUnit.HOURS)
+                    }
                     val sessionUuid = AuthService.createSession(
                         userId = userUuid,
                         clientType = "web",
                         userAgent = userAgent,
-                        ipAddress = ipAddress
+                        ipAddress = ipAddress,
+                        customDeviceName = deviceName,
+                        expiresAt = sessionExpiresAt,
+                        deviceId = deviceId
                     )
 
                     val session = UserSession(
@@ -238,11 +249,21 @@ fun Application.configureRoutes() {
                         ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
                         ?: call.request.local.remoteHost
                     val userAgent = call.request.headers["User-Agent"] ?: ""
+                    val deviceId = call.request.headers["X-Device-Id"]
+                    val deviceName = call.request.headers["X-Device-Name"]
+                    val sessionExpiresAt = if (request.keepMeLoggedIn) {
+                        Instant.now().plus(30, ChronoUnit.DAYS)
+                    } else {
+                        Instant.now().plus(12, ChronoUnit.HOURS)
+                    }
                     val sessionUuid = AuthService.createSession(
                         userId = userUuid,
                         clientType = "web",
                         userAgent = userAgent,
-                        ipAddress = ipAddress
+                        ipAddress = ipAddress,
+                        customDeviceName = deviceName,
+                        expiresAt = sessionExpiresAt,
+                        deviceId = deviceId
                     )
 
                     val session = UserSession(
@@ -400,11 +421,21 @@ fun Application.configureRoutes() {
                             ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
                             ?: call.request.local.remoteHost
                         val userAgent = call.request.headers["User-Agent"] ?: ""
+                        val deviceId = call.request.headers["X-Device-Id"]
+                        val deviceName = call.request.headers["X-Device-Name"]
+                        val sessionExpiresAt = if (request.keepMeLoggedIn) {
+                            Instant.now().plus(30, ChronoUnit.DAYS)
+                        } else {
+                            Instant.now().plus(12, ChronoUnit.HOURS)
+                        }
                         val sessionUuid = AuthService.createSession(
                             userId = userUuid,
                             clientType = "web",
                             userAgent = userAgent,
-                            ipAddress = ipAddress
+                            ipAddress = ipAddress,
+                            customDeviceName = deviceName,
+                            expiresAt = sessionExpiresAt,
+                            deviceId = deviceId
                         )
 
                         val session = UserSession(
@@ -2261,6 +2292,12 @@ fun Application.configureRoutes() {
             delete("/user/sessions") {
                 val session = call.requireSession()
                 val userUuid = UUID.fromString(session.userId)
+                val duplicatesOnly = call.request.queryParameters["duplicatesOnly"]?.toBooleanStrictOrNull() ?: false
+                if (duplicatesOnly) {
+                    val count = AuthService.cleanDuplicateSessions(userUuid)
+                    call.respond(RevokeSessionResponse(success = true, revokedCount = count, message = "Cleaned up $count duplicate or stale device session(s)"))
+                    return@delete
+                }
                 val othersOnly = call.request.queryParameters["othersOnly"]?.toBooleanStrictOrNull() ?: false
                 if (othersOnly) {
                     val count = AuthService.revokeAllOtherSessions(userUuid, session.sessionId)

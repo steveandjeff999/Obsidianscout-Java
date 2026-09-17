@@ -195,8 +195,10 @@ export function adjustNavForRole(user) {
                 if (allowedPages && Array.isArray(allowedPages)) {
                     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                         const page = link.dataset.page;
-                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "cache-manager", "prescout", "prescout-scout", "prescout-pit", "prescout-qual", "reset-password", "docs", "contact", "config-migration", "schema-history"];
-                        if (!bypassPages.includes(page) && !superAdminPages.includes(page) && !allowedPages.includes(page)) {
+                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history"];
+                        const isAllowed = allowedPages.includes(page) ||
+                            (page === "cache-manager" && (allowedPages.includes("cache-manager") || allowedPages.includes("scout-history") || allowedPages.includes("history")));
+                        if (!bypassPages.includes(page) && !superAdminPages.includes(page) && !isAllowed) {
                             link.style.display = "none";
                         }
                     });
@@ -252,6 +254,9 @@ export function isPageAccessible(page, role) {
             const settings = parsed.settings || parsed;
             const allowedPages = role === "SCOUT" ? settings.scoutPages : (role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
             if (allowedPages && Array.isArray(allowedPages)) {
+                if (page === "cache-manager" && (allowedPages.includes("cache-manager") || allowedPages.includes("scout-history") || allowedPages.includes("history"))) {
+                    return true;
+                }
                 return allowedPages.includes(page);
             }
         }

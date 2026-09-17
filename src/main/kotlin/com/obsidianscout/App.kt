@@ -540,6 +540,7 @@ fun Application.module(appConfig: AppConfig) {
 
                 SyncScheduler.start()
                 com.obsidianscout.scouting.DeduplicationScheduler.start()
+                com.obsidianscout.auth.SessionCleanupScheduler.start()
                 com.obsidianscout.admin.CloudflaredService.initOnStartup()
                 com.obsidianscout.admin.NodeMonitoringService.start()
                 com.obsidianscout.admin.PeerLoadRouter.start(appConfig)
@@ -566,6 +567,7 @@ fun Application.module(appConfig: AppConfig) {
     }
 
     environment.monitor.subscribe(ApplicationStopped) {
+        com.obsidianscout.auth.SessionCleanupScheduler.stop()
         com.obsidianscout.db.AutoBackupScheduler.stop()
         com.obsidianscout.db.QuorumFallbackStore.stop()
         com.obsidianscout.admin.PeerLoadRouter.stop()
