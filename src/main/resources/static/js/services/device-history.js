@@ -10,11 +10,40 @@ import { showToast } from '../components/toast.js';
 
 export const HISTORY_STORAGE_KEY = "obsidianscout_device_history";
 export const MAX_HISTORY_ITEMS = 1500;
+export const RETENTION_DAYS = 30;
+export const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * Get active user credentials from localStorage cache or runtime.
+ * @returns {{ username: string|null, id: string|null }}
+ */
+export function getActiveAccountInfo() {
+    try {
+        if (typeof window !== 'undefined' && window.currentUser && window.currentUser.username) {
+            return {
+                username: window.currentUser.username,
+                id: window.currentUser.id || null
+            };
+        }
+        const cachedRaw = safeGetItem("cache:/api/auth/me");
+        if (cachedRaw) {
+            const parsed = JSON.parse(cachedRaw);
+            const user = parsed.user || parsed;
+            if (user && user.username) {
+                return {
+                    username: user.username,
+                    id: user.id || user.userId || null
+                };
+            }
+        }
+    } catch (_) {}
+    return { username: null, id: null };
+}
 
 /**
  * Record a transaction in local device history.
  * @param {Object} options
- * @param {'upload'|'offline_save'|'qr_generated'|'json_export'} options.action
+ * @param {'upload'|'offline_save'|'qr_generated'|'json_export'|'qr_scanned'} options.action
  * @param {string} [options.actionLabel]
  * @param {string} options.formType - e.g. "match-scouting", "pit-scouting", etc.
  * @param {string} [options.formLabel]
@@ -23,6 +52,8 @@ export const MAX_HISTORY_ITEMS = 1500;
  * @param {string|number} [options.matchKey]
  * @param {number} [options.matchNumber]
  * @param {string} [options.scoutName]
+ * @param {string} [options.scoutedBy] - Account username that scouted this
+ * @param {string} [options.scoutedById] - Account ID that scouted this
  * @param {Object} options.payload - Full scouting form payload
  * @param {boolean} [options.serverSynced=false] - True if confirmed saved to server
  * @param {string|null} [options.syncedAt=null]
@@ -38,17 +69,29 @@ export function recordDeviceHistory({
     matchKey = null,
     matchNumber = null,
     scoutName = null,
+    scoutedBy = null,
+    scoutedById = null,
     payload = {},
     serverSynced = false,
     syncedAt = null
 }) {
     try {
-        const history = getDeviceHistory();
+        const history = getDeviceHistory({ pruneExpired: true });
         const now = new Date().toISOString();
 
         // Standardize labels if not explicitly supplied
         const resolvedActionLabel = actionLabel || getActionLabel(action);
         const resolvedFormLabel = formLabel || getFormLabel(formType);
+
+        const activeAccount = getActiveAccountInfo();
+        const resolvedScoutedBy = scoutedBy ||
+            activeAccount.username ||
+            scoutName ||
+            payload?.scoutedBy ||
+            payload?.scoutName ||
+            payload?.username ||
+            null;
+        const resolvedScoutedById = scoutedById || activeAccount.id || payload?.scoutedById || null;
 
         const newEntry = {
             id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -62,6 +105,8 @@ export function recordDeviceHistory({
             matchKey: matchKey ? String(matchKey).trim() : null,
             matchNumber: matchNumber !== null && matchNumber !== undefined ? Number(matchNumber) : null,
             scoutName: scoutName || null,
+            scoutedBy: resolvedScoutedBy,
+            scoutedById: resolvedScoutedById,
             payload: JSON.parse(JSON.stringify(payload || {})),
             serverSynced: Boolean(serverSynced),
             syncedAt: serverSynced ? (syncedAt || now) : null
@@ -86,18 +131,79 @@ export function recordDeviceHistory({
 
 /**
  * Retrieve all history entries from localStorage.
+ * Automatically purges entries older than RETENTION_DAYS (30 days).
+ * @param {Object} [options]
+ * @param {boolean} [options.pruneExpired=true]
  * @returns {Array<Object>}
  */
-export function getDeviceHistory() {
+export function getDeviceHistory({ pruneExpired = true } = {}) {
     try {
         const raw = safeGetItem(HISTORY_STORAGE_KEY);
         if (!raw) return [];
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        const entries = Array.isArray(parsed) ? parsed : [];
+
+        if (pruneExpired) {
+            const now = Date.now();
+            const valid = entries.filter(e => {
+                if (!e || !e.timestamp) return false;
+                const ts = new Date(e.timestamp).getTime();
+                return !isNaN(ts) && (now - ts) <= RETENTION_MS;
+            });
+
+            if (valid.length !== entries.length) {
+                saveDeviceHistory(valid);
+            }
+            return valid;
+        }
+
+        return entries;
     } catch (e) {
         console.warn("[DeviceHistory] Failed to parse device history:", e);
         return [];
     }
+}
+
+/**
+ * Retrieve device history scoped strictly to a user account.
+ * Hides entries if the user is not logged in.
+ * @param {string|null} accountUsername
+ * @param {string|null} [accountId]
+ * @returns {Array<Object>}
+ */
+export function getDeviceHistoryForAccount(accountUsername, accountId = null) {
+    if (!accountUsername || !String(accountUsername).trim()) {
+        return [];
+    }
+    const targetUser = String(accountUsername).trim().toLowerCase();
+    const history = getDeviceHistory({ pruneExpired: true });
+
+    return history.filter(entry => {
+        if (entry.scoutedBy && String(entry.scoutedBy).trim().toLowerCase() === targetUser) {
+            return true;
+        }
+        if (accountId && entry.scoutedById && String(entry.scoutedById) === String(accountId)) {
+            return true;
+        }
+        if (entry.scoutName && String(entry.scoutName).trim().toLowerCase() === targetUser) {
+            return true;
+        }
+        const payloadUser = (entry.payload?.scoutedBy ||
+            entry.payload?.scoutName ||
+            entry.payload?.scout_name ||
+            entry.payload?.username);
+        if (payloadUser && String(payloadUser).trim().toLowerCase() === targetUser) {
+            return true;
+        }
+        return false;
+    });
+}
+
+/**
+ * Proactively purge expired entries (>30 days).
+ */
+export function purgeExpiredHistory() {
+    return getDeviceHistory({ pruneExpired: true });
 }
 
 /**
@@ -189,10 +295,30 @@ export function deleteDeviceHistoryEntry(id) {
 }
 
 /**
- * Clear all history entries.
+ * Clear history entries. If accountUsername is provided, only removes
+ * entries scouted by that account, preserving other users' records.
+ * @param {string} [accountUsername]
  */
-export function clearDeviceHistory() {
-    saveDeviceHistory([]);
+export function clearDeviceHistory(accountUsername) {
+    if (accountUsername && String(accountUsername).trim()) {
+        const targetUser = String(accountUsername).trim().toLowerCase();
+        const history = getDeviceHistory({ pruneExpired: true });
+        const kept = history.filter(entry => {
+            const matchScoutedBy = entry.scoutedBy && String(entry.scoutedBy).trim().toLowerCase() === targetUser;
+            const matchScoutName = entry.scoutName && String(entry.scoutName).trim().toLowerCase() === targetUser;
+            const matchPayload = entry.payload && (
+                entry.payload.scoutedBy ||
+                entry.payload.scoutName ||
+                entry.payload.scout_name ||
+                entry.payload.username
+            );
+            const matchPayloadUser = matchPayload && String(matchPayload).trim().toLowerCase() === targetUser;
+            return !(matchScoutedBy || matchScoutName || matchPayloadUser);
+        });
+        saveDeviceHistory(kept);
+    } else {
+        saveDeviceHistory([]);
+    }
     window.dispatchEvent(new CustomEvent("obsidianscout:device-history-changed"));
 }
 

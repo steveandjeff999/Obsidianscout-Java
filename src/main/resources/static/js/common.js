@@ -154,13 +154,17 @@ import {
 import {
     recordDeviceHistory,
     getDeviceHistory,
+    getDeviceHistoryForAccount,
+    purgeExpiredHistory,
+    getActiveAccountInfo,
     markEntryAsSynced,
     markMatchingEntryAsSynced,
     deleteDeviceHistoryEntry,
     clearDeviceHistory,
     exportDeviceHistory,
     importDeviceHistory,
-    HISTORY_STORAGE_KEY
+    HISTORY_STORAGE_KEY,
+    RETENTION_DAYS
 } from './services/device-history.js';
 
 // 5. Utilities Layer
@@ -262,13 +266,17 @@ window.Obsidianscout = {
     loadAndRenderBanners,
     recordDeviceHistory,
     getDeviceHistory,
+    getDeviceHistoryForAccount,
+    purgeExpiredHistory,
+    getActiveAccountInfo,
     markEntryAsSynced,
     markMatchingEntryAsSynced,
     deleteDeviceHistoryEntry,
     clearDeviceHistory,
     exportDeviceHistory,
     importDeviceHistory,
-    HISTORY_STORAGE_KEY
+    HISTORY_STORAGE_KEY,
+    RETENTION_DAYS
 };
 
 // Re-export for ES module consumers
@@ -335,7 +343,20 @@ export {
     purgeScoutingCache,
     isScoutingDataPath,
     canRoleCacheScouting,
-    loadAndRenderBanners
+    loadAndRenderBanners,
+    recordDeviceHistory,
+    getDeviceHistory,
+    getDeviceHistoryForAccount,
+    purgeExpiredHistory,
+    getActiveAccountInfo,
+    markEntryAsSynced,
+    markMatchingEntryAsSynced,
+    deleteDeviceHistoryEntry,
+    clearDeviceHistory,
+    exportDeviceHistory,
+    importDeviceHistory,
+    HISTORY_STORAGE_KEY,
+    RETENTION_DAYS
 };
 
 // ==========================================================================

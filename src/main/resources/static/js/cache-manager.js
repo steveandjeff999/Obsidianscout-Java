@@ -437,7 +437,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const historyImportInput = document.getElementById("history-import-file");
 
     function updateHistoryStats() {
-        const history = Obsidianscout.getDeviceHistory();
+        const history = Obsidianscout.getDeviceHistoryForAccount(me?.username, me?.id);
         const total = history.length;
         const unsynced = history.filter(e => !e.serverSynced).length;
         const synced = history.filter(e => e.serverSynced).length;
@@ -464,7 +464,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function loadAndRenderHistoryEntries() {
         updateHistoryStats();
 
-        const history = Obsidianscout.getDeviceHistory();
+        const history = Obsidianscout.getDeviceHistoryForAccount(me?.username, me?.id);
 
         // Apply filters
         const statusVal = histFilterStatus.value;
@@ -497,6 +497,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         histEntriesBody.innerHTML = "";
 
         if (filtered.length === 0) {
+            histEmptyNotice.textContent = me?.username
+                ? `No local scouting history found for account "${me.username}". Local records are private and auto-delete after 30 days.`
+                : "Please log in to view local scouting history. Local records are private to each account.";
             histEmptyNotice.classList.remove("hidden");
             histTableContainer.classList.add("hidden");
             return;
@@ -678,7 +681,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     btnExportHistory.addEventListener("click", () => {
-        Obsidianscout.exportDeviceHistory();
+        const history = Obsidianscout.getDeviceHistoryForAccount(me?.username, me?.id);
+        if (history.length === 0) {
+            Obsidianscout.showToast("No history entries to export for this account", "info");
+            return;
+        }
+        const dateStr = new Date().toISOString().slice(0, 10);
+        Obsidianscout.downloadJson(history, `obsidianscout_${me?.username || 'user'}_history_backup_${dateStr}.json`);
     });
 
     btnImportHistory.addEventListener("click", () => {
@@ -706,10 +715,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     btnClearHistory.addEventListener("click", () => {
-        if (confirm("WARNING: Are you sure you want to delete ALL local device history records? This action cannot be undone.")) {
-            Obsidianscout.clearDeviceHistory();
+        const userHistory = Obsidianscout.getDeviceHistoryForAccount(me?.username, me?.id);
+        if (confirm(`WARNING: Are you sure you want to delete all ${userHistory.length} local history records for account "${me?.username || 'your account'}"? This action cannot be undone.`)) {
+            Obsidianscout.clearDeviceHistory(me?.username);
             loadAndRenderHistoryEntries();
-            Obsidianscout.showToast("Device history cleared", "success");
+            Obsidianscout.showToast("Local device history cleared", "success");
         }
     });
 
