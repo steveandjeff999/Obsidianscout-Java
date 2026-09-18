@@ -75,18 +75,51 @@ async function loadScoutPageData(me) {
 
         entryCache = await loadEntryCache();
 
+        let lastSelectedTeam = teamSelect.value || "";
+        let lastSelectedMatch = matchSelect.value || "";
+
+        function populateAllTeamsIfBothSelected() {
+            if (teamSelect.value && matchSelect.value) {
+                const currentVal = teamSelect.value;
+                updateTeamOptions(teamSelect, teams, "", matches, currentVal);
+            }
+        }
+
+        function populateAllMatchesIfBothSelected() {
+            if (teamSelect.value && matchSelect.value) {
+                const currentVal = matchSelect.value;
+                updateMatchOptions(matchSelect, matches, settings.timezone, "", currentVal);
+            }
+        }
+
+        teamSelect.addEventListener("focus", populateAllTeamsIfBothSelected);
+        teamSelect.addEventListener("mousedown", populateAllTeamsIfBothSelected);
+
         teamSelect.addEventListener("change", async () => {
+            const wasBothSelected = Boolean(lastSelectedTeam && lastSelectedMatch);
             const chosenTeam = teamSelect.value;
+            if (wasBothSelected && chosenTeam) {
+                matchSelect.value = "";
+            }
             const currentMatch = matchSelect.value;
             updateMatchOptions(matchSelect, matches, settings.timezone, chosenTeam, currentMatch);
             if (!matchSelect.value) {
                 updateTeamOptions(teamSelect, teams, "", matches, chosenTeam);
             }
+            lastSelectedTeam = teamSelect.value;
+            lastSelectedMatch = matchSelect.value;
             await handleSelectionChange();
         });
 
+        matchSelect.addEventListener("focus", populateAllMatchesIfBothSelected);
+        matchSelect.addEventListener("mousedown", populateAllMatchesIfBothSelected);
+
         matchSelect.addEventListener("change", async () => {
+            const wasBothSelected = Boolean(lastSelectedTeam && lastSelectedMatch);
             const chosenMatch = matchSelect.value;
+            if (wasBothSelected && chosenMatch) {
+                teamSelect.value = "";
+            }
             const currentTeam = teamSelect.value;
             updateTeamOptions(teamSelect, teams, chosenMatch, matches, currentTeam);
             const activeTeam = teamSelect.value;
@@ -95,6 +128,8 @@ async function loadScoutPageData(me) {
             } else {
                 updateMatchOptions(matchSelect, matches, settings.timezone, activeTeam, chosenMatch);
             }
+            lastSelectedTeam = teamSelect.value;
+            lastSelectedMatch = matchSelect.value;
             await handleSelectionChange();
         });
 

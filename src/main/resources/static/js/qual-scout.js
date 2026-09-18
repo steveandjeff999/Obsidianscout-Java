@@ -255,6 +255,9 @@ async function loadQualScoutPageData(me) {
             return entries;
         }
 
+        let lastSelectedTeam = teamSelect ? (teamSelect.value || "") : "";
+        let lastSelectedMatch = matchSelect ? (matchSelect.value || "") : "";
+
         if (scopeButtons && scopeButtons.length > 0) {
             scopeButtons.forEach(btn => {
                 btn.addEventListener("click", async () => {
@@ -274,30 +277,63 @@ async function loadQualScoutPageData(me) {
                         renderSingleTeamView();
                         updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value, matchSelect.value);
                         updateTeamOptions(teamSelect, teams, matchSelect.value, matches, teamSelect.value);
+                        lastSelectedTeam = teamSelect.value;
+                        lastSelectedMatch = matchSelect.value;
                         await handleSelectionChange();
                     } else {
                         if (teamFieldContainer) teamFieldContainer.classList.add("hidden");
                         const currentMatchVal = matchSelect.value;
                         updateMatchOptions(matchSelect, matches, settings.timezone, null, currentMatchVal);
+                        lastSelectedMatch = currentMatchVal;
                         await refreshAllianceState();
                     }
                 });
             });
         }
 
+        function populateAllTeamsIfBothSelected() {
+            if (currentScope === "team" && teamSelect.value && matchSelect.value) {
+                const currentVal = teamSelect.value;
+                updateTeamOptions(teamSelect, teams, "", matches, currentVal);
+            }
+        }
+
+        function populateAllMatchesIfBothSelected() {
+            if (currentScope === "team" && teamSelect.value && matchSelect.value) {
+                const currentVal = matchSelect.value;
+                updateMatchOptions(matchSelect, matches, settings.timezone, "", currentVal);
+            }
+        }
+
+        teamSelect.addEventListener("focus", populateAllTeamsIfBothSelected);
+        teamSelect.addEventListener("mousedown", populateAllTeamsIfBothSelected);
+
         teamSelect.addEventListener("change", async () => {
+            const wasBothSelected = Boolean(lastSelectedTeam && lastSelectedMatch);
             const chosenTeam = teamSelect.value;
+            if (wasBothSelected && chosenTeam) {
+                matchSelect.value = "";
+            }
             const currentMatch = matchSelect.value;
             updateMatchOptions(matchSelect, matches, settings.timezone, chosenTeam, currentMatch);
             if (!matchSelect.value) {
                 updateTeamOptions(teamSelect, teams, "", matches, chosenTeam);
             }
+            lastSelectedTeam = teamSelect.value;
+            lastSelectedMatch = matchSelect.value;
             await handleSelectionChange();
         });
 
+        matchSelect.addEventListener("focus", populateAllMatchesIfBothSelected);
+        matchSelect.addEventListener("mousedown", populateAllMatchesIfBothSelected);
+
         matchSelect.addEventListener("change", async () => {
             if (currentScope === "team") {
+                const wasBothSelected = Boolean(lastSelectedTeam && lastSelectedMatch);
                 const chosenMatch = matchSelect.value;
+                if (wasBothSelected && chosenMatch) {
+                    teamSelect.value = "";
+                }
                 const currentTeam = teamSelect.value;
                 updateTeamOptions(teamSelect, teams, chosenMatch, matches, currentTeam);
                 const activeTeam = teamSelect.value;
@@ -306,8 +342,11 @@ async function loadQualScoutPageData(me) {
                 } else {
                     updateMatchOptions(matchSelect, matches, settings.timezone, activeTeam, chosenMatch);
                 }
+                lastSelectedTeam = teamSelect.value;
+                lastSelectedMatch = matchSelect.value;
                 await handleSelectionChange();
             } else {
+                lastSelectedMatch = matchSelect.value;
                 await refreshAllianceState();
             }
         });
