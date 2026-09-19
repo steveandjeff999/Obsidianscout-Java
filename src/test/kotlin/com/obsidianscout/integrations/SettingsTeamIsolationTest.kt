@@ -125,9 +125,13 @@ class SettingsTeamIsolationTest {
         val eventsTeam2 = IntegrationService.listEvents(year = 2026, session = sessionTeam2)
         assertTrue(eventsTeam2.isEmpty(), "New team 1002 must see zero events from team 1001")
 
-        // Superadmin sees all global events
+        // Superadmin session is also scoped by team allowed keys (team 0 has 0 events)
         val eventsSuperAdmin = IntegrationService.listEvents(year = 2026, session = superAdminSession)
-        assertEquals(3, eventsSuperAdmin.size, "Superadmin sees all 3 events")
+        assertTrue(eventsSuperAdmin.isEmpty(), "Superadmin with team 0 and no scouted/active events sees 0 events")
+
+        // Without a session (internal/unauthenticated queries), all events can still be fetched
+        val eventsAll = IntegrationService.listEvents(year = 2026, session = null)
+        assertEquals(3, eventsAll.size, "Calling listEvents without session returns all 3 events")
     }
 
     @Test

@@ -581,7 +581,7 @@ object IntegrationService {
                 events
             }
 
-            if (session != null && session.role != UserRole.SUPERADMIN) {
+            if (session != null) {
                 val teamNumber = session.teamNumber
                 val partnerTeams = AllianceService.getAlliancePartnerTeams(teamNumber, session.program)
                 val visibleTeams = partnerTeams + teamNumber

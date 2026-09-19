@@ -1573,7 +1573,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             get("/events") {
                 val session = call.requireMobileSession(secret)
                 val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-                val events = IntegrationService.listEvents(year = null, cachedOnly = true, activeKey = settings.resolvedEventKey(), activeSettings = settings)
+                val events = IntegrationService.listEvents(year = null, cachedOnly = true, activeKey = settings.resolvedEventKey(), activeSettings = settings, session = session)
                 
                 val eventKeys = events.map { it.eventKey }
                 val (teamCountsMap, eventDbIdsMap) = if (eventKeys.isNotEmpty()) {
