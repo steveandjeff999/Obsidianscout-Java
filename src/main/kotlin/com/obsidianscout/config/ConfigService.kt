@@ -390,7 +390,7 @@ object ConfigService {
                 else -> configType.lowercase()
             }
             val filePath = defaultsDir.resolve("$name-$targetType.json")
-            Files.writeString(filePath, jsonText.trim() + "\n")
+            com.obsidianscout.utils.SafeFileUtils.atomicWriteString(filePath, jsonText.trim() + "\n")
 
             if (isDefault && program.equals("FRC", ignoreCase = true)) {
                 val primaryFile = when (targetType) {
@@ -401,7 +401,7 @@ object ConfigService {
                 }
                 if (primaryFile != null) {
                     primaryFile.parent?.let { if (!Files.exists(it)) Files.createDirectories(it) }
-                    Files.writeString(primaryFile, jsonText.trim() + "\n")
+                    com.obsidianscout.utils.SafeFileUtils.atomicWriteString(primaryFile, jsonText.trim() + "\n")
                 }
             }
         } catch (e: Exception) {
@@ -468,7 +468,7 @@ object ConfigService {
                 }
 
                 if (needsWrite) {
-                    Files.writeString(filePath, jsonContent.trim() + "\n")
+                    com.obsidianscout.utils.SafeFileUtils.atomicWriteString(filePath, jsonContent.trim() + "\n")
                     println("[ClusterConfigSync] Cloned/Updated default config '$fileName' to local disk.")
                 }
 
@@ -494,7 +494,7 @@ object ConfigService {
                         if (primaryNeedsWrite) {
                             try {
                                 primaryFile.parent?.let { if (!Files.exists(it)) Files.createDirectories(it) }
-                                Files.writeString(primaryFile, jsonContent.trim() + "\n")
+                                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(primaryFile, jsonContent.trim() + "\n")
                                 println("[ClusterConfigSync] Synced active default config '${primaryFile.fileName}' to local disk.")
                             } catch (e: Exception) {
                                 println("Warning: Could not sync active default config to $primaryFile: ${e.message}")

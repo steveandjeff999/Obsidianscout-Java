@@ -114,6 +114,19 @@ object DatabaseFactory {
 
     fun close() {
         try {
+            val ds = activeDataSource
+            if (ds != null && !ds.isClosed && !isPostgresCompatible) {
+                try {
+                    ds.connection.use { conn ->
+                        conn.createStatement().use { stmt ->
+                            stmt.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                        }
+                    }
+                    println("[Database] SQLite WAL checkpointed and truncated successfully.")
+                } catch (e: Exception) {
+                    println("[Database] Note on WAL checkpoint during shutdown: ${e.message}")
+                }
+            }
             activeDataSource?.close()
             activeDataSource = null
             primaryDatabase = null
@@ -1381,7 +1394,8 @@ object DatabaseFactory {
     private fun buildSqliteUrl(config: DatabaseConfig): String {
         val filePath = Paths.get(config.sqlite.file)
         filePath.parent?.let { Files.createDirectories(it) }
-        return "jdbc:sqlite:${filePath.toString()}?journal_mode=WAL&busy_timeout=5000&synchronous=NORMAL"
+        val syncMode = if (config.sqlite.synchronous.isNotBlank()) config.sqlite.synchronous.uppercase() else "FULL"
+        return "jdbc:sqlite:${filePath.toString()}?journal_mode=WAL&busy_timeout=10000&synchronous=$syncMode"
     }
 
     private fun buildPostgresOrCockroachUrl(config: DatabaseConfig): String {

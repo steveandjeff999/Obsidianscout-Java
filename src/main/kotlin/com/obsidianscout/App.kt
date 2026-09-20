@@ -82,6 +82,13 @@ fun main(args: Array<String>) {
             com.obsidianscout.utils.runResetSuperAdmin(args.drop(1).toTypedArray())
             return
         }
+        if (firstArg == "--rollback" || firstArg == "-r" || firstArg == "rollback" ||
+            firstArg == "--check-and-rollback" || firstArg == "--mark-pending" ||
+            firstArg == "--create-backup" || firstArg == "--boot-success"
+        ) {
+            com.obsidianscout.utils.UpdateRecoveryManager.handleCli(args)
+            return
+        }
     }
 
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -97,14 +104,37 @@ fun main(args: Array<String>) {
         if (isOom) {
             System.err.println("[OOM-Guard] CRITICAL: OutOfMemoryError caught in thread '${thread.name}'. Triggering automatic process exit with heap escalation...")
             try {
-                File(".oom_occurred").writeText("1")
+                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(File(".oom_occurred"), "1", createBackup = false)
             } catch (e: Exception) { /* ignore */ }
             Runtime.getRuntime().halt(137)
         } else {
             System.err.println("[UncaughtException] Thread '${thread.name}' threw exception: ${throwable.message}")
             throwable.printStackTrace()
+            try {
+                val isBoot = !com.obsidianscout.utils.UpdateRecoveryManager.isBootCompleted.get()
+                val isUpdatePending = com.obsidianscout.utils.UpdateRecoveryManager.isUpdatePending()
+                val errType = if (isBoot && isUpdatePending) "UPDATE_STARTUP_FAILURE" else if (isBoot) "STARTUP_FAILURE" else "SERVER_CRASH"
+                val sw = java.io.StringWriter()
+                throwable.printStackTrace(java.io.PrintWriter(sw))
+                com.obsidianscout.utils.UpdateRecoveryManager.recordCrashReport(
+                    com.obsidianscout.utils.PendingCrashReportDto(
+                        errorType = errType,
+                        errorMessage = "Uncaught exception in thread '${thread.name}': ${throwable.message ?: throwable.javaClass.simpleName}",
+                        errorStack = sw.toString(),
+                        failedVersion = if (isUpdatePending) com.obsidianscout.utils.UpdateRecoveryManager.getPendingVersion() else null
+                    )
+                )
+            } catch (_: Exception) {}
         }
     }
+
+    Runtime.getRuntime().addShutdownHook(Thread {
+        try {
+            println("[ObsidianScout] JVM shutdown signal received. Running cleanup and database flush...")
+            DatabaseFactory.close()
+            cockroachOrchestrator?.stop()
+        } catch (_: Exception) {}
+    })
 
     Security.addProvider(BouncyCastleProvider())
     val appConfig = AppConfigLoader.load()
@@ -534,6 +564,7 @@ fun Application.module(appConfig: AppConfig) {
                 ConfigService.startBackgroundClusterSync(30)
                 SettingsService.ensureDefaultSettings()
                 AuthService.ensureSeedSuperAdmin(appConfig.seed)
+                com.obsidianscout.admin.ServerErrorAlertService.processPendingCrashReports()
 
                 com.obsidianscout.auth.ClusterSecretService.syncSecrets(appConfig)
                 com.obsidianscout.auth.ClusterSecretService.startBackgroundSync(appConfig)

@@ -113,7 +113,8 @@ data class DatabaseConfig(
 
 @Serializable
 data class SqliteConfig(
-    val file: String = "data/obsidianscout.db"
+    val file: String = "data/obsidianscout.db",
+    val synchronous: String = "FULL" // "FULL" ensures zero committed transaction loss on abrupt power loss; "NORMAL" is slightly faster
 )
 
 @Serializable
@@ -174,9 +175,23 @@ object AppConfigLoader {
             if (!Files.exists(path)) {
                 path.parent?.let { Files.createDirectories(it) }
                 val defaultText = JsonSupport.json.encodeToString(AppConfig())
-                Files.writeString(path, defaultText)
+                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, defaultText)
             }
-            val text = Files.readString(path)
+            
+            val text = com.obsidianscout.utils.SafeFileUtils.safeReadStringWithBackupFallback(path) { str ->
+                try {
+                    JsonSupport.json.decodeFromString<AppConfig>(str)
+                    true
+                } catch (e: Exception) {
+                    false
+                }
+            } ?: run {
+                System.err.println("[AppConfigLoader] Primary config and backup corrupted or unreadable. Generating safe defaults...")
+                val defaultText = JsonSupport.json.encodeToString(AppConfig())
+                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, defaultText)
+                defaultText
+            }
+
             var config = JsonSupport.json.decodeFromString<AppConfig>(text)
 
             // If the configuration file is missing the new fields, write them back to disk.
@@ -195,7 +210,7 @@ object AppConfigLoader {
             }
             if (needsWrite) {
                 val updatedText = JsonSupport.json.encodeToString(config)
-                Files.writeString(path, updatedText)
+                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, updatedText)
             }
 
             // Auto-rotate any secrets that are still at their shipped default values.
@@ -218,7 +233,7 @@ object AppConfigLoader {
                 val current = load(path, forceReload = true)
                 val updated = current.copy(auto_backup = newConfig)
                 val updatedText = JsonSupport.json.encodeToString(updated)
-                Files.writeString(path, updatedText)
+                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, updatedText)
                 if (path == defaultPath) {
                     cachedConfig = updated
                 }
@@ -287,7 +302,7 @@ object AppConfigLoader {
         )
 
         val updatedText = JsonSupport.json.encodeToString(updated)
-        Files.writeString(path, updatedText)
+        com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, updatedText)
 
         println("[ObsidianScout] Default secrets or VAPID keys detected — auto-generated secure values and saved to ${path.toAbsolutePath()}")
 
@@ -313,7 +328,7 @@ object AppConfigLoader {
                 )
             )
             val updatedText = JsonSupport.json.encodeToString(updated)
-            Files.writeString(path, updatedText)
+            com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, updatedText)
             if (path == defaultPath) {
                 cachedConfig = updated
             }

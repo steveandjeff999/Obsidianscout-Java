@@ -203,6 +203,9 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "if exist .update_pending (\r\n" +
             "    echo [Updater] FAULTY INSTALLATION DETECTED! Server exited with code !EXIT_CODE! while update was pending testing.\r\n" +
             "    echo [Updater] Initiating automatic rollback to previous working version...\r\n" +
+            "    if exist .backup\\obsidianscout-server.jar (\r\n" +
+            "        !JAVA_EXEC! -cp .backup\\obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
+            "    )\r\n" +
             "    if exist .backup\\obsidianscout-server.jar copy /y \".backup\\obsidianscout-server.jar\" \".\" >nul\r\n" +
             "    if exist .backup\\obsidianscout-server-native* copy /y \".backup\\obsidianscout-server-native*\" \".\" >nul\r\n" +
             "    if exist .backup\\*.dll copy /y \".backup\\*.dll\" \".\" >nul 2>&1\r\n" +
@@ -365,6 +368,9 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    if [ -f .update_pending ]; then\n" +
             "        echo \"[Updater] FAULTY INSTALLATION DETECTED! Server exited with code \$EXIT_CODE while update was pending testing.\"\n" +
             "        echo \"[Updater] Initiating automatic rollback to previous working version...\"\n" +
+            "        if [ -f .backup/obsidianscout-server.jar ]; then\n" +
+            "            \"\$JAVA_EXEC\" -cp .backup/obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback \$EXIT_CODE >/dev/null 2>&1 || true\n" +
+            "        fi\n" +
             "        if [ -f .backup/obsidianscout-server.jar ]; then cp .backup/obsidianscout-server.jar ./; fi\n" +
             "        for nfile in .backup/obsidianscout-server-native*;\n" +
             "        do if [ -f \"\$nfile\" ]; then cp \"\$nfile\" ./; fi; done\n" +
@@ -731,6 +737,9 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "if exist .update_pending (\r\n" +
                 "    echo [Updater] Faulty installation detected! Server exited with code !EXIT_CODE! while update was pending testing.\r\n" +
                 "    echo [Updater] Initiating automatic rollback...\r\n" +
+                "    if exist .backup\\obsidianscout-server.jar (\r\n" +
+                "        java -cp .backup\\obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
+                "    )\r\n" +
                 "    if exist .backup\\obsidianscout-server-native-$arch (\r\n" +
                 "        copy /y \".backup\\obsidianscout-server-native-$arch\" \".\" >nul\r\n" +
                 "    ) else if exist .backup\\obsidianscout-server-native.exe (\r\n" +

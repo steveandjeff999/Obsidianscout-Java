@@ -310,7 +310,8 @@ object GistUpdateService {
         mergeConfigs(srcRoot)
 
         try {
-            File(".update_result").writeText(srcRoot.absolutePath)
+            SafeFileUtils.atomicWriteString(File(".update_result"), srcRoot.absolutePath, createBackup = false)
+            log.info("[GistUpdate] Successfully staged update for v$version in ${srcRoot.name}. Wrote .update_result")
         } catch (e: Exception) {
             log.error("[GistUpdate] Failed to write .update_result: ${e.message}")
             tempDir.deleteRecursively()
@@ -455,8 +456,8 @@ object GistUpdateService {
                         }
 
                         val mergedText = prettyJson.encodeToString(JsonElement.serializer(), merged) + "\n"
-                        userFile.writeText(mergedText)
-                        runCatching { srcFile.writeText(mergedText) }
+                        SafeFileUtils.atomicWriteString(userFile, mergedText)
+                        runCatching { SafeFileUtils.atomicWriteString(srcFile, mergedText, createBackup = false) }
                         log.info("[GistUpdate] Merged config/$relPath")
                     } catch (e: Exception) {
                         log.warn("[GistUpdate] Failed to merge config/$relPath, overwriting with default.")

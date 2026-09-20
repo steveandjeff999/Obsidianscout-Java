@@ -31,6 +31,7 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.time.Instant
@@ -333,6 +334,66 @@ object ServerErrorAlertService {
                 } catch (e: Exception) {
                     ServerLogService.appendLog("ERROR", "ServerErrorAlertService", "Failed to send server error alert email: ${e.message}")
                 }
+            }
+        }
+    }
+
+    /**
+     * Processes any pending crash reports written to disk (e.g. from a failed update rollback,
+     * unhandled fatal crash, or OutOfMemoryError) upon server boot.
+     * Inserts the event into ReportedErrors and deletes the local crash report file to prevent duplicate uploads.
+     */
+    fun processPendingCrashReports() {
+        val crashFile = File(".pending_crash_report.json")
+        val oomFile = File(".oom_occurred")
+
+        if (crashFile.exists()) {
+            try {
+                val content = com.obsidianscout.utils.SafeFileUtils.safeReadStringWithBackupFallback(crashFile.toPath())
+                if (!content.isNullOrBlank()) {
+                    val report = com.obsidianscout.config.JsonSupport.json.decodeFromString<com.obsidianscout.utils.PendingCrashReportDto>(content)
+                    
+                    val details = buildString {
+                        append("Crash Event: ").append(report.errorType)
+                        if (report.failedVersion != null) append(" | Failed Version: ").append(report.failedVersion)
+                        if (report.restoredVersion != null) append(" | Rolled Back To: ").append(report.restoredVersion)
+                        if (report.wasRolledBack) append(" (AUTOMATICALLY ROLLED BACK)")
+                    }
+
+                    recordServerError(
+                        errorMessage = report.errorMessage,
+                        requestDetails = details,
+                        errorType = report.errorType,
+                        sync = true
+                    )
+                    println("[ServerErrorAlertService] Ingested crash report into ReportedErrors: ${report.errorMessage}")
+                }
+            } catch (e: Exception) {
+                System.err.println("[ServerErrorAlertService] Failed to parse and ingest pending crash report: ${e.message}")
+            } finally {
+                try {
+                    java.nio.file.Files.deleteIfExists(crashFile.toPath())
+                    val bakFile = com.obsidianscout.utils.SafeFileUtils.getBackupPath(crashFile.toPath())
+                    java.nio.file.Files.deleteIfExists(bakFile)
+                } catch (_: Exception) {}
+            }
+        }
+
+        if (oomFile.exists()) {
+            try {
+                recordServerError(
+                    errorMessage = "Server process crashed due to OutOfMemoryError. Heap escalation triggered on reboot.",
+                    requestDetails = "Fatal OutOfMemory Handler",
+                    errorType = "OOM_CRASH",
+                    sync = true
+                )
+                println("[ServerErrorAlertService] Ingested OOM crash incident into ReportedErrors.")
+            } catch (e: Exception) {
+                System.err.println("[ServerErrorAlertService] Failed to record OOM crash incident: ${e.message}")
+            } finally {
+                try {
+                    java.nio.file.Files.deleteIfExists(oomFile.toPath())
+                } catch (_: Exception) {}
             }
         }
     }

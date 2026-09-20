@@ -151,6 +151,12 @@ export async function requireAuth() {
     }
 
     // Setup Wizard Auto Trigger
+    // Re-sync localStorage with the server's authoritative flag. If the server already
+    // knows setup is complete, write the dismiss key now so a cleared cache (or a new
+    // device/browser) never causes the wizard to re-appear spuriously.
+    if (settings && settings.setupWizardCompleted) {
+        safeSetItem("obsidianscout:setup-wizard-dismissed", "true");
+    }
     const wizardDismissedLocally = safeGetItem("obsidianscout:setup-wizard-dismissed") === "true";
     if (settings && isAdmin(me.role) && !settings.setupWizardCompleted && !wizardDismissedLocally) {
         const bypassPages = ["login", "index", "reset-password", "migration"];
