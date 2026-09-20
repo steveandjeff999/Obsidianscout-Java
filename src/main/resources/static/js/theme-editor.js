@@ -54,13 +54,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 lightInk: legacyTheme.lightInk || "#09090b",
                 lightMuted: legacyTheme.lightMuted || "#71717a",
                 lightBg: legacyTheme.lightBg || "#ffffff",
+                lightRadius: legacyTheme.lightRadius || legacyTheme.btnRadius || "999px",
                 darkAccent: legacyTheme.darkAccent || "#3b82f6",
                 darkAccent2: legacyTheme.darkAccent2 || "#38bdf8",
                 darkAccent3: legacyTheme.darkAccent3 || "#a855f7",
                 darkInk: legacyTheme.darkInk || "#f8fafc",
                 darkMuted: legacyTheme.darkMuted || "#94a3b8",
                 darkBg: legacyTheme.darkBg || "#09090b",
-                btnRadius: legacyTheme.btnRadius || "8px"
+                darkRadius: legacyTheme.darkRadius || legacyTheme.btnRadius || "999px",
+                btnRadius: legacyTheme.darkRadius || legacyTheme.btnRadius || "999px"
             });
             activeThemeName = "Default";
         }
@@ -215,6 +217,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // 4. Form Population and Extraction
+    function setRadiusSelectValue(selectId, val) {
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        const normalized = val || "999px";
+        const exists = Array.from(sel.options).some(opt => opt.value === normalized);
+        if (!exists) {
+            const opt = document.createElement("option");
+            opt.value = normalized;
+            opt.textContent = `Custom (${normalized})`;
+            sel.appendChild(opt);
+        }
+        sel.value = normalized;
+    }
+
     function populateForm(theme) {
         if (!theme) return;
         document.getElementById("theme-light-accent").value = theme.lightAccent || "#0b8f88";
@@ -222,7 +238,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("theme-light-accent3").value = theme.lightAccent3 || "#255a9c";
         document.getElementById("theme-light-ink").value = theme.lightInk || "#1d1a17";
         document.getElementById("theme-light-muted").value = theme.lightMuted || "#5f5b55";
-        document.getElementById("theme-light-radius").value = theme.btnRadius || "999px";
+        setRadiusSelectValue("theme-light-radius", theme.lightRadius || theme.btnRadius || "999px");
         parseAndPopulateBg("light", theme.lightBg);
 
         document.getElementById("theme-dark-accent").value = theme.darkAccent || "#3ccfc0";
@@ -230,20 +246,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("theme-dark-accent3").value = theme.darkAccent3 || "#6aa2ff";
         document.getElementById("theme-dark-ink").value = theme.darkInk || "#f4f2ed";
         document.getElementById("theme-dark-muted").value = theme.darkMuted || "#c3bfb8";
-        document.getElementById("theme-dark-radius").value = theme.btnRadius || "999px";
+        setRadiusSelectValue("theme-dark-radius", theme.darkRadius || theme.btnRadius || "999px");
         parseAndPopulateBg("dark", theme.darkBg);
     }
 
     function saveCurrentPresetFromForm() {
         if (selectedPresetIndex < 0 || selectedPresetIndex >= themes.length) return;
-        const radiusVal = document.getElementById("theme-light-radius").value; // Keep radius uniform
+        const lightRadiusVal = document.getElementById("theme-light-radius").value;
+        const darkRadiusVal = document.getElementById("theme-dark-radius").value;
+
         themes[selectedPresetIndex].lightAccent = document.getElementById("theme-light-accent").value;
         themes[selectedPresetIndex].lightAccent2 = document.getElementById("theme-light-accent2").value;
         themes[selectedPresetIndex].lightAccent3 = document.getElementById("theme-light-accent3").value;
         themes[selectedPresetIndex].lightInk = document.getElementById("theme-light-ink").value;
         themes[selectedPresetIndex].lightMuted = document.getElementById("theme-light-muted").value;
         themes[selectedPresetIndex].lightBg = document.getElementById("theme-light-bg").value.trim();
-        themes[selectedPresetIndex].btnRadius = radiusVal;
+        themes[selectedPresetIndex].lightRadius = lightRadiusVal;
 
         themes[selectedPresetIndex].darkAccent = document.getElementById("theme-dark-accent").value;
         themes[selectedPresetIndex].darkAccent2 = document.getElementById("theme-dark-accent2").value;
@@ -251,9 +269,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         themes[selectedPresetIndex].darkInk = document.getElementById("theme-dark-ink").value;
         themes[selectedPresetIndex].darkMuted = document.getElementById("theme-dark-muted").value;
         themes[selectedPresetIndex].darkBg = document.getElementById("theme-dark-bg").value.trim();
-        
-        // Match dark mode selector to light mode selector for consistency
-        document.getElementById("theme-dark-radius").value = radiusVal;
+        themes[selectedPresetIndex].darkRadius = darkRadiusVal;
+        themes[selectedPresetIndex].btnRadius = darkRadiusVal; // fallback for legacy
     }
 
     function rebuildPresetDropdown() {
@@ -286,7 +303,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     function updateVisualThemePreview() {
         if (!previewBox) return;
         const isDarkPreview = previewBox.classList.contains("theme-dark-preview");
-        const radiusVal = document.getElementById("theme-light-radius").value;
+        const radiusVal = isDarkPreview
+            ? document.getElementById("theme-dark-radius").value
+            : document.getElementById("theme-light-radius").value;
         
         previewBox.style.setProperty('--preview-radius', radiusVal);
 
@@ -347,19 +366,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-    // Make radius selection uniform between light & dark
+    // Independent radius controls between light & dark
     const lightRadius = document.getElementById("theme-light-radius");
     const darkRadius = document.getElementById("theme-dark-radius");
     if (lightRadius) {
         lightRadius.addEventListener("change", () => {
-            if (darkRadius) darkRadius.value = lightRadius.value;
             updateVisualThemePreview();
             saveAllThemes(true);
         });
     }
     if (darkRadius) {
         darkRadius.addEventListener("change", () => {
-            if (lightRadius) lightRadius.value = darkRadius.value;
             updateVisualThemePreview();
             saveAllThemes(true);
         });
@@ -510,7 +527,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("theme-light-accent3").value = "#255a9c";
             document.getElementById("theme-light-ink").value = "#1d1a17";
             document.getElementById("theme-light-muted").value = "#5f5b55";
-            document.getElementById("theme-light-radius").value = "999px";
+            setRadiusSelectValue("theme-light-radius", "999px");
             parseAndPopulateBg("light", "");
 
             document.getElementById("theme-dark-accent").value = "#3ccfc0";
@@ -518,7 +535,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("theme-dark-accent3").value = "#6aa2ff";
             document.getElementById("theme-dark-ink").value = "#f4f2ed";
             document.getElementById("theme-dark-muted").value = "#c3bfb8";
-            document.getElementById("theme-dark-radius").value = "999px";
+            setRadiusSelectValue("theme-dark-radius", "999px");
             parseAndPopulateBg("dark", "");
             
             updateVisualThemePreview();

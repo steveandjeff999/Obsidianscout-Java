@@ -19,7 +19,10 @@ export function applyCustomTheme(themeOrSettings) {
     const target = document.body;
     if (!target) return;
     
-    if (theme.btnRadius) target.style.setProperty('--btn-radius', theme.btnRadius);
+    const activeRadius = isDark
+        ? (theme.darkRadius || theme.btnRadius)
+        : (theme.lightRadius || theme.btnRadius);
+    if (activeRadius) target.style.setProperty('--btn-radius', activeRadius);
     else target.style.removeProperty('--btn-radius');
     
     if (isDark) {
