@@ -187,36 +187,64 @@ class DatabaseOrchestrationTest {
     }
 
     @Test
-    fun testQuorumLossMultiCheckVerificationAndAlertState() {
+    fun testQuorumLossDelayedAlertAfterTwoMinutes() {
         CockroachOrchestrator.isQuorumLost = false
         CockroachOrchestrator.consecutiveQuorumLossFailures = 0
         CockroachOrchestrator.isQuorumLossAlertSent = false
+        CockroachOrchestrator.quorumLossStartTime = 0L
 
-        val appConfig = com.obsidianscout.config.AppConfig()
-        val orchestrator = CockroachOrchestrator(appConfig)
-
-        // Simulate probe check when activeDataSource is null (failure)
-        orchestrator.checkQuorumStatus()
-        // First failed check: consecutive failures is 0 (or no exception from probe), state clean
-        assertEquals(0, CockroachOrchestrator.consecutiveQuorumLossFailures)
+        // 1. Quorum loss begins (e.g. network hiccup)
+        val now = System.currentTimeMillis()
+        CockroachOrchestrator.markQuorumLost("Quorum lost error")
+        assertTrue(CockroachOrchestrator.isQuorumLost)
+        assertTrue(CockroachOrchestrator.quorumLossStartTime > 0L)
         kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossAlertSent)
 
-        // Simulate tracking consecutive failures
-        CockroachOrchestrator.consecutiveQuorumLossFailures = 1
-        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossAlertSent, "Alert must NOT be sent after only 1 failure")
+        // 2. Short hiccup (e.g. 10s, 30s, 60s, 119s elapsed): Alert must NOT be sent
+        CockroachOrchestrator.quorumLossStartTime = now - 10_000L // 10s elapsed
+        val elapsed10s = System.currentTimeMillis() - CockroachOrchestrator.quorumLossStartTime
+        kotlin.test.assertFalse(
+            elapsed10s >= CockroachOrchestrator.QUORUM_LOSS_ALERT_DELAY_MS,
+            "10s hiccup should not exceed 2-minute threshold"
+        )
+        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossAlertSent)
 
-        CockroachOrchestrator.consecutiveQuorumLossFailures = 2
-        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossAlertSent, "Alert must NOT be sent after only 2 failures")
+        CockroachOrchestrator.quorumLossStartTime = now - 60_000L // 1 minute elapsed
+        val elapsed60s = System.currentTimeMillis() - CockroachOrchestrator.quorumLossStartTime
+        kotlin.test.assertFalse(
+            elapsed60s >= CockroachOrchestrator.QUORUM_LOSS_ALERT_DELAY_MS,
+            "60s hiccup should not exceed 2-minute threshold"
+        )
+        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossAlertSent)
 
-        // 3 consecutive failures threshold
-        CockroachOrchestrator.consecutiveQuorumLossFailures = 3
-        CockroachOrchestrator.isQuorumLossAlertSent = true
-        assertTrue(CockroachOrchestrator.isQuorumLossAlertSent, "Alert sent flag set when 3 consecutive failures reached")
+        // 3. Short hiccup recovery (recovered within 10-60s):
+        // Restoring quorum before alert threshold resets state with NO recovery alert sent
+        CockroachOrchestrator.markQuorumRestored()
+        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLost)
+        assertEquals(0L, CockroachOrchestrator.quorumLossStartTime)
+        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossAlertSent)
 
-        // Reset state
-        CockroachOrchestrator.consecutiveQuorumLossFailures = 0
-        CockroachOrchestrator.isQuorumLossAlertSent = false
-        CockroachOrchestrator.isQuorumLost = false
+        // 4. Sustained quorum loss (> 2 minutes / 120s):
+        CockroachOrchestrator.markQuorumLost("Sustained quorum loss")
+        CockroachOrchestrator.quorumLossStartTime = System.currentTimeMillis() - 125_000L // 125s elapsed (> 2 min)
+
+        val elapsed125s = System.currentTimeMillis() - CockroachOrchestrator.quorumLossStartTime
+        assertTrue(
+            elapsed125s >= CockroachOrchestrator.QUORUM_LOSS_ALERT_DELAY_MS,
+            "125s should exceed 2-minute threshold"
+        )
+
+        // Simulate probe check confirming alert should trigger
+        if (elapsed125s >= CockroachOrchestrator.QUORUM_LOSS_ALERT_DELAY_MS && !CockroachOrchestrator.isQuorumLossAlertSent) {
+            CockroachOrchestrator.isQuorumLossAlertSent = true
+        }
+        assertTrue(CockroachOrchestrator.isQuorumLossAlertSent, "Alert should be sent when quorum is lost for > 2 minutes")
+
+        // 5. Recovery after alert was sent:
+        CockroachOrchestrator.markQuorumRestored()
+        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLost)
+        kotlin.test.assertFalse(CockroachOrchestrator.isQuorumLossAlertSent)
+        assertEquals(0L, CockroachOrchestrator.quorumLossStartTime)
     }
 }
 

@@ -467,10 +467,7 @@ fun Application.module(appConfig: AppConfig) {
                     })
 
             if (isQuorumLoss) {
-                CockroachOrchestrator.isQuorumLost = true
-                if (CockroachOrchestrator.quorumLossDetails.isNullOrBlank()) {
-                    CockroachOrchestrator.quorumLossDetails = cause.message ?: "CockroachDB cluster quorum lost."
-                }
+                CockroachOrchestrator.markQuorumLost(cause.message ?: "CockroachDB cluster quorum lost.")
                 call.application.environment.log.warn("Database quorum loss encountered on request ${call.request.path()}: ${cause.message}")
                 try {
                     if (call.request.path().startsWith("/api")) {

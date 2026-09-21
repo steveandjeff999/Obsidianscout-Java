@@ -40,7 +40,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     private var port: Int = 26257
     private var isInsecure: Boolean = true
 
-    private val version = "v26.2.3"
+    private val version = "v26.3.0"
     private val linuxDownloadUrl = if (isArm) {
         "https://binaries.cockroachdb.com/cockroach-$version.linux-arm64.tgz"
     } else {
@@ -1150,30 +1150,28 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
         if (isHealthy) {
             if (isQuorumLost) {
-                isQuorumLost = false
-                quorumLossDetails = null
-                println("[Cockroach] Quorum restored! Resumed standard CockroachDB read/write operations.")
-                if (isQuorumLossAlertSent) {
-                    isQuorumLossAlertSent = false
-                    try {
-                        com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumRecoveredAlert()
-                    } catch (_: Exception) {}
-                }
+                markQuorumRestored()
+            } else {
+                consecutiveQuorumLossFailures = 0
+                quorumLossStartTime = 0L
             }
-            consecutiveQuorumLossFailures = 0
         } else if (error != null && isQuorumLossException(error)) {
             val failCount = ++consecutiveQuorumLossFailures
+            val now = System.currentTimeMillis()
             if (!isQuorumLost) {
-                isQuorumLost = true
-                quorumLossDetails = error.message ?: "Database cluster quorum lost."
-                println("[Cockroach] ⚠️ Quorum probe failed (check $failCount/3). Routing reads to local SQLite fallback mirror...")
+                markQuorumLost(error.message ?: "Database cluster quorum lost.")
+                println("[Cockroach] ⚠️ Quorum probe failed (check $failCount). Routing reads to local SQLite fallback mirror...")
+            } else if (quorumLossStartTime == 0L) {
+                quorumLossStartTime = now
             }
 
-            // Multi-check verification guard (like Node Down alerts):
-            // Require 3 consecutive failed verification cycles (~30s) before dispatching the push/email alert to superadmins.
-            if (failCount >= 3 && !isQuorumLossAlertSent) {
+            val elapsedMs = now - quorumLossStartTime
+            // Time-delayed notification guard:
+            // Only send push/email alert if quorum loss is sustained for > 2 minutes (120,000 ms)
+            // to avoid false alerts during temporary network hiccups.
+            if (elapsedMs >= QUORUM_LOSS_ALERT_DELAY_MS && !isQuorumLossAlertSent) {
                 isQuorumLossAlertSent = true
-                println("[Cockroach] Database quorum loss confirmed after 3 consecutive failed verification cycles! Dispatching alert...")
+                println("[Cockroach] Database quorum loss sustained for > ${QUORUM_LOSS_ALERT_DELAY_MS / 1000}s (${elapsedMs / 1000}s elapsed, $failCount checks). Dispatching alert...")
                 try {
                     com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumLostAlert(quorumLossDetails)
                 } catch (_: Exception) {}
@@ -1182,6 +1180,8 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     }
 
     companion object {
+        const val QUORUM_LOSS_ALERT_DELAY_MS: Long = 120_000L // 2 minutes
+
         @Volatile
         var isDbActive = false
 
@@ -1196,6 +1196,41 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
         @Volatile
         var isQuorumLossAlertSent: Boolean = false
+
+        @Volatile
+        var quorumLossStartTime: Long = 0L
+
+        fun markQuorumLost(details: String? = null) {
+            val now = System.currentTimeMillis()
+            if (!isQuorumLost) {
+                isQuorumLost = true
+                quorumLossStartTime = now
+            } else if (quorumLossStartTime == 0L) {
+                quorumLossStartTime = now
+            }
+            if (details != null) {
+                quorumLossDetails = details
+            }
+        }
+
+        fun markQuorumRestored() {
+            val wasLost = isQuorumLost
+            val wasAlertSent = isQuorumLossAlertSent
+            val durationSec = if (quorumLossStartTime > 0L) (System.currentTimeMillis() - quorumLossStartTime) / 1000 else 0
+            isQuorumLost = false
+            quorumLossDetails = null
+            consecutiveQuorumLossFailures = 0
+            quorumLossStartTime = 0L
+            isQuorumLossAlertSent = false
+            if (wasLost) {
+                println("[Cockroach] Quorum restored${if (durationSec > 0) " after ${durationSec}s" else ""}! Resumed standard CockroachDB read/write operations.")
+            }
+            if (wasAlertSent) {
+                try {
+                    com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumRecoveredAlert()
+                } catch (_: Exception) {}
+            }
+        }
 
         fun isQuorumLossException(e: Throwable): Boolean {
             var curr: Throwable? = e

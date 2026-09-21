@@ -87,21 +87,12 @@ object DatabaseFactory {
                 statement()
             }
             if (isCrdb && com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-                com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = false
-                com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = null
-                com.obsidianscout.db.orchestration.CockroachOrchestrator.consecutiveQuorumLossFailures = 0
-                if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossAlertSent) {
-                    com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossAlertSent = false
-                    try {
-                        com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumRecoveredAlert()
-                    } catch (_: Exception) {}
-                }
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.markQuorumRestored()
             }
             return result
         } catch (e: Throwable) {
             if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
-                com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = true
-                com.obsidianscout.db.orchestration.CockroachOrchestrator.quorumLossDetails = e.message ?: "Database cluster quorum lost."
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.markQuorumLost(e.message ?: "Database cluster quorum lost.")
                 println("[Database] CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Routing read to local SQLite fallback snapshot...")
                 if (QuorumFallbackStore.isEnabled && QuorumFallbackStore.isAvailable) {
                     return QuorumFallbackStore.executeRead(statement)

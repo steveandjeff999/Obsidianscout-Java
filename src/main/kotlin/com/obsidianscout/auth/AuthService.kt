@@ -783,7 +783,7 @@ object AuthService {
                 }
             } catch (e: Throwable) {
                 if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
-                    com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost = true
+                    com.obsidianscout.db.orchestration.CockroachOrchestrator.markQuorumLost(e.message)
                 }
                 // Non-critical background update: do not fail user requests during quorum loss or timeout
             }

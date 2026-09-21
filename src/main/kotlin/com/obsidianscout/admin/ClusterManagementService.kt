@@ -39,7 +39,7 @@ data class ClusterNodeInfo(
     val isLocal: Boolean,
     val status: String,
     val role: String = "Cockroach Gateway Node",
-    val cockroachVersion: String = "v26.2.3",
+    val cockroachVersion: String = "v26.3.0",
     val isDbActive: Boolean = true,
     val serverVersion: String = "Unknown",
     val executionMode: String = "Unknown"
