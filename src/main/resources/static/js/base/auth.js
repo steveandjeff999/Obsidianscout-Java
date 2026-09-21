@@ -3,7 +3,7 @@
  * Session verification, user info fetching, route authentication gating, role checks, and logout.
  */
 
-import { safeGetItem, safeRemoveItem } from './storage.js';
+import { safeGetItem, safeSetItem, safeRemoveItem } from './storage.js';
 import { request } from './http.js';
 import { loadAndRenderBanners } from '../components/banners.js';
 
