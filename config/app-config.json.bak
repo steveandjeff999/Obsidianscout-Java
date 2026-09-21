@@ -2,21 +2,23 @@
     "server": {
         "host": "0.0.0.0",
         "port": 8080,
-        "sessionSecret": "change-me",
+        "sessionSecret": "d004d8eb17d86e707890b678e5a25ce552cd725dfe0036018a64b9ca827cbe0b",
         "cookieSecure": false,
         "https": {
             "enabled": false,
             "port": 8443,
             "keystorePath": "config/obsidianscout.jks",
-            "keystorePassword": "change-me",
-            "keyAlias": "obsidianscout"
+            "keystorePassword": "8e8d2d5771b324cc7643150bea269d065412f0ab68d29253dffa37fb613a4a90",
+            "keyAlias": "obsidianscout",
+            "additionalSans": []
         },
         "logging": false
     },
     "database": {
         "type": "sqlite",
         "sqlite": {
-            "file": "data/obsidianscout.db"
+            "file": "data/obsidianscout.db",
+            "synchronous": "FULL"
         },
         "postgres": {
             "host": "localhost",
@@ -44,8 +46,8 @@
         "adminPassword": "change-me"
     },
     "vapid": {
-        "publicKey": "",
-        "privateKey": "",
+        "publicKey": "BJS4fhqE7DWJPjCjY67gI3FN8fTplw9l9U3N6hbvxUR9zFTwI6RA1_WGh3shKDttqhHcVS2EIIiklSEgb2TknLQ",
+        "privateKey": "N0vYVHPSJK88aONruInXdpU6qTt5_oc159dTkW4UTh0",
         "subject": "mailto:admin@obsidianscout.com"
     },
     "database_type": "sqlite",
@@ -55,7 +57,7 @@
     "google_sheet_password": "",
     "cockroach_port": 26257,
     "site_url": "https://kotlin.obsidianscout.com",
-    "current_version": "0.5.6.6",
+    "current_version": "0.5.6.9",
     "gist_update": {
         "enabled": false,
         "gist_url": "https://gist.githubusercontent.com/steveandjeff999/41b76376d064a6893ff2644b04447d9f/raw/Public-Version.json",

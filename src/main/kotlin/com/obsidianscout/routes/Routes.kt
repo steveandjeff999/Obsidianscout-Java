@@ -168,20 +168,33 @@ fun Application.configureRoutes() {
             route("/auth") {
                 post("/login") {
                     val request = call.receive<LoginRequest>()
+                    val ipAddress = call.request.headers["CF-Connecting-IP"]
+                        ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
+                        ?: call.request.local.remoteHost
+
+                    if (!com.obsidianscout.auth.LoginRateLimiter.checkAllowed(ipAddress, request.username)) {
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.TooManyRequests,
+                            "Too many failed attempts. Please wait 60 seconds."
+                        )
+                    }
+
                     val user = AuthService.login(
                         username = request.username,
                         teamNumber = request.teamNumber,
                         password = request.password,
                         program = request.program
-                    ) ?: throw com.obsidianscout.auth.ApiException(
-                        HttpStatusCode.Unauthorized,
-                        "Invalid credentials"
                     )
+                    if (user == null) {
+                        com.obsidianscout.auth.LoginRateLimiter.recordFailedAttempt(ipAddress, request.username)
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.Unauthorized,
+                            "Invalid credentials"
+                        )
+                    }
+                    com.obsidianscout.auth.LoginRateLimiter.clear(ipAddress, request.username)
 
                     val userUuid = UUID.fromString(user.id)
-                    val ipAddress = call.request.headers["CF-Connecting-IP"]
-                        ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
-                        ?: call.request.local.remoteHost
                     val userAgent = call.request.headers["User-Agent"] ?: ""
                     val deviceId = call.request.headers["X-Device-Id"]
                     val deviceName = call.request.headers["X-Device-Name"]
@@ -235,6 +248,17 @@ fun Application.configureRoutes() {
                 }
                 post("/register") {
                     val request = call.receive<RegisterRequest>()
+                    val ipAddress = call.request.headers["CF-Connecting-IP"]
+                        ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
+                        ?: call.request.local.remoteHost
+
+                    if (!com.obsidianscout.auth.LoginRateLimiter.checkAllowed(ipAddress, request.username)) {
+                        throw com.obsidianscout.auth.ApiException(
+                            HttpStatusCode.TooManyRequests,
+                            "Too many failed attempts. Please wait 60 seconds."
+                        )
+                    }
+
                     val user = AuthService.register(
                         username = request.username,
                         teamNumber = request.teamNumber,
@@ -243,11 +267,9 @@ fun Application.configureRoutes() {
                         role = request.role,
                         email = request.email
                     )
+                    com.obsidianscout.auth.LoginRateLimiter.clear(ipAddress, request.username)
 
                     val userUuid = UUID.fromString(user.id)
-                    val ipAddress = call.request.headers["CF-Connecting-IP"]
-                        ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
-                        ?: call.request.local.remoteHost
                     val userAgent = call.request.headers["User-Agent"] ?: ""
                     val deviceId = call.request.headers["X-Device-Id"]
                     val deviceName = call.request.headers["X-Device-Name"]
@@ -1340,6 +1362,26 @@ fun Application.configureRoutes() {
                     val response = AnalyticsService.generate(config, mergedEntries)
                     call.respond(response)
                 }
+
+                get("/compare") {
+                    val session = call.requireSession()
+                    val teamsParam = call.request.queryParameters["teams"]
+                        ?: listOfNotNull(
+                            call.request.queryParameters["team1"],
+                            call.request.queryParameters["team2"],
+                            call.request.queryParameters["team3"]
+                        ).joinToString(",")
+                    val teamNumbers = teamsParam.split(",")
+                        .mapNotNull { it.trim().toIntOrNull() }
+                        .distinct()
+                    if (teamNumbers.isEmpty()) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "No team numbers provided")
+                    }
+
+                    val eventKey = call.request.queryParameters["eventKey"]
+                    val response = com.obsidianscout.analytics.AnalyticsService.compareTeams(session, teamNumbers, eventKey)
+                    call.respond(response)
+                }
             }
 
             route("/custom-analytics") {
@@ -1403,6 +1445,33 @@ fun Application.configureRoutes() {
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
                     val response = com.obsidianscout.scouting.AllianceSelectionService.getSelection(session, eventKey)
                     call.respond(response)
+                }
+                get("/export/csv") {
+                    val session = call.requireAnalyticsOrAbove()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
+                    val response = com.obsidianscout.scouting.AllianceSelectionService.getSelection(session, eventKey)
+                    val sb = StringBuilder()
+                    sb.append("Alliance,Role,Team Number\n")
+                    val json = runCatching { JsonSupport.json.parseToJsonElement(response.selectionJson).jsonObject }.getOrNull()
+                    if (json != null) {
+                        for (allianceIndex in 1..8) {
+                            val allianceKey = "alliance$allianceIndex"
+                            val allianceObj = json[allianceKey]?.let { runCatching { it.jsonObject }.getOrNull() }
+                            if (allianceObj != null) {
+                                val captain = allianceObj["captain"]?.let { if (it is JsonPrimitive) it.content else null } ?: ""
+                                val firstPick = allianceObj["firstPick"]?.let { if (it is JsonPrimitive) it.content else null } ?: ""
+                                val secondPick = allianceObj["secondPick"]?.let { if (it is JsonPrimitive) it.content else null } ?: ""
+                                val backup = allianceObj["backup"]?.let { if (it is JsonPrimitive) it.content else null } ?: ""
+                                if (captain.isNotBlank()) sb.append("Alliance $allianceIndex,Captain,$captain\n")
+                                if (firstPick.isNotBlank()) sb.append("Alliance $allianceIndex,First Pick,$firstPick\n")
+                                if (secondPick.isNotBlank()) sb.append("Alliance $allianceIndex,Second Pick,$secondPick\n")
+                                if (backup.isNotBlank()) sb.append("Alliance $allianceIndex,Backup,$backup\n")
+                            }
+                        }
+                    }
+                    call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"alliance_selection_${eventKey}.csv\"")
+                    call.respondText(sb.toString(), ContentType.Text.CSV, HttpStatusCode.OK)
                 }
                 post {
                     val session = call.requireSession()
@@ -3679,6 +3748,7 @@ fun Application.configureRoutes() {
             "pit-data" to "pit-data.html",
             "all-data" to "all-data.html",
             "analytics" to "analytics.html",
+            "compare" to "compare.html",
             "custom-analytics" to "custom-analytics.html",
             "data-validation" to "data-validation.html",
             "graphs" to "graphs.html",

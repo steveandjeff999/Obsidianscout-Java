@@ -47,6 +47,27 @@ object AutoBackupScheduler {
         }
     }
 
+    fun millisUntilNextTarget(targetTimeStr: String = "02:54"): Long {
+        return try {
+            val parts = targetTimeStr.trim().split(":")
+            val targetHour = parts.getOrNull(0)?.toIntOrNull() ?: 2
+            val targetMin = parts.getOrNull(1)?.toIntOrNull() ?: 54
+            val targetTime = LocalTime.of(targetHour, targetMin)
+
+            val nowUtc = ZonedDateTime.now(ZoneOffset.UTC)
+            val todayTarget = nowUtc.with(targetTime).withSecond(0).withNano(0)
+
+            val nextRun = if (nowUtc.isBefore(todayTarget)) {
+                todayTarget
+            } else {
+                todayTarget.plusDays(1)
+            }
+            java.time.Duration.between(nowUtc, nextRun).toMillis().coerceAtLeast(0L)
+        } catch (_: Exception) {
+            60_000L
+        }
+    }
+
     @Synchronized
     fun start(appConfig: AppConfig? = null) {
         if (job?.isActive == true) return
@@ -60,33 +81,42 @@ object AutoBackupScheduler {
             while (isActive) {
                 try {
                     val config = AppConfigLoader.load().auto_backup
-                    if (config.enabled && DatabaseFactory.isReady) {
-                        val nowUtc = ZonedDateTime.now(ZoneOffset.UTC)
-                        val parts = config.target_time_utc.trim().split(":")
-                        val targetHour = parts.getOrNull(0)?.toIntOrNull() ?: 2
-                        val targetMin = parts.getOrNull(1)?.toIntOrNull() ?: 54
+                    if (!config.enabled || !DatabaseFactory.isReady) {
+                        delay(30_000L)
+                        continue
+                    }
 
-                        val currentDate = nowUtc.toLocalDate()
-                        if (nowUtc.hour == targetHour && nowUtc.minute == targetMin && lastRunDate != currentDate) {
-                            lastRunDate = currentDate
-                            println("[AutoBackupScheduler] ⏰ Scheduled trigger reached ($targetHour:${"%02d".format(targetMin)} UTC). Creating automated SQLite snapshot...")
+                    val msUntilNext = millisUntilNextTarget(config.target_time_utc)
+                    if (msUntilNext > 2000L) {
+                        // Sleep until target time (or chunked to max 60s so config changes take effect)
+                        val sleepTime = msUntilNext.coerceAtMost(60_000L)
+                        delay(sleepTime)
+                        continue
+                    }
 
-                            val result = SnapshotService.createSnapshot(isAutoBackup = true)
-                            lastBackupInstant = Instant.now()
-                            lastBackupStatus = if (result.success) "Success (${result.fileName})" else "Failed: ${result.message}"
+                    val nowUtc = ZonedDateTime.now(ZoneOffset.UTC)
+                    val currentDate = nowUtc.toLocalDate()
+                    if (lastRunDate != currentDate) {
+                        lastRunDate = currentDate
+                        println("[AutoBackupScheduler] ⏰ Scheduled trigger reached (${config.target_time_utc} UTC). Creating automated SQLite snapshot...")
 
-                            if (result.success) {
-                                println("[AutoBackupScheduler] Scheduled auto backup completed: ${result.fileName} (${result.sizeBytes} bytes, ${result.recordsCopied} records).")
-                            } else {
-                                println("[AutoBackupScheduler] ⚠️ Scheduled auto backup failed: ${result.message}")
-                            }
+                        val result = SnapshotService.createSnapshot(isAutoBackup = true)
+                        lastBackupInstant = Instant.now()
+                        lastBackupStatus = if (result.success) "Success (${result.fileName})" else "Failed: ${result.message}"
+
+                        if (result.success) {
+                            println("[AutoBackupScheduler] Scheduled auto backup completed: ${result.fileName} (${result.sizeBytes} bytes, ${result.recordsCopied} records).")
+                        } else {
+                            println("[AutoBackupScheduler] ⚠️ Scheduled auto backup failed: ${result.message}")
                         }
                     }
+
+                    // Re-arm delay to avoid immediate re-trigger
+                    delay(60_000L)
                 } catch (e: Exception) {
                     println("[AutoBackupScheduler] Background loop error: ${e.message}")
+                    delay(10_000L)
                 }
-                // Check every 25 seconds
-                delay(25_000L)
             }
         }
     }

@@ -108,6 +108,7 @@ object ScoutingEntries : UUIDTable("scouting_entries") {
     val isPrescout = bool("is_prescout").default(false)
     val hasDiscrepancy = bool("has_discrepancy").default(false)
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
+    val completenessPct = float("completeness_pct").nullable().default(null)
 }
 
 object PitScoutingEntries : UUIDTable("pit_scouting_entries") {
@@ -121,6 +122,7 @@ object PitScoutingEntries : UUIDTable("pit_scouting_entries") {
     val isPrescout = bool("is_prescout").default(false)
     val hasDiscrepancy = bool("has_discrepancy").default(false)
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
+    val completenessPct = float("completeness_pct").nullable().default(null)
 }
 
 object QualitativeScoutingEntries : UUIDTable("qualitative_scouting_entries") {
@@ -136,6 +138,7 @@ object QualitativeScoutingEntries : UUIDTable("qualitative_scouting_entries") {
     val isPrescout = bool("is_prescout").default(false)
     val hasDiscrepancy = bool("has_discrepancy").default(false)
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
+    val completenessPct = float("completeness_pct").nullable().default(null)
 }
 
 object AppSettings : UUIDTable("app_settings") {

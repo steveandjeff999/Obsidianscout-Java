@@ -78,6 +78,9 @@ object AllianceCollaborationManager {
             for (frame in session.incoming) {
                 if (frame is Frame.Text) {
                     val text = frame.readText()
+                    if (text.length > 512_000) {
+                        continue
+                    }
                     val msg = runCatching { Json.decodeFromString<WSMessage>(text) }.getOrNull()
                     if (msg != null && msg.type == "edit" && msg.configJson != null) {
                         // Check if the user is an admin of the alliance

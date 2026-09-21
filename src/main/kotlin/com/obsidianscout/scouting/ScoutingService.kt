@@ -42,10 +42,25 @@ data class ScoutingEntryRecord(
     val matchPlayedTime: Long? = null,
     val hasDiscrepancy: Boolean = false,
     val conflictingTeams: List<Int> = emptyList(),
-    val username: String? = null
+    val username: String? = null,
+    val completenessPct: Float? = null
 )
 
 object ScoutingService {
+
+    fun computeCompleteness(config: ScoutingConfig, data: JsonObject): Float {
+        val fields = config.fields.filter {
+            val t = it.type.lowercase()
+            t !in listOf("label", "divider", "section", "header")
+        }
+        if (fields.isEmpty()) return 100f
+        val filled = fields.count { field ->
+            val v = data[field.id]
+            v != null && v !is JsonNull &&
+                    !(v is JsonPrimitive && v.content.isBlank())
+        }
+        return (filled.toFloat() / fields.size * 100f).coerceIn(0f, 100f)
+    }
     /**
      * Lists scouting entries visible to the caller.
      * SUPERADMIN sees all entries across all teams.
@@ -99,7 +114,8 @@ object ScoutingService {
                     matchPlayedTime = matchTimes[mKey],
                     hasDiscrepancy = row[ScoutingEntries.hasDiscrepancy],
                     conflictingTeams = conflicting,
-                    username = userNames[row[ScoutingEntries.submittedByUserId].value]
+                    username = userNames[row[ScoutingEntries.submittedByUserId].value],
+                    completenessPct = row[ScoutingEntries.completenessPct]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -151,7 +167,8 @@ object ScoutingService {
                     matchPlayedTime = matchTimes[mKey],
                     hasDiscrepancy = row[ScoutingEntries.hasDiscrepancy],
                     conflictingTeams = conflicting,
-                    username = userNames[row[ScoutingEntries.submittedByUserId].value]
+                    username = userNames[row[ScoutingEntries.submittedByUserId].value],
+                    completenessPct = row[ScoutingEntries.completenessPct]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -280,15 +297,17 @@ object ScoutingService {
                 matchPlayedTime = matchPlayedTime,
                 hasDiscrepancy = duplicate[ScoutingEntries.hasDiscrepancy],
                 conflictingTeams = conflicting,
-                username = session.username
+                username = session.username,
+                completenessPct = duplicate[ScoutingEntries.completenessPct]
             )
         }
 
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
         val now = Instant.now()
         val callerUuid = UUID.fromString(session.userId)
+        val completeness = computeCompleteness(config, request.data)
 
-        val id = transaction {
+        val id = com.obsidianscout.db.writeTransactionWithRetry {
             ScoutingEntries.insertAndGetId {
                 it[ownerTeamNumber] = session.teamNumber
                 it[program] = session.program
@@ -300,6 +319,7 @@ object ScoutingService {
                 it[submittedByUserId] = EntityID(callerUuid, com.obsidianscout.db.Users)
                 it[createdAt] = now
                 it[ScoutingEntries.isPrescout] = isPrescout
+                it[completenessPct] = completeness
             }
         }
 
@@ -332,7 +352,8 @@ object ScoutingService {
                 matchPlayedTime = matchPlayedTime,
                 hasDiscrepancy = updatedRow[ScoutingEntries.hasDiscrepancy],
                 conflictingTeams = conflicting,
-                username = session.username
+                username = session.username,
+                completenessPct = completeness
             )
         }
     }

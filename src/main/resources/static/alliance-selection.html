@@ -747,6 +747,49 @@
                 padding: 12px;
             }
         }
+
+        @media print {
+            .sidebar, .sticky-panel, .orb, #export-csv-btn, #print-board-btn, #reset-board-btn, .slot-clear, .slot-info, .select-wide {
+                display: none !important;
+            }
+            .app-shell {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .main-content {
+                padding: 0 !important;
+                max-width: 100% !important;
+            }
+            .page-container {
+                display: block !important;
+                width: 100% !important;
+            }
+            .alliances-grid {
+                display: grid !important;
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 12px !important;
+            }
+            .alliance-card {
+                border: 1px solid #000 !important;
+                box-shadow: none !important;
+                background: #fff !important;
+                color: #000 !important;
+                break-inside: avoid;
+            }
+            .slot-row {
+                background: #f8fafc !important;
+                border: 1px solid #e2e8f0 !important;
+                color: #000 !important;
+            }
+            body {
+                background: #fff !important;
+                color: #000 !important;
+            }
+            @page {
+                size: landscape;
+                margin: 1cm;
+            }
+        }
     </style>
     <link rel="manifest" href="/manifest.json" />
 </head>
@@ -783,6 +826,8 @@
                                 <option value="" data-i18n="alliance-selection.loading_events">Loading events...</option>
                             </select>
                         </div>
+                        <button class="btn secondary" id="export-csv-btn" type="button" title="Export as CSV">Export CSV</button>
+                        <button class="btn secondary" id="print-board-btn" type="button" title="Print Alliance Board">Print</button>
                         <button class="btn ghost danger" id="reset-board-btn" type="button" data-i18n="alliance-selection.reset_board">Reset Board</button>
                     </div>
                 </div>

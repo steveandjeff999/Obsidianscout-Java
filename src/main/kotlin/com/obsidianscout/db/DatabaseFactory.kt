@@ -1784,3 +1784,43 @@ fun <T> readTransaction(
     statement: org.jetbrains.exposed.sql.Transaction.() -> T
 ): T = DatabaseFactory.readTransaction(db, statement)
 
+/**
+ * Top-level retry-wrapped write transaction helper to prevent SQLite_BUSY/LOCKED failures.
+ */
+fun <T> writeTransactionWithRetry(
+    maxAttempts: Int = 3,
+    initialDelayMs: Long = 50,
+    db: org.jetbrains.exposed.sql.Database? = null,
+    statement: org.jetbrains.exposed.sql.Transaction.() -> T
+): T {
+    val targetDb = db ?: DatabaseFactory.primaryDatabase
+    var lastException: Throwable? = null
+    for (attempt in 0 until maxAttempts) {
+        try {
+            return transaction(db = targetDb) {
+                statement()
+            }
+        } catch (e: Throwable) {
+            val msg = e.message?.lowercase() ?: ""
+            val isBusyOrLocked = msg.contains("sqlite_busy") ||
+                    msg.contains("sqlite_locked") ||
+                    msg.contains("database is locked") ||
+                    msg.contains("database is busy") ||
+                    msg.contains("busy")
+            if (isBusyOrLocked && attempt < maxAttempts - 1) {
+                lastException = e
+                try {
+                    Thread.sleep(initialDelayMs * (1L shl attempt))
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw e
+                }
+            } else {
+                throw e
+            }
+        }
+    }
+    throw lastException ?: IllegalStateException("Transaction failed after $maxAttempts attempts")
+}
+
+

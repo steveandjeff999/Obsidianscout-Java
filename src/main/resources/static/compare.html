@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Compare Teams</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <style>
+        .compare-header-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .team-select-card {
+            background: var(--surface-2);
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color, rgba(255,255,255,0.06));
+        }
+        .team-select-card label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 6px;
+        }
+        .comparison-table-wrapper {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+        }
+        .comparison-table th {
+            background: var(--surface-2);
+            color: var(--muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .best-val {
+            color: #22c55e !important;
+            font-weight: 800;
+        }
+        .team-hero-card {
+            background: var(--surface-2);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            text-align: center;
+            border: 1px solid var(--border-color, rgba(255,255,255,0.06));
+        }
+        .team-hero-num {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: var(--primary, #38bdf8);
+        }
+        .team-hero-name {
+            font-size: 0.95rem;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body data-page="compare">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div class="card">
+                <div class="row justify-between align-center wrap gap-12">
+                    <div>
+                        <h1 data-i18n="compare.title">Team Comparison</h1>
+                        <p class="notice" data-i18n="compare.notice">Compare 2 or 3 teams side-by-side using scouting metrics.</p>
+                    </div>
+                    <div>
+                        <select id="event-select" class="select-wide" style="min-width: 180px;">
+                            <option value="" data-i18n="compare.loading_events">Loading events...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="compare-header-grid">
+                    <div class="team-select-card">
+                        <label for="team-1-select" data-i18n="compare.team_1">Team 1</label>
+                        <select id="team-1-select" class="select-wide" style="width: 100%;">
+                            <option value="" data-i18n="compare.select_team_1">Select Team 1...</option>
+                        </select>
+                    </div>
+                    <div class="team-select-card">
+                        <label for="team-2-select" data-i18n="compare.team_2">Team 2</label>
+                        <select id="team-2-select" class="select-wide" style="width: 100%;">
+                            <option value="" data-i18n="compare.select_team_2">Select Team 2...</option>
+                        </select>
+                    </div>
+                    <div class="team-select-card">
+                        <label for="team-3-select" data-i18n="compare.team_3">Team 3 (Optional)</label>
+                        <select id="team-3-select" class="select-wide" style="width: 100%;">
+                            <option value="" data-i18n="compare.none_compare_2">None (Compare 2)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div id="compare-results-container" class="mt-20">
+                <div class="card" style="text-align: center; color: var(--muted); padding: 48px 16px;" data-i18n="compare.select_at_least_two">
+                    Select at least two teams above to view a side-by-side comparison.
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/compare.js"></script>
+</body>
+</html>

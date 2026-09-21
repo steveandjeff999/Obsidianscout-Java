@@ -220,6 +220,9 @@ async function loadScoutPageData(me) {
 
                 const filename = `scout_${eventKey || 'event'}_team${payload.targetTeamNumber}_match${payload.matchNumber || 'unknown'}.json`;
                 Obsidianscout.downloadJson(payload, filename);
+                if (typeof Obsidianscout.clearDraft === 'function') {
+                    Obsidianscout.clearDraft("match-scout");
+                }
                 Obsidianscout.recordDeviceHistory({
                     action: "json_export",
                     formType: "match-scouting",
@@ -251,6 +254,10 @@ async function loadScoutPageData(me) {
                 payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
                 payload.type = "scout";
 
+                if (typeof Obsidianscout.clearDraft === 'function') {
+                    Obsidianscout.clearDraft("match-scout");
+                }
+
                 Obsidianscout.showQrModal(payload, "Match Scouting", payload.targetTeamNumber, payload.matchKey);
                 Obsidianscout.recordDeviceHistory({
                     action: "qr_generated",
@@ -267,6 +274,86 @@ async function loadScoutPageData(me) {
         }
 
         await handleSelectionChange();
+
+        function collectCurrentFormData() {
+            const data = {};
+            if (teamSelect && teamSelect.value) data._targetTeamNumber = teamSelect.value;
+            if (matchSelect && matchSelect.value) data._matchKey = matchSelect.value;
+            if (config && config.fields) {
+                config.fields.forEach(f => {
+                    const el = form.elements[f.id];
+                    if (!el) return;
+                    if (el.type === "checkbox") {
+                        data[f.id] = el.checked;
+                    } else if (el.type === "radio") {
+                        const checked = form.querySelector(`input[name="${f.id}"]:checked`);
+                        if (checked) data[f.id] = checked.value;
+                    } else if (el.value !== undefined && el.value !== "") {
+                        data[f.id] = el.value;
+                    }
+                });
+            }
+            return data;
+        }
+
+        function applyDraftData(draft) {
+            if (!draft) return;
+            if (draft._targetTeamNumber && teamSelect) {
+                teamSelect.value = draft._targetTeamNumber;
+                lastSelectedTeam = teamSelect.value;
+            }
+            if (draft._matchKey && matchSelect) {
+                matchSelect.value = draft._matchKey;
+                lastSelectedMatch = matchSelect.value;
+            }
+
+            const chosenTeam = teamSelect ? teamSelect.value : "";
+            const chosenMatch = matchSelect ? matchSelect.value : "";
+
+            if (chosenMatch) {
+                updateTeamOptions(teamSelect, teams, chosenMatch, matches, chosenTeam);
+            }
+            if (chosenTeam) {
+                updateMatchOptions(matchSelect, matches, settings.timezone, chosenTeam, chosenMatch);
+            }
+
+            const ready = Boolean(teamSelect && teamSelect.value && matchSelect && matchSelect.value);
+            setFormEnabled(form, formBlocked, pointsPreviewCard, ready);
+
+            if (config && config.fields) {
+                config.fields.forEach(f => {
+                    if (draft[f.id] === undefined || draft[f.id] === null) return;
+                    const val = draft[f.id];
+                    if (f.type === "checkbox") {
+                        const el = form.querySelector(`input[name="${f.id}"]`);
+                        if (el) el.checked = Boolean(val);
+                    } else if (f.type === "radio") {
+                        const targetRadio = form.querySelector(`input[name="${f.id}"][value="${val}"]`);
+                        if (targetRadio) targetRadio.checked = true;
+                    } else if (f.type === "image" || f.type === "image_upload" || f.type === "photo") {
+                        const input = form.querySelector(`[name="${f.id}"]`);
+                        const container = input ? input.closest(".image-upload-field-container") : null;
+                        if (container && typeof container.updateImage === "function") {
+                            container.updateImage(val);
+                        }
+                    } else {
+                        const el = form.elements[f.id] || form.querySelector(`[name="${f.id}"]`);
+                        if (el) {
+                            el.value = val;
+                            if (f.type === "rating") {
+                                el.dispatchEvent(new Event("input", { bubbles: true }));
+                            }
+                        }
+                    }
+                });
+                updatePointsPreview(config.fields, form, pointsPreview);
+            }
+        }
+
+        if (typeof Obsidianscout.startDraftAutosave === 'function') {
+            Obsidianscout.startDraftAutosave("match-scout", form, collectCurrentFormData, 15000);
+            Obsidianscout.offerDraftRestore("match-scout", applyDraftData);
+        }
 
         const saveOfflineButton = document.getElementById("scout-save-offline");
         if (saveOfflineButton) {
@@ -308,6 +395,10 @@ async function loadScoutPageData(me) {
 
                 Obsidianscout.showToast("Saved locally (Offline mode)", "success");
                 Obsidianscout.updateConnectionStatus();
+
+                if (typeof Obsidianscout.clearDraft === 'function') {
+                    Obsidianscout.clearDraft("match-scout");
+                }
 
                 clearFormFields(fields, form);
                 updatePointsPreview(fields, form, pointsPreview);
@@ -376,6 +467,9 @@ async function loadScoutPageData(me) {
                     entryCache.push(newEntry);
                 }
                 Obsidianscout.safeSetItem("cache:/api/scouting", JSON.stringify(entryCache));
+                if (typeof Obsidianscout.clearDraft === 'function') {
+                    Obsidianscout.clearDraft("match-scout");
+                }
             } catch (error) {
                 if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
                     const createdAt = new Date().toISOString();
@@ -401,6 +495,10 @@ async function loadScoutPageData(me) {
 
                     Obsidianscout.showToast("Saved locally (Offline mode)", "success");
                     Obsidianscout.updateConnectionStatus();
+
+                    if (typeof Obsidianscout.clearDraft === 'function') {
+                        Obsidianscout.clearDraft("match-scout");
+                    }
                     
                     clearFormFields(fields, form);
                     updatePointsPreview(fields, form, pointsPreview);

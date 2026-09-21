@@ -87,7 +87,8 @@ data class HttpsConfig(
     val port: Int = 8443,
     val keystorePath: String = "config/obsidianscout.jks",
     val keystorePassword: String = "change-me",
-    val keyAlias: String = "obsidianscout"
+    val keyAlias: String = "obsidianscout",
+    val additionalSans: List<String> = emptyList()
 )
 
 @Serializable

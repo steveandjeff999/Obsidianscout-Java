@@ -141,6 +141,14 @@ import {
 } from './services/offline-sync.js';
 
 import {
+    saveDraft,
+    loadDraft,
+    clearDraft,
+    offerDraftRestore,
+    startDraftAutosave
+} from './services/form-draft.js';
+
+import {
     downloadJson,
     compressData,
     decompressData,
@@ -251,6 +259,11 @@ window.Obsidianscout = {
     compressData,
     decompressData,
     CACHE_CONFIGS,
+    saveDraft,
+    loadDraft,
+    clearDraft,
+    offerDraftRestore,
+    startDraftAutosave,
     startTour,
     endTour,
     showTourLevelSelector,

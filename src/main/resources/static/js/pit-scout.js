@@ -102,6 +102,9 @@ async function loadPitScoutPageData(me) {
 
                 const filename = `pit_${eventKey || 'event'}_team${payload.targetTeamNumber}.json`;
                 Obsidianscout.downloadJson(payload, filename);
+                if (typeof Obsidianscout.clearDraft === 'function') {
+                    Obsidianscout.clearDraft("pit-scout");
+                }
                 Obsidianscout.recordDeviceHistory({
                     action: "json_export",
                     formType: "pit-scouting",
@@ -129,6 +132,10 @@ async function loadPitScoutPageData(me) {
                 payload.targetTeamNumber = Number(teamSelect.value);
                 payload.type = "pit-scout";
 
+                if (typeof Obsidianscout.clearDraft === 'function') {
+                    Obsidianscout.clearDraft("pit-scout");
+                }
+
                 Obsidianscout.showQrModal(payload, "Pit Scouting", payload.targetTeamNumber, null);
                 Obsidianscout.recordDeviceHistory({
                     action: "qr_generated",
@@ -145,6 +152,69 @@ async function loadPitScoutPageData(me) {
         }
 
         await handleSelectionChange();
+
+        function collectCurrentFormData() {
+            const data = {};
+            if (teamSelect && teamSelect.value) data._targetTeamNumber = teamSelect.value;
+            if (config && config.fields) {
+                config.fields.forEach(f => {
+                    const el = form.elements[f.id];
+                    if (!el) return;
+                    if (el.type === "checkbox") {
+                        data[f.id] = el.checked;
+                    } else if (el.type === "radio") {
+                        const checked = form.querySelector(`input[name="${f.id}"]:checked`);
+                        if (checked) data[f.id] = checked.value;
+                    } else if (el.value !== undefined && el.value !== "") {
+                        data[f.id] = el.value;
+                    }
+                });
+            }
+            return data;
+        }
+
+        function applyDraftData(draft) {
+            if (!draft) return;
+            if (draft._targetTeamNumber && teamSelect) {
+                teamSelect.value = draft._targetTeamNumber;
+            }
+
+            const ready = Boolean(teamSelect && teamSelect.value);
+            setFormEnabled(form, formBlocked, ready);
+
+            if (config && config.fields) {
+                config.fields.forEach(f => {
+                    if (draft[f.id] === undefined || draft[f.id] === null) return;
+                    const val = draft[f.id];
+                    if (f.type === "checkbox") {
+                        const el = form.querySelector(`input[name="${f.id}"]`);
+                        if (el) el.checked = Boolean(val);
+                    } else if (f.type === "radio") {
+                        const targetRadio = form.querySelector(`input[name="${f.id}"][value="${val}"]`);
+                        if (targetRadio) targetRadio.checked = true;
+                    } else if (f.type === "image" || f.type === "image_upload" || f.type === "photo") {
+                        const input = form.querySelector(`[name="${f.id}"]`);
+                        const container = input ? input.closest(".image-upload-field-container") : null;
+                        if (container && typeof container.updateImage === "function") {
+                            container.updateImage(val);
+                        }
+                    } else {
+                        const el = form.elements[f.id] || form.querySelector(`[name="${f.id}"]`);
+                        if (el) {
+                            el.value = val;
+                            if (f.type === "rating") {
+                                el.dispatchEvent(new Event("input", { bubbles: true }));
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        if (typeof Obsidianscout.startDraftAutosave === 'function') {
+            Obsidianscout.startDraftAutosave("pit-scout", form, collectCurrentFormData, 15000);
+            Obsidianscout.offerDraftRestore("pit-scout", applyDraftData);
+        }
 
         const saveOfflineButton = document.getElementById("pit-save-offline");
         if (saveOfflineButton) {
@@ -182,6 +252,10 @@ async function loadPitScoutPageData(me) {
 
                 Obsidianscout.showToast("Saved locally (Offline mode)", "success");
                 Obsidianscout.updateConnectionStatus();
+
+                if (typeof Obsidianscout.clearDraft === 'function') {
+                    Obsidianscout.clearDraft("pit-scout");
+                }
 
                 clearFormFields(fields, form);
                 handleSelectionChange();
@@ -243,6 +317,9 @@ async function loadPitScoutPageData(me) {
                     entryCache.push(newEntry);
                 }
                 Obsidianscout.safeSetItem("cache:/api/pit-scouting", JSON.stringify(entryCache));
+                if (typeof Obsidianscout.clearDraft === 'function') {
+                    Obsidianscout.clearDraft("pit-scout");
+                }
             } catch (error) {
                 if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
                     const createdAt = new Date().toISOString();
@@ -268,6 +345,10 @@ async function loadPitScoutPageData(me) {
 
                     Obsidianscout.showToast("Saved locally (Offline mode)", "success");
                     Obsidianscout.updateConnectionStatus();
+
+                    if (typeof Obsidianscout.clearDraft === 'function') {
+                        Obsidianscout.clearDraft("pit-scout");
+                    }
 
                     clearFormFields(fields, form);
                     handleSelectionChange();

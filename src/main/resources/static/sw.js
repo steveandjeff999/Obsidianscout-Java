@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obsidianscout-shell-v44';
+const CACHE_NAME = 'obsidianscout-shell-v45';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 // Application shell assets cached during install
@@ -23,6 +23,7 @@ const ASSETS = [
     '/pit-data',
     '/analytics',
     '/custom-analytics',
+    '/compare',
     '/data-validation',
     '/graphs',
     '/events',
@@ -99,6 +100,7 @@ const ASSETS = [
     '/js/services/offline-sync.js',
     '/js/services/data-compression.js',
     '/js/services/chat-poller.js',
+    '/js/services/form-draft.js',
     '/js/utilities/helpers.js',
     '/js/utilities/haptics.js',
     '/js/utilities/media.js',
@@ -117,6 +119,7 @@ const ASSETS = [
     '/js/pit-data.js',
     '/js/analytics.js',
     '/js/custom-analytics.js',
+    '/js/compare.js',
     '/js/data-validation.js',
     '/js/graphs.js',
     '/js/events.js',

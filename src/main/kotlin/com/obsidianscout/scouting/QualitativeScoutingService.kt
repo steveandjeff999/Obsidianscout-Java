@@ -43,10 +43,26 @@ data class QualitativeScoutingEntryRecord(
     val matchPlayedTime: Long? = null,
     val hasDiscrepancy: Boolean = false,
     val conflictingTeams: List<Int> = emptyList(),
-    val username: String? = null
+    val username: String? = null,
+    val completenessPct: Float? = null
 )
 
 object QualitativeScoutingService {
+
+    fun computeCompleteness(config: ScoutingConfig, data: JsonObject): Float {
+        val fields = config.fields.filter {
+            val t = it.type.lowercase()
+            t !in listOf("label", "divider", "section", "header")
+        }
+        if (fields.isEmpty()) return 100f
+        val filled = fields.count { field ->
+            val v = data[field.id]
+            v != null && v !is JsonNull &&
+                    !(v is JsonPrimitive && v.content.isBlank())
+        }
+        return (filled.toFloat() / fields.size * 100f).coerceIn(0f, 100f)
+    }
+
     fun listEntries(session: UserSession, includePrescout: Boolean = false, all: Boolean = false, eventKey: String? = null): List<QualitativeScoutingEntryRecord> {
         return readTransaction {
             val query = QualitativeScoutingEntries.selectAll()
@@ -95,7 +111,8 @@ object QualitativeScoutingService {
                     matchPlayedTime = matchTimes[mKey],
                     hasDiscrepancy = row[QualitativeScoutingEntries.hasDiscrepancy],
                     conflictingTeams = conflicting,
-                    username = userNames[row[QualitativeScoutingEntries.submittedByUserId].value]
+                    username = userNames[row[QualitativeScoutingEntries.submittedByUserId].value],
+                    completenessPct = row[QualitativeScoutingEntries.completenessPct]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -147,7 +164,8 @@ object QualitativeScoutingService {
                     matchPlayedTime = matchTimes[mKey],
                     hasDiscrepancy = row[QualitativeScoutingEntries.hasDiscrepancy],
                     conflictingTeams = conflicting,
-                    username = userNames[row[QualitativeScoutingEntries.submittedByUserId].value]
+                    username = userNames[row[QualitativeScoutingEntries.submittedByUserId].value],
+                    completenessPct = row[QualitativeScoutingEntries.completenessPct]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -276,14 +294,16 @@ object QualitativeScoutingService {
                 matchPlayedTime = matchPlayedTime,
                 hasDiscrepancy = duplicate[QualitativeScoutingEntries.hasDiscrepancy],
                 conflictingTeams = conflicting,
-                username = session.username
+                username = session.username,
+                completenessPct = duplicate[QualitativeScoutingEntries.completenessPct]
             )
         }
 
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
         val now = Instant.now()
+        val completeness = computeCompleteness(config, request.data)
 
-        val id = transaction {
+        val id = com.obsidianscout.db.writeTransactionWithRetry {
             QualitativeScoutingEntries.insertAndGetId {
                 it[ownerTeamNumber] = session.teamNumber
                 it[program] = session.program
@@ -295,6 +315,7 @@ object QualitativeScoutingService {
                 it[submittedByUserId] = EntityID(UUID.fromString(session.userId), Users)
                 it[createdAt] = now
                 it[QualitativeScoutingEntries.isPrescout] = isPrescout
+                it[completenessPct] = completeness
             }
         }
 
@@ -326,7 +347,8 @@ object QualitativeScoutingService {
                 matchPlayedTime = matchPlayedTime,
                 hasDiscrepancy = updatedRow[QualitativeScoutingEntries.hasDiscrepancy],
                 conflictingTeams = conflicting,
-                username = session.username
+                username = session.username,
+                completenessPct = completeness
             )
         }
     }

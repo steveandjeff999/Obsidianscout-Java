@@ -140,6 +140,26 @@
                 updateRecommendations();
             });
 
+            const exportCsvBtn = document.getElementById("export-csv-btn");
+            if (exportCsvBtn) {
+                exportCsvBtn.addEventListener("click", () => {
+                    if (!currentEventKey) {
+                        if (window.Obsidianscout && typeof Obsidianscout.showToast === 'function') {
+                            Obsidianscout.showToast("No event selected", "warning");
+                        }
+                        return;
+                    }
+                    window.location.href = `/api/alliance-selection/export/csv?eventKey=${encodeURIComponent(currentEventKey)}`;
+                });
+            }
+
+            const printBtn = document.getElementById("print-board-btn");
+            if (printBtn) {
+                printBtn.addEventListener("click", () => {
+                    window.print();
+                });
+            }
+
             // Setup Selector Modal Events
             document.getElementById("selector-modal-close").addEventListener("click", closeSelectorModal);
             document.getElementById("selector-modal-cancel").addEventListener("click", closeSelectorModal);

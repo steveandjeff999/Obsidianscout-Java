@@ -47,10 +47,26 @@ data class PitScoutingEntryRecord(
     val isPrescout: Boolean = false,
     val hasDiscrepancy: Boolean = false,
     val conflictingTeams: List<Int> = emptyList(),
-    val username: String? = null
+    val username: String? = null,
+    val completenessPct: Float? = null
 )
 
 object PitScoutingService {
+
+    fun computeCompleteness(config: ScoutingConfig, data: JsonObject): Float {
+        val fields = config.fields.filter {
+            val t = it.type.lowercase()
+            t !in listOf("label", "divider", "section", "header")
+        }
+        if (fields.isEmpty()) return 100f
+        val filled = fields.count { field ->
+            val v = data[field.id]
+            v != null && v !is JsonNull &&
+                    !(v is JsonPrimitive && v.content.isBlank())
+        }
+        return (filled.toFloat() / fields.size * 100f).coerceIn(0f, 100f)
+    }
+
     fun listEntries(session: UserSession, includePrescout: Boolean = false, all: Boolean = false, eventKey: String? = null): List<PitScoutingEntryRecord> {
         return readTransaction {
             val query = PitScoutingEntries.selectAll()
@@ -88,7 +104,8 @@ object PitScoutingService {
                     isPrescout = row[PitScoutingEntries.isPrescout],
                     hasDiscrepancy = row[PitScoutingEntries.hasDiscrepancy],
                     conflictingTeams = conflicting,
-                    username = userNames[row[PitScoutingEntries.submittedByUserId].value]
+                    username = userNames[row[PitScoutingEntries.submittedByUserId].value],
+                    completenessPct = row[PitScoutingEntries.completenessPct]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -129,7 +146,8 @@ object PitScoutingService {
                     isPrescout = row[PitScoutingEntries.isPrescout],
                     hasDiscrepancy = row[PitScoutingEntries.hasDiscrepancy],
                     conflictingTeams = conflicting,
-                    username = userNames[row[PitScoutingEntries.submittedByUserId].value]
+                    username = userNames[row[PitScoutingEntries.submittedByUserId].value],
+                    completenessPct = row[PitScoutingEntries.completenessPct]
                 )
             }
             resolveEntriesList(rawRecords, session.teamNumber, all)
@@ -243,7 +261,8 @@ object PitScoutingService {
                 isPrescout = duplicate[PitScoutingEntries.isPrescout],
                 hasDiscrepancy = duplicate[PitScoutingEntries.hasDiscrepancy],
                 conflictingTeams = conflicting,
-                username = session.username
+                username = session.username,
+                completenessPct = duplicate[PitScoutingEntries.completenessPct]
             )
         }
 
@@ -251,8 +270,9 @@ object PitScoutingService {
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), cleanData)
         val now = Instant.now()
         val callerUuid = UUID.fromString(session.userId)
+        val completeness = computeCompleteness(config, cleanData)
 
-        val id = transaction {
+        val id = com.obsidianscout.db.writeTransactionWithRetry {
             PitScoutingEntries.insertAndGetId {
                 it[ownerTeamNumber] = session.teamNumber
                 it[program] = session.program
@@ -262,6 +282,7 @@ object PitScoutingService {
                 it[submittedByUserId] = EntityID(callerUuid, Users)
                 it[createdAt] = now
                 it[PitScoutingEntries.isPrescout] = isPrescout
+                it[completenessPct] = completeness
             }
         }
 
@@ -281,7 +302,8 @@ object PitScoutingService {
                 isPrescout = isPrescout,
                 hasDiscrepancy = updatedRow[PitScoutingEntries.hasDiscrepancy],
                 conflictingTeams = conflicting,
-                username = session.username
+                username = session.username,
+                completenessPct = completeness
             )
         }
     }

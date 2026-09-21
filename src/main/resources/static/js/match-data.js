@@ -90,7 +90,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     data: e.data,
                     hasDiscrepancy: e.hasDiscrepancy || false,
                     conflictingTeams: e.conflictingTeams || [],
-                    totalScore: totalScore
+                    totalScore: totalScore,
+                    completenessPct: e.completenessPct != null ? Math.round(e.completenessPct) : null
                 };
             });
 
@@ -545,6 +546,17 @@ function renderDetail(state, entry) {
     metaGroup.appendChild(buildDetailItem("Scouter Team", String(entry.ownerTeamNumber)));
     metaGroup.appendChild(buildDetailItem("Match", matchLabel));
     metaGroup.appendChild(buildDetailItem("Total Score", `${entry.totalScore} pts`));
+    if (entry.completenessPct != null) {
+        const color = entry.completenessPct >= 80 ? '#22c55e' : (entry.completenessPct >= 50 ? '#eab308' : '#ef4444');
+        const badge = document.createElement("span");
+        badge.style.cssText = `display:inline-block; padding:2px 8px; border-radius:12px; font-weight:700; font-size:0.8rem; background:${color}22; color:${color}; border:1px solid ${color}44;`;
+        badge.textContent = `${entry.completenessPct}%`;
+        const item = document.createElement("div");
+        item.className = "pit-detail-item";
+        item.innerHTML = `<span class="label">Completeness</span>`;
+        item.appendChild(badge);
+        metaGroup.appendChild(item);
+    }
     metaGroup.appendChild(buildDetailItem("Created At", formatDateTime(entry.createdAt)));
     container.appendChild(metaGroup);
 

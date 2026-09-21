@@ -103,9 +103,6 @@ fun main(args: Array<String>) {
         }
         if (isOom) {
             System.err.println("[OOM-Guard] CRITICAL: OutOfMemoryError caught in thread '${thread.name}'. Triggering automatic process exit with heap escalation...")
-            try {
-                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(File(".oom_occurred"), "1", createBackup = false)
-            } catch (e: Exception) { /* ignore */ }
             Runtime.getRuntime().halt(137)
         } else {
             System.err.println("[UncaughtException] Thread '${thread.name}' threw exception: ${throwable.message}")
@@ -179,7 +176,7 @@ fun Application.module(appConfig: AppConfig) {
     install(WebSockets) {
         pingPeriod = java.time.Duration.ofSeconds(15)
         timeout = java.time.Duration.ofSeconds(15)
-        maxFrameSize = Long.MAX_VALUE
+        maxFrameSize = 1 * 1024 * 1024L // 1 MB
         masking = false
     }
     install(Compression) {
@@ -401,46 +398,37 @@ fun Application.module(appConfig: AppConfig) {
         json(JsonSupport.json, ContentType.Application.Any)
         json(JsonSupport.json, ContentType.Text.Any)
     }
+    val cookieConfig = io.ktor.server.sessions.CookieConfiguration().apply {
+        httpOnly = true
+        path = "/"
+        maxAgeInSeconds = 60 * 60 * 12
+        extensions["SameSite"] = "Lax"
+        secure = appConfig.server.cookieSecure
+    }
+    val clusterTransformer = com.obsidianscout.auth.ClusterSessionTransformer { com.obsidianscout.auth.ClusterSecretService.getSessionSecret() }
+    val baseTransport = io.ktor.server.sessions.SessionTransportCookie(
+        name = "obsidian_session",
+        configuration = cookieConfig,
+        transformers = listOf(clusterTransformer)
+    )
+    val wrappedTransport = KeepMeLoggedInSessionTransport(baseTransport)
+    val sessionSerializer = io.ktor.server.sessions.serialization.KotlinxSessionSerializer(
+        UserSession.serializer(),
+        JsonSupport.json
+    )
+    val tracker = io.ktor.server.sessions.SessionTrackerByValue(
+        UserSession::class,
+        sessionSerializer
+    )
+    val sessionProvider = SessionProvider(
+        name = "obsidian_session",
+        type = UserSession::class,
+        transport = wrappedTransport,
+        tracker = tracker
+    )
+
     install(Sessions) {
-        cookie<UserSession>("obsidian_session") {
-            cookie.httpOnly = true
-            cookie.path = "/"
-            cookie.maxAgeInSeconds = 60 * 60 * 12
-            cookie.extensions["SameSite"] = "Lax"
-            cookie.secure = appConfig.server.cookieSecure
-            transform(com.obsidianscout.auth.ClusterSessionTransformer { com.obsidianscout.auth.ClusterSecretService.getSessionSecret() })
-        }
-
-        // Wrap the registered provider's transport to dynamically support Keep Me Logged In
-        @Suppress("UNCHECKED_CAST")
-        val originalProvider = providers.firstOrNull { it.name == "obsidian_session" } as? SessionProvider<UserSession>
-        if (originalProvider != null) {
-            val originalTransport = originalProvider.transport as io.ktor.server.sessions.SessionTransportCookie
-            val wrappedTransport = KeepMeLoggedInSessionTransport(originalTransport)
-            val newProvider = SessionProvider(
-                name = originalProvider.name,
-                type = originalProvider.type,
-                transport = wrappedTransport,
-                tracker = originalProvider.tracker
-            )
-
-            val clazz = io.ktor.server.sessions.SessionsConfig::class.java
-            val listField = runCatching { clazz.getDeclaredField("registered") }
-                .recoverCatching { clazz.getDeclaredField("_providers") }
-                .recoverCatching { clazz.getDeclaredField("providers") }
-                .getOrNull()
-            if (listField != null) {
-                listField.isAccessible = true
-                @Suppress("UNCHECKED_CAST")
-                val list = listField.get(this) as? MutableList<SessionProvider<UserSession>>
-                if (list != null) {
-                    val index = list.indexOfFirst { it.name == "obsidian_session" }
-                    if (index != -1) {
-                        list[index] = newProvider
-                    }
-                }
-            }
-        }
+        register(sessionProvider)
     }
     install(StatusPages) {
         status(HttpStatusCode.NotFound) { call, _ ->
@@ -572,6 +560,7 @@ fun Application.module(appConfig: AppConfig) {
                 SyncScheduler.start()
                 com.obsidianscout.scouting.DeduplicationScheduler.start()
                 com.obsidianscout.auth.SessionCleanupScheduler.start()
+                com.obsidianscout.auth.LoginRateLimiter.startCleanupJob()
                 com.obsidianscout.admin.CloudflaredService.initOnStartup()
                 com.obsidianscout.admin.NodeMonitoringService.start()
                 com.obsidianscout.admin.PeerLoadRouter.start(appConfig)
@@ -622,10 +611,18 @@ private fun loadOrCreateKeyStore(appConfig: AppConfig): KeyStore {
     val keystoreFile = File(httpsConfig.keystorePath)
     if (!keystoreFile.exists()) {
         keystoreFile.parentFile?.mkdirs()
+        val autoSans = runCatching {
+            java.net.NetworkInterface.getNetworkInterfaces()?.toList()
+                ?.flatMap { it.inetAddresses.toList() }
+                ?.filter { !it.isLoopbackAddress && it is java.net.Inet4Address }
+                ?.map { it.hostAddress } ?: emptyList()
+        }.getOrDefault(emptyList())
+        val dynamicDomains = (listOf("localhost", "127.0.0.1") + autoSans + httpsConfig.additionalSans).distinct()
+
         val keyStore = buildKeyStore {
             certificate(httpsConfig.keyAlias) {
                 password = httpsConfig.keystorePassword
-                domains = listOf("localhost", "127.0.0.1", "192.168.1.130")
+                domains = dynamicDomains
             }
         }
         keyStore.saveToFile(keystoreFile, httpsConfig.keystorePassword)
