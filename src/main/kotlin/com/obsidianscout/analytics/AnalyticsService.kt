@@ -245,12 +245,50 @@ object AnalyticsService {
         )
     }
 
+    fun generateDefaultWidgets(config: ScoutingConfig): List<AnalyticsWidget> {
+        val widgets = mutableListOf<AnalyticsWidget>()
+        widgets.add(AnalyticsWidget(id = "entryCount", title = "Entries Collected", type = "count"))
+        widgets.add(AnalyticsWidget(id = "avgScore", title = "Average Score", type = "score_avg"))
+        widgets.add(AnalyticsWidget(id = "totalScore", title = "Total Points", type = "score_total"))
+
+        config.fields.forEach { field ->
+            val fieldType = field.type.lowercase()
+            if (fieldType == "section" || fieldType == "header" || fieldType == "label" || fieldType == "spacer") {
+                return@forEach
+            }
+            val titleLabel = field.label.ifBlank { field.id }
+            when (fieldType) {
+                "counter", "number", "rating" -> {
+                    widgets.add(AnalyticsWidget(id = "avg_${field.id}", title = "Avg $titleLabel", type = "avg", fieldId = field.id))
+                    if (fieldType == "counter" || field.pointsPer != null) {
+                        widgets.add(AnalyticsWidget(id = "sum_${field.id}", title = "Total $titleLabel", type = "sum", fieldId = field.id))
+                    }
+                }
+                "checkbox" -> {
+                    widgets.add(AnalyticsWidget(id = "rate_${field.id}", title = "$titleLabel Rate", type = "rate", fieldId = field.id))
+                }
+                "select", "radio" -> {
+                    widgets.add(AnalyticsWidget(id = "bar_${field.id}", title = "$titleLabel Breakdown", type = "bar", fieldId = field.id))
+                }
+            }
+        }
+        return widgets
+    }
+
     fun generate(config: ScoutingConfig, entries: List<ScoutingEntryRecord>): AnalyticsResponse {
-        val widgets = config.analytics.map { widget ->
+        val widgetsToProcess = if (config.analytics.isNotEmpty()) {
+            config.analytics
+        } else {
+            generateDefaultWidgets(config)
+        }
+        val widgets = widgetsToProcess.map { widget ->
             when (widget.type.lowercase()) {
                 "count" -> widgetResult(widget, value = entries.size.toDouble())
                 "avg" -> widgetResult(widget, value = average(widget, entries))
                 "sum" -> widgetResult(widget, value = sum(widget, entries))
+                "min" -> widgetResult(widget, value = min(widget, entries))
+                "max" -> widgetResult(widget, value = max(widget, entries))
+                "rate", "pct", "percentage" -> widgetResult(widget, value = rate(widget, entries))
                 "bar" -> widgetResult(widget, series = barSeries(config, widget, entries))
                 "score_total" -> widgetResult(widget, value = totalScore(config, entries))
                 "score_avg" -> widgetResult(widget, value = averageScore(config, entries))
@@ -273,10 +311,27 @@ object AnalyticsService {
         return values.sum()
     }
 
+    private fun min(widget: AnalyticsWidget, entries: List<ScoutingEntryRecord>): Double {
+        val values = collectNumbers(widget, entries)
+        return if (values.isEmpty()) 0.0 else values.minOrNull() ?: 0.0
+    }
+
+    private fun max(widget: AnalyticsWidget, entries: List<ScoutingEntryRecord>): Double {
+        val values = collectNumbers(widget, entries)
+        return if (values.isEmpty()) 0.0 else values.maxOrNull() ?: 0.0
+    }
+
+    private fun rate(widget: AnalyticsWidget, entries: List<ScoutingEntryRecord>): Double {
+        if (entries.isEmpty()) return 0.0
+        val values = collectNumbers(widget, entries)
+        return if (values.isEmpty()) 0.0 else (values.sum() / entries.size) * 100.0
+    }
+
     private fun collectNumbers(widget: AnalyticsWidget, entries: List<ScoutingEntryRecord>): List<Double> {
         val fieldId = widget.fieldId ?: return emptyList()
         return entries.mapNotNull { entry ->
-            readNumber(entry.data[fieldId])
+            val el = entry.data[fieldId]
+            readNumber(el) ?: readBoolean(el)?.let { if (it) 1.0 else 0.0 }
         }
     }
 
@@ -284,12 +339,19 @@ object AnalyticsService {
         val fieldId = widget.fieldId ?: return emptyList()
         val field = config.fields.firstOrNull { it.id == fieldId }
         val counts = mutableMapOf<String, Int>()
+
+        field?.options?.forEach { opt ->
+            val label = opt.label.ifBlank { opt.value }
+            counts[label] = 0
+        }
+
         entries.forEach { entry ->
             val raw = readLabel(entry.data[fieldId]) ?: return@forEach
-            val label = field?.options?.firstOrNull { it.value == raw || it.label == raw }?.label ?: raw
+            val label = field?.options?.firstOrNull { it.value == raw || it.label == raw }?.let { it.label.ifBlank { it.value } } ?: raw
             counts[label] = (counts[label] ?: 0) + 1
         }
         return counts.entries
+            .filter { (field?.options?.isNotEmpty() == true) || it.value > 0 }
             .sortedByDescending { it.value }
             .map { AnalyticsSeriesPoint(it.key, it.value.toDouble()) }
     }

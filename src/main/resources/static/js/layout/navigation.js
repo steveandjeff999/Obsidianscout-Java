@@ -195,7 +195,7 @@ export function adjustNavForRole(user) {
                 if (allowedPages && Array.isArray(allowedPages)) {
                     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                         const page = link.dataset.page;
-                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history"];
+                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials"];
                         const isAllowed = allowedPages.includes(page) ||
                             (page === "cache-manager" && (allowedPages.includes("cache-manager") || allowedPages.includes("scout-history") || allowedPages.includes("history")));
                         if (!bypassPages.includes(page) && !superAdminPages.includes(page) && !isAllowed) {
@@ -237,7 +237,7 @@ export function adjustNavForRole(user) {
 
 export function isPageAccessible(page, role) {
     if (isSuperAdmin(role)) return true;
-    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor"];
+    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials"];
     if (bypassPages.includes(page)) return true;
 
     if (["users", "banners", "admin-settings", "default-configs"].includes(page) && !isAdmin(role)) {
@@ -255,6 +255,9 @@ export function isPageAccessible(page, role) {
             const allowedPages = role === "SCOUT" ? settings.scoutPages : (role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
             if (allowedPages && Array.isArray(allowedPages)) {
                 if (page === "cache-manager" && (allowedPages.includes("cache-manager") || allowedPages.includes("scout-history") || allowedPages.includes("history"))) {
+                    return true;
+                }
+                if (page.startsWith("prescout") && allowedPages.includes("prescout")) {
                     return true;
                 }
                 return allowedPages.includes(page);

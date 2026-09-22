@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ObsidianScout | Feature Tutorials</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+</head>
+
+<body data-page="tutorials">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <!-- Hero & Zachary Assistant Header -->
+            <div class="card tutorial-hero-card">
+                <div class="tutorial-hero-layout">
+                    <div class="tutorial-zachary-spotlight" id="tutorial-hero-zachary">
+                        <img src="/assets/images/zachary.png" alt="Zachary" class="tutorial-hero-avatar" id="hero-zachary-img" />
+                        <div class="zachary-speech-bubble" id="hero-zachary-bubble">
+                            <div class="zachary-bubble-header">
+                                <span class="zachary-name">Zachary</span>
+                                <span class="zachary-badge">Your Assistant</span>
+                            </div>
+                            <p class="zachary-bubble-text" id="hero-zachary-text">
+                                Hey there, scout! Need help navigating the system? I know every single button, form, and statistical regression in this entire app! Pick a feature below and let's get started!
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="tutorial-hero-stats">
+                        <div class="tutorial-hero-title-group">
+                            <h1 data-i18n="tutorials.title">Interactive Feature Tutorials</h1>
+                            <p class="notice" data-i18n="tutorials.subtitle">
+                                In-depth, interactive walkthroughs for every tool in ObsidianScout. Tutorials automatically adapt to your permissions.
+                            </p>
+                        </div>
+
+                        <!-- Overall Progress Bar -->
+                        <div class="tutorial-progress-container">
+                            <div class="tutorial-progress-header">
+                                <span class="tutorial-progress-label">Learning Path Progress</span>
+                                <span class="tutorial-progress-counts" id="progress-summary-text">0 / 0 Completed (0%)</span>
+                            </div>
+                            <div class="tutorial-progress-track">
+                                <div class="tutorial-progress-fill" id="progress-bar-fill" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Controls -->
+                        <div class="tutorial-hero-actions">
+                            <button type="button" class="btn primary" id="btn-resume-learning-path">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:4px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                <span id="resume-btn-label">Start Next Tutorial</span>
+                            </button>
+
+                            <div class="tutorial-mode-picker">
+                                <label for="tutorial-mode-select">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg>
+                                    Guide Mode:
+                                </label>
+                                <select id="tutorial-mode-select">
+                                    <option value="zachary">Zachary (Chatty Assistant)</option>
+                                    <option value="standard">Standard (Concise)</option>
+                                    <option value="disabled">Disabled (Off)</option>
+                                </select>
+                            </div>
+
+                            <button type="button" class="btn ghost btn-sm" id="btn-reset-tutorial-progress" title="Reset all tutorial progress">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                                Reset Progress
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls & Filters Bar -->
+            <div class="card tutorial-filter-bar mt-16">
+                <div class="tutorial-search-wrapper">
+                    <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" id="tutorial-search-input" placeholder="Search feature tutorials..." aria-label="Search tutorials" />
+                </div>
+                <div class="tutorial-filter-group">
+                    <button type="button" class="btn-filter active" data-filter="all">All Features</button>
+                    <button type="button" class="btn-filter" data-filter="not_completed">To Do</button>
+                    <button type="button" class="btn-filter" data-filter="completed">Completed ✔</button>
+                </div>
+            </div>
+
+            <!-- Tutorials Grid -->
+            <div class="tutorial-cards-grid mt-16" id="tutorial-cards-container">
+                <div class="tutorial-loading-state">
+                    Loading feature tutorials...
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script type="module" src="/js/tutorials.js"></script>
+</body>
+
+</html>

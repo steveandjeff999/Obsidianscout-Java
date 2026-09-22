@@ -279,4 +279,96 @@ class ProgramAndAllianceIsolationVerificationTest {
             assertEquals(1L, apiEventCount, "Global API events cache must remain intact")
         }
     }
+
+    @Test
+    fun testInactiveAllianceMembershipExcludesPartnerDataFromScoutingEntriesAndGraphs() {
+        val now = Instant.now()
+        val user100Id = UUID.randomUUID()
+        val user200Id = UUID.randomUUID()
+
+        val session100 = UserSession(user100Id.toString(), "admin100", 100, "FRC", UserRole.ADMIN)
+        val session200 = UserSession(user200Id.toString(), "admin200", 200, "FRC", UserRole.ADMIN)
+
+        transaction {
+            Users.insert {
+                it[id] = user100Id
+                it[username] = "admin100"
+                it[passwordHash] = "hash"
+                it[teamNumber] = 100
+                it[role] = "ADMIN"
+                it[program] = "FRC"
+                it[createdAt] = now
+            }
+            Users.insert {
+                it[id] = user200Id
+                it[username] = "admin200"
+                it[passwordHash] = "hash"
+                it[teamNumber] = 200
+                it[role] = "ADMIN"
+                it[program] = "FRC"
+                it[createdAt] = now
+            }
+
+            // Insert match scouting entry for Team 100
+            ScoutingEntries.insert {
+                it[id] = UUID.randomUUID()
+                it[ownerTeamNumber] = 100
+                it[program] = "FRC"
+                it[eventKey] = "2026test"
+                it[matchKey] = "2026test_qm1"
+                it[matchNumber] = 1
+                it[targetTeamNumber] = 254
+                it[submittedByUserId] = user100Id
+                it[dataJson] = """{"teleopPoints": 30}"""
+                it[createdAt] = now
+            }
+
+            // Insert match scouting entry for Team 200
+            ScoutingEntries.insert {
+                it[id] = UUID.randomUUID()
+                it[ownerTeamNumber] = 200
+                it[program] = "FRC"
+                it[eventKey] = "2026test"
+                it[matchKey] = "2026test_qm2"
+                it[matchNumber] = 2
+                it[targetTeamNumber] = 1678
+                it[submittedByUserId] = user200Id
+                it[dataJson] = """{"teleopPoints": 45}"""
+                it[createdAt] = now
+            }
+        }
+
+        // 1. Team 100 creates alliance, invites Team 200, Team 200 accepts
+        val alliance = AllianceService.createAlliance(session100, "Scouting Collab Alliance", "2026test", null)
+        AllianceService.inviteTeam(session100, alliance.id, 200)
+        AllianceService.respondToInvite(session200, alliance.id, accept = true)
+
+        // Both teams should be active by default after accepting
+        assertEquals(setOf(200), AllianceService.getAlliancePartnerTeams(100, "FRC"))
+        assertEquals(setOf(100), AllianceService.getAlliancePartnerTeams(200, "FRC"))
+
+        val entries100BothActive = ScoutingService.listEntries(session100, includePrescout = true, all = true)
+        assertEquals(2, entries100BothActive.size, "Team 100 should see both entries when alliance is active")
+
+        val entries200BothActive = ScoutingService.listEntries(session200, includePrescout = true, all = true)
+        assertEquals(2, entries200BothActive.size, "Team 200 should see both entries when alliance is active")
+
+        // 2. Team 200 toggles alliance to INACTIVE
+        AllianceService.toggleActiveMembership(session200, alliance.id, active = false)
+
+        // Neither team should see the other team as a partner when Team 200 is inactive
+        assertTrue(AllianceService.getAlliancePartnerTeams(100, "FRC").isEmpty(), "Team 100 should have no active partners when Team 200 is inactive in alliance")
+        assertTrue(AllianceService.getAlliancePartnerTeams(200, "FRC").isEmpty(), "Team 200 should have no active partners when Team 200 is inactive in alliance")
+
+        // Team 100 querying /all-data or /graphs data should only see Team 100 data
+        val entries100Inactive = ScoutingService.listEntries(session100, includePrescout = true, all = true)
+        assertEquals(1, entries100Inactive.size, "Team 100 must NOT see Team 200's data when Team 200 is inactive in alliance")
+        assertEquals(100, entries100Inactive[0].ownerTeamNumber)
+
+        // Team 200 querying /all-data or /graphs data should only see Team 200 data
+        val entries200Inactive = ScoutingService.listEntries(session200, includePrescout = true, all = true)
+        assertEquals(1, entries200Inactive.size, "Team 200 must NOT see Team 100's data when Team 200 is inactive in alliance")
+        assertEquals(200, entries200Inactive[0].ownerTeamNumber)
+    }
 }
+

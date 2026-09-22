@@ -130,6 +130,12 @@ async function handleJsError(error) {
     if (isModalOpen) return;
     isModalOpen = true;
 
+    try {
+        if (window.Obsidianscout && typeof window.Obsidianscout.showZacharyErrorExplainer === 'function') {
+            window.Obsidianscout.showZacharyErrorExplainer(error.message || "Runtime execution error");
+        }
+    } catch (_) {}
+
     showErrorPromptModal(error, me);
 }
 

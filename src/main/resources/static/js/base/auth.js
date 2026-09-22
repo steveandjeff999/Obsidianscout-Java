@@ -128,7 +128,7 @@ export async function requireAuth() {
     if (currentPage && settings && (me.role === "SCOUT" || me.role === "ANALYTICS" || me.role === "ADMIN")) {
         const allowedPages = me.role === "SCOUT" ? settings.scoutPages : (me.role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
         if (allowedPages && Array.isArray(allowedPages)) {
-            const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "reset-password", "config-migration", "schema-history"];
+            const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials"];
             const isAllowed = allowedPages.includes(currentPage) ||
                 (currentPage === "cache-manager" && (allowedPages.includes("cache-manager") || allowedPages.includes("scout-history") || allowedPages.includes("history")));
             if (!bypassPages.includes(currentPage) && !superAdminPages.includes(currentPage) && !isAllowed) {

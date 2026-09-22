@@ -1003,6 +1003,10 @@
   "all_data.loading_all_scouting_data": "Loading all scouting data...",
   "all_data.unable_to_load_scouting_data": "Unable to load scouting data",
   "analytics.no_widgets_configured": "No widgets configured in settings. Go to Settings to define analytics widgets.",
+  "analytics.no_widgets_hint": "Configure fields in your scouting settings or collect match data to see live analytics.",
+  "analytics.include_prescout": "Include Prescouting Data",
+  "analytics.refresh": "Refresh",
+  "analytics.no_data_recorded": "No data recorded yet",
   "analytics.loading_analytics": "Loading analytics...",
   "analytics.unable_to_load_analytics": "Unable to load analytics data",
   "cache_manager.queue_limit": "Off-line scouting queue size limit: 5MB",
@@ -1379,5 +1383,8 @@
   "storage.btn_details": "Details",
   "storage.btn_wipe_team": "Wipe Team Data",
   "storage.btn_clear_cache": "Clear Cache",
-  "storage.btn_delete_scouting": "Delete Scouting"
+  "storage.btn_delete_scouting": "Delete Scouting",
+  "nav.tutorials": "Tutorials",
+  "tutorials.title": "Interactive Feature Tutorials",
+  "tutorials.subtitle": "In-depth, interactive walkthroughs for every tool in ObsidianScout. Tutorials automatically adapt to your permissions."
 }

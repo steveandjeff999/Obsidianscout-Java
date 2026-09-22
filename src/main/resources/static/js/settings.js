@@ -255,6 +255,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalTutorialPrefWidget(currentMe) {
+        const tutorialPref = document.getElementById("personal-tutorial-pref");
+        if (!tutorialPref) return;
+
+        tutorialPref.value = Obsidianscout.getTutorialMode ? Obsidianscout.getTutorialMode() : (Obsidianscout.safeGetItem("obsidianscout:tutorial_mode") || "zachary");
+
+        tutorialPref.addEventListener("change", (e) => {
+            const val = e.target.value;
+            if (typeof Obsidianscout.setTutorialMode === "function") {
+                Obsidianscout.setTutorialMode(val);
+            } else {
+                Obsidianscout.safeSetItem("obsidianscout:tutorial_mode", val);
+            }
+            Obsidianscout.showToast("Tutorial guide preference updated", "success");
+        });
+    }
+
     function wirePersonalDeleteAccountWidget(currentMe) {
         const deleteBtn = document.getElementById("personal-delete-account");
         if (!deleteBtn) return;
@@ -745,4 +762,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalDeleteAccountWidget(me);
     wirePersonalHapticPrefWidget();
     wirePersonalNavLayoutWidget();
+    wirePersonalTutorialPrefWidget(me);
 });

@@ -126,7 +126,15 @@ import {
     positionPopupNextToElement,
     clearTourDOM,
     syncTourProgressToServer,
-    getTourStepsForRoleAndLevel
+    getAccessibleTutorials,
+    getTutorialMode,
+    setTutorialMode,
+    resetAllTutorialProgress,
+    speakZachary,
+    stopZacharySpeech,
+    isZacharyMuted,
+    setZacharyMuted,
+    showZacharyErrorExplainer
 } from './components/tour-wizard.js';
 
 import {
@@ -264,9 +272,21 @@ window.Obsidianscout = {
     clearDraft,
     offerDraftRestore,
     startDraftAutosave,
+    initTour,
+    runActiveTourStep,
+    displayTourStepPopup,
     startTour,
     endTour,
     showTourLevelSelector,
+    getAccessibleTutorials,
+    getTutorialMode,
+    setTutorialMode,
+    resetAllTutorialProgress,
+    speakZachary,
+    stopZacharySpeech,
+    isZacharyMuted,
+    setZacharyMuted,
+    showZacharyErrorExplainer,
     showSetupWizardModal,
     setButtonLoading,
     withButtonLoading,
@@ -344,9 +364,21 @@ export {
     compressData,
     decompressData,
     CACHE_CONFIGS,
+    initTour,
+    runActiveTourStep,
+    displayTourStepPopup,
     startTour,
     endTour,
     showTourLevelSelector,
+    getAccessibleTutorials,
+    getTutorialMode,
+    setTutorialMode,
+    resetAllTutorialProgress,
+    speakZachary,
+    stopZacharySpeech,
+    isZacharyMuted,
+    setZacharyMuted,
+    showZacharyErrorExplainer,
     showSetupWizardModal,
     setButtonLoading,
     withButtonLoading,
@@ -624,12 +656,15 @@ async function onDOMContentLoaded() {
         }
     });
 
-    // If native form validation fails (invalid event fires), instantly restore submit button
+    // If native form validation fails (invalid event fires), instantly restore submit button and trigger Zachary diagnostic if enabled
     document.addEventListener("invalid", (e) => {
         const form = e.target.form;
         if (form) {
             const submitter = form.querySelector('button[type="submit"], input[type="submit"]');
             if (submitter) setButtonLoading(submitter, false);
+            try {
+                showZacharyErrorExplainer("Form constraint violation: A required field is empty or improperly formatted.");
+            } catch (_) {}
         }
     }, true);
 

@@ -1,6 +1,7 @@
 /**
  * Component Toast Module - ObsidianScout
- * Non-blocking floating toast notification messages with haptic feedback and auto-dismiss.
+ * Non-blocking floating toast notification messages with haptic feedback, auto-dismiss,
+ * and Zachary error diagnostics integration when enabled.
  */
 
 import { triggerHaptic } from '../utilities/haptics.js';
@@ -31,6 +32,19 @@ export function showToast(message, tone = "info") {
             document.querySelectorAll('button[data-loading="true"], button.is-loading, input[type="submit"][data-loading="true"]').forEach((btn) => {
                 setButtonLoading(btn, false);
             });
+        } catch (e) {}
+
+        // Trigger Zachary diagnostic explainer if Zachary mode is active
+        try {
+            if (window.Obsidianscout && typeof window.Obsidianscout.showZacharyErrorExplainer === 'function') {
+                window.Obsidianscout.showZacharyErrorExplainer(message);
+            } else {
+                import('./tour-wizard.js').then(m => {
+                    if (m && typeof m.showZacharyErrorExplainer === 'function') {
+                        m.showZacharyErrorExplainer(message);
+                    }
+                }).catch(() => {});
+            }
         } catch (e) {}
     } else if (tone === "warning") {
         triggerHaptic("warning");

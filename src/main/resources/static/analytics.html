@@ -19,7 +19,7 @@
 </head>
 
 <body data-page="analytics">
-        <script>
+    <script>
         (function() {
             try {
                 const saved = localStorage.getItem("obsidian-theme") || "light";
@@ -36,22 +36,29 @@
 
     <div class="orb orb-3"></div>
 
-
-
     <div class="app-shell">
 
         <aside class="sidebar"></aside>
 
-
-
         <main class="main-content">
 
             <div class="card">
-
-                <h1 data-i18n="analytics.title">Analytics from config</h1>
-
-                <p class="notice" data-i18n="analytics.notice">Widgets are generated from the analytics section of the config JSON.</p>
-
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <div>
+                        <h1 data-i18n="analytics.title">Analytics from config</h1>
+                        <p class="notice" data-i18n="analytics.notice" style="margin-top: 4px;">Widgets are generated from the analytics section of the config JSON.</p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <label class="inline-control" style="cursor: pointer; user-select: none; font-size: 14px; font-weight: 500;">
+                            <input type="checkbox" id="toggle-prescout" style="cursor: pointer;" />
+                            <span data-i18n="analytics.include_prescout">Include Prescouting Data</span>
+                        </label>
+                        <button id="btn-refresh-analytics" class="btn btn-secondary" style="padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                            <span data-i18n="analytics.refresh">Refresh</span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div id="analytics-grid" class="metrics mt-20"></div>
@@ -60,8 +67,6 @@
 
     </div>
 
-
-
     <script type="module" src="/js/common.js"></script>
 
     <script defer src="/js/analytics.js"></script>
@@ -69,4 +74,3 @@
 </body>
 
 </html>
-

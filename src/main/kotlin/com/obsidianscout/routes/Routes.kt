@@ -1343,7 +1343,7 @@ fun Application.configureRoutes() {
             route("/analytics") {
                 get {
                     val session = call.requireSession()
-                    val config = ConfigService.getConfig(session.teamNumber)
+                    val config = ConfigService.getConfig(session.teamNumber, session.program)
                     val forcePrescout = call.request.queryParameters["usePrescout"]?.toBoolean() ?: false
                     
                     val regularEntries = ScoutingService.listEntries(session, includePrescout = false)
@@ -3785,6 +3785,7 @@ fun Application.configureRoutes() {
             "demo" to "demo.html",
             "about" to "about.html",
             "login" to "login.html",
+            "tutorials" to "tutorials.html",
             "404" to "404.html",
             "500" to "500.html",
             "503" to "503.html"

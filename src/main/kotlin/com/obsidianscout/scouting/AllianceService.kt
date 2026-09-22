@@ -792,16 +792,15 @@ object AllianceService {
 
         if (myAllianceIds.isEmpty()) return@readTransaction emptySet()
 
-        // Find all other ACCEPTED/ADMIN members in those alliances who are not disabled.
-        // We do NOT require partner teams to also have active eq true, so that whenever a team
-        // enables the alliance, they can collaborate and share/view data with all accepted partners.
+        // Find all other ACCEPTED/ADMIN members in those alliances who are not disabled and are active.
         AllianceMemberships
             .selectAll().where {
                 (AllianceMemberships.allianceId inList myAllianceIds) and
                 (AllianceMemberships.program eq program) and
                 (AllianceMemberships.teamNumber neq teamNumber) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
-                (AllianceMemberships.disabled eq false)
+                (AllianceMemberships.disabled eq false) and
+                (AllianceMemberships.active eq true)
             }
             .map { it[AllianceMemberships.teamNumber] }
             .toSet()
