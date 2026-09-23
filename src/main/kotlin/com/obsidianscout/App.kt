@@ -556,6 +556,7 @@ fun Application.module(appConfig: AppConfig) {
 
                 SyncScheduler.start()
                 com.obsidianscout.scouting.DeduplicationScheduler.start()
+                com.obsidianscout.scouting.ScoutingReminderScheduler.start()
                 com.obsidianscout.auth.SessionCleanupScheduler.start()
                 com.obsidianscout.auth.LoginRateLimiter.startCleanupJob()
                 com.obsidianscout.admin.CloudflaredService.initOnStartup()
@@ -593,6 +594,7 @@ fun Application.module(appConfig: AppConfig) {
         SyncScheduler.stop()
         GistUpdateService.stop()
         com.obsidianscout.scouting.DeduplicationScheduler.stop()
+        com.obsidianscout.scouting.ScoutingReminderScheduler.stop()
         com.obsidianscout.admin.CloudflaredService.stopTunnel()
         try {
             DatabaseFactory.close()

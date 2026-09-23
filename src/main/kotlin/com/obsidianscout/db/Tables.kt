@@ -469,3 +469,32 @@ object PasskeyChallenges : UUIDTable("passkey_challenges") {
     }
 }
 
+object ScoutingAssignments : UUIDTable("scouting_assignments") {
+    val ownerTeamNumber = integer("owner_team_number")
+    val program = varchar("program", 8).default("FRC")
+    val eventKey = varchar("event_key", 64)
+    val assignedUserId = reference("assigned_user_id", Users)
+    val assignmentType = varchar("assignment_type", 32) // MATCH | PIT | QUALITATIVE
+    val matchKey = varchar("match_key", 64).nullable()
+    val matchNumber = integer("match_number").nullable()
+    val compLevel = varchar("comp_level", 16).nullable()
+    val targetTeamNumber = integer("target_team_number").nullable()
+    val allianceColor = varchar("alliance_color", 16).nullable()
+    val status = varchar("status", 32).default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | SKIPPED
+    val notes = text("notes").nullable()
+    val createdByUserId = reference("created_by_user_id", Users).nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+    val completedAt = timestamp("completed_at").nullable()
+    val reminderMinutesBefore = integer("reminder_minutes_before").nullable()
+    val pushReminderSentAt = timestamp("push_reminder_sent_at").nullable()
+    val emailReminderSentAt = timestamp("email_reminder_sent_at").nullable()
+
+    init {
+        index("idx_scouting_assignments_team_event", false, ownerTeamNumber, eventKey, program)
+        index("idx_scouting_assignments_user", false, assignedUserId)
+        index("idx_scouting_assignments_status", false, status)
+        index("idx_scouting_assignments_type", false, assignmentType)
+        index("idx_scouting_assignments_match_team", false, eventKey, matchNumber, targetTeamNumber)
+    }
+}

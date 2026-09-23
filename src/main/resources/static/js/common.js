@@ -214,8 +214,25 @@ import {
 console.log("[CommonJS] Script initialized and loaded (Modular Architecture).");
 initErrorReporter();
 
+export function showModal(modalIdOrEl) {
+    const el = typeof modalIdOrEl === 'string' ? document.getElementById(modalIdOrEl) : modalIdOrEl;
+    if (el) {
+        el.classList.add('show');
+        el.classList.remove('hidden');
+    }
+}
+
+export function hideModal(modalIdOrEl) {
+    const el = typeof modalIdOrEl === 'string' ? document.getElementById(modalIdOrEl) : modalIdOrEl;
+    if (el) {
+        el.classList.remove('show');
+    }
+}
+
 // Export public API to window.Obsidianscout
 window.Obsidianscout = {
+    showModal,
+    hideModal,
     initErrorReporter,
     escapeHtml,
     getProgram,

@@ -204,4 +204,75 @@ object PushNotificationService {
             }
         }
     }
+
+    fun sendAssignmentReminder(
+        userId: UUID,
+        title: String,
+        body: String,
+        url: String,
+        tag: String
+    ) {
+        scope.launch {
+            try {
+                // Dispatch via FCM
+                FcmService.sendNotificationToUsers(
+                    targetUserUuids = listOf(userId),
+                    title = title,
+                    body = body,
+                    groupName = "Assignments",
+                    url = url
+                )
+                NotificationWebSocketManager.broadcastChatNotification(
+                    targetUserIds = listOf(userId.toString()),
+                    groupName = "Assignments",
+                    title = title,
+                    body = body,
+                    senderUsername = "ObsidianScout System"
+                )
+
+                // Dispatch via Web Push
+                val subscriptions = readTransaction {
+                    (PushSubscriptions innerJoin Users).selectAll().where {
+                        (Users.id eq userId) and (Users.notificationPreference neq "none")
+                    }.map { row ->
+                        Subscription(
+                            row[PushSubscriptions.endpoint],
+                            Subscription.Keys(row[PushSubscriptions.p256dh], row[PushSubscriptions.auth])
+                        )
+                    }
+                }
+
+                if (subscriptions.isEmpty()) return@launch
+                val pushService = getPushService()
+                val payload = JsonSupport.json.encodeToString(
+                    PushPayload(
+                        title = title,
+                        body = body,
+                        tag = tag,
+                        data = PushPayloadData(
+                            url = url,
+                            groupName = "Assignments"
+                        )
+                    )
+                )
+
+                for (sub in subscriptions) {
+                    try {
+                        val notification = Notification(sub, payload)
+                        val response = pushService.send(notification, Encoding.AES128GCM)
+                        val statusCode = response.statusLine.statusCode
+                        if (statusCode == 410 || statusCode == 404) {
+                            transaction {
+                                PushSubscriptions.deleteWhere { PushSubscriptions.endpoint eq sub.endpoint }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        println("[Push] Failed to send assignment reminder to ${sub.endpoint}: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                println("[Push] Error dispatching assignment reminder: ${e.message}")
+            }
+        }
+    }
 }

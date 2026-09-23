@@ -286,6 +286,19 @@ object PitScoutingService {
             }
         }
 
+        try {
+            ScoutingAssignmentService.handleScoutingSubmission(
+                ownerTeam = session.teamNumber,
+                program = session.program,
+                eventKey = meta.eventKey,
+                assignmentType = "PIT",
+                matchNumber = null,
+                matchKey = null,
+                targetTeamNumber = meta.targetTeamNumber,
+                userId = session.userId
+            )
+        } catch (_: Exception) {}
+
         recalculateDiscrepancies(meta.eventKey, meta.targetTeamNumber, isPrescout)
 
         return transaction {

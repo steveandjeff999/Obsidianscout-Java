@@ -53,6 +53,7 @@ import com.obsidianscout.scouting.PitScoutingService
 import com.obsidianscout.scouting.QualitativeScoutingService
 import com.obsidianscout.scouting.QualitativeScoutingEntryRecord
 import com.obsidianscout.scouting.ScoutingService
+import com.obsidianscout.scouting.ScoutingAssignmentService
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.HttpHeaders
@@ -1337,6 +1338,110 @@ fun Application.configureRoutes() {
                     }
                     com.obsidianscout.integrations.SyncScheduler.enqueueCustomEventDataSync(session.teamNumber, settings, eventKey)
                     call.respond(com.obsidianscout.integrations.SyncCounts(cachedTeams, cachedMatches))
+                }
+            }
+
+            route("/assignments") {
+                get {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                    val type = call.request.queryParameters["type"]
+                    val userId = call.request.queryParameters["userId"]
+                    val status = call.request.queryParameters["status"]
+                    val list = ScoutingAssignmentService.listAssignments(session, eventKey, type, userId, status)
+                    call.respond(mapOf("assignments" to list))
+                }
+                get("/my") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                    val list = ScoutingAssignmentService.getMyAssignments(session, eventKey)
+                    call.respond(mapOf("assignments" to list))
+                }
+                get("/coverage") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
+                    call.respond(ScoutingAssignmentService.getCoverage(session, eventKey))
+                }
+                get("/conflicts") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey")
+                    val type = call.request.queryParameters["type"]
+                    val matchNumber = call.request.queryParameters["matchNumber"]?.toIntOrNull()
+                    val matchKey = call.request.queryParameters["matchKey"]
+                    val targetTeamNumber = call.request.queryParameters["targetTeamNumber"]?.toIntOrNull()
+                    val allianceColor = call.request.queryParameters["allianceColor"]
+                    call.respond(ScoutingAssignmentService.getConflicts(session, eventKey, type, matchNumber, matchKey, targetTeamNumber, allianceColor))
+                }
+                post {
+                    val session = call.requireAdmin()
+                    val request = call.receive<com.obsidianscout.scouting.CreateAssignmentRequest>()
+                    call.respond(ScoutingAssignmentService.createAssignment(session, request))
+                }
+                post("/bulk") {
+                    val session = call.requireAdmin()
+                    val request = call.receive<com.obsidianscout.scouting.BulkCreateAssignmentsRequest>()
+                    call.respond(ScoutingAssignmentService.bulkCreateAssignments(session, request))
+                }
+                get("/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
+                    val record = ScoutingAssignmentService.getAssignmentById(session, id)
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Assignment not found")
+                    call.respond(record)
+                }
+                put("/{id}") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
+                    val request = call.receive<com.obsidianscout.scouting.UpdateAssignmentRequest>()
+                    call.respond(ScoutingAssignmentService.updateAssignment(session, id, request))
+                }
+                post("/{id}/status") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
+                    val request = call.receive<com.obsidianscout.scouting.UpdateAssignmentStatusRequest>()
+                    call.respond(ScoutingAssignmentService.updateStatus(session, id, request.status))
+                }
+                delete {
+                    val session = call.requireAdmin()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
+                    val type = call.request.queryParameters["type"]
+                    val deletedCount = ScoutingAssignmentService.deleteAllAssignments(session, eventKey, type)
+                    call.respond(com.obsidianscout.scouting.DeleteAssignmentsResponse(success = true, deletedCount = deletedCount, message = "Deleted $deletedCount assignments"))
+                }
+                delete("/{id}") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
+                    val deleted = ScoutingAssignmentService.deleteAssignment(session, id)
+                    if (deleted) {
+                        call.respond(mapOf("success" to true))
+                    } else {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Assignment not found")
+                    }
+                }
+                post("/{id}/remind") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
+                    val record = ScoutingAssignmentService.getAssignmentById(session, id)
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Assignment not found")
+                    val targetUserUuid = runCatching { java.util.UUID.fromString(record.assignedUserId) }.getOrNull()
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid user")
+                    val mKey = record.matchKey ?: "M${record.matchNumber ?: ""}"
+                    val teamStr = if (record.targetTeamNumber != null) "Team ${record.targetTeamNumber}" else "your target"
+                    val title = "Scouting Reminder: Match #${record.matchNumber ?: ""}"
+                    val body = "Manual reminder: You are assigned to scout $teamStr in Match #${record.matchNumber ?: ""}."
+                    val scoutUrl = "/scout?matchKey=$mKey&matchNumber=${record.matchNumber ?: ""}${if (record.targetTeamNumber != null) "&team=${record.targetTeamNumber}" else ""}&event=${record.eventKey}"
+
+                    PushNotificationService.sendAssignmentReminder(
+                        userId = targetUserUuid,
+                        title = title,
+                        body = body,
+                        url = scoutUrl,
+                        tag = "reminder-manual-$id"
+                    )
+                    call.respond(com.obsidianscout.scouting.AssignmentActionResponse(success = true, message = "Reminder sent"))
                 }
             }
 
@@ -3763,6 +3868,8 @@ fun Application.configureRoutes() {
             "alliances" to "alliances.html",
             "alliance-edit" to "alliance-edit.html",
             "alliance-selection" to "alliance-selection.html",
+            "assignments" to "assignments.html",
+            "my-assignments" to "my-assignments.html",
             "users" to "users.html",
             "config" to "config.html",
             "admin-settings" to "admin-settings.html",

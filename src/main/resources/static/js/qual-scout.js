@@ -434,6 +434,63 @@ async function loadQualScoutPageData(me) {
             Obsidianscout.offerDraftRestore("qual-scout", applyDraftData);
         }
 
+        // Support URL query params pre-filling from assignments (e.g. ?match=qm1&scope=red or ?match=qm1&team=254)
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlScope = urlParams.get("scope") || urlParams.get("targetAlliance"); // "red", "blue", "both", or "team"
+            const urlMatch = urlParams.get("match") || urlParams.get("matchKey");
+            const urlMatchNum = urlParams.get("matchNumber");
+            const urlTeam = urlParams.get("team") || urlParams.get("targetTeamNumber");
+
+            if (urlScope && (urlScope === "red" || urlScope === "blue" || urlScope === "both")) {
+                const scopeBtn = document.querySelector(`.scope-btn[data-scope="${urlScope}"]`);
+                if (scopeBtn) {
+                    scopeBtn.click();
+                }
+            }
+
+            if (urlMatch || urlMatchNum || urlTeam) {
+                let matchedMatchKey = "";
+                if (urlMatch) {
+                    const found = matches.find(m => m.matchKey === urlMatch || String(m.matchNumber) === urlMatch);
+                    if (found) matchedMatchKey = found.matchKey;
+                } else if (urlMatchNum) {
+                    const found = matches.find(m => String(m.matchNumber) === urlMatchNum);
+                    if (found) matchedMatchKey = found.matchKey;
+                }
+
+                let matchedTeamNum = "";
+                if (urlTeam) {
+                    const found = teams.find(t => String(t.teamNumber) === urlTeam || t.teamKey === urlTeam);
+                    if (found) matchedTeamNum = String(found.teamNumber);
+                }
+
+                if (matchedMatchKey) {
+                    matchSelect.value = matchedMatchKey;
+                    if (currentScope === "team") {
+                        updateTeamOptions(teamSelect, teams, matchedMatchKey, matches, matchedTeamNum || (teamSelect ? teamSelect.value : ""));
+                    }
+                }
+                if (matchedTeamNum && currentScope === "team" && teamSelect) {
+                    teamSelect.value = matchedTeamNum;
+                    if (!matchedMatchKey) {
+                        updateMatchOptions(matchSelect, matches, settings.timezone, matchedTeamNum, matchSelect.value);
+                    }
+                }
+
+                lastSelectedTeam = teamSelect ? teamSelect.value : "";
+                lastSelectedMatch = matchSelect ? matchSelect.value : "";
+
+                if (currentScope === "team") {
+                    await handleSelectionChange();
+                } else {
+                    await refreshAllianceState();
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to apply URL parameters to qualitative scouting form:", e);
+        }
+
         if (clearButton) {
             clearButton.addEventListener("click", () => {
                 if (!confirm(Obsidianscout.t("qual_scout.confirm_clear", "Are you sure you want to clear the form? All entered data will be reset."))) {

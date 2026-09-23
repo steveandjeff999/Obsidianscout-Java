@@ -173,6 +173,9 @@ export function adjustNavForRole(user) {
         document.querySelectorAll('.sidebar-link[data-page="users"]').forEach((link) => {
             link.style.display = "none";
         });
+        document.querySelectorAll('.sidebar-link[data-page="assignments"]').forEach((link) => {
+            link.style.display = "none";
+        });
         document.querySelectorAll('.sidebar-link[data-page="banners"]').forEach((link) => {
             link.style.display = "none";
         });
@@ -195,8 +198,11 @@ export function adjustNavForRole(user) {
                 if (allowedPages && Array.isArray(allowedPages)) {
                     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                         const page = link.dataset.page;
-                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials"];
-                        const isAllowed = allowedPages.includes(page) ||
+                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments"];
+                        if (isAdmin(role) || isSuperAdmin(role)) {
+                            bypassPages.push("assignments");
+                        }
+                        const isAllowed = bypassPages.includes(page) || allowedPages.includes(page) ||
                             (page === "cache-manager" && (allowedPages.includes("cache-manager") || allowedPages.includes("scout-history") || allowedPages.includes("history")));
                         if (!bypassPages.includes(page) && !superAdminPages.includes(page) && !isAllowed) {
                             link.style.display = "none";
@@ -237,10 +243,13 @@ export function adjustNavForRole(user) {
 
 export function isPageAccessible(page, role) {
     if (isSuperAdmin(role)) return true;
-    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials"];
+    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials", "my-assignments"];
+    if (isAdmin(role)) {
+        bypassPages.push("assignments");
+    }
     if (bypassPages.includes(page)) return true;
 
-    if (["users", "banners", "admin-settings", "default-configs"].includes(page) && !isAdmin(role)) {
+    if (["users", "banners", "admin-settings", "default-configs", "assignments"].includes(page) && !isAdmin(role)) {
         return false;
     }
     if (page === "migration" && !isSuperAdmin(role)) {

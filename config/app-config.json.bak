@@ -8,7 +8,7 @@
             "enabled": false,
             "port": 8443,
             "keystorePath": "config/obsidianscout.jks",
-            "keystorePassword": "8e8d2d5771b324cc7643150bea269d065412f0ab68d29253dffa37fb613a4a90",
+            "keystorePassword": "760f8300d38b17ddf944216c36064ae0f245656fd81f5fe73cf4695f474a0590",
             "keyAlias": "obsidianscout",
             "additionalSans": []
         },
@@ -57,7 +57,7 @@
     "google_sheet_password": "",
     "cockroach_port": 26257,
     "site_url": "https://kotlin.obsidianscout.com",
-    "current_version": "0.5.6.9",
+    "current_version": "0.5.7.3",
     "gist_update": {
         "enabled": false,
         "gist_url": "https://gist.githubusercontent.com/steveandjeff999/41b76376d064a6893ff2644b04447d9f/raw/Public-Version.json",

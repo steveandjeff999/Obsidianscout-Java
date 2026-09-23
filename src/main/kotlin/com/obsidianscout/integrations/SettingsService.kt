@@ -62,18 +62,18 @@ data class LoadBalancerSettings(
 )
 
 val DEFAULT_SCOUT_PAGES = listOf(
-    "dashboard", "chat", "scout", "pit-scout", "qual-scout", "qr-scanner", "contact", "scout-history"
+    "dashboard", "my-assignments", "chat", "scout", "pit-scout", "qual-scout", "qr-scanner", "contact", "scout-history"
 )
 
 val DEFAULT_ANALYTICS_PAGES = listOf(
-    "dashboard", "events", "scout", "pit-scout", "qual-scout", "qr-scanner",
+    "dashboard", "my-assignments", "events", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "teams", "rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact", "scout-history"
 )
 
 val DEFAULT_ADMIN_PAGES = listOf(
-    "dashboard", "admin-settings", "users", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
+    "dashboard", "my-assignments", "assignments", "admin-settings", "users", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "events", "teams", "rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact", "scout-history"
@@ -132,7 +132,10 @@ data class ApiSettings(
     val setupWizardCompleted: Boolean = false,
     val registrationLocked: Boolean = false,
     val program: String = "FRC",
-    val statboticsBaseUrl: String = "https://api.statbotics.io"
+    val statboticsBaseUrl: String = "https://api.statbotics.io",
+    val assignmentReminderMinutes: Int = 15,
+    val enableAssignmentPushReminders: Boolean = true,
+    val enableAssignmentEmailReminders: Boolean = true
 ) {
     fun resolvedEventKey(): String {
         val code = eventCode.trim()
@@ -246,12 +249,16 @@ object SettingsService {
         } else {
             canonicalStoredEventKey(settings.year, settings.eventKey)
         }
-        val normalizedScoutPages = if ("dashboard" !in settings.scoutPages) settings.scoutPages + "dashboard" else settings.scoutPages
+        val normalizedScoutPages = settings.scoutPages.toMutableList().apply {
+            if ("dashboard" !in this) add("dashboard")
+            if ("my-assignments" !in this) add("my-assignments")
+        }
         val normalizedAnalyticsPages = settings.analyticsPages.toMutableList().apply {
             if ("dashboard" !in this) add("dashboard")
             if ("events" !in this) add("events")
             if ("custom-analytics" !in this) add("custom-analytics")
             if ("data-validation" !in this) add("data-validation")
+            if ("my-assignments" !in this) add("my-assignments")
         }
         val normalizedAdminPages = settings.adminPages.toMutableList().apply {
             if ("dashboard" !in this) add("dashboard")
@@ -259,6 +266,8 @@ object SettingsService {
             if ("events" !in this) add("events")
             if ("custom-analytics" !in this) add("custom-analytics")
             if ("data-validation" !in this) add("data-validation")
+            if ("assignments" !in this) add("assignments")
+            if ("my-assignments" !in this) add("my-assignments")
         }
         val isFtc = settings.program.equals("FTC", ignoreCase = true)
         val normalizedUseStatboticsEpa = if (isFtc) false else settings.useStatboticsEpa

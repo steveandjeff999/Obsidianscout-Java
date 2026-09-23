@@ -1,4 +1,4 @@
-const CACHE_NAME = 'obsidianscout-shell-v45';
+const CACHE_NAME = 'obsidianscout-shell-v46';
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 // Application shell assets cached during install
@@ -12,6 +12,10 @@ const ASSETS = [
     '/index.html',
     '/reset-password',
     '/dashboard',
+    '/assignments',
+    '/assignments.html',
+    '/my-assignments',
+    '/my-assignments.html',
     '/scout',
     '/pit-scout',
     '/qual-scout',
@@ -138,6 +142,8 @@ const ASSETS = [
     '/js/cache-manager.js',
     '/js/qual-data.js',
     '/js/users.js',
+    '/js/assignments.js',
+    '/js/my-assignments.js',
     '/js/settings.js',
     '/js/admin-settings.js',
     '/js/cluster-management.js',

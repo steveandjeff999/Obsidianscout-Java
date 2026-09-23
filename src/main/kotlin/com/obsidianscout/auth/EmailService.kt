@@ -62,6 +62,41 @@ object EmailService {
         sendEmail(to, subject, body)
     }
 
+    fun sendAssignmentReminderEmail(
+        to: String,
+        username: String,
+        teamNumber: Int,
+        title: String,
+        details: String,
+        actionUrl: String
+    ) {
+        val subject = "Scouting Reminder: $title"
+        val body = """
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; background-color: #f1f5f9; padding: 20px 0;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 32px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+                    <div style="display: flex; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px;">
+                        <h2 style="color: #0f172a; margin: 0; font-size: 22px; font-weight: 700;">ObsidianScout Match Reminder</h2>
+                    </div>
+                    <p style="font-size: 15px;">Hello <strong>$username</strong> (Team $teamNumber),</p>
+                    <p style="font-size: 15px; color: #475569;">You have an upcoming scouting assignment scheduled soon:</p>
+                    <div style="background: #f8fafc; border-left: 4px solid #0284c7; border-radius: 6px; padding: 16px; margin: 20px 0;">
+                        <h3 style="margin: 0 0 8px 0; color: #0f172a; font-size: 17px;">$title</h3>
+                        <p style="margin: 0; font-size: 14px; color: #475569;">$details</p>
+                    </div>
+                    <p style="text-align: center; margin: 28px 0;">
+                        <a href="$actionUrl" style="background-color: #0284c7; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; display: inline-block;">Open Scouting Form</a>
+                    </p>
+                    <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+                        This automated reminder was sent by your team's ObsidianScout scouting system.
+                    </p>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+        sendEmail(to, subject, body)
+    }
+
     fun sendEmail(to: String, subject: String, body: String) {
         val settings = SettingsService.getSmtpSettings()
         sendEmailWithSettings(to, subject, body, settings)

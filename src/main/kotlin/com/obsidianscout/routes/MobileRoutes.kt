@@ -96,6 +96,24 @@ data class MobileErrorResponse(
     @SerialName("error_code") val errorCode: String
 )
 
+@Serializable
+data class MobileMessageResponse(
+    val success: Boolean = true,
+    val message: String
+)
+
+@Serializable
+data class MobileAssignmentsResponse(
+    val success: Boolean = true,
+    val assignments: List<com.obsidianscout.scouting.ScoutingAssignmentRecord>
+)
+
+@Serializable
+data class MobileAssignmentResponse(
+    val success: Boolean = true,
+    val assignment: com.obsidianscout.scouting.ScoutingAssignmentRecord
+)
+
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Authentication Helper
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1404,7 +1422,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     )
                 }
 
-                call.respond(mapOf("success" to true, "message" to "Password reset token sent to registered email."))
+                call.respond(MobileMessageResponse(success = true, message = "Password reset token sent to registered email."))
             }
 
             get("/auth/verify-reset-token") {
@@ -1527,7 +1545,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     }
                 }
 
-                call.respond(mapOf("success" to true, "message" to "Credentials have been reset successfully."))
+                call.respond(MobileMessageResponse(success = true, message = "Credentials have been reset successfully."))
             }
 
             // Profiles
@@ -2401,6 +2419,32 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             get("/config/game/stats/epa-opr-history") { epaOprHistoryHandler(Unit) }
             post("/config/game/stats/epa-opr-history") { epaOprHistoryHandler(Unit) }
+
+            // Assignments
+            get("/assignments") {
+                val session = call.requireMobileSession(secret)
+                val eventKey = call.request.queryParameters["event_key"] ?: call.request.queryParameters["eventKey"]
+                val type = call.request.queryParameters["type"]
+                val userId = call.request.queryParameters["user_id"] ?: call.request.queryParameters["userId"]
+                val status = call.request.queryParameters["status"]
+                val list = com.obsidianscout.scouting.ScoutingAssignmentService.listAssignments(session, eventKey, type, userId, status)
+                call.respond(MobileAssignmentsResponse(success = true, assignments = list))
+            }
+
+            get("/assignments/my") {
+                val session = call.requireMobileSession(secret)
+                val eventKey = call.request.queryParameters["event_key"] ?: call.request.queryParameters["eventKey"]
+                val list = com.obsidianscout.scouting.ScoutingAssignmentService.getMyAssignments(session, eventKey)
+                call.respond(MobileAssignmentsResponse(success = true, assignments = list))
+            }
+
+            post("/assignments/{id}/status") {
+                val session = call.requireMobileSession(secret)
+                val id = call.parameters["id"] ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing assignment ID", "INVALID_PARAM")
+                val req = call.receive<com.obsidianscout.scouting.UpdateAssignmentStatusRequest>()
+                val updated = com.obsidianscout.scouting.ScoutingAssignmentService.updateStatus(session, id, req.status)
+                call.respond(MobileAssignmentResponse(success = true, assignment = updated))
+            }
 
             // Pit configuration
             get("/config/pit") {

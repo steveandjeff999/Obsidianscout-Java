@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Scouting Assignments</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <style>
+        /* Page Header & Stats */
+        .assignments-header-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md, 12px);
+            padding: 20px 24px;
+            box-shadow: var(--shadow-sm);
+        }
+        .stats-kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .kpi-chip {
+            background: var(--surface-2);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm, 8px);
+            padding: 10px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .kpi-chip:hover {
+            border-color: var(--border);
+        }
+        .kpi-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--muted);
+            letter-spacing: 0.05em;
+        }
+        .kpi-val {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text);
+            line-height: 1.1;
+        }
+        .kpi-chip.conflict {
+            cursor: pointer;
+            position: relative;
+            background: rgba(239, 68, 68, 0.04);
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+        .kpi-chip.conflict:hover {
+            border-color: #ef4444;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.2);
+        }
+        .kpi-chip.conflict.has-conflicts {
+            border-color: rgba(239, 68, 68, 0.7);
+            background: rgba(239, 68, 68, 0.08);
+            box-shadow: 0 0 14px rgba(239, 68, 68, 0.22);
+            animation: pulse-conflict 2.5s infinite ease-in-out;
+        }
+        .kpi-chip.conflict .kpi-val {
+            color: var(--danger, #ef4444);
+        }
+        .kpi-action-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            padding: 2px 7px;
+            border-radius: 9999px;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.45);
+            color: #ef4444;
+            margin-top: 3px;
+            width: fit-content;
+            transition: all 0.15s ease;
+        }
+        .kpi-chip.conflict:hover .kpi-action-pill {
+            background: #ef4444;
+            color: #ffffff;
+            border-color: #ef4444;
+        }
+        @keyframes pulse-conflict {
+            0%, 100% {
+                box-shadow: 0 0 0 rgba(239, 68, 68, 0);
+            }
+            50% {
+                box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
+            }
+        }
+        .kpi-chip.completed .kpi-val {
+            color: var(--success, #10b981);
+        }
+        .kpi-chip.pending .kpi-val {
+            color: var(--warning, #f59e0b);
+        }
+
+        /* Tabs Nav */
+        .asgn-tab-nav {
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+        }
+        .asgn-tab-btn {
+            background: transparent;
+            border: none;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--muted);
+            border-radius: var(--radius-sm, 6px);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .asgn-tab-btn:hover {
+            color: var(--text);
+            background: var(--surface-2);
+        }
+        .asgn-tab-btn.active {
+            color: #fff;
+            background: var(--primary, #3b82f6);
+        }
+
+        /* Match Matrix Styling */
+        .matrix-table-container {
+            overflow-x: auto;
+            border-radius: var(--radius-sm, 8px);
+            border: 1px solid var(--border);
+            background: var(--surface);
+        }
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 800px;
+        }
+        .matrix-table th {
+            background: var(--surface-2);
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        .matrix-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-subtle);
+            vertical-align: middle;
+        }
+        .matrix-table tr:last-child td {
+            border-bottom: none;
+        }
+        .matrix-table tr:hover {
+            background: var(--surface-2);
+        }
+
+        /* Slot Cards in Matrix */
+        .slot-card {
+            padding: 9px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            cursor: pointer;
+            border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            background: var(--surface-2);
+            user-select: none;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+        }
+        .slot-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+            border-color: var(--border);
+        }
+        .slot-card.red {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02));
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+        .slot-card.blue {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
+            border-color: rgba(59, 130, 246, 0.25);
+        }
+        .slot-card.red:hover {
+            border-color: rgba(239, 68, 68, 0.5);
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.18);
+        }
+        .slot-card.blue:hover {
+            border-color: rgba(59, 130, 246, 0.5);
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.18);
+        }
+        .slot-card.assigned {
+            border-left: 4px solid var(--primary);
+        }
+        .slot-card.red.assigned {
+            border-left: 4px solid #ef4444;
+        }
+        .slot-card.blue.assigned {
+            border-left: 4px solid #3b82f6;
+        }
+        .slot-card.completed {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.03));
+            border-color: rgba(16, 185, 129, 0.45);
+            border-left: 4px solid #10b981;
+        }
+        .slot-card.conflict {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.08));
+            border-color: #ef4444;
+            border-left: 4px solid #ef4444;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.18);
+        }
+        .slot-card.warning-dual {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.06));
+            border-color: #f59e0b;
+            border-left: 4px solid #f59e0b;
+        }
+        .slot-card.covered {
+            border-style: dashed;
+            border-color: var(--border);
+            opacity: 0.85;
+            background: var(--surface-2);
+        }
+        .slot-card.red.covered {
+            border-color: rgba(239, 68, 68, 0.35);
+            background: rgba(239, 68, 68, 0.04);
+        }
+        .slot-card.blue.covered {
+            border-color: rgba(59, 130, 246, 0.35);
+            background: rgba(59, 130, 246, 0.04);
+        }
+        .slot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .slot-team-num {
+            font-weight: 800;
+            font-size: 13px;
+            color: var(--text);
+            letter-spacing: -0.01em;
+        }
+        .slot-scouter-name {
+            font-size: 11px;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .slot-scouter-name.unassigned {
+            color: var(--warning, #f59e0b);
+            font-weight: 600;
+        }
+        .asgn-type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: var(--radius-pill, 9999px);
+            letter-spacing: 0.03em;
+            line-height: 1.2;
+            text-transform: uppercase;
+        }
+        .asgn-type-badge.match {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(37, 99, 235, 0.28));
+            border: 1px solid rgba(59, 130, 246, 0.45);
+            color: #60a5fa;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.12);
+        }
+        .asgn-type-badge.pit {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.18), rgba(139, 92, 246, 0.28));
+            border: 1px solid rgba(168, 85, 247, 0.45);
+            color: #c084fc;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.12);
+        }
+        .asgn-type-badge.qual {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(219, 39, 119, 0.28));
+            border: 1px solid rgba(236, 72, 153, 0.45);
+            color: #f472b6;
+            box-shadow: 0 0 10px rgba(236, 72, 153, 0.12);
+        }
+        .asgn-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: var(--radius-pill, 9999px);
+            line-height: 1.2;
+        }
+        .asgn-status-badge.completed {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            color: #10b981;
+        }
+        .asgn-status-badge.in-progress {
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            color: #3b82f6;
+        }
+        .asgn-status-badge.pending {
+            background: rgba(148, 163, 184, 0.1);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            color: var(--muted);
+        }
+
+        /* Pit Coverage Grid */
+        .pit-coverage-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .pit-team-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm, 8px);
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .pit-team-card:hover {
+            border-color: var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+        .pit-team-card.scouted {
+            border-color: rgba(16, 185, 129, 0.4);
+            background: rgba(16, 185, 129, 0.05);
+        }
+        .pit-team-card.conflict {
+            border-color: rgba(239, 68, 68, 0.4);
+            background: rgba(239, 68, 68, 0.08);
+        }
+
+        /* Conflict Banner */
+        .conflict-banner {
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            color: #ef4444;
+            padding: 10px 14px;
+            border-radius: var(--radius-sm, 6px);
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        /* User badge in table */
+        .scouter-avatar-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+        .avatar-initial {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        /* Fix button icon centering */
+        .btn-icon-square {
+            width: 32px;
+            height: 32px;
+            padding: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+    </style>
+</head>
+<body data-page="assignments">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <!-- Header & Action Card -->
+            <div class="assignments-header-card card">
+                <div class="row items-center justify-between wrap gap-12">
+                    <div>
+                        <h1 class="page-title" style="display:flex; align-items:center; gap:8px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                                <path d="M12 11h4"></path>
+                                <path d="M12 16h4"></path>
+                                <path d="M8 11h.01"></path>
+                                <path d="M8 16h.01"></path>
+                            </svg>
+                            <span data-i18n="assignments.title">Scouting Assignments</span>
+                        </h1>
+                        <p class="notice mt-4" data-i18n="assignments.notice">
+                            Assign team members to matches, teams, pit scouting, and qualitative scouting. Monitor coverage and configure automated reminders.
+                        </p>
+                    </div>
+                    <div class="row gap-8 wrap items-center">
+                        <button class="btn" id="new-assignment-btn" type="button">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            <span data-i18n="assignments.new_assignment">New Assignment</span>
+                        </button>
+                        <button class="btn secondary" id="bulk-wizard-btn" type="button">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"></path>
+                            </svg>
+                            <span data-i18n="assignments.bulk_wizard">Bulk Match Wizard</span>
+                        </button>
+                        <button class="btn secondary" id="auto-pit-header-btn" type="button">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="m19 8 2 2 4-4"></path>
+                            </svg>
+                            <span data-i18n="assignments.auto_assign_pit">Auto-Assign Pit</span>
+                        </button>
+                        <button class="btn secondary" id="reminder-settings-btn" type="button">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+                            </svg>
+                            <span data-i18n="assignments.reminder_settings">Reminder Settings</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Event Filter & Quick Stats -->
+                <div class="row items-center justify-between wrap gap-12 mt-16 pt-16" style="border-top: 1px solid var(--border-subtle);">
+                    <div class="row items-center gap-12 wrap">
+                        <div class="field" style="margin: 0; min-width: 220px;">
+                            <label for="event-select" style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 4px;" data-i18n="assignments.active_event">Active Event</label>
+                            <select id="event-select"></select>
+                        </div>
+                        <button class="btn secondary" id="refresh-btn" type="button" title="Refresh assignments data" style="margin-top: 18px; padding: 8px 14px; font-size: 13px; display:inline-flex; align-items:center; gap:6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+
+                    <div class="stats-kpi-row" id="stats-grid">
+                        <div class="kpi-chip">
+                            <span class="kpi-label" data-i18n="assignments.total">Total</span>
+                            <span class="kpi-val" id="stat-total">0</span>
+                        </div>
+                        <div class="kpi-chip pending">
+                            <span class="kpi-label" data-i18n="assignments.pending">Pending</span>
+                            <span class="kpi-val" id="stat-pending">0</span>
+                        </div>
+                        <div class="kpi-chip">
+                            <span class="kpi-label" data-i18n="assignments.in_progress">In Progress</span>
+                            <span class="kpi-val" id="stat-progress">0</span>
+                        </div>
+                        <div class="kpi-chip completed">
+                            <span class="kpi-label" data-i18n="assignments.completed">Completed</span>
+                            <span class="kpi-val" id="stat-completed">0</span>
+                        </div>
+                        <div class="kpi-chip conflict" id="stat-conflicts-chip" title="Click to auto-resolve all assignment conflicts & discrepancies" role="button" tabindex="0">
+                            <div class="row items-center justify-between" style="width: 100%;">
+                                <span class="kpi-label" data-i18n="assignments.conflicts">Conflicts</span>
+                                <span class="kpi-action-pill" id="kpi-resolve-pill" style="display:none;">⚡ Auto-Resolve</span>
+                            </div>
+                            <span class="kpi-val" id="stat-conflicts">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Area with Tabs -->
+            <div class="card mt-20">
+                <nav class="asgn-tab-nav">
+                    <button class="asgn-tab-btn active" id="tab-btn-matrix" type="button" data-tab="matrix">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="3" y1="15" x2="21" y2="15"></line>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                            <line x1="15" y1="3" x2="15" y2="21"></line>
+                        </svg>
+                        <span data-i18n="assignments.tab_matrix">Match Scouting Matrix</span>
+                    </button>
+                    <button class="asgn-tab-btn" id="tab-btn-qual" type="button" data-tab="qual">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span data-i18n="assignments.tab_qual">Qualitative Matrix</span>
+                    </button>
+                    <button class="asgn-tab-btn" id="tab-btn-list" type="button" data-tab="list">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                            <path d="m9 14 2 2 4-4"></path>
+                        </svg>
+                        <span data-i18n="assignments.tab_list">Assignments List</span>
+                    </button>
+                    <button class="asgn-tab-btn" id="tab-btn-pit" type="button" data-tab="pit">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                        </svg>
+                        <span data-i18n="assignments.tab_pit">Pit Scouting Coverage</span>
+                    </button>
+                </nav>
+
+                <!-- TAB 1: MATCH SCOUTING MATRIX (DEFAULT) -->
+                <div id="tab-content-matrix">
+                    <div class="row justify-between items-center mb-12 wrap gap-8">
+                        <p class="notice" style="margin: 0;" data-i18n="assignments.matrix_notice">
+                            Click on any match robot slot below to assign or reassign a scouter. Red = Red Alliance, Blue = Blue Alliance, Green = Completed.
+                        </p>
+                        <div class="row items-center gap-8 wrap">
+                            <label for="matrix-stage-filter" style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted);" data-i18n="assignments.stage_filter">Stage:</label>
+                            <select id="matrix-stage-filter" style="padding: 5px 10px; font-size: 12px; border-radius: 4px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border);">
+                                <option value="all" selected>All Matches</option>
+                                <option value="qm">Qualifications</option>
+                                <option value="pr">Practice Matches</option>
+                                <option value="playoffs">Playoffs</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="matrix-table-container">
+                        <table class="matrix-table" id="matrix-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 120px;" data-i18n="nav.matches">Match</th>
+                                    <th style="width: 100px;" data-i18n="assignments.th_time">Time</th>
+                                    <th style="text-align: center;" colspan="3">Red Alliance</th>
+                                    <th style="text-align: center;" colspan="3">Blue Alliance</th>
+                                </tr>
+                            </thead>
+                            <tbody id="matrix-tbody">
+                                <tr>
+                                    <td colspan="8" style="text-align: center; color: var(--muted); padding: 32px;">
+                                        Loading match matrix...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB 2: QUALITATIVE SCOUTING MATRIX -->
+                <div id="tab-content-qual" class="hidden">
+                    <div class="row justify-between items-center mb-12 wrap gap-8">
+                        <p class="notice" style="margin: 0;" data-i18n="assignments.qual_matrix_notice">
+                            Qualitative scouting matrix. Click on an alliance slot (Red / Blue) or a match team to assign a qualitative scouter.
+                        </p>
+                        <div class="row items-center gap-8 wrap">
+                            <label for="qual-stage-filter" style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted);" data-i18n="assignments.stage_filter">Stage:</label>
+                            <select id="qual-stage-filter" style="padding: 5px 10px; font-size: 12px; border-radius: 4px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border);">
+                                <option value="all" selected>All Matches</option>
+                                <option value="qm">Qualifications</option>
+                                <option value="pr">Practice Matches</option>
+                                <option value="playoffs">Playoffs</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="matrix-table-container">
+                        <table class="matrix-table" id="qual-matrix-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 120px;" data-i18n="nav.matches">Match</th>
+                                    <th style="width: 100px;" data-i18n="assignments.th_time">Time</th>
+                                    <th style="text-align: center; width: 180px;" data-i18n="assignments.red_alliance_qual">Red Alliance</th>
+                                    <th style="text-align: center; width: 180px;" data-i18n="assignments.blue_alliance_qual">Blue Alliance</th>
+                                    <th style="text-align: center;" colspan="3" data-i18n="assignments.red_teams_qual">Red Teams (Qual)</th>
+                                    <th style="text-align: center;" colspan="3" data-i18n="assignments.blue_teams_qual">Blue Teams (Qual)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="qual-matrix-tbody">
+                                <tr>
+                                    <td colspan="10" style="text-align: center; color: var(--muted); padding: 32px;" data-i18n="assignments.loading_qual_matrix">
+                                        Loading qualitative match matrix...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB 2: ASSIGNMENTS LIST VIEW -->
+                <div id="tab-content-list" class="hidden">
+                    <div class="row items-center justify-between wrap gap-12 mb-16">
+                        <div class="row items-center gap-12 wrap flex-1">
+                            <div class="field" style="margin: 0; min-width: 140px;">
+                                <select id="filter-type">
+                                    <option value="" data-i18n="assignments.filter_all_types">All Types</option>
+                                    <option value="MATCH" data-i18n="assignments.filter_match">Match Scouting</option>
+                                    <option value="PIT" data-i18n="assignments.filter_pit">Pit Scouting</option>
+                                    <option value="QUALITATIVE" data-i18n="assignments.filter_qual">Qualitative</option>
+                                </select>
+                            </div>
+                            <div class="field" style="margin: 0; min-width: 160px;">
+                                <select id="filter-scouter">
+                                    <option value="" data-i18n="assignments.filter_all_scouters">All Scouters</option>
+                                </select>
+                            </div>
+                            <div class="field" style="margin: 0; min-width: 140px;">
+                                <select id="filter-status">
+                                    <option value="" data-i18n="assignments.filter_all_statuses">All Statuses</option>
+                                    <option value="PENDING" data-i18n="assignments.pending">Pending</option>
+                                    <option value="IN_PROGRESS" data-i18n="assignments.in_progress">In Progress</option>
+                                    <option value="COMPLETED" data-i18n="assignments.completed">Completed</option>
+                                    <option value="MISSED">Missed</option>
+                                </select>
+                            </div>
+                            <div class="field" style="margin: 0; min-width: 200px; flex: 1;">
+                                <input type="text" id="filter-search" placeholder="Search team, match, scouter, notes..." data-i18n-placeholder="assignments.search_placeholder" />
+                            </div>
+                            <button class="btn ghost btn-sm" id="delete-all-btn" type="button" style="color: var(--danger, #ef4444); border-color: rgba(239,68,68,0.35); padding: 7px 12px; font-size: 12px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" title="Delete all assignments for this event">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                                <span data-i18n="assignments.delete_all">Delete All</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-scroll">
+                        <table class="table" id="assignments-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="assignments.th_type">Type</th>
+                                    <th data-i18n="assignments.th_target">Target / Match & Team</th>
+                                    <th data-i18n="assignments.th_scouter">Assigned Scouter</th>
+                                    <th data-i18n="assignments.th_time">Scheduled Time</th>
+                                    <th data-i18n="assignments.th_status">Status</th>
+                                    <th data-i18n="assignments.th_conflicts">Conflicts</th>
+                                    <th data-i18n="assignments.th_actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assignments-tbody">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: var(--muted); padding: 32px;" data-i18n="assignments.loading">
+                                        Loading assignments...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB 3: PIT SCOUTING COVERAGE -->
+                <div id="tab-content-pit" class="hidden">
+                    <div class="row justify-between items-center mb-16 wrap gap-12">
+                        <p class="notice" style="margin: 0;" data-i18n="assignments.pit_notice">
+                            Overview of pit scouting coverage for all registered teams at this event.
+                        </p>
+                        <div class="row items-center gap-8 wrap">
+                            <button class="btn secondary" id="auto-pit-btn" type="button" style="padding: 7px 12px; font-size: 12px; display:inline-flex; align-items:center; gap:6px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="m19 8 2 2 4-4"></path>
+                                </svg>
+                                <span data-i18n="assignments.auto_assign_pit">Auto-Assign Pit Scouters</span>
+                            </button>
+                            <div class="field" style="margin: 0; min-width: 200px;">
+                                <input type="text" id="pit-search" placeholder="Filter teams by number or name..." data-i18n-placeholder="assignments.search_pit_placeholder" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pit-coverage-grid" id="pit-coverage-grid">
+                        <p style="color: var(--muted); padding: 20px;">Loading pit coverage...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Single Assignment (Create / Edit) -->
+    <div class="modal-backdrop" id="assignment-modal">
+        <div class="modal-container" style="max-width: 540px;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="assignment-modal-title" data-i18n="assignments.create_title">Create Assignment</h2>
+                <button class="modal-close" id="assignment-modal-close" type="button">&times;</button>
+            </div>
+            <form id="assignment-form" class="form-grid">
+                <input type="hidden" id="assignment-id" />
+
+                <!-- Assignment Type -->
+                <div class="field">
+                    <label for="assignment-type" data-i18n="assignments.type_label">Assignment Type *</label>
+                    <select id="assignment-type" required>
+                        <option value="MATCH" data-i18n="assignments.filter_match">Match Scouting</option>
+                        <option value="PIT" data-i18n="assignments.filter_pit">Pit Scouting</option>
+                        <option value="QUALITATIVE" data-i18n="assignments.filter_qual">Qualitative Scouting</option>
+                    </select>
+                </div>
+
+                <!-- MATCH SCOUTING FIELDS -->
+                <div id="form-group-match" class="form-grid">
+                    <div class="field">
+                        <label for="assignment-match" data-i18n="assignments.select_match">Select Match *</label>
+                        <select id="assignment-match"></select>
+                    </div>
+                    <div class="field">
+                        <label for="assignment-team" data-i18n="assignments.select_team_in_match">Select Team in Match *</label>
+                        <select id="assignment-team"></select>
+                        <small style="color: var(--muted); margin-top: 4px;">Teams scheduled in the selected match.</small>
+                    </div>
+                </div>
+
+                <!-- PIT SCOUTING FIELDS -->
+                <div id="form-group-pit" class="form-grid hidden">
+                    <div class="field">
+                        <label for="assignment-pit-team" data-i18n="assignments.select_pit_team">Select Team to Pit Scout *</label>
+                        <select id="assignment-pit-team"></select>
+                    </div>
+                </div>
+
+                <!-- QUALITATIVE SCOUTING FIELDS -->
+                <div id="form-group-qual" class="form-grid hidden">
+                    <div class="field">
+                        <label for="assignment-qual-match" data-i18n="assignments.select_match">Select Match *</label>
+                        <select id="assignment-qual-match"></select>
+                    </div>
+                    <div class="field">
+                        <label for="assignment-qual-target-type" data-i18n="assignments.target_scope">Target Scope *</label>
+                        <select id="assignment-qual-target-type">
+                            <option value="team" data-i18n="assignments.scope_team">Single Team</option>
+                            <option value="red" data-i18n="assignments.scope_red">Red Alliance (3 teams)</option>
+                            <option value="blue" data-i18n="assignments.scope_blue">Blue Alliance (3 teams)</option>
+                            <option value="both" data-i18n="assignments.scope_both">Both Alliances (6 teams)</option>
+                        </select>
+                    </div>
+                    <div class="field" id="field-qual-team">
+                        <label for="assignment-qual-team">Select Team</label>
+                        <select id="assignment-qual-team"></select>
+                    </div>
+                </div>
+
+                <!-- SCOUTER ASSIGNMENT -->
+                <div class="field">
+                    <label for="assignment-scouter" data-i18n="assignments.assign_scouter">Assign to Scouter *</label>
+                    <select id="assignment-scouter" required>
+                        <option value="" data-i18n="assignments.select_scouter_placeholder">Select team member...</option>
+                    </select>
+                </div>
+
+                <!-- STATUS -->
+                <div class="field" id="field-status-container">
+                    <label for="assignment-status" data-i18n="assignments.th_status">Status</label>
+                    <select id="assignment-status">
+                        <option value="PENDING">PENDING</option>
+                        <option value="IN_PROGRESS">IN_PROGRESS</option>
+                        <option value="COMPLETED">COMPLETED</option>
+                        <option value="MISSED">MISSED</option>
+                        <option value="CANCELLED">CANCELLED</option>
+                    </select>
+                </div>
+
+                <!-- NOTES -->
+                <div class="field">
+                    <label for="assignment-notes" data-i18n="assignments.notes_label">Notes / Instructions (Optional)</label>
+                    <input type="text" id="assignment-notes" placeholder="e.g. Focus on auto intake and climb speed" data-i18n-placeholder="assignments.notes_placeholder" />
+                </div>
+
+                <!-- LIVE CONFLICT WARNING ALERT -->
+                <div id="modal-conflict-banner" class="conflict-banner hidden">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <span id="modal-conflict-text">Warning: Another scout is already assigned to this slot!</span>
+                </div>
+
+                <div class="modal-footer mt-16">
+                    <button class="btn ghost" id="assignment-modal-cancel" type="button" data-i18n="assignments.cancel">Cancel</button>
+                    <button class="btn" id="assignment-modal-submit" type="submit" data-i18n="assignments.save">Save Assignment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Bulk Match Assignment Wizard -->
+    <div class="modal-backdrop" id="bulk-wizard-modal">
+        <div class="modal-container" style="max-width: 620px;">
+            <div class="modal-header">
+                <h2 class="modal-title" style="display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"></path>
+                    </svg>
+                    <span data-i18n="assignments.bulk_title">Bulk Match Assignment Wizard</span>
+                </h2>
+                <button class="modal-close" id="bulk-wizard-close" type="button">&times;</button>
+            </div>
+            <form id="bulk-wizard-form" class="form-grid">
+                <p class="notice" id="bulk-wizard-notice" style="margin-bottom: 12px;" data-i18n="assignments.bulk_notice">
+                    Quickly assign team scouters across matches or pit teams. Select available scouters and they will be distributed across targets.
+                </p>
+
+                <div class="field">
+                    <label for="bulk-assignment-type" data-i18n="assignments.bulk_type_label">Assignment Scope</label>
+                    <select id="bulk-assignment-type">
+                        <option value="MATCH" selected>Match Scouting (6 Robot Stations: Red 1-3, Blue 1-3)</option>
+                        <option value="QUALITATIVE_BOTH">Qualitative Scouting (Both Alliances: Red & Blue)</option>
+                        <option value="QUALITATIVE_RED">Qualitative Scouting (Red Alliance Only)</option>
+                        <option value="QUALITATIVE_BLUE">Qualitative Scouting (Blue Alliance Only)</option>
+                        <option value="QUALITATIVE_TEAMS">Qualitative Scouting (Individual Match Teams: 6 Teams)</option>
+                        <option value="PIT_AUTO">Pit Scouting (Auto-Distribute Attending Teams)</option>
+                    </select>
+                </div>
+
+                <!-- Match-specific controls -->
+                <div id="bulk-match-controls" class="form-grid" style="margin: 0;">
+                    <div class="field">
+                        <label for="bulk-consecutive-matches" data-i18n="assignments.consecutive_matches_label">Consecutive Matches per Scout</label>
+                        <input type="number" id="bulk-consecutive-matches" min="1" max="100" value="5" required />
+                        <small style="color: var(--muted); margin-top: 2px;">Number of matches a scout stays on their station before rotating.</small>
+                    </div>
+
+                    <div class="form-grid form-grid-wide">
+                        <div class="field">
+                            <label for="bulk-comp-level" data-i18n="assignments.tournament_level">Tournament Stage</label>
+                            <select id="bulk-comp-level">
+                                <option value="all" selected>All Match Stages</option>
+                                <option value="qm">Qualifications (qm)</option>
+                                <option value="pr">Practice (pr)</option>
+                                <option value="playoffs">Playoffs (Quarterfinals, Semis, Finals)</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <div class="row gap-8">
+                                <div style="flex:1;">
+                                    <label for="bulk-match-start" data-i18n="assignments.from_match">From Match</label>
+                                    <select id="bulk-match-start" style="width:100%;"></select>
+                                </div>
+                                <div style="flex:1;">
+                                    <label for="bulk-match-end" data-i18n="assignments.to_match">To Match</label>
+                                    <select id="bulk-match-end" style="width:100%;"></select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pit-specific controls -->
+                <div id="bulk-pit-controls" class="form-grid hidden" style="margin: 0;">
+                    <div class="field">
+                        <label for="bulk-pit-scope" data-i18n="assignments.pit_scope_label">Teams to Assign</label>
+                        <select id="bulk-pit-scope">
+                            <option value="unassigned" selected>Only Unassigned Teams</option>
+                            <option value="all">All Attending Teams</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="row justify-between items-center mb-6">
+                        <label style="margin:0;" data-i18n="assignments.select_scouters">Select Scouters to Rotate</label>
+                        <div class="row gap-8">
+                            <button type="button" id="bulk-select-all" class="btn ghost btn-sm" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.select_all">Select All</button>
+                            <button type="button" id="bulk-deselect-all" class="btn ghost btn-sm" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.deselect_all">Deselect All</button>
+                        </div>
+                    </div>
+                    <div id="bulk-scouters-container" style="max-height: 180px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm, 6px); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">
+                        <!-- Populated dynamically -->
+                    </div>
+                    <small style="color: var(--muted); margin-top: 4px;">Scouters will rotate in order through assigned slots.</small>
+                </div>
+
+                <div class="field">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="bulk-overwrite" />
+                        <span data-i18n="assignments.overwrite">Overwrite existing assignments in this range (replaces duplicates cleanly)</span>
+                    </label>
+                    <small style="color: var(--muted); margin-left: 24px;">If unchecked, slots that already have a scouter assigned will be skipped.</small>
+                </div>
+
+                <div class="modal-footer mt-16">
+                    <button class="btn ghost" id="bulk-wizard-cancel" type="button" data-i18n="assignments.cancel">Cancel</button>
+                    <button class="btn" type="submit" data-i18n="assignments.generate_btn">Generate Assignments</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Auto-Assign Pit Scouters -->
+    <div class="modal-backdrop" id="pit-auto-modal">
+        <div class="modal-container" style="max-width: 540px;">
+            <div class="modal-header">
+                <h2 class="modal-title" style="display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="m19 8 2 2 4-4"></path>
+                    </svg>
+                    <span data-i18n="assignments.pit_auto_title">Auto-Assign Pit Scouters</span>
+                </h2>
+                <button class="modal-close" id="pit-auto-close" type="button">&times;</button>
+            </div>
+            <form id="pit-auto-form" class="form-grid">
+                <p class="notice" style="margin-bottom: 12px;" data-i18n="assignments.pit_auto_notice">
+                    Evenly distribute registered event teams among your pit scouting team members.
+                </p>
+
+                <div class="field">
+                    <label for="pit-auto-scope" data-i18n="assignments.pit_scope_label">Teams to Assign</label>
+                    <select id="pit-auto-scope">
+                        <option value="unassigned" selected>Only Unassigned Teams</option>
+                        <option value="all">All Attending Teams</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <div class="row justify-between items-center mb-6">
+                        <label style="margin:0;" data-i18n="assignments.select_pit_scouters">Select Pit Scouters</label>
+                        <div class="row gap-8">
+                            <button type="button" id="pit-auto-select-all" class="btn ghost btn-sm" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.select_all">Select All</button>
+                            <button type="button" id="pit-auto-deselect-all" class="btn ghost btn-sm" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.deselect_all">Deselect All</button>
+                        </div>
+                    </div>
+                    <div id="pit-auto-scouters-container" style="max-height: 180px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm, 6px); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">
+                        <!-- Populated dynamically -->
+                    </div>
+                    <div id="pit-auto-summary" style="margin-top: 6px; font-size: 12px; color: var(--primary); font-weight: 600;"></div>
+                </div>
+
+                <div class="field">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="pit-auto-overwrite" />
+                        <span data-i18n="assignments.pit_overwrite">Overwrite existing pit assignments</span>
+                    </label>
+                </div>
+
+                <div class="modal-footer mt-16">
+                    <button class="btn ghost" id="pit-auto-cancel" type="button" data-i18n="assignments.cancel">Cancel</button>
+                    <button class="btn" type="submit" data-i18n="assignments.generate_pit_btn">Assign Pit Teams</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Conflict Resolution / Multi-Scout Quick Fix -->
+    <div class="modal-backdrop" id="conflict-resolver-modal">
+        <div class="modal-container" style="max-width: 620px;">
+            <div class="modal-header">
+                <h2 class="modal-title" style="display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <span id="conflict-modal-title" data-i18n="assignments.conflict_title">Resolve Assignment Conflict</span>
+                </h2>
+                <button class="modal-close" id="conflict-resolver-close" type="button">&times;</button>
+            </div>
+            <div style="padding: 16px;">
+                <p class="notice" id="conflict-modal-subtitle" style="margin-bottom: 16px;" data-i18n="assignments.conflict_subtitle">
+                    Multiple scouters are assigned to the same target slot. Choose which scouter to keep or clear the slot.
+                </p>
+
+                <div id="conflict-scouters-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom: 16px;">
+                    <!-- Populated dynamically with each assigned scouter -->
+                </div>
+
+                <div class="row justify-between items-center pt-12" style="border-top: 1px solid var(--border-subtle);">
+                    <button class="btn ghost btn-sm" id="conflict-clear-all-btn" type="button" style="color:var(--danger);" data-i18n="assignments.delete_all_in_slot">
+                        Delete All in Slot
+                    </button>
+                    <div class="row gap-8">
+                        <button class="btn ghost" id="conflict-resolver-cancel" type="button" data-i18n="assignments.close">Close</button>
+                        <button class="btn secondary btn-sm" id="conflict-resolve-all-btn" type="button" data-i18n="assignments.auto_resolve_all">
+                            Auto-Resolve All System Conflicts
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Reminder Settings -->
+    <div class="modal-backdrop" id="reminder-settings-modal">
+        <div class="modal-container" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 class="modal-title" style="display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+                    </svg>
+                    <span data-i18n="assignments.reminder_title">Assignment Reminder Settings</span>
+                </h2>
+                <button class="modal-close" id="reminder-settings-close" type="button">&times;</button>
+            </div>
+            <form id="reminder-settings-form" class="form-grid">
+                <p class="notice" style="margin-bottom: 12px;" data-i18n="assignments.reminder_notice">
+                    Configure when and how automated reminders are dispatched to assigned scouters before their scheduled matches.
+                </p>
+
+                <div class="field">
+                    <label for="setting-reminder-minutes" data-i18n="assignments.lead_time">Reminder Lead Time</label>
+                    <select id="setting-reminder-minutes">
+                        <option value="5">5 minutes before scheduled match</option>
+                        <option value="10" selected>10 minutes before scheduled match</option>
+                        <option value="15">15 minutes before scheduled match</option>
+                        <option value="20">20 minutes before scheduled match</option>
+                        <option value="30">30 minutes before scheduled match</option>
+                        <option value="45">45 minutes before scheduled match</option>
+                        <option value="60">60 minutes (1 hour) before scheduled match</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="setting-enable-push" checked />
+                        <span data-i18n="assignments.enable_push">Enable Push Notifications (Web Push & Mobile)</span>
+                    </label>
+                    <small style="color: var(--muted); margin-left: 24px;">Sends real-time browser and mobile notifications to scouters who have enabled notifications.</small>
+                </div>
+
+                <div class="field">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="setting-enable-email" checked />
+                        <span data-i18n="assignments.enable_email">Enable Email Reminders</span>
+                    </label>
+                    <small style="color: var(--muted); margin-left: 24px;">Sends HTML match reminder emails to scouters with verified email addresses.</small>
+                </div>
+
+                <div class="modal-footer mt-16">
+                    <button class="btn ghost" id="reminder-settings-cancel" type="button" data-i18n="assignments.cancel">Cancel</button>
+                    <button class="btn" type="submit" data-i18n="assignments.save_settings">Save Reminder Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/assignments.js"></script>
+</body>
+</html>

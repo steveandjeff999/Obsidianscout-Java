@@ -128,10 +128,13 @@ export async function requireAuth() {
     if (currentPage && settings && (me.role === "SCOUT" || me.role === "ANALYTICS" || me.role === "ADMIN")) {
         const allowedPages = me.role === "SCOUT" ? settings.scoutPages : (me.role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
         if (allowedPages && Array.isArray(allowedPages)) {
-            const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials"];
-            const isAllowed = allowedPages.includes(currentPage) ||
+            const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments"];
+            if (isAdmin(me.role) || isSuperAdmin(me.role)) {
+                bypassPages.push("assignments");
+            }
+            const isAllowed = bypassPages.includes(currentPage) || allowedPages.includes(currentPage) ||
                 (currentPage === "cache-manager" && (allowedPages.includes("cache-manager") || allowedPages.includes("scout-history") || allowedPages.includes("history")));
-            if (!bypassPages.includes(currentPage) && !superAdminPages.includes(currentPage) && !isAllowed) {
+            if (!superAdminPages.includes(currentPage) && !isAllowed) {
                 showToast("You do not have access to this page", "error");
                 const fallback = allowedPages.includes("dashboard") ? "/dashboard" : "/config";
                 setTimeout(() => {

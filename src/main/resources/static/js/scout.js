@@ -355,6 +355,47 @@ async function loadScoutPageData(me) {
             Obsidianscout.offerDraftRestore("match-scout", applyDraftData);
         }
 
+        // Support URL query params pre-filling from assignments (e.g. ?match=qm1&team=254)
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlMatch = urlParams.get("match") || urlParams.get("matchKey");
+            const urlMatchNum = urlParams.get("matchNumber");
+            const urlTeam = urlParams.get("team") || urlParams.get("targetTeamNumber");
+
+            if (urlMatch || urlMatchNum || urlTeam) {
+                let matchedMatchKey = "";
+                if (urlMatch) {
+                    const found = matches.find(m => m.matchKey === urlMatch || String(m.matchNumber) === urlMatch);
+                    if (found) matchedMatchKey = found.matchKey;
+                } else if (urlMatchNum) {
+                    const found = matches.find(m => String(m.matchNumber) === urlMatchNum);
+                    if (found) matchedMatchKey = found.matchKey;
+                }
+
+                let matchedTeamNum = "";
+                if (urlTeam) {
+                    const found = teams.find(t => String(t.teamNumber) === urlTeam || t.teamKey === urlTeam);
+                    if (found) matchedTeamNum = String(found.teamNumber);
+                }
+
+                if (matchedMatchKey) {
+                    matchSelect.value = matchedMatchKey;
+                    updateTeamOptions(teamSelect, teams, matchedMatchKey, matches, matchedTeamNum || teamSelect.value);
+                }
+                if (matchedTeamNum) {
+                    teamSelect.value = matchedTeamNum;
+                    if (!matchedMatchKey) {
+                        updateMatchOptions(matchSelect, matches, settings.timezone, matchedTeamNum, matchSelect.value);
+                    }
+                }
+                lastSelectedTeam = teamSelect.value;
+                lastSelectedMatch = matchSelect.value;
+                await handleSelectionChange();
+            }
+        } catch (e) {
+            console.warn("Failed to apply URL parameters to match scouting form:", e);
+        }
+
         const saveOfflineButton = document.getElementById("scout-save-offline");
         if (saveOfflineButton) {
             saveOfflineButton.addEventListener("click", () => {

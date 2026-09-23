@@ -70,10 +70,24 @@ body.theme-dark .btn.active {
     box-shadow: none;
 }
 
+body.theme-dark .btn.ghost {
+    background: transparent !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border);
+    box-shadow: none;
+}
+
 .btn.ghost:hover {
     background: var(--surface-2);
     border-color: var(--accent);
     color: var(--accent);
+    box-shadow: none;
+}
+
+body.theme-dark .btn.ghost:hover {
+    background: var(--surface-2) !important;
+    border-color: var(--accent);
+    color: var(--accent) !important;
     box-shadow: none;
 }
 
@@ -85,11 +99,40 @@ body.theme-dark .btn.active {
     box-shadow: var(--shadow-sm);
 }
 
+body.theme-dark .btn.secondary {
+    background: var(--surface-2) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border);
+}
+
 .btn.secondary:hover {
     background: var(--surface-3);
     border-color: var(--muted);
     color: var(--ink);
     transform: translateY(-1px);
+}
+
+body.theme-dark .btn.secondary:hover {
+    background: var(--surface-3) !important;
+    border-color: var(--muted);
+    color: var(--text) !important;
+}
+
+/* ── Icon Button Helper ───────────────────────────────────────────── */
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    min-width: 38px;
+    height: 38px;
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+}
+
+.btn-icon svg {
+    flex-shrink: 0;
 }
 
 /* ── Dark / Tertiary Button ───────────────────────────────────────── */

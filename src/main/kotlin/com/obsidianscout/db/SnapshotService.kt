@@ -105,7 +105,8 @@ object SnapshotService {
         AnalyticsReports,
         ReportedErrors,
         PasskeyCredentials,
-        PasskeyChallenges
+        PasskeyChallenges,
+        ScoutingAssignments
     )
 
     var customStorageDirectory: File? = null

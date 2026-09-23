@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | My Assignments</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <style>
+        .hero-banner {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-countdown {
+            font-size: 28px;
+            font-weight: 800;
+            font-family: var(--font-mono, monospace);
+            color: var(--primary, #3b82f6);
+            letter-spacing: -0.02em;
+        }
+        .hero-countdown.imminent {
+            color: var(--danger, #ef4444);
+            animation: pulse-danger 2s infinite ease-in-out;
+        }
+        .assignment-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .my-card {
+            background: var(--surface);
+            border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+            border-radius: var(--radius, 12px);
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 14px;
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+        .my-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+        .my-card.completed {
+            background: var(--surface-2);
+            opacity: 0.9;
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+        .my-card.imminent {
+            border-color: rgba(239, 68, 68, 0.5);
+            box-shadow: 0 0 18px rgba(239, 68, 68, 0.18);
+        }
+        .my-card.type-match {
+            border-left: 4px solid #3b82f6;
+        }
+        .my-card.type-pit {
+            border-left: 4px solid #a855f7;
+        }
+        .my-card.type-qual {
+            border-left: 4px solid #ec4899;
+        }
+        .card-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .card-target-title {
+            font-size: 17px;
+            font-weight: 800;
+            color: var(--text);
+            letter-spacing: -0.01em;
+        }
+        .card-target-subtitle {
+            font-size: 13px;
+            color: var(--muted);
+            margin-top: 3px;
+        }
+        .countdown-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: var(--surface-2);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-pill, 9999px);
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .countdown-chip.imminent {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+        .countdown-chip.past {
+            background: rgba(245, 158, 11, 0.12);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: var(--warning, #f59e0b);
+        }
+        .asgn-type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: var(--radius-pill, 9999px);
+            letter-spacing: 0.03em;
+            line-height: 1.2;
+            text-transform: uppercase;
+        }
+        .asgn-type-badge.match {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(37, 99, 235, 0.28));
+            border: 1px solid rgba(59, 130, 246, 0.45);
+            color: #60a5fa;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.12);
+        }
+        .asgn-type-badge.pit {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.18), rgba(139, 92, 246, 0.28));
+            border: 1px solid rgba(168, 85, 247, 0.45);
+            color: #c084fc;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.12);
+        }
+        .asgn-type-badge.qual {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(219, 39, 119, 0.28));
+            border: 1px solid rgba(236, 72, 153, 0.45);
+            color: #f472b6;
+            box-shadow: 0 0 10px rgba(236, 72, 153, 0.12);
+        }
+        .asgn-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: var(--radius-pill, 9999px);
+            line-height: 1.2;
+        }
+        .asgn-status-badge.completed {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            color: #10b981;
+        }
+        .asgn-status-badge.in-progress {
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            color: #3b82f6;
+        }
+        .asgn-status-badge.pending {
+            background: rgba(148, 163, 184, 0.1);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            color: var(--muted);
+        }
+        .tab-nav {
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+        }
+        .tab-btn {
+            background: transparent;
+            border: none;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--muted);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .tab-btn:hover {
+            color: var(--text);
+            background: var(--surface-2);
+        }
+        .tab-btn.active {
+            color: #fff;
+            background: var(--primary, #3b82f6);
+        }
+    </style>
+</head>
+<body data-page="my-assignments">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <!-- Header Card -->
+            <div class="card mb-20">
+                <div class="row items-center justify-between wrap gap-12">
+                    <div>
+                        <h1 class="page-title" style="display:flex; align-items:center; gap:8px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                            <span data-i18n="my_assignments.title">My Assignments</span>
+                        </h1>
+                        <p class="notice mt-4" data-i18n="my_assignments.notice">View your assigned matches, pit scouting, and qualitative tasks. Submitting a scouting entry will automatically complete your assignment.</p>
+                    </div>
+                    <div class="row items-center gap-12 wrap">
+                        <span class="badge secondary" id="event-badge" style="font-size: 13px; padding: 6px 12px;" data-i18n="my_assignments.active_event">Active Event</span>
+                        <button class="btn secondary" id="refresh-btn" type="button" title="Refresh assignments" style="padding: 7px 14px; font-size: 13px;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                            <span data-i18n="my_assignments.refresh">Refresh</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hero Up Next Banner (Visible when next assignment is imminent) -->
+            <div id="hero-banner" class="hero-banner hidden">
+                <div class="row items-center justify-between wrap gap-16">
+                    <div>
+                        <div class="row items-center gap-8 mb-4">
+                            <span class="badge" style="background:var(--primary); color:#fff; font-weight:bold;" data-i18n="my_assignments.up_next">UP NEXT</span>
+                            <span id="hero-type-badge" class="badge secondary">Match Scouting</span>
+                        </div>
+                        <div class="hero-countdown mt-4" id="hero-countdown">--:--</div>
+                        <div class="card-target-title mt-8" id="hero-target">Match 14 &bull; Team 254</div>
+                        <div class="card-target-subtitle" id="hero-time">Scheduled at 2:15 PM</div>
+                    </div>
+                    <div>
+                        <a href="#" id="hero-scout-btn" class="btn" style="padding: 12px 24px; font-size: 15px; display:inline-flex; align-items:center; gap:8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            <span data-i18n="my_assignments.start_now">Start Scouting Now</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assignments Container -->
+            <div class="card">
+                <nav class="tab-nav">
+                    <button class="tab-btn active" id="tab-btn-active" type="button" data-tab="active">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        <span data-i18n="my_assignments.tab_active">Active & Upcoming</span> (<span id="count-active">0</span>)
+                    </button>
+                    <button class="tab-btn" id="tab-btn-completed" type="button" data-tab="completed">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span data-i18n="my_assignments.tab_completed">Completed</span> (<span id="count-completed">0</span>)
+                    </button>
+                    <button class="tab-btn" id="tab-btn-all" type="button" data-tab="all">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                        <span data-i18n="my_assignments.tab_all">All</span> (<span id="count-all">0</span>)
+                    </button>
+                </nav>
+
+                <div id="assignments-grid" class="assignment-cards-grid mt-16">
+                    <p style="color: var(--muted); padding: 24px; text-align: center; grid-column: 1 / -1;" data-i18n="my_assignments.loading">
+                        Loading your assignments...
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/my-assignments.js"></script>
+</body>
+</html>

@@ -250,7 +250,8 @@ object DatabaseFactory {
                 AnalyticsReports,
                 UserSessions,
                 PasskeyCredentials,
-                PasskeyChallenges
+                PasskeyChallenges,
+                ScoutingAssignments
             )
 
             if (isCockroach) {
@@ -672,7 +673,8 @@ object DatabaseFactory {
                             UserChatLastRead,
                             PushSubscriptions,
                             PasskeyCredentials,
-                            PasskeyChallenges
+                            PasskeyChallenges,
+                            ScoutingAssignments
                         )
                     } else {
                         SchemaUtils.createMissingTablesAndColumns(
@@ -697,7 +699,8 @@ object DatabaseFactory {
                             UserChatLastRead,
                             PushSubscriptions,
                             PasskeyCredentials,
-                            PasskeyChallenges
+                            PasskeyChallenges,
+                            ScoutingAssignments
                         )
                     }
                 }

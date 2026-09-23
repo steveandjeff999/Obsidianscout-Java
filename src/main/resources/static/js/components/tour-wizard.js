@@ -323,9 +323,9 @@ export const FEATURE_TUTORIALS = [
             {
                 page: "dashboard",
                 target: ".main-content .dashboard-hero-greeting, .main-content h1",
-                title: "Command Dashboard Telemetry",
+                title: "Dashboard Telemetry",
                 standardDesc: "The Dashboard consolidates real-time match scouting progress, logged entries, active events, and quick navigation actions.",
-                zacharyDesc: "Welcome to the Command Dashboard! A well-structured dashboard consolidates mission-critical event telemetry into actionable metrics. Check your logged match counts and submission rates right here."
+                zacharyDesc: "Welcome to the Dashboard! A well-structured dashboard consolidates mission-critical event telemetry into actionable metrics. Check your logged match counts and submission rates right here."
             },
             {
                 page: "dashboard",

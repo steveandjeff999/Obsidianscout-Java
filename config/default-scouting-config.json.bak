@@ -1,1 +1,87 @@
-{"version":1,"title":"Manually Created Active Default","fields":[]}
+{
+    "version": 1,
+    "title": "Config With All Element Types",
+    "fields": [
+        {
+            "id": "sec_auto",
+            "label": "Autonomous Phase",
+            "type": "section",
+            "phase": "auto"
+        },
+        {
+            "id": "auto_notes",
+            "label": "Auto Notes",
+            "type": "counter",
+            "min": 0,
+            "max": 10,
+            "step": 1,
+            "phase": "auto"
+        },
+        {
+            "id": "teleop_header",
+            "label": "Teleoperated Phase",
+            "type": "section",
+            "phase": "teleop"
+        },
+        {
+            "id": "teleop_score",
+            "label": "Teleop Score",
+            "type": "number",
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "phase": "teleop"
+        },
+        {
+            "id": "driver_rating",
+            "label": "Driver Skill",
+            "type": "rating",
+            "min": 1,
+            "max": 5,
+            "step": 1,
+            "phase": "teleop"
+        },
+        {
+            "id": "coopertition",
+            "label": "Coopertition Met",
+            "type": "checkbox",
+            "phase": "teleop"
+        },
+        {
+            "id": "climb_level",
+            "label": "Climb Level",
+            "type": "select",
+            "options": [
+                {
+                    "label": "None",
+                    "value": "none",
+                    "points": 0.0
+                },
+                {
+                    "label": "Deep",
+                    "value": "deep",
+                    "points": 0.0
+                }
+            ],
+            "phase": "endgame"
+        },
+        {
+            "id": "robot_photo",
+            "label": "Robot Photo",
+            "type": "image",
+            "phase": "teleop"
+        },
+        {
+            "id": "scout_comments",
+            "label": "Comments",
+            "type": "textarea",
+            "phase": "teleop"
+        },
+        {
+            "id": "static_notice",
+            "label": "Inspection Complete",
+            "type": "text",
+            "phase": "teleop"
+        }
+    ]
+}

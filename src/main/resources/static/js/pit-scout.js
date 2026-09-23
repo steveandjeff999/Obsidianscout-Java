@@ -216,6 +216,18 @@ async function loadPitScoutPageData(me) {
             Obsidianscout.offerDraftRestore("pit-scout", applyDraftData);
         }
 
+        // Support URL query params pre-filling from assignments (e.g. ?team=254)
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlTeam = urlParams.get("team") || urlParams.get("targetTeamNumber");
+            if (urlTeam) {
+                teamSelect.value = urlTeam;
+                await handleSelectionChange();
+            }
+        } catch (e) {
+            console.warn("Failed to apply URL parameters to pit scouting form:", e);
+        }
+
         const saveOfflineButton = document.getElementById("pit-save-offline");
         if (saveOfflineButton) {
             saveOfflineButton.addEventListener("click", () => {

@@ -319,6 +319,19 @@ object QualitativeScoutingService {
             }
         }
 
+        try {
+            ScoutingAssignmentService.handleScoutingSubmission(
+                ownerTeam = session.teamNumber,
+                program = session.program,
+                eventKey = meta.eventKey,
+                assignmentType = "QUALITATIVE",
+                matchNumber = meta.matchNumber,
+                matchKey = meta.matchKey,
+                targetTeamNumber = meta.targetTeamNumber,
+                userId = session.userId
+            )
+        } catch (_: Exception) {}
+
         recalculateDiscrepancies(meta.eventKey, meta.matchKey, meta.targetTeamNumber, isPrescout)
 
         val matchPlayedTime = transaction {

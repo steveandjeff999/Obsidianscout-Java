@@ -156,7 +156,8 @@ export async function syncOfflineCache(clearOldOthers = false, force = false) {
             "/api/alliances",
             "/api/alliances/invites",
             "/api/alliances/invites/count",
-            "/api/alliances/import-sources"
+            "/api/alliances/import-sources",
+            "/api/assignments/my"
         ];
 
         if (settings.year) {
@@ -166,6 +167,9 @@ export async function syncOfflineCache(clearOldOthers = false, force = false) {
             endpoints.push(`/api/teams?eventKey=${eventKey}`);
             endpoints.push(`/api/matches?eventKey=${eventKey}`);
             endpoints.push(`/api/alliance-selection?eventKey=${eventKey}`);
+            endpoints.push(`/api/assignments/my?eventKey=${eventKey}`);
+            endpoints.push(`/api/assignments?eventKey=${eventKey}`);
+            endpoints.push(`/api/assignments/coverage?eventKey=${eventKey}`);
         }
         if (isAdminUser) {
             endpoints.push("/api/admin/users");

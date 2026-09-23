@@ -323,6 +323,19 @@ object ScoutingService {
             }
         }
 
+        try {
+            ScoutingAssignmentService.handleScoutingSubmission(
+                ownerTeam = session.teamNumber,
+                program = session.program,
+                eventKey = meta.eventKey,
+                assignmentType = "MATCH",
+                matchNumber = meta.matchNumber,
+                matchKey = meta.matchKey,
+                targetTeamNumber = meta.targetTeamNumber,
+                userId = session.userId
+            )
+        } catch (_: Exception) {}
+
         // Recalculate discrepancies for the group
         recalculateDiscrepancies(meta.eventKey, meta.matchKey, meta.targetTeamNumber, isPrescout)
 
