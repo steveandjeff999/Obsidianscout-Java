@@ -396,7 +396,11 @@ object ScoutingAssignmentService {
         status: String? = null
     ): List<ScoutingAssignmentRecord> {
         if (!eventKey.isNullOrBlank()) {
-            syncCompletedAssignments(session.program, eventKey)
+            java.util.concurrent.CompletableFuture.runAsync {
+                try {
+                    syncCompletedAssignments(session.program, eventKey)
+                } catch (_: Throwable) {}
+            }
         }
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where { ScoutingAssignments.program eq session.program }
@@ -486,7 +490,9 @@ object ScoutingAssignmentService {
             }
 
             val userIds = rows.map { it[ScoutingAssignments.assignedUserId].value }.distinct()
-            val userMap = Users.selectAll().where { Users.id inList userIds }.associate { it[Users.id].value to it[Users.username] }
+            val userMap = if (userIds.isNotEmpty()) {
+                Users.selectAll().where { Users.id inList userIds }.associate { it[Users.id].value to it[Users.username] }
+            } else emptyMap()
 
             // Group by slot to find duplicates
             val grouped = rows.groupBy { row ->
@@ -961,7 +967,9 @@ object ScoutingAssignmentService {
         if (rows.isEmpty()) return emptyList()
 
         val userIds = rows.flatMap { listOfNotNull(it[ScoutingAssignments.assignedUserId].value, it[ScoutingAssignments.createdByUserId]?.value) }.distinct()
-        val userMap = Users.selectAll().where { Users.id inList userIds }.associate { it[Users.id].value to it[Users.username] }
+        val userMap = if (userIds.isNotEmpty()) {
+            Users.selectAll().where { Users.id inList userIds }.associate { it[Users.id].value to it[Users.username] }
+        } else emptyMap()
 
         val matchKeys = rows.mapNotNull { it[ScoutingAssignments.matchKey] }.filter { it.isNotBlank() }.distinct()
         val matchTimes = if (matchKeys.isNotEmpty()) {

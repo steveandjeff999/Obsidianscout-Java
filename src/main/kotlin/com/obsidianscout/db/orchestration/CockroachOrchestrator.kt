@@ -1254,38 +1254,11 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     msg.contains("leader unavailable") ||
                     msg.contains("no lease holder") ||
                     msg.contains("no leaseholder") ||
-                    msg.contains("transactionretrywithtoughluck") ||
-                    msg.contains("result is ambiguous") ||
-                    msg.contains("ambiguousresult") ||
-                    msg.contains("unable to satisfy read at timestamp") ||
-                    msg.contains("unable to route request") ||
-                    msg.contains("latch acquisition failed") ||
                     msg.contains("replica descriptor for range") ||
-                    msg.contains("desc = transport is closing") ||
-                    msg.contains("statement timeout") ||
-                    msg.contains("statement_timeout") ||
-                    msg.contains("query execution canceled") ||
-                    msg.contains("canceling statement") ||
-                    msg.contains("read timed out") ||
-                    msg.contains("socket timeout") ||
-                    msg.contains("an i/o error occurred while sending to the backend") ||
-                    msg.contains("broken pipe") ||
-                    msg.contains("08006") ||
-                    msg.contains("restart transaction") ||
-                    msg.contains("transactionretry") ||
-                    msg.contains("connection is not available") ||
-                    msg.contains("unable to serve request") ||
-                    msg.contains("closed timestamp") ||
-                    msg.contains("namespacetable") ||
-                    (msg.contains("descriptor") && msg.contains("modified")) ||
-                    className.contains("sqltransientconnectionexception") ||
                     className.contains("rangeunavailable") ||
                     className.contains("notleaseholder") ||
-                    className.contains("ambiguousresult") ||
-                    className.contains("sockettimeoutexception") ||
-                    className.contains("timeoutexception") ||
                     (msg.contains("replica") && msg.contains("unavailable")) ||
-                    (msg.contains("deadline exceeded") && (msg.contains("range") || msg.contains("replica") || msg.contains("lease") || msg.contains("raft") || msg.contains("liveness") || msg.contains("heartbeat") || msg.contains("context")))
+                    (msg.contains("deadline exceeded") && (msg.contains("range") || msg.contains("replica") || msg.contains("lease") || msg.contains("raft") || msg.contains("liveness") || msg.contains("heartbeat")))
                 ) {
                     return true
                 }
