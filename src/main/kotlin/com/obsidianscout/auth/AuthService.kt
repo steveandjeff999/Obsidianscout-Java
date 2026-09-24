@@ -615,14 +615,6 @@ object AuthService {
                     UserSessions.deleteWhere {
                         (UserSessions.userId eq userId) and (UserSessions.deviceId eq cleanDeviceId)
                     }
-                } else if (ipAddress.isNotBlank()) {
-                    // Fallback heuristic: supersede previous session with same clientType, deviceName, and IP
-                    UserSessions.deleteWhere {
-                        (UserSessions.userId eq userId) and
-                        (UserSessions.clientType eq clientType) and
-                        (UserSessions.deviceName eq device) and
-                        (UserSessions.ipAddress eq ipAddress)
-                    }
                 }
 
                 // 3. Insert new active session
@@ -663,7 +655,7 @@ object AuthService {
                 val dId = row[UserSessions.deviceId]?.trim()?.takeIf { it.isNotBlank() }
                 val devKey = when {
                     dId != null -> "id:$dId"
-                    else -> "legacy:${row[UserSessions.clientType]}:${row[UserSessions.deviceName]}:${row[UserSessions.ipAddress]}"
+                    else -> "session:$sId"
                 }
 
                 if (isCurr || seenKeys.add(devKey)) {
@@ -707,7 +699,7 @@ object AuthService {
                 val dId = row[UserSessions.deviceId]?.trim()?.takeIf { it.isNotBlank() }
                 val key = when {
                     dId != null -> "id:$dId"
-                    else -> "legacy:${row[UserSessions.clientType]}:${row[UserSessions.deviceName]}:${row[UserSessions.ipAddress]}"
+                    else -> "session:$sUuid"
                 }
                 if (!seenKeys.add(key)) {
                     toDelete.add(sUuid)

@@ -21,9 +21,11 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.update
 import java.time.Instant
 import java.util.UUID
@@ -178,7 +180,7 @@ object ScoutingAssignmentService {
         val createdId = transaction {
             // Verify target user belongs to the same team and program (or superadmin)
             val userRow = Users.selectAll().where {
-                (Users.id eq targetUserUuid) and (Users.program eq session.program) and
+                (Users.id eq targetUserUuid) and (Users.program.lowerCase() eq session.program.lowercase().trim()) and
                 (if (session.role != UserRole.SUPERADMIN) Users.teamNumber eq session.teamNumber else Users.teamNumber eq Users.teamNumber)
             }.firstOrNull() ?: throw ApiException(HttpStatusCode.BadRequest, "Assigned user not found on team.")
 
@@ -190,8 +192,8 @@ object ScoutingAssignmentService {
 
             ScoutingAssignments.insertAndGetId {
                 it[ownerTeamNumber] = effectiveOwnerTeam
-                it[program] = session.program
-                it[eventKey] = eventKeyClean
+                it[program] = session.program.uppercase().trim()
+                it[eventKey] = eventKeyClean.lowercase()
                 it[assignedUserId] = userRow[Users.id]
                 it[assignmentType] = typeClean
                 it[matchKey] = request.matchKey?.trim()?.ifBlank { null }
@@ -227,7 +229,7 @@ object ScoutingAssignmentService {
         val createdIds = transaction {
             val userIds = request.assignments.mapNotNull { runCatching { UUID.fromString(it.assignedUserId) }.getOrNull() }.distinct()
             val validUsers = Users.selectAll().where {
-                (Users.id inList userIds) and (Users.program eq session.program) and
+                (Users.id inList userIds) and (Users.program.lowerCase() eq session.program.lowercase().trim()) and
                 (if (session.role != UserRole.SUPERADMIN) Users.teamNumber eq session.teamNumber else Users.teamNumber eq Users.teamNumber)
             }.associateBy { it[Users.id].value }
 
@@ -246,8 +248,8 @@ object ScoutingAssignmentService {
 
                 val id = ScoutingAssignments.insertAndGetId {
                     it[ownerTeamNumber] = effectiveOwnerTeam
-                    it[program] = session.program
-                    it[eventKey] = eventKeyClean
+                    it[program] = session.program.uppercase().trim()
+                    it[eventKey] = eventKeyClean.lowercase()
                     it[assignedUserId] = targetUuid
                     it[assignmentType] = typeClean
                     it[matchKey] = item.matchKey?.trim()?.ifBlank { null }
@@ -276,7 +278,7 @@ object ScoutingAssignmentService {
 
         val now = Instant.now()
         transaction {
-            val query = ScoutingAssignments.selectAll().where { (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program eq session.program) }
+            val query = ScoutingAssignments.selectAll().where { (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim()) }
             if (session.role != UserRole.SUPERADMIN && session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
             }
@@ -285,7 +287,7 @@ object ScoutingAssignmentService {
             val newTargetUser = if (!request.assignedUserId.isNullOrBlank()) {
                 val userUuid = runCatching { UUID.fromString(request.assignedUserId) }.getOrNull()
                     ?: throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID.")
-                val userExists = Users.selectAll().where { (Users.id eq userUuid) and (Users.program eq session.program) }.count() > 0
+                val userExists = Users.selectAll().where { (Users.id eq userUuid) and (Users.program.lowerCase() eq session.program.lowercase().trim()) }.count() > 0
                 if (!userExists) throw ApiException(HttpStatusCode.BadRequest, "Assigned user not found.")
                 userUuid
             } else null
@@ -335,7 +337,7 @@ object ScoutingAssignmentService {
         val now = Instant.now()
         transaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program eq session.program)
+                (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim())
             }
             if (session.role != UserRole.SUPERADMIN) {
                 query.andWhere {
@@ -365,7 +367,7 @@ object ScoutingAssignmentService {
             ?: throw ApiException(HttpStatusCode.BadRequest, "Invalid assignment ID.")
 
         return transaction {
-            val query = (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program eq session.program)
+            val query = (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim())
             val fullQuery = if (session.role != UserRole.SUPERADMIN && session.teamNumber != 0) {
                 query and (ScoutingAssignments.ownerTeamNumber eq session.teamNumber)
             } else query
@@ -378,7 +380,7 @@ object ScoutingAssignmentService {
         val assignmentUuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return null
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program eq session.program)
+                (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim())
             }
             if (session.role != UserRole.SUPERADMIN && session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
@@ -396,12 +398,12 @@ object ScoutingAssignmentService {
         status: String? = null
     ): List<ScoutingAssignmentRecord> {
         return readTransaction {
-            val query = ScoutingAssignments.selectAll().where { ScoutingAssignments.program eq session.program }
+            val query = ScoutingAssignments.selectAll().where { ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim() }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
             }
             if (!eventKey.isNullOrBlank()) {
-                query.andWhere { ScoutingAssignments.eventKey eq eventKey.trim() }
+                query.andWhere { ScoutingAssignments.eventKey.lowerCase() eq eventKey.trim().lowercase() }
             }
             if (!assignmentType.isNullOrBlank()) {
                 query.andWhere { ScoutingAssignments.assignmentType eq assignmentType.trim().uppercase() }
@@ -427,13 +429,13 @@ object ScoutingAssignmentService {
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where {
                 (ScoutingAssignments.assignedUserId eq userUuid) and
-                (ScoutingAssignments.program eq session.program)
+                (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim())
             }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
             }
             if (!eventKey.isNullOrBlank()) {
-                query.andWhere { ScoutingAssignments.eventKey eq eventKey.trim() }
+                query.andWhere { ScoutingAssignments.eventKey.lowerCase() eq eventKey.trim().lowercase() }
             }
             query.orderBy(ScoutingAssignments.matchNumber to SortOrder.ASC_NULLS_LAST, ScoutingAssignments.createdAt to SortOrder.DESC)
             val rows = query.toList()
@@ -452,8 +454,8 @@ object ScoutingAssignmentService {
     ): AssignmentConflictDto {
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.program eq session.program) and
-                (ScoutingAssignments.eventKey eq eventKey.trim()) and
+                (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim()) and
+                (ScoutingAssignments.eventKey.lowerCase() eq eventKey.trim().lowercase()) and
                 (ScoutingAssignments.status neq "SKIPPED") and
                 (ScoutingAssignments.status neq "CANCELLED")
             }
@@ -612,8 +614,8 @@ object ScoutingAssignmentService {
     fun getCoverage(session: UserSession, eventKey: String): EventAssignmentCoverageDto {
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.program eq session.program) and
-                (ScoutingAssignments.eventKey eq eventKey.trim())
+                (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim()) and
+                (ScoutingAssignments.eventKey.lowerCase() eq eventKey.trim().lowercase())
             }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
@@ -687,8 +689,8 @@ object ScoutingAssignmentService {
         }
         return transaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.program eq session.program) and
-                (ScoutingAssignments.eventKey eq eventKeyClean)
+                (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim()) and
+                (ScoutingAssignments.eventKey.lowerCase() eq eventKeyClean.lowercase())
             }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }

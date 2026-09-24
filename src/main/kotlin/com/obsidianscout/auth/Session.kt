@@ -71,25 +71,23 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                 }
             }.getOrNull()
 
-            if (userRow == null) {
-                sessions.clear<UserSession>()
-                throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
-            }
-            val dbRole = runCatching { UserRole.valueOf(userRow[Users.role]) }.getOrDefault(session.role)
-            val dbTeamNumber = userRow[Users.teamNumber]
-            val dbUsername = userRow[Users.username]
-            val dbProgram = userRow[Users.program]
-            val dbEmail = userRow[Users.email]
-            val dbNotificationPreference = userRow[Users.notificationPreference]
-            val dbTourProgress = userRow[Users.tourProgress]
-            val dbNodeAlertsEnabled = userRow[Users.nodeAlertsEnabled]
-            val dbBugReportPreference = userRow.getOrNull(Users.bugReportPreference) ?: "ask"
+            val dbRole = userRow?.let { runCatching { UserRole.valueOf(it[Users.role]) }.getOrDefault(session.role) } ?: session.role
+            val dbTeamNumber = userRow?.get(Users.teamNumber) ?: session.teamNumber
+            val dbUsername = userRow?.get(Users.username) ?: session.username
+            val dbProgram = userRow?.get(Users.program) ?: session.program
+            val dbEmail = userRow?.get(Users.email) ?: session.email
+            val dbNotificationPreference = userRow?.get(Users.notificationPreference) ?: session.notificationPreference
+            val dbTourProgress = userRow?.get(Users.tourProgress) ?: session.tourProgress
+            val dbNodeAlertsEnabled = userRow?.get(Users.nodeAlertsEnabled) ?: session.nodeAlertsEnabled
+            val dbBugReportPreference = userRow?.getOrNull(Users.bugReportPreference) ?: session.bugReportPreference
 
-            val needsSync = session.role != dbRole ||
+            val needsSync = userRow != null && (
+                            session.role != dbRole ||
                             session.teamNumber != dbTeamNumber ||
                             session.username != dbUsername ||
                             session.program != dbProgram ||
                             session.bugReportPreference != dbBugReportPreference
+            )
 
             val effectiveSession = if (needsSync) {
                 session.copy(
@@ -112,7 +110,7 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             return effectiveSession
         }
 
-        val (userRow, sessionValid) = runCatching {
+        val (userRow, sessionValid) = try {
             com.obsidianscout.db.readTransaction {
                 val row = Users.selectAll().where { Users.id eq userUuid }.firstOrNull()
                 val sessionOk = if (!session.sessionId.isNullOrBlank()) {
@@ -130,7 +128,13 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                 }
                 Pair(row, sessionOk)
             }
-        }.getOrDefault(Pair(null, true))
+        } catch (e: Throwable) {
+            if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.markQuorumLost(e.message)
+            }
+            application.environment.log.error("[requireSession] Database error during session check for user ${session.userId}: ${e.message}")
+            throw ApiException(HttpStatusCode.ServiceUnavailable, "Database is temporarily unavailable")
+        }
 
         if (userRow == null) {
             application.environment.log.warn("[requireSession] 401 User ${session.userId} does not exist in DB")
