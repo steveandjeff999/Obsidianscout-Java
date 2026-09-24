@@ -78,7 +78,7 @@ object DatabaseFactory {
 
         try {
             val result = transaction(
-                transactionIsolation = java.sql.Connection.TRANSACTION_SERIALIZABLE,
+                transactionIsolation = java.sql.Connection.TRANSACTION_READ_COMMITTED,
                 db = targetDb
             ) {
                 this.maxAttempts = 1
@@ -168,8 +168,8 @@ object DatabaseFactory {
                 val (user, pass) = getCredentials(config)
                 if (!user.isNullOrBlank()) username = user
                 if (!pass.isNullOrBlank()) password = pass
-                transactionIsolation = if (isCockroachEngine) "TRANSACTION_SERIALIZABLE" else "TRANSACTION_READ_COMMITTED"
-                connectionInitSql = "SET statement_timeout = '800ms';"
+                transactionIsolation = "TRANSACTION_READ_COMMITTED"
+                connectionInitSql = "SET statement_timeout = '15000ms';"
                 connectionTestQuery = "SELECT 1"
             } else {
                 maximumPoolSize = if (isLowMem) 4 else 8
@@ -458,7 +458,27 @@ object DatabaseFactory {
                             "ALTER TABLE alliance_memberships ADD CONSTRAINT IF NOT EXISTS ux_alliance_memberships_alliance_team_program UNIQUE (alliance_id, team_number, program)",
                             
                             "DROP INDEX IF EXISTS alliance_memberships@idx_alliance_memberships_team_active",
-                            "CREATE INDEX IF NOT EXISTS idx_alliance_memberships_team_active_program ON alliance_memberships (team_number, active, program)"
+                            "CREATE INDEX IF NOT EXISTS idx_alliance_memberships_team_active_program ON alliance_memberships (team_number, active, program)",
+
+                            "CREATE INDEX IF NOT EXISTS idx_api_matches_event_key ON api_matches (event_key)",
+                            "CREATE INDEX IF NOT EXISTS idx_api_teams_event_team_number ON api_teams (event_key, team_number)",
+                            "CREATE INDEX IF NOT EXISTS idx_api_teams_event_key ON api_teams (event_key)",
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_entries_event_program ON scouting_entries (event_key, program)",
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_entries_target_team_program ON scouting_entries (target_team_number, program)",
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_entries_owner_team_program ON scouting_entries (owner_team_number, program)",
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_entries_match_key ON scouting_entries (match_key)",
+                            "CREATE INDEX IF NOT EXISTS idx_pit_scouting_entries_event_program ON pit_scouting_entries (event_key, program)",
+                            "CREATE INDEX IF NOT EXISTS idx_pit_scouting_entries_target_team_program ON pit_scouting_entries (target_team_number, program)",
+                            "CREATE INDEX IF NOT EXISTS idx_pit_scouting_entries_owner_team_program ON pit_scouting_entries (owner_team_number, program)",
+                            "CREATE INDEX IF NOT EXISTS idx_qualitative_scouting_entries_event_program ON qualitative_scouting_entries (event_key, program)",
+                            "CREATE INDEX IF NOT EXISTS idx_qualitative_scouting_entries_match_key ON qualitative_scouting_entries (match_key)",
+                            "CREATE INDEX IF NOT EXISTS idx_qualitative_scouting_entries_owner_team_program ON qualitative_scouting_entries (owner_team_number, program)",
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_team_event ON scouting_assignments (owner_team_number, event_key, program)",
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_event_program ON scouting_assignments (event_key, program)",
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_user ON scouting_assignments (assigned_user_id)",
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_status ON scouting_assignments (status)",
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_type ON scouting_assignments (assignment_type)",
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_match_team ON scouting_assignments (event_key, match_number, target_team_number)"
                         )
 
                         for (sql in migrations) {
@@ -491,7 +511,26 @@ object DatabaseFactory {
                             val pgMigrations = listOf(
                                 "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_roles TEXT NOT NULL DEFAULT '[]'",
                                 "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'",
-                                "ALTER TABLE users ADD COLUMN IF NOT EXISTS bug_report_preference VARCHAR(16) NOT NULL DEFAULT 'ask'"
+                                "ALTER TABLE users ADD COLUMN IF NOT EXISTS bug_report_preference VARCHAR(16) NOT NULL DEFAULT 'ask'",
+                                "CREATE INDEX IF NOT EXISTS idx_api_matches_event_key ON api_matches (event_key)",
+                                "CREATE INDEX IF NOT EXISTS idx_api_teams_event_team_number ON api_teams (event_key, team_number)",
+                                "CREATE INDEX IF NOT EXISTS idx_api_teams_event_key ON api_teams (event_key)",
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_entries_event_program ON scouting_entries (event_key, program)",
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_entries_target_team_program ON scouting_entries (target_team_number, program)",
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_entries_owner_team_program ON scouting_entries (owner_team_number, program)",
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_entries_match_key ON scouting_entries (match_key)",
+                                "CREATE INDEX IF NOT EXISTS idx_pit_scouting_entries_event_program ON pit_scouting_entries (event_key, program)",
+                                "CREATE INDEX IF NOT EXISTS idx_pit_scouting_entries_target_team_program ON pit_scouting_entries (target_team_number, program)",
+                                "CREATE INDEX IF NOT EXISTS idx_pit_scouting_entries_owner_team_program ON pit_scouting_entries (owner_team_number, program)",
+                                "CREATE INDEX IF NOT EXISTS idx_qualitative_scouting_entries_event_program ON qualitative_scouting_entries (event_key, program)",
+                                "CREATE INDEX IF NOT EXISTS idx_qualitative_scouting_entries_match_key ON qualitative_scouting_entries (match_key)",
+                                "CREATE INDEX IF NOT EXISTS idx_qualitative_scouting_entries_owner_team_program ON qualitative_scouting_entries (owner_team_number, program)",
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_team_event ON scouting_assignments (owner_team_number, event_key, program)",
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_event_program ON scouting_assignments (event_key, program)",
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_user ON scouting_assignments (assigned_user_id)",
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_status ON scouting_assignments (status)",
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_type ON scouting_assignments (assignment_type)",
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_match_team ON scouting_assignments (event_key, match_number, target_team_number)"
                             )
                             for (sql in pgMigrations) {
                                 try {

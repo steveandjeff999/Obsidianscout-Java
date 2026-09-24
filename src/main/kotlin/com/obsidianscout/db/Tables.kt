@@ -109,6 +109,13 @@ object ScoutingEntries : UUIDTable("scouting_entries") {
     val hasDiscrepancy = bool("has_discrepancy").default(false)
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
     val completenessPct = float("completeness_pct").nullable().default(null)
+
+    init {
+        index("idx_scouting_entries_event_program", false, eventKey, program)
+        index("idx_scouting_entries_target_team_program", false, targetTeamNumber, program)
+        index("idx_scouting_entries_owner_team_program", false, ownerTeamNumber, program)
+        index("idx_scouting_entries_match_key", false, matchKey)
+    }
 }
 
 object PitScoutingEntries : UUIDTable("pit_scouting_entries") {
@@ -123,6 +130,12 @@ object PitScoutingEntries : UUIDTable("pit_scouting_entries") {
     val hasDiscrepancy = bool("has_discrepancy").default(false)
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
     val completenessPct = float("completeness_pct").nullable().default(null)
+
+    init {
+        index("idx_pit_scouting_entries_event_program", false, eventKey, program)
+        index("idx_pit_scouting_entries_target_team_program", false, targetTeamNumber, program)
+        index("idx_pit_scouting_entries_owner_team_program", false, ownerTeamNumber, program)
+    }
 }
 
 object QualitativeScoutingEntries : UUIDTable("qualitative_scouting_entries") {
@@ -139,6 +152,12 @@ object QualitativeScoutingEntries : UUIDTable("qualitative_scouting_entries") {
     val hasDiscrepancy = bool("has_discrepancy").default(false)
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
     val completenessPct = float("completeness_pct").nullable().default(null)
+
+    init {
+        index("idx_qualitative_scouting_entries_event_program", false, eventKey, program)
+        index("idx_qualitative_scouting_entries_match_key", false, matchKey)
+        index("idx_qualitative_scouting_entries_owner_team_program", false, ownerTeamNumber, program)
+    }
 }
 
 object AppSettings : UUIDTable("app_settings") {
@@ -184,6 +203,8 @@ object ApiTeams : UUIDTable("api_teams") {
 
     init {
         uniqueIndex("ux_api_teams_event_team", eventKey, teamKey)
+        index("idx_api_teams_event_team_number", false, eventKey, teamNumber)
+        index("idx_api_teams_event_key", false, eventKey)
     }
 }
 
@@ -202,6 +223,7 @@ object ApiMatches : UUIDTable("api_matches") {
 
     init {
         uniqueIndex("ux_api_matches_key", matchKey)
+        index("idx_api_matches_event_key", false, eventKey)
     }
 }
 
@@ -492,6 +514,7 @@ object ScoutingAssignments : UUIDTable("scouting_assignments") {
 
     init {
         index("idx_scouting_assignments_team_event", false, ownerTeamNumber, eventKey, program)
+        index("idx_scouting_assignments_event_program", false, eventKey, program)
         index("idx_scouting_assignments_user", false, assignedUserId)
         index("idx_scouting_assignments_status", false, status)
         index("idx_scouting_assignments_type", false, assignmentType)

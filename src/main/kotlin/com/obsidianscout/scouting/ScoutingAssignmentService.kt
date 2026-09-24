@@ -395,13 +395,6 @@ object ScoutingAssignmentService {
         userId: String? = null,
         status: String? = null
     ): List<ScoutingAssignmentRecord> {
-        if (!eventKey.isNullOrBlank()) {
-            java.util.concurrent.CompletableFuture.runAsync {
-                try {
-                    syncCompletedAssignments(session.program, eventKey)
-                } catch (_: Throwable) {}
-            }
-        }
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where { ScoutingAssignments.program eq session.program }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {

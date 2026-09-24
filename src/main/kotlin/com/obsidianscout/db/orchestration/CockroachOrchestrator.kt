@@ -1252,6 +1252,10 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     msg.contains("leaderless for") ||
                     msg.contains("range is leaderless") ||
                     msg.contains("leader unavailable") ||
+                    msg.contains("lost leader") ||
+                    (msg.contains("ambiguous") && (msg.contains("leader") || msg.contains("result"))) ||
+                    (msg.contains("rpc error") && msg.contains("unavailable")) ||
+                    msg.contains("transport is closing") ||
                     msg.contains("no lease holder") ||
                     msg.contains("no leaseholder") ||
                     msg.contains("replica descriptor for range") ||

@@ -623,13 +623,12 @@ object IntegrationService {
 
     fun listTeams(eventKey: String, session: UserSession): List<TeamRecord> {
         return readTransaction {
-            val bbotMappings = getBBotMappings(eventKey)
-            val placeholderToBBot = bbotMappings.associate { it.placeholderKey.lowercase().trim() to it.bbotKey }
-
             val isFtcSession = session.program.equals("FTC", ignoreCase = true)
             val allTeamRows = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }
                 .orderBy(ApiTeams.teamNumber, SortOrder.ASC)
                 .toList()
+            val bbotMappings = getBBotMappings(eventKey, cachedTeams = allTeamRows)
+            val placeholderToBBot = bbotMappings.associate { it.placeholderKey.lowercase().trim() to it.bbotKey }
             // Filter by program: FTC sessions only see ftc-prefixed team keys; FRC sessions only
             // see non-ftc-prefixed keys. This prevents cross-program contamination when an FRC
             // and FTC event share the same resolved event key string in the database.
@@ -746,7 +745,8 @@ object IntegrationService {
 
             val isFtcProgram = program.equals("FTC", ignoreCase = true)
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
-            val bbotMappings = getBBotMappings(eventKey)
+            val allMatchRows = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
+            val bbotMappings = getBBotMappings(eventKey, cachedTeams = allTeams, cachedMatches = allMatchRows)
 
             // Use the caller's program to determine the correct prefix. Fall back to
             // the heuristic (event key contains "ftc" or teams have ftc keys) only
@@ -795,7 +795,6 @@ object IntegrationService {
                 }
             }
 
-            val allMatchRows = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
             // Filter match rows by program: only include matches that contain at least one
             // team key with the correct prefix. This prevents cross-program match leakage
             // when an FRC and FTC event share the same event key in the database.
@@ -889,15 +888,19 @@ object IntegrationService {
         val placeholderNumber: Int
     )
 
-    fun getBBotMappings(eventKey: String): List<BBotMapping> {
+    fun getBBotMappings(
+        eventKey: String,
+        cachedTeams: List<org.jetbrains.exposed.sql.ResultRow>? = null,
+        cachedMatches: List<org.jetbrains.exposed.sql.ResultRow>? = null
+    ): List<BBotMapping> {
         return readTransaction {
-            val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
+            val allTeams = cachedTeams ?: ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
             val isFtcEvent = eventKey.contains("ftc", ignoreCase = true) ||
                 allTeams.any { it[ApiTeams.teamKey].startsWith("ftc", ignoreCase = true) }
             if (isFtcEvent) {
                 return@readTransaction emptyList()
             }
-            val allMatches = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
+            val allMatches = cachedMatches ?: ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey.lowercase() }.toList()
 
             val bbotKeysInMatches = mutableSetOf<String>()
             allMatches.forEach { row ->
