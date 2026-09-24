@@ -178,34 +178,6 @@ jobs:
           rm -rf "$RPM_ROOT"
           mkdir -p "$RPM_ROOT/BUILD" "$RPM_ROOT/RPMS" "$RPM_ROOT/SOURCES" "$RPM_ROOT/SPECS" "$RPM_ROOT/SRPMS"
 
-          BUILDROOT="$RPM_ROOT/BUILDROOT/obsidianscout-server-${RPM_VER}-1.${RPM_ARCH}"
-          mkdir -p "$BUILDROOT/opt/obsidianscout-server" "$BUILDROOT/usr/bin" "$BUILDROOT/usr/lib/systemd/system"
-          cp -r "$BUNDLE_DIR"/* "$BUILDROOT/opt/obsidianscout-server/"
-          chmod +x "$BUILDROOT/opt/obsidianscout-server/"*.sh 2>/dev/null || true
-          chmod +x "$BUILDROOT/opt/obsidianscout-server/"obsidianscout-server-native* 2>/dev/null || true
-
-          cat << 'EOF' > "$BUILDROOT/usr/bin/obsidianscout-server"
-          #!/bin/sh
-          cd /opt/obsidianscout-server && exec ./run.sh "$@"
-          EOF
-          chmod +x "$BUILDROOT/usr/bin/obsidianscout-server"
-
-          cat << 'EOF' > "$BUILDROOT/usr/lib/systemd/system/obsidianscout-server.service"
-          [Unit]
-          Description=ObsidianScout Scouting Server
-          After=network.target
-
-          [Service]
-          Type=simple
-          WorkingDirectory=/opt/obsidianscout-server
-          ExecStart=/opt/obsidianscout-server/run.sh
-          Restart=on-failure
-          RestartSec=5s
-
-          [Install]
-          WantedBy=multi-user.target
-          EOF
-
           cat << EOF > "$RPM_ROOT/SPECS/obsidianscout-server.spec"
           %global _enable_debug_package 0
           %define debug_package %{nil}
@@ -228,6 +200,35 @@ jobs:
           %build
 
           %install
+          mkdir -p %{buildroot}/opt/obsidianscout-server
+          mkdir -p %{buildroot}/usr/bin
+          mkdir -p %{buildroot}/usr/lib/systemd/system
+
+          cp -r ${BUNDLE_DIR}/* %{buildroot}/opt/obsidianscout-server/
+          chmod +x %{buildroot}/opt/obsidianscout-server/*.sh 2>/dev/null || true
+          chmod +x %{buildroot}/opt/obsidianscout-server/obsidianscout-server-native* 2>/dev/null || true
+
+          cat << 'SH_EOF' > %{buildroot}/usr/bin/obsidianscout-server
+          #!/bin/sh
+          cd /opt/obsidianscout-server && exec ./run.sh "\$@"
+          SH_EOF
+          chmod +x %{buildroot}/usr/bin/obsidianscout-server
+
+          cat << 'SVC_EOF' > %{buildroot}/usr/lib/systemd/system/obsidianscout-server.service
+          [Unit]
+          Description=ObsidianScout Scouting Server
+          After=network.target
+
+          [Service]
+          Type=simple
+          WorkingDirectory=/opt/obsidianscout-server
+          ExecStart=/opt/obsidianscout-server/run.sh
+          Restart=on-failure
+          RestartSec=5s
+
+          [Install]
+          WantedBy=multi-user.target
+          SVC_EOF
 
           %files
           /opt/obsidianscout-server
@@ -236,8 +237,8 @@ jobs:
 
           EOF
 
-          rpmbuild --define "_topdir $RPM_ROOT" --buildroot "$BUILDROOT" --target "${RPM_ARCH}" -bb "$RPM_ROOT/SPECS/obsidianscout-server.spec"
-          RPM_FILE=$(ls "$RPM_ROOT"/RPMS/*/*.rpm | head -n 1)
+          rpmbuild --define "_topdir $RPM_ROOT" --target "${RPM_ARCH}" -bb "$RPM_ROOT/SPECS/obsidianscout-server.spec"
+          RPM_FILE=$(ls "$RPM_ROOT"/RPMS/*/*.rpm 2>/dev/null | head -n 1)
           if [ -n "$RPM_FILE" ] && [ -f "$RPM_FILE" ]; then
             RPM_NAME="obsidianscout-v${VER}-${ARCH_KEY}.rpm"
             cp "$RPM_FILE" "dist_out/$RPM_NAME"
