@@ -171,7 +171,14 @@ jobs:
             RPM_ARCH="noarch"
           fi
 
-          BUNDLE_DIR=$(ls -d ${{ matrix.bundle_glob }} | head -n 1)
+          # Resolve relative glob to an absolute path so rpmbuild's internal chdir doesn't lose it
+          REL_BUNDLE=$(ls -d ${{ matrix.bundle_glob }} 2>/dev/null | head -n 1)
+          if [ -z "$REL_BUNDLE" ] || [ ! -d "$REL_BUNDLE" ]; then
+            echo "Bundle directory not found for pattern: ${{ matrix.bundle_glob }}"
+            exit 1
+          fi
+          BUNDLE_DIR="${GITHUB_WORKSPACE}/${REL_BUNDLE#./}"
+
           mkdir -p dist_out
 
           RPM_ROOT="/tmp/obsidianscout_server_rpm"
@@ -204,7 +211,7 @@ jobs:
           mkdir -p %{buildroot}/usr/bin
           mkdir -p %{buildroot}/usr/lib/systemd/system
 
-          cp -r ${BUNDLE_DIR}/* %{buildroot}/opt/obsidianscout-server/
+          cp -r "${BUNDLE_DIR}"/* %{buildroot}/opt/obsidianscout-server/
           chmod +x %{buildroot}/opt/obsidianscout-server/*.sh 2>/dev/null || true
           chmod +x %{buildroot}/opt/obsidianscout-server/obsidianscout-server-native* 2>/dev/null || true
 
