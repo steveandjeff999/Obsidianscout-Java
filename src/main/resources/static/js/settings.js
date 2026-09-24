@@ -259,7 +259,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const tutorialPref = document.getElementById("personal-tutorial-pref");
         if (!tutorialPref) return;
 
-        tutorialPref.value = Obsidianscout.getTutorialMode ? Obsidianscout.getTutorialMode() : (Obsidianscout.safeGetItem("obsidianscout:tutorial_mode") || "zachary");
+        tutorialPref.value = Obsidianscout.getTutorialMode ? Obsidianscout.getTutorialMode() : (Obsidianscout.safeGetItem("obsidianscout:tutorial_mode") || "standard");
 
         tutorialPref.addEventListener("change", (e) => {
             const val = e.target.value;

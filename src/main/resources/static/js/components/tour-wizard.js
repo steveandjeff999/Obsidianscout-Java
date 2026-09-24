@@ -1100,7 +1100,7 @@ export function getTutorialById(tutId) {
 export function getTutorialMode() {
     const saved = safeGetItem('obsidianscout:tutorial_mode');
     if (saved) return saved;
-    return 'zachary';
+    return 'standard';
 }
 
 export function setTutorialMode(mode) {

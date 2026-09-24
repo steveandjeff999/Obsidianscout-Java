@@ -36,6 +36,15 @@ import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.UserSessions
+import com.obsidianscout.db.ScoutingAssignments
+import com.obsidianscout.db.ChatMessages
+import com.obsidianscout.db.UserChatLastRead
+import com.obsidianscout.db.ChatGroups
+import com.obsidianscout.db.PushSubscriptions
+import com.obsidianscout.db.FcmDeviceTokens
+import com.obsidianscout.db.AnalyticsReports
+import com.obsidianscout.db.PasskeyCredentials
+import com.obsidianscout.db.PasskeyChallenges
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -574,11 +583,33 @@ object AuthService {
                 it[submittedByUserId] = deletedUserEntityId
             }
 
-            // Delete password reset tokens for the target user
-            PasswordResetTokens.deleteWhere { userId eq targetUuid }
+            // Transfer or clear scouting assignment references
+            ScoutingAssignments.update({ ScoutingAssignments.assignedUserId eq targetUuid }) {
+                it[assignedUserId] = deletedUserEntityId
+            }
+            ScoutingAssignments.update({ ScoutingAssignments.createdByUserId eq targetUuid }) {
+                it[createdByUserId] = null
+            }
 
-            // Delete active sessions for the target user
+            // Transfer chat messages and reports to placeholder user, clear created channel ownership
+            ChatMessages.update({ ChatMessages.userId eq targetUuid }) {
+                it[userId] = deletedUserEntityId
+            }
+            UserChatLastRead.deleteWhere { userId eq targetUuid }
+            ChatGroups.update({ ChatGroups.createdByUserId eq targetUuid }) {
+                it[createdByUserId] = null
+            }
+            AnalyticsReports.update({ AnalyticsReports.userId eq targetUuid }) {
+                it[userId] = deletedUserEntityId
+            }
+
+            // Delete password reset tokens, sessions, push tokens, and passkeys for the target user
+            PasswordResetTokens.deleteWhere { userId eq targetUuid }
             UserSessions.deleteWhere { userId eq targetUuid }
+            PushSubscriptions.deleteWhere { userId eq targetUuid }
+            FcmDeviceTokens.deleteWhere { userId eq targetUuid }
+            PasskeyCredentials.deleteWhere { userId eq targetUuid }
+            PasskeyChallenges.deleteWhere { userId eq targetUuid }
 
             // Delete the target user
             Users.deleteWhere { Users.id eq targetUuid }

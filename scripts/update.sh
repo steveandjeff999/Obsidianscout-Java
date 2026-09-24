@@ -1,6 +1,107 @@
 #!/bin/sh
 set -e
 
+# 1. Detect Linux Distribution Family
+DETECTED_FAMILY=""
+if [ -f /etc/os-release ]; then
+    # Source os-release without modifying current environment variables unexpectedly
+    ID=$(grep -E '^ID=' /etc/os-release | head -n 1 | cut -d '=' -f 2 | tr -d '"' | tr -d "'")
+    ID_LIKE=$(grep -E '^ID_LIKE=' /etc/os-release | head -n 1 | cut -d '=' -f 2 | tr -d '"' | tr -d "'")
+    case "$ID $ID_LIKE" in
+        *debian*|*ubuntu*|*mint*|*pop*|*raspbian*|*kali*)
+            DETECTED_FAMILY="debian"
+            ;;
+        *fedora*|*rhel*|*centos*|*rocky*|*almalinux*|*suse*|*amzn*|*ol*|*mageia*)
+            DETECTED_FAMILY="rpm"
+            ;;
+    esac
+elif [ -f /etc/debian_version ]; then
+    DETECTED_FAMILY="debian"
+elif [ -f /etc/redhat-release ] || [ -f /etc/fedora-release ] || [ -f /etc/centos-release ] || [ -f /etc/SuSE-release ]; then
+    DETECTED_FAMILY="rpm"
+fi
+
+# 2. Select native package format (.deb for Debian/Ubuntu, .rpm for Fedora/RHEL/openSUSE)
+IS_RPM_PACKAGE=0
+IS_DEB_PACKAGE=0
+
+if [ "$1" = "--rpm" ]; then
+    IS_RPM_PACKAGE=1
+elif [ "$1" = "--deb" ]; then
+    IS_DEB_PACKAGE=1
+elif [ "$1" = "--tar" ] || [ "$1" = "--portable" ] || [ "$1" = "--bundle" ]; then
+    IS_RPM_PACKAGE=0
+    IS_DEB_PACKAGE=0
+elif [ "$DETECTED_FAMILY" = "debian" ]; then
+    IS_DEB_PACKAGE=1
+elif [ "$DETECTED_FAMILY" = "rpm" ]; then
+    IS_RPM_PACKAGE=1
+elif command -v dpkg >/dev/null 2>&1 && (dpkg -s obsidianscout-server >/dev/null 2>&1 || command -v apt-get >/dev/null 2>&1); then
+    IS_DEB_PACKAGE=1
+elif command -v rpm >/dev/null 2>&1 && (rpm -q obsidianscout-server >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1 || command -v zypper >/dev/null 2>&1); then
+    IS_RPM_PACKAGE=1
+fi
+
+if [ "$IS_RPM_PACKAGE" -eq 1 ] || [ "$IS_DEB_PACKAGE" -eq 1 ]; then
+    PKG_TYPE="RPM"
+    EXT="rpm"
+    if [ "$IS_DEB_PACKAGE" -eq 1 ]; then
+        PKG_TYPE="DEB"
+        EXT="deb"
+    fi
+    echo "[ObsidianScout Updater] System native package target detected: $PKG_TYPE (.${EXT})"
+    echo "[ObsidianScout Updater] Querying latest $PKG_TYPE release from GitHub..."
+
+    ARCH=$(uname -m)
+    ARCH_KEY="linux-x86_64"
+    case "$ARCH" in
+        "aarch64"|"arm64") ARCH_KEY="linux-arm64" ;;
+        "x86_64"|"amd64") ARCH_KEY="linux-x86_64" ;;
+        *) ARCH_KEY="fatjar" ;;
+    esac
+
+    LATEST_JSON=$(curl -sSL -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/steveandjeff999/Obsidianscout-Java/releases/latest" 2>/dev/null || true)
+    
+    DOWNLOAD_URL=""
+    if [ -n "$LATEST_JSON" ]; then
+        DOWNLOAD_URL=$(echo "$LATEST_JSON" | grep -o "\"browser_download_url\":\s*\"[^\"]*${ARCH_KEY}\.${EXT}\"" | head -n 1 | cut -d '"' -f 4 || true)
+        if [ -z "$DOWNLOAD_URL" ]; then
+            DOWNLOAD_URL=$(echo "$LATEST_JSON" | grep -o "\"browser_download_url\":\s*\"[^\"]*\.${EXT}\"" | head -n 1 | cut -d '"' -f 4 || true)
+        fi
+    fi
+
+    if [ -n "$DOWNLOAD_URL" ]; then
+        TARGET_FILE="/tmp/obsidianscout-server-update.$EXT"
+        echo "[ObsidianScout Updater] Downloading $DOWNLOAD_URL ..."
+        curl -sSL "$DOWNLOAD_URL" -o "$TARGET_FILE"
+
+        echo "[ObsidianScout Updater] Upgrading package via native system package manager..."
+        if [ "$IS_RPM_PACKAGE" -eq 1 ]; then
+            if command -v dnf >/dev/null 2>&1; then
+                sudo dnf upgrade -y "$TARGET_FILE" || sudo rpm -Uvh --replacepkgs "$TARGET_FILE"
+            elif command -v yum >/dev/null 2>&1; then
+                sudo yum localinstall -y "$TARGET_FILE" || sudo rpm -Uvh --replacepkgs "$TARGET_FILE"
+            elif command -v zypper >/dev/null 2>&1; then
+                sudo zypper install --allow-unsigned-rpm -y "$TARGET_FILE" || sudo rpm -Uvh --replacepkgs "$TARGET_FILE"
+            else
+                sudo rpm -Uvh --replacepkgs "$TARGET_FILE"
+            fi
+        else
+            if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get install --reinstall -y "$TARGET_FILE" || sudo dpkg -i "$TARGET_FILE"
+            else
+                sudo dpkg -i "$TARGET_FILE"
+            fi
+        fi
+
+        rm -f "$TARGET_FILE"
+        echo "[ObsidianScout Updater] Native $PKG_TYPE update completed successfully!"
+        exit 0
+    else
+        echo "[ObsidianScout Updater] Direct $PKG_TYPE asset not found, proceeding with bundle updater..."
+    fi
+fi
+
 HAS_LOCAL_NATIVE=""
 for native_bin in ./obsidianscout-server-native*; do
     if [ -x "$native_bin" ] && [ -f "$native_bin" ]; then

@@ -22,6 +22,19 @@ import com.obsidianscout.db.PasswordResetTokens
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.ScoutingEntries
+import com.obsidianscout.db.ScoutingAssignments
+import com.obsidianscout.db.ChatMessages
+import com.obsidianscout.db.UserChatLastRead
+import com.obsidianscout.db.ChatGroups
+import com.obsidianscout.db.PushSubscriptions
+import com.obsidianscout.db.FcmDeviceTokens
+import com.obsidianscout.db.AnalyticsReports
+import com.obsidianscout.db.PasskeyCredentials
+import com.obsidianscout.db.PasskeyChallenges
+import org.jetbrains.exposed.dao.id.EntityID
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.insertAndGetId
+import java.time.Instant
 
 class UserSessionsTest {
 
@@ -44,7 +57,16 @@ class UserSessionsTest {
                 ScoutingEntries,
                 PitScoutingEntries,
                 QualitativeScoutingEntries,
-                PasswordResetTokens
+                PasswordResetTokens,
+                ScoutingAssignments,
+                ChatMessages,
+                UserChatLastRead,
+                ChatGroups,
+                PushSubscriptions,
+                FcmDeviceTokens,
+                AnalyticsReports,
+                PasskeyCredentials,
+                PasskeyChallenges
             )
         }
     }
@@ -254,5 +276,166 @@ class UserSessionsTest {
             UserSessions.selectAll().where { (UserSessions.id eq sessionUuid) and (UserSessions.userId eq userUuid) }.any()
         }
         assertFalse(existsAfter)
+    }
+
+    @Test
+    fun testDeleteUserWithAllForeignKeys() {
+        val user = AuthService.register(
+            username = "fullfktester",
+            teamNumber = 9506,
+            password = "Password123!",
+            program = "FRC",
+            role = UserRole.ADMIN
+        )
+        val userUuid = UUID.fromString(user.id)
+        val now = Instant.now()
+
+        // Create referencing rows across all tables
+        val assignmentId = transaction {
+            // ScoutingAssignments (assignedUserId and createdByUserId)
+            val aId = ScoutingAssignments.insertAndGetId {
+                it[ownerTeamNumber] = 9506
+                it[program] = "FRC"
+                it[eventKey] = "2026test"
+                it[assignedUserId] = EntityID(userUuid, Users)
+                it[createdByUserId] = EntityID(userUuid, Users)
+                it[assignmentType] = "MATCH"
+                it[createdAt] = now
+                it[updatedAt] = now
+            }.value
+
+            // ChatMessages
+            ChatMessages.insert {
+                it[teamNumber] = 9506
+                it[program] = "FRC"
+                it[groupName] = "general"
+                it[userId] = EntityID(userUuid, Users)
+                it[username] = "fullfktester"
+                it[content] = "Hello team!"
+                it[createdAt] = now
+            }
+
+            // UserChatLastRead
+            UserChatLastRead.insert {
+                it[userId] = EntityID(userUuid, Users)
+                it[groupName] = "general"
+                it[lastReadAt] = now
+            }
+
+            // ChatGroups
+            ChatGroups.insert {
+                it[teamNumber] = 9506
+                it[program] = "FRC"
+                it[groupName] = "custom-channel"
+                it[createdByUserId] = EntityID(userUuid, Users)
+                it[createdAt] = now
+            }
+
+            // AnalyticsReports
+            AnalyticsReports.insert {
+                it[ownerTeamNumber] = 9506
+                it[program] = "FRC"
+                it[userId] = EntityID(userUuid, Users)
+                it[title] = "My Custom Report"
+                it[configJson] = "{}"
+                it[createdAt] = now
+                it[updatedAt] = now
+            }
+
+            // PushSubscriptions
+            PushSubscriptions.insert {
+                it[userId] = EntityID(userUuid, Users)
+                it[endpoint] = "https://push.example.com/sub/123"
+                it[p256dh] = "key123"
+                it[auth] = "auth123"
+                it[createdAt] = now
+            }
+
+            // FcmDeviceTokens
+            FcmDeviceTokens.insert {
+                it[userId] = EntityID(userUuid, Users)
+                it[deviceToken] = "token123"
+                it[platform] = "android"
+                it[updatedAt] = now
+            }
+
+            // PasskeyCredentials
+            PasskeyCredentials.insert {
+                it[userId] = EntityID(userUuid, Users)
+                it[credentialId] = "cred123"
+                it[publicKeyCose] = "cose123"
+                it[createdAt] = now
+            }
+
+            // PasskeyChallenges
+            PasskeyChallenges.insert {
+                it[challenge] = "challenge123"
+                it[userId] = EntityID(userUuid, Users)
+                it[flow] = "authenticate"
+                it[expiresAt] = now.plusSeconds(300)
+            }
+
+            // Scouting entries
+            ScoutingEntries.insert {
+                it[ownerTeamNumber] = 9506
+                it[program] = "FRC"
+                it[dataJson] = "{}"
+                it[submittedByUserId] = EntityID(userUuid, Users)
+                it[createdAt] = now
+            }
+
+            aId
+        }
+
+        // Add active session
+        AuthService.createSession(userUuid, "web", "", "127.0.0.1")
+
+        val callerSession = UserSession(
+            userId = user.id,
+            username = user.username,
+            teamNumber = user.teamNumber,
+            role = UserRole.ADMIN
+        )
+
+        // Delete the user - this previously failed with foreign key constraint violation
+        AuthService.deleteUser(callerSession, user.id)
+
+        // Verify target user is deleted
+        val userExists = transaction {
+            Users.selectAll().where { Users.id eq userUuid }.any()
+        }
+        assertFalse(userExists)
+
+        // Verify "Deleted User" placeholder exists and took ownership
+        transaction {
+            val deletedUserRow = Users.selectAll().where {
+                (Users.username eq "Deleted User") and (Users.teamNumber eq 9506)
+            }.firstOrNull()
+            assertNotNull(deletedUserRow)
+            val deletedUserId = deletedUserRow[Users.id].value
+
+            // Assignment was reassigned to Deleted User and createdBy cleared
+            val assignment = ScoutingAssignments.selectAll().where { ScoutingAssignments.id eq assignmentId }.first()
+            assertEquals(deletedUserId, assignment[ScoutingAssignments.assignedUserId].value)
+            assertEquals(null, assignment[ScoutingAssignments.createdByUserId])
+
+            // Cleaned up personal tables
+            assertEquals(0, UserSessions.selectAll().where { UserSessions.userId eq userUuid }.count())
+            assertEquals(0, PushSubscriptions.selectAll().where { PushSubscriptions.userId eq userUuid }.count())
+            assertEquals(0, FcmDeviceTokens.selectAll().where { FcmDeviceTokens.userId eq userUuid }.count())
+            assertEquals(0, PasskeyCredentials.selectAll().where { PasskeyCredentials.userId eq userUuid }.count())
+            assertEquals(0, PasskeyChallenges.selectAll().where { PasskeyChallenges.userId eq userUuid }.count())
+            assertEquals(0, UserChatLastRead.selectAll().where { UserChatLastRead.userId eq userUuid }.count())
+
+            // Reassigned data tables to Deleted User
+            val chatMsg = ChatMessages.selectAll().where { ChatMessages.teamNumber eq 9506 }.first()
+            assertEquals(deletedUserId, chatMsg[ChatMessages.userId].value)
+
+            val report = AnalyticsReports.selectAll().where { AnalyticsReports.ownerTeamNumber eq 9506 }.first()
+            assertEquals(deletedUserId, report[AnalyticsReports.userId].value)
+
+            val entry = ScoutingEntries.selectAll().where { ScoutingEntries.ownerTeamNumber eq 9506 }.first()
+            assertEquals(deletedUserId, entry[ScoutingEntries.submittedByUserId].value)
+        }
     }
 }
