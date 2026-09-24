@@ -125,6 +125,12 @@ jobs:
       - name: Build Platform Bundle
         run: ${{ matrix.build_cmd }}
 
+      - name: Install Linux Packaging Dependencies (RPM)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
       - name: Archive Bundle (Zip for Windows/FatJAR)
         if: matrix.archive_ext == 'zip'
         shell: pwsh
@@ -134,8 +140,8 @@ jobs:
           $archiveName = "obsidianscout-v${ver}-${archKey}.zip"
           $bundlePath = Get-Item ${{ matrix.bundle_glob }} | Select-Object -First 1
           Write-Host "Zipping $bundlePath to $archiveName..."
-          Compress-Archive -Path "$($bundlePath.FullName)\*" -DestinationPath "$archiveName" -Force
-          echo "ARCHIVE_FILE=$archiveName" >> $env:GITHUB_ENV
+          New-Item -ItemType Directory -Path "dist_out" -Force
+          Compress-Archive -Path "$($bundlePath.FullName)\*" -DestinationPath "dist_out/$archiveName" -Force
 
       - name: Archive Bundle (Tar.gz for Linux/macOS)
         if: matrix.archive_ext == 'tar.gz'
@@ -145,15 +151,104 @@ jobs:
           ARCH_KEY="${{ matrix.arch_key }}"
           ARCHIVE_NAME="obsidianscout-v${VER}-${ARCH_KEY}.tar.gz"
           BUNDLE_DIR=$(ls -d ${{ matrix.bundle_glob }} | head -n 1)
+          mkdir -p dist_out
           echo "Compressing $BUNDLE_DIR to $ARCHIVE_NAME..."
-          tar -czf "$ARCHIVE_NAME" -C "$BUNDLE_DIR" .
-          echo "ARCHIVE_FILE=$ARCHIVE_NAME" >> $GITHUB_ENV
+          tar -czf "dist_out/$ARCHIVE_NAME" -C "$BUNDLE_DIR" .
+
+      - name: Package RPM Bundle (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          VER="${{ needs.bump-version.outputs.version }}"
+          ARCH_KEY="${{ matrix.arch_key }}"
+          RPM_VER="${VER//-/_}"
+          RPM_VER="${RPM_VER:-0.1.0}"
+
+          RPM_ARCH="x86_64"
+          if [ "$ARCH_KEY" = "linux-arm64" ]; then
+            RPM_ARCH="aarch64"
+          elif [ "$ARCH_KEY" = "fatjar" ]; then
+            RPM_ARCH="noarch"
+          fi
+
+          BUNDLE_DIR=$(ls -d ${{ matrix.bundle_glob }} | head -n 1)
+          mkdir -p dist_out
+
+          RPM_ROOT="/tmp/obsidianscout_server_rpm"
+          rm -rf "$RPM_ROOT"
+          mkdir -p "$RPM_ROOT/BUILD" "$RPM_ROOT/RPMS" "$RPM_ROOT/SOURCES" "$RPM_ROOT/SPECS" "$RPM_ROOT/SRPMS"
+
+          BUILDROOT="$RPM_ROOT/BUILDROOT/obsidianscout-server-${RPM_VER}-1.${RPM_ARCH}"
+          mkdir -p "$BUILDROOT/opt/obsidianscout-server" "$BUILDROOT/usr/bin" "$BUILDROOT/usr/lib/systemd/system"
+          cp -r "$BUNDLE_DIR"/* "$BUILDROOT/opt/obsidianscout-server/"
+          chmod +x "$BUILDROOT/opt/obsidianscout-server/"*.sh 2>/dev/null || true
+          chmod +x "$BUILDROOT/opt/obsidianscout-server/"obsidianscout-server-native* 2>/dev/null || true
+
+          cat << 'EOF' > "$BUILDROOT/usr/bin/obsidianscout-server"
+          #!/bin/sh
+          cd /opt/obsidianscout-server && exec ./run.sh "$@"
+          EOF
+          chmod +x "$BUILDROOT/usr/bin/obsidianscout-server"
+
+          cat << 'EOF' > "$BUILDROOT/usr/lib/systemd/system/obsidianscout-server.service"
+          [Unit]
+          Description=ObsidianScout Scouting Server
+          After=network.target
+
+          [Service]
+          Type=simple
+          WorkingDirectory=/opt/obsidianscout-server
+          ExecStart=/opt/obsidianscout-server/run.sh
+          Restart=on-failure
+          RestartSec=5s
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          cat << EOF > "$RPM_ROOT/SPECS/obsidianscout-server.spec"
+          %global _enable_debug_package 0
+          %define debug_package %{nil}
+          %define _build_id_links none
+          %define _binary_payload w19.zstdio
+
+          Name:           obsidianscout-server
+          Version:        ${RPM_VER}
+          Release:        1
+          Summary:        ObsidianScout High-Performance Scouting Server
+          License:        Proprietary
+          BuildArch:      ${RPM_ARCH}
+          AutoReqProv:    no
+
+          %description
+          ObsidianScout High-Performance Scouting Server
+
+          %prep
+
+          %build
+
+          %install
+
+          %files
+          /opt/obsidianscout-server
+          /usr/bin/obsidianscout-server
+          /usr/lib/systemd/system/obsidianscout-server.service
+
+          EOF
+
+          rpmbuild --define "_topdir $RPM_ROOT" --buildroot "$BUILDROOT" --target "${RPM_ARCH}" -bb "$RPM_ROOT/SPECS/obsidianscout-server.spec"
+          RPM_FILE=$(ls "$RPM_ROOT"/RPMS/*/*.rpm | head -n 1)
+          if [ -n "$RPM_FILE" ] && [ -f "$RPM_FILE" ]; then
+            RPM_NAME="obsidianscout-v${VER}-${ARCH_KEY}.rpm"
+            cp "$RPM_FILE" "dist_out/$RPM_NAME"
+            echo "Successfully generated RPM: dist_out/$RPM_NAME"
+          fi
 
       - name: Upload Build Artifact to Workflow
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.arch_key }}
-          path: ${{ env.ARCHIVE_FILE }}
+          path: dist_out/*
           if-no-files-found: error
 
   publish-release:
