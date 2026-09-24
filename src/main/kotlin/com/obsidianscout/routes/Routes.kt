@@ -81,6 +81,7 @@ import io.ktor.http.content.streamProvider
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
@@ -1398,6 +1399,12 @@ fun Application.configureRoutes() {
                     call.respond(ScoutingAssignmentService.updateAssignment(session, id, request))
                 }
                 post("/{id}/status") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
+                    val request = call.receive<com.obsidianscout.scouting.UpdateAssignmentStatusRequest>()
+                    call.respond(ScoutingAssignmentService.updateStatus(session, id, request.status))
+                }
+                patch("/{id}/status") {
                     val session = call.requireSession()
                     val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
                     val request = call.receive<com.obsidianscout.scouting.UpdateAssignmentStatusRequest>()

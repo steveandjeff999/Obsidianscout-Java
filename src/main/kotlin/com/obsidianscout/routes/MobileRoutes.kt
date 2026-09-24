@@ -45,6 +45,7 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
@@ -2445,6 +2446,13 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val updated = com.obsidianscout.scouting.ScoutingAssignmentService.updateStatus(session, id, req.status)
                 call.respond(MobileAssignmentResponse(success = true, assignment = updated))
             }
+            patch("/assignments/{id}/status") {
+                val session = call.requireMobileSession(secret)
+                val id = call.parameters["id"] ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing assignment ID", "INVALID_PARAM")
+                val req = call.receive<com.obsidianscout.scouting.UpdateAssignmentStatusRequest>()
+                val updated = com.obsidianscout.scouting.ScoutingAssignmentService.updateStatus(session, id, req.status)
+                call.respond(MobileAssignmentResponse(success = true, assignment = updated))
+            }
 
             // Pit configuration
             get("/config/pit") {
@@ -3203,9 +3211,29 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
             get("/admin/users") {
                 val session = call.requireMobileAdmin(secret)
-                val users = transaction {
-                    AuthService.listUsers(session)
+                val q = call.request.queryParameters["q"]
+                val teamNumber = call.request.queryParameters["teamNumber"]?.toIntOrNull()
+                val program = call.request.queryParameters["program"]
+                val roleStr = call.request.queryParameters["role"]
+                val role = roleStr?.takeIf { it.isNotBlank() }?.let {
+                    runCatching { UserRole.valueOf(it.uppercase()) }.getOrNull()
                 }
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                val offset = call.request.queryParameters["offset"]?.toLongOrNull() ?: 0L
+                val sortBy = call.request.queryParameters["sortBy"]
+                val sortDir = call.request.queryParameters["sortDir"]
+
+                val users = AuthService.listUsers(
+                    callerSession = session,
+                    search = q,
+                    teamFilter = teamNumber,
+                    roleFilter = role,
+                    programFilter = program,
+                    limit = limit,
+                    offset = offset,
+                    sortBy = sortBy,
+                    sortDir = sortDir
+                )
                 val mapped = users.map { u ->
                     MobileAdminUser(u.id, u.username, u.email, u.teamNumber, listOf(u.role.name.lowercase()))
                 }

@@ -270,12 +270,16 @@ object AuthService {
                         q.andWhere { Users.teamNumber eq teamFilter }
                     }
                     if (!programFilter.isNullOrBlank()) {
-                        q.andWhere { Users.program eq programFilter }
+                        q.andWhere { Users.program.lowerCase() eq programFilter.lowercase().trim() }
                     }
                     q
                 }
                 UserRole.ADMIN -> {
-                    val q = Users.selectAll().where { (Users.teamNumber eq callerSession.teamNumber) and (Users.program eq callerSession.program) and (Users.username neq "Deleted User") }
+                    val q = Users.selectAll().where { 
+                        (Users.teamNumber eq callerSession.teamNumber) and 
+                        (Users.program.lowerCase() eq callerSession.program.lowercase().trim()) and 
+                        (Users.username neq "Deleted User") 
+                    }
                     if (teamFilter != null && teamFilter != callerSession.teamNumber) {
                         q.andWhere { Users.teamNumber eq -1 }
                     }
