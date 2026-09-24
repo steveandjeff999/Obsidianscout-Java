@@ -30,6 +30,9 @@ object NodeMonitoringService {
     private var monitoringJob: Job? = null
     private val previousNodeStatuses = ConcurrentHashMap<String, String>()
     private val consecutiveFailures = ConcurrentHashMap<String, Int>()
+    private val localNotificationLocks = ConcurrentHashMap<String, Long>()
+    @Volatile
+    private var cachedEnrolledSuperadmins: Pair<List<UUID>, List<String>>? = null
 
     @Volatile
     var isMonitoringActive: Boolean = false
@@ -67,12 +70,16 @@ object NodeMonitoringService {
     fun hasEnrolledSuperadmins(): Boolean {
         return try {
             readTransaction {
-                !Users.selectAll()
+                val rows = Users.selectAll()
                     .where { (Users.role eq UserRole.SUPERADMIN.name) and (Users.nodeAlertsEnabled eq true) }
-                    .empty()
+                    .toList()
+                val uuids = rows.map { it[Users.id].value }
+                val emails = rows.mapNotNull { it[Users.email]?.takeIf { e -> e.isNotBlank() } }
+                cachedEnrolledSuperadmins = Pair(uuids, emails)
+                rows.isNotEmpty()
             }
         } catch (e: Exception) {
-            false
+            cachedEnrolledSuperadmins?.first?.isNotEmpty() == true
         }
     }
 
@@ -82,7 +89,14 @@ object NodeMonitoringService {
      * Returns false if an active (unexpired) lock key exists, preventing duplicate multi-node alerts.
      */
     fun claimNotificationLock(lockKey: String, lockDurationMinutes: Long = 60L): Boolean {
+        val nowMs = System.currentTimeMillis()
+        val lastClaimed = localNotificationLocks[lockKey] ?: 0L
+        if (nowMs - lastClaimed < lockDurationMinutes * 60_000L) {
+            return false
+        }
+
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+            localNotificationLocks[lockKey] = nowMs
             return true // Quorum lost: skip cluster DB lock write and allow local alert dispatch
         }
         val now = Instant.now()
@@ -90,7 +104,7 @@ object NodeMonitoringService {
         val localIp = ClusterManagementService.getLocalTailscaleIp()
 
         return try {
-            transaction {
+            val result = transaction {
                 val existing = ClusterNotificationLocks.selectAll()
                     .where { ClusterNotificationLocks.lockKey eq lockKey }
                     .firstOrNull()
@@ -120,6 +134,10 @@ object NodeMonitoringService {
                     true
                 }
             }
+            if (result) {
+                localNotificationLocks[lockKey] = nowMs
+            }
+            result
         } catch (e: Exception) {
             ServerLogService.appendLog("INFO", "NodeMonitoringService", "Notification lock '$lockKey' race condition hit. Skipping duplicate dispatch.")
             false
@@ -506,10 +524,12 @@ object NodeMonitoringService {
                     .toList()
                 val uuids = rows.map { it[Users.id].value }
                 val emails = rows.mapNotNull { it[Users.email]?.takeIf { e -> e.isNotBlank() } }
-                Pair(uuids, emails)
+                val pair = Pair(uuids, emails)
+                cachedEnrolledSuperadmins = pair
+                pair
             }
         } catch (_: Exception) {
-            Pair(emptyList(), emptyList())
+            cachedEnrolledSuperadmins ?: Pair(emptyList(), emptyList())
         }
 
         if (enrolledUuids.isEmpty()) return
@@ -585,10 +605,12 @@ object NodeMonitoringService {
                     .toList()
                 val uuids = rows.map { it[Users.id].value }
                 val emails = rows.mapNotNull { it[Users.email]?.takeIf { e -> e.isNotBlank() } }
-                Pair(uuids, emails)
+                val pair = Pair(uuids, emails)
+                cachedEnrolledSuperadmins = pair
+                pair
             }
         } catch (_: Exception) {
-            Pair(emptyList(), emptyList())
+            cachedEnrolledSuperadmins ?: Pair(emptyList(), emptyList())
         }
 
         if (enrolledUuids.isEmpty()) return

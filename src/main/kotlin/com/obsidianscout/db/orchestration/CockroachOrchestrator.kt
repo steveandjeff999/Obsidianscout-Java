@@ -1157,31 +1157,14 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             }
         } else if (error != null && isQuorumLossException(error)) {
             val failCount = ++consecutiveQuorumLossFailures
-            val now = System.currentTimeMillis()
             if (!isQuorumLost) {
-                markQuorumLost(error.message ?: "Database cluster quorum lost.")
                 println("[Cockroach] ⚠️ Quorum probe failed (check $failCount). Routing reads to local SQLite fallback mirror...")
-            } else if (quorumLossStartTime == 0L) {
-                quorumLossStartTime = now
-            }
-
-            val elapsedMs = now - quorumLossStartTime
-            // Time-delayed notification guard:
-            // Only send push/email alert if quorum loss is sustained for > 2 minutes (120,000 ms)
-            // to avoid false alerts during temporary network hiccups.
-            if (elapsedMs >= QUORUM_LOSS_ALERT_DELAY_MS && !isQuorumLossAlertSent) {
-                isQuorumLossAlertSent = true
-                println("[Cockroach] Database quorum loss sustained for > ${QUORUM_LOSS_ALERT_DELAY_MS / 1000}s (${elapsedMs / 1000}s elapsed, $failCount checks). Dispatching alert...")
-                try {
-                    com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumLostAlert(quorumLossDetails)
-                } catch (_: Exception) {}
+                markQuorumLost(error.message ?: "Database cluster quorum lost.")
             }
         }
     }
 
     companion object {
-        const val QUORUM_LOSS_ALERT_DELAY_MS: Long = 120_000L // 2 minutes
-
         @Volatile
         var isDbActive = false
 
@@ -1202,6 +1185,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
         fun markQuorumLost(details: String? = null) {
             val now = System.currentTimeMillis()
+            val wasLost = isQuorumLost
             if (!isQuorumLost) {
                 isQuorumLost = true
                 quorumLossStartTime = now
@@ -1210,6 +1194,13 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             }
             if (details != null) {
                 quorumLossDetails = details
+            }
+            if (!wasLost || !isQuorumLossAlertSent) {
+                isQuorumLossAlertSent = true
+                println("[Cockroach] Database quorum loss detected. Dispatching quorum lost alert...")
+                try {
+                    com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumLostAlert(quorumLossDetails)
+                } catch (_: Exception) {}
             }
         }
 
@@ -1261,8 +1252,12 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     msg.contains("replica descriptor for range") ||
                     className.contains("rangeunavailable") ||
                     className.contains("notleaseholder") ||
+                    className.contains("quorumlost") ||
                     (msg.contains("replica") && msg.contains("unavailable")) ||
-                    (msg.contains("deadline exceeded") && (msg.contains("range") || msg.contains("replica") || msg.contains("lease") || msg.contains("raft") || msg.contains("liveness") || msg.contains("heartbeat")))
+                    (msg.contains("deadline exceeded") && (msg.contains("range") || msg.contains("replica") || msg.contains("lease") || msg.contains("raft") || msg.contains("liveness") || msg.contains("heartbeat"))) ||
+                    msg.contains("connection refused") ||
+                    msg.contains("the connection attempt failed") ||
+                    msg.contains("connection is not available, request timed out")
                 ) {
                     return true
                 }
