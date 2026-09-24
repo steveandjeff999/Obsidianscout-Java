@@ -19,13 +19,13 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.andWhere
+import org.jetbrains.exposed.sql.batchInsert
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.update
 import java.time.Instant
 import java.util.UUID
@@ -214,6 +214,13 @@ object ScoutingAssignmentService {
             ?: throw ApiException(HttpStatusCode.InternalServerError, "Failed to retrieve created assignment.")
     }
 
+    private data class ValidatedBulkItem(
+        val raw: BulkAssignmentItem,
+        val targetUuid: UUID,
+        val typeClean: String,
+        val effectiveOwnerTeam: Int
+    )
+
     fun bulkCreateAssignments(session: UserSession, request: BulkCreateAssignmentsRequest): List<ScoutingAssignmentRecord> {
         val eventKeyClean = request.eventKey.trim()
         if (eventKeyClean.isBlank()) {
@@ -226,14 +233,14 @@ object ScoutingAssignmentService {
         val now = Instant.now()
         val creatorUuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
 
-        val createdIds = transaction {
+        val createdRows = transaction {
             val userIds = request.assignments.mapNotNull { runCatching { UUID.fromString(it.assignedUserId) }.getOrNull() }.distinct()
             val validUsers = Users.selectAll().where {
                 (Users.id inList userIds) and (Users.program.lowerCase() eq session.program.lowercase().trim()) and
                 (if (session.role != UserRole.SUPERADMIN) Users.teamNumber eq session.teamNumber else Users.teamNumber eq Users.teamNumber)
             }.associateBy { it[Users.id].value }
 
-            val ids = mutableListOf<UUID>()
+            val validItems = mutableListOf<ValidatedBulkItem>()
             for (item in request.assignments) {
                 val targetUuid = runCatching { UUID.fromString(item.assignedUserId) }.getOrNull() ?: continue
                 val uRow = validUsers[targetUuid] ?: continue
@@ -245,31 +252,32 @@ object ScoutingAssignmentService {
                 } else {
                     session.teamNumber
                 }
-
-                val id = ScoutingAssignments.insertAndGetId {
-                    it[ownerTeamNumber] = effectiveOwnerTeam
-                    it[program] = session.program.uppercase().trim()
-                    it[eventKey] = eventKeyClean.lowercase()
-                    it[assignedUserId] = targetUuid
-                    it[assignmentType] = typeClean
-                    it[matchKey] = item.matchKey?.trim()?.ifBlank { null }
-                    it[matchNumber] = item.matchNumber
-                    it[compLevel] = item.compLevel?.trim()?.ifBlank { null }
-                    it[targetTeamNumber] = item.targetTeamNumber
-                    it[allianceColor] = item.allianceColor?.trim()?.uppercase()?.ifBlank { null }
-                    it[status] = "PENDING"
-                    it[notes] = item.notes?.trim()?.ifBlank { null }
-                    it[createdByUserId] = creatorUuid
-                    it[createdAt] = now
-                    it[updatedAt] = now
-                    it[reminderMinutesBefore] = request.reminderMinutesBefore
-                }.value
-                ids.add(id)
+                validItems.add(ValidatedBulkItem(item, targetUuid, typeClean, effectiveOwnerTeam))
             }
-            ids
+
+            if (validItems.isEmpty()) return@transaction emptyList()
+
+            ScoutingAssignments.batchInsert(validItems, shouldReturnGeneratedValues = true) { item ->
+                this[ScoutingAssignments.ownerTeamNumber] = item.effectiveOwnerTeam
+                this[ScoutingAssignments.program] = session.program.uppercase().trim()
+                this[ScoutingAssignments.eventKey] = eventKeyClean.lowercase()
+                this[ScoutingAssignments.assignedUserId] = item.targetUuid
+                this[ScoutingAssignments.assignmentType] = item.typeClean
+                this[ScoutingAssignments.matchKey] = item.raw.matchKey?.trim()?.ifBlank { null }
+                this[ScoutingAssignments.matchNumber] = item.raw.matchNumber
+                this[ScoutingAssignments.compLevel] = item.raw.compLevel?.trim()?.ifBlank { null }
+                this[ScoutingAssignments.targetTeamNumber] = item.raw.targetTeamNumber
+                this[ScoutingAssignments.allianceColor] = item.raw.allianceColor?.trim()?.uppercase()?.ifBlank { null }
+                this[ScoutingAssignments.status] = "PENDING"
+                this[ScoutingAssignments.notes] = item.raw.notes?.trim()?.ifBlank { null }
+                this[ScoutingAssignments.createdByUserId] = creatorUuid
+                this[ScoutingAssignments.createdAt] = now
+                this[ScoutingAssignments.updatedAt] = now
+                this[ScoutingAssignments.reminderMinutesBefore] = request.reminderMinutesBefore
+            }
         }
 
-        return listAssignments(session, eventKey = eventKeyClean).filter { it.id in createdIds.map { id -> id.toString() } }
+        return readTransaction { mapRowsToRecords(createdRows) }
     }
 
     fun updateAssignment(session: UserSession, id: String, request: UpdateAssignmentRequest): ScoutingAssignmentRecord {
