@@ -68,25 +68,43 @@ export function localToUtcEpoch(datetimeLocalValue) {
  * @param {string|null} eventTimezone  IANA timezone for the event venue (e.g. "America/New_York")
  * @returns {HTMLElement}
  */
-export function formatTimestampWithVenueTooltip(epochSeconds, eventTimezone) {
+export function formatTimestampWithVenueTooltip(epochSeconds, eventTimezone, predictedEpochSeconds, offsetSeconds) {
     const wrapper = document.createElement("span");
     wrapper.className = "time-cell";
 
-    if (!epochSeconds) {
+    const displaySeconds = predictedEpochSeconds || epochSeconds;
+    if (!displaySeconds) {
         wrapper.textContent = "";
         return wrapper;
     }
 
     const deviceTz = getDeviceTimezone();
-    const localStr = formatTimestamp(epochSeconds, deviceTz);
+    const localStr = formatTimestamp(displaySeconds, deviceTz);
     const localSpan = document.createElement("span");
     localSpan.textContent = localStr;
     wrapper.appendChild(localSpan);
 
+    const offset = Number(offsetSeconds || 0);
+    if (offset !== 0 && epochSeconds && predictedEpochSeconds && predictedEpochSeconds !== epochSeconds) {
+        const offsetMinutes = Math.round(offset / 60);
+        if (Math.abs(offsetMinutes) >= 1) {
+            const offsetBadge = document.createElement("span");
+            const isLate = offsetMinutes > 0;
+            offsetBadge.className = `schedule-offset-badge ${isLate ? 'behind' : 'ahead'}`;
+            const sign = isLate ? "+" : "";
+            offsetBadge.textContent = `${sign}${offsetMinutes}m`;
+            const origLocalStr = formatTimestamp(epochSeconds, deviceTz);
+            const statusText = isLate ? `${offsetMinutes}m behind schedule` : `${Math.abs(offsetMinutes)}m ahead of schedule`;
+            offsetBadge.setAttribute("data-tooltip", `Est: ${localStr} (${statusText} \u2022 Sched: ${origLocalStr})`);
+            offsetBadge.setAttribute("aria-label", `Schedule offset: ${statusText}`);
+            wrapper.appendChild(offsetBadge);
+        }
+    }
+
     // Only show venue tooltip if eventTimezone is set AND differs from device tz
     if (eventTimezone && eventTimezone !== deviceTz) {
         try {
-            const venueStr = formatTimestamp(epochSeconds, eventTimezone);
+            const venueStr = formatTimestamp(displaySeconds, eventTimezone);
             // Quick sanity: if both strings are identical there's nothing to show
             if (venueStr !== localStr) {
                 const badge = document.createElement("span");

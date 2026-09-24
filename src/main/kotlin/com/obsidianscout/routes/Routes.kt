@@ -1385,6 +1385,16 @@ fun Application.configureRoutes() {
                     val request = call.receive<com.obsidianscout.scouting.BulkCreateAssignmentsRequest>()
                     call.respond(ScoutingAssignmentService.bulkCreateAssignments(session, request))
                 }
+                post("/auto-generate") {
+                    val session = call.requireAdmin()
+                    val request = call.receive<com.obsidianscout.scouting.AutoGenerateAssignmentsRequest>()
+                    call.respond(ScoutingAssignmentService.autoGenerateAssignments(session, request))
+                }
+                post("/auto-resolve-conflicts") {
+                    val session = call.requireAdmin()
+                    val request = call.receive<com.obsidianscout.scouting.AutoResolveConflictsRequest>()
+                    call.respond(ScoutingAssignmentService.autoResolveConflicts(session, request.eventKey))
+                }
                 get("/{id}") {
                     val session = call.requireSession()
                     val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
@@ -1415,7 +1425,8 @@ fun Application.configureRoutes() {
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
                     val type = call.request.queryParameters["type"]
-                    val deletedCount = ScoutingAssignmentService.deleteAllAssignments(session, eventKey, type)
+                    val idsParam = call.request.queryParameters["ids"]?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }
+                    val deletedCount = ScoutingAssignmentService.deleteAllAssignments(session, eventKey, type, idsParam)
                     call.respond(com.obsidianscout.scouting.DeleteAssignmentsResponse(success = true, deletedCount = deletedCount, message = "Deleted $deletedCount assignments"))
                 }
                 delete("/{id}") {

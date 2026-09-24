@@ -124,7 +124,9 @@ function renderMatchesTable(matches, eventKey, timezone) {
         timeCell.className = "match-time-cell";
         const timeEl = Obsidianscout.formatTimestampWithVenueTooltip(
             match.scheduledTime,
-            match.eventTimezone
+            match.eventTimezone,
+            match.predictedTime,
+            match.scheduleOffsetSeconds
         );
         timeCell.appendChild(timeEl);
         const redCell = document.createElement("td");

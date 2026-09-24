@@ -187,8 +187,9 @@ object IntegrationService {
                     )
             }
             val teamsDeferred = async { fetchMergedTeams(settings, eventKey) }
-            val matchesDeferred = async { fetchMergedMatches(settings, eventKey) }
-            Triple(eventDeferred.await(), teamsDeferred.await(), matchesDeferred.await())
+            val eventRecord = eventDeferred.await()
+            val matchesDeferred = async { fetchMergedMatches(settings, eventKey, eventRecord.timezone ?: settings.timezone) }
+            Triple(eventRecord, teamsDeferred.await(), matchesDeferred.await())
         }
 
         // Guard: if every team returned by the FRC APIs has an "ftc"-prefixed key, we
@@ -318,8 +319,9 @@ object IntegrationService {
                     )
             }
             val teamsDeferred = async { fetchMergedTeams(settings, key) }
-            val matchesDeferred = async { fetchMergedMatches(settings, key) }
-            Triple(eventDeferred.await(), teamsDeferred.await(), matchesDeferred.await())
+            val eventRecord = eventDeferred.await()
+            val matchesDeferred = async { fetchMergedMatches(settings, key, eventRecord.timezone ?: settings.timezone) }
+            Triple(eventRecord, teamsDeferred.await(), matchesDeferred.await())
         }
 
         // Guard: if every team returned by the FRC APIs has an "ftc"-prefixed key, the
@@ -807,7 +809,7 @@ object IntegrationService {
                 // An empty match (no team keys) is kept as-is.
                 allKeys.isEmpty() || !allKeys.all { it.startsWith(wrongPrefix) }
             }
-            rows.sortedWith(
+            val sortedRows = rows.sortedWith(
                 compareBy(
                     { compLevelRank(it[ApiMatches.compLevel]) },
                     { it[ApiMatches.setNumber] ?: 0 },
@@ -815,34 +817,26 @@ object IntegrationService {
                     { it[ApiMatches.scheduledTime] ?: Long.MAX_VALUE },
                     { it[ApiMatches.matchKey] }
                 )
-            ).map { row ->
+            )
+
+            data class MatchParsed(
+                val row: org.jetbrains.exposed.sql.ResultRow,
+                val compLevel: String,
+                val setNumber: Int?,
+                val matchNumber: Int?,
+                val scheduledTime: Long?,
+                val actualTime: Long?,
+                val rScore: Int?,
+                val bScore: Int?,
+                val isPlayed: Boolean
+            )
+
+            val parsedMatches = sortedRows.map { row ->
                 val compLevel = row[ApiMatches.compLevel]
                 val setNumber = row[ApiMatches.setNumber]
                 val matchNumber = row[ApiMatches.matchNumber]
-                val resolveTeams = { teamKeysJson: String ->
-                    val rawKeys = decodeTeams(teamKeysJson)
-                    rawKeys.map { key ->
-                        val trimmedKey = key.trim().lowercase()
-                        val prefix = if (trimmedKey.startsWith("ftc") || (canonicalKeyByKey[trimmedKey]?.startsWith("ftc") == true)) "ftc" else "frc"
-                        val canonicalKey = canonicalKeyByKey[trimmedKey] 
-                            ?: (if (trimmedKey.startsWith(prefix)) trimmedKey else "$prefix$trimmedKey")
-                        
-                        val num = teamNumberByKey[trimmedKey]
-                            ?: trimmedKey.removePrefix(prefix).toIntOrNull()
-                        
-                        if (num != null && canonicalKey.removePrefix(prefix).lowercase() != num.toString()) {
-                            val cleanCanonical = if (canonicalKey.startsWith(prefix)) canonicalKey else "$prefix$canonicalKey"
-                            "$cleanCanonical/$num"
-                        } else {
-                            if (num != null && canonicalKey != trimmedKey) {
-                                val cleanCanonical = if (canonicalKey.startsWith(prefix)) canonicalKey else "$prefix$canonicalKey"
-                                "$cleanCanonical/$num"
-                            } else {
-                                key
-                            }
-                        }
-                    }
-                }
+                val sched = row[ApiMatches.scheduledTime]
+                val act = row[ApiMatches.actualTime]
                 val (rScore, bScore) = try {
                     val rawDataJson = row[ApiMatches.dataJson]
                     if (rawDataJson.isNotBlank()) {
@@ -863,20 +857,86 @@ object IntegrationService {
                 } catch (_: Exception) {
                     Pair(null, null)
                 }
+                val hasScore = rScore != null || bScore != null
+                val isPlayed = hasScore || (act != null && act > 0 && sched != null && act != sched)
+                MatchParsed(row, compLevel, setNumber, matchNumber, sched, act, rScore, bScore, isPlayed)
+            }
+
+            val resolveTeams = { teamKeysJson: String ->
+                val rawKeys = decodeTeams(teamKeysJson)
+                rawKeys.map { key ->
+                    val trimmedKey = key.trim().lowercase()
+                    val prefix = if (trimmedKey.startsWith("ftc") || (canonicalKeyByKey[trimmedKey]?.startsWith("ftc") == true)) "ftc" else "frc"
+                    val canonicalKey = canonicalKeyByKey[trimmedKey] 
+                        ?: (if (trimmedKey.startsWith(prefix)) trimmedKey else "$prefix$trimmedKey")
+                    
+                    val num = teamNumberByKey[trimmedKey]
+                        ?: trimmedKey.removePrefix(prefix).toIntOrNull()
+                    
+                    if (num != null && canonicalKey.removePrefix(prefix).lowercase() != num.toString()) {
+                        val cleanCanonical = if (canonicalKey.startsWith(prefix)) canonicalKey else "$prefix$canonicalKey"
+                        "$cleanCanonical/$num"
+                    } else {
+                        if (num != null && canonicalKey != trimmedKey) {
+                            val cleanCanonical = if (canonicalKey.startsWith(prefix)) canonicalKey else "$prefix$canonicalKey"
+                            "$cleanCanonical/$num"
+                        } else {
+                            key
+                        }
+                    }
+                }
+            }
+
+            var runningOffsetSeconds: Long = 0L
+            var lastPlayedScheduledTime: Long? = null
+
+            parsedMatches.map { m ->
+                val sched = m.scheduledTime
+                val act = m.actualTime
+
+                // Reset offset across tournament days or long session breaks (> 6h gap between scheduled match times)
+                if (sched != null && lastPlayedScheduledTime != null) {
+                    val hoursGap = (sched - lastPlayedScheduledTime!!) / 3600
+                    if (hoursGap > 6 || hoursGap < -6) {
+                        runningOffsetSeconds = 0L
+                    }
+                }
+
+                // The progressive historical offset available BEFORE this match was played (using prior matches 1..N-1)
+                val historicalOffset = runningOffsetSeconds
+                val predictedTime = if (sched != null && historicalOffset != 0L) {
+                    sched + historicalOffset
+                } else {
+                    sched
+                }
+
+                // If this match was played with a recorded actual time, update the running offset for subsequent matches (N+1...)
+                if (m.isPlayed && sched != null && act != null && act > 0 && act != sched) {
+                    val matchDrift = act - sched
+                    if (matchDrift in -28800..28800) {
+                        runningOffsetSeconds = matchDrift
+                        lastPlayedScheduledTime = sched
+                    }
+                } else if (m.isPlayed && sched != null && lastPlayedScheduledTime == null) {
+                    lastPlayedScheduledTime = sched
+                }
+
                 MatchRecord(
-                    matchKey = row[ApiMatches.matchKey],
-                    eventKey = row[ApiMatches.eventKey],
-                    compLevel = compLevel,
-                    setNumber = setNumber,
-                    matchNumber = matchNumber,
-                    scheduledTime = row[ApiMatches.scheduledTime],
-                    actualTime = row[ApiMatches.actualTime],
-                    redTeams = resolveTeams(row[ApiMatches.redTeams]),
-                    blueTeams = resolveTeams(row[ApiMatches.blueTeams]),
-                    label = MatchCanonical.displayLabel(compLevel, setNumber, matchNumber),
+                    matchKey = m.row[ApiMatches.matchKey],
+                    eventKey = m.row[ApiMatches.eventKey],
+                    compLevel = m.compLevel,
+                    setNumber = m.setNumber,
+                    matchNumber = m.matchNumber,
+                    scheduledTime = sched,
+                    actualTime = act,
+                    predictedTime = predictedTime,
+                    scheduleOffsetSeconds = historicalOffset,
+                    redTeams = resolveTeams(m.row[ApiMatches.redTeams]),
+                    blueTeams = resolveTeams(m.row[ApiMatches.blueTeams]),
+                    label = MatchCanonical.displayLabel(m.compLevel, m.setNumber, m.matchNumber),
                     eventTimezone = eventTimezone,
-                    redScore = rScore,
-                    blueScore = bScore
+                    redScore = m.rScore,
+                    blueScore = m.bScore
                 )
             }
         }
@@ -1536,14 +1596,14 @@ object IntegrationService {
             .map { (_, group) -> group.maxByOrNull { it.dataJson.length } ?: group.first() }
     }
 
-    private suspend fun fetchMergedMatches(settings: ApiSettings, eventKey: String): List<MatchSyncRecord> = coroutineScope {
+    private suspend fun fetchMergedMatches(settings: ApiSettings, eventKey: String, eventTimezone: String? = null): List<MatchSyncRecord> = coroutineScope {
         val hasTba = hasTbaCredentials(settings)
         val hasFirst = hasFirstCredentials(settings)
         if (hasTba) log.info("FRC Match Sync: Fetching match schedule for event $eventKey from The Blue Alliance API (thebluealliance.com)...")
         if (hasFirst) log.info("FRC Match Sync: Fetching match schedule for event $eventKey from FIRST Robotics API (firstinspires.org)...")
 
         val tbaDeferred = if (hasTba) async { fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") } } else null
-        val firstDeferred = if (hasFirst) async { fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") } } else null
+        val firstDeferred = if (hasFirst) async { fetchFirstMatches(settings, eventKey, eventTimezone).map { it.copy(source = "first") } } else null
 
         val tbaMatches = tbaDeferred?.await() ?: emptyList()
         val firstMatches = firstDeferred?.await() ?: emptyList()
@@ -1553,9 +1613,9 @@ object IntegrationService {
             val source = settings.preferredSource ?: "tba"
             log.info("FRC Match Sync: No custom credentials. Fetching match schedule for event $eventKey from preferred source '$source' fallback...")
             val fallbackMatches = when (source) {
-                "first" -> fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") }
+                "first" -> fetchFirstMatches(settings, eventKey, eventTimezone).map { it.copy(source = "first") }
                 "both" -> (fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") } +
-                           fetchFirstMatches(settings, eventKey).map { it.copy(source = "first") })
+                           fetchFirstMatches(settings, eventKey, eventTimezone).map { it.copy(source = "first") })
                 else -> fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") }
             }
             matches.addAll(fallbackMatches)
@@ -1649,6 +1709,29 @@ object IntegrationService {
     }
 
     private suspend fun fetchFirstEventDetail(settings: ApiSettings, eventKey: String): EventSyncRecord? {
+        val detectedYear = if (eventKey.length >= 4 && eventKey.take(4).all { it.isDigit() }) {
+            eventKey.take(4).toIntOrNull()
+        } else null
+        val year = detectedYear ?: settings.year
+        val eventCode = settings.firstEventCode(eventKey)
+        if (eventCode.isNotBlank()) {
+            val root = fetchFirstJson(settings, year, "events?eventCode=$eventCode")
+            val array = root.findArray(listOf("Events", "events"))
+            val single = array.firstOrNull()?.jsonObject
+            if (single != null) {
+                val code = single.readString("code") ?: single.readString("eventCode") ?: eventCode
+                return EventSyncRecord(
+                    eventKey = canonicalTbaEventKey(year, code),
+                    year = year,
+                    eventCode = code,
+                    name = single.readString("name") ?: eventKey,
+                    startDate = single.readString("dateStart") ?: single.readString("startDate"),
+                    endDate = single.readString("dateEnd") ?: single.readString("endDate"),
+                    timezone = single.readString("timezone") ?: single.readString("timeZone") ?: single.readString("venueTimeZone"),
+                    dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), single)
+                )
+            }
+        }
         return fetchFirstEvents(settings).firstOrNull { it.eventKey.equals(eventKey, ignoreCase = true) }
     }
 
@@ -1954,7 +2037,7 @@ object IntegrationService {
                 name = obj.readString("name") ?: eventKey,
                 startDate = obj.readString("dateStart") ?: obj.readString("startDate"),
                 endDate = obj.readString("dateEnd") ?: obj.readString("endDate"),
-                timezone = obj.readString("timezone"),
+                timezone = obj.readString("timezone") ?: obj.readString("timeZone") ?: obj.readString("venueTimeZone"),
                 dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), item)
             )
         }
@@ -1987,7 +2070,7 @@ object IntegrationService {
         }
     }
 
-    private suspend fun fetchFirstMatches(settings: ApiSettings, eventKey: String): List<MatchSyncRecord> {
+    private suspend fun fetchFirstMatches(settings: ApiSettings, eventKey: String, eventTimezone: String? = null): List<MatchSyncRecord> {
         val detectedYear = if (eventKey.length >= 4 && eventKey.take(4).all { it.isDigit() }) {
             eventKey.take(4).toIntOrNull()
         } else null
@@ -1998,6 +2081,13 @@ object IntegrationService {
         }
 
         val normalizedEventKey = eventKey.lowercase()
+        val tzToUse = eventTimezone?.takeIf { it.isNotBlank() }
+            ?: readTransaction {
+                ApiEvents.selectAll().where { ApiEvents.eventKey eq normalizedEventKey }.limit(1).firstOrNull()?.get(ApiEvents.timezone)
+            }
+            ?: settings.timezone
+        val zoneId = resolveZoneId(tzToUse)
+
         val matchLevels = listOf(
             "Qualification" to "Qualification",
             "Playoff" to "Playoff"
@@ -2022,18 +2112,18 @@ object IntegrationService {
             val matchesJobs = matchLevels.map { (apiLevel, defaultLevel) ->
                 async {
                     val matchesRoot = fetchFirstJson(settings, year, "matches/$eventCode?tournamentLevel=$apiLevel")
-                    parseFirstMatchItems(matchesRoot, normalizedEventKey, defaultLevel)
+                    parseFirstMatchItems(matchesRoot, normalizedEventKey, defaultLevel, zoneId)
                 }
             }
             val scheduleJobs = scheduleLevels.map { (apiLevel, defaultLevel) ->
                 async {
                     val scheduleRoot = fetchFirstJson(settings, year, "schedule/$eventCode?tournamentLevel=$apiLevel")
-                    parseFirstMatchItems(scheduleRoot, normalizedEventKey, defaultLevel)
+                    parseFirstMatchItems(scheduleRoot, normalizedEventKey, defaultLevel, zoneId)
                 }
             }
             val fallbackJob = async {
                 val fallbackMatchesRoot = fetchFirstJson(settings, year, "matches/$eventCode")
-                parseFirstMatchItems(fallbackMatchesRoot, normalizedEventKey, "")
+                parseFirstMatchItems(fallbackMatchesRoot, normalizedEventKey, "", zoneId)
             }
 
             // Wait for all fetches to complete concurrently
@@ -2303,7 +2393,8 @@ private fun ApiSettings.firstEventCode(eventKey: String): String {
 private fun parseFirstMatchItems(
     root: JsonElement,
     eventKey: String,
-    defaultLevel: String
+    defaultLevel: String,
+    zoneId: java.time.ZoneId = java.time.ZoneOffset.UTC
 ): List<MatchSyncRecord> {
     val array = root.findArray(listOf("Matches", "matches", "Schedule", "schedule", "MatchScores"))
     return array.mapIndexed { index, item ->
@@ -2330,9 +2421,9 @@ private fun parseFirstMatchItems(
         val matchKey = obj.readString("matchKey")
             ?: obj.readString("matchKeyShort")
             ?: "${eventKey}_${compLevel}_s${setNum}_m$matchNum"
-        val scheduledTime = obj.readEpochSeconds("startTime")
-            ?: obj.readEpochSeconds("time")
-        val firstActual = obj.readEpochSeconds("actualStartTime")
+        val scheduledTime = obj.readEpochSeconds("startTime", zoneId)
+            ?: obj.readEpochSeconds("time", zoneId)
+        val firstActual = obj.readEpochSeconds("actualStartTime", zoneId)
         val actualTime = if (firstActual != null && firstActual > 0) firstActual else scheduledTime
         var redTeams = obj.readTeamList("redTeams")
         var blueTeams = obj.readTeamList("blueTeams")
@@ -2380,7 +2471,29 @@ private fun JsonObject.readFirstAlliances(): Pair<List<String>, List<String>> {
     return redTeams to blueTeams
 }
 
-internal fun JsonObject.readEpochSeconds(key: String): Long? {
+internal fun resolveZoneId(tzString: String?): java.time.ZoneId {
+    if (tzString.isNullOrBlank()) return java.time.ZoneOffset.UTC
+    val trimmed = tzString.trim()
+    return try {
+        java.time.ZoneId.of(trimmed)
+    } catch (_: Exception) {
+        try {
+            when (trimmed.lowercase()) {
+                "central standard time", "central daylight time", "central", "cst", "cdt", "america/chicago" -> java.time.ZoneId.of("America/Chicago")
+                "eastern standard time", "eastern daylight time", "eastern", "est", "edt", "america/new_york" -> java.time.ZoneId.of("America/New_York")
+                "pacific standard time", "pacific daylight time", "pacific", "pst", "pdt", "america/los_angeles" -> java.time.ZoneId.of("America/Los_Angeles")
+                "mountain standard time", "mountain daylight time", "mountain", "mst", "mdt", "america/denver" -> java.time.ZoneId.of("America/Denver")
+                "hawaii standard time", "hst", "pacific/honolulu" -> java.time.ZoneId.of("Pacific/Honolulu")
+                "alaska standard time", "akst", "akdt", "america/anchorage" -> java.time.ZoneId.of("America/Anchorage")
+                else -> java.time.ZoneId.of(trimmed, java.time.ZoneId.SHORT_IDS)
+            }
+        } catch (_: Exception) {
+            java.time.ZoneOffset.UTC
+        }
+    }
+}
+
+internal fun JsonObject.readEpochSeconds(key: String, zoneId: java.time.ZoneId = java.time.ZoneOffset.UTC): Long? {
     val primitive = this[key] as? JsonPrimitive ?: return null
     val content = primitive.content.trim()
     if (content.isBlank()) return null
@@ -2400,7 +2513,7 @@ internal fun JsonObject.readEpochSeconds(key: String): Long? {
                     content
                 }
                 val ldt = java.time.LocalDateTime.parse(normalized, java.time.format.DateTimeFormatter.ISO_DATE_TIME)
-                ldt.toEpochSecond(java.time.ZoneOffset.UTC)
+                ldt.atZone(zoneId).toEpochSecond()
             } catch (_: Exception) {
                 null
             }

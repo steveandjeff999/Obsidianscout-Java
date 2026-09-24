@@ -780,7 +780,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const matchAssignments = assignments.filter(a => a.assignmentType === "MATCH");
 
         matrixTbody.innerHTML = targetMatches.map(m => {
-            const timeStr = m.scheduledTime ? formatTimeOnly(m.scheduledTime) : "--";
+            const displayTime = m.predictedTime || m.scheduledTime;
+            const timeStr = displayTime ? formatTimeOnly(displayTime, m.eventTimezone || (settings && settings.timezone)) : "--";
+            const offsetBadge = renderOffsetBadge(m.scheduleOffsetSeconds, m.scheduledTime, m.predictedTime, m.eventTimezone || (settings && settings.timezone));
             const matchLabel = getMatchDisplayLabel(m);
             const scoutUsage = getScoutUsageInMatch(m);
 
@@ -799,7 +801,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return `
                 <tr>
                     <td><strong>${escapeHtml(matchLabel)}</strong></td>
-                    <td style="color:var(--muted); font-size:12px;">${timeStr}</td>
+                    <td style="color:var(--muted); font-size:12px; white-space:nowrap;">${timeStr}${offsetBadge}</td>
                     ${redSlotsHtml}
                     ${blueSlotsHtml}
                 </tr>
@@ -938,7 +940,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const qualAssignments = assignments.filter(a => a.assignmentType === "QUALITATIVE");
 
         qualMatrixTbody.innerHTML = targetMatches.map(m => {
-            const timeStr = m.scheduledTime ? formatTimeOnly(m.scheduledTime) : "--";
+            const displayTime = m.predictedTime || m.scheduledTime;
+            const timeStr = displayTime ? formatTimeOnly(displayTime, m.eventTimezone || (settings && settings.timezone)) : "--";
+            const offsetBadge = renderOffsetBadge(m.scheduleOffsetSeconds, m.scheduledTime, m.predictedTime, m.eventTimezone || (settings && settings.timezone));
             const matchLabel = getMatchDisplayLabel(m);
             const scoutUsage = getScoutUsageInMatch(m);
 
@@ -963,7 +967,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return `
                 <tr>
                     <td><strong>${escapeHtml(matchLabel)}</strong></td>
-                    <td style="color:var(--muted); font-size:12px;">${timeStr}</td>
+                    <td style="color:var(--muted); font-size:12px; white-space:nowrap;">${timeStr}${offsetBadge}</td>
                     ${redAllianceSlotHtml}
                     ${blueAllianceSlotHtml}
                     ${redTeamSlotsHtml}
@@ -1246,7 +1250,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             // Time
-            const timeStr = a.scheduledTime ? formatDateTime(a.scheduledTime) : '<span style="color:var(--muted)">Not scheduled</span>';
+            const displayTime = a.predictedTime || a.scheduledTime;
+            const timeStr = displayTime ? formatDateTime(displayTime, a.eventTimezone || (settings && settings.timezone)) : '<span style="color:var(--muted)">Not scheduled</span>';
+            const offsetBadge = renderOffsetBadge(a.scheduleOffsetSeconds, a.scheduledTime, a.predictedTime, a.eventTimezone || (settings && settings.timezone));
 
             // Status badge
             let statusBadge = "";
@@ -1292,7 +1298,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         </div>
                         ${a.notes ? `<div style="color:var(--muted); font-size:11px; margin-top:2px;">${escapeHtml(a.notes)}</div>` : ''}
                     </td>
-                    <td style="font-size:12px;">${timeStr}</td>
+                    <td style="font-size:12px; white-space:nowrap;">${timeStr}${offsetBadge}</td>
                     <td>${statusBadge}</td>
                     <td>${conflictCell}</td>
                     <td>
@@ -2109,7 +2115,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 slotKey = `PIT:${a.targetTeamNumber}`;
             } else if (a.assignmentType === "QUALITATIVE") {
                 const alliance = (a.allianceColor || a.targetAlliance || "").toLowerCase();
-                slotKey = `QUAL:${mKey}:${alliance ? `alliance_${alliance}` : `team_${a.targetTeamNumber}`}`;
+                const isTeamLevel = a.targetTeamNumber !== null && a.targetTeamNumber !== undefined && String(a.targetTeamNumber).trim() !== "";
+                slotKey = `QUAL:${mKey}:${isTeamLevel ? `team_${a.targetTeamNumber}` : `alliance_${alliance}`}`;
             }
             if (slotKey) {
                 if (!slotMap.has(slotKey)) slotMap.set(slotKey, []);
@@ -2209,39 +2216,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function autoResolveAllConflicts() {
-        const { idsToDelete, details } = findAssignmentDiscrepancies();
-
-        if (idsToDelete.length === 0) {
-            Obsidianscout.showToast("No assignment conflicts or discrepancies found!", "info");
-            hideModal("conflict-resolver-modal");
+        if (!currentEventKey) {
+            Obsidianscout.showToast("No active event selected", "error");
             return;
         }
 
-        const summaryParts = [];
-        if (details.slotDuplicates.length > 0) {
-            summaryParts.push(`• ${details.slotDuplicates.length} duplicate slot assignment(s)`);
-        }
-        if (details.dualScouterOverlaps.length > 0) {
-            summaryParts.push(`• ${details.dualScouterOverlaps.length} dual-assignment scouter overlap(s) in same match`);
-        }
-        if (details.redundantQual.length > 0) {
-            summaryParts.push(`• ${details.redundantQual.length} redundant qualitative alliance/team assignment(s)`);
-        }
-
-        const confirmMsg = `Found ${idsToDelete.length} discrepancy item(s) to auto-resolve:\n\n${summaryParts.join('\n')}\n\nAuto-resolve will keep completed and primary assignments and safely clear duplicate or overlapping entries. Proceed?`;
-
+        const confirmMsg = "Auto-resolve will analyze all assignments on the server for duplicate slot assignments, qual alliance/team redundancies, and dual-scouter overlaps in the same match, and safely clear invalid entries. Proceed?";
         if (!confirm(confirmMsg)) return;
 
         try {
-            await Promise.all(idsToDelete.map(id =>
-                Obsidianscout.request(`/api/assignments/${encodeURIComponent(id)}`, { method: "DELETE" })
-            ));
-            Obsidianscout.showToast(`Auto-resolved ${idsToDelete.length} discrepancy item(s)!`, "success");
+            const res = await Obsidianscout.request("/api/assignments/auto-resolve-conflicts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ eventKey: currentEventKey })
+            });
+
+            const deletedCount = res.deletedCount || 0;
+            if (deletedCount === 0) {
+                Obsidianscout.showToast("No assignment conflicts or discrepancies found!", "info");
+            } else {
+                Obsidianscout.showToast(`Auto-resolved ${deletedCount} conflict item(s)!`, "success");
+            }
             hideModal("conflict-resolver-modal");
             await loadEventData();
         } catch (err) {
             console.error("Failed to auto-resolve conflicts:", err);
-            Obsidianscout.showToast("Failed to auto-resolve all conflicts", "error");
+            Obsidianscout.showToast(err.message || "Failed to auto-resolve all conflicts", "error");
         }
     }
 
@@ -2262,47 +2262,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        const pitAssignments = assignments.filter(a => a.assignmentType === "PIT");
-        const targetTeams = scope === "unassigned"
-            ? teams.filter(t => !pitAssignments.some(a => Number(a.targetTeamNumber) === Number(t.teamNumber)))
-            : teams;
-
-        if (targetTeams.length === 0) {
-            Obsidianscout.showToast("No teams to assign for the selected scope", "info");
-            return;
-        }
-
-        // If overwrite is requested, delete existing pit assignments for those teams first
-        if (overwrite) {
-            const existingToDelete = pitAssignments.filter(a => targetTeams.some(t => Number(t.teamNumber) === Number(a.targetTeamNumber)));
-            if (existingToDelete.length > 0) {
-                await Promise.all(existingToDelete.map(a =>
-                    Obsidianscout.request(`/api/assignments/${encodeURIComponent(a.id)}`, { method: "DELETE" }).catch(() => {})
-                ));
-            }
-        }
-
-        const bulkItems = targetTeams.map((team, idx) => {
-            const scouterId = scouterIds[idx % scouterIds.length];
-            return {
-                assignedUserId: scouterId,
-                assignmentType: "PIT",
-                targetTeamNumber: team.teamNumber,
-                notes: team.nickname ? `Pit Scouting - ${team.nickname}` : "Pit Scouting"
-            };
-        });
-
         try {
-            const res = await Obsidianscout.request("/api/assignments/bulk", {
+            const res = await Obsidianscout.request("/api/assignments/auto-generate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     eventKey: currentEventKey,
-                    assignments: bulkItems
+                    assignmentType: "PIT_AUTO",
+                    scouterUserIds: scouterIds,
+                    overwrite: overwrite,
+                    pitScope: scope
                 })
             });
 
-            Obsidianscout.showToast(`Successfully assigned ${res.count || bulkItems.length} teams across ${scouterIds.length} pit scouters!`, "success");
+            Obsidianscout.showToast(`Successfully assigned ${res.createdCount || 0} teams across ${scouterIds.length} pit scouters!`, "success");
             hideModal("pit-auto-modal");
             await loadEventData();
         } catch (err) {
@@ -2337,7 +2310,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function generateBulkAssignments(e) {
         e.preventDefault();
 
-        const overwrite = bulkOverwrite.checked;
+        const overwrite = bulkOverwrite ? bulkOverwrite.checked : false;
         const bulkType = bulkAssignmentType ? bulkAssignmentType.value : "MATCH";
 
         const selectedScouterCheckboxes = Array.from(bulkScoutersContainer.querySelectorAll("input[name='bulk_scouter']:checked"));
@@ -2348,395 +2321,37 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        if (bulkType === "PIT_AUTO") {
-            const scope = bulkPitScope ? bulkPitScope.value : "unassigned";
-            const pitAssignments = assignments.filter(a => a.assignmentType === "PIT");
-            const targetTeams = scope === "unassigned"
-                ? teams.filter(t => !pitAssignments.some(a => Number(a.targetTeamNumber) === Number(t.teamNumber)))
-                : teams;
-
-            if (targetTeams.length === 0) {
-                Obsidianscout.showToast("No teams to assign for the selected scope", "info");
-                return;
-            }
-
-            if (overwrite) {
-                const existingToDelete = pitAssignments.filter(a => targetTeams.some(t => Number(t.teamNumber) === Number(a.targetTeamNumber)));
-                if (existingToDelete.length > 0) {
-                    await Promise.all(existingToDelete.map(a =>
-                        Obsidianscout.request(`/api/assignments/${encodeURIComponent(a.id)}`, { method: "DELETE" }).catch(() => {})
-                    ));
-                }
-            }
-
-            const bulkItems = targetTeams.map((team, idx) => {
-                const scouterId = scouterIds[idx % scouterIds.length];
-                return {
-                    assignedUserId: scouterId,
-                    assignmentType: "PIT",
-                    targetTeamNumber: team.teamNumber,
-                    notes: team.nickname ? `Pit Scouting - ${team.nickname}` : "Pit Scouting"
-                };
-            });
-
-            try {
-                const res = await Obsidianscout.request("/api/assignments/bulk", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        eventKey: currentEventKey,
-                        assignments: bulkItems
-                    })
-                });
-
-                Obsidianscout.showToast(`Successfully assigned ${res.count || bulkItems.length} teams across ${scouterIds.length} pit scouters!`, "success");
-                hideModal("bulk-wizard-modal");
-                await loadEventData();
-            } catch (err) {
-                console.error("Pit auto-assignment failed:", err);
-                Obsidianscout.showToast(err.message || "Failed to generate pit auto assignments", "error");
-            }
-            return;
-        }
-
         const startMatchKey = bulkMatchStart ? bulkMatchStart.value : "";
         const endMatchKey = bulkMatchEnd ? bulkMatchEnd.value : "";
         const consecutiveMatches = Math.max(1, Number(bulkConsecutiveMatches ? bulkConsecutiveMatches.value : 5) || 5);
         const stageFilter = bulkCompLevel ? bulkCompLevel.value : "all";
-
-        const availableMatches = getFilteredMatches(stageFilter);
-        if (availableMatches.length === 0) {
-            Obsidianscout.showToast(`No matches found for tournament stage (${stageFilter})`, "error");
-            return;
-        }
-
-        const startIdx = availableMatches.findIndex(m => m.matchKey === startMatchKey);
-        const endIdx = availableMatches.findIndex(m => m.matchKey === endMatchKey);
-
-        if (startIdx < 0 || endIdx < 0) {
-            Obsidianscout.showToast("Please select valid start and end matches", "error");
-            return;
-        }
-
-        if (startIdx > endIdx) {
-            Obsidianscout.showToast("Start match must come before or equal to End match in tournament progression", "error");
-            return;
-        }
-
-        const targetMatches = availableMatches.slice(startIdx, endIdx + 1);
-
-        if (targetMatches.length === 0) {
-            Obsidianscout.showToast(`No matches found in selected range`, "error");
-            return;
-        }
-
-        const existingToDelete = [];
-        const bulkItems = [];
-        let continuityBreaksCount = 0;
-        let unavoidableOverlapCount = 0;
-
-        // Helper to pick next available scouter from pool avoiding conflict in the same match
-        function pickScouterForMatch(m, preferredIdx, busyScoutsInMatch) {
-            const preferredId = scouterIds[preferredIdx % scouterIds.length];
-            if (!busyScoutsInMatch.has(preferredId)) {
-                busyScoutsInMatch.add(preferredId);
-                return { scouterId: preferredId, brokeContinuity: false, overlap: false };
-            }
-
-            // Find an alternative scouter from the pool who is NOT busy in this match
-            for (let offset = 1; offset < scouterIds.length; offset++) {
-                const altIdx = (preferredIdx + offset) % scouterIds.length;
-                const altId = scouterIds[altIdx];
-                if (!busyScoutsInMatch.has(altId)) {
-                    busyScoutsInMatch.add(altId);
-                    return { scouterId: altId, brokeContinuity: true, overlap: false };
-                }
-            }
-
-            // If all selected scouters are already busy in this match, fallback with overlap
-            busyScoutsInMatch.add(preferredId);
-            return { scouterId: preferredId, brokeContinuity: false, overlap: true };
-        }
-
-        if (bulkType === "MATCH") {
-            targetMatches.forEach((m, mIdx) => {
-                const block = Math.floor(mIdx / consecutiveMatches);
-                const redTeams = m.redTeams || [];
-                const blueTeams = m.blueTeams || [];
-                const teamKeys = redTeams.concat(blueTeams);
-
-                // Find scouts already assigned in this match (e.g. QUALITATIVE or existing MATCH)
-                const busyScoutsInMatch = new Set();
-                assignments.forEach(a => {
-                    if (isSameMatch(a, m)) {
-                        if (a.assignmentType === "MATCH" && overwrite) {
-                            // Being overwritten, do not count as busy
-                        } else if (a.assignedUserId) {
-                            busyScoutsInMatch.add(a.assignedUserId);
-                        }
-                    }
-                });
-
-                teamKeys.forEach((tKey, sIdx) => {
-                    const teamNum = parseTeamNum(tKey);
-                    if (!teamNum) return;
-
-                    const existing = assignments.filter(a =>
-                        a.assignmentType === "MATCH" &&
-                        isMatchForSlot(a, m, teamNum)
-                    );
-
-                    if (existing.length > 0) {
-                        if (!overwrite) {
-                            return; // skip already assigned slot
-                        } else {
-                            existing.forEach(ea => existingToDelete.push(ea.id));
-                        }
-                    }
-
-                    const preferredIndex = block * teamKeys.length + sIdx;
-                    const pickResult = pickScouterForMatch(m, preferredIndex, busyScoutsInMatch);
-                    if (pickResult.brokeContinuity) continuityBreaksCount++;
-                    if (pickResult.overlap) unavoidableOverlapCount++;
-
-                    bulkItems.push({
-                        assignedUserId: pickResult.scouterId,
-                        assignmentType: "MATCH",
-                        matchKey: m.matchKey,
-                        matchNumber: m.matchNumber ? Number(m.matchNumber) : extractMatchNumber(m),
-                        compLevel: m.compLevel || extractCompLevel(m) || "qm",
-                        targetTeamNumber: teamNum,
-                        allianceColor: sIdx < redTeams.length ? "red" : "blue",
-                        scheduledTime: m.scheduledTime || null,
-                        notes: null
-                    });
-                });
-            });
-        } else if (bulkType === "QUALITATIVE_BOTH") {
-            targetMatches.forEach((m, mIdx) => {
-                const block = Math.floor(mIdx / consecutiveMatches);
-
-                // Find scouts already busy in this match (e.g. MATCH scouters or existing QUALITATIVE)
-                const busyScoutsInMatch = new Set();
-                assignments.forEach(a => {
-                    if (isSameMatch(a, m)) {
-                        if (a.assignmentType === "QUALITATIVE" && overwrite) {
-                            // Being overwritten, do not count as busy
-                        } else if (a.assignedUserId) {
-                            busyScoutsInMatch.add(a.assignedUserId);
-                        }
-                    }
-                });
-
-                // Clear any existing qualitative assignments for Red and Blue in this match if overwrite
-                ["red", "blue"].forEach(alliance => {
-                    const teamKeys = alliance === "red" ? (m.redTeams || []) : (m.blueTeams || []);
-                    const teamNums = teamKeys.map(k => parseTeamNum(k)).filter(Boolean);
-
-                    const existingAlliance = assignments.filter(a =>
-                        a.assignmentType === "QUALITATIVE" &&
-                        isMatchForQualAlliance(a, m, alliance)
-                    );
-                    const existingTeams = assignments.filter(a =>
-                        a.assignmentType === "QUALITATIVE" &&
-                        isSameMatch(a, m) &&
-                        a.targetTeamNumber &&
-                        teamNums.includes(Number(a.targetTeamNumber))
-                    );
-
-                    const allConflicted = existingAlliance.concat(existingTeams);
-                    if (allConflicted.length > 0) {
-                        if (overwrite) {
-                            allConflicted.forEach(ea => existingToDelete.push(ea.id));
-                        }
-                    }
-                });
-
-                if (!overwrite) {
-                    const hasExistingQual = assignments.some(a => a.assignmentType === "QUALITATIVE" && isSameMatch(a, m));
-                    if (hasExistingQual) return; // Skip already assigned match
-                }
-
-                // Pick ONE scouter for this match to cover BOTH alliances
-                const preferredIndex = block;
-                const pickResult = pickScouterForMatch(m, preferredIndex, busyScoutsInMatch);
-                if (pickResult.brokeContinuity) continuityBreaksCount++;
-                if (pickResult.overlap) unavoidableOverlapCount++;
-
-                // Create RED Alliance qualitative assignment
-                bulkItems.push({
-                    assignedUserId: pickResult.scouterId,
-                    assignmentType: "QUALITATIVE",
-                    matchKey: m.matchKey,
-                    matchNumber: m.matchNumber ? Number(m.matchNumber) : extractMatchNumber(m),
-                    compLevel: m.compLevel || extractCompLevel(m) || "qm",
-                    allianceColor: "RED",
-                    targetAlliance: "RED",
-                    scheduledTime: m.scheduledTime || null,
-                    notes: "Qualitative scouting for RED alliance (Both Alliances)"
-                });
-
-                // Create BLUE Alliance qualitative assignment with the SAME scouter
-                bulkItems.push({
-                    assignedUserId: pickResult.scouterId,
-                    assignmentType: "QUALITATIVE",
-                    matchKey: m.matchKey,
-                    matchNumber: m.matchNumber ? Number(m.matchNumber) : extractMatchNumber(m),
-                    compLevel: m.compLevel || extractCompLevel(m) || "qm",
-                    allianceColor: "BLUE",
-                    targetAlliance: "BLUE",
-                    scheduledTime: m.scheduledTime || null,
-                    notes: "Qualitative scouting for BLUE alliance (Both Alliances)"
-                });
-            });
-        } else if (bulkType === "QUALITATIVE_RED" || bulkType === "QUALITATIVE_BLUE") {
-            const alliance = bulkType === "QUALITATIVE_RED" ? "red" : "blue";
-
-            targetMatches.forEach((m, mIdx) => {
-                const block = Math.floor(mIdx / consecutiveMatches);
-
-                const busyScoutsInMatch = new Set();
-                assignments.forEach(a => {
-                    if (isSameMatch(a, m)) {
-                        if (a.assignmentType === "QUALITATIVE" && overwrite) {
-                            // Being overwritten, do not count as busy
-                        } else if (a.assignedUserId) {
-                            busyScoutsInMatch.add(a.assignedUserId);
-                        }
-                    }
-                });
-
-                const teamKeys = alliance === "red" ? (m.redTeams || []) : (m.blueTeams || []);
-                const teamNums = teamKeys.map(k => parseTeamNum(k)).filter(Boolean);
-
-                const existingAlliance = assignments.filter(a =>
-                    a.assignmentType === "QUALITATIVE" &&
-                    isMatchForQualAlliance(a, m, alliance)
-                );
-                const existingTeams = assignments.filter(a =>
-                    a.assignmentType === "QUALITATIVE" &&
-                    isSameMatch(a, m) &&
-                    a.targetTeamNumber &&
-                    teamNums.includes(Number(a.targetTeamNumber))
-                );
-
-                const allConflicted = existingAlliance.concat(existingTeams);
-                if (allConflicted.length > 0) {
-                    if (!overwrite) {
-                        return;
-                    } else {
-                        allConflicted.forEach(ea => existingToDelete.push(ea.id));
-                    }
-                }
-
-                const preferredIndex = block;
-                const pickResult = pickScouterForMatch(m, preferredIndex, busyScoutsInMatch);
-                if (pickResult.brokeContinuity) continuityBreaksCount++;
-                if (pickResult.overlap) unavoidableOverlapCount++;
-
-                bulkItems.push({
-                    assignedUserId: pickResult.scouterId,
-                    assignmentType: "QUALITATIVE",
-                    matchKey: m.matchKey,
-                    matchNumber: m.matchNumber ? Number(m.matchNumber) : extractMatchNumber(m),
-                    compLevel: m.compLevel || extractCompLevel(m) || "qm",
-                    allianceColor: alliance.toUpperCase(),
-                    targetAlliance: alliance.toUpperCase(),
-                    scheduledTime: m.scheduledTime || null,
-                    notes: `Qualitative scouting for ${alliance.toUpperCase()} alliance`
-                });
-            });
-        } else if (bulkType === "QUALITATIVE_TEAMS") {
-            targetMatches.forEach((m, mIdx) => {
-                const block = Math.floor(mIdx / consecutiveMatches);
-                const redTeams = m.redTeams || [];
-                const blueTeams = m.blueTeams || [];
-                const teamKeys = redTeams.concat(blueTeams);
-
-                // Find scouts already busy in this match
-                const busyScoutsInMatch = new Set();
-                assignments.forEach(a => {
-                    if (isSameMatch(a, m)) {
-                        if (a.assignmentType === "QUALITATIVE" && overwrite) {
-                            // Being overwritten, do not count as busy
-                        } else if (a.assignedUserId) {
-                            busyScoutsInMatch.add(a.assignedUserId);
-                        }
-                    }
-                });
-
-                teamKeys.forEach((tKey, sIdx) => {
-                    const teamNum = parseTeamNum(tKey);
-                    if (!teamNum) return;
-
-                    const alliance = sIdx < redTeams.length ? "red" : "blue";
-
-                    // 1. Existing individual team qualitative assignment
-                    const existingTeam = assignments.filter(a =>
-                        a.assignmentType === "QUALITATIVE" &&
-                        isMatchForSlot(a, m, teamNum)
-                    );
-
-                    // 2. Existing alliance-level qualitative assignment for this team's alliance
-                    const existingAlliance = assignments.filter(a =>
-                        a.assignmentType === "QUALITATIVE" &&
-                        isMatchForQualAlliance(a, m, alliance)
-                    );
-
-                    const allConflicted = existingTeam.concat(existingAlliance);
-
-                    if (allConflicted.length > 0) {
-                        if (!overwrite) {
-                            return; // skip already assigned / covered slot
-                        } else {
-                            allConflicted.forEach(ea => existingToDelete.push(ea.id));
-                        }
-                    }
-
-                    const preferredIndex = block * teamKeys.length + sIdx;
-                    const pickResult = pickScouterForMatch(m, preferredIndex, busyScoutsInMatch);
-                    if (pickResult.brokeContinuity) continuityBreaksCount++;
-                    if (pickResult.overlap) unavoidableOverlapCount++;
-
-                    bulkItems.push({
-                        assignedUserId: pickResult.scouterId,
-                        assignmentType: "QUALITATIVE",
-                        matchKey: m.matchKey,
-                        matchNumber: m.matchNumber ? Number(m.matchNumber) : extractMatchNumber(m),
-                        compLevel: m.compLevel || extractCompLevel(m) || "qm",
-                        targetTeamNumber: teamNum,
-                        allianceColor: alliance,
-                        scheduledTime: m.scheduledTime || null,
-                        notes: `Qualitative scouting for Team #${teamNum}`
-                    });
-                });
-            });
-        }
-
-        if (bulkItems.length === 0) {
-            Obsidianscout.showToast("All slots in this range are already assigned (or no matches found). Check 'Overwrite' to replace.", "info");
-            return;
-        }
+        const pitScope = bulkPitScope ? bulkPitScope.value : "unassigned";
 
         try {
-            // If overwrite is checked, delete conflicted existing assignments first
-            if (overwrite && existingToDelete.length > 0) {
-                const uniqueToDelete = Array.from(new Set(existingToDelete));
-                await Promise.all(uniqueToDelete.map(id =>
-                    Obsidianscout.request(`/api/assignments/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {})
-                ));
-            }
-
-            const res = await Obsidianscout.request("/api/assignments/bulk", {
+            const res = await Obsidianscout.request("/api/assignments/auto-generate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     eventKey: currentEventKey,
-                    assignments: bulkItems
+                    assignmentType: bulkType,
+                    scouterUserIds: scouterIds,
+                    stageFilter: stageFilter,
+                    startMatchKey: startMatchKey,
+                    endMatchKey: endMatchKey,
+                    consecutiveMatches: consecutiveMatches,
+                    overwrite: overwrite,
+                    pitScope: pitScope
                 })
             });
 
-            const createdCount = Array.isArray(res) ? res.length : (res.count || bulkItems.length);
+            const createdCount = res.createdCount || 0;
+            const unavoidableOverlapCount = res.unavoidableOverlapCount || 0;
+            const continuityBreaksCount = res.continuityBreaksCount || 0;
+
+            if (createdCount === 0) {
+                Obsidianscout.showToast("All slots in this range are already assigned (or no matches found). Check 'Overwrite' to replace.", "info");
+                return;
+            }
 
             if (unavoidableOverlapCount > 0) {
                 Obsidianscout.showToast(
@@ -3089,26 +2704,52 @@ document.addEventListener("DOMContentLoaded", async () => {
         return null;
     }
 
-    function formatDateTime(isoString) {
+    function formatDateTime(isoString, timezone) {
         const ms = parseTimestampMs(isoString);
         if (!ms) return "";
         try {
             const d = new Date(ms);
+            const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+            if (timezone) {
+                try {
+                    return new Intl.DateTimeFormat([], { ...options, timeZone: timezone }).format(d);
+                } catch (_) {}
+            }
             return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         } catch {
             return String(isoString);
         }
     }
 
-    function formatTimeOnly(isoString) {
+    function formatTimeOnly(isoString, timezone) {
         const ms = parseTimestampMs(isoString);
         if (!ms) return "";
         try {
             const d = new Date(ms);
-            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const options = { hour: '2-digit', minute: '2-digit' };
+            if (timezone) {
+                try {
+                    return new Intl.DateTimeFormat([], { ...options, timeZone: timezone }).format(d);
+                } catch (_) {}
+            }
+            return d.toLocaleTimeString([], options);
         } catch {
             return String(isoString);
         }
+    }
+
+    function renderOffsetBadge(offsetSeconds, scheduledTime, predictedTime, timezone) {
+        const offset = Number(offsetSeconds || 0);
+        if (!offset || !scheduledTime || !predictedTime || predictedTime === scheduledTime) return "";
+        const offsetMinutes = Math.round(offset / 60);
+        if (Math.abs(offsetMinutes) < 1) return "";
+        const isLate = offsetMinutes > 0;
+        const sign = isLate ? "+" : "";
+        const origLocalStr = formatTimeOnly(scheduledTime, timezone);
+        const estLocalStr = formatTimeOnly(predictedTime, timezone);
+        const statusText = isLate ? `${offsetMinutes}m behind schedule` : `${Math.abs(offsetMinutes)}m ahead of schedule`;
+        const tooltip = `Est: ${estLocalStr} (${statusText} \u2022 Sched: ${origLocalStr})`;
+        return ` <span class="schedule-offset-badge ${isLate ? 'behind' : 'ahead'}" data-tooltip="${escapeHtml(tooltip)}" aria-label="${escapeHtml(statusText)}">${sign}${offsetMinutes}m</span>`;
     }
 
     function escapeHtml(str) {

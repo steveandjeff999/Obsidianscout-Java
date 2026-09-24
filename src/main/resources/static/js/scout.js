@@ -673,7 +673,8 @@ function updateMatchOptions(matchSelect, matches, timezone, selectedTeam, curren
         const option = document.createElement("option");
         option.value = match.matchKey;
         option.dataset.matchNumber = match.matchNumber || "";
-        const timeLabel = Obsidianscout.formatTimestamp(match.scheduledTime, timezone);
+        const displayEpoch = match.predictedTime || match.scheduledTime;
+        const timeLabel = Obsidianscout.formatTimestamp(displayEpoch, timezone);
         const matchLabel = match.label || `${match.compLevel.toUpperCase()} ${match.matchNumber || ""}`;
         const redTeams = formatTeamList(match.redTeams);
         const blueTeams = formatTeamList(match.blueTeams);

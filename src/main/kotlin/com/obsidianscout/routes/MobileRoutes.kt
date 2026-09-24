@@ -1779,7 +1779,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         blueScore = blueScore,
                         winner = winner,
                         scheduledTime = formatEpochSecond(m.scheduledTime),
-                        predictedTime = formatEpochSecond(m.scheduledTime),
+                        predictedTime = formatEpochSecond(m.predictedTime ?: m.scheduledTime),
                         actualTime = formatEpochSecond(m.actualTime)
                     )
                 }
@@ -1841,7 +1841,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         blueScore = blueScore,
                         winner = winner,
                         scheduledTime = formatEpochSecond(m.scheduledTime),
-                        predictedTime = formatEpochSecond(m.scheduledTime),
+                        predictedTime = formatEpochSecond(m.predictedTime ?: m.scheduledTime),
                         actualTime = formatEpochSecond(m.actualTime)
                     )
                 }

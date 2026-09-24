@@ -121,8 +121,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (a.status === "COMPLETED" && b.status !== "COMPLETED") return 1;
                 if (a.status !== "COMPLETED" && b.status === "COMPLETED") return -1;
                 
-                const timeA = parseTimestampMs(a.scheduledTime);
-                const timeB = parseTimestampMs(b.scheduledTime);
+                const timeA = parseTimestampMs(a.predictedTime || a.scheduledTime);
+                const timeB = parseTimestampMs(b.predictedTime || b.scheduledTime);
                 if (timeA && timeB) {
                     return timeA - timeB;
                 }
@@ -244,7 +244,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Find next pending or in_progress match assignment
         const pendingMatches = assignments.filter(a => 
             (a.status === "PENDING" || a.status === "IN_PROGRESS") && 
-            parseTimestampMs(a.scheduledTime)
+            parseTimestampMs(a.predictedTime || a.scheduledTime)
         );
 
         if (pendingMatches.length === 0) {
@@ -254,7 +254,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Check earliest
         const next = pendingMatches[0];
-        const targetMs = parseTimestampMs(next.scheduledTime);
+        const displayTime = next.predictedTime || next.scheduledTime;
+        const targetMs = parseTimestampMs(displayTime);
         const diffMs = targetMs - Date.now();
         const diffMins = Math.round(diffMs / (60 * 1000));
 
@@ -266,12 +267,23 @@ document.addEventListener("DOMContentLoaded", async () => {
             const mLabel = getMatchDisplayLabel(next.matchKey, next.matchNumber);
             const tNum = next.targetTeamNumber ? ` &bull; Team ${next.targetTeamNumber}` : "";
             heroTarget.innerHTML = `<strong>${mLabel}</strong>${tNum}`;
-            heroTime.textContent = `Scheduled for ${formatTime(next.scheduledTime)}`;
+            
+            let timeLabel = `Scheduled for ${formatTime(next.scheduledTime || displayTime, next.eventTimezone || (settings && settings.timezone))}`;
+            if (next.predictedTime && next.scheduledTime && next.predictedTime !== next.scheduledTime && next.scheduleOffsetSeconds) {
+                const offsetMins = Math.round(Number(next.scheduleOffsetSeconds) / 60);
+                if (Math.abs(offsetMins) >= 1) {
+                    const isLate = offsetMins > 0;
+                    const sign = isLate ? "+" : "";
+                    const estTimeStr = formatTime(next.predictedTime, next.eventTimezone || (settings && settings.timezone));
+                    timeLabel = `Est. ${estTimeStr} (${sign}${offsetMins}m)`;
+                }
+            }
+            heroTime.textContent = timeLabel;
 
             const scoutUrl = getScoutUrl(next);
             heroScoutBtn.setAttribute("href", scoutUrl);
 
-            updateHeroCountdownDisplay(next.scheduledTime);
+            updateHeroCountdownDisplay(displayTime);
         } else {
             heroBanner.classList.add("hidden");
         }
@@ -306,11 +318,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Update hero countdown
         const pendingMatches = assignments.filter(a => 
             (a.status === "PENDING" || a.status === "IN_PROGRESS") && 
-            parseTimestampMs(a.scheduledTime)
+            parseTimestampMs(a.predictedTime || a.scheduledTime)
         );
         if (pendingMatches.length > 0 && !heroBanner.classList.contains("hidden")) {
             const next = pendingMatches[0];
-            updateHeroCountdownDisplay(next.scheduledTime);
+            updateHeroCountdownDisplay(next.predictedTime || next.scheduledTime);
         }
 
         // Update card chips
@@ -416,15 +428,28 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             // Time & countdown badge
             let timeInfoHtml = "";
-            if (a.scheduledTime) {
-                const timeStr = formatTime(a.scheduledTime);
+            const displayEpoch = a.predictedTime || a.scheduledTime;
+            if (displayEpoch) {
+                const timeStr = formatTime(displayEpoch, a.eventTimezone || (settings && settings.timezone));
+                let offsetBadgeHtml = "";
+                if (a.scheduleOffsetSeconds && a.predictedTime && a.scheduledTime && a.predictedTime !== a.scheduledTime) {
+                    const offsetMins = Math.round(Number(a.scheduleOffsetSeconds) / 60);
+                    if (Math.abs(offsetMins) >= 1) {
+                        const isLate = offsetMins > 0;
+                        const sign = isLate ? "+" : "";
+                        const origLocalStr = formatTime(a.scheduledTime, a.eventTimezone || (settings && settings.timezone));
+                        const statusText = isLate ? `${offsetMins}m behind schedule` : `${Math.abs(offsetMins)}m ahead of schedule`;
+                        const tooltip = `Est: ${timeStr} (${statusText} \u2022 Sched: ${origLocalStr})`;
+                        offsetBadgeHtml = ` <span class="schedule-offset-badge ${isLate ? 'behind' : 'ahead'}" data-tooltip="${escapeHtml(tooltip)}" aria-label="${escapeHtml(statusText)}">${sign}${offsetMins}m</span>`;
+                    }
+                }
                 timeInfoHtml = `
                     <div class="row justify-between items-center" style="font-size:12px;">
-                        <span style="color:var(--muted); display:inline-flex; align-items:center; gap:4px;">
+                        <span style="color:var(--muted); display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap;">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            ${timeStr}
+                            ${timeStr}${offsetBadgeHtml}
                         </span>
-                        ${!isCompleted ? `<span class="countdown-chip card-countdown-chip" data-scheduled-time="${a.scheduledTime}">--</span>` : ''}
+                        ${!isCompleted ? `<span class="countdown-chip card-countdown-chip" data-scheduled-time="${displayEpoch}">--</span>` : ''}
                     </div>
                 `;
             }
@@ -535,12 +560,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    function formatTime(isoString) {
+    function formatTime(isoString, timezone) {
         const ms = parseTimestampMs(isoString);
         if (!ms) return "";
         try {
             const d = new Date(ms);
-            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const options = { hour: '2-digit', minute: '2-digit' };
+            if (timezone) {
+                try {
+                    return new Intl.DateTimeFormat([], { ...options, timeZone: timezone }).format(d);
+                } catch (_) {}
+            }
+            return d.toLocaleTimeString([], options);
         } catch {
             return String(isoString);
         }

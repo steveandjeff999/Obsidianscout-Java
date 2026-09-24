@@ -442,9 +442,18 @@ async function loadUpcomingMatches(eventKey) {
             const label = match.label || (match.compLevel ? `${match.compLevel.toUpperCase()} ${match.matchNumber || ""}` : `Match ${match.matchNumber || ""}`);
 
             let timeStr = "";
-            if (match.scheduledTime) {
-                const d = new Date(match.scheduledTime * 1000);
+            const displayTimestamp = (match.predictedTime && match.predictedTime > 0) ? match.predictedTime : match.scheduledTime;
+            if (displayTimestamp) {
+                const d = new Date(displayTimestamp * 1000);
                 timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                if (match.scheduleOffsetSeconds && match.predictedTime && match.scheduledTime && match.predictedTime !== match.scheduledTime) {
+                    const offsetMins = Math.round(Number(match.scheduleOffsetSeconds) / 60);
+                    if (Math.abs(offsetMins) >= 1) {
+                        const isLate = offsetMins > 0;
+                        const sign = isLate ? "+" : "";
+                        timeStr += ` (${sign}${offsetMins}m)`;
+                    }
+                }
             }
 
             // Build Red Alliance HTML

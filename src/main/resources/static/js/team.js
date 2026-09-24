@@ -663,7 +663,14 @@ function renderMatches() {
 
         // Time
         const timeCell = document.createElement("td");
-        timeCell.textContent = Obsidianscout.formatTimestamp(match.scheduledTime, timezone);
+        timeCell.className = "match-time-cell";
+        const timeEl = Obsidianscout.formatTimestampWithVenueTooltip(
+            match.scheduledTime,
+            timezone || match.eventTimezone,
+            match.predictedTime,
+            match.scheduleOffsetSeconds
+        );
+        timeCell.appendChild(timeEl);
         tr.appendChild(timeCell);
 
         // Red Alliance
