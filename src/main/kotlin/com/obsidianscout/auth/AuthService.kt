@@ -785,7 +785,7 @@ object AuthService {
             try {
                 transaction {
                     if (com.obsidianscout.db.DatabaseFactory.isPostgresCompatible) {
-                        exec("SET statement_timeout = '1500ms';")
+                        exec("SET LOCAL statement_timeout = '3000ms';")
                     }
                     val row = UserSessions.selectAll().where { UserSessions.id eq sessionUuid }.firstOrNull()
                     if (row != null) {

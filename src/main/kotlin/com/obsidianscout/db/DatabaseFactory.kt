@@ -258,16 +258,16 @@ object DatabaseFactory {
                 println("[Database] Executing raw DDL schema creation for CockroachDB...")
                 dataSource.connection.use { conn ->
                     conn.autoCommit = true
-                    // DDL schema operations (CREATE TABLE, ALTER TABLE) on a distributed CockroachDB cluster
-                    // take multiple seconds to commit cluster-wide consensus descriptor changes.
-                    // Reset statement_timeout from the 800ms pool default to 60s for DDL migrations.
-                    conn.createStatement().use { stmt ->
-                        try {
-                            stmt.execute("SET statement_timeout = '60s';")
-                        } catch (_: Exception) {}
-                    }
-                    val existingTables = getExistingTables(conn)
-                    conn.createStatement().use { stmt ->
+                    try {
+                        // DDL schema operations (CREATE TABLE, ALTER TABLE) on a distributed CockroachDB cluster
+                        // take multiple seconds to commit cluster-wide consensus descriptor changes.
+                        conn.createStatement().use { stmt ->
+                            try {
+                                stmt.execute("SET statement_timeout = '60s';")
+                            } catch (_: Exception) {}
+                        }
+                        val existingTables = getExistingTables(conn)
+                        conn.createStatement().use { stmt ->
                         // 0. Ensure error reporting table exists first so any subsequent errors can be logged to ReportedErrors
                         val reportedErrorsDdl = listOf(
                             """
@@ -499,8 +499,15 @@ object DatabaseFactory {
                             }
                         }
                     }
+                } finally {
+                    try {
+                        conn.createStatement().use { stmt ->
+                            stmt.execute("RESET statement_timeout;")
+                        }
+                    } catch (_: Exception) {}
                 }
-            } else {
+            }
+        } else {
                 transaction {
                     SchemaUtils.createMissingTablesAndColumns(*tables.toTypedArray())
                 }

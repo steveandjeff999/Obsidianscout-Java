@@ -165,7 +165,6 @@ object ClusterManagementService {
                 DatabaseFactory.activeDataSource?.connection?.use { conn ->
                     conn.createStatement().use { stmt ->
                         stmt.queryTimeout = 5
-                        try { stmt.execute("SET statement_timeout = '5000ms';") } catch (_: Exception) {}
                         try { stmt.execute("SET allow_unsafe_internals = true;") } catch (_: Exception) {}
                         stmt.executeQuery("SELECT address FROM crdb_internal.gossip_nodes;").use { rs ->
                             while (rs.next()) {
