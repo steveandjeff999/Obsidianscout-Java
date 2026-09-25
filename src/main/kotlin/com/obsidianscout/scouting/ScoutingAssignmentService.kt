@@ -361,6 +361,7 @@ object ScoutingAssignmentService {
             throw ApiException(HttpStatusCode.BadRequest, "Please select at least one scouter.")
         }
 
+        val prog = session.program.uppercase().trim()
         val now = Instant.now()
         val creatorUuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
 
@@ -368,7 +369,7 @@ object ScoutingAssignmentService {
             // Validate scouters belong to team/program
             val userRows = Users.selectAll().where {
                 (Users.id inList rawUserIds) and
-                (Users.program.lowerCase() eq session.program.lowercase().trim()) and
+                (Users.program eq prog) and
                 (if (session.role != UserRole.SUPERADMIN) Users.teamNumber eq session.teamNumber else Users.teamNumber eq Users.teamNumber)
             }.toList()
 
@@ -389,8 +390,8 @@ object ScoutingAssignmentService {
 
             // Existing assignments query
             val existingQuery = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim()) and
-                (ScoutingAssignments.eventKey.lowerCase() eq eventKeyClean)
+                (ScoutingAssignments.program eq prog) and
+                (ScoutingAssignments.eventKey eq eventKeyClean)
             }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {
                 existingQuery.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
@@ -820,9 +821,10 @@ object ScoutingAssignmentService {
         val assignmentUuid = runCatching { UUID.fromString(id) }.getOrNull()
             ?: throw ApiException(HttpStatusCode.BadRequest, "Invalid assignment ID.")
 
+        val prog = session.program.uppercase().trim()
         val now = Instant.now()
         transaction {
-            val query = ScoutingAssignments.selectAll().where { (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim()) }
+            val query = ScoutingAssignments.selectAll().where { (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program eq prog) }
             if (session.role != UserRole.SUPERADMIN && session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
             }
@@ -831,7 +833,7 @@ object ScoutingAssignmentService {
             val newTargetUser = if (!request.assignedUserId.isNullOrBlank()) {
                 val userUuid = runCatching { UUID.fromString(request.assignedUserId) }.getOrNull()
                     ?: throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID.")
-                val userExists = Users.selectAll().where { (Users.id eq userUuid) and (Users.program.lowerCase() eq session.program.lowercase().trim()) }.count() > 0
+                val userExists = Users.selectAll().where { (Users.id eq userUuid) and (Users.program eq prog) }.count() > 0
                 if (!userExists) throw ApiException(HttpStatusCode.BadRequest, "Assigned user not found.")
                 userUuid
             } else null
@@ -878,10 +880,11 @@ object ScoutingAssignmentService {
         val userUuid = runCatching { UUID.fromString(session.userId) }.getOrNull()
             ?: throw ApiException(HttpStatusCode.Unauthorized, "Invalid user session.")
 
+        val prog = session.program.uppercase().trim()
         val now = Instant.now()
         transaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim())
+                (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program eq prog)
             }
             if (session.role != UserRole.SUPERADMIN) {
                 query.andWhere {
@@ -910,8 +913,9 @@ object ScoutingAssignmentService {
         val assignmentUuid = runCatching { UUID.fromString(id) }.getOrNull()
             ?: throw ApiException(HttpStatusCode.BadRequest, "Invalid assignment ID.")
 
+        val prog = session.program.uppercase().trim()
         return transaction {
-            val query = (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim())
+            val query = (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program eq prog)
             val fullQuery = if (session.role != UserRole.SUPERADMIN && session.teamNumber != 0) {
                 query and (ScoutingAssignments.ownerTeamNumber eq session.teamNumber)
             } else query
@@ -922,9 +926,10 @@ object ScoutingAssignmentService {
 
     fun getAssignmentById(session: UserSession, id: String): ScoutingAssignmentRecord? {
         val assignmentUuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return null
+        val prog = session.program.uppercase().trim()
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim())
+                (ScoutingAssignments.id eq assignmentUuid) and (ScoutingAssignments.program eq prog)
             }
             if (session.role != UserRole.SUPERADMIN && session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
@@ -941,13 +946,14 @@ object ScoutingAssignmentService {
         userId: String? = null,
         status: String? = null
     ): List<ScoutingAssignmentRecord> {
+        val prog = session.program.uppercase().trim()
         return readTransaction {
-            val query = ScoutingAssignments.selectAll().where { ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim() }
+            val query = ScoutingAssignments.selectAll().where { ScoutingAssignments.program eq prog }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
             }
             if (!eventKey.isNullOrBlank()) {
-                query.andWhere { ScoutingAssignments.eventKey.lowerCase() eq eventKey.trim().lowercase() }
+                query.andWhere { ScoutingAssignments.eventKey eq eventKey.trim().lowercase() }
             }
             if (!assignmentType.isNullOrBlank()) {
                 query.andWhere { ScoutingAssignments.assignmentType eq assignmentType.trim().uppercase() }
@@ -970,16 +976,17 @@ object ScoutingAssignmentService {
 
     fun getMyAssignments(session: UserSession, eventKey: String? = null): List<ScoutingAssignmentRecord> {
         val userUuid = runCatching { UUID.fromString(session.userId) }.getOrNull() ?: return emptyList()
+        val prog = session.program.uppercase().trim()
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where {
                 (ScoutingAssignments.assignedUserId eq userUuid) and
-                (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim())
+                (ScoutingAssignments.program eq prog)
             }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
             }
             if (!eventKey.isNullOrBlank()) {
-                query.andWhere { ScoutingAssignments.eventKey.lowerCase() eq eventKey.trim().lowercase() }
+                query.andWhere { ScoutingAssignments.eventKey eq eventKey.trim().lowercase() }
             }
             query.orderBy(ScoutingAssignments.matchNumber to SortOrder.ASC_NULLS_LAST, ScoutingAssignments.createdAt to SortOrder.DESC)
             val rows = query.toList()
@@ -996,10 +1003,12 @@ object ScoutingAssignmentService {
         targetTeamNumber: Int? = null,
         allianceColor: String? = null
     ): AssignmentConflictDto {
+        val prog = session.program.uppercase().trim()
+        val eKey = eventKey.trim().lowercase()
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim()) and
-                (ScoutingAssignments.eventKey.lowerCase() eq eventKey.trim().lowercase()) and
+                (ScoutingAssignments.program eq prog) and
+                (ScoutingAssignments.eventKey eq eKey) and
                 (ScoutingAssignments.status neq "SKIPPED") and
                 (ScoutingAssignments.status neq "CANCELLED")
             }
@@ -1156,10 +1165,12 @@ object ScoutingAssignmentService {
     }
 
     fun getCoverage(session: UserSession, eventKey: String): EventAssignmentCoverageDto {
+        val prog = session.program.uppercase().trim()
+        val eKey = eventKey.trim().lowercase()
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim()) and
-                (ScoutingAssignments.eventKey.lowerCase() eq eventKey.trim().lowercase())
+                (ScoutingAssignments.program eq prog) and
+                (ScoutingAssignments.eventKey eq eKey)
             }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
@@ -1232,14 +1243,15 @@ object ScoutingAssignmentService {
         assignmentType: String? = null,
         specificIds: List<String>? = null
     ): Int {
-        val eventKeyClean = eventKey.trim()
+        val eventKeyClean = eventKey.trim().lowercase()
         if (eventKeyClean.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Event key is required.")
         }
+        val prog = session.program.uppercase().trim()
         return transaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim()) and
-                (ScoutingAssignments.eventKey.lowerCase() eq eventKeyClean.lowercase())
+                (ScoutingAssignments.program eq prog) and
+                (ScoutingAssignments.eventKey eq eventKeyClean)
             }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {
                 query.andWhere { ScoutingAssignments.ownerTeamNumber eq session.teamNumber }
@@ -1265,11 +1277,12 @@ object ScoutingAssignmentService {
         if (eventKeyClean.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Event key is required.")
         }
+        val prog = session.program.uppercase().trim()
 
         return transaction {
             val query = ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.program.lowerCase() eq session.program.lowercase().trim()) and
-                (ScoutingAssignments.eventKey.lowerCase() eq eventKeyClean) and
+                (ScoutingAssignments.program eq prog) and
+                (ScoutingAssignments.eventKey eq eventKeyClean) and
                 (ScoutingAssignments.status neq "SKIPPED") and
                 (ScoutingAssignments.status neq "CANCELLED")
             }
@@ -1597,21 +1610,25 @@ object ScoutingAssignmentService {
         val assignedUId = row[ScoutingAssignments.assignedUserId].value
         val creatorUId = row[ScoutingAssignments.createdByUserId]?.value
 
-        val mKey = row[ScoutingAssignments.matchKey]
-        val eKey = row[ScoutingAssignments.eventKey]
-        val prog = row[ScoutingAssignments.program]
-        val matchRecord: MatchRecord? = if (!mKey.isNullOrBlank() && eKey.isNotBlank()) {
-            IntegrationService.listMatches(eKey, prog).firstOrNull { it.matchKey.equals(mKey, ignoreCase = true) }
+        val mKey = row[ScoutingAssignments.matchKey]?.trim()
+        val eKey = row[ScoutingAssignments.eventKey].trim().lowercase()
+
+        val matchTiming = if (!mKey.isNullOrBlank()) {
+            ApiMatches.selectAll().where { ApiMatches.matchKey eq mKey }.firstOrNull()?.let {
+                val sched = it[ApiMatches.scheduledTime]
+                val act = it[ApiMatches.actualTime]
+                val offset = if (act != null && sched != null && act > 0 && act != sched) (act - sched) else 0L
+                val pred = if (sched != null && offset != 0L) (sched + offset) else sched
+                Triple(sched, pred, offset)
+            }
         } else null
 
-        val matchScheduledTime = matchRecord?.scheduledTime ?: if (!mKey.isNullOrBlank()) {
-            ApiMatches.selectAll().where { ApiMatches.matchKey eq mKey }.firstOrNull()?.get(ApiMatches.scheduledTime)
-        } else null
-        val matchPredictedTime = matchRecord?.predictedTime ?: matchScheduledTime
-        val matchOffset = matchRecord?.scheduleOffsetSeconds ?: 0L
+        val matchScheduledTime = matchTiming?.first
+        val matchPredictedTime = matchTiming?.second ?: matchScheduledTime
+        val matchOffset = matchTiming?.third ?: 0L
 
         val tNum = row[ScoutingAssignments.targetTeamNumber]
-        val targetTeamNickname = if (tNum != null) {
+        val targetTeamNickname = if (tNum != null && eKey.isNotBlank()) {
             ApiTeams.selectAll().where { (ApiTeams.eventKey eq eKey) and (ApiTeams.teamNumber eq tNum) }.firstOrNull()?.let {
                 it[ApiTeams.nickname] ?: it[ApiTeams.name]
             }
@@ -1647,6 +1664,8 @@ object ScoutingAssignmentService {
         )
     }
 
+    private data class MatchTiming(val scheduledTime: Long?, val predictedTime: Long?, val offsetSeconds: Long)
+
     private fun mapRowsToRecords(rows: List<org.jetbrains.exposed.sql.ResultRow>): List<ScoutingAssignmentRecord> {
         if (rows.isEmpty()) return emptyList()
 
@@ -1659,44 +1678,47 @@ object ScoutingAssignmentService {
             Users.selectAll().where { Users.id inList userIds }.associate { it[Users.id].value to it[Users.username] }
         } else emptyMap()
 
-        val eventProgPairs = rows.mapNotNull {
-            val e = runCatching { it[ScoutingAssignments.eventKey] }.getOrNull()
-            val p = runCatching { it[ScoutingAssignments.program] }.getOrNull() ?: "FRC"
-            if (!e.isNullOrBlank()) Pair(e, p) else null
-        }.distinct()
-        val matchRecordMap: Map<String, MatchRecord> = eventProgPairs.flatMap { (eKey, prog) ->
-            IntegrationService.listMatches(eKey, prog)
-        }.associateBy { it.matchKey.lowercase() }
+        val matchKeys = rows.mapNotNull { runCatching { it[ScoutingAssignments.matchKey] }.getOrNull() }
+            .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() }
+            .distinct()
 
-        val matchKeys = rows.mapNotNull { runCatching { it[ScoutingAssignments.matchKey] }.getOrNull() }.filter { it.isNotBlank() }.distinct()
-        val matchTimes = if (matchKeys.isNotEmpty()) {
-            ApiMatches.selectAll().where { ApiMatches.matchKey inList matchKeys }.associate { it[ApiMatches.matchKey] to it[ApiMatches.scheduledTime] }
+        val matchTimingMap: Map<String, MatchTiming> = if (matchKeys.isNotEmpty()) {
+            ApiMatches.selectAll().where { ApiMatches.matchKey inList matchKeys }.associate { row ->
+                val mKey = row[ApiMatches.matchKey].trim().lowercase()
+                val sched = row[ApiMatches.scheduledTime]
+                val act = row[ApiMatches.actualTime]
+                val offset = if (act != null && sched != null && act > 0 && act != sched) (act - sched) else 0L
+                val pred = if (sched != null && offset != 0L) (sched + offset) else sched
+                mKey to MatchTiming(sched, pred, offset)
+            }
         } else emptyMap()
 
         val eventTeamPairs = rows.mapNotNull {
             val t = runCatching { it[ScoutingAssignments.targetTeamNumber] }.getOrNull()
-            val e = runCatching { it[ScoutingAssignments.eventKey] }.getOrNull()
-            if (t != null && e != null) Pair(e, t) else null
+            val e = runCatching { it[ScoutingAssignments.eventKey] }.getOrNull()?.trim()?.lowercase()
+            if (t != null && !e.isNullOrBlank()) Pair(e, t) else null
         }.distinct()
 
         val teamNicknames = if (eventTeamPairs.isNotEmpty()) {
             val events = eventTeamPairs.map { it.first }.distinct()
             val teams = eventTeamPairs.map { it.second }.distinct()
             ApiTeams.selectAll().where { (ApiTeams.eventKey inList events) and (ApiTeams.teamNumber inList teams) }
-                .associate { Pair(it[ApiTeams.eventKey], it[ApiTeams.teamNumber]) to (it[ApiTeams.nickname] ?: it[ApiTeams.name]) }
+                .associate { Pair(it[ApiTeams.eventKey].trim().lowercase(), it[ApiTeams.teamNumber]) to (it[ApiTeams.nickname] ?: it[ApiTeams.name]) }
         } else emptyMap()
 
         return rows.map { row ->
             val assignedUId = runCatching { row[ScoutingAssignments.assignedUserId].value }.getOrNull()
             val creatorUId = runCatching { row[ScoutingAssignments.createdByUserId]?.value }.getOrNull()
-            val mKey = runCatching { row[ScoutingAssignments.matchKey] }.getOrNull()
+            val mKey = runCatching { row[ScoutingAssignments.matchKey] }?.getOrNull()?.trim()
             val tNum = runCatching { row[ScoutingAssignments.targetTeamNumber] }.getOrNull()
-            val eKey = runCatching { row[ScoutingAssignments.eventKey] }.getOrNull() ?: ""
+            val eKey = runCatching { row[ScoutingAssignments.eventKey] }.getOrNull()?.trim() ?: ""
 
-            val mRecord = mKey?.lowercase()?.let { matchRecordMap[it] }
-            val sTime = mRecord?.scheduledTime ?: mKey?.let { matchTimes[it] }
-            val pTime = mRecord?.predictedTime ?: sTime
-            val offset = mRecord?.scheduleOffsetSeconds ?: 0L
+            val timing = mKey?.lowercase()?.let { matchTimingMap[it] }
+            val sTime = timing?.scheduledTime
+            val pTime = timing?.predictedTime ?: sTime
+            val offset = timing?.offsetSeconds ?: 0L
+            val targetTeamNickname = if (tNum != null && eKey.isNotBlank()) teamNicknames[Pair(eKey.lowercase(), tNum)] else null
 
             ScoutingAssignmentRecord(
                 id = runCatching { row[ScoutingAssignments.id].value.toString() }.getOrNull() ?: "",
@@ -1710,7 +1732,7 @@ object ScoutingAssignmentService {
                 matchNumber = runCatching { row[ScoutingAssignments.matchNumber] }.getOrNull(),
                 compLevel = runCatching { row[ScoutingAssignments.compLevel] }.getOrNull(),
                 targetTeamNumber = tNum,
-                targetTeamName = if (tNum != null) teamNicknames[Pair(eKey, tNum)] else null,
+                targetTeamName = targetTeamNickname,
                 allianceColor = runCatching { row[ScoutingAssignments.allianceColor] }.getOrNull(),
                 status = runCatching { row[ScoutingAssignments.status] }.getOrNull() ?: "PENDING",
                 notes = runCatching { row[ScoutingAssignments.notes] }.getOrNull(),

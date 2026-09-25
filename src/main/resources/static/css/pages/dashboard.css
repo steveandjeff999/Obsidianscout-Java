@@ -146,8 +146,8 @@
 .dash-btn-secondary:hover {
     transform: translateY(-2px);
     background: var(--surface-2);
-    border-color: var(--border-focus);
-    color: var(--accent);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: var(--ink);
 }
 
 /* ── Scouting Overview & Team Filter Bar ────────────────────────── */
@@ -201,29 +201,6 @@
     color: inherit;
     position: relative;
     overflow: hidden;
-    transition: transform var(--transition-smooth), box-shadow var(--transition-smooth), border-color var(--transition-smooth);
-}
-
-.dashboard-kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
-    opacity: 0;
-    transition: opacity var(--transition-smooth);
-}
-
-.dashboard-kpi-card:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-hover);
-    border-color: rgba(37, 99, 235, 0.35);
-}
-
-.dashboard-kpi-card:hover::before {
-    opacity: 1;
 }
 
 .dashboard-kpi-header {
@@ -409,9 +386,8 @@
 }
 
 .dash-match-card:hover {
-    background: var(--surface);
+    background: var(--surface-2);
     border-color: var(--border);
-    transform: translateY(-1px);
 }
 
 .dash-match-meta {
@@ -610,15 +586,12 @@
     border: 1px solid var(--border-subtle);
     text-decoration: none;
     color: var(--ink);
-    transition: transform var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .dash-tile:hover {
-    transform: translateY(-2px);
-    background: var(--surface);
-    border-color: var(--border);
-    box-shadow: var(--shadow-sm);
-    color: var(--accent);
+    background: var(--surface-2);
+    border-color: var(--border-subtle);
+    color: var(--ink);
 }
 
 .dash-tile-icon {

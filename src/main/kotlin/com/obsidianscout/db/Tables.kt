@@ -516,6 +516,7 @@ object ScoutingAssignments : UUIDTable("scouting_assignments") {
         index("idx_scouting_assignments_team_event", false, ownerTeamNumber, eventKey, program)
         index("idx_scouting_assignments_event_program", false, eventKey, program)
         index("idx_scouting_assignments_user", false, assignedUserId)
+        index("idx_scouting_assignments_user_event", false, assignedUserId, program, ownerTeamNumber, eventKey)
         index("idx_scouting_assignments_status", false, status)
         index("idx_scouting_assignments_type", false, assignmentType)
         index("idx_scouting_assignments_match_team", false, eventKey, matchNumber, targetTeamNumber)

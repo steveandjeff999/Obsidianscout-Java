@@ -80,6 +80,11 @@ import {
     injectMobileTopBar
 } from './layout/mobile-topbar.js';
 
+import {
+    initScrollReveal,
+    refreshScrollReveal
+} from './layout/scroll-reveal.js';
+
 // 3. Components Layer
 import {
     showToast
@@ -603,6 +608,7 @@ async function onDOMContentLoaded() {
     initTheme();
     applyNavLayout();
     wireThemeToggle();
+    initScrollReveal();
 
     const sidebar = document.querySelector(".sidebar");
     if (sidebar) {
