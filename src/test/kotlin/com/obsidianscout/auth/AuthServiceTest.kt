@@ -369,4 +369,95 @@ class AuthServiceTest {
         assertNotNull(unlockedScout)
         assertEquals("unlocked_scout", unlockedScout.username)
     }
+
+    @Test
+    fun testUserCreationPermissionsForAdminAndSuperadmin() {
+        val admin = AuthService.register(
+            username = "team_admin",
+            teamNumber = 254,
+            password = "Password123!",
+            program = "FRC",
+            role = UserRole.ADMIN
+        )
+        val adminSession = UserSession(
+            userId = admin.id,
+            username = admin.username,
+            teamNumber = admin.teamNumber,
+            program = admin.program,
+            role = admin.role
+        )
+
+        val superadminSession = UserSession(
+            userId = "superadmin-id",
+            username = "site_superadmin",
+            teamNumber = 0,
+            program = "FRC",
+            role = UserRole.SUPERADMIN
+        )
+
+        // 1. Normal admin creating user on own team and program -> SUCESS
+        val adminCreated = AuthService.createUser(
+            callerSession = adminSession,
+            username = "scout_same_team",
+            teamNumber = 254,
+            password = "Password123!",
+            program = "FRC",
+            role = UserRole.SCOUT
+        )
+        assertNotNull(adminCreated)
+        assertEquals(254, adminCreated.teamNumber)
+        assertEquals("FRC", adminCreated.program)
+
+        // 2. Normal admin attempting to change team number -> FORBIDDEN
+        val diffTeamEx = assertFailsWith<ApiException> {
+            AuthService.createUser(
+                callerSession = adminSession,
+                username = "scout_other_team",
+                teamNumber = 971,
+                password = "Password123!",
+                program = "FRC",
+                role = UserRole.SCOUT
+            )
+        }
+        assertEquals(HttpStatusCode.Forbidden, diffTeamEx.status)
+
+        // 3. Normal admin attempting to change program -> FORBIDDEN
+        val diffProgEx = assertFailsWith<ApiException> {
+            AuthService.createUser(
+                callerSession = adminSession,
+                username = "scout_ftc_team",
+                teamNumber = 254,
+                password = "Password123!",
+                program = "FTC",
+                role = UserRole.SCOUT
+            )
+        }
+        assertEquals(HttpStatusCode.Forbidden, diffProgEx.status)
+
+        // 4. Superadmin can create user on any team and any program (e.g. team 971, FTC)
+        val superCreatedFtc = AuthService.createUser(
+            callerSession = superadminSession,
+            username = "ftc_scout_971",
+            teamNumber = 971,
+            password = "Password123!",
+            program = "FTC",
+            role = UserRole.SCOUT
+        )
+        assertNotNull(superCreatedFtc)
+        assertEquals(971, superCreatedFtc.teamNumber)
+        assertEquals("FTC", superCreatedFtc.program)
+
+        // 5. Superadmin can create user on any team in FRC
+        val superCreatedFrc = AuthService.createUser(
+            callerSession = superadminSession,
+            username = "frc_scout_1678",
+            teamNumber = 1678,
+            password = "Password123!",
+            program = "FRC",
+            role = UserRole.ANALYTICS
+        )
+        assertNotNull(superCreatedFrc)
+        assertEquals(1678, superCreatedFrc.teamNumber)
+        assertEquals("FRC", superCreatedFrc.program)
+    }
 }

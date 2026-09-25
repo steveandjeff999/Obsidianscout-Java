@@ -913,6 +913,7 @@ data class MobileAdminCreateUserRequest(
     val password: String,
     val email: String? = null,
     @SerialName("team_number") val teamNumber: Int? = null,
+    val program: String? = null,
     val roles: List<String> = emptyList()
 )
 
@@ -3244,13 +3245,16 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val session = call.requireMobileAdmin(secret)
                 val req = call.receive<MobileAdminCreateUserRequest>()
                 val role = try { UserRole.valueOf(req.roles.firstOrNull()?.uppercase() ?: "SCOUT") } catch (_: Exception) { UserRole.SCOUT }
+                val targetTeam = if (session.role == UserRole.SUPERADMIN) (req.teamNumber ?: session.teamNumber) else session.teamNumber
+                val targetProgram = if (session.role == UserRole.SUPERADMIN) (req.program ?: session.program) else session.program
                 
                 val created = try {
                     AuthService.createUser(
                         callerSession = session,
                         username = req.username,
-                        teamNumber = req.teamNumber ?: session.teamNumber,
+                        teamNumber = targetTeam,
                         password = req.password,
+                        program = targetProgram,
                         role = role,
                         email = req.email
                     )

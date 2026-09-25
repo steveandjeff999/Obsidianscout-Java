@@ -359,8 +359,8 @@ object AuthService {
             throw ApiException(HttpStatusCode.Forbidden, "Only a superadmin can create superadmin accounts")
         }
 
-        // ADMIN can only create users on their own team and program
-        if (callerSession.role == UserRole.ADMIN && (teamNumber != callerSession.teamNumber || program != callerSession.program)) {
+        // Non-SUPERADMIN (e.g. ADMIN) can only create users on their own team and program
+        if (callerSession.role != UserRole.SUPERADMIN && (teamNumber != callerSession.teamNumber || program != callerSession.program)) {
             throw ApiException(HttpStatusCode.Forbidden, "Admins can only create users on their own team and program")
         }
 

@@ -111,9 +111,16 @@
                         <label for="user-email" data-i18n="index.email">Email</label>
                         <input id="user-email" type="email" data-i18n-placeholder="config.placeholder_scoutexamplecom" placeholder="scout@example.com" />
                     </div>
-                    <div class="field">
+                    <div class="field" id="user-team-field">
                         <label for="user-team" data-i18n="pitdata.csv.team_number">Team Number</label>
                         <input id="user-team" type="number" required />
+                    </div>
+                    <div class="field" id="user-program-field" style="display: none;">
+                        <label for="user-program" data-i18n="index.program">Program Type</label>
+                        <select id="user-program">
+                            <option value="FRC">FRC</option>
+                            <option value="FTC">FTC</option>
+                        </select>
                     </div>
                     <div class="field">
                         <label for="user-password" data-i18n="index.password">Password</label>

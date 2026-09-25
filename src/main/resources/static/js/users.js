@@ -60,7 +60,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    // Show SUPERADMIN option in dropdowns only for superadmins
+    // Show SUPERADMIN option and program fields only for superadmins
     if (Obsidianscout.isSuperAdmin(me.role)) {
         document.querySelector(".superadmin-option").style.display = "";
         document.querySelector(".edit-superadmin-option").style.display = "";
@@ -68,6 +68,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (filterSuperadminOpt) filterSuperadminOpt.style.display = "";
         const programFilterField = document.getElementById("program-filter-field");
         if (programFilterField) programFilterField.style.display = "";
+        const userProgramField = document.getElementById("user-program-field");
+        if (userProgramField) userProgramField.style.display = "";
     }
 
     // Hide/disable team filter field if user is not a superadmin
@@ -78,11 +80,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // For ADMIN, pre-fill team number and lock it
+    // For ADMIN, pre-fill team number and program and lock them
     const teamInput = document.getElementById("user-team");
+    const programSelect = document.getElementById("user-program");
     if (!Obsidianscout.isSuperAdmin(me.role)) {
-        teamInput.value = me.teamNumber;
-        teamInput.readOnly = true;
+        if (teamInput) {
+            teamInput.value = me.teamNumber;
+            teamInput.readOnly = true;
+        }
+        if (programSelect) {
+            programSelect.value = me.program || "FRC";
+            programSelect.disabled = true;
+        }
+    } else {
+        if (teamInput) {
+            teamInput.value = me.teamNumber || "";
+            teamInput.readOnly = false;
+        }
+        if (programSelect) {
+            programSelect.value = me.program || "FRC";
+            programSelect.disabled = false;
+        }
     }
 
     // ── Modal wiring ──────────────────────────────────────────────────────────
@@ -251,19 +269,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         const submitBtn = userForm.querySelector('button[type="submit"]');
         const username   = document.getElementById("user-username").value.trim();
         const email      = document.getElementById("user-email").value.trim();
-        const teamNumber = parseInt(document.getElementById("user-team").value, 10);
+        const teamNumber = Obsidianscout.isSuperAdmin(me.role)
+            ? parseInt(document.getElementById("user-team").value, 10)
+            : Number(me.teamNumber);
+        const programSelect = document.getElementById("user-program");
+        const program    = Obsidianscout.isSuperAdmin(me.role)
+            ? (programSelect ? programSelect.value : (me.program || "FRC"))
+            : (me.program || "FRC");
         const password   = document.getElementById("user-password").value;
         const role       = document.getElementById("user-role").value;
 
         try {
             await Obsidianscout.request("/api/admin/users", {
                 method: "POST",
-                json: { username, email, teamNumber, password, role },
+                json: { username, email, teamNumber, password, role, program },
                 button: submitBtn
             });
             Obsidianscout.showToast("User created", "success");
             event.target.reset();
-            if (!Obsidianscout.isSuperAdmin(me.role)) teamInput.value = me.teamNumber;
+            if (!Obsidianscout.isSuperAdmin(me.role)) {
+                if (teamInput) {
+                    teamInput.value = me.teamNumber;
+                    teamInput.readOnly = true;
+                }
+                if (programSelect) {
+                    programSelect.value = me.program || "FRC";
+                    programSelect.disabled = true;
+                }
+            } else {
+                if (teamInput) teamInput.value = me.teamNumber || "";
+                if (programSelect) programSelect.value = me.program || "FRC";
+            }
             await loadUsers(me, openModal);
         } catch (error) {
             Obsidianscout.showToast(error.message || "User creation failed", "error");

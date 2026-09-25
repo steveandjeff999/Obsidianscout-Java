@@ -1871,12 +1871,14 @@ fun Application.configureRoutes() {
                 post("/users") {
                     val session = call.requireAdmin()
                     val request = call.receive<CreateUserRequest>()
+                    val targetTeam = if (session.role == UserRole.SUPERADMIN) request.teamNumber else session.teamNumber
+                    val targetProgram = if (session.role == UserRole.SUPERADMIN) request.program else session.program
                     val user = AuthService.createUser(
                         callerSession = session,
                         username = request.username,
-                        teamNumber = request.teamNumber,
+                        teamNumber = targetTeam,
                         password = request.password,
-                        program = request.program,
+                        program = targetProgram,
                         role = request.role,
                         email = request.email
                     )
