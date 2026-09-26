@@ -114,7 +114,24 @@ function initMetricOptions(state) {
     if (!metricSelect) {
         return;
     }
-    const metrics = buildMetricOptions(state.config || {});
+    let metrics = [];
+    if (state.datasource === "exp") {
+        metrics = [
+            { id: "score_total", label: t('alliance-selection.total_exp', "Total EXP"), kind: "score", scope: "total" },
+            { id: "score_auto", label: t('alliance-selection.auto_exp', "Auto EXP"), kind: "score", scope: "auto" },
+            { id: "score_teleop", label: t('alliance-selection.teleop_exp', "Teleop EXP"), kind: "score", scope: "teleop" },
+            { id: "score_endgame", label: t('alliance-selection.endgame_exp', "Endgame EXP"), kind: "score", scope: "endgame" }
+        ];
+    } else if (state.datasource === "all") {
+        metrics = [
+            { id: "score_total", label: t('graphs.total_points', "Total points"), kind: "score", scope: "total" },
+            { id: "score_auto", label: t('graphs.auto_points', "Auto points"), kind: "score", scope: "auto" },
+            { id: "score_teleop", label: t('graphs.teleop_points', "Teleop points"), kind: "score", scope: "teleop" },
+            { id: "score_endgame", label: t('graphs.endgame_points', "Endgame points"), kind: "score", scope: "endgame" }
+        ];
+    } else {
+        metrics = buildMetricOptions(state.config || {});
+    }
     state.metrics = metrics;
     state.metricMap = new Map(metrics.map((metric) => [metric.id, metric]));
     metricSelect.innerHTML = "";
@@ -124,10 +141,16 @@ function initMetricOptions(state) {
         option.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label;
         metricSelect.appendChild(option);
     });
-    state.metricId = metrics.length ? metrics[0].id : "score_total";
-    metricSelect.addEventListener("change", () => {
-        state.metricId = metricSelect.value;
-    });
+    if (!state.metricId || !state.metricMap.has(state.metricId)) {
+        state.metricId = metrics.length ? metrics[0].id : "score_total";
+    }
+    metricSelect.value = state.metricId;
+    if (!metricSelect.dataset.hasListener) {
+        metricSelect.addEventListener("change", () => {
+            state.metricId = metricSelect.value;
+        });
+        metricSelect.dataset.hasListener = "true";
+    }
 }
 
 function initEventFilter(state) {
@@ -247,11 +270,16 @@ function toggleFieldsForDatasource(state) {
     const prescoutField = document.getElementById("prescout-field");
     const viewSelect = document.getElementById("graph-view");
 
-    // Match-by-match and custom metrics are strictly for Scouted Data
     if (state.datasource === "scouted") {
         viewField?.classList.remove("hidden");
         metricField?.classList.remove("hidden");
         prescoutField?.classList.remove("hidden");
+        initMetricOptions(state);
+    } else if (state.datasource === "exp" || state.datasource === "all") {
+        viewField?.classList.remove("hidden");
+        metricField?.classList.remove("hidden");
+        prescoutField?.classList.add("hidden");
+        initMetricOptions(state);
     } else {
         viewField?.classList.add("hidden");
         metricField?.classList.add("hidden");
@@ -333,7 +361,7 @@ function initTeamSelection(state) {
 }
 
 function updateGraphTypeAvailability(state) {
-    const isAverages = state.dataView === "averages" || (state.datasource && state.datasource !== "scouted");
+    const isAverages = state.dataView === "averages" || (state.datasource === "epa" || state.datasource === "opr");
     const lineCheckbox = document.querySelector('.graph-type-checkbox[value="line"]');
     const lineItem = lineCheckbox?.closest(".graph-type-item");
     const countBadge = document.getElementById("graph-type-selected-count");
@@ -375,7 +403,7 @@ function initGraphTypeControls(state) {
 
     if (selectAllBtn) {
         selectAllBtn.addEventListener("click", () => {
-            const isAverages = state.dataView === "averages" || (state.datasource && state.datasource !== "scouted");
+            const isAverages = state.dataView === "averages" || (state.datasource === "epa" || state.datasource === "opr");
             const allTypes = GRAPH_TYPES
                 .map((g) => g.id)
                 .filter((id) => !isAverages || id !== "line");
@@ -601,7 +629,7 @@ function getVisibleTeams() {
 }
 
 function setGraphTypes(state, types, badge) {
-    const isAverages = state.dataView === "averages" || (state.datasource && state.datasource !== "scouted");
+    const isAverages = state.dataView === "averages" || (state.datasource === "epa" || state.datasource === "opr");
     const filteredTypes = isAverages ? types.filter((t) => t !== "line") : types;
     state.selectedGraphTypes = new Set(filteredTypes);
     document.querySelectorAll(".graph-type-checkbox").forEach((checkbox) => {
@@ -764,7 +792,29 @@ function openGraphFullscreen(titleText, sourceChart) {
     });
 }
 
-function generateGraphs(state) {
+function extractTeamExpData(matchObj, teamNumber) {
+    if (!matchObj || typeof matchObj !== "object") return null;
+    const teams = matchObj.teams;
+    if (!teams) return null;
+    const num = Number(teamNumber);
+    if (Array.isArray(teams)) {
+        return teams.find(t => {
+            const tNum = t.teamNumber || t.team_number || t.team || String(t.teamKey || "").replace(/\D/g, "");
+            return Number(tNum) === num;
+        }) || null;
+    }
+    if (typeof teams === "object") {
+        return teams[num]
+            || teams[String(num)]
+            || teams[`frc${num}`]
+            || teams[`ftc${num}`]
+            || teams[`frc_${num}`]
+            || null;
+    }
+    return null;
+}
+
+async function generateGraphs(state) {
     const output = document.getElementById("graphs-output");
     const empty = document.getElementById("graphs-empty");
     const loading = document.getElementById("graph-loading");
@@ -783,7 +833,7 @@ function generateGraphs(state) {
 
     const selectedTeams = Array.from(state.selectedTeams);
     if (!selectedTeams.length) {
-        output.appendChild(buildNotice("Select at least one team to generate graphs."));
+        output.appendChild(buildNotice(t('graphs.select_team_prompt', "Select at least one team to generate graphs.")));
         if (empty) {
             empty.classList.remove("hidden");
         }
@@ -795,7 +845,7 @@ function generateGraphs(state) {
 
     const selectedGraphTypes = Array.from(state.selectedGraphTypes);
     if (!selectedGraphTypes.length) {
-        output.appendChild(buildNotice("Select at least one graph type."));
+        output.appendChild(buildNotice(t('graphs.select_type_prompt', "Select at least one graph type.")));
         if (empty) {
             empty.classList.remove("hidden");
         }
@@ -805,11 +855,29 @@ function generateGraphs(state) {
         return;
     }
 
-    // External / All data sources: only render Team Averages
+    // External / All data sources
     if (state.datasource && state.datasource !== "scouted") {
+        const metricSelect = document.getElementById("graph-metric");
+        if (metricSelect && metricSelect.value) {
+            state.metricId = metricSelect.value;
+        }
+        const metric = state.metricMap?.get(state.metricId) || state.metrics?.[0] || { label: "Total Points", id: "score_total" };
+
+        const targetKey = state.eventKey || (state.settings ? (Obsidianscout.resolveEventKey(state.settings) || "") : "") || "";
+        if (targetKey && (state.datasource === "exp" || state.datasource === "all") && (!state.statsHistory?.match13History || state.statsHistory.match13History.length === 0)) {
+            try {
+                const refreshed = await Obsidianscout.request(`/api/stats/history?eventKey=${encodeURIComponent(targetKey)}`);
+                if (refreshed) {
+                    state.statsHistory = refreshed;
+                }
+            } catch (e) {
+                console.warn("Could not refresh stats history:", e);
+            }
+        }
+
         selectedGraphTypes.forEach((graphType) => {
-            if (graphType === "line") {
-                const card = createGraphCard(`${getDatasourceLabel(state.datasource, state)} - Line`, null, t('graphs.line_not_supported_averages', "Line graphs are not supported for team averages as they require multiple data points across matches. Line graphs are only available for Scouted Match-by-match view."));
+            if (graphType === "line" && state.dataView === "averages") {
+                const card = createGraphCard(`${getDatasourceLabel(state.datasource, state)} - Line`, null, t('graphs.line_not_supported_averages', "Line graphs are not supported for team averages as they require multiple data points across matches. Switch to Match-by-match view to use Line graphs."));
                 output.appendChild(card);
                 return;
             }
@@ -820,7 +888,12 @@ function generateGraphs(state) {
             }
 
             const chart = createPlotlyContainer(320);
-            const card = createGraphCard(`${getDatasourceLabel(state.datasource, state)} - ${graphType} (Team averages)`, chart);
+            const viewTitle = state.dataView === "matches" ? "Match-by-match" : "Team averages";
+            const metricLabel = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label;
+            const cardTitle = (state.datasource === "exp" || state.datasource === "all")
+                ? `${getDatasourceLabel(state.datasource, state)} (${metricLabel}) - ${graphType} (${viewTitle})`
+                : `${getDatasourceLabel(state.datasource, state)} - ${graphType} (${viewTitle})`;
+            const card = createGraphCard(cardTitle, chart);
             output.appendChild(card);
 
             renderNonScoutedGraph(graphType, chart, selectedTeams, state);
@@ -895,6 +968,43 @@ function generateGraphs(state) {
     }
 }
 
+function formatMatchKeyToLabel(matchKey) {
+    if (!matchKey) return "Match";
+    const str = String(matchKey).trim();
+    const parts = str.split('_');
+    const compPart = parts.length > 1 ? parts[1].toLowerCase() : str.toLowerCase();
+    if (compPart.startsWith("qm")) {
+        return `QM ${compPart.replace("qm", "")}`;
+    }
+    if (compPart.startsWith("qf")) {
+        const match = compPart.match(/qf(\d+)m(\d+)/);
+        return match ? `QF ${match[1]}-${match[2]}` : compPart.toUpperCase();
+    }
+    if (compPart.startsWith("sf")) {
+        const match = compPart.match(/sf(\d+)m(\d+)/);
+        return match ? `SF ${match[1]}-${match[2]}` : compPart.toUpperCase();
+    }
+    if (compPart.startsWith("f")) {
+        const match = compPart.match(/f(\d+)m(\d+)/);
+        return match ? `Final ${match[2]}` : compPart.toUpperCase();
+    }
+    return compPart.toUpperCase();
+}
+
+function getTeamExpMetricValue(teamExpData, metricId) {
+    if (!teamExpData) return 0;
+    if (metricId === "score_auto") {
+        return Number(teamExpData.xAutoPost ?? teamExpData.xAuto ?? teamExpData.xAutoPre ?? teamExpData.auto ?? teamExpData.auto_exp ?? teamExpData.autoExp ?? 0);
+    }
+    if (metricId === "score_teleop") {
+        return Number(teamExpData.xTelePost ?? teamExpData.xTele ?? teamExpData.xTelePre ?? teamExpData.teleop ?? teamExpData.teleop_exp ?? teamExpData.teleopExp ?? 0);
+    }
+    if (metricId === "score_endgame") {
+        return Number(teamExpData.xEndPost ?? teamExpData.xEnd ?? teamExpData.xEndPre ?? teamExpData.endgame ?? teamExpData.endgame_exp ?? teamExpData.endgameExp ?? 0);
+    }
+    return Number(teamExpData.xpPost ?? teamExpData.xp ?? teamExpData.xpPre ?? teamExpData.exp ?? teamExpData.total ?? teamExpData.total_points ?? 0);
+}
+
 function getDatasourceLabel(datasource, state) {
     const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
         ? Obsidianscout.getProgram() === "FTC"
@@ -915,6 +1025,132 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
     const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
     const effectiveUseOpr = state.settings?.useTbaOpr;
 
+    // --- MATCH-BY-MATCH RENDERING ---
+    if (state.dataView === "matches") {
+        if (state.datasource === "exp") {
+            const rawMatch13History = state.statsHistory?.match13History || [];
+            if (!rawMatch13History.length) {
+                container.appendChild(buildNotice(t('graphs.no_match13_data', "No Match 13 match data available for this event.")));
+                return;
+            }
+
+            const series = [];
+            selectedTeams.forEach((teamNumber) => {
+                const teamMatches = [];
+                rawMatch13History.forEach((matchObj) => {
+                    const teamData = extractTeamExpData(matchObj, teamNumber);
+                    if (!teamData) return;
+
+                    const matchKey = matchObj.key || matchObj.matchKey || matchObj.match_key || matchObj.match || "";
+                    const label = formatMatchKeyToLabel(matchKey);
+                    const sortWeight = getMatchSortWeightFromLabel(label);
+                    const value = getTeamExpMetricValue(teamData, state.metricId);
+                    teamMatches.push({ label, value, sortWeight });
+                });
+
+                teamMatches.sort((a, b) => a.sortWeight - b.sortWeight);
+
+                if (teamMatches.length > 0) {
+                    series.push({
+                        name: `Team ${teamNumber}`,
+                        x: teamMatches.map(m => m.label),
+                        y: teamMatches.map(m => m.value)
+                    });
+                }
+            });
+
+            if (!series.length) {
+                container.appendChild(buildNotice(t('graphs.no_match13_team_data', "No Match 13 match data found for the selected teams.")));
+                return;
+            }
+
+            if (graphType === "bar") {
+                renderPlotlyMultiBar(container, series);
+            } else if (graphType === "line" || graphType === "scatter" || graphType === "area") {
+                renderPlotlyMultiLine(container, series, { mode: graphType, dataView: "matches" });
+            } else {
+                container.appendChild(buildNotice("Unsupported graph type for Match-by-match view."));
+            }
+            return;
+        }
+
+        if (state.datasource === "all") {
+            const rawMatch13History = state.statsHistory?.match13History || [];
+            const metric = state.metricMap?.get(state.metricId) || state.metrics?.[0] || { label: "Total Points", id: "score_total" };
+            const filteredEntries = getFilteredEntriesForTeams(state);
+
+            const series = [];
+            selectedTeams.forEach((teamNumber) => {
+                // 1. Scouted series
+                const teamEntries = filteredEntries.filter(e => Number(e.targetTeamNumber) === Number(teamNumber));
+                const sortedScouted = teamEntries
+                    .filter(e => metricValue(e, metric, state) !== null)
+                    .sort((a, b) => {
+                        const weightA = getMatchSortWeightFromEntry(a);
+                        const weightB = getMatchSortWeightFromEntry(b);
+                        if (weightA !== weightB) return weightA - weightB;
+                        return (a.matchNumber || 0) - (b.matchNumber || 0);
+                    });
+
+                if (sortedScouted.length > 0) {
+                    series.push({
+                        name: `Team ${teamNumber} (Scouted)`,
+                        x: sortedScouted.map((entry, idx) => {
+                            let level = "QM";
+                            if (entry.isPrescout) level = "Prescout";
+                            else if (entry.isPractice) level = "Practice";
+                            else if (entry.matchKey) {
+                                const parts = entry.matchKey.split('_');
+                                if (parts.length > 1) level = parts[1].replace(/[0-9]/g, "").toUpperCase();
+                            }
+                            return `${level} ${entry.matchNumber || (idx + 1)}`;
+                        }),
+                        y: sortedScouted.map(e => metricValue(e, metric, state))
+                    });
+                }
+
+                // 2. Match 13 EXP series
+                if (effectiveUseExp && rawMatch13History.length > 0) {
+                    const expMatches = [];
+                    rawMatch13History.forEach((matchObj) => {
+                        const teamData = extractTeamExpData(matchObj, teamNumber);
+                        if (!teamData) return;
+
+                        const matchKey = matchObj.key || matchObj.matchKey || matchObj.match_key || matchObj.match || "";
+                        const label = formatMatchKeyToLabel(matchKey);
+                        const sortWeight = getMatchSortWeightFromLabel(label);
+                        const value = getTeamExpMetricValue(teamData, state.metricId);
+                        expMatches.push({ label, value, sortWeight });
+                    });
+
+                    expMatches.sort((a, b) => a.sortWeight - b.sortWeight);
+
+                    if (expMatches.length > 0) {
+                        series.push({
+                            name: `Team ${teamNumber} (Match 13 EXP)`,
+                            x: expMatches.map(m => m.label),
+                            y: expMatches.map(m => m.value)
+                        });
+                    }
+                }
+            });
+
+            if (!series.length) {
+                container.appendChild(buildNotice(t('graphs.no_match_data_teams', "No match data found for the selected teams.")));
+                return;
+            }
+
+            if (graphType === "bar") {
+                renderPlotlyMultiBar(container, series);
+            } else if (graphType === "line" || graphType === "scatter" || graphType === "area") {
+                renderPlotlyMultiLine(container, series, { mode: graphType, dataView: "matches" });
+            } else {
+                container.appendChild(buildNotice("Unsupported graph type for Match-by-match view."));
+            }
+        }
+    }
+
+    // --- TEAM AVERAGES RENDERING ---
     // 1. Build the data series
     const data = selectedTeams.map(teamNumber => {
         const team = state.eventTeamsMap ? state.eventTeamsMap.get(teamNumber) : null;
@@ -953,7 +1189,6 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
             const series = data.map(item => ({ label: item.label, value: item.opr }));
             renderPlotlyBar(container, series, { orientation: "h" });
         } else if (state.datasource === "all") {
-            // Grouped bar chart comparing Scouted, EPA, EXP, and OPR
             const series = [];
             series.push({
                 name: "Scouted Average",
@@ -987,7 +1222,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
     }
 
     if (graphType === "line") {
-        container.appendChild(buildNotice(t('graphs.line_not_supported_averages', "Line graphs are not supported for team averages as they require multiple data points across matches. Line graphs are only available for Scouted Match-by-match view.")));
+        container.appendChild(buildNotice(t('graphs.line_not_supported_averages', "Line graphs are not supported for team averages as they require multiple data points across matches. Switch to Match-by-match view to use Line graphs.")));
         return;
     }
 

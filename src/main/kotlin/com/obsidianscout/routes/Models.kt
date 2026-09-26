@@ -441,6 +441,33 @@ data class SummaryResponse(
 )
 
 @Serializable
+data class Match13PredictionDetail(
+    val redScore: Double? = null,
+    val blueScore: Double? = null,
+    val winProb: Double? = null,
+    val redRp1: Double? = null,
+    val redRp2: Double? = null,
+    val redRp3: Double? = null,
+    val blueRp1: Double? = null,
+    val blueRp2: Double? = null,
+    val blueRp3: Double? = null,
+    val redVar: Double? = null,
+    val blueVar: Double? = null
+)
+
+@Serializable
+data class Match13TeamExpDetail(
+    val xpPost: Double? = null,
+    val xpPre: Double? = null,
+    val xAutoPost: Double? = null,
+    val xAutoPre: Double? = null,
+    val xTelePost: Double? = null,
+    val xTelePre: Double? = null,
+    val xEndPost: Double? = null,
+    val xEndPre: Double? = null
+)
+
+@Serializable
 data class MatchTeamPrediction(
     val teamNumber: Int,
     val teamKey: String? = null,
@@ -450,6 +477,7 @@ data class MatchTeamPrediction(
     val epa: Double?,
     val opr: Double?,
     val exp: Double? = null,
+    val match13TeamExp: Match13TeamExpDetail? = null,
     val hasDiscrepancy: Boolean = false
 )
 
@@ -470,7 +498,8 @@ data class MatchPredictionResponse(
     val blueAlliance: AlliancePrediction,
     val useStatboticsEpa: Boolean,
     val useTbaOpr: Boolean,
-    val useMatch13Exp: Boolean = false
+    val useMatch13Exp: Boolean = false,
+    val match13Pred: Match13PredictionDetail? = null
 )
 
 // ─────────────────────────────────────

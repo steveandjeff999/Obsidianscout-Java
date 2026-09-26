@@ -1989,7 +1989,10 @@ object IntegrationService {
             EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
         }
 
-        if (cached == null) {
+        val needsMatch13 = settings.useMatch13Exp
+        val isCachedMatch13Missing = cached != null && (cached[EpaOprHistoryCache.match13HistoryJson].isNullOrBlank() || cached[EpaOprHistoryCache.match13HistoryJson] == "[]")
+
+        if (cached == null || (needsMatch13 && isCachedMatch13Missing)) {
             try {
                 kotlinx.coroutines.runBlocking {
                     syncEpaOprHistory(settings, normalizedKey)
@@ -2036,11 +2039,14 @@ object IntegrationService {
     }
 
     private suspend fun fetchMatch13Exps(settings: ApiSettings, eventKey: String): Map<String, Double> {
+        val cleanEventKey = canonicalStoredEventKey(settings.year, eventKey)
         val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
-        val key = settings.apiKeys.match13Key.trim()
-        val url = "$rawUrl/v1/events/${eventKey}/teams"
+        val rawKey = settings.apiKeys.match13Key.trim()
+        val key = if (rawKey == "********") "" else rawKey
+        val url = "$rawUrl/v1/events/${cleanEventKey}/teams"
         val response = try {
             client.get(url) {
+                header(HttpHeaders.Accept, "application/json")
                 if (key.isNotBlank()) {
                     header("X-Match13-Key", key)
                     header(HttpHeaders.Authorization, "Bearer $key")
@@ -2112,29 +2118,52 @@ object IntegrationService {
     }
 
     private suspend fun fetchMatch13MatchHistory(settings: ApiSettings, eventKey: String): List<JsonElement> {
+        val cleanEventKey = canonicalStoredEventKey(settings.year, eventKey)
         val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
-        val key = settings.apiKeys.match13Key.trim()
-        val url = "$rawUrl/v1/events/${eventKey}/matches"
+        val rawKey = settings.apiKeys.match13Key.trim()
+        val key = if (rawKey == "********") "" else rawKey
+        val url = "$rawUrl/v1/events/${cleanEventKey}/matches"
         return try {
             val response = client.get(url) {
+                header(HttpHeaders.Accept, "application/json")
                 if (key.isNotBlank()) {
                     header("X-Match13-Key", key)
                     header(HttpHeaders.Authorization, "Bearer $key")
                 }
             }
             if (!response.status.isSuccess()) {
+                log.warn("Match 13 match history fetch failed for $cleanEventKey with status ${response.status}")
                 return emptyList()
             }
             val text = response.bodyAsText()
             val parsed = JsonSupport.json.parseToJsonElement(text)
             val array = when (parsed) {
                 is JsonArray -> parsed
-                is JsonObject -> (parsed["matches"] as? JsonArray) ?: JsonArray(emptyList())
+                is JsonObject -> (parsed["matches"] as? JsonArray) ?: (parsed["data"] as? JsonArray) ?: JsonArray(emptyList())
                 else -> JsonArray(emptyList())
             }
-            array.toList()
+            array.mapNotNull { item ->
+                val obj = item as? JsonObject ?: return@mapNotNull null
+                val matchKey = (obj["key"] as? JsonPrimitive)?.content
+                    ?: (obj["matchKey"] as? JsonPrimitive)?.content
+                    ?: (obj["match"] as? JsonPrimitive)?.content
+                    ?: ""
+                if (matchKey.isBlank()) return@mapNotNull null
+                buildJsonObject {
+                    put("key", matchKey)
+                    put("matchKey", matchKey)
+                    put("eventKey", cleanEventKey)
+                    obj["pred"]?.let { put("pred", it) }
+                    obj["teams"]?.let { put("teams", it) }
+                    obj.forEach { (k, v) ->
+                        if (k !in listOf("key", "matchKey", "eventKey", "pred", "teams")) {
+                            put(k, v)
+                        }
+                    }
+                }
+            }
         } catch (error: Exception) {
-            log.warn("Match 13 match history fetch failed for $eventKey: ${error.message}")
+            log.warn("Match 13 match history fetch failed for $cleanEventKey: ${error.message}")
             emptyList()
         }
     }
@@ -2487,7 +2516,7 @@ object IntegrationService {
                 val baseUrl = (if (rawUrl.isBlank()) "https://actions.match13.com" else rawUrl).trimEnd('/')
                 val keyInput = request.match13Key?.trim()
                 val effectiveKey = if (keyInput.isNullOrBlank() || keyInput == "********") {
-                    currentSettings.apiKeys.match13Key
+                    if (currentSettings.apiKeys.match13Key == "********") "" else currentSettings.apiKeys.match13Key
                 } else {
                     keyInput
                 }

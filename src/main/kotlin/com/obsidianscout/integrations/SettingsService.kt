@@ -211,7 +211,8 @@ object SettingsService {
         val existing = getSettings(teamNumber, program)
         val mergedKeys = settings.apiKeys.copy(
             tbaKey = if (settings.apiKeys.tbaKey == "********") existing.apiKeys.tbaKey else settings.apiKeys.tbaKey,
-            firstKey = if (settings.apiKeys.firstKey == "********") existing.apiKeys.firstKey else settings.apiKeys.firstKey
+            firstKey = if (settings.apiKeys.firstKey == "********") existing.apiKeys.firstKey else settings.apiKeys.firstKey,
+            match13Key = if (settings.apiKeys.match13Key == "********") existing.apiKeys.match13Key else settings.apiKeys.match13Key
         )
         val settingsWithMergedKeys = settings.copy(apiKeys = mergedKeys)
         val normalized = normalize(settingsWithMergedKeys)

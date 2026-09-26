@@ -402,6 +402,12 @@ function renderPredictionsList() {
 
                 const redClass = redScore >= blueScore ? "win" : "";
                 const blueClass = blueScore >= redScore ? "win" : "";
+                const winProbHtml = (model === "exp" && match.match13Pred && match.match13Pred.winProb !== null && match.match13Pred.winProb !== undefined)
+                    ? `<div class="score-row" style="font-size: 0.72rem; color: #10b981; border-top: 1px dashed rgba(255,255,255,0.1); margin-top: 4px; padding-top: 2px;">
+                        <span>Win Prob:</span>
+                        <span>${(match.match13Pred.winProb * 100).toFixed(1)}% Red / ${((1 - match.match13Pred.winProb) * 100).toFixed(1)}% Blue</span>
+                       </div>`
+                    : "";
                 detailsHtml = `
                     <div class="score-comp">
                         <div class="score-row ${redClass}">
@@ -412,6 +418,7 @@ function renderPredictionsList() {
                             <span style="color: #60a5fa;">Blue Alliance:</span>
                             <span class="score-val">${blueScore.toFixed(1)} ${unit}</span>
                         </div>
+                        ${winProbHtml}
                     </div>
                 `;
             }

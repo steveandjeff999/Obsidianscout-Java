@@ -341,7 +341,13 @@ function renderPrediction(data) {
         if (lblExpRed) lblExpRed.textContent = `Red: ${redExp.toFixed(1)}`;
         if (lblExpBlue) lblExpBlue.textContent = `Blue: ${blueExp.toFixed(1)}`;
         updateBar("bar-exp-red", "bar-exp-blue", redExp, blueExp);
-        renderSpotlight("spotlight-exp-winner", "spotlight-exp-subtext", redExp, blueExp, "EXP");
+        if (data.match13Pred && data.match13Pred.winProb !== null && data.match13Pred.winProb !== undefined) {
+            const winProb = data.match13Pred.winProb;
+            const subtext = `Win Prob: ${(winProb * 100).toFixed(1)}% Red / ${((1 - winProb) * 100).toFixed(1)}% Blue (Diff: ${Math.abs(redExp - blueExp).toFixed(1)})`;
+            renderSpotlight("spotlight-exp-winner", "spotlight-exp-subtext", redExp, blueExp, "EXP", subtext);
+        } else {
+            renderSpotlight("spotlight-exp-winner", "spotlight-exp-subtext", redExp, blueExp, "EXP");
+        }
     }
 
     // 4. OPR Comparison Bar
@@ -459,7 +465,7 @@ function updateBar(redBarId, blueBarId, redVal, blueVal) {
     }
 }
 
-function renderSpotlight(winnerId, subtextId, redVal, blueVal, label) {
+function renderSpotlight(winnerId, subtextId, redVal, blueVal, label, customSubtext) {
     const nameEl = document.getElementById(winnerId);
     const subEl = document.getElementById(subtextId);
 
@@ -467,7 +473,7 @@ function renderSpotlight(winnerId, subtextId, redVal, blueVal, label) {
     if (redVal === 0 && blueVal === 0) {
         nameEl.textContent = t('predictor.no_data', "No Data");
         nameEl.classList.add("winner-draw");
-        subEl.textContent = `Insufficient ${label} entries for predictions.`;
+        subEl.textContent = customSubtext || `Insufficient ${label} entries for predictions.`;
         return;
     }
 
@@ -475,15 +481,15 @@ function renderSpotlight(winnerId, subtextId, redVal, blueVal, label) {
     if (redVal > blueVal) {
         nameEl.textContent = t('predictor.red_alliance', "Red Alliance");
         nameEl.classList.add("winner-red");
-        subEl.textContent = `Predicted to win by ${diff.toFixed(1)} ${label.toLowerCase() === 'scouted' ? 'pts' : 'units'}`;
+        subEl.textContent = customSubtext || `Predicted to win by ${diff.toFixed(1)} ${label.toLowerCase() === 'scouted' ? 'pts' : 'units'}`;
     } else if (blueVal > redVal) {
         nameEl.textContent = t('predictor.blue_alliance', "Blue Alliance");
         nameEl.classList.add("winner-blue");
-        subEl.textContent = `Predicted to win by ${diff.toFixed(1)} ${label.toLowerCase() === 'scouted' ? 'pts' : 'units'}`;
+        subEl.textContent = customSubtext || `Predicted to win by ${diff.toFixed(1)} ${label.toLowerCase() === 'scouted' ? 'pts' : 'units'}`;
     } else {
         nameEl.textContent = t('predictor.dead_heat', "Dead Heat / Draw");
         nameEl.classList.add("winner-draw");
-        subEl.textContent = `Alliances have identical combined ${label} values.`;
+        subEl.textContent = customSubtext || `Alliances have identical combined ${label} values.`;
     }
 }
 
@@ -513,10 +519,16 @@ function renderTeamList(listId, teams, selectedSource, effectiveUseEpa, effectiv
             if (t.opr !== null && effectiveUseOpr) {
                 metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
             }
-        } else if (selectedSource === "epa" && effectiveUseEpa) {
-            primaryLabel = t.epa !== null 
-                ? `${t.epa.toFixed(1)} EPA` 
-                : "No EPA data";
+        } else if (selectedSource === "exp" && effectiveUseExp) {
+            primaryLabel = t.exp !== null && t.exp !== undefined 
+                ? `${t.exp.toFixed(1)} EXP` 
+                : "No EXP data";
+            if (t.match13TeamExp) {
+                const auto = t.match13TeamExp.xAutoPost !== null ? t.match13TeamExp.xAutoPost.toFixed(1) : "-";
+                const tele = t.match13TeamExp.xTelePost !== null ? t.match13TeamExp.xTelePost.toFixed(1) : "-";
+                const end = t.match13TeamExp.xEndPost !== null ? t.match13TeamExp.xEndPost.toFixed(1) : "-";
+                metricsHtml += `<span class="metric-pill" title="Auto: ${auto}, Teleop: ${tele}, Endgame: ${end}">Auto: ${auto} | Tele: ${tele} | End: ${end}</span>`;
+            }
             
             metricsHtml += `<span class="metric-pill">${t.scoutedMatchesCount} matches</span>`;
             if (t.averageScoutedScore !== null) {
