@@ -16,6 +16,7 @@ import com.obsidianscout.routes.EventRecord
 import com.obsidianscout.routes.MatchRecord
 import com.obsidianscout.routes.TeamRecord
 import com.obsidianscout.routes.SummaryResponse
+import com.obsidianscout.routes.StatsHistoryResponse
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.config.ConfigService
@@ -226,6 +227,7 @@ object IntegrationService {
                             it[ApiTeams.country] = team.country.clipTeamLocation()
                             it[ApiTeams.opr] = team.opr
                             it[ApiTeams.epa] = team.epa
+                            it[ApiTeams.match13Exp] = team.exp
                             it[ApiTeams.dataJson] = team.dataJson
                             it[ApiTeams.updatedAt] = now
                         }
@@ -242,6 +244,9 @@ object IntegrationService {
                             }
                             if (team.epa != null) {
                                 it[ApiTeams.epa] = team.epa
+                            }
+                            if (team.exp != null) {
+                                it[ApiTeams.match13Exp] = team.exp
                             }
                             it[ApiTeams.dataJson] = team.dataJson
                             it[ApiTeams.updatedAt] = now
@@ -358,6 +363,7 @@ object IntegrationService {
                             it[ApiTeams.country] = team.country.clipTeamLocation()
                             it[ApiTeams.opr] = team.opr
                             it[ApiTeams.epa] = team.epa
+                            it[ApiTeams.match13Exp] = team.exp
                             it[ApiTeams.dataJson] = team.dataJson
                             it[ApiTeams.updatedAt] = now
                         }
@@ -374,6 +380,9 @@ object IntegrationService {
                             }
                             if (team.epa != null) {
                                 it[ApiTeams.epa] = team.epa
+                            }
+                            if (team.exp != null) {
+                                it[ApiTeams.match13Exp] = team.exp
                             }
                             it[ApiTeams.dataJson] = team.dataJson
                             it[ApiTeams.updatedAt] = now
@@ -438,14 +447,16 @@ object IntegrationService {
         }
         val tbaEnabled = settings.apiKeys.tbaKey.isNotBlank()
         val statboticsEnabled = true
+        val match13Enabled = true
         
-        val (oprs, epas) = coroutineScope {
+        val (oprs, epas, exps) = coroutineScope {
             val oprsDeferred = if (tbaEnabled) async { fetchTbaOprs(settings, eventKey) } else null
             val epasDeferred = if (statboticsEnabled) async { fetchStatboticsEpas(settings, eventKey) } else null
-            oprsDeferred?.await() to epasDeferred?.await()
+            val expsDeferred = if (match13Enabled) async { fetchMatch13Exps(settings, eventKey) } else null
+            Triple(oprsDeferred?.await(), epasDeferred?.await(), expsDeferred?.await())
         }
 
-        if (oprs == null && epas == null) {
+        if (oprs == null && epas == null && exps == null) {
             return 0
         }
         val now = Instant.now()
@@ -456,9 +467,11 @@ object IntegrationService {
                     val teamKey = row[ApiTeams.teamKey]
                     val opr = oprs?.get(teamKey)
                     val epa = epas?.get(teamKey)
+                    val exp = exps?.get(teamKey)
                     val hasOpr = oprs != null && oprs.containsKey(teamKey)
                     val hasEpa = epas != null && epas.containsKey(teamKey)
-                    if (hasOpr || hasEpa) {
+                    val hasExp = exps != null && exps.containsKey(teamKey)
+                    if (hasOpr || hasEpa || hasExp) {
                         ApiTeams.update({ ApiTeams.id eq row[ApiTeams.id] }) {
                             if (hasOpr) {
                                 it[ApiTeams.opr] = opr
@@ -466,13 +479,16 @@ object IntegrationService {
                             if (hasEpa) {
                                 it[ApiTeams.epa] = epa
                             }
+                            if (hasExp) {
+                                it[ApiTeams.match13Exp] = exp
+                            }
                             it[ApiTeams.updatedAt] = now
                         }
                     }
                 }
             }
         }
-        return maxOf(oprs?.size ?: 0, epas?.size ?: 0)
+        return maxOf(oprs?.size ?: 0, epas?.size ?: 0, exps?.size ?: 0)
     }
 
     fun listEvents(
@@ -708,6 +724,7 @@ object IntegrationService {
                     country = row[ApiTeams.country],
                     opr = row[ApiTeams.opr],
                     epa = row[ApiTeams.epa],
+                    exp = row[ApiTeams.match13Exp],
                     averagePoints = avgScore
                 )
             }
@@ -1381,6 +1398,7 @@ object IntegrationService {
                     it[country] = team.country
                     it[opr] = team.opr
                     it[epa] = team.epa
+                    it[ApiTeams.match13Exp] = team.exp
                     it[dataJson] = "{}"
                     it[updatedAt] = now
                 }
@@ -1394,6 +1412,7 @@ object IntegrationService {
                     it[country] = team.country
                     it[opr] = team.opr
                     it[epa] = team.epa
+                    it[ApiTeams.match13Exp] = team.exp
                     it[updatedAt] = now
                 }
             }
@@ -1896,9 +1915,11 @@ object IntegrationService {
         
         val oprs = fetchTbaOprs(settings, normalizedKey)
         val epaHistory = fetchStatboticsMatchEpaHistory(settings, normalizedKey)
+        val match13History = fetchMatch13MatchHistory(settings, normalizedKey)
         
         val oprsJson = JsonSupport.json.encodeToString(oprs)
         val epaHistoryJson = JsonSupport.json.encodeToString(epaHistory)
+        val match13HistoryJson = JsonSupport.json.encodeToString(match13History)
         val now = java.time.Instant.now()
         
         transaction {
@@ -1908,12 +1929,14 @@ object IntegrationService {
                     it[EpaOprHistoryCache.eventKey] = normalizedKey
                     it[EpaOprHistoryCache.oprsJson] = oprsJson
                     it[EpaOprHistoryCache.epaHistoryJson] = epaHistoryJson
+                    it[EpaOprHistoryCache.match13HistoryJson] = match13HistoryJson
                     it[EpaOprHistoryCache.updatedAt] = now
                 }
             } else {
                 EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq normalizedKey }) {
                     it[EpaOprHistoryCache.oprsJson] = oprsJson
                     it[EpaOprHistoryCache.epaHistoryJson] = epaHistoryJson
+                    it[EpaOprHistoryCache.match13HistoryJson] = match13HistoryJson
                     it[EpaOprHistoryCache.updatedAt] = now
                 }
             }
@@ -1955,6 +1978,167 @@ object IntegrationService {
         }
     }
 
+    fun getFullStatsHistory(settings: ApiSettings, eventKey: String): StatsHistoryResponse {
+        if (settings.program == "FTC") {
+            return FtcIntegrationService.getFullStatsHistory(settings, eventKey)
+        }
+        val normalizedKey = canonicalStoredEventKey(settings.year, eventKey)
+        if (normalizedKey.isBlank()) return StatsHistoryResponse()
+
+        var cached = transaction {
+            EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
+        }
+
+        if (cached == null) {
+            try {
+                kotlinx.coroutines.runBlocking {
+                    syncEpaOprHistory(settings, normalizedKey)
+                }
+                cached = transaction {
+                    EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
+                }
+            } catch (e: Exception) {
+                log.warn("Failed to fetch initial stats history for $normalizedKey: ${e.message}")
+            }
+        }
+
+        if (cached != null) {
+            val oprsMap = try {
+                JsonSupport.json.decodeFromString<Map<String, Double>>(cached[EpaOprHistoryCache.oprsJson])
+            } catch (_: Exception) {
+                emptyMap()
+            }
+            val epaHistoryList = try {
+                JsonSupport.json.decodeFromString<List<JsonElement>>(cached[EpaOprHistoryCache.epaHistoryJson])
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val match13HistoryList = try {
+                JsonSupport.json.decodeFromString<List<JsonElement>>(cached[EpaOprHistoryCache.match13HistoryJson])
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            val updatedAt = cached[EpaOprHistoryCache.updatedAt]
+            if (updatedAt.isBefore(java.time.Instant.now().minusSeconds(900))) {
+                SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
+            }
+
+            return StatsHistoryResponse(
+                oprs = oprsMap,
+                epaHistory = epaHistoryList,
+                match13History = match13HistoryList
+            )
+        } else {
+            SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
+            return StatsHistoryResponse()
+        }
+    }
+
+    private suspend fun fetchMatch13Exps(settings: ApiSettings, eventKey: String): Map<String, Double> {
+        val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
+        val key = settings.apiKeys.match13Key.trim()
+        val url = "$rawUrl/v1/events/${eventKey}/teams"
+        val response = try {
+            client.get(url) {
+                if (key.isNotBlank()) {
+                    header("X-Match13-Key", key)
+                    header(HttpHeaders.Authorization, "Bearer $key")
+                }
+            }
+        } catch (error: Exception) {
+            log.warn("Match 13 fetch failed: ${error.message}")
+            return emptyMap()
+        }
+        if (!response.status.isSuccess()) {
+            log.warn("Match 13 fetch failed with status ${response.status}")
+            return emptyMap()
+        }
+        val responseText = response.bodyAsText()
+        if (responseText.isBlank()) {
+            return emptyMap()
+        }
+        return try {
+            val element = JsonSupport.json.parseToJsonElement(responseText)
+            
+            fun extractTeamAndExp(obj: JsonObject): Pair<String, Double>? {
+                val teamNumber = obj.readInt("teamNumber")
+                    ?: obj.readInt("team_number")
+                    ?: obj.readInt("team")
+                    ?: (obj.readString("teamKey") ?: obj.readString("team_key"))?.removePrefix("frc")?.toIntOrNull()
+                    ?: return null
+                val exp = obj.readDouble("xpEnd")
+                    ?: obj.readDouble("xpMean")
+                    ?: obj.readDouble("xp")
+                    ?: obj.readDouble("exp")
+                    ?: obj.readDouble("expectedPoints")
+                    ?: obj.readDouble("expected_points")
+                    ?: (obj["exp"] as? JsonObject)?.readDouble("total_points")
+                    ?: (obj["exp"] as? JsonObject)?.readDouble("exp")
+                    ?: (obj["exp"] as? JsonObject)?.readDouble("total")
+                    ?: (obj["expectedPoints"] as? JsonObject)?.readDouble("total_points")
+                    ?: return null
+                return "frc$teamNumber" to exp
+            }
+
+            when (element) {
+                is JsonArray -> {
+                    element.mapNotNull { item -> (item as? JsonObject)?.let { extractTeamAndExp(it) } }.toMap()
+                }
+                is JsonObject -> {
+                    val teamsArray = element["teams"] as? JsonArray
+                    if (teamsArray != null) {
+                        teamsArray.mapNotNull { item -> (item as? JsonObject)?.let { extractTeamAndExp(it) } }.toMap()
+                    } else {
+                        val expsObj = (element["exps"] as? JsonObject) ?: element
+                        expsObj.entries.mapNotNull { (k, v) ->
+                            val teamNum = k.removePrefix("frc").toIntOrNull() ?: return@mapNotNull null
+                            val expVal = (v as? JsonPrimitive)?.content?.toDoubleOrNull()
+                                ?: (v as? JsonObject)?.readDouble("xpEnd")
+                                ?: (v as? JsonObject)?.readDouble("xpMean")
+                                ?: (v as? JsonObject)?.readDouble("xp")
+                                ?: (v as? JsonObject)?.readDouble("exp")
+                                ?: return@mapNotNull null
+                            "frc$teamNum" to expVal
+                        }.toMap()
+                    }
+                }
+                else -> emptyMap()
+            }
+        } catch (e: Exception) {
+            log.warn("Failed to parse Match 13 response: ${e.message}")
+            emptyMap()
+        }
+    }
+
+    private suspend fun fetchMatch13MatchHistory(settings: ApiSettings, eventKey: String): List<JsonElement> {
+        val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
+        val key = settings.apiKeys.match13Key.trim()
+        val url = "$rawUrl/v1/events/${eventKey}/matches"
+        return try {
+            val response = client.get(url) {
+                if (key.isNotBlank()) {
+                    header("X-Match13-Key", key)
+                    header(HttpHeaders.Authorization, "Bearer $key")
+                }
+            }
+            if (!response.status.isSuccess()) {
+                return emptyList()
+            }
+            val text = response.bodyAsText()
+            val parsed = JsonSupport.json.parseToJsonElement(text)
+            val array = when (parsed) {
+                is JsonArray -> parsed
+                is JsonObject -> (parsed["matches"] as? JsonArray) ?: JsonArray(emptyList())
+                else -> JsonArray(emptyList())
+            }
+            array.toList()
+        } catch (error: Exception) {
+            log.warn("Match 13 match history fetch failed for $eventKey: ${error.message}")
+            emptyList()
+        }
+    }
+
     private suspend fun fetchStatboticsMatchEpaHistory(settings: ApiSettings, eventKey: String): List<JsonElement> {
         val baseUrl = settings.statboticsBaseUrl.ifBlank { "https://api.statbotics.io" }.trimEnd('/')
         val cleanBaseUrl = baseUrl.removeSuffix("/v3")
@@ -1970,19 +2154,41 @@ object IntegrationService {
             val teamMatches = mutableListOf<JsonElement>()
             array.forEach { matchElem ->
                 val matchObj = matchElem as? JsonObject ?: return@forEach
-                val matchKey = (matchObj["key"] as? JsonPrimitive)?.content ?: ""
+                val matchKey = (matchObj["key"] as? JsonPrimitive)?.content
+                    ?: (matchObj["match"] as? JsonPrimitive)?.content ?: ""
                 val timestamp = (matchObj["time"] as? JsonPrimitive)?.content
                 val alliancesObj = matchObj["alliances"] as? JsonObject
-                val redTeams = (alliancesObj?.get("red") as? JsonObject)?.get("team_keys") as? JsonArray
-                val blueTeams = (alliancesObj?.get("blue") as? JsonObject)?.get("team_keys") as? JsonArray
-                val epasMap = (matchObj["epas"] as? JsonObject) ?: (matchObj["pre_epas"] as? JsonObject)
+                val redTeams = (alliancesObj?.get("red") as? JsonObject)?.let { it.get("team_keys") as? JsonArray ?: it.get("teams") as? JsonArray }
+                val blueTeams = (alliancesObj?.get("blue") as? JsonObject)?.let { it.get("team_keys") as? JsonArray ?: it.get("teams") as? JsonArray }
+                val epasMap = (matchObj["post_epas"] as? JsonObject)
+                    ?: (matchObj["epas"] as? JsonObject)
+                    ?: (matchObj["pre_epas"] as? JsonObject)
+                    ?: (matchObj["epa"] as? JsonObject)
 
                 fun processTeam(teamNum: Int, alliance: String) {
-                    val epaData = epasMap?.get(teamNum.toString()) as? JsonObject
-                    val total = epaData?.readDouble("epa") ?: epaData?.readDouble("total_points") ?: 0.0
-                    val auto = epaData?.readDouble("auto_epa") ?: epaData?.readDouble("auto_points") ?: 0.0
-                    val teleop = epaData?.readDouble("teleop_epa") ?: epaData?.readDouble("teleop_points") ?: 0.0
-                    val endgame = epaData?.readDouble("endgame_epa") ?: epaData?.readDouble("endgame_points") ?: 0.0
+                    val epaData = (epasMap?.get(teamNum.toString()) as? JsonObject)
+                        ?: (epasMap?.get("frc$teamNum") as? JsonObject)
+                    val total = epaData?.readDouble("epa")
+                        ?: epaData?.readDouble("total_points")
+                        ?: epaData?.readDouble("total")
+                        ?: (epaData?.get("breakdown") as? JsonObject)?.readDouble("total_points")
+                        ?: ((epasMap?.get(teamNum.toString()) as? JsonPrimitive)?.content?.toDoubleOrNull())
+                        ?: 0.0
+                    val auto = epaData?.readDouble("auto_epa")
+                        ?: epaData?.readDouble("auto_points")
+                        ?: epaData?.readDouble("auto")
+                        ?: (epaData?.get("breakdown") as? JsonObject)?.readDouble("auto_points")
+                        ?: 0.0
+                    val teleop = epaData?.readDouble("teleop_epa")
+                        ?: epaData?.readDouble("teleop_points")
+                        ?: epaData?.readDouble("teleop")
+                        ?: (epaData?.get("breakdown") as? JsonObject)?.readDouble("teleop_points")
+                        ?: 0.0
+                    val endgame = epaData?.readDouble("endgame_epa")
+                        ?: epaData?.readDouble("endgame_points")
+                        ?: epaData?.readDouble("endgame")
+                        ?: (epaData?.get("breakdown") as? JsonObject)?.readDouble("endgame_points")
+                        ?: 0.0
 
                     val teamMatchObj = buildJsonObject {
                         put("team", teamNum)
@@ -2004,11 +2210,11 @@ object IntegrationService {
                 }
 
                 redTeams?.forEach { t ->
-                    val num = (t as? JsonPrimitive)?.content?.toIntOrNull()
+                    val num = (t as? JsonPrimitive)?.content?.replace("frc", "")?.toIntOrNull()
                     if (num != null) processTeam(num, "red")
                 }
                 blueTeams?.forEach { t ->
-                    val num = (t as? JsonPrimitive)?.content?.toIntOrNull()
+                    val num = (t as? JsonPrimitive)?.content?.replace("frc", "")?.toIntOrNull()
                     if (num != null) processTeam(num, "blue")
                 }
             }
@@ -2276,6 +2482,34 @@ object IntegrationService {
                     com.obsidianscout.routes.TestApiResponse(false, "Failed to connect to Statbotics API: ${e.message}")
                 }
             }
+            "match13" -> {
+                val rawUrl = request.match13BaseUrl?.trim() ?: currentSettings.match13BaseUrl
+                val baseUrl = (if (rawUrl.isBlank()) "https://actions.match13.com" else rawUrl).trimEnd('/')
+                val keyInput = request.match13Key?.trim()
+                val effectiveKey = if (keyInput.isNullOrBlank() || keyInput == "********") {
+                    currentSettings.apiKeys.match13Key
+                } else {
+                    keyInput
+                }
+                if (effectiveKey.isBlank()) {
+                    return com.obsidianscout.routes.TestApiResponse(false, "Match 13 API Key is required. Please enter an API key.")
+                }
+                try {
+                    val response = client.get("$baseUrl/v1/years") {
+                        header("X-Match13-Key", effectiveKey)
+                        header(HttpHeaders.Authorization, "Bearer $effectiveKey")
+                    }
+                    if (response.status.isSuccess()) {
+                        com.obsidianscout.routes.TestApiResponse(true, "Match 13 API connection successful!")
+                    } else if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                        com.obsidianscout.routes.TestApiResponse(false, "Invalid Match 13 API Key (${response.status.value} ${response.status.description}).")
+                    } else {
+                        com.obsidianscout.routes.TestApiResponse(false, "Match 13 API returned HTTP ${response.status.value}.")
+                    }
+                } catch (e: Exception) {
+                    com.obsidianscout.routes.TestApiResponse(false, "Failed to connect to Match 13 API: ${e.message}")
+                }
+            }
             else -> com.obsidianscout.routes.TestApiResponse(false, "Unknown API specified: ${request.api}")
         }
     }
@@ -2309,6 +2543,7 @@ private data class TeamSyncRecord(
     val country: String?,
     val opr: Double?,
     val epa: Double?,
+    val exp: Double? = null,
     val dataJson: String
 )
 

@@ -198,6 +198,7 @@ object ApiTeams : UUIDTable("api_teams") {
     val country = varchar("country", 80).nullable()
     val opr = double("opr").nullable()
     val epa = double("epa").nullable()
+    val match13Exp = double("match13_exp").nullable()
     val dataJson = text("data_json")
     val updatedAt = timestamp("updated_at")
 
@@ -263,6 +264,7 @@ object EpaOprHistoryCache : UUIDTable("epa_opr_history_cache") {
     val eventKey = varchar("event_key", 64)
     val oprsJson = text("oprs_json")
     val epaHistoryJson = text("epa_history_json")
+    val match13HistoryJson = text("match13_history_json").default("[]")
     val updatedAt = timestamp("updated_at")
 
     init {

@@ -69,6 +69,7 @@
                 ? Obsidianscout.getProgram() === "FTC" 
                 : (settings && settings.program === "FTC");
             const effectiveUseEpa = !isFtc && settings.useStatboticsEpa;
+            const effectiveUseExp = !isFtc && settings.useMatch13Exp;
             const effectiveUseOpr = settings.useTbaOpr;
 
             // Filter metric selector options
@@ -78,6 +79,10 @@
                     const optEpa = metricSelect.querySelector('option[value="epa"]');
                     if (optEpa) optEpa.remove();
                 }
+                if (!effectiveUseExp) {
+                    const optExp = metricSelect.querySelector('option[value="exp"]');
+                    if (optExp) optExp.remove();
+                }
                 if (!effectiveUseOpr) {
                     const optOpr = metricSelect.querySelector('option[value="opr"]');
                     if (optOpr) optOpr.remove();
@@ -86,6 +91,7 @@
                     if (optOpr) optOpr.textContent = "FTC Scout OPR";
                 }
                 if ((selectedMetric === "epa" && !effectiveUseEpa) ||
+                    (selectedMetric === "exp" && !effectiveUseExp) ||
                     (selectedMetric === "opr" && !effectiveUseOpr)) {
                     selectedMetric = "weighted";
                     metricSelect.value = "weighted";
@@ -348,10 +354,15 @@
             ? Obsidianscout.getProgram() === "FTC" 
             : (state.settings?.program === "FTC");
         const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
+        const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
         const effectiveUseOpr = state.settings?.useTbaOpr;
 
         if (effectiveUseEpa && team.epa !== null && team.epa !== undefined) {
             num += team.epa * 0.8;
+            den += 0.8;
+        }
+        if (effectiveUseExp && team.exp !== null && team.exp !== undefined) {
+            num += team.exp * 0.8;
             den += 0.8;
         }
         if (effectiveUseOpr && team.opr !== null && team.opr !== undefined) {
@@ -385,6 +396,8 @@
             available.sort((a, b) => (b.averagePoints || -999) - (a.averagePoints || -999));
         } else if (selectedMetric === "epa") {
             available.sort((a, b) => (b.epa || -999) - (a.epa || -999));
+        } else if (selectedMetric === "exp") {
+            available.sort((a, b) => (b.exp || -999) - (a.exp || -999));
         } else if (selectedMetric === "opr") {
             available.sort((a, b) => (b.opr || -999) - (a.opr || -999));
         } else {
@@ -453,6 +466,8 @@
                 scoreVal = team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : "-";
             } else if (selectedMetric === "epa") {
                 scoreVal = team.epa !== null && team.epa !== undefined ? team.epa.toFixed(1) : "-";
+            } else if (selectedMetric === "exp") {
+                scoreVal = team.exp !== null && team.exp !== undefined ? team.exp.toFixed(1) : "-";
             } else if (selectedMetric === "opr") {
                 scoreVal = team.opr !== null && team.opr !== undefined ? team.opr.toFixed(1) : "-";
             } else {
@@ -612,6 +627,8 @@
             list.sort((a, b) => (b.averagePoints || -999) - (a.averagePoints || -999));
         } else if (selectedMetric === "epa") {
             list.sort((a, b) => (b.epa || -999) - (a.epa || -999));
+        } else if (selectedMetric === "exp") {
+            list.sort((a, b) => (b.exp || -999) - (a.exp || -999));
         } else if (selectedMetric === "opr") {
             list.sort((a, b) => (b.opr || -999) - (a.opr || -999));
         } else {
@@ -648,6 +665,7 @@
 
             const points = team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : "-";
             const epa = team.epa !== null && team.epa !== undefined ? team.epa.toFixed(1) : "-";
+            const exp = team.exp !== null && team.exp !== undefined ? team.exp.toFixed(1) : "-";
             const opr = team.opr !== null && team.opr !== undefined ? team.opr.toFixed(1) : "-";
             const rank = teamRanks[team.teamNumber];
 
@@ -655,9 +673,11 @@
                 ? Obsidianscout.getProgram() === "FTC" 
                 : (state.settings?.program === "FTC");
             const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
+            const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
             const effectiveUseOpr = state.settings?.useTbaOpr;
 
             const epaSpan = effectiveUseEpa ? `<span>EPA: ${epa}</span>` : "";
+            const expSpan = effectiveUseExp ? `<span>EXP: ${exp}</span>` : "";
             const oprSpan = effectiveUseOpr ? `<span>${isFtc ? 'FTC OPR' : 'OPR'}: ${opr}</span>` : "";
 
             item.innerHTML = `
@@ -669,6 +689,7 @@
                 <div class="selector-metrics">
                     <span>Scouted: ${points}</span>
                     ${epaSpan}
+                    ${expSpan}
                     ${oprSpan}
                 </div>
             `;
@@ -704,9 +725,11 @@
             ? Obsidianscout.getProgram() === "FTC" 
             : (state.settings?.program === "FTC");
         const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
+        const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
         const effectiveUseOpr = state.settings?.useTbaOpr;
 
         const epa = team.epa !== null && team.epa !== undefined ? team.epa.toFixed(1) : "-";
+        const exp = team.exp !== null && team.exp !== undefined ? team.exp.toFixed(1) : "-";
         const opr = team.opr !== null && team.opr !== undefined ? team.opr.toFixed(1) : "-";
         const teamMatches = state.matches.filter(m => {
             const allTeamsInMatch = (m.redTeams || []).concat(m.blueTeams || []);
@@ -715,6 +738,9 @@
 
         const cardEpa = document.getElementById("breakdown-card-epa");
         if (cardEpa) cardEpa.style.display = effectiveUseEpa ? "" : "none";
+
+        const cardExp = document.getElementById("breakdown-card-exp");
+        if (cardExp) cardExp.style.display = effectiveUseExp ? "" : "none";
 
         const cardOpr = document.getElementById("breakdown-card-opr");
         if (cardOpr) {
@@ -725,6 +751,8 @@
 
         document.getElementById("breakdown-stat-scouted").textContent = calculatedAvg;
         document.getElementById("breakdown-stat-epa").textContent = epa;
+        const statExp = document.getElementById("breakdown-stat-exp");
+        if (statExp) statExp.textContent = exp;
         document.getElementById("breakdown-stat-opr").textContent = opr;
         document.getElementById("breakdown-stat-matches").textContent = teamMatches.length;
 

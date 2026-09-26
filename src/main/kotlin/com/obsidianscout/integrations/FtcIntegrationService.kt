@@ -5,6 +5,7 @@ import com.obsidianscout.db.ApiEvents
 import com.obsidianscout.db.ApiMatches
 import com.obsidianscout.db.ApiTeams
 import com.obsidianscout.db.EpaOprHistoryCache
+import com.obsidianscout.routes.StatsHistoryResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
@@ -562,6 +563,47 @@ object FtcIntegrationService {
         } else {
             SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
             return Pair(emptyMap(), emptyList())
+        }
+    }
+
+    fun getFullStatsHistory(settings: ApiSettings, eventKey: String): StatsHistoryResponse {
+        val (year, code) = extractYearAndCode(eventKey)
+        val normalizedKey = "${year}${code.lowercase()}"
+
+        val cached = transaction {
+            EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
+        }
+
+        if (cached != null) {
+            val oprsMap = try {
+                JsonSupport.json.decodeFromString<Map<String, Double>>(cached[EpaOprHistoryCache.oprsJson])
+            } catch (_: Exception) {
+                emptyMap()
+            }
+            val epaHistoryList = try {
+                JsonSupport.json.decodeFromString<List<JsonElement>>(cached[EpaOprHistoryCache.epaHistoryJson])
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val match13HistoryList = try {
+                JsonSupport.json.decodeFromString<List<JsonElement>>(cached[EpaOprHistoryCache.match13HistoryJson])
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            val updatedAt = cached[EpaOprHistoryCache.updatedAt]
+            if (updatedAt.isBefore(Instant.now().minusSeconds(900))) {
+                SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
+            }
+
+            return StatsHistoryResponse(
+                oprs = oprsMap,
+                epaHistory = epaHistoryList,
+                match13History = match13HistoryList
+            )
+        } else {
+            SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
+            return StatsHistoryResponse()
         }
     }
 

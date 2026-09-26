@@ -7,6 +7,12 @@ let originalMainContentHTML = "";
 let mainContentWrapper = null;
 let mainContent = null;
 
+const SVG_ICONS = {
+    expand: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>`,
+    close: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+    warning: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`
+};
+
 document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.initTheme();
     const me = await Obsidianscout.requireAuth();
@@ -29,7 +35,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         mainContent.appendChild(mainContentWrapper);
         originalMainContentHTML = mainContentWrapper.innerHTML;
         await loadGraphsPageData();
-
     }
 });
 
@@ -79,11 +84,11 @@ async function initGraphsPage({ config, entries, events, settings }) {
         settings,
         eventKey: "",
         selectedTeams: new Set(),
-        metricId: "",
+        metricId: "score_total",
         dataView: "averages",
         sort: "value_desc",
         selectedGraphTypes: new Set(["bar"]),
-        forcePrescout: false,
+        includePrescout: false,
         eventTeams: new Set(),
         eventTeamsMap: new Map(),
         datasource: "scouted"
@@ -119,7 +124,7 @@ function initMetricOptions(state) {
         option.textContent = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label;
         metricSelect.appendChild(option);
     });
-    state.metricId = metrics.length ? metrics[0].id : "";
+    state.metricId = metrics.length ? metrics[0].id : "score_total";
     metricSelect.addEventListener("change", () => {
         state.metricId = metricSelect.value;
     });
@@ -183,18 +188,19 @@ function initDatasource(state) {
         ? Obsidianscout.getProgram() === "FTC"
         : (settings?.program === "FTC");
     const effectiveUseEpa = !isFtc && settings?.useStatboticsEpa;
+    const effectiveUseExp = !isFtc && settings?.useMatch13Exp;
     const effectiveUseOpr = settings?.useTbaOpr;
 
-    if (settings && (effectiveUseEpa || effectiveUseOpr)) {
+    const hasAnyExternal = effectiveUseEpa || effectiveUseExp || effectiveUseOpr;
+
+    if (settings && hasAnyExternal) {
         datasourceField.classList.remove("hidden");
         datasourceSelect.innerHTML = "";
 
-        if (effectiveUseEpa && effectiveUseOpr) {
-            const optAll = document.createElement("option");
-            optAll.value = "all";
-            optAll.textContent = t('rankings.metric.all', "All Three");
-            datasourceSelect.appendChild(optAll);
-        }
+        const optAll = document.createElement("option");
+        optAll.value = "all";
+        optAll.textContent = t('rankings.metric.all', "All Sources");
+        datasourceSelect.appendChild(optAll);
 
         const optScouted = document.createElement("option");
         optScouted.value = "scouted";
@@ -207,6 +213,13 @@ function initDatasource(state) {
             optEpa.value = "epa";
             optEpa.textContent = t('predictor.statbotics_epa', "Statbotics EPA");
             datasourceSelect.appendChild(optEpa);
+        }
+
+        if (effectiveUseExp) {
+            const optExp = document.createElement("option");
+            optExp.value = "exp";
+            optExp.textContent = t('alliance-selection.match13_exp', "Match 13 EXP");
+            datasourceSelect.appendChild(optExp);
         }
 
         if (effectiveUseOpr) {
@@ -232,16 +245,23 @@ function toggleFieldsForDatasource(state) {
     const metricField = document.getElementById("metric-field");
     const viewField = document.getElementById("view-field");
     const prescoutField = document.getElementById("prescout-field");
+    const viewSelect = document.getElementById("graph-view");
 
+    // Match-by-match and custom metrics are strictly for Scouted Data
     if (state.datasource === "scouted") {
-        metricField?.classList.remove("hidden");
         viewField?.classList.remove("hidden");
+        metricField?.classList.remove("hidden");
         prescoutField?.classList.remove("hidden");
     } else {
-        metricField?.classList.add("hidden");
         viewField?.classList.add("hidden");
+        metricField?.classList.add("hidden");
         prescoutField?.classList.add("hidden");
+        state.dataView = "averages";
+        if (viewSelect) {
+            viewSelect.value = "averages";
+        }
     }
+    updateGraphTypeAvailability(state);
 }
 
 function initTeamSelection(state) {
@@ -286,7 +306,11 @@ function initTeamSelection(state) {
 
     if (topTeams) {
         topTeams.addEventListener("click", () => {
-            const metric = state.metricMap.get(state.metricId);
+            const metricSelect = document.getElementById("graph-metric");
+            if (metricSelect && metricSelect.value) {
+                state.metricId = metricSelect.value;
+            }
+            const metric = state.metricMap.get(state.metricId) || state.metrics[0];
             const filteredEntries = getFilteredEntriesForEvent(state);
             const teamStats = buildTeamStats(filteredEntries, metric, state);
             const top = teamStats.sort((a, b) => b.value - a.value).slice(0, 8).map((item) => item.teamNumber);
@@ -305,6 +329,30 @@ function initTeamSelection(state) {
             updateTeamList(state);
             updateSelectionSummary(state);
         });
+    }
+}
+
+function updateGraphTypeAvailability(state) {
+    const isAverages = state.dataView === "averages" || (state.datasource && state.datasource !== "scouted");
+    const lineCheckbox = document.querySelector('.graph-type-checkbox[value="line"]');
+    const lineItem = lineCheckbox?.closest(".graph-type-item");
+    const countBadge = document.getElementById("graph-type-selected-count");
+
+    if (lineCheckbox && lineItem) {
+        if (isAverages) {
+            lineCheckbox.disabled = true;
+            lineItem.classList.add("disabled");
+            lineItem.title = t('graphs.line_requires_matches', "Line graphs require multiple data points across matches and are only available in Match-by-match view.");
+            if (state.selectedGraphTypes.has("line")) {
+                state.selectedGraphTypes.delete("line");
+                lineCheckbox.checked = false;
+                updateGraphTypeBadge(state, countBadge);
+            }
+        } else {
+            lineCheckbox.disabled = false;
+            lineItem.classList.remove("disabled");
+            lineItem.title = "";
+        }
     }
 }
 
@@ -327,7 +375,10 @@ function initGraphTypeControls(state) {
 
     if (selectAllBtn) {
         selectAllBtn.addEventListener("click", () => {
-            const allTypes = GRAPH_TYPES.map((g) => g.id);
+            const isAverages = state.dataView === "averages" || (state.datasource && state.datasource !== "scouted");
+            const allTypes = GRAPH_TYPES
+                .map((g) => g.id)
+                .filter((id) => !isAverages || id !== "line");
             setGraphTypes(state, allTypes, countBadge);
         });
     }
@@ -336,6 +387,7 @@ function initGraphTypeControls(state) {
     }
 
     setGraphTypes(state, ["bar"], countBadge);
+    updateGraphTypeAvailability(state);
 }
 
 function wireGraphOptions(state) {
@@ -347,6 +399,7 @@ function wireGraphOptions(state) {
     if (dataView) {
         dataView.addEventListener("change", () => {
             state.dataView = dataView.value;
+            updateGraphTypeAvailability(state);
         });
     }
     if (sortSelect) {
@@ -356,8 +409,9 @@ function wireGraphOptions(state) {
     }
     if (includePrescoutCheckbox) {
         includePrescoutCheckbox.addEventListener("change", () => {
-            state.forcePrescout = includePrescoutCheckbox.checked;
+            state.includePrescout = includePrescoutCheckbox.checked;
             updateTeamList(state);
+            updateSelectionSummary(state);
         });
     }
     if (generateButton) {
@@ -374,7 +428,6 @@ function updateTeamList(state) {
     let teams;
     if (state.eventKey && state.eventTeams && state.eventTeams.size > 0) {
         teams = Array.from(state.eventTeams);
-        // Clean up selectedTeams to only keep valid teams for the event
         state.selectedTeams.forEach(teamNumber => {
             if (!state.eventTeams.has(teamNumber)) {
                 state.selectedTeams.delete(teamNumber);
@@ -382,13 +435,13 @@ function updateTeamList(state) {
         });
     } else {
         const filteredEntries = getFilteredEntriesForEvent(state);
-        teams = Array.from(new Set(filteredEntries.map((entry) => entry.targetTeamNumber).filter(Boolean)));
+        teams = Array.from(new Set(filteredEntries.map((entry) => Number(entry.targetTeamNumber)).filter(Boolean)));
     }
 
     const scoutedTeamNumbers = new Set(
         state.entries
-            .filter((entry) => !state.eventKey || entry.eventKey === state.eventKey)
-            .map((entry) => entry.targetTeamNumber)
+            .filter((entry) => (!state.eventKey || isMatchingEvent(entry.eventKey, state.eventKey)) && (state.includePrescout || !entry.isPrescout))
+            .map((entry) => Number(entry.targetTeamNumber))
             .filter(Boolean)
     );
 
@@ -451,19 +504,30 @@ function updateTeamList(state) {
 async function loadTeamsForEvent(state) {
     state.eventTeams = new Set();
     state.eventTeamsMap = new Map();
-    if (!state.eventKey) {
+    state.matches = [];
+    state.statsHistory = { oprs: {}, epaHistory: [], match13History: [] };
+
+    const eventKeyToFetch = state.eventKey || (state.settings ? (Obsidianscout.resolveEventKey(state.settings) || "") : "") || "";
+    if (!eventKeyToFetch && !state.eventKey) {
         return;
     }
+    const targetKey = state.eventKey || eventKeyToFetch;
     try {
-        const teams = await Obsidianscout.request(`/api/teams?eventKey=${state.eventKey}`);
+        const [teams, matches, statsHistory] = await Promise.all([
+            Obsidianscout.request(`/api/teams?eventKey=${encodeURIComponent(targetKey)}`).catch(() => []),
+            Obsidianscout.request(`/api/matches?eventKey=${encodeURIComponent(targetKey)}`).catch(() => []),
+            Obsidianscout.request(`/api/stats/history?eventKey=${encodeURIComponent(targetKey)}`).catch(() => ({ oprs: {}, epaHistory: [], match13History: [] }))
+        ]);
         if (Array.isArray(teams)) {
             teams.forEach(team => {
                 if (team.teamNumber) {
-                    state.eventTeams.add(team.teamNumber);
-                    state.eventTeamsMap.set(team.teamNumber, team);
+                    state.eventTeams.add(Number(team.teamNumber));
+                    state.eventTeamsMap.set(Number(team.teamNumber), team);
                 }
             });
         }
+        state.matches = Array.isArray(matches) ? matches : [];
+        state.statsHistory = statsHistory || { oprs: {}, epaHistory: [], match13History: [] };
     } catch (error) {
         console.error("Failed to load teams for event:", error);
     }
@@ -473,11 +537,11 @@ function updateSelectionSummary(state) {
     const badge = document.getElementById("selection-summary-badge");
     const status = document.getElementById("team-selection-status");
     const pills = document.getElementById("selected-pills-container");
-    const filteredEntries = filterEntries(state.entries, state.eventKey);
+    const filteredEntries = getFilteredEntriesForEvent(state);
 
     const totalTeams = (state.eventKey && state.eventTeams && state.eventTeams.size > 0)
         ? state.eventTeams.size
-        : new Set(filteredEntries.map((entry) => entry.targetTeamNumber).filter(Boolean)).size;
+        : new Set(filteredEntries.map((entry) => Number(entry.targetTeamNumber)).filter(Boolean)).size;
 
     if (badge) {
         badge.textContent = state.selectedTeams.size ? `${state.selectedTeams.size} selected` : "No teams selected";
@@ -537,7 +601,9 @@ function getVisibleTeams() {
 }
 
 function setGraphTypes(state, types, badge) {
-    state.selectedGraphTypes = new Set(types);
+    const isAverages = state.dataView === "averages" || (state.datasource && state.datasource !== "scouted");
+    const filteredTypes = isAverages ? types.filter((t) => t !== "line") : types;
+    state.selectedGraphTypes = new Set(filteredTypes);
     document.querySelectorAll(".graph-type-checkbox").forEach((checkbox) => {
         checkbox.checked = state.selectedGraphTypes.has(checkbox.value);
     });
@@ -549,6 +615,153 @@ function updateGraphTypeBadge(state, badge) {
         return;
     }
     badge.textContent = `${state.selectedGraphTypes.size} selected`;
+}
+
+function createGraphCard(titleText, chartElement, noticeText) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const header = document.createElement("div");
+    header.className = "graphs-card-header";
+
+    const title = document.createElement("h3");
+    title.className = "graphs-card-title";
+    title.textContent = titleText;
+    header.appendChild(title);
+
+    if (chartElement) {
+        const actions = document.createElement("div");
+        actions.className = "graphs-card-actions";
+
+        const expandBtn = document.createElement("button");
+        expandBtn.type = "button";
+        expandBtn.className = "btn ghost btn-sm graph-fullscreen-btn";
+        expandBtn.title = "View Fullscreen";
+        expandBtn.setAttribute("aria-label", "View Fullscreen");
+        expandBtn.innerHTML = SVG_ICONS.expand;
+        expandBtn.addEventListener("click", () => {
+            openGraphFullscreen(titleText, chartElement);
+        });
+        actions.appendChild(expandBtn);
+        header.appendChild(actions);
+    }
+
+    card.appendChild(header);
+
+    if (noticeText) {
+        const notice = document.createElement("p");
+        notice.className = "notice";
+        notice.textContent = noticeText;
+        card.appendChild(notice);
+    }
+
+    if (chartElement) {
+        card.appendChild(chartElement);
+    }
+
+    return card;
+}
+
+let activeFullscreenResizeHandler = null;
+
+function openGraphFullscreen(titleText, sourceChart) {
+    let modal = document.getElementById("graph-fullscreen-modal");
+    if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "graph-fullscreen-modal";
+        modal.className = "graphs-fullscreen-overlay hidden";
+        modal.innerHTML = `
+            <div class="graphs-fullscreen-backdrop"></div>
+            <div class="graphs-fullscreen-dialog">
+                <div class="graphs-fullscreen-header">
+                    <h2 id="graph-fullscreen-title" class="graphs-fullscreen-title"></h2>
+                    <button type="button" class="btn ghost btn-sm graphs-fullscreen-close" aria-label="Close fullscreen view">
+                        ${SVG_ICONS.close}
+                    </button>
+                </div>
+                <div class="graphs-fullscreen-body">
+                    <div id="graph-fullscreen-chart" class="plotly-chart"></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const closeBtn = modal.querySelector(".graphs-fullscreen-close");
+        const backdrop = modal.querySelector(".graphs-fullscreen-backdrop");
+        const closeModal = () => {
+            modal.classList.add("hidden");
+            document.body.classList.remove("modal-open");
+            const chartContainer = document.getElementById("graph-fullscreen-chart");
+            if (chartContainer && window.Plotly) {
+                window.Plotly.purge(chartContainer);
+            }
+            if (activeFullscreenResizeHandler) {
+                window.removeEventListener("resize", activeFullscreenResizeHandler);
+                activeFullscreenResizeHandler = null;
+            }
+        };
+
+        closeBtn.addEventListener("click", closeModal);
+        backdrop.addEventListener("click", closeModal);
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && !modal.classList.contains("hidden")) {
+                closeModal();
+            }
+        });
+    }
+
+    const titleEl = document.getElementById("graph-fullscreen-title");
+    if (titleEl) {
+        titleEl.textContent = titleText;
+    }
+
+    const chartContainer = document.getElementById("graph-fullscreen-chart");
+    if (!chartContainer || !sourceChart) {
+        return;
+    }
+
+    // Resolve actual .plotly-chart element if wrapped in .chart-scroll
+    const actualChart = sourceChart.classList?.contains("plotly-chart")
+        ? sourceChart
+        : (sourceChart.querySelector?.(".plotly-chart") || sourceChart);
+
+    modal.classList.remove("hidden");
+    document.body.classList.add("modal-open");
+
+    // Allow browser to render layout geometry before measuring and rendering Plotly
+    requestAnimationFrame(() => {
+        if (window.Plotly && actualChart.data && actualChart.layout) {
+            const fullLayout = JSON.parse(JSON.stringify(actualChart.layout));
+            delete fullLayout.height;
+            delete fullLayout.width;
+            fullLayout.autosize = true;
+            fullLayout.margin = {
+                l: Math.max(fullLayout.margin?.l || 60, 60),
+                r: Math.max(fullLayout.margin?.r || 30, 30),
+                t: 50,
+                b: Math.max(fullLayout.margin?.b || 75, 75)
+            };
+
+            const fullData = JSON.parse(JSON.stringify(actualChart.data));
+
+            window.Plotly.newPlot(chartContainer, fullData, fullLayout, {
+                ...PLOTLY_CONFIG,
+                responsive: true
+            }).then(() => {
+                window.Plotly.Plots.resize(chartContainer);
+            });
+
+            if (activeFullscreenResizeHandler) {
+                window.removeEventListener("resize", activeFullscreenResizeHandler);
+            }
+            activeFullscreenResizeHandler = () => {
+                if (!modal.classList.contains("hidden")) {
+                    window.Plotly.Plots.resize(chartContainer);
+                }
+            };
+            window.addEventListener("resize", activeFullscreenResizeHandler);
+        }
+    });
 }
 
 function generateGraphs(state) {
@@ -592,27 +805,22 @@ function generateGraphs(state) {
         return;
     }
 
+    // External / All data sources: only render Team Averages
     if (state.datasource && state.datasource !== "scouted") {
         selectedGraphTypes.forEach((graphType) => {
+            if (graphType === "line") {
+                const card = createGraphCard(`${getDatasourceLabel(state.datasource, state)} - Line`, null, t('graphs.line_not_supported_averages', "Line graphs are not supported for team averages as they require multiple data points across matches. Line graphs are only available for Scouted Match-by-match view."));
+                output.appendChild(card);
+                return;
+            }
             if (graphType === "box" || graphType === "violin" || graphType === "histogram") {
-                const card = document.createElement("div");
-                card.className = "card";
-                const title = document.createElement("h3");
-                title.textContent = `${getDatasourceLabel(state.datasource)} - ${graphType}`;
-                card.appendChild(title);
-                card.appendChild(buildNotice("Distribution graphs are only supported for Scouted Data."));
+                const card = createGraphCard(`${getDatasourceLabel(state.datasource, state)} - ${graphType}`, null, "Distribution graphs are only supported for Scouted Data.");
                 output.appendChild(card);
                 return;
             }
 
-            const card = document.createElement("div");
-            card.className = "card";
-            const title = document.createElement("h3");
-            title.textContent = `${getDatasourceLabel(state.datasource)} - ${graphType}`;
-            card.appendChild(title);
-
             const chart = createPlotlyContainer(320);
-            card.appendChild(chart);
+            const card = createGraphCard(`${getDatasourceLabel(state.datasource, state)} - ${graphType} (Team averages)`, chart);
             output.appendChild(card);
 
             renderNonScoutedGraph(graphType, chart, selectedTeams, state);
@@ -624,7 +832,12 @@ function generateGraphs(state) {
         return;
     }
 
-    const metric = state.metricMap.get(state.metricId);
+    // Ensure state.metricId matches active selector value
+    const metricSelect = document.getElementById("graph-metric");
+    if (metricSelect && metricSelect.value) {
+        state.metricId = metricSelect.value;
+    }
+    const metric = state.metricMap.get(state.metricId) || state.metrics[0];
     const filteredEntries = getFilteredEntriesForTeams(state);
 
     if (!filteredEntries.length) {
@@ -649,8 +862,11 @@ function generateGraphs(state) {
         warnBanner.style.padding = "10px 16px";
         warnBanner.style.borderRadius = "6px";
         warnBanner.style.border = "1px solid";
+        warnBanner.style.display = "flex";
+        warnBanner.style.alignItems = "center";
+        warnBanner.style.gap = "10px";
         warnBanner.innerHTML = `
-            <span class="icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <span class="icon">${SVG_ICONS.warning}</span>
             <div style="flex:1;">
                 <strong>Discrepancy Warning:</strong> Some of the data used in these graphs contains conflicting inputs from partner teams. You can review or resolve this in the Alliance Scouting Data page.
             </div>
@@ -659,14 +875,16 @@ function generateGraphs(state) {
     }
 
     selectedGraphTypes.forEach((graphType) => {
-        const card = document.createElement("div");
-        card.className = "card";
-        const title = document.createElement("h3");
-        title.textContent = `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label} - ${graphType}`;
-        card.appendChild(title);
+        if (graphType === "line" && state.dataView === "averages") {
+            const cardTitle = `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label} - Line`;
+            const card = createGraphCard(cardTitle, null, t('graphs.line_not_supported_averages', "Line graphs are not supported for Team averages because they require multiple data points across matches. Switch to Match-by-match view to use Line graphs."));
+            output.appendChild(card);
+            return;
+        }
 
         const chart = createPlotlyContainer(320);
-        card.appendChild(chart);
+        const cardTitle = `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label} - ${graphType}`;
+        const card = createGraphCard(cardTitle, chart);
         output.appendChild(card);
 
         renderGraphType(graphType, chart, filteredEntries, metric, state);
@@ -677,13 +895,14 @@ function generateGraphs(state) {
     }
 }
 
-function getDatasourceLabel(datasource) {
+function getDatasourceLabel(datasource, state) {
     const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function')
         ? Obsidianscout.getProgram() === "FTC"
-        : (state.settings?.program === "FTC");
+        : (state?.settings?.program === "FTC");
     if (datasource === "epa") return t('predictor.statbotics_epa', "Statbotics EPA");
+    if (datasource === "exp") return t('alliance-selection.match13_exp', "Match 13 EXP");
     if (datasource === "opr") return isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('predictor.tba_opr', "TBA OPR");
-    if (datasource === "all") return t('rankings.metric.all', "All Three");
+    if (datasource === "all") return t('rankings.metric.all', "All Sources");
     return t('predictor.scouted_data', "Scouted Data");
 }
 
@@ -693,6 +912,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
         ? Obsidianscout.getProgram() === "FTC"
         : (state.settings?.program === "FTC");
     const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
+    const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
     const effectiveUseOpr = state.settings?.useTbaOpr;
 
     // 1. Build the data series
@@ -702,6 +922,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
             teamNumber,
             label: `Team ${teamNumber}`,
             epa: team ? (team.epa !== null && team.epa !== undefined ? team.epa : 0) : 0,
+            exp: team ? (team.exp !== null && team.exp !== undefined ? team.exp : (team.match13Exp !== null && team.match13Exp !== undefined ? team.match13Exp : 0)) : 0,
             opr: team ? (team.opr !== null && team.opr !== undefined ? team.opr : 0) : 0,
             scouted: team ? (team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints : 0) : 0
         };
@@ -709,7 +930,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
 
     // 2. Sort the data based on state.sort
     const sortField = state.datasource === "all"
-        ? (effectiveUseEpa ? "epa" : (effectiveUseOpr ? "opr" : "scouted"))
+        ? (effectiveUseEpa ? "epa" : (effectiveUseExp ? "exp" : (effectiveUseOpr ? "opr" : "scouted")))
         : state.datasource;
 
     data.sort((a, b) => {
@@ -725,11 +946,14 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
         if (state.datasource === "epa" && effectiveUseEpa) {
             const series = data.map(item => ({ label: item.label, value: item.epa }));
             renderPlotlyBar(container, series, { orientation: "h" });
+        } else if (state.datasource === "exp" && effectiveUseExp) {
+            const series = data.map(item => ({ label: item.label, value: item.exp }));
+            renderPlotlyBar(container, series, { orientation: "h" });
         } else if (state.datasource === "opr" && effectiveUseOpr) {
             const series = data.map(item => ({ label: item.label, value: item.opr }));
             renderPlotlyBar(container, series, { orientation: "h" });
         } else if (state.datasource === "all") {
-            // Grouped bar chart comparing Scouted, EPA, and OPR
+            // Grouped bar chart comparing Scouted, EPA, EXP, and OPR
             const series = [];
             series.push({
                 name: "Scouted Average",
@@ -741,6 +965,13 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
                     name: "Statbotics EPA",
                     x: labels,
                     y: data.map(item => item.epa)
+                });
+            }
+            if (effectiveUseExp) {
+                series.push({
+                    name: "Match 13 EXP",
+                    x: labels,
+                    y: data.map(item => item.exp)
                 });
             }
             if (effectiveUseOpr) {
@@ -755,7 +986,12 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
         return;
     }
 
-    if (graphType === "line" || graphType === "scatter" || graphType === "area") {
+    if (graphType === "line") {
+        container.appendChild(buildNotice(t('graphs.line_not_supported_averages', "Line graphs are not supported for team averages as they require multiple data points across matches. Line graphs are only available for Scouted Match-by-match view.")));
+        return;
+    }
+
+    if (graphType === "scatter" || graphType === "area") {
         const series = [];
         if (state.datasource === "scouted" || state.datasource === "all") {
             series.push({
@@ -765,7 +1001,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
             });
         }
         if (state.datasource === "epa" || state.datasource === "all") {
-            if (effectiveUseEpa || (state.datasource === "epa" && effectiveUseEpa)) {
+            if (effectiveUseEpa) {
                 series.push({
                     name: "Statbotics EPA",
                     x: labels,
@@ -773,8 +1009,17 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
                 });
             }
         }
+        if (state.datasource === "exp" || state.datasource === "all") {
+            if (effectiveUseExp) {
+                series.push({
+                    name: "Match 13 EXP",
+                    x: labels,
+                    y: data.map(item => item.exp)
+                });
+            }
+        }
         if (state.datasource === "opr" || state.datasource === "all") {
-            if (effectiveUseOpr || (state.datasource === "opr" && effectiveUseOpr)) {
+            if (effectiveUseOpr) {
                 series.push({
                     name: isFtc ? "FTC Scout OPR" : "TBA OPR",
                     x: labels,
@@ -785,6 +1030,95 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
         renderPlotlyMultiLine(container, series, { mode: graphType, dataView: "averages" });
         return;
     }
+}
+
+function getMatchSortWeightFromEntry(entry) {
+    if (!entry) return 0;
+    if (entry.isPrescout) {
+        return (entry.matchNumber || 0);
+    }
+    const matchKey = String(entry.matchKey || "").toLowerCase();
+    const isPractice = entry.isPractice || matchKey.includes("practice") || matchKey.includes("_pm") || matchKey.includes("_pr");
+
+    let levelWeight = 200000; // default Qualification Match
+    if (isPractice) {
+        levelWeight = 100000;
+    } else if (matchKey.includes("_ef") || matchKey.startsWith("ef")) {
+        levelWeight = 300000;
+    } else if (matchKey.includes("_qf") || matchKey.startsWith("qf")) {
+        levelWeight = 400000;
+    } else if (matchKey.includes("_sf") || matchKey.startsWith("sf")) {
+        levelWeight = 500000;
+    } else if (matchKey.includes("_f") || matchKey.startsWith("f")) {
+        levelWeight = 600000;
+    }
+
+    const matchNum = entry.matchNumber || 0;
+    return levelWeight + (matchNum * 100);
+}
+
+function getMatchSortWeightFromLabel(label) {
+    if (!label) return 0;
+    const str = String(label).trim();
+    if (/prescout/i.test(str)) {
+        const num = (str.match(/\d+/) || [])[0];
+        return num ? parseInt(num, 10) : 0;
+    }
+    if (/^practice/i.test(str) || /^pm/i.test(str)) {
+        const num = (str.match(/\d+/) || [])[0];
+        return 100000 + (num ? parseInt(num, 10) * 100 : 0);
+    }
+    if (/^qm/i.test(str) || /^q\s/i.test(str) || /^qual/i.test(str) || /^match/i.test(str)) {
+        const num = (str.match(/\d+/) || [])[0];
+        return 200000 + (num ? parseInt(num, 10) * 100 : 0);
+    }
+    if (/^ef/i.test(str)) {
+        const nums = str.match(/\d+/g) || [];
+        const setNum = nums[0] ? parseInt(nums[0], 10) : 0;
+        const matchNum = nums[1] ? parseInt(nums[1], 10) : 0;
+        return 300000 + (setNum * 1000) + matchNum;
+    }
+    if (/^qf/i.test(str)) {
+        const nums = str.match(/\d+/g) || [];
+        const setNum = nums[0] ? parseInt(nums[0], 10) : 0;
+        const matchNum = nums[1] ? parseInt(nums[1], 10) : 0;
+        return 400000 + (setNum * 1000) + matchNum;
+    }
+    if (/^sf/i.test(str) || /^semi/i.test(str)) {
+        const nums = str.match(/\d+/g) || [];
+        const setNum = nums[0] ? parseInt(nums[0], 10) : 0;
+        const matchNum = nums[1] ? parseInt(nums[1], 10) : 0;
+        return 500000 + (setNum * 1000) + matchNum;
+    }
+    if (/^f\s/i.test(str) || /^final/i.test(str) || /^f\d/i.test(str)) {
+        const nums = str.match(/\d+/g) || [];
+        const setNum = nums[0] ? parseInt(nums[0], 10) : 0;
+        const matchNum = nums[1] ? parseInt(nums[1], 10) : 0;
+        return 600000 + (setNum * 1000) + matchNum;
+    }
+    const anyNum = (str.match(/\d+/) || [])[0];
+    return 200000 + (anyNum ? parseInt(anyNum, 10) * 100 : 0);
+}
+
+function getSortedCategoriesFromSeries(series) {
+    const allLabels = new Set();
+    series.forEach((s) => {
+        if (Array.isArray(s.x)) {
+            s.x.forEach((label) => {
+                if (label !== null && label !== undefined) {
+                    allLabels.add(String(label));
+                }
+            });
+        }
+    });
+    return Array.from(allLabels).sort((a, b) => {
+        const weightA = getMatchSortWeightFromLabel(a);
+        const weightB = getMatchSortWeightFromLabel(b);
+        if (weightA !== weightB) {
+            return weightA - weightB;
+        }
+        return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    });
 }
 
 function renderGraphType(graphType, container, entries, metric, state) {
@@ -815,7 +1149,17 @@ function renderGraphType(graphType, container, entries, metric, state) {
         return;
     }
 
-    if (graphType === "line" || graphType === "scatter" || graphType === "area") {
+    if (graphType === "line") {
+        if (state.dataView === "averages") {
+            container.appendChild(buildNotice(t('graphs.line_not_supported_averages', "Line graphs are not supported for Team averages because they require multiple data points across matches. Switch to Match-by-match view to use Line graphs.")));
+            return;
+        }
+        const series = buildTeamSeries(entries, metric, state);
+        renderPlotlyMultiLine(container, series, { mode: "line", dataView: state.dataView });
+        return;
+    }
+
+    if (graphType === "scatter" || graphType === "area") {
         const series = buildTeamSeries(entries, metric, state);
         renderPlotlyMultiLine(container, series, { mode: graphType, dataView: state.dataView });
         return;
@@ -848,7 +1192,6 @@ function renderSummary(entries) {
     container.appendChild(buildMetricCard("Events", events.size));
     container.appendChild(buildMetricCard("Teams", teams.size));
     container.appendChild(buildMetricCard("Matches", matches.size));
-
 }
 
 function buildMetricCard(label, value) {
@@ -868,25 +1211,8 @@ function buildMetricCard(label, value) {
 }
 
 function appendPlotlyBarCard(container, titleText, series, noticeText, options = {}) {
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const title = document.createElement("h3");
-    title.textContent = titleText;
-    card.appendChild(title);
-
-    if (noticeText) {
-        const notice = document.createElement("p");
-        notice.className = "notice";
-        notice.textContent = noticeText;
-        card.appendChild(notice);
-    }
-
     if (!series.length) {
-        const empty = document.createElement("p");
-        empty.className = "notice";
-        empty.textContent = t('graphs.no_data_yet', "No data yet.");
-        card.appendChild(empty);
+        const card = createGraphCard(titleText, null, noticeText || t('graphs.no_data_yet', "No data yet."));
         container.appendChild(card);
         return;
     }
@@ -894,7 +1220,7 @@ function appendPlotlyBarCard(container, titleText, series, noticeText, options =
     const height = chartHeightForBars(series, options);
     const chart = createPlotlyContainer(height);
     const host = series.length > 20 ? wrapChartScroll(chart) : chart;
-    card.appendChild(host);
+    const card = createGraphCard(titleText, host, noticeText);
     container.appendChild(card);
     renderPlotlyBar(chart, series, options);
 }
@@ -950,13 +1276,29 @@ function renderPlotlyBar(container, series, options = {}) {
     const layout = {
         height,
         margin: orientation === "h"
-            ? { l: 140, r: 24, t: 10, b: 30 }
-            : { l: 50, r: 20, t: 10, b: 70 },
+            ? { l: 140, r: 24, t: 15, b: 40 }
+            : { l: 55, r: 20, t: 40, b: 65 },
         paper_bgcolor: "rgba(0,0,0,0)",
         plot_bgcolor: "rgba(0,0,0,0)",
         font: { color: theme.text },
-        xaxis: { gridcolor: theme.grid, zerolinecolor: theme.grid, automargin: true },
-        yaxis: { gridcolor: theme.grid, zerolinecolor: theme.grid, automargin: true }
+        xaxis: {
+            gridcolor: theme.grid,
+            zerolinecolor: theme.grid,
+            automargin: true,
+            tickangle: orientation === "h" ? 0 : -45
+        },
+        yaxis: {
+            gridcolor: theme.grid,
+            zerolinecolor: theme.grid,
+            automargin: true
+        },
+        legend: {
+            orientation: "h",
+            yanchor: "bottom",
+            y: 1.05,
+            xanchor: "center",
+            x: 0.5
+        }
     };
 
     window.Plotly.react(container, [trace], layout, PLOTLY_CONFIG);
@@ -987,15 +1329,33 @@ function renderPlotlyMultiLine(container, series, options = {}) {
         return base;
     });
 
+    const sortedCategories = getSortedCategoriesFromSeries(series);
+
     const layout = {
         height,
-        margin: { l: 50, r: 20, t: 10, b: 50 },
+        margin: { l: 55, r: 20, t: 45, b: 65 },
         paper_bgcolor: "rgba(0,0,0,0)",
         plot_bgcolor: "rgba(0,0,0,0)",
         font: { color: theme.text },
-        xaxis: { gridcolor: theme.grid, automargin: true },
-        yaxis: { gridcolor: theme.grid, zerolinecolor: theme.grid, automargin: true },
-        legend: { orientation: "h", y: -0.2 }
+        xaxis: {
+            gridcolor: theme.grid,
+            automargin: true,
+            tickangle: -45,
+            categoryorder: "array",
+            categoryarray: sortedCategories
+        },
+        yaxis: {
+            gridcolor: theme.grid,
+            zerolinecolor: theme.grid,
+            automargin: true
+        },
+        legend: {
+            orientation: "h",
+            yanchor: "bottom",
+            y: 1.05,
+            xanchor: "center",
+            x: 0.5
+        }
     };
 
     window.Plotly.react(container, traces, layout, PLOTLY_CONFIG);
@@ -1017,15 +1377,33 @@ function renderPlotlyMultiBar(container, series, options = {}) {
         };
     });
 
+    const sortedCategories = getSortedCategoriesFromSeries(series);
+
     const layout = {
         height,
-        margin: { l: 50, r: 20, t: 10, b: 50 },
+        margin: { l: 55, r: 20, t: 45, b: 65 },
         paper_bgcolor: "rgba(0,0,0,0)",
         plot_bgcolor: "rgba(0,0,0,0)",
         font: { color: theme.text },
-        xaxis: { gridcolor: theme.grid, automargin: true },
-        yaxis: { gridcolor: theme.grid, zerolinecolor: theme.grid, automargin: true },
-        legend: { orientation: "h", y: -0.2 },
+        xaxis: {
+            gridcolor: theme.grid,
+            automargin: true,
+            tickangle: -45,
+            categoryorder: "array",
+            categoryarray: sortedCategories
+        },
+        yaxis: {
+            gridcolor: theme.grid,
+            zerolinecolor: theme.grid,
+            automargin: true
+        },
+        legend: {
+            orientation: "h",
+            yanchor: "bottom",
+            y: 1.05,
+            xanchor: "center",
+            x: 0.5
+        },
         barmode: "group"
     };
 
@@ -1041,12 +1419,27 @@ function renderPlotlyDistribution(container, traces) {
     const height = Number(container.dataset.height) || 320;
     const layout = {
         height,
-        margin: { l: 50, r: 20, t: 10, b: 50 },
+        margin: { l: 55, r: 20, t: 45, b: 65 },
         paper_bgcolor: "rgba(0,0,0,0)",
         plot_bgcolor: "rgba(0,0,0,0)",
         font: { color: theme.text },
-        xaxis: { gridcolor: theme.grid, automargin: true },
-        yaxis: { gridcolor: theme.grid, zerolinecolor: theme.grid, automargin: true }
+        xaxis: {
+            gridcolor: theme.grid,
+            automargin: true,
+            tickangle: -45
+        },
+        yaxis: {
+            gridcolor: theme.grid,
+            zerolinecolor: theme.grid,
+            automargin: true
+        },
+        legend: {
+            orientation: "h",
+            yanchor: "bottom",
+            y: 1.05,
+            xanchor: "center",
+            x: 0.5
+        }
     };
     window.Plotly.react(container, traces, layout, PLOTLY_CONFIG);
 }
@@ -1065,12 +1458,20 @@ function renderPlotlyHistogram(container, values) {
     };
     const layout = {
         height,
-        margin: { l: 50, r: 20, t: 10, b: 50 },
+        margin: { l: 55, r: 20, t: 30, b: 65 },
         paper_bgcolor: "rgba(0,0,0,0)",
         plot_bgcolor: "rgba(0,0,0,0)",
         font: { color: theme.text },
-        xaxis: { gridcolor: theme.grid, automargin: true },
-        yaxis: { gridcolor: theme.grid, zerolinecolor: theme.grid, automargin: true }
+        xaxis: {
+            gridcolor: theme.grid,
+            automargin: true,
+            tickangle: -45
+        },
+        yaxis: {
+            gridcolor: theme.grid,
+            zerolinecolor: theme.grid,
+            automargin: true
+        }
     };
     window.Plotly.react(container, [trace], layout, PLOTLY_CONFIG);
 }
@@ -1094,14 +1495,23 @@ function resolveThemeTokens() {
     return { text, accent, accent3, grid };
 }
 
+function normalizePhase(rawPhase) {
+    if (!rawPhase) return null;
+    const p = String(rawPhase).toLowerCase().trim();
+    if (p.includes("auto") || p.includes("autónomo") || p.includes("autonomo")) return "auto";
+    if (p.includes("teleop") || p.includes("teleoperado") || p.includes("general")) return "teleop";
+    if (p.includes("endgame") || p.includes("end") || p.includes("fin")) return "endgame";
+    if (p.includes("post")) return "postmatch";
+    return p;
+}
+
 function buildMetricOptions(config) {
     const options = [
-        { id: "score_total", label: "Total points", kind: "score", scope: "total" },
-        { id: "score_auto", label: "Auto points", kind: "score", scope: "auto" },
-        { id: "score_teleop", label: "Teleop points", kind: "score", scope: "teleop" },
-        { id: "score_endgame", label: "Endgame points", kind: "score", scope: "endgame" },
-        { id: "count", label: "Entry count", kind: "count" }
-
+        { id: "score_total", label: t('graphs.total_points', "Total points"), kind: "score", scope: "total" },
+        { id: "score_auto", label: t('graphs.auto_points', "Auto points"), kind: "score", scope: "auto" },
+        { id: "score_teleop", label: t('graphs.teleop_points', "Teleop points"), kind: "score", scope: "teleop" },
+        { id: "score_endgame", label: t('graphs.endgame_points', "Endgame points"), kind: "score", scope: "endgame" },
+        { id: "count", label: t('graphs.entry_count', "Entry count"), kind: "count" }
     ];
 
     (config.fields || []).forEach((field) => {
@@ -1109,7 +1519,10 @@ function buildMetricOptions(config) {
             return;
         }
         const type = String(field.type || "").toLowerCase();
-        const label = (window.Obsidianscout && typeof window.Obsidianscout.localize === 'function') ? (Obsidianscout.localize(field.label) || field.id) : (field.label || field.id);
+        const label = (window.Obsidianscout && typeof window.Obsidianscout.localize === 'function') 
+            ? (Obsidianscout.localize(field.label) || field.id) 
+            : (field.label || field.id);
+
         if (type === "number" || type === "counter" || type === "rating") {
             options.push({ id: `field:${field.id}`, label, kind: "numeric", fieldId: field.id, field });
         } else if (type === "select" || type === "checkbox") {
@@ -1124,7 +1537,7 @@ function filterEntries(entries, eventKey) {
     if (!eventKey) {
         return entries;
     }
-    return entries.filter((entry) => entry.eventKey === eventKey);
+    return entries.filter((entry) => isMatchingEvent(entry.eventKey, eventKey));
 }
 
 function buildTeamStats(entries, metric, state) {
@@ -1164,6 +1577,11 @@ function sortTeamStats(stats, sort) {
     return stats.sort((a, b) => b.value - a.value);
 }
 
+function isMatchingEvent(keyA, keyB) {
+    if (!keyA || !keyB) return false;
+    return String(keyA).trim().toLowerCase() === String(keyB).trim().toLowerCase();
+}
+
 function buildTeamSeries(entries, metric, state) {
     if (state.dataView === "averages") {
         const stats = sortTeamStats(buildTeamStats(entries, metric, state), state.sort);
@@ -1176,7 +1594,7 @@ function buildTeamSeries(entries, metric, state) {
 
     const groups = new Map();
     entries.forEach((entry) => {
-        const teamNumber = entry.targetTeamNumber;
+        const teamNumber = Number(entry.targetTeamNumber);
         if (!teamNumber) {
             return;
         }
@@ -1191,13 +1609,18 @@ function buildTeamSeries(entries, metric, state) {
         const sorted = teamEntries
             .filter((entry) => metricValue(entry, metric, state) !== null)
             .sort((a, b) => {
-                if (a.matchPlayedTime !== null && b.matchPlayedTime !== null && a.matchPlayedTime !== undefined && b.matchPlayedTime !== undefined) {
-                    return a.matchPlayedTime - b.matchPlayedTime;
+                const weightA = getMatchSortWeightFromEntry(a);
+                const weightB = getMatchSortWeightFromEntry(b);
+                if (weightA !== weightB) {
+                    return weightA - weightB;
                 }
                 const aEvent = a.eventKey || "";
                 const bEvent = b.eventKey || "";
                 if (aEvent !== bEvent) {
                     return aEvent.localeCompare(bEvent);
+                }
+                if (a.matchPlayedTime !== null && b.matchPlayedTime !== null && a.matchPlayedTime !== undefined && b.matchPlayedTime !== undefined) {
+                    return a.matchPlayedTime - b.matchPlayedTime;
                 }
                 return (a.matchNumber || 0) - (b.matchNumber || 0);
             });
@@ -1205,15 +1628,25 @@ function buildTeamSeries(entries, metric, state) {
             name: `Team ${teamNumber}`,
             x: sorted.map((entry, index) => {
                 let levelAbbrev = "QM";
-                if (entry.matchKey) {
+                if (entry.isPrescout) {
+                    levelAbbrev = "Prescout";
+                } else if (entry.isPractice) {
+                    levelAbbrev = "Practice";
+                } else if (entry.matchKey) {
                     const parts = entry.matchKey.split('_');
                     if (parts.length > 1) {
                         const rawLevel = parts[1].replace(/[0-9]/g, "");
                         levelAbbrev = rawLevel.toUpperCase();
+                        if (levelAbbrev === "PM" || levelAbbrev === "PR") {
+                            levelAbbrev = "Practice";
+                        }
                     }
                 }
                 const num = entry.matchNumber || (index + 1);
-                const eventLabel = entry.isPrescout ? (entry.eventKey || "Prescout") : "";
+                const eventLabel = entry.isPrescout ? (entry.eventKey || "") : "";
+                if (levelAbbrev === "Prescout") {
+                    return eventLabel ? `Prescout (${eventLabel})` : `Prescout ${num}`;
+                }
                 return eventLabel ? `${levelAbbrev} ${num} (${eventLabel})` : `${levelAbbrev} ${num}`;
             }),
             y: sorted.map((entry) => metricValue(entry, metric, state))
@@ -1226,7 +1659,8 @@ function buildTeamSeries(entries, metric, state) {
 function buildCategoryCounts(entries, metric) {
     const counts = new Map();
     entries.forEach((entry) => {
-        const value = readLabel(entry.data && entry.data[metric.fieldId]);
+        const data = getEntryData(entry);
+        const value = readLabel(data[metric.fieldId]);
         if (!value) {
             return;
         }
@@ -1245,7 +1679,7 @@ function buildNumericValues(entries, metric, state) {
 function buildDistributionTraces(entries, metric, state, graphType) {
     const valuesByTeam = new Map();
     entries.forEach((entry) => {
-        const teamNumber = entry.targetTeamNumber;
+        const teamNumber = Number(entry.targetTeamNumber);
         if (!teamNumber) {
             return;
         }
@@ -1283,6 +1717,21 @@ function buildDistributionTrace(graphType, name, values) {
     return trace;
 }
 
+function getEntryData(entry) {
+    if (!entry) return {};
+    if (typeof entry.data === "object" && entry.data !== null) {
+        return entry.data;
+    }
+    if (typeof entry.data === "string") {
+        try {
+            return JSON.parse(entry.data);
+        } catch (_) {
+            return {};
+        }
+    }
+    return {};
+}
+
 function metricValue(entry, metric, state) {
     if (!metric) {
         return null;
@@ -1293,8 +1742,12 @@ function metricValue(entry, metric, state) {
     if (metric.kind === "score") {
         return entryScore(state.config, entry, metric.scope);
     }
+    const data = getEntryData(entry);
     if (metric.kind === "numeric") {
-        return readNumber(entry.data && entry.data[metric.fieldId]);
+        return readNumber(data[metric.fieldId]);
+    }
+    if (metric.kind === "category") {
+        return readLabel(data[metric.fieldId]);
     }
     return null;
 }
@@ -1371,36 +1824,68 @@ function fieldPoints(field, value) {
     return 0;
 }
 
-function entryScore(config, entry) {
+function entryScore(config, entry, scope = "total") {
     if (!config || !entry || !config.fields) {
         return 0;
     }
+    const data = getEntryData(entry);
+    const targetScope = normalizePhase(scope) || "total";
+    let currentSectionPhase = "auto";
+
     return config.fields.reduce((total, field) => {
         if (RESERVED_FIELDS.has(field.id)) {
             return total;
         }
-        return total + fieldPoints(field, entry.data && entry.data[field.id]);
+        if (field.type === "section") {
+            const secPhase = normalizePhase(field.phase) || normalizePhase(field.label);
+            if (secPhase) {
+                currentSectionPhase = secPhase;
+            }
+            return total;
+        }
+
+        // Determine field phase
+        let fieldPhase = normalizePhase(field.phase);
+        if (!fieldPhase) {
+            const id = String(field.id || "").toLowerCase();
+            if (id.startsWith("auto")) fieldPhase = "auto";
+            else if (id.startsWith("teleop")) fieldPhase = "teleop";
+            else if (id.startsWith("endgame")) fieldPhase = "endgame";
+            else if (id.startsWith("post")) fieldPhase = "postmatch";
+            else fieldPhase = currentSectionPhase;
+        }
+
+        // Filter by scope
+        if (targetScope !== "total" && fieldPhase !== targetScope) {
+            return total;
+        }
+
+        return total + fieldPoints(field, data[field.id]);
     }, 0);
 }
 
+function isMatchingEvent(entryEventKey, filterEventKey) {
+    if (!filterEventKey) return true;
+    if (!entryEventKey) return false;
+    return String(entryEventKey).trim().toLowerCase() === String(filterEventKey).trim().toLowerCase();
+}
+
 function getFilteredEntriesForTeams(state) {
-    const selectedTeams = Array.from(state.selectedTeams);
+    const selectedTeams = Array.from(state.selectedTeams).map(Number);
     const result = [];
     selectedTeams.forEach(teamNumber => {
         const currentEventEntries = state.entries.filter(entry =>
-            entry.targetTeamNumber === teamNumber &&
-            (!state.eventKey || entry.eventKey === state.eventKey) &&
+            Number(entry.targetTeamNumber) === teamNumber &&
+            (!state.eventKey || isMatchingEvent(entry.eventKey, state.eventKey)) &&
             !entry.isPrescout
         );
-        const prescoutEntries = state.entries.filter(entry =>
-            entry.targetTeamNumber === teamNumber &&
-            entry.isPrescout
-        );
-        if (state.forcePrescout || currentEventEntries.length < 3) {
-            result.push(...currentEventEntries);
+        result.push(...currentEventEntries);
+        if (state.includePrescout) {
+            const prescoutEntries = state.entries.filter(entry =>
+                Number(entry.targetTeamNumber) === teamNumber &&
+                entry.isPrescout
+            );
             result.push(...prescoutEntries);
-        } else {
-            result.push(...currentEventEntries);
         }
     });
     return result;
@@ -1408,25 +1893,23 @@ function getFilteredEntriesForTeams(state) {
 
 function getFilteredEntriesForEvent(state) {
     if (!state.eventKey) {
-        return state.entries;
+        return state.includePrescout ? state.entries : state.entries.filter(e => !e.isPrescout);
     }
-    const teams = Array.from(new Set(state.entries.map(e => e.targetTeamNumber).filter(Boolean)));
+    const teams = Array.from(new Set(state.entries.map(e => Number(e.targetTeamNumber)).filter(Boolean)));
     const result = [];
     teams.forEach(teamNumber => {
         const currentEventEntries = state.entries.filter(entry =>
-            entry.targetTeamNumber === teamNumber &&
-            entry.eventKey === state.eventKey &&
+            Number(entry.targetTeamNumber) === teamNumber &&
+            isMatchingEvent(entry.eventKey, state.eventKey) &&
             !entry.isPrescout
         );
-        const prescoutEntries = state.entries.filter(entry =>
-            entry.targetTeamNumber === teamNumber &&
-            entry.isPrescout
-        );
-        if (state.forcePrescout || currentEventEntries.length < 3) {
-            result.push(...currentEventEntries);
+        result.push(...currentEventEntries);
+        if (state.includePrescout) {
+            const prescoutEntries = state.entries.filter(entry =>
+                Number(entry.targetTeamNumber) === teamNumber &&
+                entry.isPrescout
+            );
             result.push(...prescoutEntries);
-        } else {
-            result.push(...currentEventEntries);
         }
     });
     return result;

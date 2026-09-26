@@ -267,9 +267,11 @@
 
                             <div class="grid gap-8">
 
-                                <label><input id="settings-epa" type="checkbox" /> Use Statbotics EPA</label>
+                                <label><input id="settings-epa" type="checkbox" /> <span data-i18n="config.use_statbotics_epa">Use Statbotics EPA</span></label>
 
-                                <label><input id="settings-opr" type="checkbox" /> Use TBA OPR</label>
+                                <label><input id="settings-exp" type="checkbox" /> <span data-i18n="config.use_match13_exp">Use Match 13 EXP</span></label>
+
+                                <label><input id="settings-opr" type="checkbox" /> <span data-i18n="config.use_tba_opr">Use TBA OPR</span></label>
 
                             </div>
 
@@ -293,7 +295,7 @@
 
                             <p id="settings-tba-notice" class="notice mt-6" style="display: none;">FTC Scout is a public API that provides event, team, match, and OPR data. No API key required.</p>
 
-                            <button id="settings-tba-test" class="btn secondary mt-12" type="button">Test Connection</button>
+                            <button id="settings-tba-test" class="btn secondary mt-12" type="button" data-i18n="config.test_connection">Test Connection</button>
 
                         </div>
 
@@ -317,7 +319,7 @@
 
                             </div>
 
-                            <button id="settings-first-test" class="btn secondary mt-12" type="button">Test FIRST API</button>
+                            <button id="settings-first-test" class="btn secondary mt-12" type="button" data-i18n="config.test_first_api">Test FIRST API</button>
 
                         </div>
 
@@ -333,7 +335,31 @@
 
                             </div>
 
-                            <button id="settings-statbotics-test" class="btn secondary mt-12" type="button">Test Statbotics API</button>
+                            <button id="settings-statbotics-test" class="btn secondary mt-12" type="button" data-i18n="config.test_statbotics">Test Statbotics API</button>
+
+                        </div>
+
+                        <div class="card soft" id="settings-match13-card">
+
+                            <h3 data-i18n="config.match13_api">Match 13</h3>
+
+                            <div class="field">
+
+                                <label for="settings-match13-url" data-i18n="config.match13_base_url">Match 13 Base URL</label>
+
+                                <input id="settings-match13-url" type="text" placeholder="https://actions.match13.com" />
+
+                            </div>
+
+                            <div class="field">
+
+                                <label for="settings-match13-key" data-i18n="config.match13_key">Match 13 API Key (optional)</label>
+
+                                <input id="settings-match13-key" type="password" />
+
+                            </div>
+
+                            <button id="settings-match13-test" class="btn secondary mt-12" type="button" data-i18n="config.test_match13">Test Match 13 API</button>
 
                         </div>
 

@@ -328,7 +328,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             setVal("settings-timezone", loadedSettings.timezone || "America/New_York");
             setVal("settings-source", loadedSettings.preferredSource || "tba");
             setVal("settings-statbotics-url", loadedSettings.statboticsBaseUrl || "https://api.statbotics.io");
+            setVal("settings-match13-url", loadedSettings.match13BaseUrl || "https://actions.match13.com");
             setChecked("settings-epa", loadedSettings.useStatboticsEpa);
+            setChecked("settings-exp", loadedSettings.useMatch13Exp);
             setChecked("settings-opr", loadedSettings.useTbaOpr);
             setChecked("settings-chat", loadedSettings.chatEnabled);
             setChecked("settings-lock-registration", loadedSettings.registrationLocked || false);
@@ -367,6 +369,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (epaCheckbox && epaCheckbox.parentElement) {
                     epaCheckbox.parentElement.style.display = "none";
                 }
+                const expCheckbox = document.getElementById("settings-exp");
+                if (expCheckbox && expCheckbox.parentElement) {
+                    expCheckbox.parentElement.style.display = "none";
+                }
                 const oprCheckbox = document.getElementById("settings-opr");
                 if (oprCheckbox && oprCheckbox.parentElement) {
                     const textNode = Array.from(oprCheckbox.parentElement.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
@@ -377,6 +383,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const statboticsCard = document.getElementById("settings-statbotics-card");
                 if (statboticsCard) {
                     statboticsCard.style.display = "none";
+                }
+                const match13Card = document.getElementById("settings-match13-card");
+                if (match13Card) {
+                    match13Card.style.display = "none";
                 }
             } else {
                 if (tbaCard) tbaCard.style.display = "";
@@ -394,6 +404,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (epaCheckbox && epaCheckbox.parentElement) {
                     epaCheckbox.parentElement.style.display = "";
                 }
+                const expCheckbox = document.getElementById("settings-exp");
+                if (expCheckbox && expCheckbox.parentElement) {
+                    expCheckbox.parentElement.style.display = "";
+                }
                 const oprCheckbox = document.getElementById("settings-opr");
                 if (oprCheckbox && oprCheckbox.parentElement) {
                     const textNode = Array.from(oprCheckbox.parentElement.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
@@ -405,12 +419,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (statboticsCard) {
                     statboticsCard.style.display = "";
                 }
+                const match13Card = document.getElementById("settings-match13-card");
+                if (match13Card) {
+                    match13Card.style.display = "";
+                }
             }
 
             if (loadedSettings.apiKeys) {
                 setVal("settings-tba-key", loadedSettings.apiKeys.tbaKey || "");
                 setVal("settings-first-user", loadedSettings.apiKeys.firstUsername || "");
                 setVal("settings-first-key", loadedSettings.apiKeys.firstKey || "");
+                setVal("settings-match13-key", loadedSettings.apiKeys.match13Key || "");
             }
 
             // Render permissions checkboxes
@@ -562,14 +581,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.timezone = getVal("settings-timezone").trim();
                     loadedSettings.preferredSource = getVal("settings-source");
                     loadedSettings.useStatboticsEpa = getChecked("settings-epa");
+                    loadedSettings.useMatch13Exp = getChecked("settings-exp");
                     loadedSettings.useTbaOpr = getChecked("settings-opr");
                     loadedSettings.chatEnabled = getChecked("settings-chat");
                     loadedSettings.registrationLocked = getChecked("settings-lock-registration");
                     loadedSettings.statboticsBaseUrl = getVal("settings-statbotics-url").trim() || "https://api.statbotics.io";
+                    loadedSettings.match13BaseUrl = getVal("settings-match13-url").trim() || "https://actions.match13.com";
                     loadedSettings.apiKeys = {
                         tbaKey: getVal("settings-tba-key").trim(),
                         firstUsername: getVal("settings-first-user").trim(),
-                        firstKey: getVal("settings-first-key").trim()
+                        firstKey: getVal("settings-first-key").trim(),
+                        match13Key: getVal("settings-match13-key").trim()
                     };
                     loadedSettings.setupWizardCompleted = true;
                     Obsidianscout.safeSetItem("obsidianscout:setup-wizard-dismissed", "true");
@@ -664,6 +686,32 @@ document.addEventListener("DOMContentLoaded", async () => {
                         Obsidianscout.showToast(err.message || "Statbotics API test failed.", "error");
                     } finally {
                         Obsidianscout.setButtonLoading(statboticsTestBtn, false);
+                    }
+                });
+            }
+
+            const match13TestBtn = document.getElementById("settings-match13-test");
+            if (match13TestBtn) {
+                match13TestBtn.addEventListener("click", async () => {
+                    Obsidianscout.setButtonLoading(match13TestBtn, true, "Testing...");
+                    try {
+                        const res = await Obsidianscout.request("/api/settings/test-api", {
+                            method: "POST",
+                            json: {
+                                api: "match13",
+                                match13BaseUrl: getVal("settings-match13-url").trim(),
+                                match13Key: getVal("settings-match13-key").trim()
+                            }
+                        });
+                        if (res && res.success) {
+                            Obsidianscout.showToast(res.message || "Match 13 API connection successful!", "success");
+                        } else {
+                            Obsidianscout.showToast((res && res.message) || "Match 13 API test failed.", "error");
+                        }
+                    } catch (err) {
+                        Obsidianscout.showToast(err.message || "Match 13 API test failed.", "error");
+                    } finally {
+                        Obsidianscout.setButtonLoading(match13TestBtn, false);
                     }
                 });
             }

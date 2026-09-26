@@ -127,4 +127,19 @@ class ApiKeyTestEndpointTest {
         }
         assertTrue(epaHistory.isNotEmpty(), "Statbotics EPA history should be synced and non-empty")
     }
+
+    @Test
+    fun testMatch13ApiConnectionHandlesLocalOrRemoteUrl() = runBlocking {
+        val session = UserSession(
+            userId = "admin-1",
+            username = "admin",
+            teamNumber = 100,
+            program = "FRC",
+            role = UserRole.ADMIN
+        )
+        val request = TestApiRequest(api = "match13", match13BaseUrl = "https://actions.match13.com")
+        val result = IntegrationService.testApiKey(session, request)
+        // Verify it was processed as Match 13 and returned a proper response (success or connection message)
+        assertTrue(result.message.contains("Match 13 API"), "Message should mention Match 13 API: ${result.message}")
+    }
 }

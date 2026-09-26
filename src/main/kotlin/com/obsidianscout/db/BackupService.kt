@@ -166,6 +166,7 @@ data class ApiTeamBackupDto(
     val country: String?,
     val opr: Double?,
     val epa: Double?,
+    val match13Exp: Double? = null,
     val dataJson: String,
     val updatedAt: Long
 )
@@ -551,6 +552,7 @@ object BackupService {
                         country = row[ApiTeams.country],
                         opr = row[ApiTeams.opr],
                         epa = row[ApiTeams.epa],
+                        match13Exp = row[ApiTeams.match13Exp],
                         dataJson = row[ApiTeams.dataJson],
                         updatedAt = row[ApiTeams.updatedAt].toEpochMilli()
                     )
@@ -1090,6 +1092,7 @@ object BackupService {
                             it[country] = at.country
                             it[opr] = at.opr
                             it[epa] = at.epa
+                            it[match13Exp] = at.match13Exp
                             it[dataJson] = at.dataJson
                             it[updatedAt] = Instant.ofEpochMilli(at.updatedAt)
                         }
@@ -1106,6 +1109,7 @@ object BackupService {
                             it[country] = at.country
                             it[opr] = at.opr
                             it[epa] = at.epa
+                            it[match13Exp] = at.match13Exp
                             it[dataJson] = at.dataJson
                             it[updatedAt] = Instant.ofEpochMilli(at.updatedAt)
                         }
@@ -1702,6 +1706,7 @@ object BackupService {
                     country = r["country"]?.takeIf { it.isNotBlank() },
                     opr = r["opr"]?.toDoubleOrNull(),
                     epa = r["epa"]?.toDoubleOrNull(),
+                    match13Exp = (r["match13_exp"] ?: r["exp"])?.toDoubleOrNull(),
                     dataJson = r["data_json"]!!,
                     updatedAt = r["updated_at"]!!.toLong()
                 )

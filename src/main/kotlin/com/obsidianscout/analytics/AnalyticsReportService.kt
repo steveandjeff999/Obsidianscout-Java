@@ -77,7 +77,8 @@ data class TeamAnalyticsSummary(
     val city: String? = null,
     val state: String? = null,
     val opr: Double? = null,
-    val epa: Double? = null
+    val epa: Double? = null,
+    val exp: Double? = null
 )
 
 @Serializable
@@ -367,7 +368,8 @@ object AnalyticsReportService {
                     city = row[ApiTeams.city],
                     state = row[ApiTeams.state],
                     opr = row[ApiTeams.opr],
-                    epa = row[ApiTeams.epa]
+                    epa = row[ApiTeams.epa],
+                    exp = row[ApiTeams.match13Exp]
                 )
             }.distinctBy { it.teamNumber }
         }
@@ -420,6 +422,7 @@ object AnalyticsReportService {
         fields.add(FieldMetadata("calc_endgame_score", "Endgame Score", "number", "calculated", "Phase Scores"))
         if (!isFtc) {
             fields.add(FieldMetadata("statbotics_epa", "EPA", "number", "calculated", "Statistics"))
+            fields.add(FieldMetadata("match13_exp", "EXP", "number", "calculated", "Statistics"))
         }
         fields.add(FieldMetadata("tba_opr", if (isFtc) "FTC Scout OPR" else "OPR", "number", "calculated", "Statistics"))
 
@@ -456,6 +459,7 @@ object AnalyticsReportService {
 
         val teamOprMap = teamsList.associate { it.teamNumber to it.opr }
         val teamEpaMap = teamsList.associate { it.teamNumber to it.epa }
+        val teamExpMap = teamsList.associate { it.teamNumber to it.exp }
 
         // Transform and flatten match records
         val flattenedMatches = matchEntries.map { entry ->
@@ -478,6 +482,7 @@ object AnalyticsReportService {
                 put("calc_teleop_score", teleopScore)
                 put("calc_endgame_score", endgameScore)
                 put("statbotics_epa", teamEpaMap[tNum] ?: 0.0)
+                put("match13_exp", teamExpMap[tNum] ?: 0.0)
                 put("tba_opr", teamOprMap[tNum] ?: 0.0)
                 put("hasDiscrepancy", entry.hasDiscrepancy)
 

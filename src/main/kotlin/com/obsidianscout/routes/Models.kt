@@ -304,7 +304,8 @@ data class ScoutingEntryRequest(
 data class ApiKeysPayload(
     val tbaKey: String = "",
     val firstUsername: String = "",
-    val firstKey: String = ""
+    val firstKey: String = "",
+    val match13Key: String = ""
 )
 
 @Serializable
@@ -316,6 +317,7 @@ data class ApiSettingsPayload(
     val preferredSource: String = "tba",
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
+    val useMatch13Exp: Boolean = false,
     val chatEnabled: Boolean = true,
     val apiKeys: ApiKeysPayload = ApiKeysPayload(),
     val scoutPages: List<String> = emptyList(),
@@ -326,7 +328,9 @@ data class ApiSettingsPayload(
     val activeThemeName: String = "",
     val setupWizardCompleted: Boolean = false,
     val registrationLocked: Boolean = false,
-    val program: String = "FRC"
+    val program: String = "FRC",
+    val statboticsBaseUrl: String = "https://api.statbotics.io",
+    val match13BaseUrl: String = "https://actions.match13.com"
 )
 
 @Serializable
@@ -390,6 +394,7 @@ data class TeamRecord(
     val country: String? = null,
     val opr: Double? = null,
     val epa: Double? = null,
+    val exp: Double? = null,
     val averagePoints: Double? = null
 )
 
@@ -417,6 +422,13 @@ data class MatchRecord(
 )
 
 @Serializable
+data class StatsHistoryResponse(
+    val oprs: Map<String, Double> = emptyMap(),
+    val epaHistory: List<kotlinx.serialization.json.JsonElement> = emptyList(),
+    val match13History: List<kotlinx.serialization.json.JsonElement> = emptyList()
+)
+
+@Serializable
 data class SummaryResponse(
     val entries: Int,
     val events: Int,
@@ -437,6 +449,7 @@ data class MatchTeamPrediction(
     val scoutedMatchesCount: Int,
     val epa: Double?,
     val opr: Double?,
+    val exp: Double? = null,
     val hasDiscrepancy: Boolean = false
 )
 
@@ -445,7 +458,8 @@ data class AlliancePrediction(
     val teams: List<MatchTeamPrediction>,
     val totalScoutedScore: Double,
     val totalEpa: Double,
-    val totalOpr: Double
+    val totalOpr: Double,
+    val totalExp: Double = 0.0
 )
 
 @Serializable
@@ -455,7 +469,8 @@ data class MatchPredictionResponse(
     val redAlliance: AlliancePrediction,
     val blueAlliance: AlliancePrediction,
     val useStatboticsEpa: Boolean,
-    val useTbaOpr: Boolean
+    val useTbaOpr: Boolean,
+    val useMatch13Exp: Boolean = false
 )
 
 // ─────────────────────────────────────
@@ -785,7 +800,9 @@ data class TestApiRequest(
     val tbaKey: String? = null,
     val firstUsername: String? = null,
     val firstKey: String? = null,
-    val statboticsBaseUrl: String? = null
+    val statboticsBaseUrl: String? = null,
+    val match13BaseUrl: String? = null,
+    val match13Key: String? = null
 )
 
 @Serializable
@@ -929,8 +946,10 @@ data class TeamValidationRecord(
     val averageScoutedScore: Double?,
     val epa: Double?,
     val opr: Double?,
+    val exp: Double? = null,
     val epaDiff: Double?,
     val oprDiff: Double?,
+    val expDiff: Double? = null,
     val isAnomaly: Boolean,
     val anomalyReason: String? = null,
     val hasDiscrepancy: Boolean = false
@@ -948,6 +967,7 @@ data class ValidationSummaryResponse(
     val teamsWithAnomalies: Int,
     val useStatboticsEpa: Boolean,
     val useTbaOpr: Boolean,
+    val useMatch13Exp: Boolean = false,
     val threshold: Double,
     val matches: List<MatchValidationRecord>,
     val teams: List<TeamValidationRecord>

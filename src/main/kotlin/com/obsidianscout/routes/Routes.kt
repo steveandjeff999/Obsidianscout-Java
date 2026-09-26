@@ -1778,6 +1778,21 @@ fun Application.configureRoutes() {
                 }
             }
 
+            route("/stats") {
+                get("/history") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
+                    if (eventKey.isBlank()) {
+                        call.respond(StatsHistoryResponse())
+                        return@get
+                    }
+                    val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
+                    val history = IntegrationService.getFullStatsHistory(settings, eventKey)
+                    call.respond(history)
+                }
+            }
+
             route("/integrations") {
                 get("/sync/status") {
                     val session = call.requireSession()
@@ -4007,11 +4022,13 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         preferredSource = preferredSource,
         useStatboticsEpa = useStatboticsEpa,
         useTbaOpr = useTbaOpr,
+        useMatch13Exp = useMatch13Exp,
         chatEnabled = chatEnabled,
         apiKeys = ApiKeysPayload(
             tbaKey = if (apiKeys.tbaKey.isNotBlank()) "********" else "",
             firstUsername = apiKeys.firstUsername,
-            firstKey = if (apiKeys.firstKey.isNotBlank()) "********" else ""
+            firstKey = if (apiKeys.firstKey.isNotBlank()) "********" else "",
+            match13Key = if (apiKeys.match13Key.isNotBlank()) "********" else ""
         ),
         scoutPages = scoutPages,
         analyticsPages = analyticsPages,
@@ -4021,7 +4038,9 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         activeThemeName = activeThemeName,
         setupWizardCompleted = setupWizardCompleted,
         registrationLocked = registrationLocked,
-        program = program
+        program = program,
+        statboticsBaseUrl = statboticsBaseUrl,
+        match13BaseUrl = match13BaseUrl
     )
 }
 
@@ -4033,11 +4052,13 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         preferredSource = preferredSource,
         useStatboticsEpa = useStatboticsEpa,
         useTbaOpr = useTbaOpr,
+        useMatch13Exp = useMatch13Exp,
         chatEnabled = chatEnabled,
         apiKeys = com.obsidianscout.integrations.ApiKeys(
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
-            firstKey = apiKeys.firstKey
+            firstKey = apiKeys.firstKey,
+            match13Key = apiKeys.match13Key
         ),
         scoutPages = if (scoutPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_SCOUT_PAGES else scoutPages,
         analyticsPages = if (analyticsPages.isEmpty()) com.obsidianscout.integrations.DEFAULT_ANALYTICS_PAGES else analyticsPages,
@@ -4047,7 +4068,9 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         activeThemeName = activeThemeName,
         setupWizardCompleted = setupWizardCompleted,
         registrationLocked = registrationLocked,
-        program = program
+        program = program,
+        statboticsBaseUrl = statboticsBaseUrl,
+        match13BaseUrl = match13BaseUrl
     )
 }
 

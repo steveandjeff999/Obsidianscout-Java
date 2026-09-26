@@ -162,6 +162,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         const heroRow = document.createElement("div");
         heroRow.style.cssText = `display: grid; grid-template-columns: repeat(${selectedTeams.length}, 1fr); gap: 16px; margin-bottom: 20px;`;
 
+        const isFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === 'function') 
+            ? Obsidianscout.getProgram() === "FTC" 
+            : (state.settings && state.settings.program === "FTC");
+        const effectiveUseEpa = !isFtc && state.settings?.useStatboticsEpa;
+        const effectiveUseExp = !isFtc && state.settings?.useMatch13Exp;
+        const effectiveUseOpr = state.settings?.useTbaOpr;
+
         selectedTeams.forEach(tNum => {
             const teamObj = state.teamsByNumber.get(tNum) || {};
             const tData = teamsData[tNum.toString()] || {};
@@ -172,17 +179,20 @@ document.addEventListener("DOMContentLoaded", async () => {
                 ? `<div style="font-size: 0.8rem; margin-top: 8px; color: var(--muted);"><span style="background: var(--surface-3, rgba(255,255,255,0.06)); padding: 2px 8px; border-radius: 999px;">${tData.matchesScouted} matches</span></div>`
                 : "";
 
-            const epaBadge = (tData.epa != null)
+            const epaBadge = (effectiveUseEpa && tData.epa != null)
                 ? `<span style="font-size: 0.75rem; background: rgba(56,189,248,0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; margin-right: 4px;">EPA ${tData.epa.toFixed(1)}</span>`
                 : "";
-            const oprBadge = (tData.opr != null)
+            const expBadge = (effectiveUseExp && tData.exp != null)
+                ? `<span style="font-size: 0.75rem; background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; margin-right: 4px;">EXP ${tData.exp.toFixed(1)}</span>`
+                : "";
+            const oprBadge = (effectiveUseOpr && tData.opr != null)
                 ? `<span style="font-size: 0.75rem; background: rgba(168,85,247,0.15); color: #c084fc; padding: 2px 6px; border-radius: 4px;">OPR ${tData.opr.toFixed(1)}</span>`
                 : "";
 
             card.innerHTML = `
                 <div class="team-hero-num">${tNum}</div>
                 <div class="team-hero-name">${Obsidianscout.escapeHtml(tData.nickname || teamObj.nickname || teamObj.name || `Team ${tNum}`)}</div>
-                ${(epaBadge || oprBadge) ? `<div style="margin-top: 6px;">${epaBadge}${oprBadge}</div>` : ""}
+                ${(epaBadge || expBadge || oprBadge) ? `<div style="margin-top: 6px;">${epaBadge}${expBadge}${oprBadge}</div>` : ""}
                 ${countBadge}
             `;
             heroRow.appendChild(card);

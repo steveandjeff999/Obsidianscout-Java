@@ -19,7 +19,8 @@ import java.time.Year
 data class ApiKeys(
     val tbaKey: String = "",
     val firstUsername: String = "",
-    val firstKey: String = ""
+    val firstKey: String = "",
+    val match13Key: String = ""
 )
 
 @Serializable
@@ -121,6 +122,7 @@ data class ApiSettings(
     val preferredSource: String = "tba",
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
+    val useMatch13Exp: Boolean = false,
     val chatEnabled: Boolean = true,
     val apiKeys: ApiKeys = ApiKeys(),
     val scoutPages: List<String> = DEFAULT_SCOUT_PAGES,
@@ -133,6 +135,7 @@ data class ApiSettings(
     val registrationLocked: Boolean = false,
     val program: String = "FRC",
     val statboticsBaseUrl: String = "https://api.statbotics.io",
+    val match13BaseUrl: String = "https://actions.match13.com",
     val assignmentReminderMinutes: Int = 15,
     val enableAssignmentPushReminders: Boolean = true,
     val enableAssignmentEmailReminders: Boolean = true
@@ -271,18 +274,23 @@ object SettingsService {
         }
         val isFtc = settings.program.equals("FTC", ignoreCase = true)
         val normalizedUseStatboticsEpa = if (isFtc) false else settings.useStatboticsEpa
+        val normalizedUseMatch13Exp = if (isFtc) false else settings.useMatch13Exp
         val rawStatboticsUrl = settings.statboticsBaseUrl.trim()
         val statboticsUrl = (if (rawStatboticsUrl.isBlank()) "https://api.statbotics.io" else rawStatboticsUrl).removeSuffix("/")
+        val rawMatch13Url = settings.match13BaseUrl.trim()
+        val match13Url = (if (rawMatch13Url.isBlank()) "https://actions.match13.com" else rawMatch13Url).removeSuffix("/")
         return settings.copy(
             eventCode = canonicalTbaEventCode(eventCode),
             eventKey = resolvedKey,
             timezone = settings.timezone.ifBlank { "America/New_York" },
             preferredSource = settings.preferredSource.lowercase(),
             useStatboticsEpa = normalizedUseStatboticsEpa,
+            useMatch13Exp = normalizedUseMatch13Exp,
             scoutPages = normalizedScoutPages,
             analyticsPages = normalizedAnalyticsPages,
             adminPages = normalizedAdminPages,
-            statboticsBaseUrl = statboticsUrl
+            statboticsBaseUrl = statboticsUrl,
+            match13BaseUrl = match13Url
         )
     }
 

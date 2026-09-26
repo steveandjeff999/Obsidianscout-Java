@@ -384,12 +384,20 @@ function renderTeamsTable() {
     countBadge.textContent = `${teams.length} teams`;
 
     if (teams.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted, #94a3b8); padding: 32px 16px;">No teams matching filter criteria</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted, #94a3b8); padding: 32px 16px;">No teams matching filter criteria</td></tr>`;
         return;
     }
 
     const useEpa = currentValidationData.useStatboticsEpa;
+    const useExp = currentValidationData.useMatch13Exp;
     const useOpr = currentValidationData.useTbaOpr;
+
+    const thEpa = document.getElementById("th-val-epa");
+    const thExp = document.getElementById("th-val-exp");
+    const thOpr = document.getElementById("th-val-opr");
+    if (thEpa) thEpa.style.display = useEpa ? "" : "none";
+    if (thExp) thExp.style.display = useExp ? "" : "none";
+    if (thOpr) thOpr.style.display = useOpr ? "" : "none";
 
     teams.forEach(team => {
         const tr = document.createElement("tr");
@@ -419,30 +427,49 @@ function renderTeamsTable() {
         tr.appendChild(avgTd);
 
         // EPA & Delta
-        const epaTd = document.createElement("td");
-        if (useEpa && team.epa !== null && team.epa !== undefined) {
-            const epaDiff = team.epaDiff;
-            const diffHtml = epaDiff !== null
-                ? `<span class="delta-chip ${Math.abs(epaDiff) >= (currentValidationData.threshold || 15) ? 'anomaly' : 'normal'}" style="margin-left: 6px;">Δ ${epaDiff > 0 ? '+' + epaDiff : epaDiff}</span>`
-                : '';
-            epaTd.innerHTML = `<span>${team.epa}</span> ${diffHtml}`;
-        } else {
-            epaTd.innerHTML = `<span class="metric-subtext">${useEpa ? 'N/A' : 'Disabled'}</span>`;
+        if (useEpa) {
+            const epaTd = document.createElement("td");
+            if (team.epa !== null && team.epa !== undefined) {
+                const epaDiff = team.epaDiff;
+                const diffHtml = epaDiff !== null
+                    ? `<span class="delta-chip ${Math.abs(epaDiff) >= (currentValidationData.threshold || 15) ? 'anomaly' : 'normal'}" style="margin-left: 6px;">Δ ${epaDiff > 0 ? '+' + epaDiff : epaDiff}</span>`
+                    : '';
+                epaTd.innerHTML = `<span>${team.epa}</span> ${diffHtml}`;
+            } else {
+                epaTd.innerHTML = `<span class="metric-subtext">N/A</span>`;
+            }
+            tr.appendChild(epaTd);
         }
-        tr.appendChild(epaTd);
+
+        // EXP & Delta
+        if (useExp) {
+            const expTd = document.createElement("td");
+            if (team.exp !== null && team.exp !== undefined) {
+                const expDiff = team.expDiff;
+                const diffHtml = expDiff !== null
+                    ? `<span class="delta-chip ${Math.abs(expDiff) >= (currentValidationData.threshold || 15) ? 'anomaly' : 'normal'}" style="margin-left: 6px;">Δ ${expDiff > 0 ? '+' + expDiff : expDiff}</span>`
+                    : '';
+                expTd.innerHTML = `<span>${team.exp}</span> ${diffHtml}`;
+            } else {
+                expTd.innerHTML = `<span class="metric-subtext">N/A</span>`;
+            }
+            tr.appendChild(expTd);
+        }
 
         // OPR & Delta
-        const oprTd = document.createElement("td");
-        if (useOpr && team.opr !== null && team.opr !== undefined) {
-            const oprDiff = team.oprDiff;
-            const diffHtml = oprDiff !== null
-                ? `<span class="delta-chip ${Math.abs(oprDiff) >= (currentValidationData.threshold || 15) ? 'anomaly' : 'normal'}" style="margin-left: 6px;">Δ ${oprDiff > 0 ? '+' + oprDiff : oprDiff}</span>`
-                : '';
-            oprTd.innerHTML = `<span>${team.opr}</span> ${diffHtml}`;
-        } else {
-            oprTd.innerHTML = `<span class="metric-subtext">${useOpr ? 'N/A' : 'Disabled'}</span>`;
+        if (useOpr) {
+            const oprTd = document.createElement("td");
+            if (team.opr !== null && team.opr !== undefined) {
+                const oprDiff = team.oprDiff;
+                const diffHtml = oprDiff !== null
+                    ? `<span class="delta-chip ${Math.abs(oprDiff) >= (currentValidationData.threshold || 15) ? 'anomaly' : 'normal'}" style="margin-left: 6px;">Δ ${oprDiff > 0 ? '+' + oprDiff : oprDiff}</span>`
+                    : '';
+                oprTd.innerHTML = `<span>${team.opr}</span> ${diffHtml}`;
+            } else {
+                oprTd.innerHTML = `<span class="metric-subtext">N/A</span>`;
+            }
+            tr.appendChild(oprTd);
         }
-        tr.appendChild(oprTd);
 
         // Anomaly Status
         const statusTd = document.createElement("td");

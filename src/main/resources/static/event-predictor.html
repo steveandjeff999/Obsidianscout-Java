@@ -491,6 +491,7 @@
                             <option value="all" data-i18n="predictor.all_3">All 3</option>
                             <option value="scouted" data-i18n="predictor.scouted_data">Scouted Data</option>
                             <option value="epa" data-i18n="predictor.statbotics_epa">Statbotics EPA</option>
+                            <option value="exp" data-i18n="alliance-selection.match13_exp">Match 13 EXP</option>
                             <option value="opr" data-i18n="predictor.tba_opr">TBA OPR</option>
                         </select>
                     </div>
@@ -595,6 +596,19 @@
                                     </div>
                                 </div>
 
+                                <!-- EXP comparison -->
+                                <div class="comp-bar-container" id="modal-exp-comparison">
+                                    <div class="comp-bar-label">
+                                        <span style="color: #f87171;" id="modal-lbl-exp-red">Red: 0.0</span>
+                                        <span style="font-weight: 700;" data-i18n="alliance-selection.match13_exp">Match 13 EXP</span>
+                                        <span style="color: #60a5fa;" id="modal-lbl-exp-blue">Blue: 0.0</span>
+                                    </div>
+                                    <div class="comp-bar-track">
+                                        <div class="comp-bar-fill comp-bar-red" id="modal-bar-exp-red" style="width: 50%;"></div>
+                                        <div class="comp-bar-fill comp-bar-blue" id="modal-bar-exp-blue" style="width: 50%;"></div>
+                                    </div>
+                                </div>
+
                                 <!-- OPR comparison -->
                                 <div class="comp-bar-container" id="modal-opr-comparison">
                                     <div class="comp-bar-label">
@@ -648,6 +662,12 @@
                             <div class="winner-spotlight-title" data-i18n="predictor.epa_prediction">EPA Prediction</div>
                             <div class="winner-name" id="modal-spotlight-epa-winner">-</div>
                             <div class="winner-subtext" id="modal-spotlight-epa-subtext">No EPA data synced</div>
+                        </div>
+
+                        <div class="winner-spotlight" id="modal-spotlight-exp-card">
+                            <div class="winner-spotlight-title" data-i18n="predictor.exp_prediction">EXP Prediction</div>
+                            <div class="winner-name" id="modal-spotlight-exp-winner">-</div>
+                            <div class="winner-subtext" id="modal-spotlight-exp-subtext">No EXP data synced</div>
                         </div>
 
                         <div class="winner-spotlight" id="modal-spotlight-opr-card">

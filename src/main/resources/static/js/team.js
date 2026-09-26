@@ -273,6 +273,7 @@ function renderStats() {
         ? Obsidianscout.getProgram() === "FTC"
         : (state.settings?.program === "FTC");
     const effectiveUseEpa = !isFtc && state.settings && state.settings.useStatboticsEpa;
+    const effectiveUseExp = !isFtc && state.settings && state.settings.useMatch13Exp;
     const effectiveUseOpr = state.settings && state.settings.useTbaOpr;
     
     // EPA
@@ -282,6 +283,14 @@ function renderStats() {
     }
     const epaEl = document.getElementById("stat-epa");
     if (epaEl) epaEl.textContent = t.epa !== null && t.epa !== undefined ? t.epa.toFixed(2) : "--";
+
+    // EXP
+    const cardExp = document.getElementById("card-stat-exp");
+    if (cardExp) {
+        cardExp.style.display = effectiveUseExp ? "" : "none";
+    }
+    const expEl = document.getElementById("stat-exp");
+    if (expEl) expEl.textContent = t.exp !== null && t.exp !== undefined ? t.exp.toFixed(2) : "--";
 
     // OPR
     const cardOpr = document.getElementById("card-stat-opr");

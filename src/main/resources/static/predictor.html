@@ -349,6 +349,19 @@
                                 </div>
                             </div>
 
+                            <!-- EXP comparison -->
+                            <div class="comp-bar-container" id="exp-comparison">
+                                <div class="comp-bar-label">
+                                    <span style="color: #f87171;" id="lbl-exp-red" data-i18n="predictor.red_00">Red: 0.0</span>
+                                    <span style="font-weight: 700;" data-i18n="alliance-selection.match13_exp">Match 13 EXP</span>
+                                    <span style="color: #60a5fa;" id="lbl-exp-blue" data-i18n="predictor.blue_00">Blue: 0.0</span>
+                                </div>
+                                <div class="comp-bar-track">
+                                    <div class="comp-bar-fill comp-bar-red" id="bar-exp-red" style="width: 50%;"></div>
+                                    <div class="comp-bar-fill comp-bar-blue" id="bar-exp-blue" style="width: 50%;"></div>
+                                </div>
+                            </div>
+
                             <!-- OPR comparison -->
                             <div class="comp-bar-container" id="opr-comparison">
                                 <div class="comp-bar-label">
@@ -402,6 +415,12 @@
                         <div class="winner-spotlight-title" data-i18n="predictor.epa_prediction">EPA Prediction</div>
                         <div class="winner-name" id="spotlight-epa-winner">-</div>
                         <div class="winner-subtext" id="spotlight-epa-subtext" data-i18n="predictor.no_epa_data_synced">No EPA data synced</div>
+                    </div>
+
+                    <div class="winner-spotlight" id="spotlight-exp-card">
+                        <div class="winner-spotlight-title" data-i18n="predictor.exp_prediction">EXP Prediction</div>
+                        <div class="winner-name" id="spotlight-exp-winner">-</div>
+                        <div class="winner-subtext" id="spotlight-exp-subtext" data-i18n="predictor.no_exp_data_synced">No EXP data synced</div>
                     </div>
 
                     <div class="winner-spotlight" id="spotlight-opr-card">

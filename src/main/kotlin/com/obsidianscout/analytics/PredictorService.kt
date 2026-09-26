@@ -66,8 +66,9 @@ object PredictorService {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
             val checkEpa = !isFtc && settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
+            val checkExp = !isFtc && settings.useMatch13Exp && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.match13Exp] == null || it[ApiTeams.match13Exp] == 0.0 }
             val checkOpr = settings.useTbaOpr && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.opr] == null || it[ApiTeams.opr] == 0.0 }
-            checkEpa || checkOpr
+            checkEpa || checkExp || checkOpr
         }
 
         if (needsStatsSync) {
@@ -75,7 +76,7 @@ object PredictorService {
                 val settings = readTransaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
                 com.obsidianscout.integrations.IntegrationService.syncStats(settings, eventKey)
             } catch (e: Exception) {
-                throw ApiException(HttpStatusCode.BadGateway, "Failed to fetch EPA/OPR stats from API: ${e.message}")
+                throw ApiException(HttpStatusCode.BadGateway, "Failed to fetch EPA/OPR/EXP stats from API: ${e.message}")
             }
         }
 
@@ -101,6 +102,7 @@ object PredictorService {
 
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val useStatboticsEpa = !isFtc && settings.useStatboticsEpa
+            val useMatch13Exp = !isFtc && settings.useMatch13Exp
             val useTbaOpr = settings.useTbaOpr
 
             val allTeamsInEvent = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
@@ -226,6 +228,7 @@ object PredictorService {
                 val teamRow = teamInfoMap[resolvedKey] ?: teamInfoMap[primaryKey]
                 val nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name) ?: "Team $teamNumber"
                 val epa = teamRow?.get(ApiTeams.epa)
+                val exp = teamRow?.get(ApiTeams.match13Exp)
                 val opr = teamRow?.get(ApiTeams.opr)
 
                 val teamEntries = entriesByTeam[teamNumber] ?: emptyList()
@@ -246,6 +249,7 @@ object PredictorService {
                     averageScoutedScore = avgScore,
                     scoutedMatchesCount = teamEntries.size,
                     epa = epa,
+                    exp = exp,
                     opr = opr,
                     hasDiscrepancy = hasDiscrepancy
                 )
@@ -260,6 +264,9 @@ object PredictorService {
             val totalRedEpa = redPredictions.mapNotNull { it.epa }.sum()
             val totalBlueEpa = bluePredictions.mapNotNull { it.epa }.sum()
 
+            val totalRedExp = redPredictions.mapNotNull { it.exp }.sum()
+            val totalBlueExp = bluePredictions.mapNotNull { it.exp }.sum()
+
             val totalRedOpr = redPredictions.mapNotNull { it.opr }.sum()
             val totalBlueOpr = bluePredictions.mapNotNull { it.opr }.sum()
 
@@ -270,15 +277,18 @@ object PredictorService {
                     teams = redPredictions,
                     totalScoutedScore = totalRedScouted,
                     totalEpa = totalRedEpa,
+                    totalExp = totalRedExp,
                     totalOpr = totalRedOpr
                 ),
                 blueAlliance = AlliancePrediction(
                     teams = bluePredictions,
                     totalScoutedScore = totalBlueScouted,
                     totalEpa = totalBlueEpa,
+                    totalExp = totalBlueExp,
                     totalOpr = totalBlueOpr
                 ),
                 useStatboticsEpa = useStatboticsEpa,
+                useMatch13Exp = useMatch13Exp,
                 useTbaOpr = useTbaOpr
             )
         }
@@ -319,6 +329,7 @@ object PredictorService {
             val isFtc = session.program.equals("FTC", ignoreCase = true)
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
             val useStatboticsEpa = !isFtc && settings.useStatboticsEpa
+            val useMatch13Exp = !isFtc && settings.useMatch13Exp
             val useTbaOpr = settings.useTbaOpr
 
             val allTeamsInEvent = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyLower }.toList()
@@ -432,6 +443,7 @@ object PredictorService {
                     val teamRow = teamInfoMap[resolvedKey] ?: teamInfoMap[primaryKey]
                     val nickname = teamRow?.get(ApiTeams.nickname) ?: teamRow?.get(ApiTeams.name) ?: "Team $teamNumber"
                     val epa = teamRow?.get(ApiTeams.epa)
+                    val exp = teamRow?.get(ApiTeams.match13Exp)
                     val opr = teamRow?.get(ApiTeams.opr)
 
                     val teamEntries = entriesByTeam[teamNumber] ?: emptyList()
@@ -452,6 +464,7 @@ object PredictorService {
                         averageScoutedScore = avgScore,
                         scoutedMatchesCount = teamEntries.size,
                         epa = epa,
+                        exp = exp,
                         opr = opr,
                         hasDiscrepancy = hasDiscrepancy
                     )
@@ -482,6 +495,9 @@ object PredictorService {
                 val totalRedEpa = redPredictions.mapNotNull { it.epa }.sum()
                 val totalBlueEpa = bluePredictions.mapNotNull { it.epa }.sum()
 
+                val totalRedExp = redPredictions.mapNotNull { it.exp }.sum()
+                val totalBlueExp = bluePredictions.mapNotNull { it.exp }.sum()
+
                 val totalRedOpr = redPredictions.mapNotNull { it.opr }.sum()
                 val totalBlueOpr = bluePredictions.mapNotNull { it.opr }.sum()
 
@@ -492,15 +508,18 @@ object PredictorService {
                         teams = redPredictions,
                         totalScoutedScore = totalRedScouted,
                         totalEpa = totalRedEpa,
+                        totalExp = totalRedExp,
                         totalOpr = totalRedOpr
                     ),
                     blueAlliance = AlliancePrediction(
                         teams = bluePredictions,
                         totalScoutedScore = totalBlueScouted,
                         totalEpa = totalBlueEpa,
+                        totalExp = totalBlueExp,
                         totalOpr = totalBlueOpr
                     ),
                     useStatboticsEpa = useStatboticsEpa,
+                    useMatch13Exp = useMatch13Exp,
                     useTbaOpr = useTbaOpr
                 )
             }

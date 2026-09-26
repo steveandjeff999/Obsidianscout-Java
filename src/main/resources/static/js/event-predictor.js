@@ -58,6 +58,7 @@ async function loadEvents() {
         }
 
         const effectiveUseEpa = !isFtc && appSettings.useStatboticsEpa;
+        const effectiveUseExp = !isFtc && appSettings.useMatch13Exp;
         const effectiveUseOpr = appSettings.useTbaOpr;
 
         const datasourceSelect = document.getElementById("datasource-select");
@@ -66,6 +67,10 @@ async function loadEvents() {
                 const optEpa = datasourceSelect.querySelector('option[value="epa"]');
                 if (optEpa) optEpa.remove();
             }
+            if (!effectiveUseExp) {
+                const optExp = datasourceSelect.querySelector('option[value="exp"]');
+                if (optExp) optExp.remove();
+            }
             if (!effectiveUseOpr) {
                 const optOpr = datasourceSelect.querySelector('option[value="opr"]');
                 if (optOpr) optOpr.remove();
@@ -73,9 +78,12 @@ async function loadEvents() {
                 const optOpr = datasourceSelect.querySelector('option[value="opr"]');
                 if (optOpr) optOpr.textContent = t('predictor.ftcscout_opr', "FTC Scout OPR");
             }
-            if (!effectiveUseEpa || !effectiveUseOpr) {
-                const optAll = datasourceSelect.querySelector('option[value="all"]');
+            const activeCount = (effectiveUseEpa ? 1 : 0) + (effectiveUseExp ? 1 : 0) + (effectiveUseOpr ? 1 : 0);
+            const optAll = datasourceSelect.querySelector('option[value="all"]');
+            if (activeCount === 0) {
                 if (optAll) optAll.remove();
+            } else if (optAll) {
+                optAll.textContent = t('predictor.all_sources', "All Sources");
             }
         }
 
@@ -84,6 +92,11 @@ async function loadEvents() {
         const modalEpaCard = document.getElementById("modal-spotlight-epa-card");
         if (modalEpaComp) modalEpaComp.style.display = effectiveUseEpa ? "" : "none";
         if (modalEpaCard) modalEpaCard.style.display = effectiveUseEpa ? "" : "none";
+
+        const modalExpComp = document.getElementById("modal-exp-comparison");
+        const modalExpCard = document.getElementById("modal-spotlight-exp-card");
+        if (modalExpComp) modalExpComp.style.display = effectiveUseExp ? "" : "none";
+        if (modalExpCard) modalExpCard.style.display = effectiveUseExp ? "" : "none";
 
         const modalOprComp = document.getElementById("modal-opr-comparison");
         const modalOprCard = document.getElementById("modal-spotlight-opr-card");
@@ -265,6 +278,7 @@ function renderPredictionsList() {
                 ? Obsidianscout.getProgram() === "FTC"
                 : (appSettings && appSettings.program === "FTC");
             const effectiveUseEpa = !isFtc && appSettings && appSettings.useStatboticsEpa;
+            const effectiveUseExp = !isFtc && appSettings && appSettings.useMatch13Exp;
             const effectiveUseOpr = appSettings && appSettings.useTbaOpr;
 
             const redScouted = match.redAlliance.totalScoutedScore;
@@ -279,6 +293,13 @@ function renderPredictionsList() {
             if (effectiveUseEpa && (redEpa > 0 || blueEpa > 0)) {
                 if (redEpa > blueEpa) redVotes++;
                 else if (blueEpa > redEpa) blueVotes++;
+            }
+
+            const redExp = match.redAlliance.totalExp;
+            const blueExp = match.blueAlliance.totalExp;
+            if (effectiveUseExp && (redExp > 0 || blueExp > 0)) {
+                if (redExp > blueExp) redVotes++;
+                else if (blueExp > redExp) blueVotes++;
             }
 
             const redOpr = match.redAlliance.totalOpr;
@@ -310,6 +331,16 @@ function renderPredictionsList() {
                     `;
                 }
 
+                let expRowHtml = "";
+                if (effectiveUseExp) {
+                    expRowHtml = `
+                        <div class="score-row" style="font-size: 0.75rem;">
+                            <span style="color: #10b981; font-weight: 500;">EXP:</span>
+                            <span style="font-weight: 600; color: #e2e8f0;">R ${redExp.toFixed(1)} - B ${blueExp.toFixed(1)}</span>
+                        </div>
+                    `;
+                }
+
                 let oprRowHtml = "";
                 if (effectiveUseOpr) {
                     oprRowHtml = `
@@ -327,6 +358,7 @@ function renderPredictionsList() {
                             <span style="font-weight: 600; color: #e2e8f0;">R ${redScouted.toFixed(1)} - B ${blueScouted.toFixed(1)}</span>
                         </div>
                         ${epaRowHtml}
+                        ${expRowHtml}
                         ${oprRowHtml}
                     </div>
                 `;
@@ -344,6 +376,10 @@ function renderPredictionsList() {
                 redScore = match.redAlliance.totalEpa;
                 blueScore = match.blueAlliance.totalEpa;
                 unit = "EPA";
+            } else if (model === "exp") {
+                redScore = match.redAlliance.totalExp;
+                blueScore = match.blueAlliance.totalExp;
+                unit = "EXP";
             } else if (model === "opr") {
                 redScore = match.redAlliance.totalOpr;
                 blueScore = match.blueAlliance.totalOpr;
@@ -431,6 +467,7 @@ function renderModalPrediction(data) {
         ? Obsidianscout.getProgram() === "FTC"
         : (appSettings && appSettings.program === "FTC");
     const effectiveUseEpa = !isFtc && appSettings && appSettings.useStatboticsEpa;
+    const effectiveUseExp = !isFtc && appSettings && appSettings.useMatch13Exp;
     const effectiveUseOpr = appSettings && appSettings.useTbaOpr;
 
     // Scouted Score Comparison Bar
@@ -456,6 +493,23 @@ function renderModalPrediction(data) {
         document.getElementById("modal-lbl-epa-blue").textContent = `Blue: ${blueEpa.toFixed(1)}`;
         updateModalBar("modal-bar-epa-red", "modal-bar-epa-blue", redEpa, blueEpa);
         renderModalSpotlight("modal-spotlight-epa-winner", "modal-spotlight-epa-subtext", redEpa, blueEpa, "EPA");
+    }
+
+    // EXP Comparison Bar & Card
+    const expComp = document.getElementById("modal-exp-comparison");
+    const expCard = document.getElementById("modal-spotlight-exp-card");
+    if (!effectiveUseExp) {
+        if (expComp) expComp.style.display = "none";
+        if (expCard) expCard.style.display = "none";
+    } else {
+        if (expComp) expComp.style.display = "";
+        if (expCard) expCard.style.display = "";
+        const redExp = red.totalExp;
+        const blueExp = blue.totalExp;
+        document.getElementById("modal-lbl-exp-red").textContent = `Red: ${redExp.toFixed(1)}`;
+        document.getElementById("modal-lbl-exp-blue").textContent = `Blue: ${blueExp.toFixed(1)}`;
+        updateModalBar("modal-bar-exp-red", "modal-bar-exp-blue", redExp, blueExp);
+        renderModalSpotlight("modal-spotlight-exp-winner", "modal-spotlight-exp-subtext", redExp, blueExp, "EXP");
     }
 
     // OPR Comparison Bar & Card
@@ -485,8 +539,8 @@ function renderModalPrediction(data) {
     document.getElementById("modal-blue-total-scouted").textContent = `${blueScouted.toFixed(1)} pts`;
 
     // Render team lists
-    renderModalTeamList("modal-red-team-list", red.teams, effectiveUseEpa, effectiveUseOpr);
-    renderModalTeamList("modal-blue-team-list", blue.teams, effectiveUseEpa, effectiveUseOpr);
+    renderModalTeamList("modal-red-team-list", red.teams, effectiveUseEpa, effectiveUseExp, effectiveUseOpr);
+    renderModalTeamList("modal-blue-team-list", blue.teams, effectiveUseEpa, effectiveUseExp, effectiveUseOpr);
 }
 
 function updateModalBar(redBarId, blueBarId, redVal, blueVal) {
@@ -537,7 +591,7 @@ function renderModalSpotlight(winnerId, subtextId, redVal, blueVal, label) {
     }
 }
 
-function renderModalTeamList(listId, teams, effectiveUseEpa, effectiveUseOpr) {
+function renderModalTeamList(listId, teams, effectiveUseEpa, effectiveUseExp, effectiveUseOpr) {
     const list = document.getElementById(listId);
     if (!list) return;
     list.innerHTML = "";
@@ -553,6 +607,9 @@ function renderModalTeamList(listId, teams, effectiveUseEpa, effectiveUseOpr) {
         let metricsHtml = `<span class="metric-pill">${t.scoutedMatchesCount} matches</span>`;
         if (t.epa !== null && effectiveUseEpa) {
             metricsHtml += `<span class="metric-pill">EPA: ${t.epa.toFixed(1)}</span>`;
+        }
+        if (t.exp !== null && effectiveUseExp) {
+            metricsHtml += `<span class="metric-pill">EXP: ${t.exp.toFixed(1)}</span>`;
         }
         if (t.opr !== null && effectiveUseOpr) {
             metricsHtml += `<span class="metric-pill">OPR: ${t.opr.toFixed(1)}</span>`;
