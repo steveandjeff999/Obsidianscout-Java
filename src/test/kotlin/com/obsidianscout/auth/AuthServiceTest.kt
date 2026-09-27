@@ -460,4 +460,19 @@ class AuthServiceTest {
         assertEquals(1678, superCreatedFrc.teamNumber)
         assertEquals("FRC", superCreatedFrc.program)
     }
+
+    @Test
+    fun testRegisterPasswordTooShort() {
+        val ex = assertFailsWith<ApiException> {
+            AuthService.register(
+                username = "short_pw_user",
+                teamNumber = 1111,
+                password = "123",
+                program = "FRC",
+                role = UserRole.SCOUT
+            )
+        }
+        assertEquals(HttpStatusCode.BadRequest, ex.status)
+        assertEquals("Password must be at least 4 characters long", ex.message)
+    }
 }

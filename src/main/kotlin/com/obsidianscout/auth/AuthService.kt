@@ -191,6 +191,9 @@ object AuthService {
         if (username.isBlank() || password.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Username and password are required")
         }
+        if (password.length < 4) {
+            throw ApiException(HttpStatusCode.BadRequest, "Password must be at least 4 characters long")
+        }
         if (teamNumber <= 0) {
             throw ApiException(HttpStatusCode.BadRequest, "A valid team number is required")
         }

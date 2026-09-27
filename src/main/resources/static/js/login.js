@@ -389,14 +389,20 @@ document.addEventListener("DOMContentLoaded", () => {
         const role = document.getElementById("reg-role").value;
         const keepMeLoggedIn = document.getElementById("reg-keepMeLoggedIn").checked;
 
+        if (!password || password.length < 4) {
+            Obsidianscout.showToast(t('login.password_too_short', "Password must be at least 4 characters long"), "error");
+            Obsidianscout.setButtonLoading(registerButton, false);
+            return;
+        }
+
         if (password !== confirm) {
-            Obsidianscout.showToast("Passwords do not match", "error");
+            Obsidianscout.showToast(t('login.passwords_dont_match', "Passwords do not match"), "error");
             Obsidianscout.setButtonLoading(registerButton, false);
             return;
         }
 
         if (teamNumber <= 0 || isNaN(teamNumber)) {
-            Obsidianscout.showToast("Enter a valid team number", "error");
+            Obsidianscout.showToast(t('login.valid_team_number', "Enter a valid team number"), "error");
             Obsidianscout.setButtonLoading(registerButton, false);
             return;
         }
