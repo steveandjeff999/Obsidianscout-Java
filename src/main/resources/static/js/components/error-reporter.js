@@ -131,7 +131,18 @@ async function handleJsError(error) {
     isModalOpen = true;
 
     try {
-        if (window.Obsidianscout && typeof window.Obsidianscout.showZacharyErrorExplainer === 'function') {
+        const getMode = () => {
+            if (window.Obsidianscout && typeof window.Obsidianscout.getTutorialMode === 'function') {
+                return window.Obsidianscout.getTutorialMode();
+            }
+            try {
+                return localStorage.getItem('obsidianscout:tutorial_mode') || 'standard';
+            } catch {
+                return 'standard';
+            }
+        };
+        const currentMode = getMode();
+        if (currentMode === 'zachary' && window.Obsidianscout && typeof window.Obsidianscout.showZacharyErrorExplainer === 'function') {
             window.Obsidianscout.showZacharyErrorExplainer(error.message || "Runtime execution error");
         }
     } catch (_) {}

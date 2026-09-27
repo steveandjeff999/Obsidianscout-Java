@@ -82,7 +82,8 @@ export function stopZacharySpeech() {
 
 export function speakZachary(text) {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    if (isZacharyMuted() || getTutorialMode() !== 'zachary') return;
+    const mode = getTutorialMode();
+    if (isZacharyMuted() || !mode || mode === 'standard' || mode === 'concise' || mode === 'disabled' || mode !== 'zachary') return;
 
     try {
         stopZacharySpeech();
@@ -107,7 +108,8 @@ export function speakZachary(text) {
         utterance.volume = 1.0;
 
         setTimeout(() => {
-            if (!isZacharyMuted() && getTutorialMode() === 'zachary') {
+            const currentMode = getTutorialMode();
+            if (!isZacharyMuted() && currentMode === 'zachary') {
                 window.speechSynthesis.speak(utterance);
             }
         }, 100);
@@ -117,15 +119,21 @@ export function speakZachary(text) {
 }
 
 // ==========================================================================
-// ZACHARY ERROR EXPLAINER (ONLY WHEN ZACHARY MODE IS ENABLED)
+// ZACHARY ERROR EXPLAINER (ONLY WHEN ZACHARY MODE IS ENABLED - NEVER IN CONCISE/STANDARD MODE)
 // ==========================================================================
 let activeErrorPopup = null;
 let lastErrorTimestamp = 0;
 
 export function showZacharyErrorExplainer(errorMessage, errorContext = {}) {
-    // Strictly verify Zachary mode is enabled
-    if (getTutorialMode() !== 'zachary') return;
+    // Strictly verify Zachary mode is enabled (suppress in concise / standard / disabled mode)
+    const mode = getTutorialMode();
+    if (!mode || mode === 'standard' || mode === 'concise' || mode === 'disabled' || mode !== 'zachary') return;
     if (!errorMessage || typeof errorMessage !== 'string') return;
+
+    // Suppress Zachary on login/authentication pages
+    const isLoginPage = (document.body && (document.body.dataset.page === "login" || document.body.classList.contains("login-page"))) ||
+        (typeof window !== "undefined" && window.location && (window.location.pathname === "/login" || window.location.pathname === "/login.html" || window.location.pathname.endsWith("/login.html") || window.location.pathname.endsWith("/login")));
+    if (isLoginPage) return;
 
     // Rate-limit error popups (minimum 3.5s cooldown)
     const now = Date.now();

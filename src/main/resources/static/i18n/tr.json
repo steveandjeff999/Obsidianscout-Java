@@ -1051,6 +1051,8 @@
   "login.locked_team_msg": "Bu takım için kayıt kilitlidir.",
   "login.locked_out_contact_prompt": "Kilitlendiniz mi veya bir sorun mu var?",
   "login.contact_us": "Bize Ulaşın",
+  "login.fill_required_fields": "Lütfen gerekli tüm alanları doldurun.",
+  "login.enter_username": "Lütfen bir kullanıcı adı girin.",
   "chat.ypp_reminder_prefix": "Gençlik Koruma hatırlatması: Lütfen ",
   "chat.ypp_reminder_link": "FIRST Gençlik Koruma Programı (YPP) kurallarına",
   "chat.ypp_reminder_suffix": " uyun. Tüm sohbet iletişimlerinin saygılı, güvenli ve olumlu kalmasını sağlayın.",

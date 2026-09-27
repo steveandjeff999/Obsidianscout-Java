@@ -103,6 +103,30 @@
             border: 1px solid var(--border);
         }
 
+        .node-badge.uptime {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            text-transform: none;
+        }
+        body.theme-dark .node-badge.uptime {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .node-badge.offline {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            text-transform: none;
+        }
+        body.theme-dark .node-badge.offline {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
         .server-actions-col {
             display: flex;
             align-items: center;

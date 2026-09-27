@@ -3369,13 +3369,16 @@ fun Application.configureRoutes() {
                     get("/status") {
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         val appConfig = AppConfigLoader.load()
+                        val uptimeSec = com.obsidianscout.admin.ClusterManagementService.getLocalUptimeSeconds()
                         call.respond(
                             com.obsidianscout.admin.ClusterStatusResponse(
                                 status = "online",
                                 serverVersion = appConfig.current_version,
                                 nodeIp = localIp,
                                 dbActive = true,
-                                executionMode = com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode()
+                                executionMode = com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode(),
+                                uptimeSeconds = uptimeSec,
+                                uptimeFormatted = com.obsidianscout.admin.ClusterManagementService.formatUptime(uptimeSec)
                             )
                         )
                     }
@@ -3849,13 +3852,16 @@ fun Application.configureRoutes() {
                 get("/status") {
                     val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                     val appConfig = AppConfigLoader.load()
+                    val uptimeSec = com.obsidianscout.admin.ClusterManagementService.getLocalUptimeSeconds()
                     call.respond(
                         com.obsidianscout.admin.ClusterStatusResponse(
                             status = "online",
                             serverVersion = appConfig.current_version,
                             nodeIp = localIp,
                             dbActive = true,
-                            executionMode = com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode()
+                            executionMode = com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode(),
+                            uptimeSeconds = uptimeSec,
+                            uptimeFormatted = com.obsidianscout.admin.ClusterManagementService.formatUptime(uptimeSec)
                         )
                     )
                 }

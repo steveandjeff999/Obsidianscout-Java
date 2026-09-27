@@ -679,15 +679,37 @@ async function onDOMContentLoaded() {
         }
     });
 
-    // If native form validation fails (invalid event fires), instantly restore submit button and trigger Zachary diagnostic if enabled
+    // If native form validation fails (invalid event fires), instantly restore submit button and trigger Zachary diagnostic if enabled (or toast on login)
+    let lastInvalidToastTime = 0;
     document.addEventListener("invalid", (e) => {
         const form = e.target.form;
         if (form) {
             const submitter = form.querySelector('button[type="submit"], input[type="submit"]');
             if (submitter) setButtonLoading(submitter, false);
-            try {
-                showZacharyErrorExplainer("Form constraint violation: A required field is empty or improperly formatted.");
-            } catch (_) {}
+
+            const isLoginPage = (document.body && (document.body.dataset.page === "login" || document.body.classList.contains("login-page"))) ||
+                (typeof window !== "undefined" && window.location && (window.location.pathname === "/login" || window.location.pathname === "/login.html" || window.location.pathname.endsWith("/login.html") || window.location.pathname.endsWith("/login")));
+
+            if (isLoginPage) {
+                const now = Date.now();
+                if (now - lastInvalidToastTime > 1500) {
+                    lastInvalidToastTime = now;
+                    const errorMsg = e.target.validationMessage ||
+                        (window.Obsidianscout && typeof window.Obsidianscout.t === 'function'
+                            ? window.Obsidianscout.t('login.fill_required_fields', 'Please fill in all required fields.')
+                            : 'Please fill in all required fields.');
+                    showToast(errorMsg, "error");
+                }
+            } else {
+                try {
+                    const currentMode = typeof getTutorialMode === 'function'
+                        ? getTutorialMode()
+                        : (safeGetItem('obsidianscout:tutorial_mode') || 'standard');
+                    if (currentMode === 'zachary') {
+                        showZacharyErrorExplainer("Form constraint violation: A required field is empty or improperly formatted.");
+                    }
+                } catch (_) {}
+            }
         }
     }, true);
 

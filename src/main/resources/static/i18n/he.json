@@ -1048,6 +1048,8 @@
   "login.locked_team_msg": "הרישום נעול עבור צוות זה.",
   "login.locked_out_contact_prompt": "נעול בחוץ או שמשהו השתבש?",
   "login.contact_us": "צור קשר",
+  "login.fill_required_fields": "אנא מלא את כל שדות החובה.",
+  "login.enter_username": "אנא הזן שם משתמש.",
   "chat.ypp_reminder_prefix": "תזכורת להגנת נוער: אנא פעל לפי הנחיות ",
   "chat.ypp_reminder_link": "תוכנית הגנת הנוער (YPP) של FIRST",
   "chat.ypp_reminder_suffix": ". שמור על כל תקשורת הצ'אט מכבדת, בטוחה וחיובית.",

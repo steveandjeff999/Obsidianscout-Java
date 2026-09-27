@@ -1090,6 +1090,8 @@
   "login.locked_team_msg": "El registro está bloqueado para este equipo.",
   "login.locked_out_contact_prompt": "¿Bloqueado o algo salió mal?",
   "login.contact_us": "Contáctenos",
+  "login.fill_required_fields": "Por favor, complete todos los campos obligatorios.",
+  "login.enter_username": "Por favor ingrese un nombre de usuario.",
   "chat.ypp_reminder_prefix": "Recordatorio de protección juvenil: Siga las pautas del ",
   "chat.ypp_reminder_link": "Programa de protección juvenil (YPP) de FIRST",
   "chat.ypp_reminder_suffix": ". Siga manteniendo todas las comunicaciones de chat respetuosas, seguras y positivas.",

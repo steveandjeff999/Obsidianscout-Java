@@ -27,6 +27,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.lang.management.ManagementFactory
 import java.time.Duration
 import kotlin.system.exitProcess
 
@@ -42,7 +43,9 @@ data class ClusterNodeInfo(
     val cockroachVersion: String = "v26.3.0",
     val isDbActive: Boolean = true,
     val serverVersion: String = "Unknown",
-    val executionMode: String = "Unknown"
+    val executionMode: String = "Unknown",
+    val uptimeSeconds: Long? = null,
+    val uptimeFormatted: String? = null
 )
 
 @Serializable
@@ -73,12 +76,40 @@ data class ClusterStatusResponse(
     val serverVersion: String = "Unknown",
     val nodeIp: String = "",
     val dbActive: Boolean = true,
-    val executionMode: String = if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) "Native" else "Jar"
+    val executionMode: String = if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) "Native" else "Jar",
+    val uptimeSeconds: Long? = null,
+    val uptimeFormatted: String? = null
 )
 
 object ClusterManagementService {
 
+    private val serverStartTimeMillis = System.currentTimeMillis()
+
     fun getLocalExecutionMode(): String = if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) "Native" else "Jar"
+
+    fun getLocalUptimeSeconds(): Long {
+        val jvmUptime = try {
+            ManagementFactory.getRuntimeMXBean().uptime / 1000L
+        } catch (_: Throwable) {
+            -1L
+        }
+        return if (jvmUptime > 0) jvmUptime else ((System.currentTimeMillis() - serverStartTimeMillis) / 1000L).coerceAtLeast(0L)
+    }
+
+    fun formatUptime(uptimeSeconds: Long?): String {
+        if (uptimeSeconds == null || uptimeSeconds < 0) return "N/A"
+        val days = uptimeSeconds / 86400
+        val hours = (uptimeSeconds % 86400) / 3600
+        val minutes = (uptimeSeconds % 3600) / 60
+        val seconds = uptimeSeconds % 60
+
+        return when {
+            days > 0 -> "${days}d ${hours}h ${minutes}m"
+            hours > 0 -> "${hours}h ${minutes}m ${seconds}s"
+            minutes > 0 -> "${minutes}m ${seconds}s"
+            else -> "${seconds}s"
+        }
+    }
 
     @Volatile
     private var cachedHttpClient: HttpClient? = null
@@ -144,6 +175,7 @@ object ClusterManagementService {
 
         // Add Local Node
         val localMode = if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) "Native" else "Jar"
+        val localUptime = getLocalUptimeSeconds()
         nodesList.add(
             ClusterNodeInfo(
                 nodeId = "node-local-$localIp",
@@ -154,7 +186,9 @@ object ClusterManagementService {
                 status = if (DatabaseFactory.isReady) "online" else "booting",
                 isDbActive = com.obsidianscout.db.orchestration.CockroachOrchestrator.isDbActive,
                 serverVersion = appConfig.current_version,
-                executionMode = localMode
+                executionMode = localMode,
+                uptimeSeconds = localUptime,
+                uptimeFormatted = formatUptime(localUptime)
             )
         )
 
@@ -208,7 +242,9 @@ object ClusterManagementService {
                         status = if (probeResult.isOnline) "online" else "offline",
                         isDbActive = probeResult.isOnline,
                         serverVersion = probeResult.version,
-                        executionMode = probeResult.executionMode
+                        executionMode = probeResult.executionMode,
+                        uptimeSeconds = probeResult.uptimeSeconds,
+                        uptimeFormatted = if (probeResult.isOnline) (probeResult.uptimeFormatted ?: "Unknown") else "Offline"
                     )
                 }
             }.awaitAll()
@@ -225,7 +261,9 @@ object ClusterManagementService {
     private data class NodeProbeDetails(
         val isOnline: Boolean,
         val version: String,
-        val executionMode: String
+        val executionMode: String,
+        val uptimeSeconds: Long? = null,
+        val uptimeFormatted: String? = null
     )
 
     private fun fetchNodeStatusAndVersion(ip: String, appPort: Int, dbPort: Int = 26257): NodeProbeDetails {
@@ -246,7 +284,19 @@ object ClusterManagementService {
                 val mode = jsonElem?.get("executionMode")?.let {
                     runCatching { it.jsonPrimitive.content }.getOrNull()
                 } ?: fetchNodeVersionFromEndpoint(ip, appPort)?.second ?: "Unknown"
-                return NodeProbeDetails(isOnline = true, version = ver, executionMode = mode)
+                val uptimeSec = jsonElem?.get("uptimeSeconds")?.let {
+                    runCatching { it.jsonPrimitive.content.toLongOrNull() }.getOrNull()
+                }
+                val uptimeFmt = jsonElem?.get("uptimeFormatted")?.let {
+                    runCatching { it.jsonPrimitive.content }.getOrNull()
+                } ?: uptimeSec?.let { formatUptime(it) }
+                return NodeProbeDetails(
+                    isOnline = true,
+                    version = ver,
+                    executionMode = mode,
+                    uptimeSeconds = uptimeSec,
+                    uptimeFormatted = uptimeFmt
+                )
             }
         } catch (e: Exception) {
             if (e.message?.contains("selector manager closed") == true) {
@@ -264,7 +314,7 @@ object ClusterManagementService {
             false
         }
 
-        return if (isTcpAlive) NodeProbeDetails(isOnline = true, version = "Unknown", executionMode = "Unknown") else NodeProbeDetails(isOnline = false, version = "Offline", executionMode = "Offline")
+        return if (isTcpAlive) NodeProbeDetails(isOnline = true, version = "Unknown", executionMode = "Unknown", uptimeSeconds = null, uptimeFormatted = "Unknown") else NodeProbeDetails(isOnline = false, version = "Offline", executionMode = "Offline", uptimeSeconds = null, uptimeFormatted = "Offline")
     }
 
     private fun fetchNodeVersionFromEndpoint(ip: String, appPort: Int): Pair<String, String>? {

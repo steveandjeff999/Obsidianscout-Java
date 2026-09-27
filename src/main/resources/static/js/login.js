@@ -57,13 +57,23 @@ document.addEventListener("DOMContentLoaded", () => {
     // Login
     loginForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        Obsidianscout.setButtonLoading(loginButton, true, t('login.signing_in', 'Signing in...'));
 
-        const username = document.getElementById("username").value.trim();
-        const teamNumber = parseInt(document.getElementById("teamNumber").value, 10);
-        const program = document.getElementById("login-program").value;
-        const password = document.getElementById("password").value;
-        const keepMeLoggedIn = document.getElementById("keepMeLoggedIn").checked;
+        const usernameInput = document.getElementById("username");
+        const teamNumberInput = document.getElementById("teamNumber");
+        const passwordInput = document.getElementById("password");
+
+        const username = usernameInput ? usernameInput.value.trim() : "";
+        const teamNumber = teamNumberInput ? parseInt(teamNumberInput.value, 10) : NaN;
+        const program = document.getElementById("login-program") ? document.getElementById("login-program").value : "FRC";
+        const password = passwordInput ? passwordInput.value : "";
+        const keepMeLoggedIn = document.getElementById("keepMeLoggedIn") ? document.getElementById("keepMeLoggedIn").checked : false;
+
+        if (!username || !password || isNaN(teamNumber) || teamNumber <= 0) {
+            Obsidianscout.showToast(t('login.fill_required_fields', "Please fill in all required fields."), "error");
+            return;
+        }
+
+        Obsidianscout.setButtonLoading(loginButton, true, t('login.signing_in', 'Signing in...'));
 
         try {
             await Obsidianscout.request("/api/auth/login", {
@@ -388,6 +398,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const confirm = document.getElementById("reg-confirm").value;
         const role = document.getElementById("reg-role").value;
         const keepMeLoggedIn = document.getElementById("reg-keepMeLoggedIn").checked;
+
+        if (!username) {
+            Obsidianscout.showToast(t('login.enter_username', "Please enter a username"), "error");
+            Obsidianscout.setButtonLoading(registerButton, false);
+            return;
+        }
 
         if (!password || password.length < 4) {
             Obsidianscout.showToast(t('login.password_too_short', "Password must be at least 4 characters long"), "error");

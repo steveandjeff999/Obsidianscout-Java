@@ -34,18 +34,36 @@ export function showToast(message, tone = "info") {
             });
         } catch (e) {}
 
-        // Trigger Zachary diagnostic explainer if Zachary mode is active
-        try {
-            if (window.Obsidianscout && typeof window.Obsidianscout.showZacharyErrorExplainer === 'function') {
-                window.Obsidianscout.showZacharyErrorExplainer(message);
-            } else {
-                import('./tour-wizard.js').then(m => {
-                    if (m && typeof m.showZacharyErrorExplainer === 'function') {
-                        m.showZacharyErrorExplainer(message);
+        // Trigger Zachary diagnostic explainer only if Zachary mode is explicitly active (never in concise/standard mode) and not on the login page
+        const isLoginPage = (document.body && (document.body.dataset.page === "login" || document.body.classList.contains("login-page"))) ||
+            (typeof window !== "undefined" && window.location && (window.location.pathname === "/login" || window.location.pathname === "/login.html" || window.location.pathname.endsWith("/login.html") || window.location.pathname.endsWith("/login")));
+
+        if (!isLoginPage) {
+            try {
+                const getMode = () => {
+                    if (window.Obsidianscout && typeof window.Obsidianscout.getTutorialMode === 'function') {
+                        return window.Obsidianscout.getTutorialMode();
                     }
-                }).catch(() => {});
-            }
-        } catch (e) {}
+                    try {
+                        return localStorage.getItem('obsidianscout:tutorial_mode') || 'standard';
+                    } catch {
+                        return 'standard';
+                    }
+                };
+                const currentMode = getMode();
+                if (currentMode === 'zachary') {
+                    if (window.Obsidianscout && typeof window.Obsidianscout.showZacharyErrorExplainer === 'function') {
+                        window.Obsidianscout.showZacharyErrorExplainer(message);
+                    } else {
+                        import('./tour-wizard.js').then(m => {
+                            if (m && typeof m.showZacharyErrorExplainer === 'function') {
+                                m.showZacharyErrorExplainer(message);
+                            }
+                        }).catch(() => {});
+                    }
+                }
+            } catch (e) {}
+        }
     } else if (tone === "warning") {
         triggerHaptic("warning");
         try {

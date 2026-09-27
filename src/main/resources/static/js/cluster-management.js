@@ -689,6 +689,20 @@
         }
     }
 
+    function formatUptime(seconds) {
+        if (seconds == null || isNaN(seconds) || seconds < 0) return "N/A";
+        const totalSec = Math.floor(seconds);
+        const days = Math.floor(totalSec / 86400);
+        const hours = Math.floor((totalSec % 86400) / 3600);
+        const mins = Math.floor((totalSec % 3600) / 60);
+        const secs = totalSec % 60;
+
+        if (days > 0) return `${days}d ${hours}h ${mins}m`;
+        if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+        if (mins > 0) return `${mins}m ${secs}s`;
+        return `${secs}s`;
+    }
+
     function renderServerList(nodes, localIp) {
         const container = document.getElementById("server-list-container");
         if (!container) return;
@@ -720,6 +734,25 @@
 
             const modeLabelColor = rawMode.toLowerCase() === "native" ? "#c084fc" : (rawMode.toLowerCase() === "jar" ? "#fbbf24" : "#9ca3af");
 
+            const isOffline = statusClass === "offline";
+            let uptimeStr = "Offline";
+            if (!isOffline) {
+                if (node.uptimeFormatted && node.uptimeFormatted !== "Unknown") {
+                    uptimeStr = node.uptimeFormatted;
+                } else if (typeof node.uptimeSeconds === "number" && node.uptimeSeconds >= 0) {
+                    uptimeStr = formatUptime(node.uptimeSeconds);
+                } else {
+                    uptimeStr = "N/A";
+                }
+            }
+
+            let uptimeBadgeHtml = "";
+            if (isOffline) {
+                uptimeBadgeHtml = `<span class="node-badge offline" title="Uptime: Offline"><i class="fa-regular fa-clock"></i> Offline</span>`;
+            } else {
+                uptimeBadgeHtml = `<span class="node-badge uptime" title="Uptime: ${escapeHtml(uptimeStr)}"><i class="fa-regular fa-clock"></i> ${escapeHtml(uptimeStr)}</span>`;
+            }
+
             html += `
                 <div class="server-item ${isSelected ? "active-selected" : ""}" data-ip="${escapeHtml(node.ip)}">
                     <div class="server-info-col">
@@ -730,9 +763,10 @@
                                 <span class="node-badge ${badgeClass}">${badgeText}</span>
                                 <span class="node-badge" style="background: rgba(59, 130, 246, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">${escapeHtml(versionStr)}</span>
                                 ${modeBadgeHtml}
+                                ${uptimeBadgeHtml}
                             </div>
                             <div style="font-size: 12px; color: var(--text-muted, #94a3b8); margin-top: 2px;">
-                                Server Version: <strong style="color: #38bdf8;">${escapeHtml(versionStr)}</strong> | Mode: <strong style="color: ${modeLabelColor};">${escapeHtml(rawMode)}</strong> | App Port: <strong>${node.appPort}</strong> | Cockroach DB Port: <strong>${node.dbPort}</strong> | Role: ${escapeHtml(node.role || "Gateway")}
+                                Server Version: <strong style="color: #38bdf8;">${escapeHtml(versionStr)}</strong> | Mode: <strong style="color: ${modeLabelColor};">${escapeHtml(rawMode)}</strong> | Uptime: <strong style="color: ${isOffline ? '#f87171' : '#34d399'};">${escapeHtml(uptimeStr)}</strong> | App Port: <strong>${node.appPort}</strong> | Cockroach DB Port: <strong>${node.dbPort}</strong> | Role: ${escapeHtml(node.role || "Gateway")}
                             </div>
                         </div>
                     </div>
