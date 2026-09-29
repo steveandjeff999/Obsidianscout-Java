@@ -110,7 +110,14 @@ private const val STATUS_DECLINED = "DECLINED"
 
 object AllianceService {
 
-    private val effectiveSettingsCache = ConcurrentHashMap<String, com.obsidianscout.integrations.ApiSettings>()
+    private data class CachedSettings(
+        val settings: com.obsidianscout.integrations.ApiSettings,
+        val cachedAt: Long = System.currentTimeMillis()
+    ) {
+        fun isExpired(ttlMs: Long = 60_000L) = System.currentTimeMillis() - cachedAt > ttlMs
+    }
+
+    private val effectiveSettingsCache = ConcurrentHashMap<String, CachedSettings>()
 
     fun clearEffectiveSettingsCache() {
         effectiveSettingsCache.clear()
@@ -415,6 +422,7 @@ object AllianceService {
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
                     (AllianceMemberships.program eq session.program) and
                     (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                    (AllianceMemberships.disabled eq false) and
                     (AllianceMemberships.active eq true)
                 }.any()
 
@@ -806,6 +814,7 @@ object AllianceService {
                 (AllianceMemberships.teamNumber eq teamNumber) and
                 (AllianceMemberships.program eq program) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                (AllianceMemberships.disabled eq false) and
                 (AllianceMemberships.active eq true)
             }
             .map { it[AllianceMemberships.allianceId].value }
@@ -918,6 +927,7 @@ object AllianceService {
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceUuid) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.disabled eq false) and
                     (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED))
                 }
                 .firstOrNull()
@@ -1136,76 +1146,81 @@ object AllianceService {
     }
 
     fun getEffectiveSettings(teamNumber: Int, program: String = "FRC"): com.obsidianscout.integrations.ApiSettings {
-        return effectiveSettingsCache.computeIfAbsent("$program-$teamNumber") {
-            readTransaction {
-                val localSettings = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber, program)
-                val activeAllianceId = getActiveAllianceId(teamNumber, program) ?: return@readTransaction localSettings
+        val key = "$program-$teamNumber"
+        val cached = effectiveSettingsCache[key]
+        if (cached != null && !cached.isExpired()) return cached.settings
 
-                val allianceRow = ScoutingAlliances
-                    .select(ScoutingAlliances.year, ScoutingAlliances.eventCode, ScoutingAlliances.eventKey)
-                    .where { ScoutingAlliances.id eq activeAllianceId }
-                    .firstOrNull() ?: return@readTransaction localSettings
+        val computed = readTransaction {
+            val localSettings = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber, program)
+            val activeAllianceId = getActiveAllianceId(teamNumber, program) ?: return@readTransaction localSettings
 
-                val allianceYear = allianceRow[ScoutingAlliances.year]
-                val allianceEventCode = allianceRow[ScoutingAlliances.eventCode]
-                val allianceEventKey = allianceRow[ScoutingAlliances.eventKey]
+            val allianceRow = ScoutingAlliances
+                .select(ScoutingAlliances.year, ScoutingAlliances.eventCode, ScoutingAlliances.eventKey)
+                .where { ScoutingAlliances.id eq activeAllianceId }
+                .firstOrNull() ?: return@readTransaction localSettings
 
-                val (effYear, effCode, effKey) = when {
-                    allianceYear != null && !allianceEventCode.isNullOrBlank() -> {
-                        Triple(allianceYear, allianceEventCode, "${allianceYear}${allianceEventCode.trim().lowercase()}")
-                    }
-                    !allianceEventKey.isNullOrBlank() -> {
-                        val parsedYear = allianceEventKey.take(4).toIntOrNull() ?: localSettings.year
-                        val parsedCode = if (allianceEventKey.length > 4) allianceEventKey.drop(4) else ""
-                        Triple(parsedYear, parsedCode, allianceEventKey.trim().lowercase())
-                    }
-                    else -> {
-                        Triple(localSettings.year, localSettings.eventCode, localSettings.eventKey)
-                    }
+            val allianceYear = allianceRow[ScoutingAlliances.year]
+            val allianceEventCode = allianceRow[ScoutingAlliances.eventCode]
+            val allianceEventKey = allianceRow[ScoutingAlliances.eventKey]
+
+            val (effYear, effCode, effKey) = when {
+                allianceYear != null && !allianceEventCode.isNullOrBlank() -> {
+                    Triple(allianceYear, allianceEventCode, "${allianceYear}${allianceEventCode.trim().lowercase()}")
                 }
-
-                // Active member team numbers (including ourselves)
-                val memberTeamNumbers = AllianceMemberships
-                    .selectAll().where {
-                        (AllianceMemberships.allianceId eq activeAllianceId) and
-                        (AllianceMemberships.program eq program) and
-                        (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
-                        (AllianceMemberships.active eq true)
-                    }
-                    .map { it[AllianceMemberships.teamNumber] }
-
-                var tbaKey = localSettings.apiKeys.tbaKey
-                var firstUsername = localSettings.apiKeys.firstUsername
-                var firstKey = localSettings.apiKeys.firstKey
-
-                if (tbaKey.isBlank() || firstUsername.isBlank() || firstKey.isBlank()) {
-                    for (memberTeam in memberTeamNumbers) {
-                        if (memberTeam == teamNumber) continue
-                        val memberSettings = com.obsidianscout.integrations.SettingsService.getSettings(memberTeam)
-                        if (tbaKey.isBlank() && memberSettings.apiKeys.tbaKey.isNotBlank()) {
-                            tbaKey = memberSettings.apiKeys.tbaKey
-                        }
-                        if ((firstUsername.isBlank() || firstKey.isBlank()) &&
-                            memberSettings.apiKeys.firstUsername.isNotBlank() &&
-                            memberSettings.apiKeys.firstKey.isNotBlank()) {
-                            firstUsername = memberSettings.apiKeys.firstUsername
-                            firstKey = memberSettings.apiKeys.firstKey
-                        }
-                    }
+                !allianceEventKey.isNullOrBlank() -> {
+                    val parsedYear = allianceEventKey.take(4).toIntOrNull() ?: localSettings.year
+                    val parsedCode = if (allianceEventKey.length > 4) allianceEventKey.drop(4) else ""
+                    Triple(parsedYear, parsedCode, allianceEventKey.trim().lowercase())
                 }
-
-                localSettings.copy(
-                    year = effYear,
-                    eventCode = effCode,
-                    eventKey = effKey,
-                    apiKeys = localSettings.apiKeys.copy(
-                        tbaKey = tbaKey,
-                        firstUsername = firstUsername,
-                        firstKey = firstKey
-                    )
-                )
+                else -> {
+                    Triple(localSettings.year, localSettings.eventCode, localSettings.eventKey)
+                }
             }
+
+            // Active member team numbers (including ourselves)
+            val memberTeamNumbers = AllianceMemberships
+                .selectAll().where {
+                    (AllianceMemberships.allianceId eq activeAllianceId) and
+                    (AllianceMemberships.program eq program) and
+                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                    (AllianceMemberships.active eq true) and
+                    (AllianceMemberships.disabled eq false)
+                }
+                .map { it[AllianceMemberships.teamNumber] }
+
+            var tbaKey = localSettings.apiKeys.tbaKey
+            var firstUsername = localSettings.apiKeys.firstUsername
+            var firstKey = localSettings.apiKeys.firstKey
+
+            if (tbaKey.isBlank() || firstUsername.isBlank() || firstKey.isBlank()) {
+                for (memberTeam in memberTeamNumbers) {
+                    if (memberTeam == teamNumber) continue
+                    val memberSettings = com.obsidianscout.integrations.SettingsService.getSettings(memberTeam)
+                    if (tbaKey.isBlank() && memberSettings.apiKeys.tbaKey.isNotBlank()) {
+                        tbaKey = memberSettings.apiKeys.tbaKey
+                    }
+                    if ((firstUsername.isBlank() || firstKey.isBlank()) &&
+                        memberSettings.apiKeys.firstUsername.isNotBlank() &&
+                        memberSettings.apiKeys.firstKey.isNotBlank()) {
+                        firstUsername = memberSettings.apiKeys.firstUsername
+                        firstKey = memberSettings.apiKeys.firstKey
+                    }
+                }
+            }
+
+            localSettings.copy(
+                year = effYear,
+                eventCode = effCode,
+                eventKey = effKey,
+                apiKeys = localSettings.apiKeys.copy(
+                    tbaKey = tbaKey,
+                    firstUsername = firstUsername,
+                    firstKey = firstKey
+                )
+            )
         }
+        effectiveSettingsCache[key] = CachedSettings(computed)
+        return computed
     }
 
 }

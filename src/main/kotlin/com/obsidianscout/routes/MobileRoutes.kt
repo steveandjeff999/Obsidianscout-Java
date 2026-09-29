@@ -79,6 +79,9 @@ import java.io.File
 import java.time.Instant
 import java.util.Date
 import java.util.UUID
+import org.slf4j.LoggerFactory
+
+private val mobileLogger = LoggerFactory.getLogger("MobileRoutes")
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Exceptions & Base DTOs
@@ -1071,10 +1074,20 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         firstKey = if (parsed.firstKey == "********") currentSettings.apiKeys.firstKey else (parsed.firstKey ?: currentSettings.apiKeys.firstKey)
                     )
                 )
-                SettingsService.updateSettings(teamNumber, updatedSettings)
+                val savedSettings = SettingsService.updateSettings(teamNumber, updatedSettings)
+                // Sync event to alliance row if this team is an active alliance admin
+                val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
+                if (activeAllianceId != null && AllianceService.isAllianceAdmin(teamNumber, activeAllianceId)) {
+                    AllianceService.updateAllianceEvent(
+                        activeAllianceId,
+                        savedSettings.year,
+                        savedSettings.eventCode,
+                        savedSettings.eventKey
+                    )
+                }
             }
-        } catch (_: Exception) {
-            // ignore
+        } catch (e: Exception) {
+            mobileLogger.warn("extractAndUpdateSettingsFromConfigJson failed for team $teamNumber/$program: ${e.message}", e)
         }
     }
 
