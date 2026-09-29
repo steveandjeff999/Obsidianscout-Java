@@ -70,14 +70,14 @@ val DEFAULT_ANALYTICS_PAGES = listOf(
     "dashboard", "my-assignments", "events", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "teams", "rankings", "qual-rankings", "matches", "predictor",
-    "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact", "scout-history"
+    "event-predictor", "alliances", "alliance-selection", "match-planning", "chat", "backup", "docs", "contact", "scout-history"
 )
 
 val DEFAULT_ADMIN_PAGES = listOf(
     "dashboard", "my-assignments", "assignments", "admin-settings", "users", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "events", "teams", "rankings", "qual-rankings", "matches", "predictor",
-    "event-predictor", "alliances", "alliance-selection", "chat", "backup", "docs", "contact", "scout-history"
+    "event-predictor", "alliances", "alliance-selection", "match-planning", "chat", "backup", "docs", "contact", "scout-history"
 )
 
 fun canonicalTbaEventCode(code: String): String = code.trim().lowercase().removePrefix("frc")

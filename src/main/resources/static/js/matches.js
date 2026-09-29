@@ -119,7 +119,8 @@ function renderMatchesTable(matches, eventKey, timezone) {
         const red = match.redTeams.map(k => Obsidianscout.formatTeam(k)).join(", ");
         const blue = match.blueTeams.map(k => Obsidianscout.formatTeam(k)).join(", ");
         const matchCell = document.createElement("td");
-        matchCell.textContent = localize(match.label) || (match.compLevel.toUpperCase() + " " + (match.matchNumber || ""));
+        const matchLabel = localize(match.label) || (match.compLevel.toUpperCase() + " " + (match.matchNumber || ""));
+        matchCell.innerHTML = `<a href="/match-planning?match=${encodeURIComponent(match.matchKey)}" title="Open in Match Planning" style="color: var(--accent); font-weight: 700; text-decoration: none;">${matchLabel}</a>`;
         const timeCell = document.createElement("td");
         timeCell.className = "match-time-cell";
         const timeEl = Obsidianscout.formatTimestampWithVenueTooltip(

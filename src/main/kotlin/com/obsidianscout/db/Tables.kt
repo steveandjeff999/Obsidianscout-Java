@@ -295,6 +295,18 @@ object AllianceSelections : UUIDTable("alliance_selections") {
     }
 }
 
+object MatchPlans : UUIDTable("match_plans") {
+    val ownerKey = varchar("owner_key", 64)
+    val eventKey = varchar("event_key", 64)
+    val matchKey = varchar("match_key", 64)
+    val planJson = text("plan_json")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_match_plans_owner_event_match", ownerKey, eventKey, matchKey)
+    }
+}
+
 object Banners : UUIDTable("banners") {
     val teamNumber = integer("team_number").default(0)
     val program = varchar("program", 8).default("FRC")

@@ -1,7 +1,7 @@
 package com.obsidianscout.scouting
 
 import com.obsidianscout.auth.UserSession
-import com.obsidianscout.db.AllianceSelections
+import com.obsidianscout.db.MatchPlans
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.selectAll
@@ -11,23 +11,24 @@ import org.jetbrains.exposed.sql.upsert
 import java.time.Instant
 
 @Serializable
-data class AllianceSelectionResponse(
-    val selectionJson: String,
+data class MatchPlanResponse(
+    val planJson: String,
     val updatedAt: Long
 )
 
 @Serializable
-data class AllianceSelectionUpdateRequest(
+data class MatchPlanUpdateRequest(
     val eventKey: String,
-    val selectionJson: String
+    val matchKey: String,
+    val planJson: String
 )
 
 @Serializable
-data class AllianceSelectionUpdateResponse(
+data class MatchPlanUpdateResponse(
     val updatedAt: Long
 )
 
-object AllianceSelectionService {
+object MatchPlanningService {
 
     private fun resolveOwnerKey(session: UserSession): String {
         val allianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
@@ -38,54 +39,57 @@ object AllianceSelectionService {
         }
     }
 
-    fun getSelection(session: UserSession, eventKey: String): AllianceSelectionResponse {
+    fun getPlan(session: UserSession, eventKey: String, matchKey: String): MatchPlanResponse {
         return readTransaction {
             val owner = resolveOwnerKey(session)
-            val row = AllianceSelections
+            val row = MatchPlans
                 .selectAll().where {
-                    (AllianceSelections.ownerKey eq owner) and
-                    (AllianceSelections.eventKey eq eventKey)
+                    (MatchPlans.ownerKey eq owner) and
+                    (MatchPlans.eventKey eq eventKey) and
+                    (MatchPlans.matchKey eq matchKey)
                 }
                 .firstOrNull() ?: run {
-                    // Backward-compatibility: check legacy un-scoped team key if this is an FRC team
                     if (owner.startsWith("team_")) {
-                        AllianceSelections.selectAll().where {
-                            (AllianceSelections.ownerKey eq "team_${session.teamNumber}") and
-                            (AllianceSelections.eventKey eq eventKey)
+                        MatchPlans.selectAll().where {
+                            (MatchPlans.ownerKey eq "team_${session.teamNumber}") and
+                            (MatchPlans.eventKey eq eventKey) and
+                            (MatchPlans.matchKey eq matchKey)
                         }.firstOrNull()
                     } else null
                 }
 
             if (row != null) {
-                AllianceSelectionResponse(
-                    selectionJson = row[AllianceSelections.selectionJson],
-                    updatedAt = row[AllianceSelections.updatedAt].toEpochMilli()
+                MatchPlanResponse(
+                    planJson = row[MatchPlans.planJson],
+                    updatedAt = row[MatchPlans.updatedAt].toEpochMilli()
                 )
             } else {
-                AllianceSelectionResponse(
-                    selectionJson = "{}",
+                MatchPlanResponse(
+                    planJson = "{}",
                     updatedAt = 0L
                 )
             }
         }
     }
 
-    fun updateSelection(session: UserSession, request: AllianceSelectionUpdateRequest): AllianceSelectionUpdateResponse {
+    fun updatePlan(session: UserSession, request: MatchPlanUpdateRequest): MatchPlanUpdateResponse {
         return transaction {
             val owner = resolveOwnerKey(session)
             val now = Instant.now()
 
-            AllianceSelections.upsert(
-                AllianceSelections.ownerKey,
-                AllianceSelections.eventKey
+            MatchPlans.upsert(
+                MatchPlans.ownerKey,
+                MatchPlans.eventKey,
+                MatchPlans.matchKey
             ) {
                 it[ownerKey] = owner
                 it[eventKey] = request.eventKey
-                it[selectionJson] = request.selectionJson
+                it[matchKey] = request.matchKey
+                it[planJson] = request.planJson
                 it[updatedAt] = now
             }
 
-            AllianceSelectionUpdateResponse(updatedAt = now.toEpochMilli())
+            MatchPlanUpdateResponse(updatedAt = now.toEpochMilli())
         }
     }
 }

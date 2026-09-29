@@ -93,6 +93,8 @@
   "nav.predictor": "Predictor",
   "nav.alliances": "Alliances",
   "nav.alliance-selection": "Alliance Selection",
+  "nav.match-planning": "Match Planning",
+  "nav.match_planning": "Match Planning",
   "nav.users": "Users",
   "nav.banners": "Banners",
   "nav.settings": "Settings",

@@ -1778,6 +1778,40 @@ fun Application.configureRoutes() {
                 }
             }
 
+            route("/field-images") {
+                get {
+                    val session = call.requireSession()
+                    val yearParam = call.request.queryParameters["year"]?.toIntOrNull()
+                        ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).year
+                    val result = findFieldImage(yearParam)
+                    if (result != null) {
+                        call.respond(mapOf(
+                            "year" to yearParam.toString(),
+                            "imagePath" to result.first,
+                            "imageName" to result.second
+                        ))
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("No field image found for year $yearParam"))
+                    }
+                }
+            }
+
+            route("/match-planning") {
+                get {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing eventKey parameter"))
+                    val matchKey = call.request.queryParameters["matchKey"]
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing matchKey parameter"))
+                    call.respond(com.obsidianscout.scouting.MatchPlanningService.getPlan(session, eventKey, matchKey))
+                }
+                post {
+                    val session = call.requireSession()
+                    val request = call.receive<com.obsidianscout.scouting.MatchPlanUpdateRequest>()
+                    call.respond(com.obsidianscout.scouting.MatchPlanningService.updatePlan(session, request))
+                }
+            }
+
             route("/stats") {
                 get("/history") {
                     val session = call.requireSession()
@@ -3909,6 +3943,7 @@ fun Application.configureRoutes() {
             "alliances" to "alliances.html",
             "alliance-edit" to "alliance-edit.html",
             "alliance-selection" to "alliance-selection.html",
+            "match-planning" to "match-planning.html",
             "assignments" to "assignments.html",
             "my-assignments" to "my-assignments.html",
             "users" to "users.html",
@@ -4089,4 +4124,37 @@ private fun findDocsDir(): java.io.File {
         }
     }
     return java.io.File("docs")
+}
+
+private fun findFieldImage(year: Int): Pair<String, String>? {
+    val supportedExts = setOf("png", "jpg", "jpeg", "webp")
+    val candidateDirs = listOf(
+        File("static/assets/images/field-images/$year"),
+        File("Obsidianscout/src/main/resources/static/assets/images/field-images/$year"),
+        File("src/main/resources/static/assets/images/field-images/$year"),
+        File("assets/images/field-images/$year")
+    )
+    for (dir in candidateDirs) {
+        if (dir.exists() && dir.isDirectory) {
+            val file = dir.listFiles()?.firstOrNull { it.isFile && it.extension.lowercase() in supportedExts }
+            if (file != null) {
+                return Pair("/assets/images/field-images/$year/${file.name}", file.name)
+            }
+        }
+    }
+    try {
+        val resource = Thread.currentThread().contextClassLoader.getResource("static/assets/images/field-images/$year")
+        if (resource != null) {
+            val uri = resource.toURI()
+            if (uri.scheme == "file") {
+                val file = File(uri).listFiles()?.firstOrNull { it.isFile && it.extension.lowercase() in supportedExts }
+                if (file != null) {
+                    return Pair("/assets/images/field-images/$year/${file.name}", file.name)
+                }
+            }
+        }
+    } catch (e: Exception) {
+        // ignore
+    }
+    return null
 }

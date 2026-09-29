@@ -89,6 +89,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         { id: "event-predictor", label: "Event Predictor" },
         { id: "alliances", label: "Alliances" },
         { id: "alliance-selection", label: "Alliance Selection" },
+        { id: "match-planning", label: "Match Planning" },
         { id: "chat", label: "Chat" },
         { id: "backup", label: "Data Sharing" },
         { id: "docs", label: "Docs" },
