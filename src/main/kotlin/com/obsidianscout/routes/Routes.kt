@@ -532,7 +532,7 @@ fun Application.configureRoutes() {
                     val isEmailRecovery = !request.email.isNullOrBlank()
 
                     if (isEmailRecovery) {
-                        val recoverEmail = request.email!!.trim()
+                        val recoverEmail = request.email!!.trim().lowercase()
                         val matchedUsers = com.obsidianscout.db.readTransaction {
                             com.obsidianscout.db.Users
                                 .selectAll().where { com.obsidianscout.db.Users.email.lowerCase() eq recoverEmail.lowercase() }

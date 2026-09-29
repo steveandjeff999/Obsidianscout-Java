@@ -233,7 +233,7 @@ object AuthService {
                 it[Users.role] = role.name
                 it[Users.createdAt] = Instant.now()
                 it[Users.lastLogin] = Instant.now()
-                it[Users.email] = email?.takeIf { it.isNotBlank() }
+                it[Users.email] = email?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
             }
 
             val existingTeamSettings = AppSettings
@@ -385,7 +385,7 @@ object AuthService {
                 it[Users.passwordHash] = hash
                 it[Users.role] = role.name
                 it[Users.createdAt] = Instant.now()
-                it[Users.email] = email?.takeIf { it.isNotBlank() }
+                it[Users.email] = email?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
             }
             val row = Users.selectAll().where { Users.id eq id }.first()
             rowToUser(row)
@@ -497,7 +497,7 @@ object AuthService {
                 if (!newUsername.isNullOrBlank()) stmt[username] = newUsername.trim()
                 if (newHash != null)             stmt[passwordHash] = newHash
                 if (newRole != null)             stmt[role] = newRole.name
-                if (newEmail != null)            stmt[email] = newEmail.takeIf { it.isNotBlank() }
+                if (newEmail != null)            stmt[email] = newEmail.trim().lowercase().takeIf { it.isNotBlank() }
                 if (newNotificationPreference != null) stmt[notificationPreference] = newNotificationPreference
                 if (newNodeAlertsEnabled != null) stmt[nodeAlertsEnabled] = newNodeAlertsEnabled
                 if (newBugReportPreference != null) stmt[bugReportPreference] = newBugReportPreference
