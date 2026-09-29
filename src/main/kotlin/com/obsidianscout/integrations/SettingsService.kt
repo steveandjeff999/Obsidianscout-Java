@@ -85,8 +85,9 @@ fun canonicalTbaEventCode(code: String): String = code.trim().lowercase().remove
 fun canonicalTbaEventKey(year: Int, codeOrKey: String): String {
     val clean = canonicalTbaEventCode(codeOrKey)
     if (clean.isBlank()) return ""
+    val stripped = if (clean.length > 4 && clean.take(4).all { it.isDigit() }) clean.drop(4) else clean
     val yearStr = year.toString()
-    return if (clean.startsWith(yearStr)) clean else "$yearStr$clean"
+    return if (stripped.startsWith(yearStr)) stripped else "$yearStr$stripped"
 }
 
 fun canonicalStoredEventKey(year: Int, key: String): String = canonicalTbaEventKey(year, key)

@@ -1135,7 +1135,17 @@ fun Application.configureRoutes() {
                 put {
                     val session = call.requireAdmin()
                     val payload = call.receive<ApiSettingsPayload>()
-                    val updated = SettingsService.updateSettings(session.teamNumber, payload.toSettings())
+                    val targetProgram = if (payload.program.isNotBlank()) payload.program else session.program
+                    val updated = SettingsService.updateSettings(session.teamNumber, payload.toSettings().copy(program = targetProgram))
+                    val activeAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, targetProgram)
+                    if (activeAllianceId != null && AllianceService.isAllianceAdmin(session.teamNumber, activeAllianceId)) {
+                        AllianceService.updateAllianceEvent(
+                            activeAllianceId,
+                            updated.year,
+                            updated.eventCode,
+                            updated.eventKey
+                        )
+                    }
                     call.respond(SettingsResponse(updated.toPayload()))
                 }
                 post("/dismiss-wizard") {

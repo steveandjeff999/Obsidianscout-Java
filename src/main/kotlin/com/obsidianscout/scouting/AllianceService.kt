@@ -293,6 +293,26 @@ object AllianceService {
     }
 
     /**
+     * Updates an alliance's year, eventCode, and eventKey.
+     */
+    fun updateAllianceEvent(
+        allianceId: UUID,
+        year: Int,
+        eventCode: String,
+        eventKey: String
+    ) {
+        transaction {
+            ScoutingAlliances.update({ ScoutingAlliances.id eq allianceId }) {
+                it[ScoutingAlliances.year] = year
+                it[ScoutingAlliances.eventCode] = eventCode.trim().lowercase()
+                it[ScoutingAlliances.eventKey] = eventKey.trim().lowercase()
+                it[updatedAt] = Instant.now()
+            }
+            clearEffectiveSettingsCache()
+        }
+    }
+
+    /**
      * Deletes an alliance and all its membership rows.
      * Only an alliance admin may call this.
      */
@@ -816,6 +836,7 @@ object AllianceService {
                 (AllianceMemberships.teamNumber eq teamNumber) and
                 (AllianceMemberships.program eq program) and
                 (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                (AllianceMemberships.disabled eq false) and
                 (AllianceMemberships.active eq true)
             }
             .firstOrNull()
