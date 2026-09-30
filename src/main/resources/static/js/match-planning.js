@@ -122,8 +122,20 @@
         wireDrawingTools();
         await initMatchPlanningPage();
 
+        const container = document.querySelector(".canvas-container");
+        if (window.ResizeObserver && container) {
+            const ro = new ResizeObserver(() => {
+                if (currentMatch) {
+                    resizeCanvas();
+                    renderCanvas();
+                    updateFieldMarkerPositions();
+                }
+            });
+            ro.observe(container);
+        }
+
         window.addEventListener("resize", () => {
-            if (fieldImageObj && currentMatch) {
+            if (currentMatch) {
                 resizeCanvas();
                 renderCanvas();
                 updateFieldMarkerPositions();

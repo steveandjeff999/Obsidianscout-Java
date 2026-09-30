@@ -567,6 +567,31 @@ tasks.register("bumpVersion") {
             appConfigKt.writeText(patchedKt)
             println("[bumpVersion] Updated default in ${appConfigKt.absolutePath}")
         }
+
+        val swFile = file("src/main/resources/static/sw.js")
+        if (swFile.exists()) {
+            val swText = swFile.readText()
+            val swRegex = Regex("const CACHE_NAME = ['\"][^'\"]+['\"];")
+            val sanitizedVer = newVersion.replace(".", "-")
+            val newCacheConst = "const CACHE_NAME = 'obsidianscout-shell-v$sanitizedVer';"
+            val patchedSw = swRegex.replace(swText, newCacheConst)
+            if (patchedSw != swText) {
+                swFile.writeText(patchedSw)
+                println("[bumpVersion] Updated CACHE_NAME in ${swFile.absolutePath} to obsidianscout-shell-v$sanitizedVer")
+            }
+        }
+        val outerSwFile = file("../static/sw.js")
+        if (outerSwFile.exists() && outerSwFile.canonicalPath != swFile.canonicalPath) {
+            val swText = outerSwFile.readText()
+            val swRegex = Regex("const CACHE_NAME = ['\"][^'\"]+['\"];")
+            val sanitizedVer = newVersion.replace(".", "-")
+            val newCacheConst = "const CACHE_NAME = 'obsidianscout-shell-v$sanitizedVer';"
+            val patchedSw = swRegex.replace(swText, newCacheConst)
+            if (patchedSw != swText) {
+                outerSwFile.writeText(patchedSw)
+                println("[bumpVersion] Updated CACHE_NAME in ${outerSwFile.absolutePath} to obsidianscout-shell-v$sanitizedVer")
+            }
+        }
     }
 }
 

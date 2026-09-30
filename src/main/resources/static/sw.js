@@ -182,24 +182,28 @@ function fetchWithTimeout(request, timeoutMs) {
     });
 }
 
-// Install: Cache all application shell assets sequentially to avoid connection pool saturation
+// Install: Cache all application shell assets in parallel batches for fast installation and full offline readiness
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(async (cache) => {
-                console.log(`[ServiceWorker] Pre-caching offline shell assets sequentially for ${CACHE_NAME}`);
-                for (const url of ASSETS) {
-                    try {
-                        // Append version query parameter to bypass Cloudflare edge cache and intermediate CDN caches
-                        const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}_sw_ver=${encodeURIComponent(CACHE_NAME)}`;
-                        const response = await fetch(fetchUrl, { cache: 'reload' });
-                        if (response.status === 200) {
-                            // Store under clean URL so normal app requests match cache keys directly
-                            await cache.put(url, response);
+                console.log(`[ServiceWorker] Pre-caching offline shell assets for ${CACHE_NAME}`);
+                const BATCH_SIZE = 8;
+                for (let i = 0; i < ASSETS.length; i += BATCH_SIZE) {
+                    const batch = ASSETS.slice(i, i + BATCH_SIZE);
+                    await Promise.all(batch.map(async (url) => {
+                        try {
+                            // Append version query parameter to bypass Cloudflare edge cache and intermediate CDN caches
+                            const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}_sw_ver=${encodeURIComponent(CACHE_NAME)}`;
+                            const response = await fetch(fetchUrl, { cache: 'reload' });
+                            if (response.status === 200) {
+                                // Store under clean URL so normal app requests match cache keys directly
+                                await cache.put(url, response);
+                            }
+                        } catch (err) {
+                            console.warn(`[ServiceWorker] Failed to fetch shell asset ${url}:`, err);
                         }
-                    } catch (err) {
-                        console.warn(`[ServiceWorker] Failed to fetch shell asset ${url}:`, err);
-                    }
+                    }));
                 }
             })
             .then(() => self.skipWaiting())

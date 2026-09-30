@@ -194,8 +194,12 @@ fun Application.module(appConfig: AppConfig) {
         options { call, _ ->
             val path = call.request.path()
             val method = call.request.local.method.value.uppercase()
-            if (path.contains("/vendor/") || path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) {
+            if (path == "/sw.js" || path.endsWith("/sw.js")) {
+                CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
+            } else if (path.contains("/vendor/") || path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) {
                 CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 3600 * 24 * 30, visibility = CacheControl.Visibility.Public))
+            } else if (path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".json")) {
+                CachingOptions(CacheControl.NoCache(visibility = CacheControl.Visibility.Public))
             } else if (method == "GET" && path.startsWith("/api/")) {
                 CachingOptions(CacheControl.NoCache(visibility = CacheControl.Visibility.Private))
             } else {
@@ -234,11 +238,18 @@ fun Application.module(appConfig: AppConfig) {
     intercept(io.ktor.server.application.ApplicationCallPipeline.Plugins) {
         val path = call.request.path()
         val method = call.request.local.method.value.uppercase()
-        val isAsset = path.contains("/vendor/") || path.contains("/css/") || path.contains("/js/") ||
+        val isSw = path == "/sw.js" || path.endsWith("/sw.js")
+        val isAsset = (path.contains("/vendor/") || path.contains("/css/") || path.contains("/js/") ||
                 path.contains("/assets/") || path.endsWith(".js") || path.endsWith(".css") ||
-                path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")
+                path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) && !isSw
 
-        if (!isAsset) {
+        if (isSw) {
+            call.response.headers.append("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, private")
+            call.response.headers.append("Pragma", "no-cache")
+            call.response.headers.append("Expires", "0")
+            call.response.headers.append("CDN-Cache-Control", "no-store")
+            call.response.headers.append("Cloudflare-CDN-Cache-Control", "no-store")
+        } else if (!isAsset) {
             if (method == "GET" && path.startsWith("/api/")) {
                 call.response.headers.append("Cache-Control", "private, no-cache, must-revalidate")
             } else {

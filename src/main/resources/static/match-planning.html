@@ -51,6 +51,7 @@
             -webkit-backdrop-filter: blur(36px) saturate(180%) brightness(90%);
         }
 
+        /* ── Field Strategy Layout ── */
         .field-layout {
             display: grid;
             grid-template-columns: 140px minmax(0, 1fr) 140px;
@@ -59,10 +60,27 @@
             width: 100%;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 1024px) and (min-width: 768px) {
             .field-layout {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto auto auto;
+                grid-template-columns: 115px minmax(0, 1fr) 115px;
+                gap: 10px;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .field-layout {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .field-layout .canvas-container {
+                order: 1;
+            }
+            .field-layout .ds-column.ds-blue {
+                order: 2;
+            }
+            .field-layout .ds-column.ds-red {
+                order: 3;
             }
         }
 
@@ -71,11 +89,12 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            gap: 12px;
-            padding: 12px 8px;
+            gap: 10px;
+            padding: 10px 8px;
             border-radius: var(--radius-sm);
             background: rgba(0, 0, 0, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            min-width: 0;
         }
 
         body.theme-dark .ds-column {
@@ -83,13 +102,16 @@
         }
 
         .ds-column-header {
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 900;
             letter-spacing: 0.08em;
             text-transform: uppercase;
             text-align: center;
             padding-bottom: 6px;
             border-bottom: 2px solid currentColor;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .ds-column.ds-blue {
@@ -105,36 +127,37 @@
         .ds-slot-list {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
             flex: 1;
             justify-content: space-around;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 767px) {
             .ds-column {
                 flex-direction: row;
                 align-items: center;
                 gap: 8px;
-                padding: 10px;
+                padding: 8px 10px;
             }
             .ds-column-header {
                 border-bottom: none;
                 border-right: 2px solid currentColor;
                 padding-bottom: 0;
                 padding-right: 8px;
-                min-width: 60px;
+                min-width: 54px;
+                font-size: 0.75rem;
             }
             .ds-slot-list {
                 flex-direction: row;
                 flex: 1;
-                gap: 8px;
+                gap: 6px;
             }
         }
 
         .ds-slot-card {
             background: var(--surface-2);
             border-radius: var(--radius-sm);
-            padding: 10px 12px;
+            padding: 8px 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -143,6 +166,7 @@
             transition: all 0.2s ease;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
             cursor: pointer;
+            min-width: 0;
         }
 
         body.theme-dark .ds-slot-card {
@@ -158,10 +182,10 @@
             border-right: 4px solid #ef4444;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 767px) {
             .ds-slot-card {
                 flex: 1;
-                padding: 6px 8px;
+                padding: 6px 4px;
             }
             .ds-blue .ds-slot-card {
                 border-left: 1px solid rgba(59, 130, 246, 0.3);
@@ -179,11 +203,12 @@
         }
 
         .ds-slot-tag {
-            font-size: 0.72rem;
+            font-size: 0.70rem;
             font-weight: 800;
             text-transform: uppercase;
             opacity: 0.8;
             margin-bottom: 2px;
+            white-space: nowrap;
         }
 
         .ds-slot-team {
@@ -192,15 +217,75 @@
             color: var(--ink);
         }
 
+        @media (max-width: 600px) {
+            .ds-slot-team {
+                font-size: 1rem;
+            }
+            .ds-slot-tag {
+                font-size: 0.62rem;
+            }
+        }
+
         .ds-slot-nickname {
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 600;
             color: var(--muted);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 110px;
+            max-width: 100px;
             text-align: center;
+        }
+
+        @media (max-width: 767px) {
+            .ds-slot-nickname {
+                max-width: 75px;
+                font-size: 0.65rem;
+            }
+        }
+
+        /* ── Header Controls Card ── */
+        .header-controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .header-select-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .header-select-group .select-wide {
+            min-width: 180px;
+        }
+
+        @media (max-width: 768px) {
+            .header-controls-row {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+            .header-select-group {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                width: 100%;
+                gap: 8px;
+            }
+            .header-select-group .select-wide {
+                min-width: 0 !important;
+                width: 100% !important;
+            }
+        }
+
+        @media (max-width: 440px) {
+            .header-select-group {
+                grid-template-columns: 1fr;
+            }
         }
 
         /* ── Canvas Wrapper & Toolbar ── */
@@ -209,6 +294,9 @@
             justify-content: center;
             width: 100%;
             margin-bottom: 8px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 4px;
         }
 
         .canvas-toolbar {
@@ -216,27 +304,48 @@
             z-index: 20;
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 18px;
-            background: rgba(15, 23, 42, 0.88);
+            gap: 8px;
+            padding: 6px 14px;
+            background: rgba(15, 23, 42, 0.92);
             border-radius: 999px;
             border: 1px solid rgba(255, 255, 255, 0.18);
             backdrop-filter: blur(24px) saturate(180%);
             -webkit-backdrop-filter: blur(24px) saturate(180%);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            flex-wrap: wrap;
-            justify-content: center;
+            flex-wrap: nowrap;
+            white-space: nowrap;
             max-width: 100%;
+        }
+
+        @media (max-width: 600px) {
+            .canvas-toolbar {
+                padding: 4px 10px;
+                gap: 6px;
+            }
+            .tool-btn {
+                padding: 4px 6px;
+                font-size: 0.8rem;
+            }
+            .toolbar-slider {
+                width: 60px;
+            }
+            .toolbar-label {
+                font-size: 0.68rem;
+            }
+            .swatch-btn {
+                width: 18px;
+                height: 18px;
+            }
         }
 
         .toolbar-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
 
         .toolbar-label {
-            font-size: 0.78rem;
+            font-size: 0.75rem;
             font-weight: 800;
             color: #94a3b8;
             text-transform: uppercase;
@@ -246,11 +355,11 @@
         .toolbar-slider-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
 
         .toolbar-slider {
-            width: 90px;
+            width: 80px;
             height: 6px;
             -webkit-appearance: none;
             appearance: none;
@@ -268,28 +377,28 @@
         .toolbar-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
             background: #ffffff;
             cursor: pointer;
             box-shadow: 0 0 6px rgba(0,0,0,0.5);
-            border: 2px solid var(--accent);
+            border: 2px solid var(--accent, #6366f1);
         }
 
         .toolbar-slider::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
             background: #ffffff;
             cursor: pointer;
             box-shadow: 0 0 6px rgba(0,0,0,0.5);
-            border: 2px solid var(--accent);
+            border: 2px solid var(--accent, #6366f1);
         }
 
         .stroke-preview-wrapper {
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -307,22 +416,22 @@
 
         .toolbar-divider {
             width: 1px;
-            height: 22px;
+            height: 20px;
             background: rgba(255, 255, 255, 0.2);
             margin: 0 2px;
         }
 
         .save-status-badge {
-            font-size: 0.72rem;
+            font-size: 0.70rem;
             font-weight: 800;
             color: #94a3b8;
-            padding: 4px 10px;
+            padding: 3px 8px;
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.12);
             display: inline-flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
             white-space: nowrap;
             transition: all 0.2s ease;
         }
@@ -347,9 +456,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 420px;
+            min-height: 200px;
             box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.12);
+            width: 100%;
         }
 
         .canvas-viewport {
@@ -567,21 +677,27 @@
             gap: 16px;
         }
 
-        @media (min-width: 900px) {
+        @media (min-width: 1100px) {
             .team-cards-grid {
                 grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 680px) and (max-width: 1099px) {
+            .team-cards-grid {
+                grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
             }
         }
 
         .team-profile-card {
             background: rgba(255, 255, 255, 0.06);
             border-radius: var(--radius);
-            padding: 16px;
+            padding: 14px;
             border: 1px solid rgba(255, 255, 255, 0.12);
             box-shadow: 0 4px 14px rgba(0,0,0,0.06);
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
             min-width: 0;
         }
 
@@ -606,30 +722,33 @@
         }
 
         .card-team-number {
-            font-size: 1.35rem;
+            font-size: 1.25rem;
             font-weight: 900;
             color: var(--ink);
             display: flex;
             align-items: baseline;
             gap: 6px;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .card-team-nickname {
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 600;
             color: var(--muted);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 160px;
+            max-width: 140px;
         }
 
         .card-station-pill {
-            font-size: 0.72rem;
+            font-size: 0.70rem;
             font-weight: 900;
             padding: 3px 8px;
             border-radius: 999px;
             letter-spacing: 0.05em;
+            white-space: nowrap;
         }
 
         .card-station-pill.blue {
@@ -647,22 +766,17 @@
         /* Breakdown Metrics */
         .breakdown-summary-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-        }
-
-        @media (max-width: 600px) {
-            .breakdown-summary-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
+            grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+            gap: 6px;
         }
 
         .breakdown-stat-card {
             background: var(--surface-2);
             border-radius: var(--radius-sm);
-            padding: 8px;
+            padding: 6px 4px;
             text-align: center;
             border: 1px solid rgba(0,0,0,0.03);
+            min-width: 0;
         }
 
         body.theme-dark .breakdown-stat-card {
@@ -671,15 +785,18 @@
         }
 
         .breakdown-stat-label {
-            font-size: 0.65rem;
+            font-size: 0.62rem;
             font-weight: 800;
             text-transform: uppercase;
             color: var(--muted);
             margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .breakdown-stat-val {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             font-weight: 900;
             color: var(--ink);
         }
@@ -695,6 +812,7 @@
             border-bottom: 1px solid var(--surface-3);
             padding-bottom: 4px;
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         body.theme-dark .card-tabs {
@@ -733,7 +851,7 @@
 
         .pit-specs-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
             gap: 6px;
             margin-bottom: 12px;
         }
@@ -745,6 +863,7 @@
             display: flex;
             flex-direction: column;
             gap: 2px;
+            min-width: 0;
         }
 
         body.theme-dark .pit-spec-item {
@@ -995,21 +1114,21 @@
 
                 <!-- Header Controls Card -->
                 <div class="card">
-                    <div class="row gap-12 wrap justify-between align-center">
+                    <div class="header-controls-row">
                         <div>
                             <h1>Match Planning</h1>
                             <p class="notice">Strategize match gameplay with interactive field drawings and comprehensive alliance data.</p>
                         </div>
-                        <div class="row gap-12 wrap align-center">
+                        <div class="header-select-group">
                             <div class="field" style="margin-top: 0;">
                                 <label for="event-filter" style="margin-bottom: 4px;">Event</label>
-                                <select id="event-filter" class="select-wide" style="min-width: 200px;">
+                                <select id="event-filter" class="select-wide">
                                     <option value="">Loading events...</option>
                                 </select>
                             </div>
                             <div class="field" style="margin-top: 0;">
                                 <label for="match-select" style="margin-bottom: 4px;">Select Match</label>
-                                <select id="match-select" class="select-wide" style="min-width: 220px;">
+                                <select id="match-select" class="select-wide">
                                     <option value="">— Select Match —</option>
                                 </select>
                             </div>
