@@ -750,6 +750,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadPasskeys();
     }
 
+    function wirePersonalGamepadSettingsWidget() {
+        const container = document.getElementById("personal-gamepad-settings-container");
+        if (!container) return;
+        if (window.GamepadSettingsUI && typeof window.GamepadSettingsUI.render === "function") {
+            window.GamepadSettingsUI.render(container);
+        }
+    }
+
     wirePersonalAvatarWidget(me);
     wirePersonalUsernameWidget(me);
     wirePersonalPasswordWidget();
@@ -759,6 +767,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalNodeAlertsWidget(me);
     wirePersonalDeviceSessionsWidget(me);
     wirePersonalPasskeysWidget();
+    wirePersonalGamepadSettingsWidget();
     wirePersonalDeleteAccountWidget(me);
     wirePersonalHapticPrefWidget();
     wirePersonalNavLayoutWidget();

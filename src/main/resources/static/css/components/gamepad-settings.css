@@ -1,0 +1,679 @@
+/* ==========================================================================
+   ObsidianScout Controller & Gamepad Settings Styles (Matches Flutter App)
+   ========================================================================== */
+
+.gamepad-settings-view {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    color: var(--ink);
+    font-family: inherit;
+}
+
+/* 1. Header Bar (for Modal or standalone) */
+.gamepad-app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    margin-bottom: 4px;
+}
+
+.gamepad-app-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.gamepad-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Glass Card Container */
+.gamepad-card {
+    background: var(--surface);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+    border-radius: 16px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    transition: all 0.2s ease;
+}
+
+body.theme-dark .gamepad-card {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+/* 2. Device Hardware Status Row */
+.gamepad-hardware-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.gamepad-hardware-icon-box {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    transition: all 0.2s ease;
+}
+
+.gamepad-hardware-icon-box.connected {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.gamepad-hardware-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.gamepad-hardware-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 3px 0;
+    color: var(--ink);
+}
+
+.gamepad-hardware-subtitle {
+    font-size: 0.82rem;
+    color: var(--muted, #64748b);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Switch styling */
+.gamepad-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+}
+
+.gamepad-switch-text {
+    flex: 1;
+}
+
+.gamepad-switch-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0 0 2px 0;
+}
+
+.gamepad-switch-sub {
+    font-size: 0.78rem;
+    color: var(--muted, #64748b);
+    margin: 0;
+}
+
+/* Segmented button group (Xbox / PS4 / Keyboard) */
+.gamepad-segmented-group {
+    display: flex;
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+    border-radius: 10px;
+    padding: 3px;
+    gap: 2px;
+    margin-top: 8px;
+}
+
+body.theme-dark .gamepad-segmented-group {
+    background: rgba(0, 0, 0, 0.25);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.gamepad-segment-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted, #64748b);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.gamepad-segment-btn:hover {
+    color: var(--ink);
+}
+
+.gamepad-segment-btn.active {
+    background: var(--surface);
+    color: var(--accent, #6366f1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+body.theme-dark .gamepad-segment-btn.active {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+/* Rumble strength sub-box */
+.gamepad-rumble-box {
+    margin-top: 10px;
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+
+body.theme-dark .gamepad-rumble-box {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.gamepad-strength-badge {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--accent, #6366f1);
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
+/* Profile List in Settings Card (Matches App) */
+.gamepad-profiles-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.gamepad-profile-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+body.theme-dark .gamepad-profile-item {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.gamepad-profile-item:hover {
+    border-color: var(--accent, #6366f1);
+}
+
+.gamepad-profile-item.active {
+    background: rgba(99, 102, 241, 0.1) !important;
+    border: 1.5px solid var(--accent, #6366f1) !important;
+}
+
+.gamepad-profile-item-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.gamepad-profile-icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--muted, #64748b);
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.gamepad-profile-icon-box.active {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--accent, #6366f1);
+}
+
+.gamepad-profile-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.gamepad-profile-name {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gamepad-profile-item.active .gamepad-profile-name {
+    color: var(--accent, #6366f1);
+    font-weight: 700;
+}
+
+.gamepad-profile-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    color: var(--muted, #64748b);
+    margin-top: 1px;
+}
+
+.gamepad-profile-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.gamepad-profile-actions .btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    white-space: nowrap !important;
+    font-size: 0.78rem !important;
+    padding: 5px 10px !important;
+}
+
+.gamepad-profile-icon-box svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* 3. Live Controller Input HUD (Collapsible) */
+.gamepad-hud-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+}
+
+.gamepad-hud-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0;
+}
+
+.gamepad-hud-title i {
+    color: #38bdf8;
+}
+
+.gamepad-trigger-gauges-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 14px 0 12px 0;
+}
+
+.gamepad-trigger-gauge-box {
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+
+body.theme-dark .gamepad-trigger-gauge-box {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.gamepad-trigger-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 6px;
+}
+
+body.theme-dark .gamepad-trigger-bar-bg {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.gamepad-trigger-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent, #6366f1);
+    border-radius: 4px;
+    transition: width 0.05s ease-out;
+}
+
+.gamepad-hud-chips-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.gamepad-hud-chip {
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--muted, #64748b);
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+    transition: all 0.1s ease;
+    user-select: none;
+}
+
+body.theme-dark .gamepad-hud-chip {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.gamepad-hud-chip.pressed {
+    background: var(--accent, #6366f1) !important;
+    color: #fff !important;
+    border-color: var(--accent, #6366f1) !important;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.5) !important;
+    transform: scale(1.04);
+}
+
+/* 4. Phase Filter Chips */
+.gamepad-filter-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin: 14px 0;
+}
+
+.gamepad-filter-chip {
+    padding: 5px 14px;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+    background: var(--surface);
+    color: var(--muted, #64748b);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+body.theme-dark .gamepad-filter-chip {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.gamepad-filter-chip.active {
+    background: rgba(99, 102, 241, 0.2) !important;
+    color: var(--accent, #6366f1) !important;
+    border-color: var(--accent, #6366f1) !important;
+}
+
+/* Action Buttons in Mappings Table / List */
+.btn-edit-binding, .btn-rebind, .btn-del-binding {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    line-height: 1.2 !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+}
+
+.btn-del-binding {
+    background: rgba(239, 68, 68, 0.12) !important;
+    color: #ef4444 !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+}
+
+.btn-del-binding:hover {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+}
+
+.gamepad-key-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--accent, #6366f1);
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 0.85rem;
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.gamepad-key-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--accent, #6366f1);
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 0.75rem;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    vertical-align: middle;
+    user-select: none;
+}
+
+body.theme-dark .gamepad-key-badge {
+    background: rgba(129, 140, 248, 0.2);
+    color: #a5b4fc;
+    border-color: rgba(129, 140, 248, 0.4);
+}
+
+/* Modal Dialog */
+.gamepad-modal-dialog {
+    width: min(840px, 94vw) !important;
+    max-height: 90vh;
+}
+
+/* Add / Edit Binding Modal Sheet (Matches Flutter BottomSheet & Glass Design) */
+.gamepad-modal-sheet {
+    background: var(--surface, #ffffff);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 20px;
+    padding: 20px 24px 24px 24px;
+    width: min(560px, 94vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+body.theme-dark .gamepad-modal-sheet {
+    background: #1e293b;
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+}
+
+.gamepad-sheet-handle {
+    width: 42px;
+    height: 4px;
+    background: rgba(150, 150, 150, 0.3);
+    border-radius: 2px;
+    margin: 0 auto 4px auto;
+}
+
+.gamepad-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.gamepad-sheet-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Conflict & Duplicate Warning Banners */
+.gamepad-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    margin-bottom: 4px;
+}
+
+.gamepad-banner.warning-red {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #f87171;
+}
+
+.gamepad-banner.warning-amber {
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+}
+
+.gamepad-banner-title {
+    font-weight: 700;
+    font-size: 0.85rem;
+    margin-bottom: 2px;
+}
+
+/* Interactive Input Capture Card */
+.gamepad-input-capture-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+body.theme-dark .gamepad-input-capture-card {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.gamepad-input-capture-card:hover {
+    border-color: var(--accent, #6366f1);
+    background: rgba(99, 102, 241, 0.06);
+}
+
+.gamepad-input-capture-card.listening {
+    border: 2px solid var(--accent, #6366f1);
+    background: rgba(99, 102, 241, 0.15);
+    box-shadow: 0 0 14px rgba(99, 102, 241, 0.35);
+}
+
+.gamepad-capture-badge {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--accent, #6366f1);
+    font-weight: 700;
+    font-size: 1rem;
+    font-family: monospace;
+    min-width: 44px;
+    text-align: center;
+}
+
+.gamepad-capture-info {
+    flex: 1;
+}
+
+.gamepad-capture-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0 0 2px 0;
+}
+
+.gamepad-capture-subtitle {
+    font-size: 0.78rem;
+    color: var(--muted, #64748b);
+    margin: 0;
+}
+
+/* Phase Badges */
+.badge-phase-auto {
+    background: rgba(99, 102, 241, 0.18) !important;
+    color: #818cf8 !important;
+    border: 1px solid rgba(99, 102, 241, 0.4) !important;
+}
+
+.badge-phase-teleop {
+    background: rgba(56, 189, 248, 0.18) !important;
+    color: #38bdf8 !important;
+    border: 1px solid rgba(56, 189, 248, 0.4) !important;
+}
+
+.badge-phase-endgame {
+    background: rgba(16, 185, 129, 0.18) !important;
+    color: #34d399 !important;
+    border: 1px solid rgba(16, 185, 129, 0.4) !important;
+}
+
+.badge-phase-global {
+    background: rgba(245, 158, 11, 0.18) !important;
+    color: #fbbf24 !important;
+    border: 1px solid rgba(245, 158, 11, 0.4) !important;
+}
+
+.badge-phase-postmatch {
+    background: rgba(168, 85, 247, 0.18) !important;
+    color: #c084fc !important;
+    border: 1px solid rgba(168, 85, 247, 0.4) !important;
+}
+
+@media (max-width: 640px) {
+    .gamepad-trigger-gauges-row {
+        grid-template-columns: 1fr;
+    }
+    .gamepad-hardware-header {
+        flex-wrap: wrap;
+    }
+}

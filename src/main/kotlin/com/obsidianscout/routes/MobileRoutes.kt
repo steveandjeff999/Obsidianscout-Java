@@ -2502,6 +2502,72 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 call.respond(MobileConfigResponse(config = config))
             }
 
+            // Gamepad & Controller Configurations
+            get("/gamepad/profiles") {
+                val session = call.requireMobileSession(secret)
+                val profiles = com.obsidianscout.config.GamepadProfileService.listProfiles(session.teamNumber, session.program)
+                call.respond(com.obsidianscout.config.GamepadProfileListResponse(profiles = profiles))
+            }
+            get("/v1/gamepad/profiles") {
+                val session = call.requireMobileSession(secret)
+                val profiles = com.obsidianscout.config.GamepadProfileService.listProfiles(session.teamNumber, session.program)
+                call.respond(com.obsidianscout.config.GamepadProfileListResponse(profiles = profiles))
+            }
+            get("/gamepad/profiles/{id}") {
+                val session = call.requireMobileSession(secret)
+                val id = call.parameters["id"] ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing profile id", "INVALID_PARAM")
+                val profile = com.obsidianscout.config.GamepadProfileService.getProfile(id, session.teamNumber, session.program)
+                    ?: throw MobileApiException(HttpStatusCode.NotFound, "Gamepad profile not found", "NOT_FOUND")
+                call.respond(com.obsidianscout.config.GamepadProfileResponse(profile = profile))
+            }
+            get("/v1/gamepad/profiles/{id}") {
+                val session = call.requireMobileSession(secret)
+                val id = call.parameters["id"] ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing profile id", "INVALID_PARAM")
+                val profile = com.obsidianscout.config.GamepadProfileService.getProfile(id, session.teamNumber, session.program)
+                    ?: throw MobileApiException(HttpStatusCode.NotFound, "Gamepad profile not found", "NOT_FOUND")
+                call.respond(com.obsidianscout.config.GamepadProfileResponse(profile = profile))
+            }
+            post("/gamepad/profiles") {
+                val session = call.requireMobileSession(secret)
+                val profileDto = call.receive<com.obsidianscout.config.GamepadProfileDTO>()
+                val saved = com.obsidianscout.config.GamepadProfileService.saveProfile(
+                    teamNumber = session.teamNumber,
+                    program = session.program,
+                    profile = profileDto,
+                    updatedBy = session.username
+                )
+                call.respond(com.obsidianscout.config.GamepadProfileResponse(profile = saved))
+            }
+            post("/v1/gamepad/profiles") {
+                val session = call.requireMobileSession(secret)
+                val profileDto = call.receive<com.obsidianscout.config.GamepadProfileDTO>()
+                val saved = com.obsidianscout.config.GamepadProfileService.saveProfile(
+                    teamNumber = session.teamNumber,
+                    program = session.program,
+                    profile = profileDto,
+                    updatedBy = session.username
+                )
+                call.respond(com.obsidianscout.config.GamepadProfileResponse(profile = saved))
+            }
+            delete("/gamepad/profiles/{id}") {
+                val session = call.requireMobileSession(secret)
+                val id = call.parameters["id"] ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing profile id", "INVALID_PARAM")
+                val success = com.obsidianscout.config.GamepadProfileService.deleteProfile(id, session.teamNumber, session.program)
+                if (!success) {
+                    throw MobileApiException(HttpStatusCode.NotFound, "Gamepad profile not found", "NOT_FOUND")
+                }
+                call.respond(MobileMessageResponse(success = true, message = "Profile deleted"))
+            }
+            delete("/v1/gamepad/profiles/{id}") {
+                val session = call.requireMobileSession(secret)
+                val id = call.parameters["id"] ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing profile id", "INVALID_PARAM")
+                val success = com.obsidianscout.config.GamepadProfileService.deleteProfile(id, session.teamNumber, session.program)
+                if (!success) {
+                    throw MobileApiException(HttpStatusCode.NotFound, "Gamepad profile not found", "NOT_FOUND")
+                }
+                call.respond(MobileMessageResponse(success = true, message = "Profile deleted"))
+            }
+
             // POST PUT Configs
             val saveGameConfigHandler: suspend PipelineContext<Unit, ApplicationCall>.(Unit) -> Unit = {
                 call.requireMobileAdmin(secret)

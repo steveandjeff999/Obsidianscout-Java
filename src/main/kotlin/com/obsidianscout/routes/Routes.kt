@@ -5,6 +5,10 @@ import com.obsidianscout.analytics.AnalyticsService
 import com.obsidianscout.analytics.PredictorService
 import com.obsidianscout.analytics.ValidationService
 import com.obsidianscout.config.ConfigMigrationService
+import com.obsidianscout.config.GamepadProfileService
+import com.obsidianscout.config.GamepadProfileDTO
+import com.obsidianscout.config.GamepadProfileListResponse
+import com.obsidianscout.config.GamepadProfileResponse
 import com.obsidianscout.auth.ApiException
 import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserSession
@@ -1108,6 +1112,41 @@ fun Application.configureRoutes() {
                     val id = call.parameters["id"] ?: throw IllegalArgumentException("Missing revision id")
                     val result = ConfigMigrationService.restoreRevision(id, session.teamNumber, session.program, session.username)
                     call.respond(result)
+                }
+            }
+
+            route("/gamepad/profiles") {
+                get {
+                    val session = call.requireSession()
+                    val profiles = GamepadProfileService.listProfiles(session.teamNumber, session.program)
+                    call.respond(GamepadProfileListResponse(profiles = profiles))
+                }
+                get("/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"] ?: throw IllegalArgumentException("Missing profile id")
+                    val profile = GamepadProfileService.getProfile(id, session.teamNumber, session.program)
+                        ?: throw ApiException(HttpStatusCode.NotFound, "Gamepad profile not found")
+                    call.respond(GamepadProfileResponse(profile = profile))
+                }
+                post {
+                    val session = call.requireSession()
+                    val profileDto = call.receive<GamepadProfileDTO>()
+                    val saved = GamepadProfileService.saveProfile(
+                        teamNumber = session.teamNumber,
+                        program = session.program,
+                        profile = profileDto,
+                        updatedBy = session.username
+                    )
+                    call.respond(GamepadProfileResponse(profile = saved))
+                }
+                delete("/{id}") {
+                    val session = call.requireSession()
+                    val id = call.parameters["id"] ?: throw IllegalArgumentException("Missing profile id")
+                    val success = GamepadProfileService.deleteProfile(id, session.teamNumber, session.program)
+                    if (!success) {
+                        throw ApiException(HttpStatusCode.NotFound, "Gamepad profile not found")
+                    }
+                    call.respond(HttpStatusCode.OK, mapOf("success" to true))
                 }
             }
 

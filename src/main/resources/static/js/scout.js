@@ -41,6 +41,7 @@ async function loadScoutPageData(me) {
         const eventKey = Obsidianscout.resolveEventKey(settings);
         
         const config = await Obsidianscout.request("/api/config");
+        window.activeFormConfig = config;
 
         // Restore original HTML
         mainContentWrapper.innerHTML = originalMainContentHTML;
@@ -170,6 +171,97 @@ async function loadScoutPageData(me) {
         const firstVisibleTab = tabsRow ? tabsRow.querySelector(".tab:not(.hidden)") : null;
         switchTab(firstVisibleTab ? firstVisibleTab.dataset.tab : "auto");
 
+        if (window.GamepadService) {
+            window.GamepadService.setPhase(firstVisibleTab ? firstVisibleTab.dataset.tab : "auto");
+            if (config && config.fields && (!window.GamepadService.activeProfile || window.GamepadService.activeProfile.id === 'default_xbox')) {
+                const smartProfile = window.GamepadService.autoGenerateForConfig(config);
+                window.GamepadService.saveProfile(smartProfile);
+            }
+            window.GamepadService.renderKeybindBadges(fieldContainer, firstVisibleTab ? firstVisibleTab.dataset.tab : "auto");
+
+            window.GamepadService.onAction((event) => {
+                const { binding, value, isRepeat } = event;
+                const activeForm = document.getElementById("scouting-form");
+                if (!activeForm) return;
+
+                // 1. System Actions
+                if (binding.actionType === 'switchTab') {
+                    const tabs = Array.from(document.querySelectorAll("#scouting-tabs .tab:not(.hidden)"));
+                    if (tabs.length === 0) return;
+                    const currentActiveIdx = tabs.findIndex(t => t.classList.contains("active"));
+                    if (binding.targetValue === 'prev') {
+                        const newIdx = currentActiveIdx > 0 ? currentActiveIdx - 1 : tabs.length - 1;
+                        switchTab(tabs[newIdx].dataset.tab);
+                    } else if (binding.targetValue === 'next') {
+                        const newIdx = currentActiveIdx < tabs.length - 1 ? currentActiveIdx + 1 : 0;
+                        switchTab(tabs[newIdx].dataset.tab);
+                    } else if (binding.targetValue) {
+                        switchTab(binding.targetValue);
+                    }
+                    return;
+                }
+
+                if (binding.actionType === 'submit') {
+                    const submitBtn = document.getElementById("scout-submit");
+                    if (submitBtn && !submitBtn.disabled) submitBtn.click();
+                    return;
+                }
+
+                if (binding.actionType === 'barcode') {
+                    const genQrBtn = document.getElementById("scout-gen-qr");
+                    if (genQrBtn && !genQrBtn.disabled) genQrBtn.click();
+                    return;
+                }
+
+                if (binding.actionType === 'clearForm') {
+                    const clearBtn = document.getElementById("scout-clear");
+                    if (clearBtn && !clearBtn.disabled) clearBtn.click();
+                    return;
+                }
+
+                // 2. Form Field Target Actions
+                if (!binding.targetFieldId) return;
+                const inputEl = activeForm.querySelector(`[name="${binding.targetFieldId}"]`);
+                if (!inputEl) return;
+
+                if (binding.actionType === 'increment' || binding.actionType === 'decrement') {
+                    const step = binding.stepValue || 1;
+                    const currentVal = Number(inputEl.value) || 0;
+                    const minVal = inputEl.min !== '' ? Number(inputEl.min) : 0;
+                    const maxVal = inputEl.max !== '' ? Number(inputEl.max) : Number.POSITIVE_INFINITY;
+                    const delta = binding.actionType === 'increment' ? step : -step;
+                    const newVal = Math.min(maxVal, Math.max(minVal, currentVal + delta));
+
+                    inputEl.value = String(newVal);
+                    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+                    return;
+                }
+
+                if (binding.actionType === 'toggle') {
+                    if (inputEl.type === 'checkbox') {
+                        inputEl.checked = !inputEl.checked;
+                        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+                        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    return;
+                }
+
+                if (binding.actionType === 'cycleOption') {
+                    if (inputEl.tagName === 'SELECT') {
+                        const options = Array.from(inputEl.options);
+                        if (options.length > 1) {
+                            const nextIndex = (inputEl.selectedIndex + 1) % options.length;
+                            inputEl.selectedIndex = nextIndex;
+                            inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+                            inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    }
+                    return;
+                }
+            });
+        }
+
         const pointsPreview = {
             auto: document.getElementById("points-auto"),
             teleop: document.getElementById("points-teleop"),
@@ -270,6 +362,15 @@ async function loadScoutPageData(me) {
                     payload,
                     serverSynced: false
                 });
+            });
+        }
+
+        const gamepadSettingsBtn = document.getElementById("scout-gamepad-settings");
+        if (gamepadSettingsBtn) {
+            gamepadSettingsBtn.addEventListener("click", () => {
+                if (window.GamepadSettingsUI && typeof window.GamepadSettingsUI.openModal === "function") {
+                    window.GamepadSettingsUI.openModal({ config });
+                }
             });
         }
 
@@ -1352,6 +1453,10 @@ function setFormEnabled(form, notice, pointsCard, enabled) {
             input.disabled = !enabled;
             return;
         }
+        if (input.id === "scout-gamepad-settings") {
+            input.disabled = false;
+            return;
+        }
         if (input.id === "scout-submit" || input.id === "scout-clear") {
             input.disabled = !enabled;
             return;
@@ -1390,6 +1495,11 @@ function switchTab(activeTab) {
             field.classList.add("hidden");
         }
     });
+
+    if (window.GamepadService) {
+        window.GamepadService.setPhase(targetTab);
+        window.GamepadService.renderKeybindBadges(document.getElementById("form-fields"), targetTab);
+    }
 }
 
 

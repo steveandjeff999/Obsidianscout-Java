@@ -24,6 +24,7 @@
 @import url('./components/modals.css');
 @import url('./components/alerts-banners.css');
 @import url('./components/widgets.css');
+@import url('./components/gamepad-settings.css');
 
 /* 4. Page-Specific Styles */
 @import url('./pages/dashboard.css');

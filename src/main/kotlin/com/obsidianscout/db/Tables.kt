@@ -536,3 +536,26 @@ object ScoutingAssignments : UUIDTable("scouting_assignments") {
         index("idx_scouting_assignments_match_team", false, eventKey, matchNumber, targetTeamNumber)
     }
 }
+
+object GamepadProfiles : UUIDTable("gamepad_profiles") {
+    val ownerTeamNumber = integer("owner_team_number").default(0)
+    val program = varchar("program", 8).default("FRC")
+    val profileId = varchar("profile_id", 128)
+    val name = varchar("name", 128)
+    val description = text("description").default("")
+    val controllerType = varchar("controller_type", 32).default("xbox")
+    val selectedGamepadId = varchar("selected_gamepad_id", 128).nullable()
+    val enabled = bool("enabled").default(true)
+    val showTooltips = bool("show_tooltips").default(true)
+    val hapticEnabled = bool("haptic_enabled").default(true)
+    val hapticStrength = double("haptic_strength").default(1.0)
+    val profileJson = text("profile_json")
+    val updatedByUsername = varchar("updated_by_username", 64).default("")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_gamepad_profiles_team_program_id", ownerTeamNumber, program, profileId)
+        index("idx_gamepad_profiles_team_program", false, ownerTeamNumber, program)
+    }
+}
+

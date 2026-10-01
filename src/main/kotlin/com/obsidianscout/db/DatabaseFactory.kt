@@ -252,7 +252,8 @@ object DatabaseFactory {
                 UserSessions,
                 PasskeyCredentials,
                 PasskeyChallenges,
-                ScoutingAssignments
+                ScoutingAssignments,
+                GamepadProfiles
             )
 
             if (isCockroach) {
