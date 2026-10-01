@@ -582,7 +582,7 @@
             }
         }
 
-        async syncWithServer() {
+        async syncWithServer(forceRefresh = false) {
             try {
                 const res = await fetch('/api/gamepad/profiles', {
                     headers: { 'Accept': 'application/json' }
@@ -591,19 +591,25 @@
                     const data = await res.json();
                     const serverProfiles = data.profiles || (Array.isArray(data) ? data : []);
                     if (serverProfiles.length > 0) {
-                        this.profiles = serverProfiles;
+                        if (forceRefresh) {
+                            this.profiles = serverProfiles;
+                        } else {
+                            const serverIds = new Set(serverProfiles.map(p => p.id));
+                            const localOnly = this.profiles.filter(p => !serverIds.has(p.id));
+                            this.profiles = [...serverProfiles, ...localOnly];
+                        }
                         const activeId = localStorage.getItem(STORAGE_KEY_ACTIVE_ID);
                         this.activeProfile = this.profiles.find(p => p.id === activeId) || this.profiles[0];
                         this.saveToLocalStorage();
                         this.notifyStateChanged();
-                        return;
+                        return true;
                     }
+                    return true;
                 }
-            } catch (_) {}
-
-            // If server has no profiles yet and we have a local one, push it
-            if (this.activeProfile) {
-                this.saveProfileToServer(this.activeProfile).catch(() => {});
+                return false;
+            } catch (e) {
+                console.warn('[GamepadService] syncWithServer failed (server offline):', e);
+                return false;
             }
         }
 

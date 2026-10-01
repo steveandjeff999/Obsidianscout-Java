@@ -32,7 +32,8 @@
         dish: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg>',
         pointer: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path></svg>',
         toggle: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;"><rect x="1" y="5" width="22" height="14" rx="7" ry="7"></rect><circle cx="16" cy="12" r="3"></circle></svg>',
-        cycle: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>'
+        cycle: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>',
+        arrows: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>'
     };
 
     function getFieldLabel(field) {
@@ -79,10 +80,6 @@
 
             if (!this.activeConfig) {
                 this.activeConfig = await this.fetchActiveConfig();
-            }
-
-            if (window.GamepadService) {
-                await window.GamepadService.syncWithServer().catch(() => {});
             }
 
             target.innerHTML = this.buildHTML();
@@ -670,12 +667,12 @@
                         if (ok) {
                             Obsidianscout.showToast(`Profile "${p.name}" saved to server!`, 'success');
                         } else {
-                            Obsidianscout.showToast('Saved locally on device (offline).', 'info');
+                            Obsidianscout.showToast('Save Failed: Could not reach server (server offline). Profile was NOT saved to the server.', 'error');
                         }
                     }
                 } catch (err) {
                     if (window.Obsidianscout && Obsidianscout.showToast) {
-                        Obsidianscout.showToast('Failed to save profile to server.', 'error');
+                        Obsidianscout.showToast('Save Failed: Server is offline or unreachable.', 'error');
                     }
                 } finally {
                     if (btn && origHtml) {
@@ -692,13 +689,17 @@
             const btnRefresh = root.querySelector('#gamepad-btn-refresh-gamepads');
             btnRefresh?.addEventListener('click', async () => {
                 btnRefresh.disabled = true;
-                await service.syncWithServer().catch(() => {});
+                const synced = await service.syncWithServer(true).catch(() => false);
                 const count = service.getConnectedGamepads().length;
                 this.refreshHardwareCard(root);
                 this.refreshProfilesList(root);
                 btnRefresh.disabled = false;
                 if (window.Obsidianscout && Obsidianscout.showToast) {
-                    Obsidianscout.showToast(`${count} controller(s) detected, profiles synced.`, 'info');
+                    if (synced) {
+                        Obsidianscout.showToast(`${count} controller(s) detected, profiles synced from server.`, 'success');
+                    } else {
+                        Obsidianscout.showToast(`${count} controller(s) detected (Server is offline - could not sync profiles).`, 'warning');
+                    }
                 }
             });
 
@@ -1072,7 +1073,6 @@
                         <td>
                             <span class="gamepad-key-pill" title="${keyName}">
                                 <span>${shortBadge}</span>
-                                <small style="font-size: 0.75rem; opacity: 0.85; font-family: inherit;">${keyName}</small>
                             </span>
                             ${hasConflict ? `<span style="color: #ef4444; margin-left: 4px; display: inline-flex; vertical-align: middle;" title="Duplicate key conflict in this phase!">${ICONS.warning}</span>` : ''}
                         </td>
