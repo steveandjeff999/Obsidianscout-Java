@@ -662,9 +662,6 @@ graalvmNative {
                 "-H:+UnlockExperimentalVMOptions",
                 "-H:+ReportExceptionStackTraces",
                 "-H:EnableURLProtocols=http,https",
-                "-H:+EnableAllSecurityServices",
-                "--enable-https",
-                "--enable-http",
                 "-H:ReflectionConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/com.obsidianscout/obsidianscout-server/reflect-config.json",
                 "-H:ResourceConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/com.obsidianscout/obsidianscout-server/resource-config.json",
                 "--no-fallback",
@@ -674,7 +671,9 @@ graalvmNative {
                 "--initialize-at-build-time=kotlin.reflect.",
                 "--initialize-at-build-time=org.jetbrains.exposed.",
                 "--initialize-at-build-time=ch.qos.logback.",
-                "--initialize-at-build-time=org.slf4j."
+                "--initialize-at-build-time=org.slf4j.",
+                "--initialize-at-build-time=org.sqlite.util.",
+                "--initialize-at-build-time=org.sqlite.util.ProcessRunner"
             )
         }
     }
