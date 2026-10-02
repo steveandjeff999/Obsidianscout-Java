@@ -221,6 +221,13 @@ async function loadScoutPageData(me) {
 
                 // 2. Form Field Target Actions
                 if (!binding.targetFieldId) return;
+
+                const activeTab = document.querySelector("#scouting-tabs .tab.active");
+                const currentPhase = activeTab ? activeTab.dataset.tab : null;
+                if (binding.phase && binding.phase !== 'global' && currentPhase && binding.phase !== currentPhase) {
+                    return;
+                }
+
                 const inputEl = activeForm.querySelector(`[name="${binding.targetFieldId}"]`);
                 if (!inputEl) return;
 

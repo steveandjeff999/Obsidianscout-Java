@@ -278,14 +278,15 @@
             // 2. Continuous Hold mode (Fixed Hz)
             if (binding.triggerMode === 'continuousHold' && binding.isRepeatable !== false) {
                 if (isPressed) {
-                    if (!wasPressed) {
+                    if (!this.repeatTimers.has(bindingId)) {
                         this.dispatchAction(binding, value, false, gp);
                         const freq = Math.max(1.0, binding.repeatFrequencyHz || 6.0);
                         const intervalMs = Math.round(1000.0 / freq);
                         this.clearRepeatTimer(bindingId);
                         const timer = setInterval(() => {
-                            if (this.livePressed.get(binding.inputKey)) {
-                                this.dispatchAction(binding, this.liveValues.get(binding.inputKey) || 1.0, true, gp);
+                            const isStillActive = this.isBindingActive(binding) && this.livePressed.get(binding.inputKey);
+                            if (isStillActive) {
+                                this.dispatchAction(binding, this.liveValues.get(binding.inputKey) || 1.0, true, gp || this.lastActiveGamepad);
                             } else {
                                 this.clearRepeatTimer(bindingId);
                             }
@@ -304,12 +305,20 @@
             }
         }
 
+        isBindingActive(binding) {
+            if (!binding) return false;
+            const profile = this.activeProfile;
+            if (!profile || !profile.enabled) return false;
+            if (binding.phase && binding.phase !== 'global' && binding.phase !== this.currentPhase) return false;
+            return true;
+        }
+
         handleScaledTrigger(binding, value, isPressed, wasPressed, gp) {
             const bindingId = binding.id;
             const threshold = binding.triggerThreshold || 0.15;
             const effectiveVal = Math.abs(value !== undefined ? value : (this.liveValues.get(binding.inputKey) || 0.0));
 
-            if (!isPressed || effectiveVal < threshold) {
+            if (!isPressed || effectiveVal < threshold || !this.isBindingActive(binding)) {
                 this.clearRepeatTimer(bindingId);
                 this.lastFireTimes.delete(bindingId);
                 return;
@@ -323,7 +332,7 @@
             const intervalMs = Math.max(20, Math.round(1000.0 / currentHz));
 
             if (!this.lastFireTimes.has(bindingId)) {
-                // Initial trigger pull
+                // Initial trigger pull or first trigger in this phase
                 this.dispatchAction(binding, effectiveVal, false, gp);
                 this.lastFireTimes.set(bindingId, now);
                 this.scheduleScaledNext(binding, intervalMs, gp);
@@ -353,8 +362,9 @@
                 const liveVal = Math.abs(this.liveValues.get(binding.inputKey) || 0.0);
                 const threshold = binding.triggerThreshold || 0.15;
                 const isStillPressed = this.livePressed.get(binding.inputKey);
+                const isActive = this.isBindingActive(binding);
 
-                if (isStillPressed && liveVal >= threshold) {
+                if (isActive && isStillPressed && liveVal >= threshold) {
                     const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
                     this.dispatchAction(binding, liveVal, true, gp || this.lastActiveGamepad);
                     this.lastFireTimes.set(bindingId, now);
@@ -380,6 +390,45 @@
                 clearTimeout(this.repeatTimers.get(bindingId));
                 clearInterval(this.repeatTimers.get(bindingId));
                 this.repeatTimers.delete(bindingId);
+            }
+        }
+
+        clearAllRepeatTimers() {
+            for (const timer of this.repeatTimers.values()) {
+                clearTimeout(timer);
+                clearInterval(timer);
+            }
+            this.repeatTimers.clear();
+            this.lastFireTimes.clear();
+        }
+
+        resetAllInputs(reason) {
+            this.clearAllRepeatTimers();
+            this.livePressed.clear();
+            this.liveValues.clear();
+            if (this.isListeningForBinding) {
+                this.isListeningForBinding = false;
+                this.onBindingCaptured = null;
+            }
+            if (reason) console.log(`[GamepadService] Reset inputs: ${reason}`);
+        }
+
+        setPhase(phase) {
+            const newPhase = (phase || 'auto').toLowerCase();
+            if (this.currentPhase === newPhase) return;
+            this.currentPhase = newPhase;
+
+            // Clear any active timers and fire records for bindings that do not belong to the new phase
+            const profile = this.activeProfile;
+            if (profile && Array.isArray(profile.bindings)) {
+                for (const binding of profile.bindings) {
+                    if (binding.phase && binding.phase !== 'global' && binding.phase !== newPhase) {
+                        this.clearRepeatTimer(binding.id);
+                        this.lastFireTimes.delete(binding.id);
+                    }
+                }
+            } else {
+                this.clearAllRepeatTimers();
             }
         }
 
@@ -457,26 +506,6 @@
             return false;
         }
 
-        resetAllInputs(reason) {
-            for (const timer of this.repeatTimers.values()) {
-                clearTimeout(timer);
-                clearInterval(timer);
-            }
-            this.repeatTimers.clear();
-            this.lastFireTimes.clear();
-            this.livePressed.clear();
-            this.liveValues.clear();
-            if (this.isListeningForBinding) {
-                this.isListeningForBinding = false;
-                this.onBindingCaptured = null;
-            }
-            if (reason) console.log(`[GamepadService] Reset inputs: ${reason}`);
-        }
-
-        setPhase(phase) {
-            this.currentPhase = (phase || 'auto').toLowerCase();
-        }
-
         onAction(callback) {
             this.actionListeners.add(callback);
             return () => this.actionListeners.delete(callback);
@@ -515,6 +544,7 @@
         setActiveProfile(profileId) {
             const match = this.profiles.find(p => p.id === profileId);
             if (match) {
+                this.clearAllRepeatTimers();
                 this.activeProfile = match;
                 this.saveToLocalStorage();
                 this.notifyStateChanged();
