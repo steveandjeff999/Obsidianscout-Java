@@ -673,7 +673,9 @@ graalvmNative {
                 "--initialize-at-build-time=ch.qos.logback.",
                 "--initialize-at-build-time=org.slf4j.",
                 "--initialize-at-build-time=org.sqlite.util.",
-                "--initialize-at-build-time=org.sqlite.util.ProcessRunner"
+                "--initialize-at-build-time=org.sqlite.util.ProcessRunner",
+                "--initialize-at-build-time=org.xml.sax.",
+                "--initialize-at-build-time=org.xml.sax.helpers.LocatorImpl"
             )
         }
     }
