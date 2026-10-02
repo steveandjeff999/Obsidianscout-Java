@@ -115,20 +115,20 @@ if [ -n "$HAS_LOCAL_NATIVE" ]; then
     exec "$HAS_LOCAL_NATIVE" --update "$@"
 fi
 
-GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-21/bin/java"
+GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-25/bin/java"
 if [ ! -x "$GRAAL_JAVA" ] && [ -n "$GRAALVM_HOME" ] && [ -x "$GRAALVM_HOME/bin/java" ]; then
     GRAAL_JAVA="$GRAALVM_HOME/bin/java"
 fi
 
 if [ ! -x "$GRAAL_JAVA" ]; then
-    echo "[ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for maximum performance..."
+    echo "[ObsidianScout] GraalVM JDK 25 not detected. Auto-installing GraalVM for maximum performance..."
     if [ -x ./install-graal.sh ]; then
         ./install-graal.sh
     elif [ -x ./scripts/install-graal.sh ]; then
         ./scripts/install-graal.sh
     fi
-    if [ -x "$HOME/.graalvm/graalvm-jdk-21/bin/java" ]; then
-        GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-21/bin/java"
+    if [ -x "$HOME/.graalvm/graalvm-jdk-25/bin/java" ]; then
+        GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-25/bin/java"
     fi
 fi
 
@@ -141,8 +141,8 @@ fi
 # Clear any previous update state
 rm -f .update_result
 
-# Run the interactive Java update utility
-"$JAVA_EXEC" -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt "$@"
+# Run the interactive Java update utility with unsafe / modular access enabled
+"$JAVA_EXEC" --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt "$@"
 
 # If the helper completed successfully and wrote the path of the new files
 if [ -f .update_result ]; then

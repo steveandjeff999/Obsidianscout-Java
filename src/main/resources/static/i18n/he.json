@@ -423,6 +423,7 @@
   "index.sign_in_tab": "התחבר",
   "index.create_account_tab": "צור חשבון",
   "index.login_submit": "התחבר",
+  "index.sign_in_passkey": "התחבר באמצעות מפתח גישה (Passkey)",
   "index.register_submit": "צור חשבון",
   "index.keep_me_logged_in": "השאר אותי מחובר",
   "pitdata.title": "נתוני פיט",

@@ -1,21 +1,26 @@
-# Automated GraalVM JDK 21 Installer for Windows
+# Automated GraalVM JDK 25 Installer for Windows
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
 
 Write-Host "=========================================================================" -ForegroundColor Cyan
-Write-Host " [ObsidianScout] Installing GraalVM JDK 21 (Native Image Support) " -ForegroundColor Cyan
+Write-Host " [ObsidianScout] Installing GraalVM JDK 25 (Native Image Support) " -ForegroundColor Cyan
 Write-Host "=========================================================================" -ForegroundColor Cyan
 
-$TargetDir = Join-Path $env:USERPROFILE ".graalvm\graalvm-jdk-21"
-$ZipPath = Join-Path $env:TEMP "graalvm-jdk-21_windows-x64_bin.zip"
-$Url = "https://download.oracle.com/graalvm/21/latest/graalvm-jdk-21_windows-x64_bin.zip"
+$TargetDir = Join-Path $env:USERPROFILE ".graalvm\graalvm-jdk-25"
+$ZipPath = Join-Path $env:TEMP "graalvm-jdk-25_windows-x64_bin.zip"
+$Url = "https://download.oracle.com/graalvm/25/latest/graalvm-jdk-25_windows-x64_bin.zip"
 
 if (Test-Path "$TargetDir\bin\native-image.cmd") {
-    Write-Host "[GraalVM] GraalVM JDK 21 already installed at $TargetDir" -ForegroundColor Green
+    Write-Host "[GraalVM] GraalVM JDK 25 already installed at $TargetDir" -ForegroundColor Green
 } else {
-    Write-Host "[1/3] Downloading GraalVM JDK 21 from $Url..." -ForegroundColor Yellow
-    Invoke-WebRequest -Uri $Url -OutFile $ZipPath
+    Write-Host "[1/3] Downloading GraalVM JDK 25 from $Url..." -ForegroundColor Yellow
+    if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+        curl.exe -L "$Url" -o "$ZipPath"
+    } else {
+        Invoke-WebRequest -Uri $Url -OutFile $ZipPath -UseBasicParsing
+    }
 
-    Write-Host "[2/3] Extracting GraalVM JDK 21 to $TargetDir..." -ForegroundColor Yellow
+    Write-Host "[2/3] Extracting GraalVM JDK 25 to $TargetDir..." -ForegroundColor Yellow
     $TempExtract = Join-Path $env:TEMP "graalvm_extract"
     if (Test-Path $TempExtract) { Remove-Item -Recurse -Force $TempExtract }
     Expand-Archive -Path $ZipPath -DestinationPath $TempExtract -Force

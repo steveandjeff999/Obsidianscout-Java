@@ -2,7 +2,7 @@
 set -e
 
 echo "========================================================================="
-echo " [ObsidianScout] Installing GraalVM JDK 21 (Native Image Support) "
+echo " [ObsidianScout] Installing GraalVM JDK 25 (Native Image Support) "
 echo "========================================================================="
 
 UNAME_S=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -20,13 +20,13 @@ case "$UNAME_M" in
     *)             echo "Unsupported architecture: $UNAME_M"; exit 1 ;;
 esac
 
-INSTALL_DIR="$HOME/.graalvm/graalvm-jdk-21"
-URL="https://download.oracle.com/graalvm/21/latest/graalvm-jdk-21_${OS}-${ARCH}_bin.tar.gz"
+INSTALL_DIR="$HOME/.graalvm/graalvm-jdk-25"
+URL="https://download.oracle.com/graalvm/25/latest/graalvm-jdk-25_${OS}-${ARCH}_bin.tar.gz"
 
 if [ -f "$INSTALL_DIR/bin/native-image" ]; then
-    echo "[GraalVM] GraalVM JDK 21 is already installed at $INSTALL_DIR"
+    echo "[GraalVM] GraalVM JDK 25 is already installed at $INSTALL_DIR"
 else
-    echo "[1/3] Downloading GraalVM JDK 21 for ${OS}-${ARCH}..."
+    echo "[1/3] Downloading GraalVM JDK 25 for ${OS}-${ARCH}..."
     TMP_TAR=$(mktemp)
     curl -sSL "$URL" -o "$TMP_TAR"
 
@@ -49,7 +49,7 @@ export PATH="$INSTALL_DIR/bin:$PATH"
 for PROFILE in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
     if [ -f "$PROFILE" ] && ! grep -q "GRAALVM_HOME" "$PROFILE"; then
         echo "" >> "$PROFILE"
-        echo "# GraalVM JDK 21" >> "$PROFILE"
+        echo "# GraalVM JDK 25" >> "$PROFILE"
         echo "export GRAALVM_HOME=\"$INSTALL_DIR\"" >> "$PROFILE"
         echo "export PATH=\"\$GRAALVM_HOME/bin:\$PATH\"" >> "$PROFILE"
         echo "Added GRAALVM_HOME to $PROFILE"

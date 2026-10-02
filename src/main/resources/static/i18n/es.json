@@ -401,6 +401,7 @@
   "index.sign_in_tab": "Iniciar sesión",
   "index.create_account_tab": "Crear cuenta",
   "index.login_submit": "Iniciar sesión",
+  "index.sign_in_passkey": "Iniciar sesión con una llave de paso",
   "index.register_submit": "Crear cuenta",
   "index.keep_me_logged_in": "Mantener sesión iniciada",
   "pitdata.title": "Datos de pit",

@@ -68,7 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const password = passwordInput ? passwordInput.value : "";
         const keepMeLoggedIn = document.getElementById("keepMeLoggedIn") ? document.getElementById("keepMeLoggedIn").checked : false;
 
-        if (!username || !password || isNaN(teamNumber) || teamNumber <= 0) {
+        if (!username || !password || isNaN(teamNumber) || teamNumber < 0) {
             Obsidianscout.showToast(t('login.fill_required_fields', "Please fill in all required fields."), "error");
             return;
         }
@@ -116,7 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         method: "POST",
                         json: {
                             username: username || null,
-                            teamNumber: teamNumber && teamNumber > 0 ? teamNumber : null,
+                            teamNumber: teamNumber !== null && !isNaN(teamNumber) && teamNumber >= 0 ? teamNumber : null,
                             program: program || "FRC"
                         }
                     });

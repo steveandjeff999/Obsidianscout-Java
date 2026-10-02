@@ -63,12 +63,28 @@ dependencies {
 
 tasks.test {
     useJUnit()
+    jvmArgs(
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "--sun-misc-unsafe-memory-access=allow"
+    )
 }
 
 application {
     mainClass.set("com.obsidianscout.AppKt")
     applicationDefaultJvmArgs = listOf(
         "-Djava.awt.headless=true",
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--add-opens=java.base/java.nio=ALL-UNNAMED",
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.util=ALL-UNNAMED",
+        "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+        "--add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "--sun-misc-unsafe-memory-access=allow",
         "-Xms256m",
         "-Xmx2048m",
         "-XX:+AlwaysPreTouch",
@@ -85,7 +101,7 @@ application {
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(25))
     }
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
@@ -154,7 +170,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    ) else (\r\n" +
             "        echo [ObsidianScout] Low-RAM/Low-CPU mode enabled. Dynamic heap ^(256m to 512m^)...\r\n" +
             "    )\r\n" +
-            "    set JAVA_OPTS=-Djava.awt.headless=true -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:CICompilerCount=2 -XX:CompileThreshold=1500 -Xms256m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:GCTimeRatio=4 -XX:MaxMetaspaceSize=128m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=5 -Dio.netty.eventLoopThreads=2 -XX:MaxDirectMemorySize=32m\r\n" +
+            "    set JAVA_OPTS=-Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:CICompilerCount=2 -XX:CompileThreshold=1500 -Xms256m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:GCTimeRatio=4 -XX:MaxMetaspaceSize=128m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=5 -Dio.netty.eventLoopThreads=2 -XX:MaxDirectMemorySize=32m\r\n" +
             ") else (\r\n" +
             "    if \"%HEAP_SIZE%\"==\"\" set HEAP_SIZE=2048m\r\n" +
             "    if exist .oom_occurred (\r\n" +
@@ -164,13 +180,13 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        if \"!HEAP_SIZE!\"==\"2048m\" set HEAP_SIZE=3072m\r\n" +
             "        if \"!HEAP_SIZE!\"==\"3072m\" set HEAP_SIZE=4096m\r\n" +
             "        echo [OOM-Recovery] Auto-escalating max heap RAM to !HEAP_SIZE! with thorough GC protections...\r\n" +
-            "        set JAVA_OPTS=-Djava.awt.headless=true -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:CICompilerCount=2 -XX:CompileThreshold=1500 -Xms256m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:GCTimeRatio=4 -XX:MaxMetaspaceSize=192m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=6 -Dio.netty.eventLoopThreads=2 -XX:MaxDirectMemorySize=64m\r\n" +
+            "        set JAVA_OPTS=-Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:CICompilerCount=2 -XX:CompileThreshold=1500 -Xms256m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:GCTimeRatio=4 -XX:MaxMetaspaceSize=192m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=6 -Dio.netty.eventLoopThreads=2 -XX:MaxDirectMemorySize=64m\r\n" +
             "    ) else if \"%USE_ZGC%\"==\"1\" (\r\n" +
             "        echo [ObsidianScout] Standard mode. Ultra-low latency Generational ZGC ^(512m to !HEAP_SIZE!^)...\r\n" +
-            "        set JAVA_OPTS=-Djava.awt.headless=true -XX:+UseZGC -XX:+ZGenerational -Xms512m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\r\n" +
+            "        set JAVA_OPTS=-Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+UseZGC -XX:+ZGenerational -Xms512m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\r\n" +
             "    ) else (\r\n" +
             "        echo [ObsidianScout] Standard mode. Dynamic heap ^(512m to !HEAP_SIZE!^) with thorough G1GC...\r\n" +
-            "        set JAVA_OPTS=-Djava.awt.headless=true -Xms512m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapWastePercent=5 -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\r\n" +
+            "        set JAVA_OPTS=-Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Xms512m -Xmx!HEAP_SIZE! -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapWastePercent=5 -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\r\n" +
             "    )\r\n" +
             ")\r\n" +
             "set EXEC_CMD=\r\n" +
@@ -181,14 +197,14 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    !EXEC_CMD!\r\n" +
             ") else (\r\n" +
             "    set JAVA_EXEC=java\r\n" +
-            "    set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
+            "    set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\r\n" +
             "    if not exist \"!GRAAL_JAVA!\" (\r\n" +
             "        if defined GRAALVM_HOME if exist \"%GRAALVM_HOME%\\bin\\java.exe\" set GRAAL_JAVA=%GRAALVM_HOME%\\bin\\java.exe\r\n" +
             "    )\r\n" +
             "    if not exist \"!GRAAL_JAVA!\" (\r\n" +
-            "        echo [ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for high-performance execution...\r\n" +
+            "        echo [ObsidianScout] GraalVM JDK 25 not detected. Auto-installing GraalVM for high-performance execution...\r\n" +
             "        if exist install-graal.bat call install-graal.bat\r\n" +
-            "        if exist \"%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\" set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
+            "        if exist \"%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\" set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\r\n" +
             "    )\r\n" +
             "    if exist \"!GRAAL_JAVA!\" (\r\n" +
             "        echo [ObsidianScout] Using GraalVM High-Performance JVM: !GRAAL_JAVA!\r\n" +
@@ -204,7 +220,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    echo [Updater] FAULTY INSTALLATION DETECTED! Server exited with code !EXIT_CODE! while update was pending testing.\r\n" +
             "    echo [Updater] Initiating automatic rollback to previous working version...\r\n" +
             "    if exist .backup\\obsidianscout-server.jar (\r\n" +
-            "        !JAVA_EXEC! -cp .backup\\obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
+            "        !JAVA_EXEC! --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp .backup\\obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
             "    )\r\n" +
             "    if exist .backup\\obsidianscout-server.jar copy /y \".backup\\obsidianscout-server.jar\" \".\" >nul\r\n" +
             "    if exist .backup\\obsidianscout-server-native* copy /y \".backup\\obsidianscout-server-native*\" \".\" >nul\r\n" +
@@ -298,7 +314,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        else\n" +
             "            echo \"[ObsidianScout] Low-RAM/Low-CPU mode enabled. Dynamic heap (256m to 512m)...\"\n" +
             "        fi\n" +
-            "        JAVA_OPTS=\"-Djava.awt.headless=true -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:CICompilerCount=2 -XX:CompileThreshold=1500 -Xms256m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:GCTimeRatio=4 -XX:MaxMetaspaceSize=128m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=5 -Dio.netty.eventLoopThreads=2 -XX:MaxDirectMemorySize=32m\"\n" +
+            "        JAVA_OPTS=\"-Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:CICompilerCount=2 -XX:CompileThreshold=1500 -Xms256m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:GCTimeRatio=4 -XX:MaxMetaspaceSize=128m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=5 -Dio.netty.eventLoopThreads=2 -XX:MaxDirectMemorySize=32m\"\n" +
             "    else\n" +
             "        HEAP_SIZE=\"\${HEAP_SIZE:-2048m}\"\n" +
             "        if [ -f .oom_occurred ]; then\n" +
@@ -311,13 +327,13 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "                *) HEAP_SIZE=\"2048m\" ;;\n" +
             "            esac\n" +
             "            echo \"[OOM-Recovery] Auto-escalating max heap RAM to \$HEAP_SIZE with thorough GC protections...\"\n" +
-            "            JAVA_OPTS=\"-Djava.awt.headless=true -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:CICompilerCount=2 -XX:CompileThreshold=1500 -Xms256m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:GCTimeRatio=4 -XX:MaxMetaspaceSize=192m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=6 -Dio.netty.eventLoopThreads=2 -XX:MaxDirectMemorySize=64m\"\n" +
+            "            JAVA_OPTS=\"-Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:CICompilerCount=2 -XX:CompileThreshold=1500 -Xms256m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:GCTimeRatio=4 -XX:MaxMetaspaceSize=192m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=6 -Dio.netty.eventLoopThreads=2 -XX:MaxDirectMemorySize=64m\"\n" +
             "        elif [ \"\$USE_ZGC\" = \"1\" ]; then\n" +
             "            echo \"[ObsidianScout] Standard mode. Ultra-low latency Generational ZGC (512m to \$HEAP_SIZE)...\"\n" +
-            "            JAVA_OPTS=\"-Djava.awt.headless=true -XX:+UseZGC -XX:+ZGenerational -Xms512m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\"\n" +
+            "            JAVA_OPTS=\"-Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -XX:+UseZGC -XX:+ZGenerational -Xms512m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\"\n" +
             "        else\n" +
             "            echo \"[ObsidianScout] Standard mode. Dynamic heap (512m to \$HEAP_SIZE) with thorough G1GC...\"\n" +
-            "            JAVA_OPTS=\"-Djava.awt.headless=true -Xms512m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapWastePercent=5 -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\"\n" +
+            "            JAVA_OPTS=\"-Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Xms512m -Xmx\$HEAP_SIZE -XX:+AlwaysPreTouch -XX:+ExitOnOutOfMemoryError -XX:+UseStringDeduplication -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapWastePercent=5 -XX:SoftRefLRUPolicyMSPerMB=0 -XX:MaxMetaspaceSize=256m -Xss256k -Dio.netty.allocator.type=pooled -Dio.netty.allocator.maxOrder=8 -XX:MaxDirectMemorySize=128m\"\n" +
             "        fi\n" +
             "    fi\n" +
             "    chmod +x ./*native* ./*.sh 2>/dev/null || true\n" +
@@ -336,19 +352,19 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        \$EXEC_CMD\n" +
             "        EXIT_CODE=\$?\n" +
             "    else\n" +
-            "        GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
+            "        GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-25/bin/java\"\n" +
             "        if [ ! -x \"\$GRAAL_JAVA\" ] && [ -n \"\$GRAALVM_HOME\" ] && [ -x \"\$GRAALVM_HOME/bin/java\" ]; then\n" +
             "            GRAAL_JAVA=\"\$GRAALVM_HOME/bin/java\"\n" +
             "        fi\n" +
             "        if [ ! -x \"\$GRAAL_JAVA\" ]; then\n" +
-            "            echo \"[ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for high-performance execution...\"\n" +
+            "            echo \"[ObsidianScout] GraalVM JDK 25 not detected. Auto-installing GraalVM for high-performance execution...\"\n" +
             "            if [ -x ./install-graal.sh ]; then\n" +
             "                ./install-graal.sh\n" +
             "            elif [ -x ./scripts/install-graal.sh ]; then\n" +
             "                ./scripts/install-graal.sh\n" +
             "            fi\n" +
-            "            if [ -x \"\$HOME/.graalvm/graalvm-jdk-21/bin/java\" ]; then\n" +
-            "                GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
+            "            if [ -x \"\$HOME/.graalvm/graalvm-jdk-25/bin/java\" ]; then\n" +
+            "                GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-25/bin/java\"\n" +
             "            fi\n" +
             "        fi\n" +
             "        if [ -x \"\$GRAAL_JAVA\" ]; then\n" +
@@ -369,7 +385,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        echo \"[Updater] FAULTY INSTALLATION DETECTED! Server exited with code \$EXIT_CODE while update was pending testing.\"\n" +
             "        echo \"[Updater] Initiating automatic rollback to previous working version...\"\n" +
             "        if [ -f .backup/obsidianscout-server.jar ]; then\n" +
-            "            \"\$JAVA_EXEC\" -cp .backup/obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback \$EXIT_CODE >/dev/null 2>&1 || true\n" +
+            "            \"\$JAVA_EXEC\" --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp .backup/obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback \$EXIT_CODE >/dev/null 2>&1 || true\n" +
             "        fi\n" +
             "        if [ -f .backup/obsidianscout-server.jar ]; then cp .backup/obsidianscout-server.jar ./; fi\n" +
             "        for nfile in .backup/obsidianscout-server-native*;\n" +
@@ -440,7 +456,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "    !NATIVE_EXEC! --reset-superadmin %*\r\n" +
             "    exit /b %ERRORLEVEL%\r\n" +
             ")\r\n" +
-            "java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt %*\r\n" +
+            "java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt %*\r\n" +
             "pause\r\n"
         )
 
@@ -457,7 +473,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "if [ -n \"\$HAS_LOCAL_NATIVE\" ]; then\n" +
             "    exec \"\$HAS_LOCAL_NATIVE\" --reset-superadmin \"\$@\"\n" +
             "fi\n" +
-            "java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n"
+            "java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n"
         )
         resetSh.setExecutable(true, false)
 
@@ -639,7 +655,7 @@ graalvmNative {
             mainClass.set("com.obsidianscout.AppKt")
             javaLauncher.set(
                 javaToolchains.launcherFor {
-                    languageVersion.set(JavaLanguageVersion.of(21))
+                    languageVersion.set(JavaLanguageVersion.of(25))
                 }
             )
             buildArgs.addAll(
@@ -738,20 +754,20 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    set EXEC_CMD=obsidianscout-server-native-$arch\r\n" +
                 ") else (\r\n" +
                 "    echo [ObsidianScout Native] Native binary not found, checking GraalVM JDK for high-performance JVM execution...\r\n" +
-                "    set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
+                "    set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\r\n" +
                 "    if not exist \"!GRAAL_JAVA!\" (\r\n" +
                 "        if defined GRAALVM_HOME if exist \"%GRAALVM_HOME%\\bin\\java.exe\" set GRAAL_JAVA=%GRAALVM_HOME%\\bin\\java.exe\r\n" +
                 "    )\r\n" +
                 "    if not exist \"!GRAAL_JAVA!\" (\r\n" +
-                "        echo [ObsidianScout] Auto-installing GraalVM JDK 21 for high-performance execution...\r\n" +
+                "        echo [ObsidianScout] Auto-installing GraalVM JDK 25 for high-performance execution...\r\n" +
                 "        if exist install-graal.bat call install-graal.bat\r\n" +
-                "        if exist \"%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\" set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-21\\bin\\java.exe\r\n" +
+                "        if exist \"%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\" set GRAAL_JAVA=%USERPROFILE%\\.graalvm\\graalvm-jdk-25\\bin\\java.exe\r\n" +
                 "    )\r\n" +
                 "    if exist \"!GRAAL_JAVA!\" (\r\n" +
                 "        echo [ObsidianScout] Using GraalVM High-Performance JVM: !GRAAL_JAVA!\r\n" +
-                "        set EXEC_CMD=\"!GRAAL_JAVA!\" -Djava.awt.headless=true -Xms256m -Xmx1024m -jar obsidianscout-server.jar\r\n" +
+                "        set EXEC_CMD=\"!GRAAL_JAVA!\" -Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Xms256m -Xmx1024m -jar obsidianscout-server.jar\r\n" +
                 "    ) else (\r\n" +
-                "        set EXEC_CMD=java -Djava.awt.headless=true -Xms256m -Xmx1024m -jar obsidianscout-server.jar\r\n" +
+                "        set EXEC_CMD=java -Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Xms256m -Xmx1024m -jar obsidianscout-server.jar\r\n" +
                 "    )\r\n" +
                 ")\r\n" +
                 ":loop\r\n" +
@@ -763,7 +779,7 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    echo [Updater] Faulty installation detected! Server exited with code !EXIT_CODE! while update was pending testing.\r\n" +
                 "    echo [Updater] Initiating automatic rollback...\r\n" +
                 "    if exist .backup\\obsidianscout-server.jar (\r\n" +
-                "        java -cp .backup\\obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
+                "        java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp .backup\\obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
                 "    )\r\n" +
                 "    if exist .backup\\obsidianscout-server-native-$arch (\r\n" +
                 "        copy /y \".backup\\obsidianscout-server-native-$arch\" \".\" >nul\r\n" +
@@ -843,24 +859,24 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    EXEC_CMD=\"./obsidianscout-server-native\"\n" +
                 "else\n" +
                 "    echo \"[ObsidianScout Native] Native binary not found, checking GraalVM JDK for high-performance JVM execution...\"\n" +
-                "    GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
+                "    GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-25/bin/java\"\n" +
                 "    if [ ! -x \"\$GRAAL_JAVA\" ] && [ -n \"\$GRAALVM_HOME\" ] && [ -x \"\$GRAALVM_HOME/bin/java\" ]; then\n" +
                 "        GRAAL_JAVA=\"\$GRAALVM_HOME/bin/java\"\n" +
                 "    fi\n" +
                 "    if [ ! -x \"\$GRAAL_JAVA\" ]; then\n" +
-                "        echo \"[ObsidianScout] Auto-installing GraalVM JDK 21 for high-performance execution...\"\n" +
+                "        echo \"[ObsidianScout] Auto-installing GraalVM JDK 25 for high-performance execution...\"\n" +
                 "        if [ -x ./install-graal.sh ]; then\n" +
                 "            ./install-graal.sh\n" +
                 "        fi\n" +
-                "        if [ -x \"\$HOME/.graalvm/graalvm-jdk-21/bin/java\" ]; then\n" +
-                "            GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-21/bin/java\"\n" +
+                "        if [ -x \"\$HOME/.graalvm/graalvm-jdk-25/bin/java\" ]; then\n" +
+                "            GRAAL_JAVA=\"\$HOME/.graalvm/graalvm-jdk-25/bin/java\"\n" +
                 "        fi\n" +
                 "    fi\n" +
                 "    if [ -x \"\$GRAAL_JAVA\" ]; then\n" +
                 "        echo \"[ObsidianScout] Using GraalVM High-Performance JVM: \$GRAAL_JAVA\"\n" +
-                "        EXEC_CMD=\"\\\"\$GRAAL_JAVA\\\" -Djava.awt.headless=true -Xms256m -Xmx1024m -jar obsidianscout-server.jar\"\n" +
+                "        EXEC_CMD=\"\\\"\$GRAAL_JAVA\\\" -Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Xms256m -Xmx1024m -jar obsidianscout-server.jar\"\n" +
                 "    else\n" +
-                "        EXEC_CMD=\"java -Djava.awt.headless=true -Xms256m -Xmx1024m -jar obsidianscout-server.jar\"\n" +
+                "        EXEC_CMD=\"java -Djava.awt.headless=true --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -Xms256m -Xmx1024m -jar obsidianscout-server.jar\"\n" +
                 "    fi\n" +
                 "fi\n" +
                 "while true; do\n" +
@@ -925,7 +941,7 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    !NATIVE_EXEC! --reset-superadmin %*\r\n" +
                 "    exit /b %ERRORLEVEL%\r\n" +
                 ")\r\n" +
-                "java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt %*\r\n" +
+                "java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt %*\r\n" +
                 "pause\r\n"
             )
 
@@ -942,7 +958,7 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "if [ -n \"\$HAS_LOCAL_NATIVE\" ]; then\n" +
                 "    exec \"\$HAS_LOCAL_NATIVE\" --reset-superadmin \"\$@\"\n" +
                 "fi\n" +
-                "java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n"
+                "java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt \"\$@\"\n"
             )
             resetSh.setExecutable(true, false)
 

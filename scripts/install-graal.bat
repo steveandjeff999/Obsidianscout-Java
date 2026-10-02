@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 echo =========================================================================
-echo  [ObsidianScout] Installing GraalVM JDK 21 for Windows
+echo  [ObsidianScout] Installing GraalVM JDK 25 for Windows
 echo =========================================================================
 powershell -ExecutionPolicy Bypass -File "%~dp0install-graal.ps1"
 if %ERRORLEVEL% NEQ 0 (

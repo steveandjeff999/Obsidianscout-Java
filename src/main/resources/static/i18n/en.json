@@ -414,6 +414,7 @@
   "index.sign_in_tab": "Sign in",
   "index.create_account_tab": "Create account",
   "index.login_submit": "Sign in",
+  "index.sign_in_passkey": "Sign in with a Passkey",
   "index.register_submit": "Create account",
   "index.keep_me_logged_in": "Keep me signed in",
   "pitdata.title": "Pit data",

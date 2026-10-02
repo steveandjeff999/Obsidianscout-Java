@@ -384,6 +384,7 @@
   "index.sign_in_tab": "Giriş yap",
   "index.create_account_tab": "Hesap oluştur",
   "index.login_submit": "Giriş yap",
+  "index.sign_in_passkey": "Geçiş anahtarı ile giriş yap",
   "index.register_submit": "Hesap oluştur",
   "index.keep_me_logged_in": "Oturumumu açık tut",
   "pitdata.title": "Pit verileri",

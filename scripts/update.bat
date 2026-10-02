@@ -17,19 +17,19 @@ if defined NATIVE_EXEC (
     exit /b %ERRORLEVEL%
 )
 
-:: Ensure GraalVM JDK 21 is available for high-performance execution
-set GRAAL_JAVA=%USERPROFILE%\.graalvm\graalvm-jdk-21\bin\java.exe
+:: Ensure GraalVM JDK 25 is available for high-performance execution
+set GRAAL_JAVA=%USERPROFILE%\.graalvm\graalvm-jdk-25\bin\java.exe
 if not exist "!GRAAL_JAVA!" (
     if defined GRAALVM_HOME if exist "%GRAALVM_HOME%\bin\java.exe" set GRAAL_JAVA=%GRAALVM_HOME%\bin\java.exe
 )
 if not exist "!GRAAL_JAVA!" (
-    echo [ObsidianScout] GraalVM JDK 21 not detected. Auto-installing GraalVM for maximum performance...
+    echo [ObsidianScout] GraalVM JDK 25 not detected. Auto-installing GraalVM for maximum performance...
     if exist install-graal.bat (
         call install-graal.bat
     ) else if exist scripts\install-graal.bat (
         call scripts\install-graal.bat
     )
-    if exist "%USERPROFILE%\.graalvm\graalvm-jdk-21\bin\java.exe" set GRAAL_JAVA=%USERPROFILE%\.graalvm\graalvm-jdk-21\bin\java.exe
+    if exist "%USERPROFILE%\.graalvm\graalvm-jdk-25\bin\java.exe" set GRAAL_JAVA=%USERPROFILE%\.graalvm\graalvm-jdk-25\bin\java.exe
 )
 
 if exist "!GRAAL_JAVA!" (
@@ -41,8 +41,8 @@ if exist "!GRAAL_JAVA!" (
 :: Clear any previous update state
 if exist .update_result del /q .update_result
 
-:: Run the interactive Java update utility
-%JAVA_EXEC% -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt %*
+:: Run the interactive Java update utility with unsafe / modular access enabled
+%JAVA_EXEC% --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt %*
 
 :: If the helper completed successfully and wrote the path of the new files
 if not exist .update_result (
