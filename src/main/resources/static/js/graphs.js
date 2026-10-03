@@ -362,26 +362,29 @@ function initTeamSelection(state) {
 
 function updateGraphTypeAvailability(state) {
     const isAverages = state.dataView === "averages" || (state.datasource === "epa" || state.datasource === "opr");
-    const lineCheckbox = document.querySelector('.graph-type-checkbox[value="line"]');
-    const lineItem = lineCheckbox?.closest(".graph-type-item");
     const countBadge = document.getElementById("graph-type-selected-count");
 
-    if (lineCheckbox && lineItem) {
-        if (isAverages) {
-            lineCheckbox.disabled = true;
-            lineItem.classList.add("disabled");
-            lineItem.title = t('graphs.line_requires_matches', "Line graphs require multiple data points across matches and are only available in Match-by-match view.");
-            if (state.selectedGraphTypes.has("line")) {
-                state.selectedGraphTypes.delete("line");
-                lineCheckbox.checked = false;
-                updateGraphTypeBadge(state, countBadge);
+    ["line", "area"].forEach((type) => {
+        const checkbox = document.querySelector(`.graph-type-checkbox[value="${type}"]`);
+        const item = checkbox?.closest(".graph-type-item");
+
+        if (checkbox && item) {
+            if (isAverages) {
+                checkbox.disabled = true;
+                item.classList.add("disabled");
+                item.title = t(`graphs.${type}_requires_matches`, `${type === "area" ? "Area" : "Line"} graphs require multiple data points across matches and are only available in Match-by-match view.`);
+                if (state.selectedGraphTypes.has(type)) {
+                    state.selectedGraphTypes.delete(type);
+                    checkbox.checked = false;
+                    updateGraphTypeBadge(state, countBadge);
+                }
+            } else {
+                checkbox.disabled = false;
+                item.classList.remove("disabled");
+                item.title = "";
             }
-        } else {
-            lineCheckbox.disabled = false;
-            lineItem.classList.remove("disabled");
-            lineItem.title = "";
         }
-    }
+    });
 }
 
 function initGraphTypeControls(state) {
@@ -406,7 +409,7 @@ function initGraphTypeControls(state) {
             const isAverages = state.dataView === "averages" || (state.datasource === "epa" || state.datasource === "opr");
             const allTypes = GRAPH_TYPES
                 .map((g) => g.id)
-                .filter((id) => !isAverages || id !== "line");
+                .filter((id) => !isAverages || (id !== "line" && id !== "area"));
             setGraphTypes(state, allTypes, countBadge);
         });
     }
@@ -444,6 +447,60 @@ function wireGraphOptions(state) {
     }
     if (generateButton) {
         generateButton.addEventListener("click", () => generateGraphs(state));
+    }
+
+    const shareButton = document.getElementById("graph-share-btn");
+    if (shareButton) {
+        shareButton.addEventListener("click", async () => {
+            const { openShareModal } = await import("./components/share-modal.js");
+            const currentMetric = state.metricMap?.get(state.metricId) || state.metrics?.[0] || { id: "score_total", label: "Total Points", kind: "score", scope: "total" };
+            const metricName = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(currentMetric.label) : (currentMetric.label || "Scoring Metric");
+            const filteredEntries = getFilteredEntriesForTeams(state);
+            const teamsArray = Array.from(state.selectedTeams || []).map(Number);
+            const graphTypesArray = Array.from(state.selectedGraphTypes || ["bar"]);
+
+            openShareModal({
+                defaultTitle: `${state.eventKey || 'Scouting'} Graphs - ${metricName}`,
+                resourceType: "graph",
+                eventKey: state.eventKey || null,
+                payloadProvider: () => {
+                    return {
+                        resourceType: "graph",
+                        targetEventKey: state.eventKey || null,
+                        queryConfig: {
+                            eventKey: state.eventKey,
+                            selectedTeams: teamsArray,
+                            metricId: state.metricId,
+                            metricName: metricName,
+                            metric: currentMetric,
+                            datasource: state.datasource,
+                            dataView: state.dataView,
+                            sort: state.sort,
+                            includePrescout: state.includePrescout,
+                            selectedGraphTypes: graphTypesArray
+                        },
+                        snapshotData: {
+                            eventKey: state.eventKey,
+                            selectedTeams: teamsArray,
+                            metricId: state.metricId,
+                            metricName: metricName,
+                            metric: currentMetric,
+                            metrics: state.metrics,
+                            datasource: state.datasource,
+                            dataView: state.dataView,
+                            sort: state.sort,
+                            includePrescout: state.includePrescout,
+                            selectedGraphTypes: graphTypesArray,
+                            entries: filteredEntries,
+                            config: state.config,
+                            statsHistory: state.statsHistory,
+                            settings: state.settings,
+                            teams: Array.from(state.eventTeamsMap ? state.eventTeamsMap.values() : [])
+                        }
+                    };
+                }
+            });
+        });
     }
 }
 
@@ -876,8 +933,9 @@ async function generateGraphs(state) {
         }
 
         selectedGraphTypes.forEach((graphType) => {
-            if (graphType === "line" && state.dataView === "averages") {
-                const card = createGraphCard(`${getDatasourceLabel(state.datasource, state)} - Line`, null, t('graphs.line_not_supported_averages', "Line graphs are not supported for team averages as they require multiple data points across matches. Switch to Match-by-match view to use Line graphs."));
+            if ((graphType === "line" || graphType === "area") && state.dataView === "averages") {
+                const typeLabel = graphType === "area" ? "Area" : "Line";
+                const card = createGraphCard(`${getDatasourceLabel(state.datasource, state)} - ${typeLabel}`, null, t(`graphs.${graphType}_not_supported_averages`, `${typeLabel} graphs are not supported for team averages as they require multiple data points across matches. Switch to Match-by-match view to use ${typeLabel} graphs.`));
                 output.appendChild(card);
                 return;
             }
@@ -948,9 +1006,10 @@ async function generateGraphs(state) {
     }
 
     selectedGraphTypes.forEach((graphType) => {
-        if (graphType === "line" && state.dataView === "averages") {
-            const cardTitle = `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label} - Line`;
-            const card = createGraphCard(cardTitle, null, t('graphs.line_not_supported_averages', "Line graphs are not supported for Team averages because they require multiple data points across matches. Switch to Match-by-match view to use Line graphs."));
+        if ((graphType === "line" || graphType === "area") && state.dataView === "averages") {
+            const typeLabel = graphType === "area" ? "Area" : "Line";
+            const cardTitle = `${(window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(metric.label) : metric.label} - ${typeLabel}`;
+            const card = createGraphCard(cardTitle, null, t(`graphs.${graphType}_not_supported_averages`, `${typeLabel} graphs are not supported for Team averages because they require multiple data points across matches. Switch to Match-by-match view to use ${typeLabel} graphs.`));
             output.appendChild(card);
             return;
         }
@@ -1216,17 +1275,18 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
                     y: data.map(item => item.opr)
                 });
             }
-            renderPlotlyMultiBar(container, series);
+            renderPlotlyMultiBar(container, series, { dataView: "averages" });
         }
         return;
     }
 
-    if (graphType === "line") {
-        container.appendChild(buildNotice(t('graphs.line_not_supported_averages', "Line graphs are not supported for team averages as they require multiple data points across matches. Switch to Match-by-match view to use Line graphs.")));
+    if (graphType === "line" || graphType === "area") {
+        const typeLabel = graphType === "area" ? "Area" : "Line";
+        container.appendChild(buildNotice(t(`graphs.${graphType}_not_supported_averages`, `${typeLabel} graphs are not supported for team averages as they require multiple data points across matches. Switch to Match-by-match view to use ${typeLabel} graphs.`)));
         return;
     }
 
-    if (graphType === "scatter" || graphType === "area") {
+    if (graphType === "scatter") {
         const series = [];
         if (state.datasource === "scouted" || state.datasource === "all") {
             series.push({
@@ -1262,7 +1322,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
                 });
             }
         }
-        renderPlotlyMultiLine(container, series, { mode: graphType, dataView: "averages" });
+        renderPlotlyMultiLine(container, series, { mode: "scatter", dataView: "averages" });
         return;
     }
 }
@@ -1384,19 +1444,20 @@ function renderGraphType(graphType, container, entries, metric, state) {
         return;
     }
 
-    if (graphType === "line") {
+    if (graphType === "line" || graphType === "area") {
         if (state.dataView === "averages") {
-            container.appendChild(buildNotice(t('graphs.line_not_supported_averages', "Line graphs are not supported for Team averages because they require multiple data points across matches. Switch to Match-by-match view to use Line graphs.")));
+            const typeLabel = graphType === "area" ? "Area" : "Line";
+            container.appendChild(buildNotice(t(`graphs.${graphType}_not_supported_averages`, `${typeLabel} graphs are not supported for Team averages because they require multiple data points across matches. Switch to Match-by-match view to use ${typeLabel} graphs.`)));
             return;
         }
         const series = buildTeamSeries(entries, metric, state);
-        renderPlotlyMultiLine(container, series, { mode: "line", dataView: state.dataView });
+        renderPlotlyMultiLine(container, series, { mode: graphType, dataView: state.dataView });
         return;
     }
 
-    if (graphType === "scatter" || graphType === "area") {
+    if (graphType === "scatter") {
         const series = buildTeamSeries(entries, metric, state);
-        renderPlotlyMultiLine(container, series, { mode: graphType, dataView: state.dataView });
+        renderPlotlyMultiLine(container, series, { mode: "scatter", dataView: state.dataView });
         return;
     }
 
@@ -1564,7 +1625,10 @@ function renderPlotlyMultiLine(container, series, options = {}) {
         return base;
     });
 
-    const sortedCategories = getSortedCategoriesFromSeries(series);
+    const isAverages = options.dataView === "averages";
+    const sortedCategories = isAverages
+        ? (series.length > 0 && Array.isArray(series[0].x) ? series[0].x : getSortedCategoriesFromSeries(series))
+        : getSortedCategoriesFromSeries(series);
 
     const layout = {
         height,
@@ -1612,7 +1676,10 @@ function renderPlotlyMultiBar(container, series, options = {}) {
         };
     });
 
-    const sortedCategories = getSortedCategoriesFromSeries(series);
+    const isAverages = options.dataView === "averages";
+    const sortedCategories = isAverages
+        ? (series.length > 0 && Array.isArray(series[0].x) ? series[0].x : getSortedCategoriesFromSeries(series))
+        : getSortedCategoriesFromSeries(series);
 
     const layout = {
         height,

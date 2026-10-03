@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Shared View</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="/css/share-modal.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <script defer src="/vendor/plotly-2.32.0.min.js"></script>
+    <link rel="manifest" href="/manifest.json" />
+
+    <style>
+        .shared-view-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px 16px 60px 16px;
+        }
+
+        .shared-header-card {
+            background: var(--surface, #1e1e24);
+            border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow, 0 8px 24px rgba(0, 0, 0, 0.2));
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .shared-header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .shared-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--ink, #ffffff);
+        }
+
+        .shared-meta-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 0.85rem;
+            color: var(--muted, #8e8ea0);
+        }
+
+        .shared-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pin-gate-box {
+            max-width: 420px;
+            margin: 60px auto;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .pin-gate-icon {
+            font-size: 3rem;
+            color: var(--accent, #6366f1);
+            margin-bottom: 8px;
+        }
+
+        .shared-table-wrap {
+            overflow-x: auto;
+            width: 100%;
+        }
+
+        .shared-chart-wrap {
+            position: relative;
+            height: 360px;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body data-page="shared">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="shared-view-container">
+        <!-- Status / Error Banner -->
+        <div id="shared-status-banner" style="display: none;"></div>
+
+        <!-- PIN Protection Gate -->
+        <div id="shared-pin-gate" class="card shared-content-card pin-gate-box" style="display: none;">
+            <i class="fas fa-lock pin-gate-icon"></i>
+            <h2 style="margin: 0;" data-i18n="shared_viewer.pin_required_title">Protected Share Link</h2>
+            <p class="notice" id="pin-prompt-msg" data-i18n="shared_viewer.pin_prompt">This shared data is secured with a PIN code.</p>
+            <div class="field mt-12">
+                <input type="password" id="pin-entry-input" class="share-input" placeholder="Enter PIN code..." data-i18n-placeholder="shared_viewer.pin_placeholder" style="text-align: center; font-size: 1.25rem; letter-spacing: 4px;" maxlength="16" />
+            </div>
+            <button class="btn primary mt-12" id="pin-submit-btn" type="button">
+                <i class="fas fa-unlock"></i> <span data-i18n="shared_viewer.pin_submit">Unlock Data</span>
+            </button>
+        </div>
+
+        <!-- Main Content Area -->
+        <div id="shared-main-content" style="display: none;">
+            <div class="shared-header-card">
+                <div class="shared-header-top">
+                    <h1 class="shared-title" id="view-title">
+                        <i class="fas fa-chart-pie" id="view-icon"></i>
+                        <span id="view-title-text">Shared Report</span>
+                    </h1>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="btn ghost btn-sm" id="shared-theme-toggle" type="button" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--border);" title="Toggle Dark / Light Mode">
+                            <i class="fas fa-moon" id="shared-theme-icon"></i>
+                            <span id="shared-theme-label">Dark Mode</span>
+                        </button>
+                        <span class="share-badge" id="view-scope-badge">Public</span>
+                        <span class="share-badge" id="view-mode-badge">Live Feed</span>
+                    </div>
+                </div>
+                <p id="view-desc" class="notice" style="margin: 0;"></p>
+                <div class="shared-meta-row">
+                    <div class="shared-meta-item">
+                        <i class="fas fa-users"></i>
+                        <span>Shared by Team <strong id="view-owner-team">--</strong> (<span id="view-program">FRC</span>)</span>
+                    </div>
+                    <div class="shared-meta-item" id="view-event-item">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span id="view-event-key">All Events</span>
+                    </div>
+                    <div class="shared-meta-item" id="view-expiry-item">
+                        <i class="fas fa-clock"></i>
+                        <span id="view-expiry-text">Never Expires</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="shared-content-card" id="view-render-target">
+                <!-- Dynamically rendered chart, prediction matrix, data table, or BI studio output -->
+                <div id="view-loader" style="text-align: center; padding: 60px;">
+                    <i class="fas fa-spinner fa-spin fa-2x" style="color: var(--accent);"></i>
+                    <p class="mt-12" style="color: var(--muted);">Loading shared data...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/js/shared-viewer.js"></script>
+</body>
+</html>

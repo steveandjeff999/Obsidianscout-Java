@@ -559,3 +559,48 @@ object GamepadProfiles : UUIDTable("gamepad_profiles") {
     }
 }
 
+object SharedLinks : UUIDTable("shared_links") {
+    val token = varchar("token", 64).uniqueIndex("ux_shared_links_token")
+    val ownerTeamNumber = integer("owner_team_number")
+    val program = varchar("program", 8).default("FRC")
+    val createdByUsername = varchar("created_by_username", 64)
+    val title = varchar("title", 128)
+    val description = text("description").nullable()
+    val resourceType = varchar("resource_type", 32)
+    val targetEventKey = varchar("target_event_key", 64).nullable()
+    val shareMode = varchar("share_mode", 24).default("live_query")
+    val queryConfigJson = text("query_config_json")
+    val snapshotDataJson = text("snapshot_data_json").nullable()
+    val accessScope = varchar("access_scope", 24).default("public")
+    val allowedTeams = text("allowed_teams").nullable()
+    val pinHash = varchar("pin_hash", 255).nullable()
+    val redactPrivateNotes = bool("redact_private_notes").default(true)
+    val redactScoutNames = bool("redact_scout_names").default(false)
+    val createdAt = timestamp("created_at")
+    val expiresAt = timestamp("expires_at").nullable()
+    val isRevoked = bool("is_revoked").default(false)
+    val revokedAt = timestamp("revoked_at").nullable()
+    val revokedByUsername = varchar("revoked_by_username", 64).nullable()
+    val viewCount = integer("view_count").default(0)
+    val lastAccessedAt = timestamp("last_accessed_at").nullable()
+
+    init {
+        index("idx_shared_links_team_prog", false, ownerTeamNumber, program)
+        index("idx_shared_links_token", false, token)
+        index("idx_shared_links_expires", false, expiresAt)
+    }
+}
+
+object SharedLinkAccessLogs : UUIDTable("shared_link_access_logs") {
+    val sharedLinkId = reference("shared_link_id", SharedLinks)
+    val accessedAt = timestamp("accessed_at")
+    val ipAddress = varchar("ip_address", 64).nullable()
+    val userAgent = varchar("user_agent", 255).nullable()
+    val userTeamNumber = integer("user_team_number").nullable()
+    val username = varchar("username", 64).nullable()
+
+    init {
+        index("idx_shared_link_access_logs_link", false, sharedLinkId)
+    }
+}
+

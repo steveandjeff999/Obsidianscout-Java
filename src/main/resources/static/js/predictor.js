@@ -249,6 +249,53 @@ async function loadPredictorData() {
             }
         });
 
+        const btnSharePrediction = document.getElementById("btn-share-prediction");
+        if (btnSharePrediction) {
+            btnSharePrediction.addEventListener("click", async () => {
+                if (!currentPrediction) {
+                    Obsidianscout.showToast("Please select a match to predict before sharing", "warning");
+                    return;
+                }
+                const { openShareModal } = await import("./components/share-modal.js");
+                const matchLabel = matchSelect.options[matchSelect.selectedIndex]?.text || matchSelect.value;
+                openShareModal({
+                    defaultTitle: `Match Prediction - ${matchLabel}`,
+                    resourceType: "predictor",
+                    eventKey: targetEventKey,
+                    payloadProvider: () => {
+                        const dsVal = (datasourceSelect && !datasourceField.classList.contains("hidden")) ? datasourceSelect.value : "all";
+                        return {
+                            resourceType: "predictor",
+                            targetEventKey: targetEventKey,
+                            queryConfig: {
+                                matchKey: matchSelect.value,
+                                eventKey: targetEventKey,
+                                label: matchLabel,
+                                datasource: dsVal
+                            },
+                            snapshotData: {
+                                matchKey: matchSelect.value,
+                                eventKey: targetEventKey,
+                                label: matchLabel,
+                                datasource: dsVal,
+                                prediction: currentPrediction,
+                                settings: currentSettings,
+                                redAlliance: currentPrediction.redAlliance,
+                                blueAlliance: currentPrediction.blueAlliance,
+                                redTeams: currentPrediction.redAlliance ? currentPrediction.redAlliance.teams : [],
+                                blueTeams: currentPrediction.blueAlliance ? currentPrediction.blueAlliance.teams : [],
+                                redPredictedScore: currentPrediction.redAlliance ? currentPrediction.redAlliance.predictedScore : null,
+                                bluePredictedScore: currentPrediction.blueAlliance ? currentPrediction.blueAlliance.predictedScore : null,
+                                redWinProb: currentPrediction.redWinProbability,
+                                blueWinProb: currentPrediction.blueWinProbability,
+                                predictionNotes: currentPrediction.summary || null
+                            }
+                        };
+                    }
+                });
+            });
+        }
+
         if (matchKeyParam) {
             const normalizedKey = matchKeyParam.toLowerCase().trim();
             let foundVal = null;

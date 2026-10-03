@@ -3959,6 +3959,65 @@ fun Application.configureRoutes() {
                     put("message", "Bug report received. Thank you!")
                 })
             }
+
+            route("/shares") {
+                post {
+                    val appConfig = AppConfigLoader.load()
+                    val session = call.resolveSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val req = call.receive<com.obsidianscout.scouting.CreateShareRequest>()
+                    val origin = call.request.headers["Origin"] ?: call.request.headers["Host"]?.let { "http://$it" } ?: ""
+                    call.respond(com.obsidianscout.scouting.ShareService.createShare(session, req, origin))
+                }
+                get("/team") {
+                    val appConfig = AppConfigLoader.load()
+                    val session = call.resolveSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val statusFilter = call.request.queryParameters["status"]
+                    val origin = call.request.headers["Origin"] ?: call.request.headers["Host"]?.let { "http://$it" } ?: ""
+                    call.respond(com.obsidianscout.scouting.ShareService.listTeamShares(session.teamNumber, session.program, statusFilter, origin))
+                }
+                get("/resolve/{token}") {
+                    val appConfig = AppConfigLoader.load()
+                    val session = call.optionalSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val token = call.parameters["token"] ?: throw ApiException(HttpStatusCode.BadRequest, "Missing token")
+                    val pin = call.request.queryParameters["pin"]
+                    val clientIp = call.request.headers["X-Forwarded-For"]?.substringBefore(",")?.trim() ?: call.request.local.remoteHost
+                    val userAgent = call.request.headers[HttpHeaders.UserAgent]
+                    call.respond(com.obsidianscout.scouting.ShareService.resolveShare(token, pin, session, clientIp, userAgent))
+                }
+                post("/verify-pin/{token}") {
+                    val appConfig = AppConfigLoader.load()
+                    val session = call.optionalSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val token = call.parameters["token"] ?: throw ApiException(HttpStatusCode.BadRequest, "Missing token")
+                    val req = call.receive<com.obsidianscout.scouting.VerifyPinRequest>()
+                    val clientIp = call.request.headers["X-Forwarded-For"]?.substringBefore(",")?.trim() ?: call.request.local.remoteHost
+                    val userAgent = call.request.headers[HttpHeaders.UserAgent]
+                    call.respond(com.obsidianscout.scouting.ShareService.resolveShare(token, req.pin, session, clientIp, userAgent))
+                }
+                patch("/{token}") {
+                    val appConfig = AppConfigLoader.load()
+                    val session = call.resolveSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val token = call.parameters["token"] ?: throw ApiException(HttpStatusCode.BadRequest, "Missing token")
+                    val req = call.receive<com.obsidianscout.scouting.UpdateShareRequest>()
+                    val origin = call.request.headers["Origin"] ?: call.request.headers["Host"]?.let { "http://$it" } ?: ""
+                    call.respond(com.obsidianscout.scouting.ShareService.updateShare(token, req, session, origin))
+                }
+                delete("/{token}") {
+                    val appConfig = AppConfigLoader.load()
+                    val session = call.resolveSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val token = call.parameters["token"] ?: throw ApiException(HttpStatusCode.BadRequest, "Missing token")
+                    call.respond(mapOf("success" to com.obsidianscout.scouting.ShareService.deleteShare(token, session)))
+                }
+                post("/{token}/revoke") {
+                    val appConfig = AppConfigLoader.load()
+                    val session = call.resolveSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val token = call.parameters["token"] ?: throw ApiException(HttpStatusCode.BadRequest, "Missing token")
+                    call.respond(mapOf("success" to com.obsidianscout.scouting.ShareService.revokeShare(token, session)))
+                }
+            }
+        }
+
+        get("/shared/{token}") {
+            call.respondStaticHtml("shared.html")
         }
 
         val pages = mapOf(
@@ -4017,6 +4076,7 @@ fun Application.configureRoutes() {
             "demo" to "demo.html",
             "about" to "about.html",
             "login" to "login.html",
+            "shared-links" to "shared-links.html",
             "tutorials" to "tutorials.html",
             "404" to "404.html",
             "500" to "500.html",
@@ -4206,4 +4266,19 @@ private fun findFieldImage(year: Int): Pair<String, String>? {
         // ignore
     }
     return null
+}
+
+fun ApplicationCall.optionalSessionOrMobileJwt(jwtSecret: String): UserSession? {
+    val session = sessions.get<UserSession>()
+    if (session != null) return session
+    val authHeader = request.headers["Authorization"]
+    if (authHeader != null && authHeader.startsWith("Bearer ", ignoreCase = true)) {
+        val token = authHeader.removePrefix("Bearer ").trim()
+        return JwtHelper.verifyToken(token, jwtSecret)
+    }
+    return null
+}
+
+fun ApplicationCall.resolveSessionOrMobileJwt(jwtSecret: String): UserSession {
+    return optionalSessionOrMobileJwt(jwtSecret) ?: throw ApiException(HttpStatusCode.Unauthorized, "Authentication required")
 }

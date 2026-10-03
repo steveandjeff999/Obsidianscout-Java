@@ -1,0 +1,395 @@
+/* Share Modal & Shared Links CSS */
+.share-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.share-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.share-modal-dialog {
+    background: var(--surface, #1e1e24);
+    color: var(--ink, #ffffff);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+    border-radius: 16px;
+    width: 100%;
+    max-width: 580px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    transform: scale(0.95);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.share-modal-overlay.active .share-modal-dialog {
+    transform: scale(1);
+}
+
+.share-modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.share-modal-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.share-modal-close {
+    background: transparent;
+    border: none;
+    color: var(--muted, #8e8ea0);
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.share-modal-close:hover {
+    color: var(--ink, #ffffff);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.share-modal-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.share-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.share-field-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ink-secondary, #b4b4c0);
+}
+
+.share-input, .share-select {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--surface-2, #282832);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+    border-radius: 8px;
+    color: var(--ink, #ffffff);
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.share-input:focus, .share-select:focus {
+    border-color: var(--accent, #6366f1);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+.share-radio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+}
+
+.share-radio-card {
+    background: var(--surface-2, #282832);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+    border-radius: 10px;
+    padding: 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.share-radio-card:hover {
+    border-color: var(--accent, #6366f1);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.share-radio-card.active {
+    border-color: var(--accent, #6366f1);
+    background: rgba(99, 102, 241, 0.16);
+}
+
+.share-radio-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.share-radio-desc {
+    font-size: 0.75rem;
+    color: var(--muted, #8e8ea0);
+}
+
+.share-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--surface-2, #282832);
+    border-radius: 8px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+}
+
+.share-toggle-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.share-toggle-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.share-toggle-desc {
+    font-size: 0.75rem;
+    color: var(--muted, #8e8ea0);
+}
+
+.share-modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.share-result-box {
+    background: var(--surface-2, #282832);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.share-url-row {
+    display: flex;
+    gap: 8px;
+}
+
+.share-qr-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: #ffffff;
+    border-radius: 12px;
+    margin: 8px auto;
+    width: fit-content;
+}
+
+.share-qr-container img, .share-qr-container canvas {
+    max-width: 180px;
+    max-height: 180px;
+}
+
+.share-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.share-badge-active { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.share-badge-expired { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.share-badge-revoked { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+.share-badge-pin { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+.share-badge-team { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.share-badge-alliance { background: rgba(14, 165, 233, 0.15); color: #0ea5e9; }
+
+/* Management Table */
+.shares-table-container {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.shares-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+}
+
+.shares-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted, #8e8ea0);
+    border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+}
+
+.shares-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+    font-size: 0.9rem;
+    vertical-align: middle;
+}
+
+.shares-table tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.shares-action-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.shares-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--ink, #ffffff);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+.shares-action-btn svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+    fill: none;
+}
+
+.shares-action-btn:hover {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: var(--accent, #6366f1);
+    color: var(--accent, #6366f1);
+    transform: translateY(-1px);
+}
+
+.shares-action-btn.danger {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.25);
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.shares-action-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.22);
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+/* Mobile Responsive Breakpoints */
+@media (max-width: 640px) {
+    .share-modal-overlay {
+        padding: 8px;
+        align-items: flex-end;
+    }
+
+    .share-modal-dialog {
+        max-height: 94vh;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .share-modal-header {
+        padding: 16px;
+    }
+
+    .share-modal-body {
+        padding: 16px;
+        gap: 16px;
+    }
+
+    .share-modal-footer {
+        padding: 14px 16px;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .share-modal-footer .btn {
+        width: 100%;
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    .share-radio-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .share-url-row {
+        flex-direction: column;
+    }
+
+    .share-url-row .btn {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .shares-table th, .shares-table td {
+        padding: 10px 12px;
+        font-size: 0.825rem;
+    }
+
+    .shared-header-card, .shared-content-card {
+        padding: 16px;
+    }
+
+    .shared-title {
+        font-size: 1.25rem;
+    }
+
+    .shared-chart-wrap {
+        height: 320px;
+    }
+
+    .pin-gate-box {
+        margin: 20px auto;
+        padding: 16px;
+    }
+}
+
+@media (max-width: 400px) {
+    .share-radio-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -253,7 +253,9 @@ object DatabaseFactory {
                 PasskeyCredentials,
                 PasskeyChallenges,
                 ScoutingAssignments,
-                GamepadProfiles
+                GamepadProfiles,
+                SharedLinks,
+                SharedLinkAccessLogs
             )
 
             if (isCockroach) {

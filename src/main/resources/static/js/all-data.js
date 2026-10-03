@@ -137,6 +137,8 @@ function mergeEntries(match, pit, qual) {
             isPrescout: e.isPrescout || false,
             matchNumber: e.matchNumber,
             matchKey: e.matchKey,
+            username: e.username || e.scoutName || "Scout",
+            scoutName: e.username || e.scoutName || "Scout",
             createdAt: e.createdAt,
             matchPlayedTime: e.matchPlayedTime || null,
             data: e.data,
@@ -157,6 +159,8 @@ function mergeEntries(match, pit, qual) {
             isPrescout: e.isPrescout || false,
             matchNumber: null,
             matchKey: null,
+            username: e.username || e.scoutName || "Scout",
+            scoutName: e.username || e.scoutName || "Scout",
             createdAt: e.createdAt,
             matchPlayedTime: null,
             data: e.data,
@@ -177,6 +181,8 @@ function mergeEntries(match, pit, qual) {
             isPrescout: e.isPrescout || false,
             matchNumber: e.matchNumber,
             matchKey: e.matchKey,
+            username: e.username || e.scoutName || "Scout",
+            scoutName: e.username || e.scoutName || "Scout",
             createdAt: e.createdAt,
             matchPlayedTime: e.matchPlayedTime || null,
             data: e.data,
@@ -292,6 +298,38 @@ function initControls(state) {
     });
 
     exportButton.addEventListener("click", () => exportCsv(state));
+
+    const shareButton = document.getElementById("btn-share-data");
+    if (shareButton) {
+        shareButton.addEventListener("click", async () => {
+            const { openShareModal } = await import("./components/share-modal.js");
+            const filteredRows = getFilteredAndSortedRows(state);
+            const eventName = state.filters.eventKey || "All Events";
+            openShareModal({
+                defaultTitle: `Scouting Data - ${eventName}`,
+                resourceType: "all_data",
+                eventKey: state.filters.eventKey || null,
+                payloadProvider: () => {
+                    return {
+                        resourceType: "all_data",
+                        targetEventKey: state.filters.eventKey || null,
+                        queryConfig: {
+                            eventKey: state.filters.eventKey,
+                            teamQuery: state.filters.teamQuery,
+                            type: state.filters.type,
+                            matchNumber: state.filters.matchNumber,
+                            sortBy: state.filters.sortBy
+                        },
+                        snapshotData: {
+                            eventKey: state.filters.eventKey,
+                            totalRows: filteredRows.length,
+                            rows: filteredRows.slice(0, 500)
+                        }
+                    };
+                }
+            });
+        });
+    }
 }
 
 function renderAll(state) {

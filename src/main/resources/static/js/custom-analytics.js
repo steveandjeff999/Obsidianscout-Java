@@ -311,6 +311,42 @@
             });
         }
 
+        // Share Report via URL
+        const btnShareReport = document.getElementById("btn-share-report");
+        if (btnShareReport) {
+            btnShareReport.addEventListener("click", async () => {
+                const { openShareModal } = await import("./components/share-modal.js");
+                openShareModal({
+                    defaultTitle: currentReport.title || "Custom Analytics Report",
+                    resourceType: "custom_analytics",
+                    eventKey: currentReport.slicers.eventKey || null,
+                    payloadProvider: () => {
+                        return {
+                            resourceType: "custom_analytics",
+                            targetEventKey: currentReport.slicers.eventKey || null,
+                            queryConfig: {
+                                title: currentReport.title,
+                                description: currentReport.description,
+                                slicers: currentReport.slicers,
+                                calculatedMetrics: currentReport.calculatedMetrics,
+                                widgets: currentReport.widgets
+                            },
+                            snapshotData: {
+                                title: currentReport.title,
+                                description: currentReport.description,
+                                slicers: currentReport.slicers,
+                                calculatedMetrics: currentReport.calculatedMetrics,
+                                widgets: currentReport.widgets,
+                                dataset: dataset,
+                                teamsCount: dataset.teams ? dataset.teams.length : 0,
+                                matchesCount: dataset.matchEntries ? dataset.matchEntries.length : 0
+                            }
+                        };
+                    }
+                });
+            });
+        }
+
         // Report Library Modal
         const btnReportLibrary = document.getElementById("btn-report-library");
         if (btnReportLibrary) {
