@@ -678,7 +678,11 @@ graalvmNative {
                 "--initialize-at-build-time=org.sqlite.util.",
                 "--initialize-at-build-time=org.sqlite.util.ProcessRunner",
                 "--initialize-at-build-time=org.xml.sax.",
-                "--initialize-at-build-time=org.xml.sax.helpers.LocatorImpl"
+                "--initialize-at-build-time=org.xml.sax.helpers.LocatorImpl",
+                // Runtime initialization overrides for classes with random state or runtime-specific seeds
+                "--initialize-at-run-time=kotlin.uuid.",
+                "--initialize-at-run-time=kotlin.random.",
+                "--initialize-at-run-time=java.security.SecureRandom"
             )
         }
     }
