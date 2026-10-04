@@ -121,6 +121,7 @@ fun Application.configureRoutes() {
             route("/cluster") {
                 get("/status") {
                     val appConfig = AppConfigLoader.load()
+                    val uptimeSec = com.obsidianscout.admin.ClusterManagementService.getLocalUptimeSeconds()
                     call.respond(
                         buildJsonObject {
                             put("status", if (com.obsidianscout.db.DatabaseFactory.isReady) "online" else "booting")
@@ -131,6 +132,8 @@ fun Application.configureRoutes() {
                             put("serverVersion", appConfig.current_version)
                             put("executionMode", com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode())
                             put("nodeIp", com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp())
+                            put("uptimeSeconds", uptimeSec)
+                            put("uptimeFormatted", com.obsidianscout.admin.ClusterManagementService.formatUptime(uptimeSec))
                         }
                     )
                 }
@@ -3917,24 +3920,6 @@ fun Application.configureRoutes() {
                 }
             }
 
-            route("/cluster") {
-                get("/status") {
-                    val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
-                    val appConfig = AppConfigLoader.load()
-                    val uptimeSec = com.obsidianscout.admin.ClusterManagementService.getLocalUptimeSeconds()
-                    call.respond(
-                        com.obsidianscout.admin.ClusterStatusResponse(
-                            status = "online",
-                            serverVersion = appConfig.current_version,
-                            nodeIp = localIp,
-                            dbActive = true,
-                            executionMode = com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode(),
-                            uptimeSeconds = uptimeSec,
-                            uptimeFormatted = com.obsidianscout.admin.ClusterManagementService.formatUptime(uptimeSec)
-                        )
-                    )
-                }
-            }
 
             post("/bug-reports") {
                 val session = call.sessions.get<UserSession>()
