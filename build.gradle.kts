@@ -670,6 +670,8 @@ graalvmNative {
                 // Build-time initialization for libraries with safe static initializers only
                 "--initialize-at-build-time=kotlin.",
                 "--initialize-at-build-time=kotlin.reflect.",
+                "--initialize-at-build-time=kotlinx.datetime.",
+                "--initialize-at-build-time=kotlinx.",
                 "--initialize-at-build-time=org.jetbrains.exposed.",
                 "--initialize-at-build-time=ch.qos.logback.",
                 "--initialize-at-build-time=org.slf4j.",
