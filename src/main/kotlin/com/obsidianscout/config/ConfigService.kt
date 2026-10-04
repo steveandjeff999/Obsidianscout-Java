@@ -114,7 +114,7 @@ object ConfigService {
         val defaultsDir = getDefaultsDirectory()
 
         transaction {
-            SchemaUtils.createMissingTablesAndColumns(DefaultConfigs, DeletedDefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs)
+            SchemaUtils.create(DefaultConfigs, DeletedDefaultConfigs, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs)
 
             val deletedPresets = DeletedDefaultConfigs.selectAll().map { row ->
                 Triple(

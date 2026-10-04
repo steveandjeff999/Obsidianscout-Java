@@ -171,7 +171,7 @@ object QuorumFallbackStore {
                 readOnly = false,
                 db = db
             ) {
-                SchemaUtils.createMissingTablesAndColumns(*mirroredTables)
+                SchemaUtils.create(*mirroredTables)
             }
 
             // CRITICAL FIX: Database.connect() in Exposed automatically overrides TransactionManager.defaultDatabase.

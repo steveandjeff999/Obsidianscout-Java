@@ -217,7 +217,7 @@ object SnapshotService {
                 readOnly = false,
                 db = snapshotDb
             ) {
-                SchemaUtils.createMissingTablesAndColumns(*allTables)
+                SchemaUtils.create(*allTables)
             }
 
             // 2. Read all datasets from the primary database

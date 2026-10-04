@@ -531,7 +531,7 @@ object DatabaseFactory {
             }
         } else {
                 transaction {
-                    SchemaUtils.createMissingTablesAndColumns(*tables.toTypedArray())
+                    SchemaUtils.create(*tables.toTypedArray())
                 }
                 // Explicit column migrations for PostgreSQL (safe to run repeatedly with IF NOT EXISTS)
                 if (isPostgresCompatible) {
@@ -728,61 +728,32 @@ object DatabaseFactory {
 
                 // ── 3. Create new UUID tables via Exposed ───────────────────────
                 transaction {
-                    if (isCockroach) {
-                        SchemaUtils.create(
-                            Users,
-                            ScoutingConfigs,
-                            PitScoutingConfigs,
-                            QualitativeScoutingConfigs,
-                            ScoutingEntries,
-                            PitScoutingEntries,
-                            QualitativeScoutingEntries,
-                            AppSettings,
-                            ApiEvents,
-                            ApiTeams,
-                            ApiMatches,
-                            ScoutingAlliances,
-                            AllianceMemberships,
-                            EpaOprHistoryCache,
-                            PasswordResetTokens,
-                            AllianceSelections,
-                            MatchPlans,
-                            Banners,
-                            ChatMessages,
-                            UserChatLastRead,
-                            PushSubscriptions,
-                            PasskeyCredentials,
-                            PasskeyChallenges,
-                            ScoutingAssignments
-                        )
-                    } else {
-                        SchemaUtils.createMissingTablesAndColumns(
-                            Users,
-                            ScoutingConfigs,
-                            PitScoutingConfigs,
-                            QualitativeScoutingConfigs,
-                            ScoutingEntries,
-                            PitScoutingEntries,
-                            QualitativeScoutingEntries,
-                            AppSettings,
-                            ApiEvents,
-                            ApiTeams,
-                            ApiMatches,
-                            ScoutingAlliances,
-                            AllianceMemberships,
-                            EpaOprHistoryCache,
-                            PasswordResetTokens,
-                            AllianceSelections,
-                            MatchPlans,
-                            Banners,
-                            ChatMessages,
-                            UserChatLastRead,
-                            PushSubscriptions,
-                            PasskeyCredentials,
-                            PasskeyChallenges,
-                            ScoutingAssignments
-                        )
-                    }
+                    SchemaUtils.create(
+                        Users,
+                        ScoutingConfigs,
+                        PitScoutingConfigs,
+                        QualitativeScoutingConfigs,
+                        ScoutingEntries,
+                        PitScoutingEntries,
+                        QualitativeScoutingEntries,
+                        AppSettings,
+                        ApiEvents,
+                        ApiTeams,
+                        ApiMatches,
+                        ScoutingAlliances,
+                        AllianceMemberships,
+                        EpaOprHistoryCache,
+                        PasswordResetTokens,
+                        AllianceSelections,
+                        MatchPlans,
+                        Banners,
+                        ChatMessages,
+                        UserChatLastRead,
+                        PushSubscriptions,
+                        PasskeyCredentials,
+                        PasskeyChallenges,
+                        ScoutingAssignments
+                    )
                 }
 
                 // ── 4. Copy data, minting UUIDs on the server ───────────────────
