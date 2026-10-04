@@ -326,7 +326,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             loadedSettings = settingsResponse.settings;
             setVal("settings-year", loadedSettings.year);
             setVal("settings-event-code", loadedSettings.eventCode || "");
-            setVal("settings-timezone", loadedSettings.timezone || "America/New_York");
+            setVal("settings-timezone", loadedSettings.timezone || "UTC");
             setVal("settings-source", loadedSettings.preferredSource || "tba");
             setVal("settings-statbotics-url", loadedSettings.statboticsBaseUrl || "https://api.statbotics.io");
             setVal("settings-match13-url", loadedSettings.match13BaseUrl || "https://actions.match13.com");

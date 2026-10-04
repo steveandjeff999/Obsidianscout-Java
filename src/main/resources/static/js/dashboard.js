@@ -218,7 +218,14 @@ function populateEventContext(settings, eventKey) {
     if (eventEl) eventEl.textContent = eventKey || t("dashboard.not_set", "Not set");
 
     const tzEl = document.getElementById("summary-timezone");
-    if (tzEl) tzEl.textContent = localizeTimezone(settings.timezone) || "-";
+    if (tzEl) {
+        tzEl.textContent = "-";
+        Obsidianscout.getEventTimezone(eventKey).then(tz => {
+            tzEl.textContent = localizeTimezone(tz) || "UTC";
+        }).catch(() => {
+            tzEl.textContent = "UTC";
+        });
+    }
 
     const sourceEl = document.getElementById("summary-source");
     if (sourceEl) {

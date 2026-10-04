@@ -313,7 +313,7 @@ data class ApiSettingsPayload(
     val year: Int = java.time.Year.now().value,
     val eventCode: String = "",
     val eventKey: String = "",
-    val timezone: String = "America/New_York",
+    val timezone: String = "UTC",
     val preferredSource: String = "tba",
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,

@@ -59,8 +59,11 @@ async function loadPitScoutPageData(me) {
         const eventBadge = document.getElementById("event-badge");
         const formBlocked = document.getElementById("form-blocked");
 
-        timezoneBadge.textContent = settings.timezone;
         eventBadge.textContent = eventKey || "Not set";
+        const eventTz = await Obsidianscout.getEventTimezone(eventKey);
+        if (timezoneBadge) {
+            timezoneBadge.textContent = eventTz;
+        }
 
         await loadTeams(eventKey, teamSelect);
         let entryCache = await loadEntryCache();
