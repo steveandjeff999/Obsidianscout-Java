@@ -1,15 +1,16 @@
 package com.obsidianscout.scouting
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.jsonObject
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
 
 object DeduplicationScheduler {
@@ -77,7 +78,7 @@ object DeduplicationScheduler {
             MatchGroupKey(owner, prog, event, match, target, isPrescout)
         }
         matchGrouped.forEach { (key, group) ->
-            val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
+            val unique = mutableListOf<org.jetbrains.exposed.v1.core.ResultRow>()
             val toDelete = mutableListOf<java.util.UUID>()
             group.forEach { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
@@ -111,7 +112,7 @@ object DeduplicationScheduler {
             PitGroupKey(owner, prog, event, target, isPrescout)
         }
         pitGrouped.forEach { (key, group) ->
-            val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
+            val unique = mutableListOf<org.jetbrains.exposed.v1.core.ResultRow>()
             val toDelete = mutableListOf<java.util.UUID>()
             group.forEach { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
@@ -146,7 +147,7 @@ object DeduplicationScheduler {
             QualitativeGroupKey(owner, prog, event, match, target, isPrescout)
         }
         qualGrouped.forEach { (key, group) ->
-            val unique = mutableListOf<org.jetbrains.exposed.sql.ResultRow>()
+            val unique = mutableListOf<org.jetbrains.exposed.v1.core.ResultRow>()
             val toDelete = mutableListOf<java.util.UUID>()
             group.forEach { row ->
                 val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject

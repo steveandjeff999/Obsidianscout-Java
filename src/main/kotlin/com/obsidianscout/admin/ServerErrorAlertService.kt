@@ -1,5 +1,7 @@
 package com.obsidianscout.admin
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.EmailService
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.UserSession
@@ -20,17 +22,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.andWhere
-import org.jetbrains.exposed.sql.deleteAll
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.lowerCase
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.andWhere
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -227,7 +227,7 @@ object ServerErrorAlertService {
         val resolvedClientIp = clientIp.take(64)
         scope.launch {
             try {
-                org.jetbrains.exposed.sql.transactions.transaction {
+                org.jetbrains.exposed.v1.jdbc.transactions.transaction {
                     com.obsidianscout.db.ReportedErrors.insert {
                         it[errorType] = "SERVER"
                         it[errorMessage] = cause.message?.take(2000) ?: cause.javaClass.name
@@ -286,7 +286,7 @@ object ServerErrorAlertService {
 
         fun persist() {
             try {
-                org.jetbrains.exposed.sql.transactions.transaction {
+                org.jetbrains.exposed.v1.jdbc.transactions.transaction {
                     com.obsidianscout.db.ReportedErrors.insert {
                         it[ReportedErrors.errorType] = errorType
                         it[ReportedErrors.errorMessage] = errorMessage.take(2000)
@@ -422,7 +422,7 @@ object ServerErrorAlertService {
         // Persist to ReportedErrors table asynchronously
         scope.launch {
             try {
-                org.jetbrains.exposed.sql.transactions.transaction {
+                org.jetbrains.exposed.v1.jdbc.transactions.transaction {
                     com.obsidianscout.db.ReportedErrors.insert {
                         it[errorType] = "CLIENT_JS"
                         it[errorMessage] = report.errorMessage.take(2000)
@@ -567,8 +567,8 @@ object ServerErrorAlertService {
 
             val total = query.count()
             val items = query
-                .orderBy(com.obsidianscout.db.ReportedErrors.createdAt, org.jetbrains.exposed.sql.SortOrder.DESC)
-                .limit(limit.coerceIn(1, 500), offset)
+                .orderBy(com.obsidianscout.db.ReportedErrors.createdAt, org.jetbrains.exposed.v1.core.SortOrder.DESC)
+                .limit(limit.coerceIn(1, 500)).offset(offset.toLong())
                 .map { row ->
                     com.obsidianscout.routes.ReportedErrorItem(
                         id = row[com.obsidianscout.db.ReportedErrors.id].value.toString(),
@@ -659,7 +659,7 @@ object ServerErrorAlertService {
     fun updateReportedErrorStatus(id: String, newStatus: String, resolvedByUsername: String?): Boolean {
         val uuid = runCatching { java.util.UUID.fromString(id) }.getOrNull() ?: return false
         val statusUpper = if (newStatus.uppercase() == "RESOLVED") "RESOLVED" else "OPEN"
-        return org.jetbrains.exposed.sql.transactions.transaction {
+        return org.jetbrains.exposed.v1.jdbc.transactions.transaction {
             val updated = com.obsidianscout.db.ReportedErrors.update({ com.obsidianscout.db.ReportedErrors.id eq uuid }) {
                 it[status] = statusUpper
                 if (statusUpper == "RESOLVED") {
@@ -679,7 +679,7 @@ object ServerErrorAlertService {
      */
     fun deleteReportedError(id: String): Boolean {
         val uuid = runCatching { java.util.UUID.fromString(id) }.getOrNull() ?: return false
-        return org.jetbrains.exposed.sql.transactions.transaction {
+        return org.jetbrains.exposed.v1.jdbc.transactions.transaction {
             val count = com.obsidianscout.db.ReportedErrors.deleteWhere { com.obsidianscout.db.ReportedErrors.id eq uuid }
             count > 0
         }
@@ -693,7 +693,7 @@ object ServerErrorAlertService {
         val uuids = errorIds.mapNotNull { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
         if (uuids.isEmpty()) return 0
         val statusUpper = if (newStatus.uppercase() == "RESOLVED") "RESOLVED" else "OPEN"
-        return org.jetbrains.exposed.sql.transactions.transaction {
+        return org.jetbrains.exposed.v1.jdbc.transactions.transaction {
             com.obsidianscout.db.ReportedErrors.update({ com.obsidianscout.db.ReportedErrors.id inList uuids }) {
                 it[status] = statusUpper
                 if (statusUpper == "RESOLVED") {
@@ -714,7 +714,7 @@ object ServerErrorAlertService {
         if (errorIds.isEmpty()) return 0
         val uuids = errorIds.mapNotNull { runCatching { java.util.UUID.fromString(it) }.getOrNull() }
         if (uuids.isEmpty()) return 0
-        return org.jetbrains.exposed.sql.transactions.transaction {
+        return org.jetbrains.exposed.v1.jdbc.transactions.transaction {
             com.obsidianscout.db.ReportedErrors.deleteWhere { com.obsidianscout.db.ReportedErrors.id inList uuids }
         }
     }
@@ -724,7 +724,7 @@ object ServerErrorAlertService {
      */
     fun clearReportedErrors(statusFilter: String?): Int {
         val upper = statusFilter?.uppercase() ?: "ALL"
-        return org.jetbrains.exposed.sql.transactions.transaction {
+        return org.jetbrains.exposed.v1.jdbc.transactions.transaction {
             when (upper) {
                 "RESOLVED" -> com.obsidianscout.db.ReportedErrors.deleteWhere { com.obsidianscout.db.ReportedErrors.status eq "RESOLVED" }
                 "OPEN" -> com.obsidianscout.db.ReportedErrors.deleteWhere { com.obsidianscout.db.ReportedErrors.status eq "OPEN" }

@@ -1,5 +1,7 @@
 package com.obsidianscout.db.orchestration
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.config.AppConfig
 import com.obsidianscout.config.DatabaseConfig
 import com.obsidianscout.config.PostgresConfig
@@ -15,7 +17,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.v1.jdbc.selectAll
 
 data class PeerStatus(val dbReady: Boolean, val isDbActive: Boolean)
 

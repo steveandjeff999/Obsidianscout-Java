@@ -1,5 +1,7 @@
 package com.obsidianscout.scouting
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.ApiException
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.UserSession
@@ -15,17 +17,16 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.select
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.obsidianscout.db.readTransaction
-import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.v1.jdbc.update
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -988,7 +989,7 @@ object AllianceService {
         }
     }
 
-    fun validateAllianceRow(allianceRow: org.jetbrains.exposed.sql.ResultRow, members: List<AllianceMemberRecord>): AllianceValidationDto {
+    fun validateAllianceRow(allianceRow: org.jetbrains.exposed.v1.core.ResultRow, members: List<AllianceMemberRecord>): AllianceValidationDto {
         val allianceId = allianceRow[ScoutingAlliances.id].value.toString()
         val allianceName = allianceRow[ScoutingAlliances.name]
         val year = allianceRow[ScoutingAlliances.year]

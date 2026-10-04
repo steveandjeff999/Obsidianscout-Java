@@ -1,19 +1,20 @@
 package com.obsidianscout.config
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.db.GamepadProfiles
 import com.obsidianscout.db.readTransaction
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
@@ -212,7 +213,7 @@ object GamepadProfileService {
         return deletedCount > 0
     }
 
-    private fun parseProfileRow(row: org.jetbrains.exposed.sql.ResultRow): GamepadProfileDTO? {
+    private fun parseProfileRow(row: org.jetbrains.exposed.v1.core.ResultRow): GamepadProfileDTO? {
         val rawJson = row[GamepadProfiles.profileJson]
         return try {
             json.decodeFromString<GamepadProfileDTO>(rawJson)

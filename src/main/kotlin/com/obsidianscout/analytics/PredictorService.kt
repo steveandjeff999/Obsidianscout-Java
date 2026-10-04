@@ -1,5 +1,7 @@
 package com.obsidianscout.analytics
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.config.ConfigService
@@ -22,10 +24,10 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.andWhere
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.andWhere
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.obsidianscout.db.readTransaction
 import com.obsidianscout.auth.ApiException
 
@@ -180,7 +182,7 @@ object PredictorService {
                 (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamNumber inList teamNumbers)
             }.toList()
             
-            val teamInfoMap = mutableMapOf<String, org.jetbrains.exposed.sql.ResultRow>()
+            val teamInfoMap = mutableMapOf<String, org.jetbrains.exposed.v1.core.ResultRow>()
             teamRows.forEach { row ->
                 val rowKey = row[ApiTeams.teamKey].lowercase().trim()
                 val rowCanonical = canonicalKeyByKey[rowKey] ?: rowKey
@@ -461,7 +463,7 @@ object PredictorService {
                 }
             }
 
-            val teamInfoMap = mutableMapOf<String, org.jetbrains.exposed.sql.ResultRow>()
+            val teamInfoMap = mutableMapOf<String, org.jetbrains.exposed.v1.core.ResultRow>()
             allTeamsInEvent.forEach { row ->
                 val rowKey = row[ApiTeams.teamKey].lowercase().trim()
                 val rowCanonical = canonicalKeyByKey[rowKey] ?: rowKey

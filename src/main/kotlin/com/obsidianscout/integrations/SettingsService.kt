@@ -1,17 +1,19 @@
 package com.obsidianscout.integrations
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.AppSettings
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.obsidianscout.db.readTransaction
-import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.core.and
 import java.time.Instant
 import java.time.Year
 

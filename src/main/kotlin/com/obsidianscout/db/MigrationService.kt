@@ -1,9 +1,10 @@
 package com.obsidianscout.db
 
 import com.obsidianscout.auth.UserRole
-import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager

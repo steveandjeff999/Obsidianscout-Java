@@ -1,5 +1,7 @@
 package com.obsidianscout.scouting
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.ApiException
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.UserSession
@@ -15,20 +17,17 @@ import com.obsidianscout.integrations.IntegrationService
 import com.obsidianscout.routes.MatchRecord
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.andWhere
-import org.jetbrains.exposed.sql.batchInsert
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.lowerCase
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.andWhere
+import org.jetbrains.exposed.v1.jdbc.batchInsert
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.time.Instant
 import java.util.UUID
 
@@ -1297,7 +1296,7 @@ object ScoutingAssignmentService {
             val toDeleteIds = mutableSetOf<UUID>()
 
             // 1. Same-slot duplicate assignments
-            val slotMap = mutableMapOf<String, MutableList<org.jetbrains.exposed.sql.ResultRow>>()
+            val slotMap = mutableMapOf<String, MutableList<org.jetbrains.exposed.v1.core.ResultRow>>()
             for (row in rows) {
                 val type = row[ScoutingAssignments.assignmentType].uppercase()
                 val mKey = row[ScoutingAssignments.matchKey]?.lowercase() ?: (row[ScoutingAssignments.matchNumber]?.let { "m$it" } ?: "")
@@ -1315,7 +1314,7 @@ object ScoutingAssignmentService {
             for ((_, slotRows) in slotMap) {
                 if (slotRows.size > 1) {
                     // Priority: Keep COMPLETED (score 3), IN_PROGRESS (score 2), has notes, oldest
-                    val sorted = slotRows.sortedWith(compareByDescending<org.jetbrains.exposed.sql.ResultRow> {
+                    val sorted = slotRows.sortedWith(compareByDescending<org.jetbrains.exposed.v1.core.ResultRow> {
                         when (it[ScoutingAssignments.status].uppercase()) {
                             "COMPLETED" -> 3
                             "IN_PROGRESS" -> 2
@@ -1371,7 +1370,7 @@ object ScoutingAssignmentService {
                     (uMatchRows[0][ScoutingAssignments.allianceColor]?.lowercase() != uMatchRows[1][ScoutingAssignments.allianceColor]?.lowercase())
 
                 if (uMatchRows.size > 1 && !isBothAlliancesQualPair) {
-                    val sorted = uMatchRows.sortedWith(compareByDescending<org.jetbrains.exposed.sql.ResultRow> {
+                    val sorted = uMatchRows.sortedWith(compareByDescending<org.jetbrains.exposed.v1.core.ResultRow> {
                         when (it[ScoutingAssignments.status].uppercase()) {
                             "COMPLETED" -> 3
                             "IN_PROGRESS" -> 2
@@ -1603,7 +1602,7 @@ object ScoutingAssignmentService {
         }
     }
 
-    private fun mapRowToRecord(row: org.jetbrains.exposed.sql.ResultRow): ScoutingAssignmentRecord {
+    private fun mapRowToRecord(row: org.jetbrains.exposed.v1.core.ResultRow): ScoutingAssignmentRecord {
         val userIds = listOfNotNull(row[ScoutingAssignments.assignedUserId].value, row[ScoutingAssignments.createdByUserId]?.value)
         val userMap = Users.selectAll().where { Users.id inList userIds }.associate { it[Users.id].value to it[Users.username] }
 
@@ -1666,7 +1665,7 @@ object ScoutingAssignmentService {
 
     private data class MatchTiming(val scheduledTime: Long?, val predictedTime: Long?, val offsetSeconds: Long)
 
-    private fun mapRowsToRecords(rows: List<org.jetbrains.exposed.sql.ResultRow>): List<ScoutingAssignmentRecord> {
+    private fun mapRowsToRecords(rows: List<org.jetbrains.exposed.v1.core.ResultRow>): List<ScoutingAssignmentRecord> {
         if (rows.isEmpty()) return emptyList()
 
         val userIds = rows.flatMap {

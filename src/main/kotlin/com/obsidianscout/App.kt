@@ -30,12 +30,11 @@ import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.call
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.install
-import io.ktor.server.engine.applicationEngineEnvironment
 import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.engine.sslConnector
 import io.ktor.server.netty.Netty
-import io.ktor.server.plugins.callloging.CallLogging
+import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.compression.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.doublereceive.DoubleReceive
@@ -64,6 +63,7 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import com.obsidianscout.db.orchestration.CockroachOrchestrator
 import io.ktor.http.ContentType
+import kotlin.time.Duration.Companion.seconds
 
 private var cockroachOrchestrator: CockroachOrchestrator? = null
 
@@ -136,26 +136,26 @@ fun main(args: Array<String>) {
     Security.addProvider(BouncyCastleProvider())
     val appConfig = AppConfigLoader.load()
     
-    val environment = applicationEngineEnvironment {
-        module { module(appConfig) }
-        connector {
-            host = if (appConfig.server.host == "127.0.0.1") "0.0.0.0" else appConfig.server.host
-            port = appConfig.server.port
-        }
-    }
-
     if (appConfig.server.https.enabled) {
         val keyStore = loadOrCreateKeyStore(appConfig)
         com.obsidianscout.utils.ProxyServer.start(appConfig, keyStore)
     }
 
-    embeddedServer(Netty, environment) {
-        connectionGroupSize = 4
-        workerGroupSize = 32
-        callGroupSize = 64
-        requestReadTimeoutSeconds = 60
-        responseWriteTimeoutSeconds = 60
-    }.start(wait = true)
+    embeddedServer(
+        Netty,
+        configure = {
+            connector {
+                host = if (appConfig.server.host == "127.0.0.1") "0.0.0.0" else appConfig.server.host
+                port = appConfig.server.port
+            }
+            connectionGroupSize = 4
+            workerGroupSize = 32
+            callGroupSize = 64
+            requestReadTimeoutSeconds = 60
+            responseWriteTimeoutSeconds = 60
+        },
+        module = { module(appConfig) }
+    ).start(wait = true)
 }
 
 fun Application.module(appConfig: AppConfig) {
@@ -174,8 +174,8 @@ fun Application.module(appConfig: AppConfig) {
         header("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)")
     }
     install(WebSockets) {
-        pingPeriod = java.time.Duration.ofSeconds(15)
-        timeout = java.time.Duration.ofSeconds(15)
+        pingPeriod = 15.seconds
+        timeout = 15.seconds
         maxFrameSize = 1 * 1024 * 1024L // 1 MB
         masking = false
     }

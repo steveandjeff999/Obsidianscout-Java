@@ -1,11 +1,13 @@
 package com.obsidianscout.db
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.db.orchestration.CockroachOrchestrator
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.SQLException
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -89,7 +91,7 @@ class DatabaseReadFallbackTest {
     @Test
     fun testReadTransactionExecutesNormally() {
         DatabaseFactory.isCockroach = false
-        val db = org.jetbrains.exposed.sql.Database.connect(
+        val db = org.jetbrains.exposed.v1.jdbc.Database.connect(
             url = "jdbc:sqlite:${testDbFile.absolutePath}",
             driver = "org.sqlite.JDBC"
         )
@@ -129,7 +131,7 @@ class DatabaseReadFallbackTest {
 
         transaction(sqliteDb) {
             Users.insert {
-                it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), Users)
+                it[id] = org.jetbrains.exposed.v1.core.dao.id.EntityID(java.util.UUID.randomUUID(), Users)
                 it[username] = "scout_tester"
                 it[teamNumber] = 9999
                 it[program] = "FRC"
@@ -201,7 +203,7 @@ class DatabaseReadFallbackTest {
             // 4. CRITICAL: Verify that TransactionManager.defaultDatabase is STILL the main DB
             assertEquals(
                 DatabaseFactory.primaryDatabase,
-                org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase,
+                org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase,
                 "TransactionManager.defaultDatabase must remain pointing to primaryDatabase and not fallback SQLite"
             )
 
@@ -228,7 +230,7 @@ class DatabaseReadFallbackTest {
             // Insert superadmin in main database
             transaction {
                 Users.insert {
-                    it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), Users)
+                    it[id] = org.jetbrains.exposed.v1.core.dao.id.EntityID(java.util.UUID.randomUUID(), Users)
                     it[username] = "superadmin"
                     it[teamNumber] = 0
                     it[program] = "FRC"
@@ -387,7 +389,7 @@ class DatabaseReadFallbackTest {
 
         transaction(sqliteDb) {
             Users.insert {
-                it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), Users)
+                it[id] = org.jetbrains.exposed.v1.core.dao.id.EntityID(java.util.UUID.randomUUID(), Users)
                 it[username] = "inspect_user"
                 it[teamNumber] = 254
                 it[program] = "FRC"
@@ -397,7 +399,7 @@ class DatabaseReadFallbackTest {
             }
 
             ApiEvents.insert {
-                it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), ApiEvents)
+                it[id] = org.jetbrains.exposed.v1.core.dao.id.EntityID(java.util.UUID.randomUUID(), ApiEvents)
                 it[eventKey] = "2026caln"
                 it[year] = 2026
                 it[eventCode] = "caln"
@@ -410,7 +412,7 @@ class DatabaseReadFallbackTest {
             }
 
             ApiTeams.insert {
-                it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), ApiTeams)
+                it[id] = org.jetbrains.exposed.v1.core.dao.id.EntityID(java.util.UUID.randomUUID(), ApiTeams)
                 it[eventKey] = "2026caln"
                 it[teamKey] = "frc254"
                 it[teamNumber] = 254
@@ -420,7 +422,7 @@ class DatabaseReadFallbackTest {
             }
 
             ApiMatches.insert {
-                it[id] = org.jetbrains.exposed.dao.id.EntityID(java.util.UUID.randomUUID(), ApiMatches)
+                it[id] = org.jetbrains.exposed.v1.core.dao.id.EntityID(java.util.UUID.randomUUID(), ApiMatches)
                 it[matchKey] = "2026caln_qm1"
                 it[eventKey] = "2026caln"
                 it[compLevel] = "qm"

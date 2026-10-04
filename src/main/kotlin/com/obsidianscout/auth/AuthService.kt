@@ -1,36 +1,29 @@
 package com.obsidianscout.auth
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import at.favre.lib.crypto.bcrypt.BCrypt
 import com.obsidianscout.config.SeedConfig
 import com.obsidianscout.db.Users
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.andWhere
-import org.jetbrains.exposed.sql.lowerCase
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.andWhere
+import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.obsidianscout.db.readTransaction
-import org.jetbrains.exposed.sql.addLogger
-import org.jetbrains.exposed.sql.StdOutSqlLogger
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNotNull
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.v1.core.StdOutSqlLogger
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.core.or
 import com.obsidianscout.db.AppSettings
 import com.obsidianscout.integrations.ApiSettings
 import com.obsidianscout.config.JsonSupport
-import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.v1.jdbc.insert
 import com.obsidianscout.db.PasswordResetTokens
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.PitScoutingEntries
@@ -312,7 +305,7 @@ object AuthService {
             val isDesc = sortDir?.equals("desc", ignoreCase = true) == true
             val order = if (isDesc) SortOrder.DESC else SortOrder.ASC
 
-            val orderPairs = mutableListOf<Pair<org.jetbrains.exposed.sql.Expression<*>, SortOrder>>()
+            val orderPairs = mutableListOf<Pair<org.jetbrains.exposed.v1.core.Expression<*>, SortOrder>>()
             when (sortBy?.lowercase()) {
                 "username" -> orderPairs.add(Users.username.lowerCase() to order)
                 "email" -> orderPairs.add(Users.email.lowerCase() to order)
@@ -333,7 +326,7 @@ object AuthService {
 
             query
                 .orderBy(*orderPairs.toTypedArray())
-                .limit(limit, offset = offset)
+                .limit(limit).offset(offset.toLong())
                 .map { rowToUser(it) }
         }
     }

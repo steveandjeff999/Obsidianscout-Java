@@ -22,11 +22,9 @@ import com.obsidianscout.analytics.AnalyticsDatasetResponse
 import com.obsidianscout.analytics.PredictorService
 import com.obsidianscout.routes.MatchPredictionResponse
 import kotlinx.coroutines.runBlocking
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.security.SecureRandom
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -520,9 +518,7 @@ object ShareService {
         val linkId = row[SharedLinks.id]
         transaction {
             SharedLinks.update({ SharedLinks.id eq linkId }) {
-                with(SqlExpressionBuilder) {
-                    it.update(SharedLinks.viewCount, SharedLinks.viewCount + 1)
-                }
+                it[SharedLinks.viewCount] = SharedLinks.viewCount + 1
                 it[SharedLinks.lastAccessedAt] = now
             }
 

@@ -37,7 +37,7 @@ object ProxyServer {
         val proxyPort = appConfig.server.https.port
         val host = appConfig.server.host
 
-        val environment = applicationEngineEnvironment {
+        val server = embeddedServer(Netty, configure = {
             sslConnector(
                 keyStore = keyStore,
                 keyAlias = appConfig.server.https.keyAlias,
@@ -47,7 +47,7 @@ object ProxyServer {
                 this.host = host
                 this.port = proxyPort
             }
-            module {
+        }, module = {
                 install(ServerWebSockets)
                 routing {
                     // WebSocket proxying - target the specific alliance collaboration path to prevent routing conflicts
@@ -182,9 +182,9 @@ object ProxyServer {
                     }
                 }
             }
-        }
+        )
 
-        embeddedServer(Netty, environment).start(wait = false)
+        server.start(wait = false)
         println("[ProxyServer] Embedded HTTPS reverse proxy started on port $proxyPort (routing to HTTP backend on $targetPort)")
     }
 }

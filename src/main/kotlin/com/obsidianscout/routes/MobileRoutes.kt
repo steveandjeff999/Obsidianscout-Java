@@ -1,5 +1,7 @@
 package com.obsidianscout.routes
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.obsidianscout.auth.AuthService
@@ -22,7 +24,7 @@ import com.obsidianscout.db.Users
 import com.obsidianscout.db.PasswordResetTokens
 import com.obsidianscout.auth.EmailService
 import com.obsidianscout.auth.TeamSecretService
-import org.jetbrains.exposed.sql.lowerCase
+import org.jetbrains.exposed.v1.core.lowerCase
 import com.obsidianscout.integrations.IntegrationService
 import com.obsidianscout.integrations.SettingsService
 import com.obsidianscout.integrations.ApiSettings
@@ -50,6 +52,7 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.util.pipeline.PipelineContext
+import io.ktor.server.routing.RoutingContext
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.client.call.body
@@ -61,20 +64,17 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.*
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.andWhere
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.andWhere
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.obsidianscout.db.readTransaction
-import org.jetbrains.exposed.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import java.io.File
 import java.time.Instant
 import java.util.Date
@@ -2217,7 +2217,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             }
 
             // GET/POST Current Data Mode
-            val currentDataModeHandler: suspend PipelineContext<Unit, ApplicationCall>.(Unit) -> Unit = {
+            val currentDataModeHandler: suspend RoutingContext.() -> Unit = {
                 val session = call.requireMobileSession(secret)
                 val body = try { call.receive<MobileCurrentDataModeRequest>() } catch (_: Exception) { MobileCurrentDataModeRequest() }
                 
@@ -2330,11 +2330,11 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 )
             }
 
-            get("/config/game/current-data-mode") { currentDataModeHandler(Unit) }
-            post("/config/game/current-data-mode") { currentDataModeHandler(Unit) }
+            get("/config/game/current-data-mode") { currentDataModeHandler() }
+            post("/config/game/current-data-mode") { currentDataModeHandler() }
 
             // historical EPA/OPR data
-            val epaOprHistoryHandler: suspend PipelineContext<Unit, ApplicationCall>.(Unit) -> Unit = {
+            val epaOprHistoryHandler: suspend RoutingContext.() -> Unit = {
                 val session = call.requireMobileSession(secret)
                 val body = try { call.receive<MobileEpaOprHistoryRequest>() } catch (_: Exception) { MobileEpaOprHistoryRequest() }
                 
@@ -2432,8 +2432,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 )
             }
 
-            get("/config/game/stats/epa-opr-history") { epaOprHistoryHandler(Unit) }
-            post("/config/game/stats/epa-opr-history") { epaOprHistoryHandler(Unit) }
+            get("/config/game/stats/epa-opr-history") { epaOprHistoryHandler() }
+            post("/config/game/stats/epa-opr-history") { epaOprHistoryHandler() }
 
             // Assignments
             get("/assignments") {
@@ -2569,7 +2569,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             }
 
             // POST PUT Configs
-            val saveGameConfigHandler: suspend PipelineContext<Unit, ApplicationCall>.(Unit) -> Unit = {
+            val saveGameConfigHandler: suspend RoutingContext.() -> Unit = {
                 call.requireMobileAdmin(secret)
                 val reqBody = call.receiveText()
                 try {
@@ -2584,14 +2584,14 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 call.respond(MobileSaveConfigResponse())
             }
 
-            post("/config/game") { saveGameConfigHandler(Unit) }
-            put("/config/game") { saveGameConfigHandler(Unit) }
-            post("/config/game/active") { saveGameConfigHandler(Unit) }
-            put("/config/game/active") { saveGameConfigHandler(Unit) }
-            post("/config/game/team") { saveGameConfigHandler(Unit) }
-            put("/config/game/team") { saveGameConfigHandler(Unit) }
+            post("/config/game") { saveGameConfigHandler() }
+            put("/config/game") { saveGameConfigHandler() }
+            post("/config/game/active") { saveGameConfigHandler() }
+            put("/config/game/active") { saveGameConfigHandler() }
+            post("/config/game/team") { saveGameConfigHandler() }
+            put("/config/game/team") { saveGameConfigHandler() }
 
-            val savePitConfigHandler: suspend PipelineContext<Unit, ApplicationCall>.(Unit) -> Unit = {
+            val savePitConfigHandler: suspend RoutingContext.() -> Unit = {
                 call.requireMobileAdmin(secret)
                 val reqBody = call.receiveText()
                 try {
@@ -2606,14 +2606,14 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 call.respond(MobileSaveConfigResponse())
             }
 
-            post("/config/pit") { savePitConfigHandler(Unit) }
-            put("/config/pit") { savePitConfigHandler(Unit) }
-            post("/config/pit/active") { savePitConfigHandler(Unit) }
-            put("/config/pit/active") { savePitConfigHandler(Unit) }
-            post("/config/pit/team") { savePitConfigHandler(Unit) }
-            put("/config/pit/team") { savePitConfigHandler(Unit) }
+            post("/config/pit") { savePitConfigHandler() }
+            put("/config/pit") { savePitConfigHandler() }
+            post("/config/pit/active") { savePitConfigHandler() }
+            put("/config/pit/active") { savePitConfigHandler() }
+            post("/config/pit/team") { savePitConfigHandler() }
+            put("/config/pit/team") { savePitConfigHandler() }
 
-            val saveQualitativeConfigHandler: suspend PipelineContext<Unit, ApplicationCall>.(Unit) -> Unit = {
+            val saveQualitativeConfigHandler: suspend RoutingContext.() -> Unit = {
                 call.requireMobileAdmin(secret)
                 val reqBody = call.receiveText()
                 try {
@@ -2628,12 +2628,12 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 call.respond(MobileSaveConfigResponse())
             }
 
-            post("/config/qualitative") { saveQualitativeConfigHandler(Unit) }
-            put("/config/qualitative") { saveQualitativeConfigHandler(Unit) }
-            post("/config/qualitative/active") { saveQualitativeConfigHandler(Unit) }
-            put("/config/qualitative/active") { saveQualitativeConfigHandler(Unit) }
-            post("/config/qualitative/team") { saveQualitativeConfigHandler(Unit) }
-            put("/config/qualitative/team") { saveQualitativeConfigHandler(Unit) }
+            post("/config/qualitative") { saveQualitativeConfigHandler() }
+            put("/config/qualitative") { saveQualitativeConfigHandler() }
+            post("/config/qualitative/active") { saveQualitativeConfigHandler() }
+            put("/config/qualitative/active") { saveQualitativeConfigHandler() }
+            post("/config/qualitative/team") { saveQualitativeConfigHandler() }
+            put("/config/qualitative/team") { saveQualitativeConfigHandler() }
 
             get("/config/defaults") {
                 val session = call.requireMobileSession(secret)
@@ -3418,7 +3418,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             }
 
             // Graphs & Visualize Plotly Fallback
-            val graphsHandler: suspend PipelineContext<Unit, ApplicationCall>.(Unit) -> Unit = {
+            val graphsHandler: suspend RoutingContext.() -> Unit = {
                 val session = call.requireMobileSession(secret)
                 val body = try { call.receive<MobileGraphRequest>() } catch (_: Exception) { MobileGraphRequest() }
 
@@ -3473,8 +3473,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 )
             }
 
-            post("/graphs") { graphsHandler(Unit) }
-            post("/graphs/visualize") { graphsHandler(Unit) }
+            post("/graphs") { graphsHandler() }
+            post("/graphs/visualize") { graphsHandler() }
         }
     }
 }

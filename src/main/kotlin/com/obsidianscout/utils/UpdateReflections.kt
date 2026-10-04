@@ -1,5 +1,7 @@
 package com.obsidianscout.utils
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -108,20 +110,20 @@ fun main() {
     // 3. Known third-party reflection targets required for native image
     val staticReflectionTargets = listOf(
         // Exposed Database Framework
-        "org.jetbrains.exposed.sql.UUIDColumnType" to true,
-        "org.jetbrains.exposed.sql.ColumnType" to false,
-        "org.jetbrains.exposed.sql.Table" to false,
-        "org.jetbrains.exposed.sql.Column" to false,
-        "org.jetbrains.exposed.dao.id.UUIDTable" to false,
-        "org.jetbrains.exposed.dao.id.IdTable" to false,
-        "org.jetbrains.exposed.dao.id.EntityID" to true,
-        "org.jetbrains.exposed.sql.VarCharColumnType" to true,
-        "org.jetbrains.exposed.sql.IntegerColumnType" to true,
-        "org.jetbrains.exposed.sql.LongColumnType" to true,
-        "org.jetbrains.exposed.sql.BooleanColumnType" to true,
-        "org.jetbrains.exposed.sql.TextColumnType" to true,
-        "org.jetbrains.exposed.sql.DoubleColumnType" to true,
-        "org.jetbrains.exposed.sql.javatime.JavaTimestampColumnType" to true,
+        "org.jetbrains.exposed.v1.core.java.UUIDColumnType" to true,
+        "org.jetbrains.exposed.v1.core.ColumnType" to false,
+        "org.jetbrains.exposed.v1.core.Table" to false,
+        "org.jetbrains.exposed.v1.core.Column" to false,
+        "org.jetbrains.exposed.v1.core.dao.id.java.UUIDTable" to false,
+        "org.jetbrains.exposed.v1.core.dao.id.IdTable" to false,
+        "org.jetbrains.exposed.v1.core.dao.id.EntityID" to true,
+        "org.jetbrains.exposed.v1.core.VarCharColumnType" to true,
+        "org.jetbrains.exposed.v1.core.IntegerColumnType" to true,
+        "org.jetbrains.exposed.v1.core.LongColumnType" to true,
+        "org.jetbrains.exposed.v1.core.BooleanColumnType" to true,
+        "org.jetbrains.exposed.v1.core.TextColumnType" to true,
+        "org.jetbrains.exposed.v1.core.DoubleColumnType" to true,
+        "org.jetbrains.exposed.v1.javatime.JavaTimestampColumnType" to true,
 
         // Ktor Sessions & Core
         "io.ktor.network.selector.InterestSuspensionsMap" to true,

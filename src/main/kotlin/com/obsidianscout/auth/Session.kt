@@ -1,5 +1,7 @@
 package com.obsidianscout.auth
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.httpMethod
@@ -19,15 +21,13 @@ import io.ktor.http.Cookie
 import io.ktor.util.AttributeKey
 import com.obsidianscout.db.DatabaseFactory
 import com.obsidianscout.db.Users
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
 
 import com.obsidianscout.db.UserSessions
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.or
 import java.time.Instant
 
 @Serializable
@@ -305,7 +305,7 @@ class KeepMeLoggedInSessionTransport(
                 name = delegate.name,
                 value = transformed,
                 encoding = delegate.configuration.encoding,
-                maxAge = maxAgeSeconds.toInt(),
+                maxAge = maxAgeSeconds?.toInt(),
                 path = delegate.configuration.path,
                 domain = delegate.configuration.domain,
                 secure = isHttps,

@@ -1,5 +1,7 @@
 package com.obsidianscout.scouting
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.db.ApiMatches
@@ -9,10 +11,10 @@ import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.ScoutingAssignments
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.Users
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.File
 import java.time.Instant
 import kotlin.test.AfterTest

@@ -1,17 +1,18 @@
 package com.obsidianscout.db
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.routes.BannerCreateRequest
 import com.obsidianscout.routes.BannerDto
 import com.obsidianscout.routes.BannerUpdateRequest
-import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.insertAndGetId
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.time.Instant
 import java.util.UUID
 
@@ -19,7 +20,7 @@ object BannerService {
 
     fun getAll(teamNumber: Int? = null, program: String? = null): List<BannerDto> = try {
         readTransaction {
-            val conditions = mutableListOf<org.jetbrains.exposed.sql.Op<Boolean>>()
+            val conditions = mutableListOf<org.jetbrains.exposed.v1.core.Op<Boolean>>()
             if (teamNumber != null) {
                 conditions.add((Banners.teamNumber eq teamNumber) or (Banners.teamNumber eq 0))
             }

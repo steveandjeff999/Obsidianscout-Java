@@ -1,9 +1,10 @@
 plugins {
-    kotlin("jvm") version "2.1.20"
-    kotlin("plugin.serialization") version "2.1.20"
+    kotlin("jvm") version "2.4.20"
+    kotlin("plugin.serialization") version "2.4.20"
     application
-    id("com.gradleup.shadow") version "9.3.0"
-    id("org.graalvm.buildtools.native") version "0.10.4"
+    id("com.gradleup.shadow") version "9.6.1"
+    id("org.graalvm.buildtools.native") version "1.1.14"
+    id("io.github.ben-manes.versions") version "0.64.0"
 }
 
 group = "com.obsidianscout"
@@ -13,14 +14,14 @@ repositories {
     mavenCentral()
 }
 
-val ktorVersion = "2.3.12"
-val exposedVersion = "0.53.0"
-val logbackVersion = "1.5.6"
+val ktorVersion = "3.6.0"
+val exposedVersion = "1.5.0"
+val logbackVersion = "1.6.5"
 
 dependencies {
     implementation("io.ktor:ktor-server-core-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-netty-jvm:$ktorVersion")
-    implementation("io.netty:netty-tcnative-boringssl-static:2.0.65.Final")
+    implementation("io.netty:netty-tcnative-boringssl-static:2.0.84.Final")
     implementation("io.ktor:ktor-server-websockets-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
@@ -43,21 +44,21 @@ dependencies {
     implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
     implementation("org.jetbrains.exposed:exposed-java-time:$exposedVersion")
 
-    implementation("com.zaxxer:HikariCP:5.1.0")
-    implementation("org.xerial:sqlite-jdbc:3.46.0.0")
-    implementation("org.postgresql:postgresql:42.7.3")
+    implementation("com.zaxxer:HikariCP:7.1.0")
+    implementation("org.xerial:sqlite-jdbc:3.53.4.0")
+    implementation("org.postgresql:postgresql:42.7.13")
 
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("at.favre.lib:bcrypt:0.10.2")
-    implementation("com.auth0:java-jwt:4.4.0")
+    implementation("com.auth0:java-jwt:4.6.1")
 
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
-    implementation("org.eclipse.angus:jakarta.mail:2.0.3")
+    implementation("org.eclipse.angus:jakarta.mail:2.0.5")
     implementation("nl.martijndwars:web-push:5.1.2")
-    implementation("com.google.firebase:firebase-admin:9.4.1")
-    implementation("org.bouncycastle:bcprov-jdk18on:1.78")
+    implementation("com.google.firebase:firebase-admin:9.11.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.86")
     implementation("org.apache.httpcomponents:httpclient:4.5.14")
-    implementation("com.webauthn4j:webauthn4j-core:0.22.2.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.31.11.RELEASE")
     testImplementation(kotlin("test"))
 }
 

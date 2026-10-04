@@ -1,12 +1,14 @@
 package com.obsidianscout.utils
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.config.AppConfigLoader
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.config.ConfigService
 import com.obsidianscout.db.DatabaseFactory
 import com.obsidianscout.db.QualitativeScoutingConfigs
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive

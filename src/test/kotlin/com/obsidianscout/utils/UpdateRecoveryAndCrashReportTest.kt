@@ -1,5 +1,7 @@
 package com.obsidianscout.utils
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.admin.ServerErrorAlertService
 import com.obsidianscout.config.DatabaseConfig
 import com.obsidianscout.config.JsonSupport
@@ -8,7 +10,7 @@ import com.obsidianscout.db.DatabaseFactory
 import com.obsidianscout.db.ReportedErrors
 import com.obsidianscout.db.readTransaction
 import kotlinx.serialization.decodeFromString
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.*

@@ -1,5 +1,7 @@
 package com.obsidianscout.integrations
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.ApiEvents
 import com.obsidianscout.db.ApiMatches
@@ -54,19 +56,17 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.intOrNull
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.andWhere
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.select
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.andWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.obsidianscout.db.readTransaction
-import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
+import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.Base64
@@ -837,7 +837,7 @@ object IntegrationService {
             )
 
             data class MatchParsed(
-                val row: org.jetbrains.exposed.sql.ResultRow,
+                val row: org.jetbrains.exposed.v1.core.ResultRow,
                 val compLevel: String,
                 val setNumber: Int?,
                 val matchNumber: Int?,
@@ -967,8 +967,8 @@ object IntegrationService {
 
     fun getBBotMappings(
         eventKey: String,
-        cachedTeams: List<org.jetbrains.exposed.sql.ResultRow>? = null,
-        cachedMatches: List<org.jetbrains.exposed.sql.ResultRow>? = null
+        cachedTeams: List<org.jetbrains.exposed.v1.core.ResultRow>? = null,
+        cachedMatches: List<org.jetbrains.exposed.v1.core.ResultRow>? = null
     ): List<BBotMapping> {
         return readTransaction {
             val allTeams = cachedTeams ?: ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()

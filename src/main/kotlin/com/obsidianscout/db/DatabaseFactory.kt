@@ -1,12 +1,14 @@
 package com.obsidianscout.db
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.config.DatabaseConfig
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -51,9 +53,9 @@ object DatabaseFactory {
      */
     fun <T> readTransaction(
         db: Database? = null,
-        statement: org.jetbrains.exposed.sql.Transaction.() -> T
+        statement: org.jetbrains.exposed.v1.core.Transaction.() -> T
     ): T {
-        val currentTx = org.jetbrains.exposed.sql.transactions.TransactionManager.currentOrNull()
+        val currentTx = org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.currentOrNull()
         if (currentTx != null) {
             return currentTx.statement()
         }
@@ -122,7 +124,7 @@ object DatabaseFactory {
             activeDataSource = null
             primaryDatabase = null
             isReady = false
-            org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = null
+            org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = null
             println("[Database] Database connection pool closed.")
         } catch (e: Exception) {
             println("[Database] Error closing database pool: ${e.message}")
@@ -203,14 +205,14 @@ object DatabaseFactory {
 
         val primaryDb = Database.connect(
             dataSource,
-            databaseConfig = org.jetbrains.exposed.sql.DatabaseConfig {
+            databaseConfig = org.jetbrains.exposed.v1.core.DatabaseConfig {
                 defaultMaxAttempts = 1
                 defaultMinRetryDelay = 0
                 defaultMaxRetryDelay = 0
             }
         )
         primaryDatabase = primaryDb
-        org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = primaryDb
+        org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = primaryDb
 
         // Run the INT->UUID migration if the database still has the old schema
         if (runMigration) {
@@ -313,16 +315,24 @@ object DatabaseFactory {
                                     try {
                                         stmt.executeUpdate(sql)
                                     } catch (e: Exception) {
-                                        println("[Database] Error creating table $tableName with statement ($sql): ${e.message}")
-                                        try {
-                                            com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
-                                                errorMessage = "Database error creating table $tableName: ${e.message}",
-                                                cause = e,
-                                                requestDetails = "Statement: $sql",
-                                                errorType = "SERVER",
-                                                sync = true
-                                            )
-                                        } catch (_: Exception) {}
+                                        val msg = e.message ?: ""
+                                        val isBenign = msg.contains("already exists", ignoreCase = true) ||
+                                                msg.contains("duplicate", ignoreCase = true) ||
+                                                msg.contains("42P07") || msg.contains("42710")
+                                        if (isBenign) {
+                                            println("[Database] Note: Schema object already exists for $tableName ($sql): $msg")
+                                        } else {
+                                            println("[Database] Error creating table $tableName with statement ($sql): $msg")
+                                            try {
+                                                com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
+                                                    errorMessage = "Database error creating table $tableName: $msg",
+                                                    cause = e,
+                                                    requestDetails = "Statement: $sql",
+                                                    errorType = "SERVER",
+                                                    sync = true
+                                                )
+                                            } catch (_: Exception) {}
+                                        }
                                     }
                                 }
                             }
@@ -344,19 +354,19 @@ object DatabaseFactory {
                                         println("[Database] Adding missing column $columnName to table $tableName...")
                                         // Generate column DDL description
                                         val ddlType = when {
-                                            column.columnType is org.jetbrains.exposed.sql.UUIDColumnType -> "UUID"
-                                            column.columnType is org.jetbrains.exposed.sql.VarCharColumnType -> {
-                                                val len = (column.columnType as org.jetbrains.exposed.sql.VarCharColumnType).colLength
+                                            column.columnType is org.jetbrains.exposed.v1.core.java.UUIDColumnType -> "UUID"
+                                            column.columnType is org.jetbrains.exposed.v1.core.VarCharColumnType -> {
+                                                val len = (column.columnType as org.jetbrains.exposed.v1.core.VarCharColumnType).colLength
                                                 "VARCHAR($len)"
                                             }
-                                            column.columnType is org.jetbrains.exposed.sql.IntegerColumnType -> "INT"
-                                            column.columnType is org.jetbrains.exposed.sql.LongColumnType -> "BIGINT"
-                                            column.columnType is org.jetbrains.exposed.sql.DoubleColumnType -> "DOUBLE PRECISION"
-                                            column.columnType is org.jetbrains.exposed.sql.TextColumnType -> "TEXT"
-                                            column.columnType is org.jetbrains.exposed.sql.BooleanColumnType -> "BOOL"
-                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaInstantColumnType || 
-                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaLocalDateTimeColumnType || 
-                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaOffsetDateTimeColumnType -> "TIMESTAMPTZ"
+                                            column.columnType is org.jetbrains.exposed.v1.core.IntegerColumnType -> "INT"
+                                            column.columnType is org.jetbrains.exposed.v1.core.LongColumnType -> "BIGINT"
+                                            column.columnType is org.jetbrains.exposed.v1.core.DoubleColumnType -> "DOUBLE PRECISION"
+                                            column.columnType is org.jetbrains.exposed.v1.core.TextColumnType -> "TEXT"
+                                            column.columnType is org.jetbrains.exposed.v1.core.BooleanColumnType -> "BOOL"
+                                            column.columnType is org.jetbrains.exposed.v1.javatime.JavaInstantColumnType || 
+                                            column.columnType is org.jetbrains.exposed.v1.javatime.JavaLocalDateTimeColumnType || 
+                                            column.columnType is org.jetbrains.exposed.v1.javatime.JavaOffsetDateTimeColumnType -> "TIMESTAMPTZ"
                                             else -> "TEXT"
                                         }
 
@@ -379,7 +389,7 @@ object DatabaseFactory {
                                             columnName == "program" -> "'FRC'"
                                             columnName == "bug_report_preference" -> "'ask'"
                                             columnName == "notification_preference" -> "'all'"
-                                            column.columnType is org.jetbrains.exposed.sql.BooleanColumnType -> "FALSE"
+                                            column.columnType is org.jetbrains.exposed.v1.core.BooleanColumnType -> "FALSE"
                                             else -> null
                                         }
 
@@ -388,15 +398,15 @@ object DatabaseFactory {
                                             column.columnType.nullable -> " NULL"
                                             // When adding a NOT NULL column to an existing table with rows, CockroachDB / PostgreSQL
                                             // requires a default value to avoid "null value in column violates not-null constraint".
-                                            column.columnType is org.jetbrains.exposed.sql.VarCharColumnType ||
-                                            column.columnType is org.jetbrains.exposed.sql.TextColumnType -> " DEFAULT '' NOT NULL"
-                                            column.columnType is org.jetbrains.exposed.sql.IntegerColumnType ||
-                                            column.columnType is org.jetbrains.exposed.sql.LongColumnType -> " DEFAULT 0 NOT NULL"
-                                            column.columnType is org.jetbrains.exposed.sql.DoubleColumnType -> " DEFAULT 0.0 NOT NULL"
-                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaInstantColumnType ||
-                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaLocalDateTimeColumnType ||
-                                            column.columnType is org.jetbrains.exposed.sql.javatime.JavaOffsetDateTimeColumnType -> " DEFAULT CURRENT_TIMESTAMP NOT NULL"
-                                            column.columnType is org.jetbrains.exposed.sql.UUIDColumnType -> " DEFAULT gen_random_uuid() NOT NULL"
+                                            column.columnType is org.jetbrains.exposed.v1.core.VarCharColumnType ||
+                                            column.columnType is org.jetbrains.exposed.v1.core.TextColumnType -> " DEFAULT '' NOT NULL"
+                                            column.columnType is org.jetbrains.exposed.v1.core.IntegerColumnType ||
+                                            column.columnType is org.jetbrains.exposed.v1.core.LongColumnType -> " DEFAULT 0 NOT NULL"
+                                            column.columnType is org.jetbrains.exposed.v1.core.DoubleColumnType -> " DEFAULT 0.0 NOT NULL"
+                                            column.columnType is org.jetbrains.exposed.v1.javatime.JavaInstantColumnType ||
+                                            column.columnType is org.jetbrains.exposed.v1.javatime.JavaLocalDateTimeColumnType ||
+                                            column.columnType is org.jetbrains.exposed.v1.javatime.JavaOffsetDateTimeColumnType -> " DEFAULT CURRENT_TIMESTAMP NOT NULL"
+                                            column.columnType is org.jetbrains.exposed.v1.core.java.UUIDColumnType -> " DEFAULT gen_random_uuid() NOT NULL"
                                             else -> " NULL"
                                         }
 
@@ -490,16 +500,24 @@ object DatabaseFactory {
                             try {
                                 stmt.executeUpdate(sql)
                             } catch (e: Exception) {
-                                println("[Database] Note/Warning running Cockroach schema migration statement: ${e.message}")
-                                try {
-                                    com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
-                                        errorMessage = "CockroachDB schema migration warning: ${e.message}",
-                                        cause = e,
-                                        requestDetails = "Migration SQL: $sql",
-                                        errorType = "SERVER",
-                                        sync = true
-                                    )
-                                } catch (_: Exception) {}
+                                val msg = e.message ?: ""
+                                val isBenign = msg.contains("already exists", ignoreCase = true) ||
+                                        msg.contains("duplicate", ignoreCase = true) ||
+                                        msg.contains("42P07") || msg.contains("42710")
+                                if (isBenign) {
+                                    println("[Database] Note: Schema object already exists ($sql): $msg")
+                                } else {
+                                    println("[Database] Note/Warning running Cockroach schema migration statement ($sql): $msg")
+                                    try {
+                                        com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
+                                            errorMessage = "CockroachDB schema migration warning: $msg",
+                                            cause = e,
+                                            requestDetails = "Migration SQL: $sql",
+                                            errorType = "SERVER",
+                                            sync = true
+                                        )
+                                    } catch (_: Exception) {}
+                                }
                             }
                         }
                     }
@@ -550,16 +568,24 @@ object DatabaseFactory {
                                     stmt.executeUpdate(sql)
                                     println("[Database] Ran PG migration: $sql")
                                 } catch (e: Exception) {
-                                    println("[Database] Note running PG migration ($sql): ${e.message}")
-                                    try {
-                                        com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
-                                            errorMessage = "PostgreSQL schema migration warning: ${e.message}",
-                                            cause = e,
-                                            requestDetails = "Migration SQL: $sql",
-                                            errorType = "SERVER",
-                                            sync = true
-                                        )
-                                    } catch (_: Exception) {}
+                                    val msg = e.message ?: ""
+                                    val isBenign = msg.contains("already exists", ignoreCase = true) ||
+                                            msg.contains("duplicate", ignoreCase = true) ||
+                                            msg.contains("42P07") || msg.contains("42710")
+                                    if (isBenign) {
+                                        println("[Database] Note: Schema object already exists ($sql): $msg")
+                                    } else {
+                                        println("[Database] Note running PG migration ($sql): $msg")
+                                        try {
+                                            com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
+                                                errorMessage = "PostgreSQL schema migration warning: $msg",
+                                                cause = e,
+                                                requestDetails = "Migration SQL: $sql",
+                                                errorType = "SERVER",
+                                                sync = true
+                                            )
+                                        } catch (_: Exception) {}
+                                    }
                                 }
                             }
                         }
@@ -1828,8 +1854,8 @@ object DatabaseFactory {
  * Top-level convenience delegate for DatabaseFactory.readTransaction.
  */
 fun <T> readTransaction(
-    db: org.jetbrains.exposed.sql.Database? = null,
-    statement: org.jetbrains.exposed.sql.Transaction.() -> T
+    db: org.jetbrains.exposed.v1.jdbc.Database? = null,
+    statement: org.jetbrains.exposed.v1.core.Transaction.() -> T
 ): T = DatabaseFactory.readTransaction(db, statement)
 
 /**
@@ -1838,8 +1864,8 @@ fun <T> readTransaction(
 fun <T> writeTransactionWithRetry(
     maxAttempts: Int = 3,
     initialDelayMs: Long = 50,
-    db: org.jetbrains.exposed.sql.Database? = null,
-    statement: org.jetbrains.exposed.sql.Transaction.() -> T
+    db: org.jetbrains.exposed.v1.jdbc.Database? = null,
+    statement: org.jetbrains.exposed.v1.core.Transaction.() -> T
 ): T {
     val targetDb = db ?: DatabaseFactory.primaryDatabase
     var lastException: Throwable? = null

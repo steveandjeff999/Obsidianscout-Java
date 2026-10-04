@@ -8,12 +8,10 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -157,7 +155,7 @@ object QuorumFallbackStore {
             sqliteDataSource = HikariDataSource(hikariConfig)
             val db = Database.connect(
                 sqliteDataSource!!,
-                databaseConfig = org.jetbrains.exposed.sql.DatabaseConfig {
+                databaseConfig = org.jetbrains.exposed.v1.core.DatabaseConfig {
                     defaultMaxAttempts = 1
                     defaultMinRetryDelay = 0
                     defaultMaxRetryDelay = 0
@@ -181,7 +179,7 @@ object QuorumFallbackStore {
             // so that all application transactions (AuthService, UserService, session verification, scouter forms)
             // continue targeting the real CockroachDB database and are never redirected to the SQLite mirror!
             if (DatabaseFactory.primaryDatabase != null) {
-                org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+                org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
             }
 
             isAvailable = true
@@ -193,7 +191,7 @@ object QuorumFallbackStore {
             println("[QuorumFallbackStore] Failed to initialize SQLite mirror: ${e.message}")
         } finally {
             if (DatabaseFactory.primaryDatabase != null) {
-                org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+                org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
             }
         }
     }
@@ -263,7 +261,7 @@ object QuorumFallbackStore {
         }
 
         if (DatabaseFactory.primaryDatabase != null) {
-            org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+            org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
         }
     }
 
@@ -281,7 +279,7 @@ object QuorumFallbackStore {
         start()
 
         if (DatabaseFactory.primaryDatabase != null) {
-            org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+            org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
         }
 
         scope.launch {
@@ -317,7 +315,7 @@ object QuorumFallbackStore {
         }
 
         if (DatabaseFactory.primaryDatabase != null) {
-            org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+            org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
         }
     }
 
@@ -336,7 +334,7 @@ object QuorumFallbackStore {
             }
         } finally {
             if (DatabaseFactory.primaryDatabase != null) {
-                org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+                org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
             }
         }
     }
@@ -970,7 +968,7 @@ object QuorumFallbackStore {
         } finally {
             isSyncing.set(false)
             if (DatabaseFactory.primaryDatabase != null) {
-                org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+                org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
             }
         }
     }
@@ -1009,7 +1007,7 @@ object QuorumFallbackStore {
             } catch (_: Exception) {
             } finally {
                 if (DatabaseFactory.primaryDatabase != null) {
-                    org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+                    org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
                 }
             }
         }
@@ -1106,7 +1104,7 @@ object QuorumFallbackStore {
             } catch (_: Exception) {
             } finally {
                 if (DatabaseFactory.primaryDatabase != null) {
-                    org.jetbrains.exposed.sql.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
+                    org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
                 }
             }
         }

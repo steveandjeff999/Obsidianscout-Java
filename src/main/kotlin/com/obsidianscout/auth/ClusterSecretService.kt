@@ -6,8 +6,9 @@ import com.obsidianscout.db.ClusterSecrets
 import com.obsidianscout.utils.VapidKeyGenerator
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicReference
 

@@ -1,5 +1,7 @@
 package com.obsidianscout.routes
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.scouting.AllianceService
 import com.obsidianscout.analytics.AnalyticsService
 import com.obsidianscout.analytics.PredictorService
@@ -26,24 +28,20 @@ import com.obsidianscout.db.PushSubscriptions
 import com.obsidianscout.db.PushNotificationService
 import com.obsidianscout.db.FcmService
 import com.obsidianscout.config.AppConfigLoader
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.SqlExpressionBuilder
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNotNull
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.core.SqlExpressionBuilder
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.core.and
 
 
-import org.jetbrains.exposed.sql.lowerCase
+import org.jetbrains.exposed.v1.core.lowerCase
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
-import org.jetbrains.exposed.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import com.obsidianscout.config.ConfigService
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.integrations.ApiSettings
@@ -100,10 +98,10 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.close
 import com.obsidianscout.scouting.AllianceCollaborationManager
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.obsidianscout.utils.*
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.core.and
 import com.obsidianscout.db.AllianceMemberships
 import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.ChatService
@@ -113,11 +111,6 @@ import com.obsidianscout.db.ChatMessages
 fun Application.configureRoutes() {
     routing {
         route("/api") {
-            intercept(ApplicationCallPipeline.Plugins) {
-                call.response.headers.append(HttpHeaders.CacheControl, "no-cache, no-store, must-revalidate")
-                call.response.headers.append(HttpHeaders.Pragma, "no-cache")
-                call.response.headers.append(HttpHeaders.Expires, "0")
-            }
             get("/version") {
                 val appConfig = AppConfigLoader.load()
                 call.respond(VersionResponse(appConfig.current_version, com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode()))
@@ -792,7 +785,7 @@ fun Application.configureRoutes() {
                     val lang = call.request.queryParameters["lang"]?.lowercase() ?: "en"
                     val docsDir = findDocsDir()
                     if (!docsDir.exists()) {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Docs directory not found"))
+                        call.respond(emptyList<Map<String, String>>())
                         return@get
                     }
                     val baseFiles = docsDir.listFiles { _, name -> 
@@ -2139,7 +2132,7 @@ fun Application.configureRoutes() {
                     val originalNotificationPreference = userRecord[com.obsidianscout.db.Users.notificationPreference]
 
                     transaction {
-                        org.jetbrains.exposed.sql.SchemaUtils.drop(
+                        org.jetbrains.exposed.v1.jdbc.SchemaUtils.drop(
                             com.obsidianscout.db.Users,
                             com.obsidianscout.db.ScoutingConfigs,
                             com.obsidianscout.db.PitScoutingConfigs,
@@ -2162,7 +2155,7 @@ fun Application.configureRoutes() {
                             com.obsidianscout.db.PushSubscriptions
                         )
 
-                        org.jetbrains.exposed.sql.SchemaUtils.create(
+                        org.jetbrains.exposed.v1.jdbc.SchemaUtils.create(
                             com.obsidianscout.db.Users,
                             com.obsidianscout.db.ScoutingConfigs,
                             com.obsidianscout.db.PitScoutingConfigs,
@@ -2602,15 +2595,8 @@ fun Application.configureRoutes() {
             }
 
             route("/chat") {
-                intercept(ApplicationCallPipeline.Plugins) {
-                    val session = call.requireSession()
-                    val settings = SettingsService.getSettings(session.teamNumber)
-                    if (!settings.chatEnabled) {
-                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Chat is disabled by team admin")
-                    }
-                }
                 get("/messages") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val groupName = call.request.queryParameters["group"] ?: "general"
                     try {
                         val messages = ChatService.getMessages(session.teamNumber, session.program, groupName, session.userId, session.role)
@@ -2620,7 +2606,7 @@ fun Application.configureRoutes() {
                     }
                 }
                 post("/messages") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val request = call.receive<SendMessageRequest>()
                     try {
                         val message = ChatService.sendMessage(
@@ -2643,7 +2629,7 @@ fun Application.configureRoutes() {
                     }
                 }
                 put("/messages/{id}") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
                     val request = call.receive<EditChatMessageRequest>()
@@ -2660,7 +2646,7 @@ fun Application.configureRoutes() {
                     }
                 }
                 delete("/messages/{id}") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
                     try {
@@ -2674,7 +2660,7 @@ fun Application.configureRoutes() {
                     }
                 }
                 post("/messages/{id}/react") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
                     val request = call.receive<ReactMessageRequest>()
@@ -2687,17 +2673,17 @@ fun Application.configureRoutes() {
                     }
                 }
                 get("/groups") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val groups = ChatService.getGroups(session.teamNumber, session.program, session.userId, session.role)
                     call.respond(groups)
                 }
                 get("/groups/details") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val details = ChatService.getAllGroupDetails(session.teamNumber, session.program, session.userId, session.role)
                     call.respond(details)
                 }
                 get("/groups/{name}/details") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val groupName = call.parameters["name"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing channel name")
                     try {
@@ -2709,7 +2695,7 @@ fun Application.configureRoutes() {
                     }
                 }
                 put("/groups/{name}/permissions") {
-                    val session = call.requireAdmin()
+                    val session = call.requireChatAdmin()
                     val groupName = call.parameters["name"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing channel name")
                     val request = call.receive<UpdateGroupPermissionsRequest>()
@@ -2728,7 +2714,7 @@ fun Application.configureRoutes() {
                     }
                 }
                 post("/groups/{name}/clear") {
-                    val session = call.requireAdmin()
+                    val session = call.requireChatAdmin()
                     val groupName = call.parameters["name"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing channel name")
                     try {
@@ -2739,7 +2725,7 @@ fun Application.configureRoutes() {
                     }
                 }
                 post("/groups") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val request = call.receive<CreateGroupRequest>()
                     val success = ChatService.createGroup(
                         teamNumber = session.teamNumber,
@@ -2755,7 +2741,7 @@ fun Application.configureRoutes() {
                     })
                 }
                 delete("/groups/{name}") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val groupName = call.parameters["name"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing channel name")
                     try {
@@ -2769,18 +2755,18 @@ fun Application.configureRoutes() {
                     }
                 }
                 get("/unread-status") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val status = ChatService.getUnreadStatus(session.userId, session.teamNumber, session.username, session.role, session.program)
                     call.respond(status)
                 }
                 post("/read") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val request = call.receive<ReadChatGroupRequest>()
                     ChatService.updateLastRead(session.userId, request.groupName)
                     call.respond(HttpStatusCode.OK)
                 }
                 get("/team-users") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val usernames = com.obsidianscout.db.readTransaction {
                         com.obsidianscout.db.Users.selectAll()
                             .where {
@@ -2794,7 +2780,7 @@ fun Application.configureRoutes() {
                     call.respond(usernames)
                 }
                 get("/team-members") {
-                    val session = call.requireSession()
+                    val session = call.requireChatSession()
                     val members = com.obsidianscout.db.readTransaction {
                         com.obsidianscout.db.Users.selectAll()
                             .where {
@@ -4102,6 +4088,10 @@ fun Application.configureRoutes() {
             }
         }
 
+        get("/") {
+            call.respondStaticHtml("index.html")
+        }
+
         pages.forEach { (path, fileName) ->
             get("/$path") {
                 call.respondStaticHtml(fileName)
@@ -4281,4 +4271,22 @@ fun ApplicationCall.optionalSessionOrMobileJwt(jwtSecret: String): UserSession? 
 
 fun ApplicationCall.resolveSessionOrMobileJwt(jwtSecret: String): UserSession {
     return optionalSessionOrMobileJwt(jwtSecret) ?: throw ApiException(HttpStatusCode.Unauthorized, "Authentication required")
+}
+
+private suspend fun ApplicationCall.requireChatSession(): UserSession {
+    val session = requireSession()
+    val settings = SettingsService.getSettings(session.teamNumber)
+    if (!settings.chatEnabled) {
+        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Chat is disabled by team admin")
+    }
+    return session
+}
+
+private suspend fun ApplicationCall.requireChatAdmin(): UserSession {
+    val session = requireAdmin()
+    val settings = SettingsService.getSettings(session.teamNumber)
+    if (!settings.chatEnabled) {
+        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Chat is disabled by team admin")
+    }
+    return session
 }

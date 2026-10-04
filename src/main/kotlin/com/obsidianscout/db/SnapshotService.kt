@@ -4,10 +4,11 @@ import com.obsidianscout.auth.AuthService
 import com.obsidianscout.config.AppConfigLoader
 import com.obsidianscout.config.AutoBackupConfig
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.TransactionManager
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.File
 import java.sql.DriverManager
 import java.time.Instant
@@ -203,7 +204,7 @@ object SnapshotService {
         val snapshotDb = Database.connect(
             sqliteUrl,
             driver = "org.sqlite.JDBC",
-            databaseConfig = org.jetbrains.exposed.sql.DatabaseConfig {
+            databaseConfig = org.jetbrains.exposed.v1.core.DatabaseConfig {
                 defaultMaxAttempts = 1
                 defaultIsolationLevel = java.sql.Connection.TRANSACTION_SERIALIZABLE
             }
@@ -711,7 +712,7 @@ object SnapshotService {
             val snapshotDb = Database.connect(
                 snapshotUrl,
                 driver = "org.sqlite.JDBC",
-                databaseConfig = org.jetbrains.exposed.sql.DatabaseConfig {
+                databaseConfig = org.jetbrains.exposed.v1.core.DatabaseConfig {
                     defaultMaxAttempts = 1
                     defaultIsolationLevel = java.sql.Connection.TRANSACTION_SERIALIZABLE
                 }

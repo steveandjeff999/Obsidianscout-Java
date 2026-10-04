@@ -1,13 +1,15 @@
 package com.obsidianscout.auth
 
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.db.AppSettings
 import com.obsidianscout.db.Users
 import com.obsidianscout.db.UserSessions
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.File
 import java.util.UUID
 import kotlin.test.AfterTest
@@ -31,9 +33,9 @@ import com.obsidianscout.db.FcmDeviceTokens
 import com.obsidianscout.db.AnalyticsReports
 import com.obsidianscout.db.PasskeyCredentials
 import com.obsidianscout.db.PasskeyChallenges
-import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import java.time.Instant
 
 class UserSessionsTest {
