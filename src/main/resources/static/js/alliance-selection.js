@@ -871,16 +871,19 @@
         // Sort by date descending
         notes.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+        // Notes are free text written by scouts (possibly from alliance partner teams): escape them.
+        const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+
         notes.forEach(n => {
             const card = document.createElement("div");
             card.className = "note-card";
             card.innerHTML = `
                 <div class="note-header">
-                    <span>${n.type} | Scouter Team ${n.scouter}</span>
+                    <span>${esc(n.type)} | Scouter Team ${esc(n.scouter)}</span>
                     <span>${formatDateString(n.date)}</span>
                 </div>
                 <div class="note-body">
-                    <strong>${n.label}:</strong> ${n.text}
+                    <strong>${esc(n.label)}:</strong> ${esc(n.text)}
                 </div>
             `;
             container.appendChild(card);

@@ -124,7 +124,8 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                         }.any()
                     } else false
                 } else {
-                    true
+                    // Every login creates a server-side session row; tokens without one cannot be revoked.
+                    false
                 }
                 Pair(row, sessionOk)
             }
@@ -206,25 +207,34 @@ suspend fun ApplicationCall.requireAdmin(): UserSession {
  * Requires ADMIN / SUPERADMIN role OR valid HMAC signed inter-node cluster request.
  */
 suspend fun ApplicationCall.requireAdminOrClusterAuth(): Boolean {
-    val timestampStr = request.headers["X-Cluster-Timestamp"]
-    val signature = request.headers["X-Cluster-Signature"]
-
-    if (!timestampStr.isNullOrBlank() && !signature.isNullOrBlank()) {
-        val timestamp = timestampStr.toLongOrNull() ?: 0L
-        val now = System.currentTimeMillis()
-        if (Math.abs(now - timestamp) <= 300_000L) { // 5-minute replay guard
-            val method = request.httpMethod.value
-            val uriPath = request.uri
-            val secret = ClusterSecretService.getSessionSecret()
-            val dataToSign = "$timestamp:$method:$uriPath"
-            if (ClusterCryptoUtils.verifyHmac(dataToSign, signature, secret)) {
-                return true
-            }
-        }
-    }
-
+    if (hasValidClusterSignature()) return true
     requireAdmin()
     return true
+}
+
+private const val CLUSTER_SIGNATURE_WINDOW_MS = 300_000L
+private val seenClusterSignatures = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+/**
+ * Verifies the X-Cluster-Timestamp / X-Cluster-Signature HMAC headers. Each signature is
+ * accepted at most once within the timestamp window so captured requests cannot be replayed.
+ */
+fun ApplicationCall.hasValidClusterSignature(): Boolean {
+    val timestampStr = request.headers["X-Cluster-Timestamp"]
+    val signature = request.headers["X-Cluster-Signature"]
+    if (timestampStr.isNullOrBlank() || signature.isNullOrBlank()) return false
+
+    val timestamp = timestampStr.toLongOrNull() ?: return false
+    val now = System.currentTimeMillis()
+    if (Math.abs(now - timestamp) > CLUSTER_SIGNATURE_WINDOW_MS) return false
+
+    val dataToSign = "$timestamp:${request.httpMethod.value}:${request.uri}"
+    if (!ClusterCryptoUtils.verifyHmac(dataToSign, signature, ClusterSecretService.getSessionSecret())) return false
+
+    if (seenClusterSignatures.size > 10_000) {
+        seenClusterSignatures.entries.removeIf { now - it.value > CLUSTER_SIGNATURE_WINDOW_MS * 2 }
+    }
+    return seenClusterSignatures.putIfAbsent(signature, now) == null
 }
 
 /**
@@ -242,23 +252,7 @@ suspend fun ApplicationCall.requireSuperAdmin(): UserSession {
  * Requires SUPERADMIN role OR valid HMAC signed inter-node cluster request.
  */
 suspend fun ApplicationCall.requireSuperAdminOrClusterAuth(): Boolean {
-    val timestampStr = request.headers["X-Cluster-Timestamp"]
-    val signature = request.headers["X-Cluster-Signature"]
-
-    if (!timestampStr.isNullOrBlank() && !signature.isNullOrBlank()) {
-        val timestamp = timestampStr.toLongOrNull() ?: 0L
-        val now = System.currentTimeMillis()
-        if (Math.abs(now - timestamp) <= 300_000L) { // 5-minute replay guard
-            val method = request.httpMethod.value
-            val uriPath = request.uri
-            val secret = ClusterSecretService.getSessionSecret()
-            val dataToSign = "$timestamp:$method:$uriPath"
-            if (ClusterCryptoUtils.verifyHmac(dataToSign, signature, secret)) {
-                return true
-            }
-        }
-    }
-
+    if (hasValidClusterSignature()) return true
     requireSuperAdmin()
     return true
 }

@@ -405,8 +405,8 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        if (!password || password.length < 4) {
-            Obsidianscout.showToast(t('login.password_too_short', "Password must be at least 4 characters long"), "error");
+        if (!password || password.length < 8) {
+            Obsidianscout.showToast(t('login.password_too_short', "Password must be at least 8 characters long"), "error");
             Obsidianscout.setButtonLoading(registerButton, false);
             return;
         }

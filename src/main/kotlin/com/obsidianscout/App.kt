@@ -141,11 +141,15 @@ fun main(args: Array<String>) {
         com.obsidianscout.utils.ProxyServer.start(appConfig, keyStore)
     }
 
+    if (appConfig.server.host == "127.0.0.1" || appConfig.server.host == "localhost") {
+        println("[ObsidianScout] Binding HTTP to ${appConfig.server.host} only (loopback). Set server.host to 0.0.0.0 if cluster peers or LAN clients must reach this node directly.")
+    }
+
     embeddedServer(
         Netty,
         configure = {
             connector {
-                host = if (appConfig.server.host == "127.0.0.1") "0.0.0.0" else appConfig.server.host
+                host = appConfig.server.host
                 port = appConfig.server.port
             }
             connectionGroupSize = 4
@@ -169,7 +173,7 @@ fun Application.module(appConfig: AppConfig) {
         header("X-Content-Type-Options", "nosniff")
         header("X-XSS-Protection", "1; mode=block")
         header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-        header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';")
+        header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: blob:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';")
         header("Referrer-Policy", "strict-origin-when-cross-origin")
         header("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)")
     }
@@ -297,7 +301,7 @@ fun Application.module(appConfig: AppConfig) {
                     valid = true
                 } else if (requestedWith.equals("XMLHttpRequest", ignoreCase = true)) {
                     valid = true
-                } else if (host != null && ((origin != null && origin.contains(host)) || (referer != null && referer.contains(host)))) {
+                } else if (host != null && (sameHost(origin, host) || sameHost(referer, host))) {
                     valid = true
                 }
 
@@ -642,6 +646,15 @@ private fun loadOrCreateKeyStore(appConfig: AppConfig): KeyStore {
         keyStore.load(input, httpsConfig.keystorePassword.toCharArray())
     }
     return keyStore
+}
+
+/** True when [url] (an Origin or Referer value) points at exactly [hostHeader] (host[:port]). */
+private fun sameHost(url: String?, hostHeader: String): Boolean {
+    if (url.isNullOrBlank()) return false
+    val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return false
+    val urlHost = uri.host ?: return false
+    val authority = if (uri.port != -1) "$urlHost:${uri.port}" else urlHost
+    return authority.equals(hostHeader, ignoreCase = true)
 }
 
 private fun Throwable.isIgnorableException(): Boolean {

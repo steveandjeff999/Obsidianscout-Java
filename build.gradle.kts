@@ -135,6 +135,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
     
     from(file("config")) {
         into("config")
+        exclude("secrets.json*", "*.jks")
     }
     
     from(file("../docs")) {
@@ -714,6 +715,7 @@ val nativeBundleTasks = nativeArchs.map { arch ->
 
         from(file("config")) {
             into("config")
+            exclude("secrets.json*", "*.jks")
         }
 
         from(file("../docs")) {

@@ -20,6 +20,7 @@
     }
     let lastSyncedTime = 0;
     let fieldImageLoadedYear = null;
+    let fieldImageLoadedSrc = null;
 
     // Resilient offline-first sync & polling state
     let hasUnsavedChanges = false;
@@ -840,31 +841,43 @@
         // 2. Load saved drawings and team positions (offline-first: local then server)
         await loadSavedPlan(currentEventKey, match.matchKey);
 
-        // 3. Fetch field image dynamically for this year (with caching)
-        if (!fieldImageObj || fieldImageLoadedYear !== currentYear) {
-            try {
-                const imageInfo = await Obsidianscout.request(`/api/field-images?year=${currentYear}`, { timeoutMs: 8000 });
-                await loadFieldImage(imageInfo.imagePath);
+        // 3. Fetch field image dynamically for this year (with caching and auto-invalidation on change)
+        try {
+            const imageInfo = await Obsidianscout.request(`/api/field-images?year=${currentYear}`, { timeoutMs: 8000 });
+            const targetPath = (imageInfo && imageInfo.imagePath) ? imageInfo.imagePath : `/assets/images/field-images/${currentYear}/rebuilt.png`;
+            if (!fieldImageObj || fieldImageLoadedYear !== currentYear || fieldImageLoadedSrc !== targetPath) {
+                await loadFieldImage(targetPath);
                 fieldImageLoadedYear = currentYear;
-            } catch (e) {
-                console.warn(`No specific field image found for year ${currentYear}, attempting fallback...`, e);
+                fieldImageLoadedSrc = targetPath;
+            } else {
+                resizeCanvas();
+                renderCanvas();
+                updateFieldMarkerPositions();
+            }
+        } catch (e) {
+            console.warn(`No specific field image found for year ${currentYear}, attempting fallback...`, e);
+            const fallbackPath = `/assets/images/field-images/${currentYear}/rebuilt.png`;
+            if (!fieldImageObj || fieldImageLoadedYear !== currentYear || fieldImageLoadedSrc !== fallbackPath) {
                 try {
-                    await loadFieldImage(`/assets/images/field-images/${currentYear}/rebuilt.png`);
+                    await loadFieldImage(fallbackPath);
                     fieldImageLoadedYear = currentYear;
+                    fieldImageLoadedSrc = fallbackPath;
                 } catch (err2) {
                     try {
-                        await loadFieldImage(`/assets/images/field-images/${currentYear}/reefscape.png`);
+                        const fallbackPath2 = `/assets/images/field-images/${currentYear}/reefscape.png`;
+                        await loadFieldImage(fallbackPath2);
                         fieldImageLoadedYear = currentYear;
+                        fieldImageLoadedSrc = fallbackPath2;
                     } catch (err3) {
                         console.error("Failed to load any field image:", err3);
                         renderPlaceholderField();
                     }
                 }
+            } else {
+                resizeCanvas();
+                renderCanvas();
+                updateFieldMarkerPositions();
             }
-        } else {
-            resizeCanvas();
-            renderCanvas();
-            updateFieldMarkerPositions();
         }
 
         // 4. Render Draggable Square Team Markers on field
@@ -2101,16 +2114,19 @@
 
         notes.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+        // Notes are free text written by scouts (possibly from alliance partner teams): escape them.
+        const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+
         notes.forEach(n => {
             const item = document.createElement("div");
             item.className = "note-card";
             item.innerHTML = `
                 <div class="note-header">
-                    <span>${n.type} | Scouter ${n.scouter || ''}</span>
+                    <span>${esc(n.type)} | Scouter ${esc(n.scouter || '')}</span>
                     <span>${formatDateString(n.date)}</span>
                 </div>
                 <div class="note-body">
-                    <strong>${n.label}:</strong> ${n.text}
+                    <strong>${esc(n.label)}:</strong> ${esc(n.text)}
                 </div>
             `;
             container.appendChild(item);

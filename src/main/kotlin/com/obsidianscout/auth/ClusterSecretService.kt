@@ -43,9 +43,13 @@ object ClusterSecretService {
         }
     }
 
+    // Used only if no secret has been loaded yet. Random per process, so nothing signed with it
+    // can be forged from a well-known value.
+    private val ephemeralFallbackSecret: String by lazy { AppConfigLoader.generateSecret() }
+
     fun getSessionSecret(): String {
         val current = sessionSecretRef.get()
-        return if (current.isNull_or_blank()) "change-me" else current
+        return if (current.isNull_or_blank()) ephemeralFallbackSecret else current
     }
 
     fun getVapidPublicKey(): String = vapidPublicKeyRef.get() ?: ""

@@ -1,5 +1,6 @@
 package com.obsidianscout.admin
 
+import com.obsidianscout.auth.clientIp
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.EmailService
@@ -200,9 +201,7 @@ object ServerErrorAlertService {
         val requestMethod = try { call.request.httpMethod.value } catch (_: Throwable) { "UNKNOWN" }
         val requestUri = try { call.request.uri } catch (_: Throwable) { requestPath }
         val clientIp = try {
-            call.request.headers["CF-Connecting-IP"]
-                ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
-                ?: call.request.origin.remoteHost
+            call.clientIp()
         } catch (_: Throwable) { "Unknown" }
 
         val session = try { call.sessions.get<UserSession>() } catch (_: Throwable) { null }

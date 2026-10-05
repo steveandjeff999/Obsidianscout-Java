@@ -92,28 +92,39 @@ object AuthService {
      * Ensures a SUPERADMIN exists at startup. If none exists, creates one from the seed config.
      */
     fun ensureSeedSuperAdmin(seed: SeedConfig) {
-        transaction {
-            val superAdmin = Users
-                .selectAll().where { (Users.username eq seed.adminUsername) and (Users.teamNumber eq seed.adminTeamNumber) }
+        // Never touch an existing account here: this runs on every boot, and overwriting the
+        // password would undo any change an operator made. Use --reset-superadmin to recover access.
+        val exists = readTransaction {
+            Users.selectAll().where { (Users.username eq seed.adminUsername) and (Users.teamNumber eq seed.adminTeamNumber) }
                 .limit(1)
-                .firstOrNull()
-            if (superAdmin == null) {
-                val hash = hashPassword(seed.adminPassword)
-                Users.insertAndGetId {
-                    it[username] = seed.adminUsername
-                    it[teamNumber] = seed.adminTeamNumber
-                    it[passwordHash] = hash
-                    it[role] = UserRole.SUPERADMIN.name
-                    it[createdAt] = Instant.now()
-                }
-            } else {
-                val hash = hashPassword(seed.adminPassword)
-                Users.update({ Users.id eq superAdmin[Users.id] }) {
-                    it[passwordHash] = hash
-                    it[role] = UserRole.SUPERADMIN.name
-                }
+                .any()
+        }
+        if (exists) return
+
+        val isDefaultPassword = seed.adminPassword.isBlank() || seed.adminPassword.lowercase() in DEFAULT_SEED_PASSWORDS
+        val password = if (isDefaultPassword) generateInitialPassword() else seed.adminPassword
+        val hash = hashPassword(password)
+        transaction {
+            Users.insertAndGetId {
+                it[username] = seed.adminUsername
+                it[teamNumber] = seed.adminTeamNumber
+                it[passwordHash] = hash
+                it[role] = UserRole.SUPERADMIN.name
+                it[createdAt] = Instant.now()
             }
         }
+        if (isDefaultPassword) {
+            println("[ObsidianScout] Created superadmin '${seed.adminUsername}' (team ${seed.adminTeamNumber}) with a generated one-time password: $password")
+            println("[ObsidianScout] Sign in and change it now. This password is not stored anywhere else.")
+        }
+    }
+
+    private val DEFAULT_SEED_PASSWORDS = setOf("change-me", "changeme")
+
+    private fun generateInitialPassword(): String {
+        val bytes = ByteArray(18)
+        java.security.SecureRandom().nextBytes(bytes)
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
 
     fun login(username: String, teamNumber: Int, password: String, program: String = "FRC"): UserRecord? {
@@ -184,9 +195,8 @@ object AuthService {
         if (username.isBlank() || password.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Username and password are required")
         }
-        if (password.length < 4) {
-            throw ApiException(HttpStatusCode.BadRequest, "Password must be at least 4 characters long")
-        }
+        validateUsername(username)
+        validatePassword(password)
         if (teamNumber <= 0) {
             throw ApiException(HttpStatusCode.BadRequest, "A valid team number is required")
         }
@@ -202,6 +212,14 @@ object AuthService {
                 .limit(1)
                 .any()
             if (teamHasUsers) {
+                // Elevated roles on an existing team must be granted by that team's admins,
+                // otherwise anyone could self-register as admin of someone else's team.
+                if (role != UserRole.SCOUT) {
+                    throw ApiException(
+                        HttpStatusCode.Forbidden,
+                        "This team already has accounts. Register as a scout and ask a team admin to change your role."
+                    )
+                }
                 val teamSettings = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber, program)
                 if (teamSettings.registrationLocked) {
                     throw ApiException(
@@ -349,6 +367,8 @@ object AuthService {
         if (username.isBlank() || password.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Username and password are required")
         }
+        validateUsername(username)
+        validatePassword(password)
 
         // Only SUPERADMIN can create another SUPERADMIN
         if (role == UserRole.SUPERADMIN && callerSession.role != UserRole.SUPERADMIN) {
@@ -413,6 +433,7 @@ object AuthService {
         if (newPassword != null && newPassword.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Password cannot be blank")
         }
+        newPassword?.let { validatePassword(it) }
 
         // Hash outside the transaction if needed
         val newHash = newPassword?.takeIf { it.isNotBlank() }
@@ -445,7 +466,7 @@ object AuthService {
 
             // ADMIN restrictions when editing other users
             if (callerSession.role == UserRole.ADMIN && !isSelfUpdate) {
-                if (targetTeam != callerSession.teamNumber) {
+                if (targetTeam != callerSession.teamNumber || !targetProgram.equals(callerSession.program, ignoreCase = true)) {
                     throw ApiException(HttpStatusCode.Forbidden, "Admins can only edit users on their own team")
                 }
                 if (targetRole == UserRole.SUPERADMIN) {
@@ -471,6 +492,9 @@ object AuthService {
                 }
                 if (checkUsername.equals("Deleted User", ignoreCase = true)) {
                     throw ApiException(HttpStatusCode.BadRequest, "Invalid username")
+                }
+                if (checkUsername != targetRow[Users.username]) {
+                    validateUsername(checkUsername)
                 }
             }
 
@@ -517,13 +541,12 @@ object AuthService {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
         }
 
-        val (targetRole, targetTeam) = readTransaction {
+        val (targetRole, targetTeam, targetProgram) = readTransaction {
             val targetRow = Users.selectAll().where { Users.id eq targetUuid }
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "User not found")
             val role = try { UserRole.valueOf(targetRow[Users.role]) } catch (_: Exception) { UserRole.SCOUT }
-            val team = targetRow[Users.teamNumber]
-            Pair(role, team)
+            Triple(role, targetRow[Users.teamNumber], targetRow[Users.program])
         }
 
         val isSelfDelete = callerSession.userId == targetUserId
@@ -534,7 +557,7 @@ object AuthService {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to delete this account")
             }
             if (callerSession.role == UserRole.ADMIN) {
-                if (targetTeam != callerSession.teamNumber) {
+                if (targetTeam != callerSession.teamNumber || !targetProgram.equals(callerSession.program, ignoreCase = true)) {
                     throw ApiException(HttpStatusCode.Forbidden, "Admins can only delete users on their own team")
                 }
                 if (targetRole == UserRole.SUPERADMIN) {
@@ -885,6 +908,30 @@ object AuthService {
             bugReportPreference = row.getOrNull(Users.bugReportPreference) ?: "ask",
             lastLogin = row.getOrNull(Users.lastLogin)?.toString()
         )
+    }
+
+    private val FORBIDDEN_USERNAME_CHARS = setOf('/', '\\', ':', '*', '?', '"', '<', '>', '|', '`')
+
+    /**
+     * Usernames are used in chat file names and rendered in the UI, so reject path separators,
+     * markup characters and control characters. Spaces and other punctuation remain allowed.
+     */
+    fun validateUsername(username: String) {
+        val trimmed = username.trim()
+        if (trimmed.isEmpty() || trimmed.length > 64) {
+            throw ApiException(HttpStatusCode.BadRequest, "Username must be between 1 and 64 characters")
+        }
+        if (trimmed.contains("..") || trimmed.any { it in FORBIDDEN_USERNAME_CHARS || it.isISOControl() }) {
+            throw ApiException(HttpStatusCode.BadRequest, "Username cannot contain '..' or any of: / \\ : * ? \" < > | `")
+        }
+    }
+
+    const val MIN_PASSWORD_LENGTH = 8
+
+    fun validatePassword(password: String) {
+        if (password.length < MIN_PASSWORD_LENGTH) {
+            throw ApiException(HttpStatusCode.BadRequest, "Password must be at least $MIN_PASSWORD_LENGTH characters long")
+        }
     }
 
     private fun hashPassword(password: String): String {

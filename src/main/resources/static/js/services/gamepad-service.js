@@ -673,7 +673,7 @@
             try {
                 const res = await fetch('/api/gamepad/profiles', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                     body: JSON.stringify(profile)
                 });
                 return res.ok;
@@ -693,7 +693,8 @@
 
             try {
                 await fetch(`/api/gamepad/profiles/${encodeURIComponent(profileId)}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
             } catch (_) {}
         }

@@ -2131,6 +2131,7 @@
                     } else {
                         const res = await fetch("/api/admin/snapshots/restore-upload", {
                             method: "POST",
+                            headers: { "X-Requested-With": "XMLHttpRequest" },
                             body: formData
                         });
                         if (!res.ok) throw new Error(`HTTP ${res.status}`);

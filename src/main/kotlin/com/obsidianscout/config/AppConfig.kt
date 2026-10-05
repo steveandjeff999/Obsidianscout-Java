@@ -195,6 +195,13 @@ object AppConfigLoader {
 
             var config = JsonSupport.json.decodeFromString<AppConfig>(text)
 
+            // Generated secrets live in a separate, git-ignored secrets.json next to this file.
+            // Real values found in app-config.json (older installs, operator edits, other writers)
+            // take precedence and are moved into secrets.json below.
+            val storedSecrets = readStoredSecrets(path)
+            val fileHadSecrets = hasRealSecrets(config)
+            config = withSecrets(config, mergeSecrets(config, storedSecrets))
+
             // If the configuration file is missing the new fields, write them back to disk.
             var needsWrite = false
             if (!text.contains("database_type")) {
@@ -209,13 +216,27 @@ object AppConfigLoader {
             if (!text.contains("auto_backup")) {
                 needsWrite = true
             }
-            if (needsWrite) {
-                val updatedText = JsonSupport.json.encodeToString(config)
-                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, updatedText)
-            }
-
             // Auto-rotate any secrets that are still at their shipped default values.
-            config = autoRotateSecrets(config, path)
+            config = autoRotateSecrets(config)
+
+            val finalSecrets = secretsOf(config)
+            val secretsPersisted = if (finalSecrets != storedSecrets) {
+                try {
+                    writeStoredSecrets(path, finalSecrets)
+                    true
+                } catch (e: Exception) {
+                    System.err.println("[AppConfigLoader] Failed to write ${secretsPathFor(path)}: ${e.message}. Leaving secrets in ${path.fileName}.")
+                    false
+                }
+            } else true
+
+            if (needsWrite || (fileHadSecrets && secretsPersisted)) {
+                val toWrite = if (secretsPersisted) stripSecrets(config) else config
+                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, JsonSupport.json.encodeToString(toWrite))
+            }
+            if (secretsPersisted) {
+                scrubSecretsFromBackup(path, config)
+            }
 
             if (path == defaultPath) {
                 cachedConfig = config
@@ -233,7 +254,7 @@ object AppConfigLoader {
             try {
                 val current = load(path, forceReload = true)
                 val updated = current.copy(auto_backup = newConfig)
-                val updatedText = JsonSupport.json.encodeToString(updated)
+                val updatedText = JsonSupport.json.encodeToString(stripSecrets(updated))
                 com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, updatedText)
                 if (path == defaultPath) {
                     cachedConfig = updated
@@ -245,21 +266,109 @@ object AppConfigLoader {
         }
     }
 
+    /** The generated secrets, stored outside the version-controlled app-config.json. */
+    @Serializable
+    data class StoredSecrets(
+        val sessionSecret: String = "",
+        val keystorePassword: String = "",
+        val vapidPublicKey: String = "",
+        val vapidPrivateKey: String = ""
+    )
+
+    private const val SECRET_PLACEHOLDER = "change-me"
+
+    fun secretsPathFor(path: Path): Path = path.resolveSibling("secrets.json")
+
+    private fun isPlaceholder(value: String) = value.isBlank() || value in DEFAULT_SECRET_VALUES
+
+    private fun readStoredSecrets(path: Path): StoredSecrets {
+        val secretsPath = secretsPathFor(path)
+        if (!Files.exists(secretsPath)) return StoredSecrets()
+        return try {
+            JsonSupport.json.decodeFromString<StoredSecrets>(Files.readString(secretsPath))
+        } catch (e: Exception) {
+            System.err.println("[AppConfigLoader] Could not read $secretsPath: ${e.message}")
+            StoredSecrets()
+        }
+    }
+
+    private fun writeStoredSecrets(path: Path, secrets: StoredSecrets) {
+        val secretsPath = secretsPathFor(path)
+        secretsPath.parent?.let { Files.createDirectories(it) }
+        com.obsidianscout.utils.SafeFileUtils.atomicWriteString(secretsPath, JsonSupport.json.encodeToString(secrets))
+    }
+
+    private fun hasRealSecrets(config: AppConfig): Boolean =
+        !isPlaceholder(config.server.sessionSecret) ||
+            !isPlaceholder(config.server.https.keystorePassword) ||
+            config.vapid.privateKey.isNotBlank()
+
+    private fun secretsOf(config: AppConfig) = StoredSecrets(
+        sessionSecret = config.server.sessionSecret,
+        keystorePassword = config.server.https.keystorePassword,
+        vapidPublicKey = config.vapid.publicKey,
+        vapidPrivateKey = config.vapid.privateKey
+    )
+
+    private fun mergeSecrets(config: AppConfig, stored: StoredSecrets): StoredSecrets {
+        val fileHasVapid = config.vapid.publicKey.isNotBlank() && config.vapid.privateKey.isNotBlank()
+        return StoredSecrets(
+            sessionSecret = config.server.sessionSecret.takeUnless { isPlaceholder(it) } ?: stored.sessionSecret,
+            keystorePassword = config.server.https.keystorePassword.takeUnless { isPlaceholder(it) } ?: stored.keystorePassword,
+            vapidPublicKey = if (fileHasVapid) config.vapid.publicKey else stored.vapidPublicKey,
+            vapidPrivateKey = if (fileHasVapid) config.vapid.privateKey else stored.vapidPrivateKey
+        )
+    }
+
+    private fun withSecrets(config: AppConfig, secrets: StoredSecrets): AppConfig = config.copy(
+        server = config.server.copy(
+            sessionSecret = secrets.sessionSecret,
+            https = config.server.https.copy(keystorePassword = secrets.keystorePassword)
+        ),
+        vapid = config.vapid.copy(publicKey = secrets.vapidPublicKey, privateKey = secrets.vapidPrivateKey)
+    )
+
+    /**
+     * Atomic writes keep the previous file as app-config.json.bak, which is also version
+     * controlled. If that backup still holds real secrets (from before they were moved to
+     * secrets.json), replace it with the current secret-free config.
+     */
+    private fun scrubSecretsFromBackup(path: Path, config: AppConfig) {
+        val backupPath = com.obsidianscout.utils.SafeFileUtils.getBackupPath(path)
+        if (!Files.exists(backupPath)) return
+        try {
+            val backupConfig = JsonSupport.json.decodeFromString<AppConfig>(Files.readString(backupPath))
+            if (hasRealSecrets(backupConfig)) {
+                com.obsidianscout.utils.SafeFileUtils.atomicWriteString(
+                    backupPath,
+                    JsonSupport.json.encodeToString(stripSecrets(config)),
+                    createBackup = false
+                )
+            }
+        } catch (e: Exception) {
+            System.err.println("[AppConfigLoader] Could not check $backupPath for secrets: ${e.message}")
+        }
+    }
+
+    /** Copy of [config] safe to write to the version-controlled app-config.json. */
+    fun stripSecrets(config: AppConfig): AppConfig =
+        withSecrets(config, StoredSecrets(SECRET_PLACEHOLDER, SECRET_PLACEHOLDER, "", ""))
+
     /**
      * Checks each secret field. If it is still set to a known default placeholder,
-     * replaces it with a cryptographically random value and persists the updated
-     * config back to disk so the same secret is reused on subsequent startups.
+     * replaces it with a cryptographically random value. The caller persists the
+     * result to secrets.json so the same secret is reused on subsequent startups.
      */
-    private fun autoRotateSecrets(config: AppConfig, path: Path): AppConfig {
+    private fun autoRotateSecrets(config: AppConfig): AppConfig {
         var changed = false
         var keystorePasswordRotated = false
 
-        val sessionSecret = if (config.server.sessionSecret in DEFAULT_SECRET_VALUES) {
+        val sessionSecret = if (config.server.sessionSecret.isBlank() || config.server.sessionSecret in DEFAULT_SECRET_VALUES) {
             changed = true
             generateSecret()
         } else config.server.sessionSecret
 
-        val keystorePassword = if (config.server.https.keystorePassword in DEFAULT_SECRET_VALUES) {
+        val keystorePassword = if (config.server.https.keystorePassword.isBlank() || config.server.https.keystorePassword in DEFAULT_SECRET_VALUES) {
             changed = true
             keystorePasswordRotated = true
             generateSecret()
@@ -302,16 +411,13 @@ object AppConfigLoader {
             )
         )
 
-        val updatedText = JsonSupport.json.encodeToString(updated)
-        com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, updatedText)
-
-        println("[ObsidianScout] Default secrets or VAPID keys detected — auto-generated secure values and saved to ${path.toAbsolutePath()}")
+        println("[ObsidianScout] Default secrets or VAPID keys detected — auto-generated secure values (stored in config/secrets.json).")
 
         return updated
     }
 
     /**
-     * Persists updated session secret and VAPID keys back to config/app-config.json on disk.
+     * Persists updated session secret and VAPID keys to config/secrets.json (not app-config.json).
      */
     fun saveSecretUpdates(
         sessionSecret: String,
@@ -328,12 +434,11 @@ object AppConfigLoader {
                     privateKey = vapidPrivateKey
                 )
             )
-            val updatedText = JsonSupport.json.encodeToString(updated)
-            com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, updatedText)
+            writeStoredSecrets(path, secretsOf(updated))
             if (path == defaultPath) {
                 cachedConfig = updated
             }
-            println("[ObsidianScout] Synchronized updated cluster secrets (Session & VAPID) to ${path.toAbsolutePath()}")
+            println("[ObsidianScout] Synchronized updated cluster secrets (Session & VAPID) to ${secretsPathFor(path).toAbsolutePath()}")
         } catch (e: Exception) {
             println("[ObsidianScout] Warning: Failed to save cluster secrets to config file: ${e.message}")
         }

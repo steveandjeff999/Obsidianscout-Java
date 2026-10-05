@@ -1,5 +1,6 @@
 package com.obsidianscout.routes
 
+import com.obsidianscout.auth.clientIp
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.scouting.AllianceService
@@ -16,7 +17,6 @@ import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.requireAdmin
-import com.obsidianscout.auth.requireAdminOrClusterAuth
 import com.obsidianscout.auth.requireAnalyticsOrAbove
 import com.obsidianscout.auth.requireSession
 import com.obsidianscout.auth.requireSuperAdmin
@@ -108,6 +108,21 @@ import com.obsidianscout.db.ChatService
 import com.obsidianscout.db.ChatMessages
 
 
+internal const val FORGOT_PASSWORD_GENERIC_MESSAGE =
+    "If an account matches those details and has an email address, a password reset link has been sent to it."
+
+/**
+ * Every forgot-password request counts against the shared login limiter (per IP and per
+ * account identifier), which caps email sends and account probing.
+ */
+internal fun checkForgotPasswordRateLimit(ip: String, identifier: String) {
+    val key = "reset:${identifier.trim().lowercase()}"
+    if (!com.obsidianscout.auth.LoginRateLimiter.checkAllowed(ip, key)) {
+        throw com.obsidianscout.auth.ApiException(HttpStatusCode.TooManyRequests, "Too many requests. Please wait 60 seconds.")
+    }
+    com.obsidianscout.auth.LoginRateLimiter.recordFailedAttempt(ip, key)
+}
+
 fun Application.configureRoutes() {
     routing {
         route("/api") {
@@ -145,6 +160,8 @@ fun Application.configureRoutes() {
                     )
                 }
                 get("/probe-node") {
+                    // Probing arbitrary hosts is an inter-node function; never expose it anonymously.
+                    call.requireSuperAdminOrClusterAuth()
                     val targetIp = call.request.queryParameters["targetIp"] ?: ""
                     val appPort = call.request.queryParameters["appPort"]?.toIntOrNull() ?: 8080
                     val dbPort = call.request.queryParameters["dbPort"]?.toIntOrNull() ?: 26257
@@ -170,9 +187,7 @@ fun Application.configureRoutes() {
             route("/auth") {
                 post("/login") {
                     val request = call.receive<LoginRequest>()
-                    val ipAddress = call.request.headers["CF-Connecting-IP"]
-                        ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
-                        ?: call.request.local.remoteHost
+                    val ipAddress = call.clientIp()
 
                     if (!com.obsidianscout.auth.LoginRateLimiter.checkAllowed(ipAddress, request.username)) {
                         throw com.obsidianscout.auth.ApiException(
@@ -250,9 +265,7 @@ fun Application.configureRoutes() {
                 }
                 post("/register") {
                     val request = call.receive<RegisterRequest>()
-                    val ipAddress = call.request.headers["CF-Connecting-IP"]
-                        ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
-                        ?: call.request.local.remoteHost
+                    val ipAddress = call.clientIp()
 
                     if (!com.obsidianscout.auth.LoginRateLimiter.checkAllowed(ipAddress, request.username)) {
                         throw com.obsidianscout.auth.ApiException(
@@ -441,9 +454,7 @@ fun Application.configureRoutes() {
                         )
 
                         val userUuid = UUID.fromString(user.id)
-                        val ipAddress = call.request.headers["CF-Connecting-IP"]
-                            ?: call.request.headers["X-Forwarded-For"]?.split(",")?.firstOrNull()?.trim()
-                            ?: call.request.local.remoteHost
+                        val ipAddress = call.clientIp()
                         val userAgent = call.request.headers["User-Agent"] ?: ""
                         val deviceId = call.request.headers["X-Device-Id"]
                         val deviceName = call.request.headers["X-Device-Name"]
@@ -517,6 +528,7 @@ fun Application.configureRoutes() {
 
                 post("/forgot-password") {
                     val request = call.receive<ForgotPasswordRequest>()
+                    checkForgotPasswordRateLimit(call.clientIp(), request.email ?: "${request.teamNumber}:${request.username}")
                     val smtp = SettingsService.getSmtpSettings()
                     if (smtp.host.isBlank()) {
                         throw com.obsidianscout.auth.ApiException(
@@ -539,10 +551,8 @@ fun Application.configureRoutes() {
                                 .toList()
                         }
                         if (matchedUsers.isEmpty()) {
-                            throw com.obsidianscout.auth.ApiException(
-                                HttpStatusCode.NotFound,
-                                "No accounts found with that email address."
-                            )
+                            call.respond(mapOf("message" to FORGOT_PASSWORD_GENERIC_MESSAGE))
+                            return@post
                         }
                         userEmail = recoverEmail
 
@@ -584,19 +594,12 @@ fun Application.configureRoutes() {
                                 .firstOrNull()
                         }
 
-                        if (user == null) {
-                            throw com.obsidianscout.auth.ApiException(
-                                HttpStatusCode.NotFound,
-                                "User not found on team."
-                            )
-                        }
-
-                        val foundEmail = user[com.obsidianscout.db.Users.email]
-                        if (foundEmail.isNullOrBlank()) {
-                            throw com.obsidianscout.auth.ApiException(
-                                HttpStatusCode.BadRequest,
-                                "This account does not have a registered email address. Please contact your team admin."
-                            )
+                        // Respond identically whether or not the account exists or has an email,
+                        // so this endpoint cannot be used to discover accounts.
+                        val foundEmail = user?.get(com.obsidianscout.db.Users.email)
+                        if (user == null || foundEmail.isNullOrBlank()) {
+                            call.respond(mapOf("message" to FORGOT_PASSWORD_GENERIC_MESSAGE))
+                            return@post
                         }
                         userEmail = foundEmail
                         val userIdVal = user[com.obsidianscout.db.Users.id]
@@ -620,25 +623,9 @@ fun Application.configureRoutes() {
                         }
                     }
 
-                    val referer = call.request.headers["Referer"]
-                    val origin = call.request.headers["Origin"]
-                    val baseUrl = when {
-                        !origin.isNullOrBlank() -> origin.trimEnd('/')
-                        !referer.isNullOrBlank() -> {
-                            runCatching {
-                                val uri = java.net.URI(referer)
-                                "${uri.scheme}://${uri.authority}"
-                            }.getOrNull()
-                        }
-                        else -> null
-                    } ?: run {
-                        val hostHeader = call.request.headers["X-Forwarded-Host"]
-                            ?: call.request.headers["Host"]
-                            ?: "localhost:8080"
-                        val scheme = call.request.headers["X-Forwarded-Proto"] ?: "http"
-                        "$scheme://$hostHeader"
-                    }
-                    
+                    // Links must point at the configured site, never at a request header value.
+                    val baseUrl = AppConfigLoader.load().getEffectiveSiteUrl()
+
                     try {
                         EmailService.sendForgotPasswordEmail(
                             to = userEmail,
@@ -649,13 +636,14 @@ fun Application.configureRoutes() {
                             isApp = request.isApp || (call.request.headers["X-Client"] == "mobile")
                         )
                     } catch (e: Exception) {
+                        call.application.environment.log.error("[forgot-password] Failed to send reset email: ${e.message}")
                         throw com.obsidianscout.auth.ApiException(
                             HttpStatusCode.InternalServerError,
-                            "Failed to send email: ${e.message}"
+                            "Failed to send the reset email. Please try again later or contact an administrator."
                         )
                     }
 
-                    call.respond(mapOf("message" to "Password reset link sent to registered email."))
+                    call.respond(mapOf("message" to FORGOT_PASSWORD_GENERIC_MESSAGE))
                 }
 
                 get("/verify-reset-token") {
@@ -759,6 +747,17 @@ fun Application.configureRoutes() {
                     }
                     
                     transaction {
+                        // Claim the token first so concurrent requests cannot both use it.
+                        val claimed = com.obsidianscout.db.PasswordResetTokens.update({
+                            (com.obsidianscout.db.PasswordResetTokens.id eq tokenRow[com.obsidianscout.db.PasswordResetTokens.id]) and
+                            (com.obsidianscout.db.PasswordResetTokens.used eq false)
+                        }) {
+                            it[used] = true
+                        }
+                        if (claimed == 0) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid or expired reset token.")
+                        }
+
                         com.obsidianscout.auth.AuthService.updateUser(
                             callerSession = com.obsidianscout.auth.UserSession(
                                 userId = finalUserId,
@@ -771,13 +770,9 @@ fun Application.configureRoutes() {
                             newPassword = request.newPassword,
                             newRole = null
                         )
-
-                        com.obsidianscout.db.PasswordResetTokens.update({ 
-                            com.obsidianscout.db.PasswordResetTokens.id eq tokenRow[com.obsidianscout.db.PasswordResetTokens.id] 
-                        }) {
-                            it[used] = true
-                        }
                     }
+                    // A reset usually means the old password may be compromised: sign out everywhere.
+                    com.obsidianscout.auth.AuthService.revokeAllSessions(UUID.fromString(finalUserId))
 
                     call.respond(mapOf("message" to "Credentials have been reset successfully."))
                 }
@@ -785,7 +780,7 @@ fun Application.configureRoutes() {
 
             route("/docs") {
                 get {
-                    val lang = call.request.queryParameters["lang"]?.lowercase() ?: "en"
+                    val lang = call.request.queryParameters["lang"]?.lowercase()?.takeIf { it.matches(Regex("^[a-z]{2}(-[a-z]{2})?$")) } ?: "en"
                     val docsDir = findDocsDir()
                     if (!docsDir.exists()) {
                         call.respond(emptyList<Map<String, String>>())
@@ -818,7 +813,7 @@ fun Application.configureRoutes() {
                     if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid filename")
                     }
-                    val lang = call.request.queryParameters["lang"]?.lowercase() ?: "en"
+                    val lang = call.request.queryParameters["lang"]?.lowercase()?.takeIf { it.matches(Regex("^[a-z]{2}(-[a-z]{2})?$")) } ?: "en"
                     val docsDir = findDocsDir()
                     val baseFile = java.io.File(docsDir, filename)
                     val baseName = baseFile.nameWithoutExtension
@@ -1858,10 +1853,13 @@ fun Application.configureRoutes() {
                         ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).year
                     val result = findFieldImage(yearParam)
                     if (result != null) {
+                        val versionParam = if (result.lastModified > 0) "?v=${result.lastModified}" else ""
                         call.respond(mapOf(
                             "year" to yearParam.toString(),
-                            "imagePath" to result.first,
-                            "imageName" to result.second
+                            "imagePath" to "${result.webPath}$versionParam",
+                            "rawImagePath" to result.webPath,
+                            "imageName" to result.fileName,
+                            "lastModified" to result.lastModified.toString()
                         ))
                     } else {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("No field image found for year $yearParam"))
@@ -2696,7 +2694,7 @@ fun Application.configureRoutes() {
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
                     val request = call.receive<ReactMessageRequest>()
                     try {
-                        val updated = ChatService.toggleReaction(id, session.username, request.emoji)
+                        val updated = ChatService.toggleReaction(id, session.username, request.emoji, session.teamNumber, session.program)
                             ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
                         call.respond(updated)
                     } catch (e: IllegalArgumentException) {
@@ -2834,7 +2832,7 @@ fun Application.configureRoutes() {
             }
 
             webSocket("/ws/notifications") {
-                val session = call.sessions.get<UserSession>() ?: return@webSocket this.close(
+                val session = runCatching { call.requireSession() }.getOrNull() ?: return@webSocket this.close(
                     CloseReason(CloseReason.Codes.VIOLATED_POLICY, "No session")
                 )
                 com.obsidianscout.db.NotificationWebSocketManager.registerSession(session.userId, this)
@@ -3099,7 +3097,7 @@ fun Application.configureRoutes() {
                     call.respond(HttpStatusCode.NoContent)
                 }
                 webSocket("/{id}/collaborate/{kind}") {
-                    val session = call.sessions.get<UserSession>() ?: return@webSocket this.close(
+                    val session = runCatching { call.requireSession() }.getOrNull() ?: return@webSocket this.close(
                         CloseReason(CloseReason.Codes.VIOLATED_POLICY, "No session")
                     )
                     val id = call.parameters["id"] ?: return@webSocket this.close(
@@ -3483,18 +3481,18 @@ fun Application.configureRoutes() {
                         )
                     }
                     get("/nodes") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterNodes())
                     }
                     get("/nodes/local/logs") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
                         val filter = call.request.queryParameters["filter"]
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getNodeLogs(localIp, limit, filter))
                     }
                     get("/nodes/local/app-config") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAppConfig(localIp, isInterNodeCall = true))
                     }
@@ -3515,14 +3513,14 @@ fun Application.configureRoutes() {
                         call.respond(com.obsidianscout.admin.ClusterManagementService.forceReinstallUpdateNode(localIp))
                     }
                     get("/nodes/{ip}/logs") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val ip = call.parameters["ip"] ?: "local"
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
                         val filter = call.request.queryParameters["filter"]
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getNodeLogs(ip, limit, filter))
                     }
                     get("/nodes/{ip}/app-config") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val ip = call.parameters["ip"] ?: "local"
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAppConfig(ip))
                     }
@@ -3685,7 +3683,7 @@ fun Application.configureRoutes() {
                         )
                     }
                     get("/logs-all") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 500
                         val filter = call.request.queryParameters["filter"]
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAllClusterLogs(limit, filter))
@@ -3693,7 +3691,7 @@ fun Application.configureRoutes() {
 
                     // Quorum Fallback Mirror Management
                     get("/quorum-fallback") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterQuorumFallbackStatus())
                     }
                     post("/quorum-fallback/toggle") {
@@ -3712,7 +3710,7 @@ fun Application.configureRoutes() {
                         call.respond(com.obsidianscout.admin.ClusterManagementService.syncQuorumFallback(req.targetIp))
                     }
                     get("/quorum-fallback/inspect") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val targetIp = call.request.queryParameters["targetIp"] ?: "local"
                         call.respond(com.obsidianscout.admin.ClusterManagementService.inspectNodeQuorumFallback(targetIp))
                     }
@@ -3722,12 +3720,12 @@ fun Application.configureRoutes() {
                         call.respond(com.obsidianscout.admin.ClusterManagementService.updateNodeQuorumFallbackConfig(req))
                     }
                     get("/nodes/local/quorum-fallback/status") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.db.QuorumFallbackStore.getStatus(localIp))
                     }
                     get("/nodes/local/quorum-fallback/inspect") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.db.QuorumFallbackStore.inspect(localIp))
                     }
@@ -3755,7 +3753,7 @@ fun Application.configureRoutes() {
 
                     // Automated SQLite Backup Management (Per-Server / Cluster-Wide)
                     get("/auto-backup") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterAutoBackupStatus())
                     }
                     post("/auto-backup/toggle") {
@@ -3774,7 +3772,7 @@ fun Application.configureRoutes() {
                         call.respond(com.obsidianscout.admin.ClusterManagementService.createNodeSnapshot(req.targetIp))
                     }
                     get("/nodes/local/auto-backup/status") {
-                        call.requireAdminOrClusterAuth()
+                        call.requireSuperAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.db.SnapshotService.getLocalNodeStatus().copy(isLocal = true, nodeIp = localIp))
                     }
@@ -3962,39 +3960,39 @@ fun Application.configureRoutes() {
             route("/shares") {
                 post {
                     val appConfig = AppConfigLoader.load()
-                    val session = call.resolveSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val session = call.resolveSessionOrMobileJwt(com.obsidianscout.auth.ClusterSecretService.getSessionSecret())
                     val req = call.receive<com.obsidianscout.scouting.CreateShareRequest>()
                     val origin = call.request.headers["Origin"] ?: call.request.headers["Host"]?.let { "http://$it" } ?: ""
                     call.respond(com.obsidianscout.scouting.ShareService.createShare(session, req, origin))
                 }
                 get("/team") {
                     val appConfig = AppConfigLoader.load()
-                    val session = call.resolveSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val session = call.resolveSessionOrMobileJwt(com.obsidianscout.auth.ClusterSecretService.getSessionSecret())
                     val statusFilter = call.request.queryParameters["status"]
                     val origin = call.request.headers["Origin"] ?: call.request.headers["Host"]?.let { "http://$it" } ?: ""
                     call.respond(com.obsidianscout.scouting.ShareService.listTeamShares(session.teamNumber, session.program, statusFilter, origin))
                 }
                 get("/resolve/{token}") {
                     val appConfig = AppConfigLoader.load()
-                    val session = call.optionalSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val session = call.optionalSessionOrMobileJwt(com.obsidianscout.auth.ClusterSecretService.getSessionSecret())
                     val token = call.parameters["token"] ?: throw ApiException(HttpStatusCode.BadRequest, "Missing token")
                     val pin = call.request.queryParameters["pin"]
-                    val clientIp = call.request.headers["X-Forwarded-For"]?.substringBefore(",")?.trim() ?: call.request.local.remoteHost
+                    val clientIp = call.clientIp()
                     val userAgent = call.request.headers[HttpHeaders.UserAgent]
                     call.respond(com.obsidianscout.scouting.ShareService.resolveShare(token, pin, session, clientIp, userAgent))
                 }
                 post("/verify-pin/{token}") {
                     val appConfig = AppConfigLoader.load()
-                    val session = call.optionalSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val session = call.optionalSessionOrMobileJwt(com.obsidianscout.auth.ClusterSecretService.getSessionSecret())
                     val token = call.parameters["token"] ?: throw ApiException(HttpStatusCode.BadRequest, "Missing token")
                     val req = call.receive<com.obsidianscout.scouting.VerifyPinRequest>()
-                    val clientIp = call.request.headers["X-Forwarded-For"]?.substringBefore(",")?.trim() ?: call.request.local.remoteHost
+                    val clientIp = call.clientIp()
                     val userAgent = call.request.headers[HttpHeaders.UserAgent]
                     call.respond(com.obsidianscout.scouting.ShareService.resolveShare(token, req.pin, session, clientIp, userAgent))
                 }
                 patch("/{token}") {
                     val appConfig = AppConfigLoader.load()
-                    val session = call.resolveSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val session = call.resolveSessionOrMobileJwt(com.obsidianscout.auth.ClusterSecretService.getSessionSecret())
                     val token = call.parameters["token"] ?: throw ApiException(HttpStatusCode.BadRequest, "Missing token")
                     val req = call.receive<com.obsidianscout.scouting.UpdateShareRequest>()
                     val origin = call.request.headers["Origin"] ?: call.request.headers["Host"]?.let { "http://$it" } ?: ""
@@ -4002,13 +4000,13 @@ fun Application.configureRoutes() {
                 }
                 delete("/{token}") {
                     val appConfig = AppConfigLoader.load()
-                    val session = call.resolveSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val session = call.resolveSessionOrMobileJwt(com.obsidianscout.auth.ClusterSecretService.getSessionSecret())
                     val token = call.parameters["token"] ?: throw ApiException(HttpStatusCode.BadRequest, "Missing token")
                     call.respond(mapOf("success" to com.obsidianscout.scouting.ShareService.deleteShare(token, session)))
                 }
                 post("/{token}/revoke") {
                     val appConfig = AppConfigLoader.load()
-                    val session = call.resolveSessionOrMobileJwt(appConfig.server.sessionSecret)
+                    val session = call.resolveSessionOrMobileJwt(com.obsidianscout.auth.ClusterSecretService.getSessionSecret())
                     val token = call.parameters["token"] ?: throw ApiException(HttpStatusCode.BadRequest, "Missing token")
                     call.respond(mapOf("success" to com.obsidianscout.scouting.ShareService.revokeShare(token, session)))
                 }
@@ -4238,7 +4236,9 @@ private fun findDocsDir(): java.io.File {
     return java.io.File("docs")
 }
 
-private fun findFieldImage(year: Int): Pair<String, String>? {
+private data class FieldImageResult(val webPath: String, val fileName: String, val lastModified: Long)
+
+private fun findFieldImage(year: Int): FieldImageResult? {
     val supportedExts = setOf("png", "jpg", "jpeg", "webp")
     val candidateDirs = listOf(
         File("static/assets/images/field-images/$year"),
@@ -4250,7 +4250,7 @@ private fun findFieldImage(year: Int): Pair<String, String>? {
         if (dir.exists() && dir.isDirectory) {
             val file = dir.listFiles()?.firstOrNull { it.isFile && it.extension.lowercase() in supportedExts }
             if (file != null) {
-                return Pair("/assets/images/field-images/$year/${file.name}", file.name)
+                return FieldImageResult("/assets/images/field-images/$year/${file.name}", file.name, file.lastModified())
             }
         }
     }
@@ -4261,7 +4261,7 @@ private fun findFieldImage(year: Int): Pair<String, String>? {
             if (uri.scheme == "file") {
                 val file = File(uri).listFiles()?.firstOrNull { it.isFile && it.extension.lowercase() in supportedExts }
                 if (file != null) {
-                    return Pair("/assets/images/field-images/$year/${file.name}", file.name)
+                    return FieldImageResult("/assets/images/field-images/$year/${file.name}", file.name, file.lastModified())
                 }
             }
         }
@@ -4271,18 +4271,22 @@ private fun findFieldImage(year: Int): Pair<String, String>? {
     return null
 }
 
-fun ApplicationCall.optionalSessionOrMobileJwt(jwtSecret: String): UserSession? {
-    val session = sessions.get<UserSession>()
-    if (session != null) return session
+/**
+ * Resolves a web session or mobile JWT, going through the same database checks as the rest of
+ * the API (revoked sessions, deleted accounts, current role/team) rather than trusting the token.
+ */
+suspend fun ApplicationCall.optionalSessionOrMobileJwt(jwtSecret: String): UserSession? {
+    if (sessions.get<UserSession>() != null) {
+        return runCatching { requireSession() }.getOrNull()
+    }
     val authHeader = request.headers["Authorization"]
     if (authHeader != null && authHeader.startsWith("Bearer ", ignoreCase = true)) {
-        val token = authHeader.removePrefix("Bearer ").trim()
-        return JwtHelper.verifyToken(token, jwtSecret)
+        return runCatching { requireMobileSession(jwtSecret) }.getOrNull()
     }
     return null
 }
 
-fun ApplicationCall.resolveSessionOrMobileJwt(jwtSecret: String): UserSession {
+suspend fun ApplicationCall.resolveSessionOrMobileJwt(jwtSecret: String): UserSession {
     return optionalSessionOrMobileJwt(jwtSecret) ?: throw ApiException(HttpStatusCode.Unauthorized, "Authentication required")
 }
 

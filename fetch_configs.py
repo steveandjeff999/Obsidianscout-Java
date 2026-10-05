@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import urllib.request
@@ -6,12 +7,19 @@ import urllib.error
 def fetch_configs(base_url="http://localhost:8080"):
     print(f"Connecting to ObsidianScout server at {base_url}...")
 
-    # 1. Login to obtain JWT Token
+    # 1. Login to obtain JWT Token. Credentials come from the environment; never hard-code them.
+    username = os.environ.get("OBSIDIAN_USERNAME")
+    password = os.environ.get("OBSIDIAN_PASSWORD")
+    team_number = os.environ.get("OBSIDIAN_TEAM_NUMBER")
+    if not username or not password or not team_number:
+        print("Set OBSIDIAN_USERNAME, OBSIDIAN_PASSWORD and OBSIDIAN_TEAM_NUMBER before running this script.")
+        sys.exit(1)
+
     login_url = f"{base_url}/api/mobile/auth/login"
     login_data = {
-        "username": "Seth Herod",
-        "password": "5454",
-        "team_number": 5454
+        "username": username,
+        "password": password,
+        "team_number": int(team_number)
     }
     
     req_body = json.dumps(login_data).encode("utf-8")

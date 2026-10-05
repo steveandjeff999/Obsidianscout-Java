@@ -1,9 +1,38 @@
 package com.obsidianscout.auth
 
+import io.ktor.server.application.ApplicationCall
 import kotlinx.coroutines.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+
+/**
+ * Resolves the client IP for rate limiting and audit logs.
+ *
+ * Forwarding headers are only honoured when the direct peer is a proxy we run ourselves:
+ * loopback (cloudflared, the built-in HTTPS proxy, a local reverse proxy) or a Tailscale
+ * cluster peer (100.64.0.0/10). Anyone else could set those headers to any value.
+ */
+fun ApplicationCall.clientIp(): String {
+    val peer = request.local.remoteAddress
+    if (!isTrustedProxyAddress(peer)) return peer
+
+    request.headers["CF-Connecting-IP"]?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    val forwarded = request.headers.getAll("X-Forwarded-For")
+        ?.flatMap { it.split(",") }
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+    // The right-most entry was appended by the trusted proxy; earlier entries are client-supplied.
+    return forwarded?.lastOrNull() ?: peer
+}
+
+private fun isTrustedProxyAddress(address: String): Boolean {
+    val inet = runCatching { java.net.InetAddress.getByName(address) }.getOrNull() ?: return false
+    if (inet.isLoopbackAddress) return true
+    val bytes = inet.address
+    // Tailscale CGNAT range 100.64.0.0/10
+    return bytes.size == 4 && (bytes[0].toInt() and 0xFF) == 100 && (bytes[1].toInt() and 0xC0) == 64
+}
 
 object LoginRateLimiter {
 

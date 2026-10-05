@@ -346,8 +346,10 @@ object ClusterManagementService {
 
     fun checkNodeResponsiveFromPeerNode(peerIp: String, targetIp: String, appPort: Int, dbPort: Int): Boolean? {
         return try {
-            val req = HttpRequest.newBuilder()
-                .uri(URI.create("http://$peerIp:$appPort/api/cluster/probe-node?targetIp=$targetIp&appPort=$appPort&dbPort=$dbPort"))
+            val req = buildSignedClusterRequest(
+                "http://$peerIp:$appPort/api/cluster/probe-node?targetIp=$targetIp&appPort=$appPort&dbPort=$dbPort",
+                "GET"
+            )
                 .timeout(Duration.ofSeconds(4))
                 .GET()
                 .build()

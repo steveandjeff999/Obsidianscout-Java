@@ -252,7 +252,7 @@ object QuorumFallbackStore {
                 val updated = current.copy(
                     quorum_fallback = current.quorum_fallback.copy(enabled = false)
                 )
-                val text = com.obsidianscout.config.JsonSupport.json.encodeToString(com.obsidianscout.config.AppConfig.serializer(), updated)
+                val text = com.obsidianscout.config.JsonSupport.json.encodeToString(com.obsidianscout.config.AppConfig.serializer(), AppConfigLoader.stripSecrets(updated))
                 Files.writeString(Paths.get("config", "app-config.json"), text)
                 AppConfigLoader.updateCache(updated)
             } catch (e: Exception) {
@@ -271,7 +271,7 @@ object QuorumFallbackStore {
         val updated = current.copy(
             quorum_fallback = current.quorum_fallback.copy(enabled = true)
         )
-        val text = com.obsidianscout.config.JsonSupport.json.encodeToString(com.obsidianscout.config.AppConfig.serializer(), updated)
+        val text = com.obsidianscout.config.JsonSupport.json.encodeToString(com.obsidianscout.config.AppConfig.serializer(), AppConfigLoader.stripSecrets(updated))
         Files.writeString(Paths.get("config", "app-config.json"), text)
         AppConfigLoader.updateCache(updated)
 
@@ -295,7 +295,7 @@ object QuorumFallbackStore {
 
         if (updateConfigFile) {
             try {
-                val text = com.obsidianscout.config.JsonSupport.json.encodeToString(com.obsidianscout.config.AppConfig.serializer(), updated)
+                val text = com.obsidianscout.config.JsonSupport.json.encodeToString(com.obsidianscout.config.AppConfig.serializer(), AppConfigLoader.stripSecrets(updated))
                 Files.writeString(Paths.get("config", "app-config.json"), text)
                 AppConfigLoader.updateCache(updated)
             } catch (e: Exception) {

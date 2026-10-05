@@ -469,12 +469,90 @@ class AuthServiceTest {
             AuthService.register(
                 username = "short_pw_user",
                 teamNumber = 1111,
-                password = "123",
+                password = "1234567",
                 program = "FRC",
                 role = UserRole.SCOUT
             )
         }
         assertEquals(HttpStatusCode.BadRequest, ex.status)
-        assertEquals("Password must be at least 4 characters long", ex.message)
+        assertEquals("Password must be at least 8 characters long", ex.message)
+    }
+
+    @Test
+    fun testSelfRegisterAsAdminOnlyAllowedForNewTeam() {
+        val first = AuthService.register(
+            username = "founder",
+            teamNumber = 3333,
+            password = "Password123!",
+            program = "FRC",
+            role = UserRole.ADMIN
+        )
+        assertEquals(UserRole.ADMIN, first.role)
+
+        for (elevated in listOf(UserRole.ADMIN, UserRole.ANALYTICS)) {
+            val ex = assertFailsWith<ApiException> {
+                AuthService.register(
+                    username = "newcomer_${elevated.name}",
+                    teamNumber = 3333,
+                    password = "Password123!",
+                    program = "FRC",
+                    role = elevated
+                )
+            }
+            assertEquals(HttpStatusCode.Forbidden, ex.status)
+        }
+
+        val scout = AuthService.register(
+            username = "newcomer_scout",
+            teamNumber = 3333,
+            password = "Password123!",
+            program = "FRC",
+            role = UserRole.SCOUT
+        )
+        assertEquals(UserRole.SCOUT, scout.role)
+    }
+
+    @Test
+    fun testUsernamesWithPathOrMarkupCharactersAreRejected() {
+        for (bad in listOf("../5455/alice", "a/b", "a\\b", "<img>", "x\u0000y", "..")) {
+            val ex = assertFailsWith<ApiException>("username '$bad' should be rejected") {
+                AuthService.register(
+                    username = bad,
+                    teamNumber = 4444,
+                    password = "Password123!",
+                    program = "FRC",
+                    role = UserRole.SCOUT
+                )
+            }
+            assertEquals(HttpStatusCode.BadRequest, ex.status)
+        }
+        // Spaces and ordinary punctuation remain valid.
+        val ok = AuthService.register(
+            username = "Seth Herod-2",
+            teamNumber = 4444,
+            password = "Password123!",
+            program = "FRC",
+            role = UserRole.SCOUT
+        )
+        assertEquals("Seth Herod-2", ok.username)
+    }
+
+    @Test
+    fun testSeedSuperAdminNeverOverwritesExistingAccount() {
+        val seed = com.obsidianscout.config.SeedConfig(adminUsername = "superadmin", adminTeamNumber = 0, adminPassword = "OperatorChosen1!")
+        AuthService.ensureSeedSuperAdmin(seed)
+        assertNotNull(AuthService.login("superadmin", 0, "OperatorChosen1!"))
+
+        // A later boot with a different configured password must not reset the account.
+        AuthService.ensureSeedSuperAdmin(seed.copy(adminPassword = "change-me"))
+        assertNotNull(AuthService.login("superadmin", 0, "OperatorChosen1!"))
+        assertNull(AuthService.login("superadmin", 0, "change-me"))
+    }
+
+    @Test
+    fun testSeedSuperAdminNeverUsesDefaultPassword() {
+        val seed = com.obsidianscout.config.SeedConfig(adminUsername = "fresh_superadmin", adminTeamNumber = 0, adminPassword = "change-me")
+        AuthService.ensureSeedSuperAdmin(seed)
+        assertNull(AuthService.login("fresh_superadmin", 0, "change-me"))
     }
 }

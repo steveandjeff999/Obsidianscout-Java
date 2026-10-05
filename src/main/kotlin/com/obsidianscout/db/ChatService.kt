@@ -551,9 +551,19 @@ object ChatService {
         ChatMessages.deleteWhere { ChatMessages.id eq msgUuid } > 0
     }
 
-    fun toggleReaction(id: String, username: String, emoji: String): ChatMessageDto? = transaction {
+    /** Reactions are rendered by clients, so only accept a short emoji-like token. */
+    fun isValidReaction(emoji: String): Boolean =
+        emoji.isNotBlank() && emoji.length <= 32 &&
+            emoji.none { it.isISOControl() || it.isWhitespace() || it in "<>&\"'`=/\\" || it.isLetterOrDigit() }
+
+    fun toggleReaction(id: String, username: String, emoji: String, teamNumber: Int, program: String): ChatMessageDto? = transaction {
+        if (!isValidReaction(emoji)) {
+            throw IllegalArgumentException("Invalid reaction")
+        }
         val msgUuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction null
-        val row = ChatMessages.selectAll().where { ChatMessages.id eq msgUuid }.firstOrNull() ?: return@transaction null
+        val row = ChatMessages.selectAll().where {
+            (ChatMessages.id eq msgUuid) and (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.program eq program)
+        }.firstOrNull() ?: return@transaction null
         if (row[ChatMessages.username] == username) {
             throw IllegalArgumentException("Cannot react to your own message")
         }

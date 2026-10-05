@@ -601,7 +601,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const pill = document.createElement("span");
                 const hasReacted = users.includes(me.username);
                 pill.className = `reaction-pill ${hasReacted ? "active" : ""} ${isMe ? "readonly" : ""}`;
-                pill.innerHTML = `<span>${emoji}</span><span>${users.length}</span>`;
+                // Reaction keys come from other users: render as text, never as HTML.
+                const emojiSpan = document.createElement("span");
+                emojiSpan.textContent = emoji;
+                const countSpan = document.createElement("span");
+                countSpan.textContent = String(users.length);
+                pill.append(emojiSpan, countSpan);
                 pill.title = users.join(", ");
                 if (!isMe) {
                     pill.addEventListener("click", () => {

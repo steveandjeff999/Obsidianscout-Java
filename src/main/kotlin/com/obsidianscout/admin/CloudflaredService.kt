@@ -290,7 +290,8 @@ object CloudflaredService {
             val p = pb.start()
             process = p
             lastStatusMessage = "Tunnel process launched (PID ${p.pid()})"
-            println("[CloudflaredService] Started cloudflared process (PID ${p.pid()}) with command: ${command.joinToString(" ")}")
+            val loggedCommand = command.mapIndexed { i, arg -> if (i > 0 && command[i - 1] == "--token") "<redacted>" else arg }
+            println("[CloudflaredService] Started cloudflared process (PID ${p.pid()}) with command: ${loggedCommand.joinToString(" ")}")
         } catch (e: Exception) {
             lastStatusMessage = "Failed to start tunnel: ${e.message}"
             println("[CloudflaredService] Error starting cloudflared: ${e.message}")

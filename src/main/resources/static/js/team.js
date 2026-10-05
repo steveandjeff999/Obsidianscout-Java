@@ -1,3 +1,14 @@
+// Scouting data, field labels and usernames are user-supplied: escape before putting them in innerHTML.
+function escText(value) {
+    if (value === null || value === undefined) return "";
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 let currentUser = null;
 let currentEventKey = "";
 let currentTeamNumber = null;
@@ -544,9 +555,9 @@ function renderQualFeedback(qualEntries) {
             <div class="qual-feedback-card">
                 <div class="qual-feedback-header">
                     <span class="qual-match-badge">${matchLabel}</span>
-                    <span class="qual-meta">Scouted by ${scouterName} • ${dateStr}</span>
+                    <span class="qual-meta">Scouted by ${escText(scouterName)} • ${dateStr}</span>
                 </div>
-                <div class="qual-feedback-body">${notes}</div>
+                <div class="qual-feedback-body">${escText(notes)}</div>
             </div>
         `;
     }).join("");
@@ -574,15 +585,15 @@ function renderPitDetails() {
                 const formatted = formatFieldValue(f, val);
                 return `
                     <div class="pit-profile-item">
-                        <span class="pit-profile-label">${localize(f.label)}</span>
-                        <strong class="pit-profile-value">${formatted}</strong>
+                        <span class="pit-profile-label">${escText(localize(f.label))}</span>
+                        <strong class="pit-profile-value">${escText(formatted)}</strong>
                     </div>
                 `;
             }).join("");
 
             return `
                 <div class="pit-profile-section">
-                    ${group.title ? `<h3 class="pit-section-header">${group.title}</h3>` : ''}
+                    ${group.title ? `<h3 class="pit-section-header">${escText(group.title)}</h3>` : ''}
                     <div class="pit-section-grid">
                         ${fieldsHtml}
                     </div>
@@ -592,8 +603,8 @@ function renderPitDetails() {
     } else {
         const items = Object.entries(d).filter(([k]) => !RESERVED_FIELDS.has(k)).map(([k, v]) => `
             <div class="pit-profile-item">
-                <span class="pit-profile-label">${k}</span>
-                <strong class="pit-profile-value">${v}</strong>
+                <span class="pit-profile-label">${escText(k)}</span>
+                <strong class="pit-profile-value">${escText(v)}</strong>
             </div>
         `).join("");
         container.innerHTML = `<div class="pit-section-grid">${items}</div>`;
@@ -749,8 +760,8 @@ function renderScoutingRecords() {
             <div class="record-card-header">
                 <div class="record-card-header-left">
                     <span class="record-type-badge ${recordTypeClass === "qual" ? "qual" : recordTypeClass}">${entry.type}</span>
-                    <span class="record-meta-text">${metaText}</span>
-                    <span class="record-date-text">| Scouter: ${scouterName} | ${formatDateTime(entry.createdAt)}</span>
+                    <span class="record-meta-text">${escText(metaText)}</span>
+                    <span class="record-date-text">| Scouter: ${escText(scouterName)} | ${formatDateTime(entry.createdAt)}</span>
                 </div>
                 <div class="record-card-expand-icon">&#9662;</div>
             </div>

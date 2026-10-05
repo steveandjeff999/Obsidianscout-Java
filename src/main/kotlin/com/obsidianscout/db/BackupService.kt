@@ -716,6 +716,24 @@ object BackupService {
                 return if (isGlobalImport) originalTeam else targetTeamNumber
             }
 
+            // Only superadmins may import elevated roles. Everyone else gets roles clamped to
+            // team-level roles so an uploaded file cannot mint a SUPERADMIN account.
+            val teamImportableRoles = setOf(
+                com.obsidianscout.auth.UserRole.ADMIN.name,
+                com.obsidianscout.auth.UserRole.ANALYTICS.name,
+                com.obsidianscout.auth.UserRole.SCOUT.name
+            )
+            fun sanitizeImportedRole(role: String): String {
+                val normalized = role.trim().uppercase()
+                val isKnown = runCatching { com.obsidianscout.auth.UserRole.valueOf(normalized) }.isSuccess
+                return when {
+                    !isKnown -> com.obsidianscout.auth.UserRole.SCOUT.name
+                    isSuperAdmin -> normalized
+                    normalized in teamImportableRoles -> normalized
+                    else -> com.obsidianscout.auth.UserRole.SCOUT.name
+                }
+            }
+
             // 1. Users mapping: (username, teamNumber) -> target UserId
             val userMap = mutableMapOf<Pair<String, Int>, UUID>()
             
@@ -737,7 +755,7 @@ object BackupService {
                             it[username] = u.username
                             it[teamNumber] = assignedTeam
                             it[passwordHash] = u.passwordHash
-                            it[role] = u.role
+                            it[role] = sanitizeImportedRole(u.role)
                             it[createdAt] = Instant.ofEpochMilli(u.createdAt)
                             it[email] = u.email
                             it[profilePicture] = u.profilePicture

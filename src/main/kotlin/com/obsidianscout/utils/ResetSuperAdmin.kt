@@ -23,10 +23,15 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
  * Or directly with the JAR:
  *   java -cp obsidianscout-server.jar com.obsidianscout.utils.ResetSuperAdminKt [newPassword]
  *
- * If no password argument is supplied, the password is reset to "changeme".
+ * If no password argument is supplied, a random password is generated and printed once.
  */
 fun runResetSuperAdmin(args: Array<String>) {
-    val newPassword = args.firstOrNull()?.takeIf { it.isNotBlank() } ?: "changeme"
+    val supplied = args.firstOrNull()?.takeIf { it.isNotBlank() }
+    val newPassword = supplied ?: run {
+        val bytes = ByteArray(18)
+        java.security.SecureRandom().nextBytes(bytes)
+        java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+    }
 
     println("========================================================================")
     println("  ObsidianScout – Reset Superadmin Utility")
@@ -83,8 +88,8 @@ fun runResetSuperAdmin(args: Array<String>) {
         println("  - ID $id  |  username: $username  |  team: $team")
     }
     println()
-    if (newPassword == "changeme") {
-        println("Password has been reset to: changeme")
+    if (supplied == null) {
+        println("Password has been reset to this generated value: $newPassword")
         println("Default username is: superadmin (unless you changed it)")
         println("Log in and change the password as soon as possible.")
     } else {

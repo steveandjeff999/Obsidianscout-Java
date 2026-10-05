@@ -142,6 +142,28 @@ object ShareService {
         }
     }
 
+    // Failed PIN attempts, tracked per link and per (link, client IP), so short PINs cannot be guessed.
+    private const val PIN_WINDOW_MS = 15 * 60_000L
+    private const val MAX_PIN_FAILURES_PER_LINK = 20
+    private const val MAX_PIN_FAILURES_PER_CLIENT = 5
+    private val pinFailures = java.util.concurrent.ConcurrentHashMap<String, MutableList<Long>>()
+
+    private fun recentPinFailures(key: String, now: Long): Int {
+        val list = pinFailures[key] ?: return 0
+        synchronized(list) {
+            list.removeIf { now - it > PIN_WINDOW_MS }
+            return list.size
+        }
+    }
+
+    private fun recordPinFailure(key: String, now: Long) {
+        val list = pinFailures.computeIfAbsent(key) { mutableListOf() }
+        synchronized(list) { list.add(now) }
+        if (pinFailures.size > 10_000) {
+            pinFailures.entries.removeIf { (_, l) -> synchronized(l) { l.all { now - it > PIN_WINDOW_MS } } }
+        }
+    }
+
     fun createShare(session: UserSession, request: CreateShareRequest, baseUrl: String = ""): ShareLinkDTO {
         val trimmedTitle = request.title.trim()
         if (trimmedTitle.isEmpty()) {
@@ -426,7 +448,17 @@ object ShareService {
                 )
             }
 
+            val nowMs = System.currentTimeMillis()
+            val linkKey = "link:$token"
+            val clientKey = "client:$token:${clientIp ?: "unknown"}"
+            if (recentPinFailures(linkKey, nowMs) >= MAX_PIN_FAILURES_PER_LINK ||
+                recentPinFailures(clientKey, nowMs) >= MAX_PIN_FAILURES_PER_CLIENT) {
+                throw ApiException(HttpStatusCode.TooManyRequests, "Too many incorrect PIN attempts. Please try again in 15 minutes.")
+            }
+
             if (!verifyPin(pin.trim(), pinHash)) {
+                recordPinFailure(linkKey, nowMs)
+                recordPinFailure(clientKey, nowMs)
                 return ResolvedSharePayload(
                     token = token,
                     title = row[SharedLinks.title],
@@ -588,7 +620,7 @@ object ShareService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Share link not found")
 
             // Team check
-            if (target[SharedLinks.ownerTeamNumber] != session.teamNumber && session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+            if ((target[SharedLinks.ownerTeamNumber] != session.teamNumber || !target[SharedLinks.program].equals(session.program, ignoreCase = true)) && session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to revoke this link")
             }
 
@@ -606,7 +638,7 @@ object ShareService {
             val target = SharedLinks.selectAll().where { SharedLinks.token eq token }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Share link not found")
 
-            if (target[SharedLinks.ownerTeamNumber] != session.teamNumber && session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+            if ((target[SharedLinks.ownerTeamNumber] != session.teamNumber || !target[SharedLinks.program].equals(session.program, ignoreCase = true)) && session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to update this link")
             }
 
@@ -658,7 +690,7 @@ object ShareService {
             val target = SharedLinks.selectAll().where { SharedLinks.token eq token }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Share link not found")
 
-            if (target[SharedLinks.ownerTeamNumber] != session.teamNumber && session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+            if ((target[SharedLinks.ownerTeamNumber] != session.teamNumber || !target[SharedLinks.program].equals(session.program, ignoreCase = true)) && session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to delete this link")
             }
 

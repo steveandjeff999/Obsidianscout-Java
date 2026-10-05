@@ -284,8 +284,11 @@ self.addEventListener('fetch', (event) => {
     }
 
     // 2. Static assets (JS, CSS, images, vendor libraries): Stale-While-Revalidate (fetch updated versions in background)
+    // If request has query parameters (e.g. ?v=... or ?t=... cache-busters), check exact cache match first
+    // so new versions fetch fresh from the network immediately instead of serving old stale cache.
+    const matchOptions = url.search ? {} : { ignoreSearch: true };
     event.respondWith(
-        caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
+        caches.match(event.request, matchOptions).then((cachedResponse) => {
             const fetchPromise = fetch(event.request).then((networkResponse) => {
                 if (networkResponse.status === 200) {
                     const responseClone = networkResponse.clone();
@@ -305,6 +308,12 @@ self.addEventListener('fetch', (event) => {
             }
 
             return fetchPromise.catch(() => {
+                if (url.search) {
+                    // Fallback to cached version without query params if offline
+                    return caches.match(event.request, { ignoreSearch: true }).then((fallback) => {
+                        return fallback || new Response('Offline resource not cached', { status: 503, statusText: 'Offline' });
+                    });
+                }
                 return new Response('Offline resource not cached', { status: 503, statusText: 'Offline' });
             });
         })
