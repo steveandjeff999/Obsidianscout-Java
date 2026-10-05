@@ -328,6 +328,8 @@ data class ApiSettingsPayload(
     val activeThemeName: String = "",
     val setupWizardCompleted: Boolean = false,
     val registrationLocked: Boolean = false,
+    /** Roles allowed on the create-account page. Omitted (null) on save keeps the team's current value. */
+    val selfRegisterRoles: List<String>? = null,
     val program: String = "FRC",
     val statboticsBaseUrl: String = "https://api.statbotics.io",
     val match13BaseUrl: String = "https://actions.match13.com"

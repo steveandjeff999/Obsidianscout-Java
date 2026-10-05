@@ -64,6 +64,15 @@ data class LoadBalancerSettings(
     )
 )
 
+/** Roles a new user may pick on the create-account page. All are allowed unless a team admin changes it. */
+val DEFAULT_SELF_REGISTER_ROLES = listOf("ADMIN", "ANALYTICS", "SCOUT")
+
+/** Keeps only valid self-registration roles, uppercased, de-duplicated and in a stable order. */
+fun normalizeSelfRegisterRoles(roles: List<String>): List<String> {
+    val requested = roles.map { it.trim().uppercase() }.toSet()
+    return DEFAULT_SELF_REGISTER_ROLES.filter { it in requested }
+}
+
 val DEFAULT_SCOUT_PAGES = listOf(
     "dashboard", "my-assignments", "chat", "scout", "pit-scout", "qual-scout", "qr-scanner", "contact", "scout-history"
 )
@@ -136,6 +145,7 @@ data class ApiSettings(
     val activeThemeName: String = "",
     val setupWizardCompleted: Boolean = false,
     val registrationLocked: Boolean = false,
+    val selfRegisterRoles: List<String> = DEFAULT_SELF_REGISTER_ROLES,
     val program: String = "FRC",
     val statboticsBaseUrl: String = "https://api.statbotics.io",
     val match13BaseUrl: String = "https://actions.match13.com",
@@ -293,6 +303,7 @@ object SettingsService {
             scoutPages = normalizedScoutPages,
             analyticsPages = normalizedAnalyticsPages,
             adminPages = normalizedAdminPages,
+            selfRegisterRoles = normalizeSelfRegisterRoles(settings.selfRegisterRoles),
             statboticsBaseUrl = statboticsUrl,
             match13BaseUrl = match13Url
         )

@@ -527,6 +527,16 @@
                             <label><input id="settings-chat" type="checkbox" /> <span data-i18n="config.enable_team_chat">Enable Team Chat</span></label>
                             <label><input id="settings-lock-registration" type="checkbox" /> <span data-i18n="config.lock_user_registration">Lock new user registration via create account page</span></label>
 
+                            <div id="settings-self-register-roles" style="margin-left: 24px;">
+                                <div style="font-size: 14px; margin-bottom: 4px;" data-i18n="config.self_register_roles">Roles new users can choose when creating an account</div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                                    <label><input class="self-register-role" type="checkbox" value="ADMIN" /> <span data-i18n="config.self_register_role_admin">Admin</span></label>
+                                    <label><input class="self-register-role" type="checkbox" value="ANALYTICS" /> <span data-i18n="config.self_register_role_analytics">Analytics</span></label>
+                                    <label><input class="self-register-role" type="checkbox" value="SCOUT" /> <span data-i18n="config.self_register_role_scout">Scout</span></label>
+                                </div>
+                                <div style="font-size: 12px; color: var(--muted); margin-top: 4px;" data-i18n="config.self_register_roles_hint">Admins can always create accounts with any role from the Users page. Unchecking every role works like locking registration.</div>
+                            </div>
+
                         </div>
 
                     </div>

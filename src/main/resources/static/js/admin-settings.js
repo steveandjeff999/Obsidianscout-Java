@@ -321,6 +321,25 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const el = document.getElementById(id);
                 return el ? el.checked : false;
             };
+            // Roles new users may pick on the create-account page. Missing/undefined means the default: all roles.
+            const ALL_SELF_REGISTER_ROLES = ["ADMIN", "ANALYTICS", "SCOUT"];
+            const setSelfRegisterRoles = (roles) => {
+                const allowed = Array.isArray(roles) ? roles : ALL_SELF_REGISTER_ROLES;
+                document.querySelectorAll(".self-register-role").forEach(cb => {
+                    cb.checked = allowed.includes(cb.value);
+                });
+            };
+            const getSelfRegisterRoles = () =>
+                Array.from(document.querySelectorAll(".self-register-role"))
+                    .filter(cb => cb.checked)
+                    .map(cb => cb.value);
+            // Role choices only matter while registration is unlocked.
+            const syncSelfRegisterRolesEnabled = () => {
+                const locked = getChecked("settings-lock-registration");
+                const group = document.getElementById("settings-self-register-roles");
+                if (group) group.style.opacity = locked ? "0.5" : "1";
+                document.querySelectorAll(".self-register-role").forEach(cb => { cb.disabled = locked; });
+            };
 
             // Populate settings
             loadedSettings = settingsResponse.settings;
@@ -335,6 +354,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             setChecked("settings-opr", loadedSettings.useTbaOpr);
             setChecked("settings-chat", loadedSettings.chatEnabled);
             setChecked("settings-lock-registration", loadedSettings.registrationLocked || false);
+            setSelfRegisterRoles(loadedSettings.selfRegisterRoles);
+            syncSelfRegisterRolesEnabled();
+            const lockRegistrationToggle = document.getElementById("settings-lock-registration");
+            if (lockRegistrationToggle) lockRegistrationToggle.addEventListener("change", syncSelfRegisterRolesEnabled);
 
             const isFtc = me.program === "FTC";
             const yearNote = document.getElementById("settings-year-note");
@@ -586,6 +609,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.useTbaOpr = getChecked("settings-opr");
                     loadedSettings.chatEnabled = getChecked("settings-chat");
                     loadedSettings.registrationLocked = getChecked("settings-lock-registration");
+                    loadedSettings.selfRegisterRoles = getSelfRegisterRoles();
                     loadedSettings.statboticsBaseUrl = getVal("settings-statbotics-url").trim() || "https://api.statbotics.io";
                     loadedSettings.match13BaseUrl = getVal("settings-match13-url").trim() || "https://actions.match13.com";
                     loadedSettings.apiKeys = {
@@ -750,6 +774,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.adminPages = adminPages;
                     loadedSettings.chatEnabled = getChecked("settings-chat");
                     loadedSettings.registrationLocked = getChecked("settings-lock-registration");
+                    loadedSettings.selfRegisterRoles = getSelfRegisterRoles();
                     loadedSettings.setupWizardCompleted = true;
                     Obsidianscout.safeSetItem("obsidianscout:setup-wizard-dismissed", "true");
 

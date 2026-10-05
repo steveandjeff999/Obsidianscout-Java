@@ -1166,7 +1166,13 @@ fun Application.configureRoutes() {
                     val session = call.requireAdmin()
                     val payload = call.receive<ApiSettingsPayload>()
                     val targetProgram = if (payload.program.isNotBlank()) payload.program else session.program
-                    val updated = SettingsService.updateSettings(session.teamNumber, payload.toSettings().copy(program = targetProgram))
+                    // Pages that save only part of the settings don't send selfRegisterRoles; keep the saved value then.
+                    val selfRegisterRoles = payload.selfRegisterRoles
+                        ?: SettingsService.getSettings(session.teamNumber, targetProgram).selfRegisterRoles
+                    val updated = SettingsService.updateSettings(
+                        session.teamNumber,
+                        payload.toSettings().copy(program = targetProgram, selfRegisterRoles = selfRegisterRoles)
+                    )
                     val activeAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, targetProgram)
                     if (activeAllianceId != null && AllianceService.isAllianceAdmin(session.teamNumber, activeAllianceId)) {
                         AllianceService.updateAllianceEvent(
@@ -4189,6 +4195,7 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         activeThemeName = activeThemeName,
         setupWizardCompleted = setupWizardCompleted,
         registrationLocked = registrationLocked,
+        selfRegisterRoles = selfRegisterRoles,
         program = program,
         statboticsBaseUrl = statboticsBaseUrl,
         match13BaseUrl = match13BaseUrl

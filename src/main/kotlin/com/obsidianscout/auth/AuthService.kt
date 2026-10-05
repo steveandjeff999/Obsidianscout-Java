@@ -189,7 +189,9 @@ object AuthService {
     private val selfRegisterRoles = setOf(UserRole.ADMIN, UserRole.ANALYTICS, UserRole.SCOUT)
 
     /**
-     * Self-registration with a team role (admin, analytics, or scout).
+     * Self-registration with a team role (admin, analytics, or scout). The first account on a team
+     * may pick any of these; after that, the team's registration lock and its allowed
+     * self-registration roles (admin settings, all roles by default) apply.
      */
     fun register(username: String, teamNumber: Int, password: String, program: String = "FRC", role: UserRole = UserRole.SCOUT, email: String? = null): UserRecord {
         if (username.isBlank() || password.isBlank()) {
@@ -212,19 +214,24 @@ object AuthService {
                 .limit(1)
                 .any()
             if (teamHasUsers) {
-                // Elevated roles on an existing team must be granted by that team's admins,
-                // otherwise anyone could self-register as admin of someone else's team.
-                if (role != UserRole.SCOUT) {
-                    throw ApiException(
-                        HttpStatusCode.Forbidden,
-                        "This team already has accounts. Register as a scout and ask a team admin to change your role."
-                    )
-                }
                 val teamSettings = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber, program)
                 if (teamSettings.registrationLocked) {
                     throw ApiException(
                         HttpStatusCode.Forbidden,
                         "Registration is locked for this team. Please contact a team administrator to create an account."
+                    )
+                }
+                // Team admins choose which roles can be picked on the create-account page (all by default).
+                val allowedRoles = com.obsidianscout.integrations.normalizeSelfRegisterRoles(teamSettings.selfRegisterRoles)
+                if (role.name !in allowedRoles) {
+                    val allowedText = allowedRoles.joinToString(", ") { it.lowercase().replaceFirstChar(Char::uppercase) }
+                    throw ApiException(
+                        HttpStatusCode.Forbidden,
+                        if (allowedRoles.isEmpty()) {
+                            "This team does not allow creating accounts here. Please contact a team administrator."
+                        } else {
+                            "This team only allows creating accounts with these roles: $allowedText. Ask a team admin if you need a different role."
+                        }
                     )
                 }
             }

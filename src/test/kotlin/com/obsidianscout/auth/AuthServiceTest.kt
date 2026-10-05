@@ -479,37 +479,49 @@ class AuthServiceTest {
     }
 
     @Test
-    fun testSelfRegisterAsAdminOnlyAllowedForNewTeam() {
-        val first = AuthService.register(
-            username = "founder",
-            teamNumber = 3333,
-            password = "Password123!",
-            program = "FRC",
-            role = UserRole.ADMIN
+    fun testSelfRegisterAllowsAllRolesByDefault() {
+        AuthService.register(username = "founder", teamNumber = 3333, password = "Password123!", program = "FRC", role = UserRole.ADMIN)
+        assertEquals(
+            listOf("ADMIN", "ANALYTICS", "SCOUT"),
+            com.obsidianscout.integrations.SettingsService.getSettings(3333, "FRC").selfRegisterRoles
         )
-        assertEquals(UserRole.ADMIN, first.role)
 
-        for (elevated in listOf(UserRole.ADMIN, UserRole.ANALYTICS)) {
+        // With no admin changes, every self-registration role stays available on an existing team.
+        for (role in listOf(UserRole.ADMIN, UserRole.ANALYTICS, UserRole.SCOUT)) {
+            val user = AuthService.register(
+                username = "newcomer_${role.name.lowercase()}",
+                teamNumber = 3333,
+                password = "Password123!",
+                program = "FRC",
+                role = role
+            )
+            assertEquals(role, user.role)
+        }
+    }
+
+    @Test
+    fun testSelfRegisterRespectsTeamAllowedRoles() {
+        AuthService.register(username = "founder", teamNumber = 3334, password = "Password123!", program = "FRC", role = UserRole.ADMIN)
+        val settings = com.obsidianscout.integrations.SettingsService.getSettings(3334, "FRC")
+        com.obsidianscout.integrations.SettingsService.updateSettings(3334, settings.copy(selfRegisterRoles = listOf("scout", "SCOUT", "bogus")))
+        assertEquals(listOf("SCOUT"), com.obsidianscout.integrations.SettingsService.getSettings(3334, "FRC").selfRegisterRoles)
+
+        for (role in listOf(UserRole.ADMIN, UserRole.ANALYTICS)) {
             val ex = assertFailsWith<ApiException> {
-                AuthService.register(
-                    username = "newcomer_${elevated.name}",
-                    teamNumber = 3333,
-                    password = "Password123!",
-                    program = "FRC",
-                    role = elevated
-                )
+                AuthService.register(username = "blocked_${role.name.lowercase()}", teamNumber = 3334, password = "Password123!", program = "FRC", role = role)
             }
             assertEquals(HttpStatusCode.Forbidden, ex.status)
         }
-
-        val scout = AuthService.register(
-            username = "newcomer_scout",
-            teamNumber = 3333,
-            password = "Password123!",
-            program = "FRC",
-            role = UserRole.SCOUT
-        )
+        val scout = AuthService.register(username = "allowed_scout", teamNumber = 3334, password = "Password123!", program = "FRC", role = UserRole.SCOUT)
         assertEquals(UserRole.SCOUT, scout.role)
+
+        // Unchecking every role blocks self-registration entirely.
+        val current = com.obsidianscout.integrations.SettingsService.getSettings(3334, "FRC")
+        com.obsidianscout.integrations.SettingsService.updateSettings(3334, current.copy(selfRegisterRoles = emptyList()))
+        val ex = assertFailsWith<ApiException> {
+            AuthService.register(username = "late_scout", teamNumber = 3334, password = "Password123!", program = "FRC", role = UserRole.SCOUT)
+        }
+        assertEquals(HttpStatusCode.Forbidden, ex.status)
     }
 
     @Test
