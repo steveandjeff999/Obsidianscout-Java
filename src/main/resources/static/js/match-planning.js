@@ -12,7 +12,12 @@
     let isDraggingMarker = false;
     let activeTool = "pen"; // "pen" | "eraser"
     let currentColor = "#ffffff";
-    let currentStrokeWidth = 6;
+    let penStrokeWidth = 6;
+    let eraserStrokeWidth = 22;
+
+    function getCurrentStrokeWidth() {
+        return activeTool === "eraser" ? eraserStrokeWidth : penStrokeWidth;
+    }
     let autoSaveTimeout = null;
     let pollIntervalId = null;
     let lastSyncedTime = 0;
@@ -21,6 +26,18 @@
     let ctx = null;
     let drawingCanvas = null;
     let drawingCtx = null;
+
+    // Stylus / S Pen / Palm Rejection State
+    let isPenActive = false; // True whenever a pen is drawing/in contact
+    let barrelWasDown = false;
+    let barrelDownTime = 0;
+    let barrelHoldActive = false;
+    let previousToolBeforeErase = "pen";
+    let quickPopupOpen = false;
+    let lastPenCoords = { clientX: 0, clientY: 0, normX: 0.5, normY: 0.5 };
+    let barrelHoldTimer = null;
+    let lastColorCycleTime = 0;
+    let strokeDrawnWhileBarrelDown = false;
 
     // Comp Level Rank for standard FIRST/FRC sorting: Practice -> Qualification -> Playoff
     function getCompLevelRank(compLevel) {
@@ -793,62 +810,163 @@
         }
     }
 
-    function wireDrawingTools() {
-        // Color Swatches
+        function syncStrokeSlider() {
+            const currentWidth = getCurrentStrokeWidth();
+            const slider = document.getElementById("stroke-slider");
+            const popupSlider = document.getElementById("popup-stroke-slider");
+            if (slider && parseInt(slider.value) !== currentWidth) slider.value = currentWidth;
+            if (popupSlider && parseInt(popupSlider.value) !== currentWidth) popupSlider.value = currentWidth;
+        }
+
+        // Helper setters to keep toolbar & popup in sync
+        function setTool(toolName) {
+            activeTool = toolName;
+            const penBtn = document.getElementById("tool-pen");
+            const eraserBtn = document.getElementById("tool-eraser");
+            const popupPen = document.getElementById("popup-tool-pen");
+            const popupEraser = document.getElementById("popup-tool-eraser");
+
+            if (toolName === "pen") {
+                if (penBtn) penBtn.classList.add("active");
+                if (eraserBtn) eraserBtn.classList.remove("active");
+                if (popupPen) popupPen.classList.add("active");
+                if (popupEraser) popupEraser.classList.remove("active");
+            } else {
+                if (penBtn) penBtn.classList.remove("active");
+                if (eraserBtn) eraserBtn.classList.add("active");
+                if (popupPen) popupPen.classList.remove("active");
+                if (popupEraser) popupEraser.classList.add("active");
+            }
+            syncStrokeSlider();
+            updateStrokePreview();
+        }
+
+        function setColor(hex) {
+            currentColor = hex;
+            document.querySelectorAll(".swatch-btn").forEach(b => {
+                b.classList.toggle("active", b.getAttribute("data-color").toLowerCase() === hex.toLowerCase());
+            });
+            document.querySelectorAll(".stylus-popup-swatch").forEach(b => {
+                b.classList.toggle("active", b.getAttribute("data-color").toLowerCase() === hex.toLowerCase());
+            });
+            updateStrokePreview();
+        }
+
+        function setStrokeWidth(val) {
+            const parsed = Math.max(2, Math.min(48, parseInt(val) || 6));
+            if (activeTool === "eraser") {
+                eraserStrokeWidth = parsed;
+            } else {
+                penStrokeWidth = parsed;
+            }
+            syncStrokeSlider();
+            updateStrokePreview();
+        }
+
+        function cycleNextColor() {
+            const swatches = Array.from(document.querySelectorAll(".swatch-btn")).map(b => b.getAttribute("data-color"));
+            if (swatches.length === 0) return;
+            const idx = swatches.indexOf(currentColor);
+            const nextIdx = (idx + 1) % swatches.length;
+            setColor(swatches[nextIdx]);
+            Obsidianscout.showToast?.(`Color: ${swatches[nextIdx]}`, "info");
+        }
+
+        // Quick Popup Management
+        const quickPopup = document.getElementById("stylus-quick-popup");
+        function showQuickPopup(clientX, clientY) {
+            if (!quickPopup || !canvas) return;
+            const viewport = document.getElementById("canvas-viewport") || canvas.parentElement;
+            const vpRect = viewport.getBoundingClientRect();
+
+            let x = clientX - vpRect.left;
+            let y = clientY - vpRect.top;
+
+            // Offset slightly so it doesn't block the pen tip
+            x += 16;
+            y -= 30;
+
+            quickPopup.style.display = "flex";
+            const popupW = quickPopup.offsetWidth || 210;
+            const popupH = quickPopup.offsetHeight || 140;
+
+            // Keep within viewport boundaries
+            if (x + popupW > vpRect.width) x = vpRect.width - popupW - 10;
+            if (x < 10) x = 10;
+            if (y + popupH > vpRect.height) y = vpRect.height - popupH - 10;
+            if (y < 10) y = 10;
+
+            quickPopup.style.left = `${x}px`;
+            quickPopup.style.top = `${y}px`;
+            quickPopupOpen = true;
+
+            // Sync values in popup
+            setTool(activeTool);
+            setColor(currentColor);
+            setStrokeWidth(currentStrokeWidth);
+        }
+
+        function hideQuickPopup() {
+            if (quickPopup && quickPopupOpen) {
+                quickPopup.style.display = "none";
+                quickPopupOpen = false;
+            }
+        }
+
+        // Wire popup controls
+        const popupPen = document.getElementById("popup-tool-pen");
+        if (popupPen) popupPen.addEventListener("click", () => setTool("pen"));
+        const popupEraser = document.getElementById("popup-tool-eraser");
+        if (popupEraser) popupEraser.addEventListener("click", () => setTool("eraser"));
+
+        document.querySelectorAll(".stylus-popup-swatch").forEach(btn => {
+            btn.addEventListener("click", () => {
+                setColor(btn.getAttribute("data-color"));
+                if (activeTool !== "pen") setTool("pen");
+            });
+        });
+
+        const popupSlider = document.getElementById("popup-stroke-slider");
+        if (popupSlider) {
+            popupSlider.addEventListener("input", (e) => setStrokeWidth(e.target.value));
+        }
+
+        // Close popup when clicking outside
+        window.addEventListener("pointerdown", (e) => {
+            if (quickPopupOpen && quickPopup && !quickPopup.contains(e.target) && e.target !== canvas) {
+                hideQuickPopup();
+            }
+        });
+
+        // Wire Toolbar Color Swatches
         document.querySelectorAll(".swatch-btn").forEach(btn => {
             btn.addEventListener("click", () => {
-                document.querySelectorAll(".swatch-btn").forEach(b => b.classList.remove("active"));
-                btn.classList.add("active");
-                currentColor = btn.getAttribute("data-color");
-                activeTool = "pen";
-                document.getElementById("tool-pen").classList.add("active");
-                document.getElementById("tool-eraser").classList.remove("active");
-                updateStrokePreview();
+                setColor(btn.getAttribute("data-color"));
+                setTool("pen");
             });
         });
 
         // Pen Tool
         const penBtn = document.getElementById("tool-pen");
-        if (penBtn) {
-            penBtn.addEventListener("click", () => {
-                activeTool = "pen";
-                penBtn.classList.add("active");
-                document.getElementById("tool-eraser").classList.remove("active");
-                updateStrokePreview();
-            });
-        }
+        if (penBtn) penBtn.addEventListener("click", () => setTool("pen"));
 
         // Eraser Tool
         const eraserBtn = document.getElementById("tool-eraser");
-        if (eraserBtn) {
-            eraserBtn.addEventListener("click", () => {
-                activeTool = "eraser";
-                eraserBtn.classList.add("active");
-                document.getElementById("tool-pen").classList.remove("active");
-                updateStrokePreview();
-            });
-        }
+        if (eraserBtn) eraserBtn.addEventListener("click", () => setTool("eraser"));
 
         // Stroke Size Slider
         const strokeSlider = document.getElementById("stroke-slider");
         if (strokeSlider) {
-            strokeSlider.addEventListener("input", (e) => {
-                currentStrokeWidth = parseInt(e.target.value) || 6;
-                updateStrokePreview();
-            });
+            strokeSlider.addEventListener("input", (e) => setStrokeWidth(e.target.value));
         }
 
         // Undo Button
         const undoBtn = document.getElementById("undo-canvas-btn");
-        if (undoBtn) {
-            undoBtn.addEventListener("click", undoAction);
-        }
+        if (undoBtn) undoBtn.addEventListener("click", undoAction);
 
         // Redo Button
         const redoBtn = document.getElementById("redo-canvas-btn");
-        if (redoBtn) {
-            redoBtn.addEventListener("click", redoAction);
-        }
+        if (redoBtn) redoBtn.addEventListener("click", redoAction);
 
         // Clear Button
         const clearBtn = document.getElementById("clear-canvas-btn");
@@ -863,24 +981,20 @@
             });
         }
 
-        // Fullscreen Toggle (Whole Strategy Workspace + Stats)
+        // Fullscreen Toggle
         const fullscreenBtn = document.getElementById("fullscreen-btn");
         const pageContainer = document.getElementById("match-planning-container") || document.querySelector(".page-container");
         if (fullscreenBtn && pageContainer) {
             fullscreenBtn.addEventListener("click", () => {
                 if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                     if (pageContainer.requestFullscreen) {
-                        pageContainer.requestFullscreen().catch(err => {
-                            console.warn("Fullscreen request failed:", err);
-                        });
+                        pageContainer.requestFullscreen().catch(err => console.warn(err));
                     } else if (pageContainer.webkitRequestFullscreen) {
                         pageContainer.webkitRequestFullscreen();
                     }
                 } else {
                     if (document.exitFullscreen) {
-                        document.exitFullscreen().catch(err => {
-                            console.warn("Exit fullscreen failed:", err);
-                        });
+                        document.exitFullscreen().catch(err => console.warn(err));
                     } else if (document.webkitExitFullscreen) {
                         document.webkitExitFullscreen();
                     }
@@ -890,7 +1004,6 @@
             const onFullscreenChange = () => {
                 const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
                 fullscreenBtn.innerHTML = isFs ? '<i class="fa-solid fa-compress"></i> Exit' : '<i class="fa-solid fa-expand"></i> Fullscreen';
-                fullscreenBtn.title = isFs ? "Exit Fullscreen" : "Toggle Fullscreen Field & Stats";
                 setTimeout(() => {
                     resizeCanvas();
                     renderCanvas();
@@ -902,31 +1015,23 @@
             document.addEventListener("webkitfullscreenchange", onFullscreenChange);
         }
 
-        // Save / Download Plan
+        // Download Plan
         const downloadBtn = document.getElementById("download-canvas-btn");
         if (downloadBtn) {
             downloadBtn.addEventListener("click", () => {
                 if (!canvas) return;
-
-                // 1. Render field background and drawing annotations
                 renderCanvas();
-
-                // 2. Draw square robot team markers onto the canvas for export
                 drawSquareMarkersOnCanvas(ctx, canvas.width, canvas.height);
-
-                // 3. Download image
                 const link = document.createElement("a");
                 const matchLabel = currentMatch ? (currentMatch.label || `match-${currentMatch.matchNumber}`) : "match-plan";
                 link.download = `obsidianscout-plan-${matchLabel}.png`;
                 link.href = canvas.toDataURL("image/png");
                 link.click();
-
-                // 4. Restore canvas without burned-in markers
                 renderCanvas();
             });
         }
 
-        // Keyboard Shortcuts: Ctrl+Z / Cmd+Z (Undo), Ctrl+Y / Ctrl+Shift+Z / Cmd+Shift+Z (Redo)
+        // Keyboard Shortcuts (Undo, Redo, P, E, X, [, ])
         window.addEventListener("keydown", (e) => {
             const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
             if (tag === "input" || tag === "textarea" || tag === "select") return;
@@ -937,16 +1042,37 @@
             } else if (((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "z" || e.key === "Z")) || ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y"))) {
                 e.preventDefault();
                 redoAction();
+            } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+                if (e.key === "p" || e.key === "P") {
+                    setTool("pen");
+                } else if (e.key === "e" || e.key === "E") {
+                    setTool("eraser");
+                } else if (e.key === "x" || e.key === "X") {
+                    setTool(activeTool === "pen" ? "eraser" : "pen");
+                } else if (e.key === "[") {
+                    setStrokeWidth(getCurrentStrokeWidth() - 2);
+                } else if (e.key === "]") {
+                    setStrokeWidth(getCurrentStrokeWidth() + 2);
+                }
             }
         });
 
-        // Pointer Events (Mouse, Touch, Stylus) on Canvas
+        // Pointer Events (Mouse, Touch, Stylus) on Canvas with S Pen and Palm Rejection
         if (canvas) {
+            canvas.style.touchAction = "none";
+            // Prevent native context menu on right click or stylus barrel button
+            canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
             canvas.addEventListener("pointerdown", handlePointerDown);
             canvas.addEventListener("pointermove", handlePointerMove);
             canvas.addEventListener("pointerup", handlePointerUp);
             canvas.addEventListener("pointercancel", handlePointerUp);
-            canvas.addEventListener("pointerleave", handlePointerUp);
+            canvas.addEventListener("pointerleave", handlePointerLeave);
+
+            // High frequency pointer raw update if supported
+            if (window.PointerEvent && "onpointerrawupdate" in window) {
+                canvas.addEventListener("pointerrawupdate", handlePointerMove);
+            }
         }
 
         updateStrokePreview();
@@ -954,11 +1080,20 @@
 
     function updateStrokePreview() {
         const preview = document.getElementById("stroke-preview-circle");
+        const popupPreview = document.getElementById("popup-stroke-preview");
+        const currentWidth = getCurrentStrokeWidth();
+        const size = Math.max(3, Math.min(24, Math.round(currentWidth * 0.55)));
+        const color = (activeTool === "eraser") ? "#cbd5e1" : currentColor;
+
         if (preview) {
-            const size = Math.max(3, Math.min(22, currentStrokeWidth));
             preview.style.width = `${size}px`;
             preview.style.height = `${size}px`;
-            preview.style.backgroundColor = (activeTool === "eraser") ? "#cbd5e1" : currentColor;
+            preview.style.backgroundColor = color;
+        }
+        if (popupPreview) {
+            popupPreview.style.width = `${size}px`;
+            popupPreview.style.height = `${size}px`;
+            popupPreview.style.backgroundColor = color;
         }
     }
 
@@ -970,14 +1105,128 @@
         };
     }
 
+    // Process S Pen / Stylus Barrel Button edge transitions
+    function checkStylusBarrelButton(e) {
+        if (e.pointerType !== "pen") return;
+        lastPenCoords = { clientX: e.clientX, clientY: e.clientY };
+
+        // Barrel button (buttons & 2)
+        const isBarrelDown = (e.buttons & 2) !== 0 || (e.button === 2);
+
+        // Hardware inverted eraser tip (buttons & 32)
+        const isEraserTip = (e.buttons & 32) !== 0;
+        if (isEraserTip && activeTool !== "eraser") {
+            previousToolBeforeErase = activeTool;
+            activeTool = "eraser";
+            barrelHoldActive = true;
+            updateStrokePreview();
+        }
+
+        // RISING EDGE: Button just pressed
+        if (isBarrelDown && !barrelWasDown) {
+            barrelDownTime = performance.now();
+            barrelWasDown = true;
+            strokeDrawnWhileBarrelDown = false;
+
+            // Immediately switch to eraser so there is ZERO delay or pen-tool flash!
+            if (!barrelHoldActive) {
+                previousToolBeforeErase = activeTool === "eraser" ? "pen" : activeTool;
+                activeTool = "eraser";
+                barrelHoldActive = true;
+                updateStrokePreview();
+            }
+
+            // If currently drawing, switch ongoing stroke tool to eraser
+            if (isDrawing && annotations.length > 0) {
+                strokeDrawnWhileBarrelDown = true;
+                const cur = annotations[annotations.length - 1];
+                cur.tool = "eraser";
+                cur.widthRatio = eraserStrokeWidth / 1000;
+                renderCanvas();
+            }
+        }
+        // FALLING EDGE: Button released
+        else if (!isBarrelDown && barrelWasDown) {
+            barrelWasDown = false;
+            const pressDuration = performance.now() - barrelDownTime;
+
+            // If held for >= 450ms OR if an erase stroke was drawn during the press -> this was a HOLD TO ERASE action!
+            if (strokeDrawnWhileBarrelDown || pressDuration >= 450) {
+                if (barrelHoldActive) {
+                    barrelHoldActive = false;
+                    setTool(previousToolBeforeErase);
+                }
+            } else {
+                // Quick tap release (<450ms without drawing an erase stroke) -> This was a CLICK to cycle color!
+                if (barrelHoldActive) {
+                    barrelHoldActive = false;
+                    setTool(previousToolBeforeErase === "eraser" ? "pen" : previousToolBeforeErase);
+                }
+
+                // If tap initiated a 1-point stroke, discard it so button click doesn't leave stray mark
+                if (annotations.length > 0) {
+                    const lastStroke = annotations[annotations.length - 1];
+                    if (lastStroke && lastStroke.points.length <= 2) {
+                        annotations.pop();
+                        renderCanvas();
+                    }
+                }
+
+                // Debounce: prevent single physical click from cycling multiple times
+                const now = performance.now();
+                if (now - lastColorCycleTime >= 350) {
+                    lastColorCycleTime = now;
+                    cycleNextColor();
+                    if (activeTool !== "pen") {
+                        setTool("pen");
+                    }
+                }
+            }
+        }
+    }
+
     function handlePointerDown(e) {
         if (!currentMatch) return;
-        canvas.setPointerCapture(e.pointerId);
+
+        // Active Palm Rejection: If pen is active/drawing, swallow all finger touches!
+        if (isPenActive && e.pointerType === "touch") {
+            e.preventDefault();
+            return;
+        }
+
+        // If clicking outside popup, dismiss it
+        hideQuickPopup();
+
+        // Check stylus button edges
+        checkStylusBarrelButton(e);
+
+        if (e.pointerType === "pen") {
+            isPenActive = true;
+        }
+
+        const isBarrelDown = (e.buttons & 2) !== 0 || (e.button === 2);
+        if (isBarrelDown) {
+            strokeDrawnWhileBarrelDown = true;
+            if (!barrelHoldActive) {
+                previousToolBeforeErase = activeTool === "eraser" ? "pen" : activeTool;
+                activeTool = "eraser";
+                barrelHoldActive = true;
+                updateStrokePreview();
+            }
+        }
+
+        try {
+            canvas.setPointerCapture(e.pointerId);
+        } catch (err) {}
+
         isDrawing = true;
         const normPos = getNormalizedCoords(e);
-        const strokeRatio = (activeTool === "eraser" ? currentStrokeWidth * 3.5 : currentStrokeWidth) / 1000;
+        // Uniform stroke size dictated by tool-specific width directly (no variable pressure curves)
+        const effectiveTool = (isBarrelDown || activeTool === "eraser") ? "eraser" : activeTool;
+        const effectiveWidth = (effectiveTool === "eraser" ? eraserStrokeWidth : penStrokeWidth);
+        const strokeRatio = effectiveWidth / 1000;
         annotations.push({
-            tool: activeTool,
+            tool: effectiveTool,
             color: currentColor,
             widthRatio: strokeRatio,
             points: [normPos]
@@ -986,6 +1235,19 @@
     }
 
     function handlePointerMove(e) {
+        // Active Palm Rejection: discard touch events while pen is drawing
+        if (isPenActive && e.pointerType === "touch") {
+            e.preventDefault();
+            return;
+        }
+
+        checkStylusBarrelButton(e);
+
+        const isBarrelDown = (e.buttons & 2) !== 0 || (e.button === 2);
+        if (isBarrelDown && isDrawing) {
+            strokeDrawnWhileBarrelDown = true;
+        }
+
         if (!isDrawing) return;
         const normPos = getNormalizedCoords(e);
         const curStroke = annotations[annotations.length - 1];
@@ -996,14 +1258,37 @@
     }
 
     function handlePointerUp(e) {
+        checkStylusBarrelButton(e);
+
+        if (e.pointerType === "pen") {
+            isPenActive = false;
+        }
+
         if (isDrawing) {
             isDrawing = false;
             try {
                 canvas.releasePointerCapture(e.pointerId);
             } catch (err) {}
-            redoStack = []; // reset redo stack when a new stroke is completed
+            redoStack = []; // Reset redo stack when a new stroke is completed
             scheduleAutoSave();
         }
+    }
+
+    function handlePointerLeave(e) {
+        if (barrelHoldTimer) {
+            clearTimeout(barrelHoldTimer);
+            barrelHoldTimer = null;
+        }
+        if (barrelHoldActive) {
+            barrelHoldActive = false;
+            activeTool = previousToolBeforeErase;
+            updateStrokePreview();
+        }
+        barrelWasDown = false;
+        if (e.pointerType === "pen") {
+            isPenActive = false;
+        }
+        handlePointerUp(e);
     }
 
     function replayAnnotations() {

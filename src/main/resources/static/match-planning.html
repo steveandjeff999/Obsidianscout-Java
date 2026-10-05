@@ -627,6 +627,109 @@
             cursor: pointer;
         }
 
+        /* ── Stylus Quick Popup (Samsung Notes Style) ── */
+        .stylus-quick-popup {
+            position: absolute;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 14px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+            padding: 10px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            user-select: none;
+            touch-action: none;
+            min-width: 190px;
+            animation: popupFadeIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes popupFadeIn {
+            from { opacity: 0; transform: scale(0.92) translateY(6px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .stylus-popup-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #94a3b8;
+            padding-bottom: 2px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .stylus-popup-tools {
+            display: flex;
+            gap: 6px;
+        }
+
+        .stylus-popup-tool-btn {
+            flex: 1;
+            padding: 5px 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            color: #cbd5e1;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            transition: all 0.12s ease;
+        }
+
+        .stylus-popup-tool-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+        }
+
+        .stylus-popup-swatches {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+
+        .stylus-popup-swatch {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: transform 0.12s ease, border-color 0.12s ease;
+            padding: 0;
+        }
+
+        .stylus-popup-swatch.active {
+            transform: scale(1.25);
+            border-color: #ffffff;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
+        }
+
+        .stylus-popup-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stylus-popup-slider-row input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent);
+            cursor: pointer;
+            height: 4px;
+        }
+
         .canvas-empty-state {
             position: absolute;
             inset: 0;
@@ -1163,7 +1266,7 @@
                             <!-- Brush Size Slider -->
                             <div class="toolbar-group toolbar-slider-group">
                                 <span class="toolbar-label">Size</span>
-                                <input type="range" class="toolbar-slider" id="stroke-slider" min="2" max="36" value="6" step="1" title="Brush Size" />
+                                <input type="range" class="toolbar-slider" id="stroke-slider" min="2" max="48" value="6" step="1" title="Brush Size" />
                                 <div class="stroke-preview-wrapper" title="Size preview">
                                     <span class="stroke-preview-circle" id="stroke-preview-circle" style="width: 6px; height: 6px;"></span>
                                 </div>
@@ -1213,6 +1316,30 @@
 
                                 <!-- Draggable Square Team Markers Layer -->
                                 <div class="field-markers-layer" id="field-markers-layer"></div>
+
+                                <!-- Stylus Quick Popup (Samsung Notes style) -->
+                                <div class="stylus-quick-popup" id="stylus-quick-popup" style="display: none;">
+                                    <div class="stylus-popup-header">
+                                        <span>Quick Tools</span>
+                                        <i class="fa-solid fa-pen-nib"></i>
+                                    </div>
+                                    <div class="stylus-popup-tools">
+                                        <button type="button" class="stylus-popup-tool-btn active" id="popup-tool-pen"><i class="fa-solid fa-pen"></i> Pen</button>
+                                        <button type="button" class="stylus-popup-tool-btn" id="popup-tool-eraser"><i class="fa-solid fa-eraser"></i> Eraser</button>
+                                    </div>
+                                    <div class="stylus-popup-swatches">
+                                        <button type="button" class="stylus-popup-swatch active" data-color="#ffffff" style="background:#ffffff;" title="White"></button>
+                                        <button type="button" class="stylus-popup-swatch" data-color="#000000" style="background:#000000;" title="Black"></button>
+                                        <button type="button" class="stylus-popup-swatch" data-color="#22c55e" style="background:#22c55e;" title="Green"></button>
+                                        <button type="button" class="stylus-popup-swatch" data-color="#eab308" style="background:#eab308;" title="Yellow"></button>
+                                        <button type="button" class="stylus-popup-swatch" data-color="#f97316" style="background:#f97316;" title="Orange"></button>
+                                    </div>
+                                    <div class="stylus-popup-slider-row">
+                                        <span style="font-size: 0.7rem; font-weight: 800; color: #94a3b8;">SIZE</span>
+                                        <input type="range" id="popup-stroke-slider" min="2" max="48" value="6" step="1" title="Stroke Size" />
+                                        <span class="stroke-preview-circle" id="popup-stroke-preview" style="width: 6px; height: 6px; background: #ffffff;"></span>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Placeholder when no match loaded -->
