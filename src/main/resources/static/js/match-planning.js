@@ -298,7 +298,7 @@
                 matchSelect.appendChild(opt);
             });
 
-            matchSelect.addEventListener("change", async () => {
+            matchSelect.onchange = async () => {
                 const selectedKey = matchSelect.value;
                 if (!selectedKey) {
                     clearLoadedMatch();
@@ -308,7 +308,7 @@
                 if (match) {
                     await selectMatch(match);
                 }
-            });
+            };
 
             // If there's a match query param, select it automatically
             const urlParams = new URLSearchParams(window.location.search);
@@ -2515,6 +2515,12 @@
             renderModalPlot(currentModalSource);
         });
 
+        const escHandler = (e) => {
+            if (e.key === "Escape" && !modal.classList.contains("hidden")) {
+                closeModal();
+            }
+        };
+
         const closeModal = () => {
             modal.classList.add("hidden");
             document.body.classList.remove("modal-open");
@@ -2525,6 +2531,7 @@
                 window.removeEventListener("resize", activeModalResizeHandler);
                 activeModalResizeHandler = null;
             }
+            document.removeEventListener("keydown", escHandler);
         };
 
         const closeBtn = modal.querySelector(".graphs-fullscreen-close");
@@ -2532,13 +2539,6 @@
 
         if (closeBtn) closeBtn.onclick = closeModal;
         if (backdrop) backdrop.onclick = closeModal;
-
-        const escHandler = (e) => {
-            if (e.key === "Escape" && !modal.classList.contains("hidden")) {
-                closeModal();
-                document.removeEventListener("keydown", escHandler);
-            }
-        };
         document.addEventListener("keydown", escHandler);
 
         if (activeModalResizeHandler) {
