@@ -12,7 +12,12 @@
     let isDraggingMarker = false;
     let activeTool = "pen"; // "pen" | "eraser"
     let currentColor = "#ffffff";
-    let currentStrokeWidth = 6;
+    let penStrokeWidth = 6;
+    let eraserStrokeWidth = 22;
+
+    function getCurrentStrokeWidth() {
+        return activeTool === "eraser" ? eraserStrokeWidth : penStrokeWidth;
+    }
     let autoSaveTimeout = null;
     let pollIntervalId = null;
     let lastSyncedTime = 0;
@@ -31,6 +36,8 @@
     let quickPopupOpen = false;
     let lastPenCoords = { clientX: 0, clientY: 0, normX: 0.5, normY: 0.5 };
     let barrelHoldTimer = null;
+    let lastColorCycleTime = 0;
+    let strokeDrawnWhileBarrelDown = false;
 
     // Comp Level Rank for standard FIRST/FRC sorting: Practice -> Qualification -> Playoff
     function getCompLevelRank(compLevel) {
@@ -803,6 +810,14 @@
         }
     }
 
+        function syncStrokeSlider() {
+            const currentWidth = getCurrentStrokeWidth();
+            const slider = document.getElementById("stroke-slider");
+            const popupSlider = document.getElementById("popup-stroke-slider");
+            if (slider && parseInt(slider.value) !== currentWidth) slider.value = currentWidth;
+            if (popupSlider && parseInt(popupSlider.value) !== currentWidth) popupSlider.value = currentWidth;
+        }
+
         // Helper setters to keep toolbar & popup in sync
         function setTool(toolName) {
             activeTool = toolName;
@@ -822,6 +837,7 @@
                 if (popupPen) popupPen.classList.remove("active");
                 if (popupEraser) popupEraser.classList.add("active");
             }
+            syncStrokeSlider();
             updateStrokePreview();
         }
 
@@ -837,11 +853,13 @@
         }
 
         function setStrokeWidth(val) {
-            currentStrokeWidth = Math.max(2, Math.min(36, parseInt(val) || 6));
-            const slider = document.getElementById("stroke-slider");
-            const popupSlider = document.getElementById("popup-stroke-slider");
-            if (slider && parseInt(slider.value) !== currentStrokeWidth) slider.value = currentStrokeWidth;
-            if (popupSlider && parseInt(popupSlider.value) !== currentStrokeWidth) popupSlider.value = currentStrokeWidth;
+            const parsed = Math.max(2, Math.min(48, parseInt(val) || 6));
+            if (activeTool === "eraser") {
+                eraserStrokeWidth = parsed;
+            } else {
+                penStrokeWidth = parsed;
+            }
+            syncStrokeSlider();
             updateStrokePreview();
         }
 
@@ -1032,9 +1050,9 @@
                 } else if (e.key === "x" || e.key === "X") {
                     setTool(activeTool === "pen" ? "eraser" : "pen");
                 } else if (e.key === "[") {
-                    setStrokeWidth(currentStrokeWidth - 2);
+                    setStrokeWidth(getCurrentStrokeWidth() - 2);
                 } else if (e.key === "]") {
-                    setStrokeWidth(currentStrokeWidth + 2);
+                    setStrokeWidth(getCurrentStrokeWidth() + 2);
                 }
             }
         });
@@ -1063,7 +1081,8 @@
     function updateStrokePreview() {
         const preview = document.getElementById("stroke-preview-circle");
         const popupPreview = document.getElementById("popup-stroke-preview");
-        const size = Math.max(3, Math.min(22, currentStrokeWidth));
+        const currentWidth = getCurrentStrokeWidth();
+        const size = Math.max(3, Math.min(24, Math.round(currentWidth * 0.55)));
         const color = (activeTool === "eraser") ? "#cbd5e1" : currentColor;
 
         if (preview) {
@@ -1107,51 +1126,59 @@
         if (isBarrelDown && !barrelWasDown) {
             barrelDownTime = performance.now();
             barrelWasDown = true;
-            if (barrelHoldTimer) clearTimeout(barrelHoldTimer);
+            strokeDrawnWhileBarrelDown = false;
 
-            // Timer: if held past 250ms -> Hold to Erase (Samsung Notes style)
-            barrelHoldTimer = setTimeout(() => {
-                if (barrelWasDown) {
-                    previousToolBeforeErase = activeTool;
-                    activeTool = "eraser";
-                    barrelHoldActive = true;
-                    updateStrokePreview();
-                    // If currently drawing, switch ongoing stroke tool to eraser
-                    if (isDrawing && annotations.length > 0) {
-                        const cur = annotations[annotations.length - 1];
-                        cur.tool = "eraser";
-                        cur.widthRatio = (currentStrokeWidth * 3.5) / 1000;
-                        renderCanvas();
-                    }
-                }
-            }, 250);
+            // Immediately switch to eraser so there is ZERO delay or pen-tool flash!
+            if (!barrelHoldActive) {
+                previousToolBeforeErase = activeTool === "eraser" ? "pen" : activeTool;
+                activeTool = "eraser";
+                barrelHoldActive = true;
+                updateStrokePreview();
+            }
+
+            // If currently drawing, switch ongoing stroke tool to eraser
+            if (isDrawing && annotations.length > 0) {
+                strokeDrawnWhileBarrelDown = true;
+                const cur = annotations[annotations.length - 1];
+                cur.tool = "eraser";
+                cur.widthRatio = eraserStrokeWidth / 1000;
+                renderCanvas();
+            }
         }
         // FALLING EDGE: Button released
         else if (!isBarrelDown && barrelWasDown) {
             barrelWasDown = false;
-            if (barrelHoldTimer) {
-                clearTimeout(barrelHoldTimer);
-                barrelHoldTimer = null;
-            }
+            const pressDuration = performance.now() - barrelDownTime;
 
-            if (barrelHoldActive) {
-                // Revert from momentary eraser back to prior tool
-                barrelHoldActive = false;
-                activeTool = previousToolBeforeErase;
-                updateStrokePreview();
+            // If held for >= 450ms OR if an erase stroke was drawn during the press -> this was a HOLD TO ERASE action!
+            if (strokeDrawnWhileBarrelDown || pressDuration >= 450) {
+                if (barrelHoldActive) {
+                    barrelHoldActive = false;
+                    setTool(previousToolBeforeErase);
+                }
             } else {
-                // Was released before 250ms -> Click to open Quick Popup!
-                if (quickPopupOpen) {
-                    hideQuickPopup();
-                } else {
-                    showQuickPopup(e.clientX, e.clientY);
-                    // If tap initiated a 1-point stroke, discard it so button click doesn't leave stray mark
-                    if (annotations.length > 0) {
-                        const lastStroke = annotations[annotations.length - 1];
-                        if (lastStroke && lastStroke.points.length <= 2) {
-                            annotations.pop();
-                            renderCanvas();
-                        }
+                // Quick tap release (<450ms without drawing an erase stroke) -> This was a CLICK to cycle color!
+                if (barrelHoldActive) {
+                    barrelHoldActive = false;
+                    setTool(previousToolBeforeErase === "eraser" ? "pen" : previousToolBeforeErase);
+                }
+
+                // If tap initiated a 1-point stroke, discard it so button click doesn't leave stray mark
+                if (annotations.length > 0) {
+                    const lastStroke = annotations[annotations.length - 1];
+                    if (lastStroke && lastStroke.points.length <= 2) {
+                        annotations.pop();
+                        renderCanvas();
+                    }
+                }
+
+                // Debounce: prevent single physical click from cycling multiple times
+                const now = performance.now();
+                if (now - lastColorCycleTime >= 350) {
+                    lastColorCycleTime = now;
+                    cycleNextColor();
+                    if (activeTool !== "pen") {
+                        setTool("pen");
                     }
                 }
             }
@@ -1177,9 +1204,15 @@
             isPenActive = true;
         }
 
-        // If right click / barrel button down initially, check if it's already an erase action
-        if (e.button === 2 || (e.buttons & 2) !== 0) {
-            // Barrel button down at start of touch
+        const isBarrelDown = (e.buttons & 2) !== 0 || (e.button === 2);
+        if (isBarrelDown) {
+            strokeDrawnWhileBarrelDown = true;
+            if (!barrelHoldActive) {
+                previousToolBeforeErase = activeTool === "eraser" ? "pen" : activeTool;
+                activeTool = "eraser";
+                barrelHoldActive = true;
+                updateStrokePreview();
+            }
         }
 
         try {
@@ -1188,10 +1221,12 @@
 
         isDrawing = true;
         const normPos = getNormalizedCoords(e);
-        // Uniform stroke size dictated by currentStrokeWidth directly (no variable pressure curves)
-        const strokeRatio = (activeTool === "eraser" ? currentStrokeWidth * 3.5 : currentStrokeWidth) / 1000;
+        // Uniform stroke size dictated by tool-specific width directly (no variable pressure curves)
+        const effectiveTool = (isBarrelDown || activeTool === "eraser") ? "eraser" : activeTool;
+        const effectiveWidth = (effectiveTool === "eraser" ? eraserStrokeWidth : penStrokeWidth);
+        const strokeRatio = effectiveWidth / 1000;
         annotations.push({
-            tool: activeTool,
+            tool: effectiveTool,
             color: currentColor,
             widthRatio: strokeRatio,
             points: [normPos]
@@ -1207,6 +1242,11 @@
         }
 
         checkStylusBarrelButton(e);
+
+        const isBarrelDown = (e.buttons & 2) !== 0 || (e.button === 2);
+        if (isBarrelDown && isDrawing) {
+            strokeDrawnWhileBarrelDown = true;
+        }
 
         if (!isDrawing) return;
         const normPos = getNormalizedCoords(e);
