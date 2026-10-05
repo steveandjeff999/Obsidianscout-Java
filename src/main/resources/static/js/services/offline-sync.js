@@ -3,7 +3,7 @@
  * LocalStorage caching for scouting entries, background synchronizer, and comprehensive offline asset/endpoint pre-caching.
  */
 
-import { safeGetItem, safeSetItem, safeRemoveItem } from '../base/storage.js';
+import { safeGetItem, safeSetItem, safeRemoveItem, pruneHttpCaches } from '../base/storage.js';
 import { request, purgeScoutingCache } from '../base/http.js';
 import { showToast } from '../components/toast.js';
 import { checkLoginStatus, getMe, isAdmin } from '../base/auth.js';
@@ -219,7 +219,7 @@ export async function syncOfflineCache(clearOldOthers = false, force = false) {
         for (const endpoint of endpoints) {
             try {
                 await request(endpoint, { timeoutMs: 8000 });
-                updatedKeys.add("cache:" + endpoint);
+                updatedKeys.add(endpoint);
                 successCount++;
             } catch (e) {
                 console.warn("[Offline Cache] Sync failed for " + endpoint + ":", e.message || e);
@@ -229,12 +229,18 @@ export async function syncOfflineCache(clearOldOthers = false, force = false) {
         console.log("[Offline Cache] Background sync complete. Successfully updated " + successCount + " endpoints.");
 
         if (clearOldOthers && successCount > 0) {
+            try {
+                await pruneHttpCaches(updatedKeys);
+            } catch (pruneErr) {
+                console.warn("[Offline Cache] Failed to prune IDB caches:", pruneErr);
+            }
+
             const keysToRemove = [];
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
                 if (key && (key.startsWith("cache:") || key.startsWith("etag:"))) {
                     const subKey = key.startsWith("cache:") ? key.substring(6) : key.substring(5);
-                    if (subKey !== "/api/auth/me" && !updatedKeys.has("cache:" + subKey)) {
+                    if (subKey !== "/api/auth/me" && subKey !== "/api/settings" && !updatedKeys.has(subKey)) {
                         keysToRemove.push(key);
                     }
                 }

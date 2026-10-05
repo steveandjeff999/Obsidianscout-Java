@@ -12,7 +12,15 @@ import {
     safeRemoveItem,
     clearAllCaches,
     saveScrollPositions,
-    restoreScrollPositions
+    restoreScrollPositions,
+    getHttpCache,
+    getHttpCacheSync,
+    setHttpCache,
+    removeHttpCache,
+    clearAllHttpCaches,
+    pruneHttpCaches,
+    purgeScoutingHttpCache,
+    migrateLocalStorageToIdb
 } from './base/storage.js';
 
 import {
@@ -286,6 +294,11 @@ window.Obsidianscout = {
     safeSetItem,
     safeRemoveItem,
     clearAllCaches,
+    getHttpCache,
+    getHttpCacheSync,
+    setHttpCache,
+    removeHttpCache,
+    clearAllHttpCaches,
     downloadJson,
     showQrModal,
     compressData,
@@ -383,6 +396,11 @@ export {
     safeSetItem,
     safeRemoveItem,
     clearAllCaches,
+    getHttpCache,
+    getHttpCacheSync,
+    setHttpCache,
+    removeHttpCache,
+    clearAllHttpCaches,
     downloadJson,
     showQrModal,
     compressData,
@@ -533,6 +551,13 @@ function initGlobalSidebarAndUser(sidebarEl) {
 }
 
 async function onDOMContentLoaded() {
+    // Migrate legacy HTTP caches from localStorage to IndexedDB to free 5MB quota
+    try {
+        migrateLocalStorageToIdb();
+    } catch (e) {
+        console.warn("[Storage] IDB migration check failed:", e);
+    }
+
     // Clean up legacy i18n caches in localStorage
     try {
         const keysToRemove = [];

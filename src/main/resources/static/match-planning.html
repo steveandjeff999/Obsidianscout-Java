@@ -434,6 +434,7 @@
             gap: 4px;
             white-space: nowrap;
             transition: all 0.2s ease;
+            user-select: none;
         }
 
         .save-status-badge.saving {
@@ -446,6 +447,34 @@
             color: #4ade80;
             border-color: rgba(74, 222, 128, 0.4);
             background: rgba(74, 222, 128, 0.1);
+        }
+
+        .save-status-badge.offline {
+            color: #38bdf8;
+            border-color: rgba(56, 189, 248, 0.4);
+            background: rgba(56, 189, 248, 0.12);
+            cursor: pointer;
+        }
+
+        .save-status-badge.retrying {
+            color: #fb923c;
+            border-color: rgba(251, 146, 60, 0.4);
+            background: rgba(251, 146, 60, 0.12);
+            cursor: pointer;
+        }
+
+        .save-status-badge.error {
+            color: #f87171;
+            border-color: rgba(248, 113, 113, 0.4);
+            background: rgba(248, 113, 113, 0.12);
+            cursor: pointer;
+        }
+
+        .save-status-badge.offline:hover,
+        .save-status-badge.retrying:hover,
+        .save-status-badge.error:hover {
+            filter: brightness(1.2);
+            transform: translateY(-1px);
         }
 
         .canvas-container {

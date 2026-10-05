@@ -1,4 +1,6 @@
+
 const CACHE_NAME = 'obsidianscout-shell-v0-6-1-4';
+
 const NAVIGATION_TIMEOUT_MS = 4000;
 
 // Application shell assets cached during install
@@ -87,6 +89,7 @@ const ASSETS = [
     '/css/utilities/animations.css',
     '/js/common.js',
     '/js/base/storage.js',
+    '/js/base/idb-cache.js',
     '/js/base/http.js',
     '/js/base/auth.js',
     '/js/base/i18n.js',

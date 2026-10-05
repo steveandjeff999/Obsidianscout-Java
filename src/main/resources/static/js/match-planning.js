@@ -18,9 +18,20 @@
     function getCurrentStrokeWidth() {
         return activeTool === "eraser" ? eraserStrokeWidth : penStrokeWidth;
     }
-    let autoSaveTimeout = null;
-    let pollIntervalId = null;
     let lastSyncedTime = 0;
+    let fieldImageLoadedYear = null;
+
+    // Resilient offline-first sync & polling state
+    let hasUnsavedChanges = false;
+    let isSaving = false;
+    let queuedSavePending = false;
+    let saveDebounceTimer = null;
+    let retryTimer = null;
+    let retryCount = 0;
+    let isSyncingOtherPlans = false;
+    let pollTimeoutId = null;
+    let pollBackoffMs = 10000;
+    let lastScoutingPollTime = 0;
 
     let canvas = null;
     let ctx = null;
@@ -182,18 +193,68 @@
             });
 
             eventFilter.addEventListener("change", async () => {
-                if (pollIntervalId) {
-                    clearInterval(pollIntervalId);
-                    pollIntervalId = null;
-                }
+                cancelPolling();
                 currentEventKey = eventFilter.value;
                 await loadMatches(currentEventKey);
             });
 
+            // Resilient connection recovery and lifecycle listeners
+            window.addEventListener("online", () => {
+                if (hasUnsavedChanges || getPendingPlansQueue().length > 0) {
+                    triggerSavePipeline();
+                }
+                scheduleNextPoll(1000);
+            });
+
+            window.addEventListener("offline", () => {
+                if (hasUnsavedChanges) {
+                    updateSaveBadge("offline");
+                }
+                cancelPolling();
+            });
+
+            window.addEventListener("obsidianscout:connection-changed", (e) => {
+                if (e.detail && e.detail.online) {
+                    if (hasUnsavedChanges || getPendingPlansQueue().length > 0) {
+                        triggerSavePipeline();
+                    }
+                    scheduleNextPoll(1000);
+                } else {
+                    if (hasUnsavedChanges) {
+                        updateSaveBadge("offline");
+                    }
+                }
+            });
+
+            window.addEventListener("obsidianscout:offline-entries-synced", () => {
+                if (hasUnsavedChanges || getPendingPlansQueue().length > 0) {
+                    triggerSavePipeline();
+                }
+            });
+
             window.addEventListener("beforeunload", () => {
-                if (pollIntervalId) {
-                    clearInterval(pollIntervalId);
-                    pollIntervalId = null;
+                cancelPolling();
+                if (currentMatch && currentEventKey && hasUnsavedChanges) {
+                    savePlanLocally(currentEventKey, currentMatch.matchKey, {
+                        annotations: annotations,
+                        teamMarkerPositions: teamMarkerPositions
+                    }, false);
+                }
+            });
+
+            document.addEventListener("visibilitychange", () => {
+                if (document.hidden) {
+                    if (currentMatch && currentEventKey && hasUnsavedChanges) {
+                        savePlanLocally(currentEventKey, currentMatch.matchKey, {
+                            annotations: annotations,
+                            teamMarkerPositions: teamMarkerPositions
+                        }, false);
+                    }
+                } else {
+                    if (hasUnsavedChanges || getPendingPlansQueue().length > 0) {
+                        triggerSavePipeline();
+                    }
+                    scheduleNextPoll(2000);
                 }
             });
 
@@ -267,10 +328,7 @@
     }
 
     function clearLoadedMatch() {
-        if (pollIntervalId) {
-            clearInterval(pollIntervalId);
-            pollIntervalId = null;
-        }
+        cancelPolling();
         currentMatch = null;
         annotations = [];
         const emptyState = document.getElementById("canvas-empty-state");
@@ -312,131 +370,398 @@
         teamMarkerPositions = defaultMarkerPositions();
     }
 
-    function updateSaveBadge(status) {
+    function isOnlineConnection() {
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+            return false;
+        }
+        if (window.Obsidianscout && typeof window.Obsidianscout.isServerOnline === "function") {
+            return window.Obsidianscout.isServerOnline();
+        }
+        return true;
+    }
+
+    const STORAGE_PREFIX = "obsidianscout:match_plan:";
+    const PENDING_QUEUE_KEY = "obsidianscout:pending_match_plans";
+
+    function getPlanStorageKey(eventKey, matchKey) {
+        return `${STORAGE_PREFIX}${eventKey}:${matchKey}`;
+    }
+
+    function getPendingPlansQueue() {
+        try {
+            const text = (window.Obsidianscout && Obsidianscout.safeGetItem)
+                ? Obsidianscout.safeGetItem(PENDING_QUEUE_KEY)
+                : localStorage.getItem(PENDING_QUEUE_KEY);
+            return text ? JSON.parse(text) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function savePendingPlansQueue(queue) {
+        try {
+            const json = JSON.stringify(queue);
+            if (window.Obsidianscout && Obsidianscout.safeSetItem) {
+                Obsidianscout.safeSetItem(PENDING_QUEUE_KEY, json);
+            } else {
+                localStorage.setItem(PENDING_QUEUE_KEY, json);
+            }
+        } catch (e) {}
+    }
+
+    function markPlanInQueue(eventKey, matchKey, isPending) {
+        const queue = getPendingPlansQueue();
+        const filtered = queue.filter(item => !(item.eventKey === eventKey && item.matchKey === matchKey));
+        if (isPending) {
+            filtered.push({ eventKey, matchKey, timestamp: Date.now() });
+        }
+        savePendingPlansQueue(filtered);
+    }
+
+    function savePlanLocally(eventKey, matchKey, data, isSynced = false) {
+        if (!eventKey || !matchKey) return;
+        try {
+            const record = {
+                eventKey,
+                matchKey,
+                annotations: data.annotations || [],
+                teamMarkerPositions: data.teamMarkerPositions || defaultMarkerPositions(),
+                updatedAt: data.updatedAt || Date.now(),
+                synced: !!isSynced
+            };
+            const key = getPlanStorageKey(eventKey, matchKey);
+            const json = JSON.stringify(record);
+            if (window.Obsidianscout && Obsidianscout.safeSetItem) {
+                Obsidianscout.safeSetItem(key, json);
+            } else {
+                localStorage.setItem(key, json);
+            }
+            markPlanInQueue(eventKey, matchKey, !isSynced);
+        } catch (e) {
+            console.warn("[Match Plan] LocalStorage save warning:", e);
+        }
+    }
+
+    function loadPlanLocally(eventKey, matchKey) {
+        if (!eventKey || !matchKey) return null;
+        try {
+            const key = getPlanStorageKey(eventKey, matchKey);
+            const text = (window.Obsidianscout && Obsidianscout.safeGetItem)
+                ? Obsidianscout.safeGetItem(key)
+                : localStorage.getItem(key);
+            if (!text) return null;
+            return JSON.parse(text);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function updateSaveBadge(status, attempt) {
         const badge = document.getElementById("save-status-indicator");
         if (!badge) return;
         badge.className = "save-status-badge";
         if (status === "saving") {
             badge.classList.add("saving");
             badge.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+            badge.title = "Saving match plan to cloud...";
         } else if (status === "saved") {
             badge.classList.add("saved");
             badge.innerHTML = '<i class="fa-solid fa-cloud"></i> Saved';
+            badge.title = "Saved to cloud and device";
+        } else if (status === "offline") {
+            badge.classList.add("offline");
+            badge.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Saved locally';
+            badge.title = "Saved to device. Will sync to cloud when connection is restored. Click to sync now.";
+        } else if (status === "retrying") {
+            badge.classList.add("retrying");
+            const attemptText = attempt ? ` (${attempt})` : "";
+            badge.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i> Retrying${attemptText}`;
+            badge.title = "Weak connection. Retrying sync automatically. Click to retry now.";
         } else if (status === "error") {
-            badge.classList.add("saving");
-            badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Save failed';
+            badge.classList.add("error");
+            badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Save failed (tap to retry)';
+            badge.title = "Cloud save failed. Click to retry now.";
         }
     }
 
     function scheduleAutoSave() {
         if (!currentMatch || !currentEventKey) return;
-        updateSaveBadge("saving");
-        if (autoSaveTimeout) {
-            clearTimeout(autoSaveTimeout);
+
+        hasUnsavedChanges = true;
+        const now = Date.now();
+
+        // 1. Immediately persist locally (zero data loss guarantee on crashes/drops)
+        savePlanLocally(currentEventKey, currentMatch.matchKey, {
+            annotations: annotations,
+            teamMarkerPositions: teamMarkerPositions,
+            updatedAt: now
+        }, false);
+
+        // 2. Clear any pending debounce timer
+        if (saveDebounceTimer) {
+            clearTimeout(saveDebounceTimer);
+            saveDebounceTimer = null;
         }
-        autoSaveTimeout = setTimeout(async () => {
-            try {
-                const payload = {
-                    eventKey: currentEventKey,
-                    matchKey: currentMatch.matchKey,
-                    planJson: JSON.stringify({
-                        annotations: annotations,
-                        teamMarkerPositions: teamMarkerPositions
-                    })
-                };
-                const res = await Obsidianscout.request("/api/match-planning", {
-                    method: "POST",
-                    body: JSON.stringify(payload)
-                });
-                if (res && res.updatedAt) {
-                    lastSyncedTime = res.updatedAt;
-                }
-                updateSaveBadge("saved");
-            } catch (err) {
-                console.error("Auto-save match plan failed:", err);
-                updateSaveBadge("error");
+
+        // 3. If offline, set offline badge immediately and pause network call
+        if (!isOnlineConnection()) {
+            updateSaveBadge("offline");
+            return;
+        }
+
+        // 4. Update badge to saving and debounce network POST
+        updateSaveBadge("saving");
+        saveDebounceTimer = setTimeout(() => {
+            saveDebounceTimer = null;
+            triggerSavePipeline();
+        }, 600);
+    }
+
+    async function triggerSavePipeline() {
+        if (!currentMatch || !currentEventKey) return;
+
+        if (retryTimer) {
+            clearTimeout(retryTimer);
+            retryTimer = null;
+        }
+
+        if (!isOnlineConnection()) {
+            updateSaveBadge("offline");
+            return;
+        }
+
+        if (isSaving) {
+            queuedSavePending = true;
+            return;
+        }
+
+        isSaving = true;
+        updateSaveBadge("saving");
+
+        const matchKey = currentMatch.matchKey;
+        const eventKey = currentEventKey;
+        const currentPayload = {
+            eventKey: eventKey,
+            matchKey: matchKey,
+            planJson: JSON.stringify({
+                annotations: annotations,
+                teamMarkerPositions: teamMarkerPositions
+            })
+        };
+
+        try {
+            const res = await Obsidianscout.request("/api/match-planning", {
+                method: "POST",
+                json: currentPayload,
+                timeoutMs: 15000 // 15 second timeout for weak connections
+            });
+
+            const serverUpdatedAt = (res && res.updatedAt) ? res.updatedAt : Date.now();
+            lastSyncedTime = serverUpdatedAt;
+            retryCount = 0;
+
+            if (currentMatch && currentMatch.matchKey === matchKey && currentEventKey === eventKey) {
+                hasUnsavedChanges = queuedSavePending;
             }
-        }, 500);
+
+            savePlanLocally(eventKey, matchKey, {
+                annotations: annotations,
+                teamMarkerPositions: teamMarkerPositions,
+                updatedAt: serverUpdatedAt
+            }, true);
+
+            if (!queuedSavePending && (!currentMatch || currentMatch.matchKey === matchKey)) {
+                updateSaveBadge("saved");
+            }
+
+            // Sync other queued matches in background
+            syncOtherPendingPlans();
+        } catch (err) {
+            console.warn("[Match Plan] Network save failed:", err);
+            if (!isOnlineConnection()) {
+                updateSaveBadge("offline");
+            } else {
+                retryCount++;
+                updateSaveBadge("retrying", retryCount);
+                // Exponential backoff: 2s, 3s, 4.5s, 6.7s, up to 15s max
+                const delay = Math.min(2000 * Math.pow(1.5, Math.min(retryCount, 5)), 15000);
+                retryTimer = setTimeout(() => {
+                    retryTimer = null;
+                    triggerSavePipeline();
+                }, delay);
+            }
+        } finally {
+            isSaving = false;
+            if (queuedSavePending) {
+                queuedSavePending = false;
+                triggerSavePipeline();
+            }
+        }
+    }
+
+    async function syncOtherPendingPlans() {
+        if (isSyncingOtherPlans || !isOnlineConnection()) return;
+        const queue = getPendingPlansQueue();
+        if (!queue || queue.length === 0) return;
+
+        isSyncingOtherPlans = true;
+        try {
+            for (const item of [...queue]) {
+                if (currentMatch && currentEventKey && item.eventKey === currentEventKey && item.matchKey === currentMatch.matchKey) {
+                    continue; // Current match handled by main pipeline
+                }
+                const local = loadPlanLocally(item.eventKey, item.matchKey);
+                if (!local || local.synced) {
+                    markPlanInQueue(item.eventKey, item.matchKey, false);
+                    continue;
+                }
+
+                try {
+                    const res = await Obsidianscout.request("/api/match-planning", {
+                        method: "POST",
+                        json: {
+                            eventKey: item.eventKey,
+                            matchKey: item.matchKey,
+                            planJson: JSON.stringify({
+                                annotations: local.annotations || [],
+                                teamMarkerPositions: local.teamMarkerPositions || defaultMarkerPositions()
+                            })
+                        },
+                        timeoutMs: 12000
+                    });
+
+                    if (res && res.updatedAt) {
+                        savePlanLocally(item.eventKey, item.matchKey, {
+                            annotations: local.annotations,
+                            teamMarkerPositions: local.teamMarkerPositions,
+                            updatedAt: res.updatedAt
+                        }, true);
+                    }
+                } catch (syncErr) {
+                    console.warn(`[Match Plan] Background sync of pending plan ${item.matchKey} delayed:`, syncErr);
+                    break; // Stop iterating queue on error to avoid connection congestion
+                }
+            }
+        } finally {
+            isSyncingOtherPlans = false;
+        }
     }
 
     async function loadSavedPlan(eventKey, matchKey) {
-        try {
-            const res = await Obsidianscout.request(`/api/match-planning?eventKey=${encodeURIComponent(eventKey)}&matchKey=${encodeURIComponent(matchKey)}`);
-            if (res && res.updatedAt) {
-                lastSyncedTime = res.updatedAt;
+        // 1. Immediately check local storage
+        const local = loadPlanLocally(eventKey, matchKey);
+        let loadedFromLocal = false;
+        if (local) {
+            if (Array.isArray(local.annotations)) {
+                annotations = local.annotations;
             }
-            if (res && res.planJson && res.planJson !== "{}" && res.planJson !== "") {
-                const data = JSON.parse(res.planJson);
-                if (Array.isArray(data.annotations)) {
-                    annotations = data.annotations;
+            if (local.teamMarkerPositions && typeof local.teamMarkerPositions === "object") {
+                teamMarkerPositions = Object.assign({}, defaultMarkerPositions(), local.teamMarkerPositions);
+            }
+            lastSyncedTime = local.updatedAt || 0;
+            loadedFromLocal = true;
+
+            if (local.synced === false) {
+                hasUnsavedChanges = true;
+                updateSaveBadge(isOnlineConnection() ? "saving" : "offline");
+                if (isOnlineConnection()) {
+                    triggerSavePipeline();
                 }
-                if (data.teamMarkerPositions && typeof data.teamMarkerPositions === "object") {
-                    teamMarkerPositions = Object.assign({}, defaultMarkerPositions(), data.teamMarkerPositions);
-                }
+            } else {
+                hasUnsavedChanges = false;
                 updateSaveBadge("saved");
-                return true;
             }
-        } catch (e) {
-            console.warn("No existing saved plan found or failed to load:", e);
+        } else {
+            annotations = [];
+            teamMarkerPositions = defaultMarkerPositions();
+            hasUnsavedChanges = false;
+            updateSaveBadge("saved");
         }
-        updateSaveBadge("saved");
-        return false;
-    }
 
-    async function selectMatch(match) {
-        if (pollIntervalId) {
-            clearInterval(pollIntervalId);
-            pollIntervalId = null;
-        }
-        lastSyncedTime = 0;
-        currentMatch = match;
-        annotations = [];
-        redoStack = [];
-        resetMarkerPositions();
-
-        const emptyState = document.getElementById("canvas-empty-state");
-        if (emptyState) emptyState.style.display = "none";
-
-        // 1. Update Driver Station side columns
-        updateDriverStations(match);
-
-        // 2. Load saved drawings and team positions from the database
-        await loadSavedPlan(currentEventKey, match.matchKey);
-
-        // 3. Fetch field image dynamically for this year
-        try {
-            const imageInfo = await Obsidianscout.request(`/api/field-images?year=${currentYear}`);
-            await loadFieldImage(imageInfo.imagePath);
-        } catch (e) {
-            console.warn(`No specific field image found for year ${currentYear}, attempting fallback...`, e);
+        // 2. Fetch server copy if online
+        if (isOnlineConnection()) {
             try {
-                await loadFieldImage(`/assets/images/field-images/${currentYear}/rebuilt.png`);
-            } catch (err2) {
-                try {
-                    await loadFieldImage(`/assets/images/field-images/${currentYear}/reefscape.png`);
-                } catch (err3) {
-                    console.error("Failed to load any field image:", err3);
-                    renderPlaceholderField();
+                const res = await Obsidianscout.request(
+                    `/api/match-planning?eventKey=${encodeURIComponent(eventKey)}&matchKey=${encodeURIComponent(matchKey)}`,
+                    { timeoutMs: 8000 }
+                );
+                if (res) {
+                    const serverTime = res.updatedAt || 0;
+                    // If local changes are pending, local edits win and should sync to server
+                    if (hasUnsavedChanges) {
+                        triggerSavePipeline();
+                        return true;
+                    }
+
+                    // If server has newer data, apply server copy
+                    if (serverTime > lastSyncedTime || (!loadedFromLocal && res.planJson && res.planJson !== "{}")) {
+                        if (res.planJson && res.planJson !== "{}" && res.planJson !== "") {
+                            const data = JSON.parse(res.planJson);
+                            if (Array.isArray(data.annotations)) {
+                                annotations = data.annotations;
+                            }
+                            if (data.teamMarkerPositions && typeof data.teamMarkerPositions === "object") {
+                                teamMarkerPositions = Object.assign({}, defaultMarkerPositions(), data.teamMarkerPositions);
+                            }
+                        }
+                        lastSyncedTime = serverTime;
+                        savePlanLocally(eventKey, matchKey, {
+                            annotations: annotations,
+                            teamMarkerPositions: teamMarkerPositions,
+                            updatedAt: serverTime
+                        }, true);
+                        renderCanvas();
+                        updateFieldMarkerPositions();
+                    }
+                    updateSaveBadge("saved");
+                    return true;
+                }
+            } catch (e) {
+                console.warn("[Match Plan] Server plan load failed/offline:", e);
+                if (loadedFromLocal) {
+                    if (!local.synced) {
+                        updateSaveBadge("offline");
+                    } else {
+                        updateSaveBadge("saved");
+                    }
                 }
             }
         }
 
-        // 4. Render Draggable Square Team Markers on field
-        renderFieldMarkers();
-
-        // 5. Load stats for all 6 teams in this match
-        await loadAllTeamStats(match);
-
-        // 6. Start real-time polling sync (every 3 seconds)
-        pollIntervalId = setInterval(pollServer, 3000);
+        return loadedFromLocal;
     }
 
-    async function pollServer() {
-        if (!currentEventKey || !currentMatch || isDrawing || isDraggingMarker) return;
+    function cancelPolling() {
+        if (pollTimeoutId) {
+            clearTimeout(pollTimeoutId);
+            pollTimeoutId = null;
+        }
+    }
+
+    function scheduleNextPoll(delayMs) {
+        cancelPolling();
+        pollTimeoutId = setTimeout(runPollCycle, delayMs);
+    }
+
+    async function runPollCycle() {
+        if (!currentEventKey || !currentMatch) {
+            scheduleNextPoll(10000);
+            return;
+        }
+
+        // Do NOT poll while drawing, dragging, saving, having unsaved changes, or offline
+        if (isDrawing || isDraggingMarker || isSaving || hasUnsavedChanges || !isOnlineConnection()) {
+            scheduleNextPoll(isOnlineConnection() ? 8000 : 15000);
+            return;
+        }
+
+        // 1. Poll lightweight match plan
         try {
-            // 1. Poll match plan drawings & marker positions
-            const res = await Obsidianscout.request(`/api/match-planning?eventKey=${encodeURIComponent(currentEventKey)}&matchKey=${encodeURIComponent(currentMatch.matchKey)}`);
-            if (res && res.updatedAt > lastSyncedTime) {
+            const res = await Obsidianscout.request(
+                `/api/match-planning?eventKey=${encodeURIComponent(currentEventKey)}&matchKey=${encodeURIComponent(currentMatch.matchKey)}`,
+                { timeoutMs: 6000 }
+            );
+            if (res && res.updatedAt > lastSyncedTime && !hasUnsavedChanges && !isDrawing && !isDraggingMarker) {
                 if (res.planJson && res.planJson !== "{}" && res.planJson !== "") {
                     const data = JSON.parse(res.planJson);
                     if (Array.isArray(data.annotations)) {
@@ -447,38 +772,109 @@
                     }
                     renderCanvas();
                     updateFieldMarkerPositions();
+                    savePlanLocally(currentEventKey, currentMatch.matchKey, {
+                        annotations: annotations,
+                        teamMarkerPositions: teamMarkerPositions,
+                        updatedAt: res.updatedAt
+                    }, true);
                 }
                 lastSyncedTime = res.updatedAt;
                 updateSaveBadge("saved");
             }
-
-            // 2. Poll scouting entries for real-time team stats updates
-            const [matchEntries, pitEntries, qualEntries] = await Promise.all([
-                Obsidianscout.request(`/api/scouting?includePrescout=true`),
-                Obsidianscout.request(`/api/pit-scouting?includePrescout=true`),
-                Obsidianscout.request(`/api/qual-scouting?includePrescout=true`)
-            ]);
-
-            const currentMatchCount = state.matchEntries?.length || 0;
-            const newMatchCount = matchEntries?.length || 0;
-            const currentPitCount = state.pitEntries?.length || 0;
-            const newPitCount = pitEntries?.length || 0;
-            const currentQualCount = state.qualEntries?.length || 0;
-            const newQualCount = qualEntries?.length || 0;
-
-            const hasEntriesChanged = (currentMatchCount !== newMatchCount) ||
-                (currentPitCount !== newPitCount) ||
-                (currentQualCount !== newQualCount);
-
-            if (hasEntriesChanged) {
-                state.matchEntries = matchEntries || [];
-                state.pitEntries = pitEntries || [];
-                state.qualEntries = qualEntries || [];
-                await loadAllTeamStats(currentMatch);
-            }
+            pollBackoffMs = 10000;
         } catch (err) {
-            console.warn("Match planning polling sync failed:", err);
+            console.warn("[Match Plan] Polling drawing sync failed:", err);
+            pollBackoffMs = Math.min(pollBackoffMs * 1.5, 30000);
         }
+
+        // 2. Poll heavy scouting entries (at most once every 60 seconds)
+        const now = Date.now();
+        if (now - lastScoutingPollTime > 60000) {
+            lastScoutingPollTime = now;
+            try {
+                const [matchEntries, pitEntries, qualEntries] = await Promise.all([
+                    Obsidianscout.request(`/api/scouting?includePrescout=true`, { timeoutMs: 8000 }),
+                    Obsidianscout.request(`/api/pit-scouting?includePrescout=true`, { timeoutMs: 8000 }),
+                    Obsidianscout.request(`/api/qual-scouting?includePrescout=true`, { timeoutMs: 8000 })
+                ]);
+
+                const currentMatchCount = state.matchEntries?.length || 0;
+                const newMatchCount = matchEntries?.length || 0;
+                const currentPitCount = state.pitEntries?.length || 0;
+                const newPitCount = pitEntries?.length || 0;
+                const currentQualCount = state.qualEntries?.length || 0;
+                const newQualCount = qualEntries?.length || 0;
+
+                const hasEntriesChanged = (currentMatchCount !== newMatchCount) ||
+                    (currentPitCount !== newPitCount) ||
+                    (currentQualCount !== newQualCount);
+
+                if (hasEntriesChanged) {
+                    state.matchEntries = matchEntries || [];
+                    state.pitEntries = pitEntries || [];
+                    state.qualEntries = qualEntries || [];
+                    if (currentMatch) {
+                        await loadAllTeamStats(currentMatch);
+                    }
+                }
+            } catch (scoutErr) {
+                console.warn("[Match Plan] Scouting polling sync skipped:", scoutErr);
+            }
+        }
+
+        scheduleNextPoll(pollBackoffMs);
+    }
+
+    async function selectMatch(match) {
+        cancelPolling();
+        lastSyncedTime = 0;
+        currentMatch = match;
+        redoStack = [];
+
+        const emptyState = document.getElementById("canvas-empty-state");
+        if (emptyState) emptyState.style.display = "none";
+
+        // 1. Update Driver Station side columns
+        updateDriverStations(match);
+
+        // 2. Load saved drawings and team positions (offline-first: local then server)
+        await loadSavedPlan(currentEventKey, match.matchKey);
+
+        // 3. Fetch field image dynamically for this year (with caching)
+        if (!fieldImageObj || fieldImageLoadedYear !== currentYear) {
+            try {
+                const imageInfo = await Obsidianscout.request(`/api/field-images?year=${currentYear}`, { timeoutMs: 8000 });
+                await loadFieldImage(imageInfo.imagePath);
+                fieldImageLoadedYear = currentYear;
+            } catch (e) {
+                console.warn(`No specific field image found for year ${currentYear}, attempting fallback...`, e);
+                try {
+                    await loadFieldImage(`/assets/images/field-images/${currentYear}/rebuilt.png`);
+                    fieldImageLoadedYear = currentYear;
+                } catch (err2) {
+                    try {
+                        await loadFieldImage(`/assets/images/field-images/${currentYear}/reefscape.png`);
+                        fieldImageLoadedYear = currentYear;
+                    } catch (err3) {
+                        console.error("Failed to load any field image:", err3);
+                        renderPlaceholderField();
+                    }
+                }
+            }
+        } else {
+            resizeCanvas();
+            renderCanvas();
+            updateFieldMarkerPositions();
+        }
+
+        // 4. Render Draggable Square Team Markers on field
+        renderFieldMarkers();
+
+        // 5. Load stats for all 6 teams in this match
+        await loadAllTeamStats(match);
+
+        // 6. Start resilient polling sync
+        scheduleNextPoll(10000);
     }
 
     function updateDriverStations(match) {
@@ -688,8 +1084,8 @@
             el.style.top = `${newY}px`;
 
             teamMarkerPositions[stationId] = {
-                xRatio: Math.max(0, Math.min(1, newX / W)),
-                yRatio: Math.max(0, Math.min(1, newY / H))
+                xRatio: Math.round(Math.max(0, Math.min(1, newX / W)) * 10000) / 10000,
+                yRatio: Math.round(Math.max(0, Math.min(1, newY / H)) * 10000) / 10000
             };
         });
 
@@ -1075,6 +1471,19 @@
             }
         }
 
+        // Save Status Indicator click to retry / manual sync
+        const saveBadge = document.getElementById("save-status-indicator");
+        if (saveBadge) {
+            saveBadge.addEventListener("click", () => {
+                if (hasUnsavedChanges || retryTimer || getPendingPlansQueue().length > 0) {
+                    Obsidianscout.showToast("Attempting to sync match plan with server...", "info");
+                    triggerSavePipeline();
+                } else {
+                    Obsidianscout.showToast("All match plan changes are saved.", "success");
+                }
+            });
+        }
+
         updateStrokePreview();
     }
 
@@ -1100,8 +1509,8 @@
     function getNormalizedCoords(e) {
         const rect = canvas.getBoundingClientRect();
         return {
-            x: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
-            y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
+            x: Math.round(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * 10000) / 10000,
+            y: Math.round(Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)) * 10000) / 10000
         };
     }
 
@@ -1187,7 +1596,6 @@
 
     function handlePointerDown(e) {
         if (!currentMatch) return;
-
         // Active Palm Rejection: If pen is active/drawing, swallow all finger touches!
         if (isPenActive && e.pointerType === "touch") {
             e.preventDefault();
@@ -1251,9 +1659,15 @@
         if (!isDrawing) return;
         const normPos = getNormalizedCoords(e);
         const curStroke = annotations[annotations.length - 1];
-        if (curStroke) {
-            curStroke.points.push(normPos);
-            renderCanvas();
+        if (curStroke && curStroke.points && curStroke.points.length > 0) {
+            const lastPoint = curStroke.points[curStroke.points.length - 1];
+            const dx = normPos.x - lastPoint.x;
+            const dy = normPos.y - lastPoint.y;
+            // Filter jitter and micro-steps under 0.002 normalized screen distance
+            if (dx * dx + dy * dy >= 0.000004) {
+                curStroke.points.push(normPos);
+                renderCanvas();
+            }
         }
     }
 
@@ -1357,7 +1771,19 @@
         statsCard.style.display = "block";
 
         try {
-            // Load all entries and configs in parallel
+            // Load configs and entries in parallel with offline caching resilience
+            const configPromises = [
+                state.configs.match ? Promise.resolve(state.configs.match) : Obsidianscout.request("/api/config", { timeoutMs: 8000 }).catch(() => null),
+                state.configs.pit ? Promise.resolve(state.configs.pit) : Obsidianscout.request("/api/pit-config", { timeoutMs: 8000 }).catch(() => null),
+                state.configs.qualitative ? Promise.resolve(state.configs.qualitative) : Obsidianscout.request("/api/qual-config", { timeoutMs: 8000 }).catch(() => null)
+            ];
+
+            const entriesPromises = [
+                Obsidianscout.request(`/api/scouting?includePrescout=true`, { timeoutMs: 8000 }).catch(() => state.matchEntries || []),
+                Obsidianscout.request(`/api/pit-scouting?includePrescout=true`, { timeoutMs: 8000 }).catch(() => state.pitEntries || []),
+                Obsidianscout.request(`/api/qual-scouting?includePrescout=true`, { timeoutMs: 8000 }).catch(() => state.qualEntries || [])
+            ];
+
             const [
                 matchConfig,
                 pitConfig,
@@ -1365,21 +1791,14 @@
                 matchEntries,
                 pitEntries,
                 qualEntries
-            ] = await Promise.all([
-                Obsidianscout.request("/api/config"),
-                Obsidianscout.request("/api/pit-config"),
-                Obsidianscout.request("/api/qual-config"),
-                Obsidianscout.request(`/api/scouting?includePrescout=true`),
-                Obsidianscout.request(`/api/pit-scouting?includePrescout=true`),
-                Obsidianscout.request(`/api/qual-scouting?includePrescout=true`)
-            ]);
+            ] = await Promise.all([...configPromises, ...entriesPromises]);
 
-            state.configs.match = matchConfig;
-            state.configs.pit = pitConfig;
-            state.configs.qualitative = qualConfig;
-            state.matchEntries = matchEntries || [];
-            state.pitEntries = pitEntries || [];
-            state.qualEntries = qualEntries || [];
+            if (matchConfig) state.configs.match = matchConfig;
+            if (pitConfig) state.configs.pit = pitConfig;
+            if (qualConfig) state.configs.qualitative = qualConfig;
+            if (matchEntries && matchEntries.length > 0) state.matchEntries = matchEntries;
+            if (pitEntries && pitEntries.length > 0) state.pitEntries = pitEntries;
+            if (qualEntries && qualEntries.length > 0) state.qualEntries = qualEntries;
 
             blueContainer.innerHTML = "";
             redContainer.innerHTML = "";

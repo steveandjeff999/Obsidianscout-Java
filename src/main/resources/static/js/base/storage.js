@@ -3,6 +3,21 @@
  * LocalStorage wrappers, cache clearance, and scroll position persistence.
  */
 
+export {
+    getDb,
+    getHttpCache,
+    getHttpCacheSync,
+    setHttpCache,
+    removeHttpCache,
+    clearAllHttpCaches,
+    purgeScoutingHttpCache,
+    pruneHttpCaches,
+    migrateLocalStorageToIdb,
+    isScoutingDataPath
+} from './idb-cache.js';
+
+import { clearAllHttpCaches } from './idb-cache.js';
+
 export function safeGetItem(key) {
     try {
         return localStorage.getItem(key);
@@ -17,6 +32,23 @@ export function safeSetItem(key, value) {
         localStorage.setItem(key, value);
         return true;
     } catch (e) {
+        const isQuota = e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === 1014);
+        if (isQuota) {
+            console.warn("[Storage] QuotaExceededError detected on localStorage. Purging stale cache keys to reclaim space...");
+            try {
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const k = localStorage.key(i);
+                    if (k && (k.startsWith("cache:") || k.startsWith("etag:")) && k !== "cache:/api/auth/me" && k !== "cache:/api/settings") {
+                        localStorage.removeItem(k);
+                    }
+                }
+                localStorage.setItem(key, value);
+                return true;
+            } catch (retryErr) {
+                console.error("[Storage] Failed to write even after emergency cleanup:", retryErr);
+                return false;
+            }
+        }
         console.warn("[Storage] Failed to write to localStorage:", e);
         return false;
     }
@@ -34,6 +66,10 @@ export function safeRemoveItem(key) {
 }
 
 export function clearAllCaches() {
+    try {
+        clearAllHttpCaches().catch(err => console.warn("[Storage] Failed to clear IDB caches:", err));
+    } catch (_) {}
+
     try {
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {

@@ -4,6 +4,16 @@
  */
 
 import { safeGetItem, safeSetItem, safeRemoveItem } from './storage.js';
+import {
+    getHttpCache,
+    getHttpCacheSync,
+    setHttpCache,
+    removeHttpCache,
+    purgeScoutingHttpCache,
+    isScoutingDataPath
+} from './idb-cache.js';
+
+export { isScoutingDataPath };
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
 
@@ -116,17 +126,6 @@ export async function withButtonLoading(button, asyncFn, loadingTextOrOptions = 
     }
 }
 
-export function isScoutingDataPath(path) {
-    if (!path) return false;
-    const clean = path.split("?")[0];
-    return clean === "/api/scouting" ||
-           clean === "/api/pit-scouting" ||
-           clean === "/api/qual-scouting" ||
-           clean.startsWith("/api/prescout/") ||
-           clean === "/api/analytics" ||
-           clean === "/api/custom-analytics/dataset";
-}
-
 export function getActiveUserRole() {
     try {
         const meText = safeGetItem("cache:/api/auth/me");
@@ -165,6 +164,10 @@ export function getActiveEventKey() {
 
 export function getCachedData(path) {
     try {
+        const cached = getHttpCacheSync(path);
+        if (cached && cached.text !== null) {
+            return safeParse(cached.text);
+        }
         const text = safeGetItem("cache:" + path);
         if (text !== null) {
             return safeParse(text);
@@ -173,21 +176,12 @@ export function getCachedData(path) {
     return null;
 }
 
-export function purgeScoutingCache() {
+export async function purgeScoutingCache() {
     try {
-        if (typeof localStorage === 'undefined') return;
-        const keysToRemove = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && (key.startsWith("cache:") || key.startsWith("etag:"))) {
-                const subPath = key.startsWith("cache:") ? key.substring(6) : key.substring(5);
-                if (isScoutingDataPath(subPath)) {
-                    keysToRemove.push(key);
-                }
-            }
-        }
-        keysToRemove.forEach(k => safeRemoveItem(k));
-    } catch (e) {}
+        await purgeScoutingHttpCache();
+    } catch (e) {
+        console.warn("[HTTP Cache] Failed to purge scouting cache:", e);
+    }
 }
 
 export async function request(path, options = {}) {
@@ -218,10 +212,10 @@ export async function request(path, options = {}) {
     } catch (e) {}
 
     if (method === "GET" && !navigator.onLine) {
-        const cachedText = safeGetItem("cache:" + path);
-        if (cachedText !== null) {
+        const cached = await getHttpCache(path);
+        if (cached && cached.text !== null) {
             console.log("[Offline Cache] Offline mode: Serving cached response for:", path);
-            return safeParse(cachedText);
+            return safeParse(cached.text);
         }
     }
 
@@ -259,13 +253,11 @@ export async function request(path, options = {}) {
         opts.headers["X-Device-Id"] = devId;
     }
 
+    let cached = null;
     if (method === "GET") {
-        const cachedText = safeGetItem("cache:" + path);
-        const storedEtag = safeGetItem("etag:" + path);
-        if (storedEtag && cachedText !== null && !opts.headers["If-None-Match"]) {
-            opts.headers["If-None-Match"] = storedEtag;
-        } else if (!cachedText && storedEtag) {
-            safeRemoveItem("etag:" + path);
+        cached = await getHttpCache(path);
+        if (cached && cached.etag && cached.text !== null && !opts.headers["If-None-Match"]) {
+            opts.headers["If-None-Match"] = cached.etag;
         }
     }
     if (options.json !== undefined) {
@@ -288,9 +280,11 @@ export async function request(path, options = {}) {
         }
 
         if (response.status === 304) {
-            const cachedText = safeGetItem("cache:" + path);
-            if (cachedText !== null) {
-                const parsed = safeParse(cachedText);
+            if (!cached) {
+                cached = await getHttpCache(path);
+            }
+            if (cached && cached.text !== null) {
+                const parsed = safeParse(cached.text);
                 if (parsed !== null && parsed !== undefined) {
                     return parsed;
                 }
@@ -298,8 +292,7 @@ export async function request(path, options = {}) {
             // 304 received, but cache was missing or corrupt:
             // Remove orphan ETag and re-fetch unconditionally with reload to get fresh 200 OK data
             console.warn(`[HTTP Cache] 304 Not Modified received for ${path}, but cached data is missing. Re-fetching unconditionally...`);
-            safeRemoveItem("etag:" + path);
-            safeRemoveItem("cache:" + path);
+            await removeHttpCache(path);
             const retryHeaders = { ...opts.headers };
             delete retryHeaders["If-None-Match"];
             retryHeaders["Cache-Control"] = "no-cache";
@@ -319,10 +312,7 @@ export async function request(path, options = {}) {
             const freshText = await retryResponse.text();
             const freshData = freshText ? safeParse(freshText) : null;
             const freshEtag = retryResponse.headers && retryResponse.headers.get && retryResponse.headers.get("ETag");
-            const didStore = safeSetItem("cache:" + path, freshText);
-            if (didStore && freshEtag) {
-                safeSetItem("etag:" + path, freshEtag);
-            }
+            await setHttpCache(path, freshText, freshEtag);
             return freshData;
         }
 
@@ -417,17 +407,8 @@ export async function request(path, options = {}) {
             }
 
             if (shouldCache) {
-                const didStore = safeSetItem("cache:" + path, textToCache);
-                try {
-                    const etag = response.headers && response.headers.get && response.headers.get("ETag");
-                    if (etag) {
-                        if (didStore) {
-                            safeSetItem("etag:" + path, etag);
-                        } else {
-                            safeRemoveItem("etag:" + path);
-                        }
-                    }
-                } catch (e) {}
+                const etag = response.headers && response.headers.get && response.headers.get("ETag");
+                await setHttpCache(path, textToCache, etag || null);
             }
 
             if (path && (path === "/api/auth/me" || path.startsWith("/api/auth/me?"))) {
@@ -450,29 +431,22 @@ export async function request(path, options = {}) {
                 }
             }
         } else {
-            safeRemoveItem("cache:" + path);
-            safeRemoveItem("etag:" + path);
+            await removeHttpCache(path);
             const basePath = path.split("?")[0];
-            safeRemoveItem("cache:" + basePath);
-            safeRemoveItem("etag:" + basePath);
+            await removeHttpCache(basePath);
             if (basePath === "/api/auth/logout") {
-                safeRemoveItem("cache:/api/auth/me");
-                safeRemoveItem("etag:/api/auth/me");
+                await removeHttpCache("/api/auth/me");
                 purgeScoutingCache();
             }
             if (basePath.includes("scouting") || basePath.includes("team") || basePath.includes("event")) {
-                safeRemoveItem("cache:/api/summary");
-                safeRemoveItem("etag:/api/summary");
+                await removeHttpCache("/api/summary");
             }
             if (basePath.includes("/admin/users") || basePath.includes("/user") || basePath.includes("/admin/")) {
-                safeRemoveItem("cache:/api/auth/me");
-                safeRemoveItem("etag:/api/auth/me");
-                safeRemoveItem("cache:/api/settings");
-                safeRemoveItem("etag:/api/settings");
+                await removeHttpCache("/api/auth/me");
+                await removeHttpCache("/api/settings");
             }
             if (basePath.includes("/settings") || basePath.includes("/config")) {
-                safeRemoveItem("cache:/api/settings");
-                safeRemoveItem("etag:/api/settings");
+                await removeHttpCache("/api/settings");
             }
         }
 
@@ -483,10 +457,10 @@ export async function request(path, options = {}) {
         }
 
         if (method === "GET") {
-            const cachedText = safeGetItem("cache:" + path);
-            if (cachedText !== null) {
+            const cachedFallback = await getHttpCache(path);
+            if (cachedFallback && cachedFallback.text !== null) {
                 console.warn("[Offline Cache] Network fetch failed, falling back to cache for:", path, error);
-                return safeParse(cachedText);
+                return safeParse(cachedFallback.text);
             }
         }
 
