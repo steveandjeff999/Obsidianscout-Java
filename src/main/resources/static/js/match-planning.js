@@ -1206,108 +1206,112 @@
         }
     }
 
-        function syncStrokeSlider() {
-            const currentWidth = getCurrentStrokeWidth();
-            const slider = document.getElementById("stroke-slider");
-            const popupSlider = document.getElementById("popup-stroke-slider");
-            if (slider && parseInt(slider.value) !== currentWidth) slider.value = currentWidth;
-            if (popupSlider && parseInt(popupSlider.value) !== currentWidth) popupSlider.value = currentWidth;
+    function syncStrokeSlider() {
+        const currentWidth = getCurrentStrokeWidth();
+        const slider = document.getElementById("stroke-slider");
+        const popupSlider = document.getElementById("popup-stroke-slider");
+        if (slider && parseInt(slider.value) !== currentWidth) slider.value = currentWidth;
+        if (popupSlider && parseInt(popupSlider.value) !== currentWidth) popupSlider.value = currentWidth;
+    }
+
+    // Helper setters to keep toolbar & popup in sync
+    function setTool(toolName) {
+        activeTool = toolName;
+        const penBtn = document.getElementById("tool-pen");
+        const eraserBtn = document.getElementById("tool-eraser");
+        const popupPen = document.getElementById("popup-tool-pen");
+        const popupEraser = document.getElementById("popup-tool-eraser");
+
+        if (toolName === "pen") {
+            if (penBtn) penBtn.classList.add("active");
+            if (eraserBtn) eraserBtn.classList.remove("active");
+            if (popupPen) popupPen.classList.add("active");
+            if (popupEraser) popupEraser.classList.remove("active");
+        } else {
+            if (penBtn) penBtn.classList.remove("active");
+            if (eraserBtn) eraserBtn.classList.add("active");
+            if (popupPen) popupPen.classList.remove("active");
+            if (popupEraser) popupEraser.classList.add("active");
         }
+        syncStrokeSlider();
+        updateStrokePreview();
+    }
 
-        // Helper setters to keep toolbar & popup in sync
-        function setTool(toolName) {
-            activeTool = toolName;
-            const penBtn = document.getElementById("tool-pen");
-            const eraserBtn = document.getElementById("tool-eraser");
-            const popupPen = document.getElementById("popup-tool-pen");
-            const popupEraser = document.getElementById("popup-tool-eraser");
+    function setColor(hex) {
+        currentColor = hex;
+        document.querySelectorAll(".swatch-btn").forEach(b => {
+            b.classList.toggle("active", b.getAttribute("data-color").toLowerCase() === hex.toLowerCase());
+        });
+        document.querySelectorAll(".stylus-popup-swatch").forEach(b => {
+            b.classList.toggle("active", b.getAttribute("data-color").toLowerCase() === hex.toLowerCase());
+        });
+        updateStrokePreview();
+    }
 
-            if (toolName === "pen") {
-                if (penBtn) penBtn.classList.add("active");
-                if (eraserBtn) eraserBtn.classList.remove("active");
-                if (popupPen) popupPen.classList.add("active");
-                if (popupEraser) popupEraser.classList.remove("active");
-            } else {
-                if (penBtn) penBtn.classList.remove("active");
-                if (eraserBtn) eraserBtn.classList.add("active");
-                if (popupPen) popupPen.classList.remove("active");
-                if (popupEraser) popupEraser.classList.add("active");
-            }
-            syncStrokeSlider();
-            updateStrokePreview();
+    function setStrokeWidth(val) {
+        const parsed = Math.max(2, Math.min(48, parseInt(val) || 6));
+        if (activeTool === "eraser") {
+            eraserStrokeWidth = parsed;
+        } else {
+            penStrokeWidth = parsed;
         }
+        syncStrokeSlider();
+        updateStrokePreview();
+    }
 
-        function setColor(hex) {
-            currentColor = hex;
-            document.querySelectorAll(".swatch-btn").forEach(b => {
-                b.classList.toggle("active", b.getAttribute("data-color").toLowerCase() === hex.toLowerCase());
-            });
-            document.querySelectorAll(".stylus-popup-swatch").forEach(b => {
-                b.classList.toggle("active", b.getAttribute("data-color").toLowerCase() === hex.toLowerCase());
-            });
-            updateStrokePreview();
-        }
+    function cycleNextColor() {
+        const swatches = Array.from(document.querySelectorAll(".swatch-btn")).map(b => b.getAttribute("data-color"));
+        if (swatches.length === 0) return;
+        const idx = swatches.indexOf(currentColor);
+        const nextIdx = (idx + 1) % swatches.length;
+        setColor(swatches[nextIdx]);
+        Obsidianscout.showToast?.(`Color: ${swatches[nextIdx]}`, "info");
+    }
 
-        function setStrokeWidth(val) {
-            const parsed = Math.max(2, Math.min(48, parseInt(val) || 6));
-            if (activeTool === "eraser") {
-                eraserStrokeWidth = parsed;
-            } else {
-                penStrokeWidth = parsed;
-            }
-            syncStrokeSlider();
-            updateStrokePreview();
-        }
-
-        function cycleNextColor() {
-            const swatches = Array.from(document.querySelectorAll(".swatch-btn")).map(b => b.getAttribute("data-color"));
-            if (swatches.length === 0) return;
-            const idx = swatches.indexOf(currentColor);
-            const nextIdx = (idx + 1) % swatches.length;
-            setColor(swatches[nextIdx]);
-            Obsidianscout.showToast?.(`Color: ${swatches[nextIdx]}`, "info");
-        }
-
-        // Quick Popup Management
+    // Quick Popup Management
+    function showQuickPopup(clientX, clientY) {
         const quickPopup = document.getElementById("stylus-quick-popup");
-        function showQuickPopup(clientX, clientY) {
-            if (!quickPopup || !canvas) return;
-            const viewport = document.getElementById("canvas-viewport") || canvas.parentElement;
-            const vpRect = viewport.getBoundingClientRect();
+        if (!quickPopup || !canvas) return;
+        const viewport = document.getElementById("canvas-viewport") || canvas.parentElement;
+        const vpRect = viewport.getBoundingClientRect();
 
-            let x = clientX - vpRect.left;
-            let y = clientY - vpRect.top;
+        let x = clientX - vpRect.left;
+        let y = clientY - vpRect.top;
 
-            // Offset slightly so it doesn't block the pen tip
-            x += 16;
-            y -= 30;
+        // Offset slightly so it doesn't block the pen tip
+        x += 16;
+        y -= 30;
 
-            quickPopup.style.display = "flex";
-            const popupW = quickPopup.offsetWidth || 210;
-            const popupH = quickPopup.offsetHeight || 140;
+        quickPopup.style.display = "flex";
+        const popupW = quickPopup.offsetWidth || 210;
+        const popupH = quickPopup.offsetHeight || 140;
 
-            // Keep within viewport boundaries
-            if (x + popupW > vpRect.width) x = vpRect.width - popupW - 10;
-            if (x < 10) x = 10;
-            if (y + popupH > vpRect.height) y = vpRect.height - popupH - 10;
-            if (y < 10) y = 10;
+        // Keep within viewport boundaries
+        if (x + popupW > vpRect.width) x = vpRect.width - popupW - 10;
+        if (x < 10) x = 10;
+        if (y + popupH > vpRect.height) y = vpRect.height - popupH - 10;
+        if (y < 10) y = 10;
 
-            quickPopup.style.left = `${x}px`;
-            quickPopup.style.top = `${y}px`;
-            quickPopupOpen = true;
+        quickPopup.style.left = `${x}px`;
+        quickPopup.style.top = `${y}px`;
+        quickPopupOpen = true;
 
-            // Sync values in popup
-            setTool(activeTool);
-            setColor(currentColor);
-            setStrokeWidth(currentStrokeWidth);
+        // Sync values in popup
+        setTool(activeTool);
+        setColor(currentColor);
+        setStrokeWidth(getCurrentStrokeWidth());
+    }
+
+    function hideQuickPopup() {
+        const quickPopup = document.getElementById("stylus-quick-popup");
+        if (quickPopup && quickPopupOpen) {
+            quickPopup.style.display = "none";
+            quickPopupOpen = false;
         }
+    }
 
-        function hideQuickPopup() {
-            if (quickPopup && quickPopupOpen) {
-                quickPopup.style.display = "none";
-                quickPopupOpen = false;
-            }
-        }
+    function wireDrawingTools() {
+        const quickPopup = document.getElementById("stylus-quick-popup");
 
         // Wire popup controls
         const popupPen = document.getElementById("popup-tool-pen");
