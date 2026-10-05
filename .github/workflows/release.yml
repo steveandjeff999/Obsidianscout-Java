@@ -84,7 +84,7 @@ jobs:
             archive_ext: zip
 
           - name: Linux x86_64 Native
-            os: ubuntu-latest
+            os: ubuntu-24.04
             arch_key: linux-x86_64
             build_cmd: ./gradlew publishnative -PwithNativeImage -PskipBump
             bundle_glob: build/bundle-native/obsidianscout-v*-x86_64
@@ -98,7 +98,7 @@ jobs:
             archive_ext: tar.gz
 
           - name: Cross-Platform Fat-JAR Bundle
-            os: ubuntu-latest
+            os: ubuntu-24.04
             arch_key: fatjar
             build_cmd: ./gradlew publish -PskipBump
             bundle_glob: build/bundle
