@@ -225,6 +225,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        !JAVA_EXEC! --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp .backup\\obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
             "    )\r\n" +
             "    if exist .backup\\obsidianscout-server.jar copy /y \".backup\\obsidianscout-server.jar\" \".\" >nul\r\n" +
+            "    del /q obsidianscout-server-native* >nul 2>&1\r\n" +
             "    if exist .backup\\obsidianscout-server-native* copy /y \".backup\\obsidianscout-server-native*\" \".\" >nul\r\n" +
             "    if exist .backup\\*.dll copy /y \".backup\\*.dll\" \".\" >nul 2>&1\r\n" +
             "    if exist .backup\\config\\app-config.json (\r\n" +
@@ -246,6 +247,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        echo [Updater] Backing up current installation before applying update...\r\n" +
             "        if not exist .backup mkdir .backup\r\n" +
             "        if exist obsidianscout-server.jar copy /y \"obsidianscout-server.jar\" \".backup\\\" >nul\r\n" +
+            "        del /q .backup\\obsidianscout-server-native* >nul 2>&1\r\n" +
             "        if exist obsidianscout-server-native* copy /y \"obsidianscout-server-native*\" \".backup\\\" >nul\r\n" +
             "        if exist *.dll copy /y \"*.dll\" \".backup\\\" >nul 2>&1\r\n" +
             "        if exist config\\app-config.json (\r\n" +
@@ -256,6 +258,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            if exist \"%%s\" copy /y \"%%s\" \".backup\\\" >nul\r\n" +
             "        )\r\n" +
             "        echo [Updater] Applying update from !SRC_ROOT!...\r\n" +
+            "        del /q obsidianscout-server-native* >nul 2>&1\r\n" +
             "        if exist config\\app-config.json (\r\n" +
             "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
             "            xcopy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
@@ -390,6 +393,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            \"\$JAVA_EXEC\" --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp .backup/obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback \$EXIT_CODE >/dev/null 2>&1 || true\n" +
             "        fi\n" +
             "        if [ -f .backup/obsidianscout-server.jar ]; then cp .backup/obsidianscout-server.jar ./; fi\n" +
+            "        rm -f obsidianscout-server-native*\n" +
             "        for nfile in .backup/obsidianscout-server-native*;\n" +
             "        do if [ -f \"\$nfile\" ]; then cp \"\$nfile\" ./; fi; done\n" +
             "        for lib in .backup/*.so .backup/*.dylib .backup/*.dll;\n" +
@@ -415,6 +419,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "            echo \"[Updater] Backing up current installation before applying update...\"\n" +
             "            mkdir -p .backup .backup/config\n" +
             "            if [ -f obsidianscout-server.jar ]; then cp obsidianscout-server.jar .backup/; fi\n" +
+            "            rm -f .backup/obsidianscout-server-native*\n" +
             "            for nfile in obsidianscout-server-native*;\n" +
             "            do if [ -f \"\$nfile\" ]; then cp \"\$nfile\" .backup/; fi; done\n" +
             "            for lib in *.so *.dylib *.dll;\n" +
@@ -424,6 +429,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "                if [ -f \"\$script\" ]; then cp \"\$script\" .backup/; fi\n" +
             "            done\n" +
             "            echo \"[Updater] Applying update from \$SRC_ROOT...\"\n" +
+            "            rm -f obsidianscout-server-native*\n" +
             "            if [ -f config/app-config.json ]; then\n" +
             "                mkdir -p .update_tmp_cfg\n" +
             "                cp config/app-config.json .update_tmp_cfg/app-config.json\n" +
@@ -791,20 +797,17 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    if exist .backup\\obsidianscout-server.jar (\r\n" +
                 "        java --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp .backup\\obsidianscout-server.jar com.obsidianscout.utils.UpdateRecoveryManagerKt --check-and-rollback !EXIT_CODE! >nul 2>&1\r\n" +
                 "    )\r\n" +
-                "    if exist .backup\\obsidianscout-server-native-$arch (\r\n" +
-                "        copy /y \".backup\\obsidianscout-server-native-$arch\" \".\" >nul\r\n" +
-                "    ) else if exist .backup\\obsidianscout-server-native.exe (\r\n" +
-                "        copy /y \".backup\\obsidianscout-server-native.exe\" \".\" >nul\r\n" +
-                "    ) else if exist .backup\\obsidianscout-server.jar (\r\n" +
-                "        copy /y \".backup\\obsidianscout-server.jar\" \".\" >nul\r\n" +
-                "    )\r\n" +
+                "    del /q obsidianscout-server-native* >nul 2>&1\r\n" +
+                "    if exist .backup\\obsidianscout-server-native* copy /y \".backup\\obsidianscout-server-native*\" \".\" >nul\r\n" +
+                "    if exist .backup\\obsidianscout-server.jar copy /y \".backup\\obsidianscout-server.jar\" \".\" >nul\r\n" +
                 "    if exist .backup\\config\\app-config.json (\r\n" +
                 "        if not exist config mkdir config\r\n" +
                 "        copy /y \".backup\\config\\app-config.json\" \"config\\\" >nul\r\n" +
                 "    )\r\n" +
                 "    del /q .update_pending >nul 2>&1\r\n" +
                 "    del /q .update_result >nul 2>&1\r\n" +
-                "    goto loop\r\n" +
+                "    cmd /c \"%~f0\" %*\r\n" +
+                "    exit /b 0\r\n" +
                 ")\r\n" +
                 "if exist .update_result (\r\n" +
                 "    set /p SRC_ROOT=<.update_result\r\n" +
@@ -812,18 +815,12 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    if exist \"!SRC_ROOT!\" (\r\n" +
                 "        echo [Updater] Backing up current native installation...\r\n" +
                 "        if not exist .backup mkdir .backup\r\n" +
-                "        if exist obsidianscout-server-native-$arch copy /y \"obsidianscout-server-native-$arch\" \".backup\\\" >nul\r\n" +
-                "        if exist obsidianscout-server-native-$arch.exe copy /y \"obsidianscout-server-native-$arch.exe\" \".backup\\\" >nul\r\n" +
-                "        if exist obsidianscout-server-native.exe copy /y \"obsidianscout-server-native.exe\" \".backup\\\" >nul\r\n" +
+                "        del /q .backup\\obsidianscout-server-native* >nul 2>&1\r\n" +
+                "        if exist obsidianscout-server-native* copy /y \"obsidianscout-server-native*\" \".backup\\\" >nul\r\n" +
                 "        if exist obsidianscout-server.jar copy /y \"obsidianscout-server.jar\" \".backup\\\" >nul\r\n" +
                 "        if exist *.dll copy /y \"*.dll\" \".backup\\\" >nul 2>&1\r\n" +
                 "        echo [Updater] Applying update from !SRC_ROOT!...\r\n" +
-                "        dir /b \"!SRC_ROOT!\\obsidianscout-server-native*\" >nul 2>&1\r\n" +
-                "        if errorlevel 1 (\r\n" +
-                "            if exist obsidianscout-server-native-$arch del /q \"obsidianscout-server-native-$arch\" >nul 2>&1\r\n" +
-                "            if exist obsidianscout-server-native-$arch.exe del /q \"obsidianscout-server-native-$arch.exe\" >nul 2>&1\r\n" +
-                "            if exist obsidianscout-server-native.exe del /q \"obsidianscout-server-native.exe\" >nul 2>&1\r\n" +
-                "        )\r\n" +
+                "        del /q obsidianscout-server-native* >nul 2>&1\r\n" +
                 "        if exist config\\app-config.json (\r\n" +
                 "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
                 "            copy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
@@ -897,29 +894,24 @@ val nativeBundleTasks = nativeArchs.map { arch ->
                 "    if [ -f .update_pending ]; then\n" +
                 "        echo \"[Updater] Faulty installation detected! Exited code \$EXIT_CODE while update was pending.\"\n" +
                 "        echo \"[Updater] Restoring backup...\"\n" +
-                "        if [ -f .backup/\$BINARY_NAME ]; then\n" +
-                "            cp .backup/\$BINARY_NAME ./\n" +
-                "        elif [ -f .backup/obsidianscout-server-native ]; then\n" +
-                "            cp .backup/obsidianscout-server-native ./\n" +
-                "        elif [ -f .backup/obsidianscout-server.jar ]; then\n" +
-                "            cp .backup/obsidianscout-server.jar ./\n" +
-                "        fi\n" +
+                "        rm -f obsidianscout-server-native*\n" +
+                "        for nfile in .backup/obsidianscout-server-native*; do\n" +
+                "            if [ -f \"\$nfile\" ]; then cp \"\$nfile\" ./ && chmod +x \"./\$(basename \"\$nfile\")\"; fi\n" +
+                "        done\n" +
+                "        if [ -f .backup/obsidianscout-server.jar ]; then cp .backup/obsidianscout-server.jar ./; fi\n" +
                 "        if [ -f .backup/config/app-config.json ]; then\n" +
                 "            mkdir -p config\n" +
                 "            cp .backup/config/app-config.json config/\n" +
                 "        fi\n" +
                 "        rm -f .update_pending .update_result\n" +
-                "        continue\n" +
+                "        exec \"\$0\" \"\$@\"\n" +
                 "    fi\n" +
                 "    if [ -f .update_result ]; then\n" +
                 "        SRC_ROOT=\$(cat .update_result)\n" +
                 "        rm -f .update_result\n" +
                 "        if [ -d \"\$SRC_ROOT\" ]; then\n" +
                 "            echo \"[Updater] Applying update from \$SRC_ROOT...\"\n" +
-                "            HAS_NATIVE=\$(find \"\$SRC_ROOT\" -maxdepth 1 -name \"obsidianscout-server-native*\" | head -n 1)\n" +
-                "            if [ -z \"\$HAS_NATIVE\" ]; then\n" +
-                "                rm -f obsidianscout-server-native*\n" +
-                "            fi\n" +
+                "            rm -f obsidianscout-server-native*\n" +
                 "            if [ -f config/app-config.json ]; then\n" +
                 "                mkdir -p .update_tmp_cfg\n" +
                 "                cp config/app-config.json .update_tmp_cfg/app-config.json\n" +

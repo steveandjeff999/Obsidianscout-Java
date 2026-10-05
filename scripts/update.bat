@@ -11,10 +11,14 @@ for %%f in (obsidianscout-server-native*.exe obsidianscout-server-native*) do (
     )
 )
 
+:: Clear any previous update state
+if exist .update_result del /q .update_result
+
+:: The native binary stages the update (.update_result); :finalize below applies it
 if defined NATIVE_EXEC (
     echo [ObsidianScout Native] Running native update utility: !NATIVE_EXEC! --update
     !NATIVE_EXEC! --update %*
-    exit /b %ERRORLEVEL%
+    goto finalize
 )
 
 :: Ensure GraalVM JDK 25 is available for high-performance execution
@@ -38,12 +42,10 @@ if exist "!GRAAL_JAVA!" (
     set JAVA_EXEC=java
 )
 
-:: Clear any previous update state
-if exist .update_result del /q .update_result
-
 :: Run the interactive Java update utility with unsafe / modular access enabled
 %JAVA_EXEC% --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt %*
 
+:finalize
 :: If the helper completed successfully and wrote the path of the new files
 if not exist .update_result (
     echo Update failed or was cancelled.
@@ -65,6 +67,7 @@ echo Finalizing update (copying new files)...
 :: Create backup of current files
 if not exist .backup mkdir .backup
 if exist obsidianscout-server.jar copy /y "obsidianscout-server.jar" ".backup\" >nul
+del /q .backup\obsidianscout-server-native* >nul 2>&1
 for %%f in (obsidianscout-server-native*) do (
     if exist "%%f" copy /y "%%f" ".backup\" >nul
 )
@@ -72,14 +75,13 @@ for %%s in (run.sh run.bat update.sh update.bat reset-superadmin.sh reset-supera
     if exist "%%s" copy /y "%%s" ".backup\" >nul
 )
 
-:: If incoming release is JAR-only, clean up old native executables
-dir /b "!SRC_ROOT!\obsidianscout-server-native*" >nul 2>&1
-if errorlevel 1 (
-    del /q obsidianscout-server-native* >nul 2>&1
-)
-
 :: Recursively copy all updated files and subdirectories with retries and stdin redirection
 timeout /t 3 >nul 2>&1
+
+:: Remove every old native executable (stale names would otherwise win in run.bat); the copy
+:: below brings in whatever the new release ships - nothing if it is JAR-only
+del /q obsidianscout-server-native* >nul 2>&1
+
 set COPY_ATTEMPTS=0
 :copy_loop_upd
 set /a COPY_ATTEMPTS+=1

@@ -58,7 +58,10 @@ object UpdateRecoveryManager {
                 }
             }
 
-            // Backup native executables
+            // Backup native executables. Drop stale ones from earlier backups first so a rollback
+            // can never resurrect a binary the current install no longer uses.
+            backupDir.listFiles { _, name -> name.startsWith("obsidianscout-server-native", ignoreCase = true) }
+                ?.forEach { if (it.isFile) it.delete() }
             val nativeFiles = File(".").listFiles { _, name -> name.startsWith("obsidianscout-server-native", ignoreCase = true) } ?: emptyArray()
             for (nf in nativeFiles) {
                 if (nf.isFile) nf.copyTo(File(backupDir, nf.name), overwrite = true)
@@ -204,6 +207,10 @@ object UpdateRecoveryManager {
                 backupJar.copyTo(File("obsidianscout-server.jar"), overwrite = true)
             }
 
+            // Remove native binaries installed by the failed update, then restore the backed-up set
+            // (which is empty when the previous working version ran from the JAR).
+            File(".").listFiles { _, name -> name.startsWith("obsidianscout-server-native", ignoreCase = true) }
+                ?.forEach { if (it.isFile) it.delete() }
             val backupNativeFiles = backupDir.listFiles { _, name -> name.startsWith("obsidianscout-server-native", ignoreCase = true) } ?: emptyArray()
             for (bf in backupNativeFiles) {
                 if (bf.isFile) bf.copyTo(File(bf.name), overwrite = true)

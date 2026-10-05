@@ -110,39 +110,40 @@ for native_bin in ./obsidianscout-server-native*; do
     fi
 done
 
-if [ -n "$HAS_LOCAL_NATIVE" ]; then
-    echo "[ObsidianScout Native] Running native update utility: $HAS_LOCAL_NATIVE --update"
-    exec "$HAS_LOCAL_NATIVE" --update "$@"
-fi
-
-GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-25/bin/java"
-if [ ! -x "$GRAAL_JAVA" ] && [ -n "$GRAALVM_HOME" ] && [ -x "$GRAALVM_HOME/bin/java" ]; then
-    GRAAL_JAVA="$GRAALVM_HOME/bin/java"
-fi
-
-if [ ! -x "$GRAAL_JAVA" ]; then
-    echo "[ObsidianScout] GraalVM JDK 25 not detected. Auto-installing GraalVM for maximum performance..."
-    if [ -x ./install-graal.sh ]; then
-        ./install-graal.sh
-    elif [ -x ./scripts/install-graal.sh ]; then
-        ./scripts/install-graal.sh
-    fi
-    if [ -x "$HOME/.graalvm/graalvm-jdk-25/bin/java" ]; then
-        GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-25/bin/java"
-    fi
-fi
-
-if [ -x "$GRAAL_JAVA" ]; then
-    JAVA_EXEC="$GRAAL_JAVA"
-else
-    JAVA_EXEC="java"
-fi
-
 # Clear any previous update state
 rm -f .update_result
 
-# Run the interactive Java update utility with unsafe / modular access enabled
-"$JAVA_EXEC" --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt "$@"
+if [ -n "$HAS_LOCAL_NATIVE" ]; then
+    # The native binary stages the update (.update_result); the finalize step below applies it.
+    echo "[ObsidianScout Native] Running native update utility: $HAS_LOCAL_NATIVE --update"
+    "$HAS_LOCAL_NATIVE" --update "$@"
+else
+    GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-25/bin/java"
+    if [ ! -x "$GRAAL_JAVA" ] && [ -n "$GRAALVM_HOME" ] && [ -x "$GRAALVM_HOME/bin/java" ]; then
+        GRAAL_JAVA="$GRAALVM_HOME/bin/java"
+    fi
+
+    if [ ! -x "$GRAAL_JAVA" ]; then
+        echo "[ObsidianScout] GraalVM JDK 25 not detected. Auto-installing GraalVM for maximum performance..."
+        if [ -x ./install-graal.sh ]; then
+            ./install-graal.sh
+        elif [ -x ./scripts/install-graal.sh ]; then
+            ./scripts/install-graal.sh
+        fi
+        if [ -x "$HOME/.graalvm/graalvm-jdk-25/bin/java" ]; then
+            GRAAL_JAVA="$HOME/.graalvm/graalvm-jdk-25/bin/java"
+        fi
+    fi
+
+    if [ -x "$GRAAL_JAVA" ]; then
+        JAVA_EXEC="$GRAAL_JAVA"
+    else
+        JAVA_EXEC="java"
+    fi
+
+    # Run the interactive Java update utility with unsafe / modular access enabled
+    "$JAVA_EXEC" --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=jdk.unsupported/sun.misc=ALL-UNNAMED --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp obsidianscout-server.jar com.obsidianscout.utils.UpdateHelperKt "$@"
+fi
 
 # If the helper completed successfully and wrote the path of the new files
 if [ -f .update_result ]; then
@@ -157,6 +158,7 @@ if [ -f .update_result ]; then
         if [ -f obsidianscout-server.jar ]; then
             cp obsidianscout-server.jar .backup/
         fi
+        rm -f .backup/obsidianscout-server-native*
         for native_bin in obsidianscout-server-native*; do
             if [ -f "$native_bin" ]; then
                 cp "$native_bin" .backup/
@@ -173,18 +175,15 @@ if [ -f .update_result ]; then
             cp "$SRC_ROOT/obsidianscout-server.jar" ./
         fi
 
-        # Copy Native Executables if present (or remove old native binaries if incoming release is JAR-only)
-        HAS_NATIVE=$(find "$SRC_ROOT" -maxdepth 1 -name "obsidianscout-server-native*" | head -n 1)
-        if [ -z "$HAS_NATIVE" ]; then
-            rm -f obsidianscout-server-native*
-        else
-            for native_bin in "$SRC_ROOT"/obsidianscout-server-native*; do
-                if [ -f "$native_bin" ]; then
-                    cp "$native_bin" ./
-                    chmod +x "./$(basename "$native_bin")"
-                fi
-            done
-        fi
+        # Remove every old native binary (stale names would otherwise win in run.sh), then copy
+        # in whatever the new release ships - nothing if it is JAR-only.
+        rm -f obsidianscout-server-native*
+        for native_bin in "$SRC_ROOT"/obsidianscout-server-native*; do
+            if [ -f "$native_bin" ]; then
+                cp "$native_bin" ./
+                chmod +x "./$(basename "$native_bin")"
+            fi
+        done
         for lib in "$SRC_ROOT"/*.so; do
             if [ -f "$lib" ]; then
                 cp "$lib" ./
