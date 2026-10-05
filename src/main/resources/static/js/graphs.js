@@ -241,7 +241,7 @@ function initDatasource(state) {
         if (effectiveUseExp) {
             const optExp = document.createElement("option");
             optExp.value = "exp";
-            optExp.textContent = t('alliance-selection.match13_exp', "Match 13 EXP");
+            optExp.textContent = t('alliance-selection.match13_exp', "Match 13 xP");
             datasourceSelect.appendChild(optExp);
         }
 
@@ -1069,7 +1069,7 @@ function getDatasourceLabel(datasource, state) {
         ? Obsidianscout.getProgram() === "FTC"
         : (state?.settings?.program === "FTC");
     if (datasource === "epa") return t('predictor.statbotics_epa', "Statbotics EPA");
-    if (datasource === "exp") return t('alliance-selection.match13_exp', "Match 13 EXP");
+    if (datasource === "exp") return t('alliance-selection.match13_exp', "Match 13 xP");
     if (datasource === "opr") return isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('predictor.tba_opr', "TBA OPR");
     if (datasource === "all") return t('rankings.metric.all', "All Sources");
     return t('predictor.scouted_data', "Scouted Data");
@@ -1168,7 +1168,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
                     });
                 }
 
-                // 2. Match 13 EXP series
+                // 2. Match 13 xP series
                 if (effectiveUseExp && rawMatch13History.length > 0) {
                     const expMatches = [];
                     rawMatch13History.forEach((matchObj) => {
@@ -1186,7 +1186,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
 
                     if (expMatches.length > 0) {
                         series.push({
-                            name: `Team ${teamNumber} (Match 13 EXP)`,
+                            name: `Team ${teamNumber} (Match 13 xP)`,
                             x: expMatches.map(m => m.label),
                             y: expMatches.map(m => m.value)
                         });
@@ -1263,7 +1263,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
             }
             if (effectiveUseExp) {
                 series.push({
-                    name: "Match 13 EXP",
+                    name: "Match 13 xP",
                     x: labels,
                     y: data.map(item => item.exp)
                 });
@@ -1307,7 +1307,7 @@ function renderNonScoutedGraph(graphType, container, selectedTeams, state) {
         if (state.datasource === "exp" || state.datasource === "all") {
             if (effectiveUseExp) {
                 series.push({
-                    name: "Match 13 EXP",
+                    name: "Match 13 xP",
                     x: labels,
                     y: data.map(item => item.exp)
                 });

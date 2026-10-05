@@ -2181,7 +2181,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val session = call.requireMobileSession(secret)
                 val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                 val epaSource = if (settings.useStatboticsEpa) "scouted_with_statbotics" else if (settings.useMatch13Exp) "scouted_with_match13_exp" else if (settings.useTbaOpr) "scouted_with_tba_opr" else "scouted_only"
-                val dataMode = if (settings.useStatboticsEpa) "Scouted Data + Statbotics EPA Gap-Fill" else if (settings.useMatch13Exp) "Scouted Data + Match 13 EXP Gap-Fill" else if (settings.useTbaOpr) "Scouted Data + TBA OPR Gap-Fill" else "Scouted Data Only"
+                val dataMode = if (settings.useStatboticsEpa) "Scouted Data + Statbotics EPA Gap-Fill" else if (settings.useMatch13Exp) "Scouted Data + Match 13 xP Gap-Fill" else if (settings.useTbaOpr) "Scouted Data + TBA OPR Gap-Fill" else "Scouted Data Only"
                 call.respond(MobileDataModeResponse(epaSource = epaSource, dataMode = dataMode))
             }
 
@@ -2192,7 +2192,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 
                 val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                 val epaSource = if (settings.useStatboticsEpa) "scouted_with_statbotics" else if (settings.useMatch13Exp) "scouted_with_match13_exp" else if (settings.useTbaOpr) "scouted_with_tba_opr" else "scouted_only"
-                val dataMode = if (settings.useStatboticsEpa) "Scouted Data + Statbotics EPA Gap-Fill" else if (settings.useMatch13Exp) "Scouted Data + Match 13 EXP Gap-Fill" else if (settings.useTbaOpr) "Scouted Data + TBA OPR Gap-Fill" else "Scouted Data Only"
+                val dataMode = if (settings.useStatboticsEpa) "Scouted Data + Statbotics EPA Gap-Fill" else if (settings.useMatch13Exp) "Scouted Data + Match 13 xP Gap-Fill" else if (settings.useTbaOpr) "Scouted Data + TBA OPR Gap-Fill" else "Scouted Data Only"
 
                 val eventKey = if (!body.eventCode.isNullOrBlank()) {
                     resolveEventKey(body.eventCode, session.teamNumber, session.program)

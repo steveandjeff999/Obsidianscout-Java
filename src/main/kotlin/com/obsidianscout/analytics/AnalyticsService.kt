@@ -211,7 +211,7 @@ object AnalyticsService {
         metricDefs.add(TeamComparisonMetric("max_points", "Max Match Points", "overview", "number", "pts"))
         metricDefs.add(TeamComparisonMetric("matches_scouted", "Matches Scouted", "overview", "number", "matches"))
         metricDefs.add(TeamComparisonMetric("epa", "Statbotics EPA", "overview", "number", "EPA"))
-        metricDefs.add(TeamComparisonMetric("exp", "Match 13 EXP", "overview", "number", "EXP"))
+        metricDefs.add(TeamComparisonMetric("exp", "Match 13 xP", "overview", "number", "xP"))
         metricDefs.add(TeamComparisonMetric("opr", "TBA OPR", "overview", "number", "OPR"))
 
         config.fields.forEach { field ->

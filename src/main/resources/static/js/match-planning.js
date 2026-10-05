@@ -1927,7 +1927,7 @@
                 </div>` : ''}
                 ${effectiveUseExp ? `
                 <div class="breakdown-stat-card">
-                    <div class="breakdown-stat-label">Match 13 EXP</div>
+                    <div class="breakdown-stat-label">Match 13 xP</div>
                     <div class="breakdown-stat-val highlight-avg">${exp}</div>
                 </div>` : ''}
                 ${effectiveUseOpr ? `
@@ -2291,10 +2291,10 @@
             return {
                 x: teamMatches.map(m => m.label),
                 y: teamMatches.map(m => m.val),
-                name: `Team ${teamNumber} Match 13 EXP`,
-                label: "Match 13 EXP",
+                name: `Team ${teamNumber} Match 13 xP`,
+                label: "Match 13 xP",
                 color: "#f59e0b",
-                unit: "EXP"
+                unit: "xP"
             };
         }
 

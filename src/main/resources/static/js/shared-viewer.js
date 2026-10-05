@@ -461,7 +461,7 @@ function getTeamExpMetricValue(teamExpData, metricId) {
 
 function getDatasourceLabel(datasource, isFtc = false) {
     if (datasource === "epa") return t('predictor.statbotics_epa', "Statbotics EPA");
-    if (datasource === "exp") return t('alliance-selection.match13_exp', "Match 13 EXP");
+    if (datasource === "exp") return t('alliance-selection.match13_exp', "Match 13 xP");
     if (datasource === "opr") return isFtc ? t('predictor.ftcscout_opr', "FTC Scout OPR") : t('predictor.tba_opr', "TBA OPR");
     if (datasource === "all") return t('rankings.metric.all', "All Sources");
     return t('predictor.scouted_data', "Scouted Data");
@@ -728,7 +728,7 @@ async function renderGraphView(target, config, snapshot, live) {
                                     <option value="all" ${state.datasource === 'all' ? 'selected' : ''}>${t('rankings.metric.all', 'All Sources')}</option>
                                     <option value="scouted" ${state.datasource === 'scouted' ? 'selected' : ''}>${t('predictor.scouted_data', 'Scouted Data')}</option>
                                     ${effectiveUseEpa ? `<option value="epa" ${state.datasource === 'epa' ? 'selected' : ''}>${t('predictor.statbotics_epa', 'Statbotics EPA')}</option>` : ''}
-                                    ${effectiveUseExp ? `<option value="exp" ${state.datasource === 'exp' ? 'selected' : ''}>${t('alliance-selection.match13_exp', 'Match 13 EXP')}</option>` : ''}
+                                    ${effectiveUseExp ? `<option value="exp" ${state.datasource === 'exp' ? 'selected' : ''}>${t('alliance-selection.match13_exp', 'Match 13 xP')}</option>` : ''}
                                     ${effectiveUseOpr ? `<option value="opr" ${state.datasource === 'opr' ? 'selected' : ''}>${isFtc ? t('predictor.ftcscout_opr', 'FTC Scout OPR') : t('predictor.tba_opr', 'TBA OPR')}</option>` : ''}
                                 </select>
                             </div>
@@ -1494,7 +1494,7 @@ async function renderGraphView(target, config, snapshot, live) {
                         expMatches.sort((a, b) => a.sortWeight - b.sortWeight);
                         if (expMatches.length > 0) {
                             series.push({
-                                name: `Team ${teamNumber} (Match 13 EXP)`,
+                                name: `Team ${teamNumber} (Match 13 xP)`,
                                 x: expMatches.map(m => m.label),
                                 y: expMatches.map(m => m.value)
                             });
@@ -1610,7 +1610,7 @@ async function renderGraphView(target, config, snapshot, live) {
                     marker: { color: theme.accent },
                     text: data.map(i => Number(i.exp).toFixed(1)),
                     textposition: "auto",
-                    hovertemplate: "<b>%{y}</b><br>Match 13 EXP: %{x:.2f}<extra></extra>"
+                    hovertemplate: "<b>%{y}</b><br>Match 13 xP: %{x:.2f}<extra></extra>"
                 };
                 const layout = {
                     height: Math.max(260, data.length * 32 + 80),
@@ -1668,10 +1668,10 @@ async function renderGraphView(target, config, snapshot, live) {
                 if (st.effectiveUseExp) {
                     series.push({
                         type: "bar",
-                        name: "Match 13 EXP",
+                        name: "Match 13 xP",
                         x: labels,
                         y: data.map(i => i.exp),
-                        hovertemplate: "<b>%{x}</b><br>Match 13 EXP: %{y:.2f}<extra></extra>"
+                        hovertemplate: "<b>%{x}</b><br>Match 13 xP: %{y:.2f}<extra></extra>"
                     });
                 }
                 if (st.effectiveUseOpr) {
@@ -1708,7 +1708,7 @@ async function renderGraphView(target, config, snapshot, live) {
                 series.push({ type: "scatter", name: "Statbotics EPA", x: labels, y: data.map(i => i.epa), mode: "markers", marker: { size: 8 } });
             }
             if ((st.datasource === "exp" || st.datasource === "all") && st.effectiveUseExp) {
-                series.push({ type: "scatter", name: "Match 13 EXP", x: labels, y: data.map(i => i.exp), mode: "markers", marker: { size: 8 } });
+                series.push({ type: "scatter", name: "Match 13 xP", x: labels, y: data.map(i => i.exp), mode: "markers", marker: { size: 8 } });
             }
             if ((st.datasource === "opr" || st.datasource === "all") && st.effectiveUseOpr) {
                 series.push({ type: "scatter", name: st.isFtc ? "FTC Scout OPR" : "TBA OPR", x: labels, y: data.map(i => i.opr), mode: "markers", marker: { size: 8 } });
@@ -2264,7 +2264,7 @@ function renderPredictorView(target, config, snapshot, live) {
                         <option value="all" ${selectedSource === 'all' ? 'selected' : ''}>${t('predictor.all_sources', 'All Sources')}</option>
                         <option value="scouted" ${selectedSource === 'scouted' ? 'selected' : ''}>${t('predictor.scouted_data', 'Scouted Data')}</option>
                         ${effectiveUseEpa ? `<option value="epa" ${selectedSource === 'epa' ? 'selected' : ''}>${t('predictor.statbotics_epa', 'Statbotics EPA')}</option>` : ''}
-                        ${effectiveUseExp ? `<option value="exp" ${selectedSource === 'exp' ? 'selected' : ''}>${t('alliance-selection.match13_exp', 'Match 13 EXP')}</option>` : ''}
+                        ${effectiveUseExp ? `<option value="exp" ${selectedSource === 'exp' ? 'selected' : ''}>${t('alliance-selection.match13_exp', 'Match 13 xP')}</option>` : ''}
                         ${effectiveUseOpr ? `<option value="opr" ${selectedSource === 'opr' ? 'selected' : ''}>${isFtc ? t('predictor.ftcscout_opr', 'FTC Scout OPR') : t('predictor.tba_opr', 'TBA OPR')}</option>` : ''}
                     </select>
                 </div>
@@ -2309,7 +2309,7 @@ function renderPredictorView(target, config, snapshot, live) {
                         <div class="comp-bar-container mb-16 ${effectiveUseExp ? '' : 'hidden'}" id="shared-exp-comp">
                             <div class="comp-bar-label" style="display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem;">
                                 <span style="color: #f87171;" id="lbl-pred-exp-red">Red: ${redExp.toFixed(1)}</span>
-                                <span style="font-weight: 700;">Match 13 EXP</span>
+                                <span style="font-weight: 700;">Match 13 xP</span>
                                 <span style="color: #60a5fa;" id="lbl-pred-exp-blue">Blue: ${blueExp.toFixed(1)}</span>
                             </div>
                             <div class="comp-bar-track" style="height: 12px; border-radius: 6px; background: var(--surface-2, rgba(0,0,0,0.1)); border: 1px solid var(--border); display: flex; overflow: hidden;">

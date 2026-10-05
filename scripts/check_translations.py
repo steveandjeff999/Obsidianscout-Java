@@ -55,7 +55,7 @@ if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
 # Allowlisted tokens/proper nouns that are expected to be identical across languages
 DEFAULT_ALLOWLIST = {
     "ObsidianScout", "Statbotics", "Statbotics EPA", "EPA", "OPR", "TBA", "TBA OPR",
-    "Match 13 EXP", "EXP", "QR", "JAB", "JABCode", "API", "JSON", "CSV", "URL", "ID",
+    "Match 13 EXP", "EXP", "Match 13 xP", "xP", "QR", "JAB", "JABCode", "API", "JSON", "CSV", "URL", "ID",
     "UUID", "IP", "NTP", "SSL", "TLS", "HTTP", "HTTPS", "PostgreSQL", "SQLite",
     "Blue Alliance", "The Blue Alliance", "FIRST", "FRC", "FTC", "FLL", "v1.0",
     "OK", "N/A", "NaN", "null", "true", "false", "auto", "General", "Predictor",

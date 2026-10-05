@@ -145,7 +145,7 @@ async function loadPredictorData() {
             if (effectiveUseExp) {
                 const optExp = document.createElement("option");
                 optExp.value = "exp";
-                optExp.textContent = t('alliance-selection.match13_exp', "Match 13 EXP");
+                optExp.textContent = t('alliance-selection.match13_exp', "Match 13 xP");
                 datasourceSelect.appendChild(optExp);
             }
 
