@@ -14,7 +14,7 @@ permissions:
 jobs:
   bump-version:
     name: Bump Version & Recommit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.bump.outputs.version }}
       tag_name: ${{ steps.bump.outputs.tag_name }}
