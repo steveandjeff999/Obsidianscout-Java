@@ -59,7 +59,10 @@ async function loadQualScoutPageData(me) {
         const clearButton = document.getElementById("scout-clear");
         const formBlocked = document.getElementById("form-blocked");
 
-        timezoneBadge.textContent = settings.timezone;
+        const eventTz = await Obsidianscout.getEventTimezone(eventKey);
+        if (timezoneBadge) {
+            timezoneBadge.textContent = eventTz;
+        }
         if (eventBadge) {
             eventBadge.textContent = eventKey || "Not set";
         }
@@ -67,7 +70,7 @@ async function loadQualScoutPageData(me) {
         let entryCache = [];
         let matches = [];
 
-        const dataBundle = await loadTeamsAndMatches(eventKey, teamSelect, matchSelect, settings.timezone);
+        const dataBundle = await loadTeamsAndMatches(eventKey, teamSelect, matchSelect, eventTz);
         matches = dataBundle.matches;
         const teams = dataBundle.teams;
 
@@ -275,7 +278,7 @@ async function loadQualScoutPageData(me) {
                         if (teamFieldContainer) teamFieldContainer.classList.remove("hidden");
                         submitButton.textContent = Obsidianscout.t("qual_scout.save_entry", "Save entry");
                         renderSingleTeamView();
-                        updateMatchOptions(matchSelect, matches, settings.timezone, teamSelect.value, matchSelect.value);
+                        updateMatchOptions(matchSelect, matches, eventTz, teamSelect.value, matchSelect.value);
                         updateTeamOptions(teamSelect, teams, matchSelect.value, matches, teamSelect.value);
                         lastSelectedTeam = teamSelect.value;
                         lastSelectedMatch = matchSelect.value;
@@ -283,7 +286,7 @@ async function loadQualScoutPageData(me) {
                     } else {
                         if (teamFieldContainer) teamFieldContainer.classList.add("hidden");
                         const currentMatchVal = matchSelect.value;
-                        updateMatchOptions(matchSelect, matches, settings.timezone, null, currentMatchVal);
+                        updateMatchOptions(matchSelect, matches, eventTz, null, currentMatchVal);
                         lastSelectedMatch = currentMatchVal;
                         await refreshAllianceState();
                     }
@@ -301,7 +304,7 @@ async function loadQualScoutPageData(me) {
         function populateAllMatchesIfBothSelected() {
             if (currentScope === "team" && teamSelect.value && matchSelect.value) {
                 const currentVal = matchSelect.value;
-                updateMatchOptions(matchSelect, matches, settings.timezone, "", currentVal);
+                updateMatchOptions(matchSelect, matches, eventTz, "", currentVal);
             }
         }
 
@@ -315,7 +318,7 @@ async function loadQualScoutPageData(me) {
                 matchSelect.value = "";
             }
             const currentMatch = matchSelect.value;
-            updateMatchOptions(matchSelect, matches, settings.timezone, chosenTeam, currentMatch);
+            updateMatchOptions(matchSelect, matches, eventTz, chosenTeam, currentMatch);
             if (!matchSelect.value) {
                 updateTeamOptions(teamSelect, teams, "", matches, chosenTeam);
             }
@@ -338,9 +341,9 @@ async function loadQualScoutPageData(me) {
                 updateTeamOptions(teamSelect, teams, chosenMatch, matches, currentTeam);
                 const activeTeam = teamSelect.value;
                 if (!chosenMatch) {
-                    updateMatchOptions(matchSelect, matches, settings.timezone, activeTeam, "");
+                    updateMatchOptions(matchSelect, matches, eventTz, activeTeam, "");
                 } else {
-                    updateMatchOptions(matchSelect, matches, settings.timezone, activeTeam, chosenMatch);
+                    updateMatchOptions(matchSelect, matches, eventTz, activeTeam, chosenMatch);
                 }
                 lastSelectedTeam = teamSelect.value;
                 lastSelectedMatch = matchSelect.value;
@@ -394,7 +397,7 @@ async function loadQualScoutPageData(me) {
                 updateTeamOptions(teamSelect, teams, chosenMatch, matches, chosenTeam);
             }
             if (chosenTeam) {
-                updateMatchOptions(matchSelect, matches, settings.timezone, chosenTeam, chosenMatch);
+                updateMatchOptions(matchSelect, matches, eventTz, chosenTeam, chosenMatch);
             }
 
             const ready = Boolean(teamSelect && teamSelect.value && matchSelect && matchSelect.value);
@@ -474,7 +477,7 @@ async function loadQualScoutPageData(me) {
                 if (matchedTeamNum && currentScope === "team" && teamSelect) {
                     teamSelect.value = matchedTeamNum;
                     if (!matchedMatchKey) {
-                        updateMatchOptions(matchSelect, matches, settings.timezone, matchedTeamNum, matchSelect.value);
+                        updateMatchOptions(matchSelect, matches, eventTz, matchedTeamNum, matchSelect.value);
                     }
                 }
 

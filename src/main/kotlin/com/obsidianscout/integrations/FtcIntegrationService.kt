@@ -118,7 +118,7 @@ object FtcIntegrationService {
                 val name = obj["name"]?.jsonPrimitive?.content ?: ""
                 val start = obj["start"]?.jsonPrimitive?.content
                 val end = obj["end"]?.jsonPrimitive?.content
-                val timezone = obj["timezone"]?.jsonPrimitive?.content ?: "America/New_York"
+                val timezone = obj["timezone"]?.jsonPrimitive?.content ?: "UTC"
                 val eventKey = "${year}${code.lowercase()}"
 
                 val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.limit(1).firstOrNull()
@@ -253,7 +253,7 @@ object FtcIntegrationService {
         }
 
         val name = eventObj["name"]?.jsonPrimitive?.content ?: code
-        val timezone = eventObj["timezone"]?.jsonPrimitive?.content ?: "America/New_York"
+        val timezone = eventObj["timezone"]?.jsonPrimitive?.content ?: "UTC"
         val start = eventObj["start"]?.jsonPrimitive?.content
         val end = eventObj["end"]?.jsonPrimitive?.content
 

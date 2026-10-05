@@ -121,7 +121,7 @@ data class ApiSettings(
     val eventCode: String = "",
     /** Computed from year + eventCode; kept for API responses and legacy stored JSON. */
     val eventKey: String = "",
-    val timezone: String = "America/New_York",
+    val timezone: String = "UTC",
     val preferredSource: String = "tba",
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
@@ -286,7 +286,7 @@ object SettingsService {
         return settings.copy(
             eventCode = canonicalTbaEventCode(eventCode),
             eventKey = resolvedKey,
-            timezone = settings.timezone.ifBlank { "America/New_York" },
+            timezone = settings.timezone.ifBlank { "UTC" },
             preferredSource = settings.preferredSource.lowercase(),
             useStatboticsEpa = normalizedUseStatboticsEpa,
             useMatch13Exp = normalizedUseMatch13Exp,

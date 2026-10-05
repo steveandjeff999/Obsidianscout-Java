@@ -58,13 +58,16 @@ async function initPrescoutScout(me) {
         const formBlocked = document.getElementById("form-blocked");
         const pointsPreviewCard = document.getElementById("points-preview");
 
-        timezoneBadge.textContent = settings.timezone || "UTC";
+        timezoneBadge.textContent = "UTC";
 
         const defaultEvent = Obsidianscout.resolveEventKey(settings) || settings.eventCode || "prescout";
         if (eventCodeInput && !eventCodeInput.value) {
             eventCodeInput.value = defaultEvent;
         }
         currentEventKey = (eventCodeInput && eventCodeInput.value.trim().toLowerCase()) || defaultEvent;
+        Obsidianscout.getEventTimezone(currentEventKey).then(tz => {
+            if (timezoneBadge) timezoneBadge.textContent = tz || "UTC";
+        });
 
         let entryCache = await loadEntryCache();
 
@@ -191,6 +194,9 @@ async function initPrescoutScout(me) {
         if (eventCodeInput) {
             eventCodeInput.addEventListener("input", () => {
                 currentEventKey = eventCodeInput.value.trim().toLowerCase() || defaultEvent;
+                Obsidianscout.getEventTimezone(currentEventKey).then(tz => {
+                    if (timezoneBadge) timezoneBadge.textContent = tz || "UTC";
+                });
                 if (teamInput && Number(teamInput.value.trim()) > 0 && matchInput) {
                     matchInput.value = getNextMatchNumber(Number(teamInput.value.trim()), currentEventKey);
                 }

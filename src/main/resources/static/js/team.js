@@ -2,7 +2,7 @@ let currentUser = null;
 let currentEventKey = "";
 let currentTeamNumber = null;
 let currentTeamKey = "";
-let timezone = "America/New_York";
+let timezone = "UTC";
 
 let state = {
     team: null,
@@ -79,11 +79,11 @@ async function loadTeamProfile() {
         const settingsResponse = await Obsidianscout.request("/api/settings");
         const settings = settingsResponse.settings;
         state.settings = settings;
-        timezone = settings.timezone;
 
         if (!currentEventKey) {
             currentEventKey = Obsidianscout.resolveEventKey(settings);
         }
+        timezone = await Obsidianscout.getEventTimezone(currentEventKey);
 
         // Fetch configs, teams, matches, and scouting entries in parallel
         const [

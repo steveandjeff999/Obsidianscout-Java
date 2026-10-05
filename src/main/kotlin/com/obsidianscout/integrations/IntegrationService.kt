@@ -183,13 +183,13 @@ object IntegrationService {
                         name = eventKey,
                         startDate = null,
                         endDate = null,
-                        timezone = settings.timezone,
+                        timezone = settings.timezone.takeIf { it.isNotBlank() } ?: "UTC",
                         dataJson = "{}"
                     )
             }
             val teamsDeferred = async { fetchMergedTeams(settings, eventKey) }
             val eventRecord = eventDeferred.await()
-            val matchesDeferred = async { fetchMergedMatches(settings, eventKey, eventRecord.timezone ?: settings.timezone) }
+            val matchesDeferred = async { fetchMergedMatches(settings, eventKey, eventRecord.timezone?.takeIf { it.isNotBlank() } ?: settings.timezone.takeIf { it.isNotBlank() } ?: "UTC") }
             Triple(eventRecord, teamsDeferred.await(), matchesDeferred.await())
         }
 
@@ -550,7 +550,7 @@ object IntegrationService {
                     eventCode = row[ApiEvents.eventCode],
                     startDate = row[ApiEvents.startDate],
                     endDate = row[ApiEvents.endDate],
-                    timezone = row[ApiEvents.timezone]
+                    timezone = row[ApiEvents.timezone]?.takeIf { it.isNotBlank() } ?: "UTC"
                 )
             }.toMutableList()
 
@@ -573,9 +573,9 @@ object IntegrationService {
                             "Event: $key"
                         }
                         val recordTimezone = if (isSelfActive) {
-                            activeSettings?.timezone ?: "America/New_York"
+                            activeSettings?.timezone?.takeIf { it.isNotBlank() } ?: "UTC"
                         } else {
-                            "America/New_York"
+                            "UTC"
                         }
 
                         events.add(
@@ -761,6 +761,8 @@ object IntegrationService {
                 .limit(1)
                 .firstOrNull()
                 ?.get(ApiEvents.timezone)
+                ?.takeIf { it.isNotBlank() }
+                ?: "UTC"
 
             val isFtcProgram = program.equals("FTC", ignoreCase = true)
             val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey.lowercase() }.toList()
@@ -1225,7 +1227,7 @@ object IntegrationService {
                     eventCode = storedCode,
                     startDate = row[ApiEvents.startDate],
                     endDate = row[ApiEvents.endDate],
-                    timezone = row[ApiEvents.timezone]
+                    timezone = row[ApiEvents.timezone]?.takeIf { it.isNotBlank() } ?: "UTC"
                 )
             }.firstOrNull()
         }
@@ -1644,23 +1646,28 @@ object IntegrationService {
         MatchCanonical.mergeAll(matches)
     }
 
-    private suspend fun upsertEventRecord(settings: ApiSettings, eventKey: String) {
+    suspend fun fetchAndUpsertEvent(settings: ApiSettings, eventKey: String): EventRecord? {
         val event = fetchTbaEventDetail(settings, eventKey)
             ?: fetchFirstEventDetail(settings, eventKey)
             ?: EventSyncRecord(
-            eventKey = eventKey,
-            year = settings.year,
-            eventCode = settings.eventCode.ifBlank { eventKey.removePrefix(settings.year.toString()) },
-            name = eventKey,
-            startDate = null,
-            endDate = null,
-            timezone = settings.timezone,
-            dataJson = "{}"
-        )
+                eventKey = eventKey,
+                year = settings.year,
+                eventCode = settings.eventCode.ifBlank { eventKey.removePrefix(settings.year.toString()) },
+                name = eventKey,
+                startDate = null,
+                endDate = null,
+                timezone = settings.timezone.takeIf { it.isNotBlank() } ?: "UTC",
+                dataJson = "{}"
+            )
         val now = Instant.now()
         transaction {
             upsertEvent(event, now)
         }
+        return getEvent(eventKey)
+    }
+
+    private suspend fun upsertEventRecord(settings: ApiSettings, eventKey: String) {
+        fetchAndUpsertEvent(settings, eventKey)
     }
 
     private fun upsertEvent(event: EventSyncRecord, now: Instant) {
@@ -2319,8 +2326,9 @@ object IntegrationService {
         val tzToUse = eventTimezone?.takeIf { it.isNotBlank() }
             ?: readTransaction {
                 ApiEvents.selectAll().where { ApiEvents.eventKey eq normalizedEventKey }.limit(1).firstOrNull()?.get(ApiEvents.timezone)
-            }
-            ?: settings.timezone
+            }?.takeIf { it.isNotBlank() }
+            ?: settings.timezone.takeIf { it.isNotBlank() }
+            ?: "UTC"
         val zoneId = resolveZoneId(tzToUse)
 
         val matchLevels = listOf(

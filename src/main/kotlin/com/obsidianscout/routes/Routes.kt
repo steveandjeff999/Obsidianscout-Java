@@ -1654,9 +1654,37 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val eventKeyParam = call.request.queryParameters["eventKey"]
                     if (!eventKeyParam.isNullOrBlank()) {
-                        val event = IntegrationService.getEvent(eventKeyParam)
+                        val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
+                        var event = IntegrationService.getEvent(eventKeyParam)
+                        if (event == null || event.timezone.isNullOrBlank() || event.timezone == "UTC") {
+                            try {
+                                val fetched = IntegrationService.fetchAndUpsertEvent(settings, eventKeyParam)
+                                if (fetched != null && !fetched.timezone.isNullOrBlank() && fetched.timezone != "UTC") {
+                                    event = fetched
+                                } else if (event == null) {
+                                    event = fetched
+                                }
+                            } catch (e: Exception) {
+                                // Ignore fetch failure
+                            }
+                        }
                         if (event != null) {
-                            call.respond(event)
+                            val resolvedEvent = if (event.timezone.isNullOrBlank()) {
+                                event.copy(timezone = "UTC")
+                            } else {
+                                event
+                            }
+                            call.respond(resolvedEvent)
+                            return@get
+                        } else {
+                            call.respond(
+                                EventRecord(
+                                    eventKey = eventKeyParam.lowercase().trim(),
+                                    name = eventKeyParam,
+                                    year = settings.year,
+                                    timezone = "UTC"
+                                )
+                            )
                             return@get
                         }
                     }

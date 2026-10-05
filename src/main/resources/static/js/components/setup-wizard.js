@@ -253,7 +253,7 @@ export function showSetupWizardModal(me, settings, forceOpen = false) {
                     </div>
                     <div class="field">
                         <label for="wizard-timezone">Timezone</label>
-                        <input id="wizard-timezone" type="text" placeholder="America/New_York" value="${localSettings.timezone || 'America/New_York'}" />
+                        <input id="wizard-timezone" type="text" placeholder="UTC" value="${localSettings.timezone || 'UTC'}" />
                         <span class="wizard-field-desc">Database logs and schedule offsets use this timezone.</span>
                     </div>
                     <div class="field">

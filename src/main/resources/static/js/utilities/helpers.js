@@ -5,6 +5,7 @@
 
 import { safeGetItem } from '../base/storage.js';
 import { t } from '../base/i18n.js';
+import { request } from '../base/http.js';
 
 export function resolveEventKey(settings) {
     if (!settings) {
@@ -15,6 +16,25 @@ export function resolveEventKey(settings) {
         return `${settings.year}${code}`.toLowerCase();
     }
     return (settings.eventKey || "").trim().toLowerCase();
+}
+
+/**
+ * Resolves the timezone for a given event key by querying the /api/events?eventKey=... endpoint.
+ * Defaults to "UTC" if not found or if no timezone is available.
+ */
+export async function getEventTimezone(eventKey) {
+    if (!eventKey || typeof eventKey !== "string" || !eventKey.trim()) {
+        return "UTC";
+    }
+    try {
+        const event = await request(`/api/events?eventKey=${encodeURIComponent(eventKey.trim())}`);
+        if (event && event.timezone && typeof event.timezone === "string" && event.timezone.trim()) {
+            return event.timezone.trim();
+        }
+    } catch (e) {
+        console.debug("Could not fetch event timezone for " + eventKey, e);
+    }
+    return "UTC";
 }
 
 export function getDeviceTimezone() {
