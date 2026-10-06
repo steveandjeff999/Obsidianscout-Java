@@ -135,9 +135,9 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
     
     from(file("config")) {
         into("config")
-        exclude("secrets.json*", "*.jks")
+        exclude("secrets.json*", "*.jks", "*.bak")
     }
-    
+
     from(file("../docs")) {
         into("docs")
     }
@@ -261,7 +261,7 @@ val buildBundle = tasks.register<Copy>("buildbundle") {
             "        del /q obsidianscout-server-native* >nul 2>&1\r\n" +
             "        if exist config\\app-config.json (\r\n" +
             "            if not exist .update_tmp_cfg mkdir .update_tmp_cfg\r\n" +
-            "            xcopy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
+            "            copy /y \"config\\app-config.json\" \".update_tmp_cfg\\app-config.json\" >nul\r\n" +
             "        )\r\n" +
             "        timeout /t 3 >nul 2>&1\r\n" +
             "        set COPY_ATTEMPTS=0\r\n" +
@@ -721,7 +721,7 @@ val nativeBundleTasks = nativeArchs.map { arch ->
 
         from(file("config")) {
             into("config")
-            exclude("secrets.json*", "*.jks")
+            exclude("secrets.json*", "*.jks", "*.bak")
         }
 
         from(file("../docs")) {

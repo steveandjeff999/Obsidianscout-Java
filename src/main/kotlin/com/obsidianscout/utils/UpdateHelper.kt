@@ -299,7 +299,10 @@ fun runUpdateHelper() {
                              }
 
                              val prettyJson = Json { prettyPrint = true }
-                             userFile.writeText(prettyJson.encodeToString(JsonElement.serializer(), merged) + "\n")
+                             val mergedText = prettyJson.encodeToString(JsonElement.serializer(), merged) + "\n"
+                             userFile.writeText(mergedText)
+                             // update.bat copies the whole bundle over the install, so the bundled copy must hold the merge too
+                             runCatching { srcFile.writeText(mergedText) }
                          } catch (e: Exception) {
                              println("Warning: Failed to merge config/$relPath, overwriting with default. Details: ${e.message}")
                              srcFile.copyTo(userFile, overwrite = true)

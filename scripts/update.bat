@@ -82,6 +82,12 @@ timeout /t 3 >nul 2>&1
 :: below brings in whatever the new release ships - nothing if it is JAR-only
 del /q obsidianscout-server-native* >nul 2>&1
 
+:: The bulk copy below overwrites config\ with the release defaults; keep the user's app-config.json
+if exist config\app-config.json (
+    if not exist .update_tmp_cfg mkdir .update_tmp_cfg
+    copy /y "config\app-config.json" ".update_tmp_cfg\app-config.json" >nul
+)
+
 set COPY_ATTEMPTS=0
 :copy_loop_upd
 set /a COPY_ATTEMPTS+=1
@@ -91,6 +97,12 @@ if errorlevel 1 (
         timeout /t 2 >nul 2>&1
         goto copy_loop_upd
     )
+)
+
+if exist .update_tmp_cfg\app-config.json (
+    if not exist config mkdir config
+    copy /y ".update_tmp_cfg\app-config.json" "config\app-config.json" >nul
+    rd /s /q .update_tmp_cfg >nul 2>&1
 )
 
 :: Clean up temp folder
