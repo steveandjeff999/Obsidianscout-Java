@@ -121,6 +121,8 @@ function renderMatchesTable(matches, eventKey, timezone) {
         const matchCell = document.createElement("td");
         const matchLabel = localize(match.label) || (match.compLevel.toUpperCase() + " " + (match.matchNumber || ""));
         matchCell.innerHTML = `<a href="/match-planning?match=${encodeURIComponent(match.matchKey)}" title="Open in Match Planning" style="color: var(--accent); font-weight: 700; text-decoration: none;">${matchLabel}</a>`;
+        const videoLinks = Obsidianscout.createMatchVideoLinks(match.videos);
+        if (videoLinks) matchCell.appendChild(videoLinks);
         const timeCell = document.createElement("td");
         timeCell.className = "match-time-cell";
         const timeEl = Obsidianscout.formatTimestampWithVenueTooltip(

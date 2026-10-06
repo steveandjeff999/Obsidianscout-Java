@@ -31,6 +31,9 @@ import org.jetbrains.exposed.v1.jdbc.update
 import java.time.Instant
 import java.util.UUID
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.scouting.ScoutingAssignmentService")
+
+
 @Serializable
 data class ScoutingAssignmentRecord(
     val id: String,
@@ -1512,11 +1515,11 @@ object ScoutingAssignmentService {
                         it[completedAt] = now
                         it[updatedAt] = now
                     }
-                    println("[ScoutingAssignmentService] Auto-synced and marked completed ${idsToComplete.size} assignment(s) for event $eventClean")
+                    consoleLog.info("[ScoutingAssignmentService] Auto-synced and marked completed ${idsToComplete.size} assignment(s) for event $eventClean")
                 }
             }
         } catch (e: Exception) {
-            println("[ScoutingAssignmentService] syncCompletedAssignments warning: ${e.message}")
+            consoleLog.warn("[ScoutingAssignmentService] syncCompletedAssignments warning: ${e.message}")
         }
     }
 
@@ -1597,7 +1600,7 @@ object ScoutingAssignmentService {
                     it[completedAt] = now
                     it[updatedAt] = now
                 }
-                println("[ScoutingAssignmentService] Auto-completed ${matchingIds.size} assignment(s) for event $eventKey ($typeClean)")
+                consoleLog.info("[ScoutingAssignmentService] Auto-completed ${matchingIds.size} assignment(s) for event $eventKey ($typeClean)")
             }
         }
     }

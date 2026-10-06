@@ -783,6 +783,8 @@ function exportCsv(state) {
 }
 
 function csvEscape(value) {
-    const text = value === null || value === undefined ? "" : String(value);
+    let text = value === null || value === undefined ? "" : String(value);
+    // Spreadsheets run cells starting with = + - @ as formulas; show them as text instead.
+    if (/^[=+\-@\t\r]/.test(text) && !/^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(text)) text = "'" + text;
     return `"${text.replace(/"/g, '""')}"`;
 }

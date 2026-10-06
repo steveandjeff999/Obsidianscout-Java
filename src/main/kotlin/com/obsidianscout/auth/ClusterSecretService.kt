@@ -12,6 +12,9 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicReference
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.auth.ClusterSecretService")
+
+
 @Serializable
 data class KeyRegenerationResponse(
     val success: Boolean,
@@ -148,7 +151,7 @@ object ClusterSecretService {
                 )
             }
         } catch (e: Exception) {
-            println("[ClusterSecretService] Warning: Failed to sync secrets with database cluster: ${e.message}")
+            consoleLog.error("[ClusterSecretService] Warning: Failed to sync secrets with database cluster: ${e.message}")
         }
     }
 
@@ -160,7 +163,7 @@ object ClusterSecretService {
         if (syncJob?.isActive == true) return
 
         syncJob = CoroutineScope(Dispatchers.IO).launch {
-            println("[ClusterSecretService] Background cluster secret sync monitor started (polling every $intervalSeconds seconds)...")
+            consoleLog.info("[ClusterSecretService] Background cluster secret sync monitor started (polling every $intervalSeconds seconds)...")
             while (isActive) {
                 try {
                     delay(intervalSeconds * 1000)
@@ -204,7 +207,7 @@ object ClusterSecretService {
             vapidPrivateKey = newVapidKeys.privateKey
         )
 
-        println("[ClusterSecretService] SuperAdmin regenerated cluster keys (Session & VAPID) across CockroachDB cluster.")
+        consoleLog.info("[ClusterSecretService] SuperAdmin regenerated cluster keys (Session & VAPID) across CockroachDB cluster.")
 
         return KeyRegenerationResponse(
             success = true,

@@ -76,7 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
         Obsidianscout.setButtonLoading(loginButton, true, t('login.signing_in', 'Signing in...'));
 
         try {
-            await Obsidianscout.request("/api/auth/login", {
+            const loginResponse = await Obsidianscout.request("/api/auth/login", {
                 method: "POST",
                 json: {
                     username,
@@ -86,6 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     keepMeLoggedIn
                 }
             });
+            await Obsidianscout.resetCachesForUser(loginResponse);
             await handlePostLoginPasskeyCheck();
         } catch (error) {
             Obsidianscout.showToast(error.message || "Sign in failed", "error");
@@ -150,10 +151,11 @@ document.addEventListener("DOMContentLoaded", () => {
                         keepMeLoggedIn: keepMeLoggedIn
                     };
 
-                    await Obsidianscout.request("/api/auth/passkey/authenticate/finish", {
+                    const loginResponse = await Obsidianscout.request("/api/auth/passkey/authenticate/finish", {
                         method: "POST",
                         json: finishPayload
                     });
+                    await Obsidianscout.resetCachesForUser(loginResponse);
 
                     window.location.href = "/dashboard";
                 } catch (err) {
@@ -430,7 +432,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         try {
-            await Obsidianscout.request("/api/auth/register", {
+            const loginResponse = await Obsidianscout.request("/api/auth/register", {
                 method: "POST",
                 json: {
                     username,
@@ -442,6 +444,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     keepMeLoggedIn
                 }
             });
+            await Obsidianscout.resetCachesForUser(loginResponse);
             Obsidianscout.showToast("Account created!", "success");
             window.location.href = "/dashboard";
         } catch (error) {

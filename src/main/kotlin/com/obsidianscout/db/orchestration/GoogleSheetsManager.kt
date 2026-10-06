@@ -8,6 +8,9 @@ import java.time.Duration
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.db.orchestration.GoogleSheetsManager")
+
+
 @Serializable
 data class PeerInfo(
     val ip: String,
@@ -59,7 +62,7 @@ object GoogleSheetsManager {
                 cachedHttpClient = buildNewHttpClient()
             }
         } catch (e: Exception) {
-            println("[GoogleSheets] Failed to recreate HttpClient: ${e.message}")
+            consoleLog.error("[GoogleSheets] Failed to recreate HttpClient: ${e.message}")
         }
     }
 
@@ -113,14 +116,14 @@ object GoogleSheetsManager {
 
             val response = getHttpClient().send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() != 200) {
-                println("[GoogleSheets] Failed to fetch peers. Status code: ${response.statusCode()}")
+                consoleLog.error("[GoogleSheets] Failed to fetch peers. Status code: ${response.statusCode()}")
                 return emptyList()
             }
 
             val body = response.body()
             return parsePeerDetails(body, sheetUrl)
         } catch (e: Exception) {
-            println("[GoogleSheets] Error fetching peers: ${e.message}")
+            consoleLog.error("[GoogleSheets] Error fetching peers: ${e.message}")
             if (e.message?.contains("selector manager closed") == true || e is java.io.IOException) {
                 resetHttpClient()
             }
@@ -154,12 +157,12 @@ object GoogleSheetsManager {
 
             val response = getHttpClient().send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() in 200..299) {
-                println("[GoogleSheets] Successfully registered self to Google Sheet: $localIp:$port")
+                consoleLog.info("[GoogleSheets] Successfully registered self to Google Sheet: $localIp:$port")
             } else {
-                println("[GoogleSheets] Failed to register self. Status code: ${response.statusCode()}, Response: ${response.body()}")
+                consoleLog.error("[GoogleSheets] Failed to register self. Status code: ${response.statusCode()}, Response: ${response.body()}")
             }
         } catch (e: Exception) {
-            println("[GoogleSheets] Error registering self: ${e.message}")
+            consoleLog.error("[GoogleSheets] Error registering self: ${e.message}")
             if (e.message?.contains("selector manager closed") == true || e is java.io.IOException) {
                 resetHttpClient()
             }
@@ -190,7 +193,7 @@ object GoogleSheetsManager {
                 val peers = json.decodeFromString<List<PeerInfo>>(trimmed)
                 return peers.map { PeerDetails(it.ip, it.port, it.displayName) }
             } catch (e: Exception) {
-                println("[GoogleSheets] Failed to parse JSON, falling back to regex: ${e.message}")
+                consoleLog.error("[GoogleSheets] Failed to parse JSON, falling back to regex: ${e.message}")
                 val regex = """"ip"\s*:\s*"([^"]+)"\s*,\s*"port"\s*:\s*(\d+)(?:\s*,\s*"(?:name|server_name|hostname)"\s*:\s*"([^"]+)")?""".toRegex()
                 val matches = regex.findAll(trimmed).map { match ->
                     val ip = match.groupValues[1]

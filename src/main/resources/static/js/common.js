@@ -44,7 +44,8 @@ import {
     isAdmin,
     isSuperAdmin,
     canAccessAnalytics,
-    wireLogout
+    wireLogout,
+    resetCachesForUser
 } from './base/auth.js';
 
 import {
@@ -209,7 +210,8 @@ import {
     showRetryButton,
     getProgram,
     getProgramPrefix,
-    escapeHtml
+    escapeHtml,
+    createMatchVideoLinks
 } from './utilities/helpers.js';
 
 import {
@@ -249,6 +251,7 @@ window.Obsidianscout = {
     hideModal,
     initErrorReporter,
     escapeHtml,
+    createMatchVideoLinks,
     getProgram,
     getProgramPrefix,
     request,
@@ -263,6 +266,7 @@ window.Obsidianscout = {
     setActiveNav,
     adjustNavForRole,
     wireLogout,
+    resetCachesForUser,
     initTheme,
     wireThemeToggle,
     applyNavLayout,
@@ -352,6 +356,7 @@ window.Obsidianscout = {
 // Re-export for ES module consumers
 export {
     escapeHtml,
+    createMatchVideoLinks,
     getProgram,
     getProgramPrefix,
     request,
@@ -366,6 +371,7 @@ export {
     setActiveNav,
     adjustNavForRole,
     wireLogout,
+    resetCachesForUser,
     initTheme,
     wireThemeToggle,
     applyNavLayout,

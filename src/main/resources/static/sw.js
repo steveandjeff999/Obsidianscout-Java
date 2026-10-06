@@ -38,6 +38,7 @@ const ASSETS = [
     '/events',
     '/teams',
     '/rankings',
+    '/projected-rankings',
     '/qual-rankings',
     '/team',
     '/matches',
@@ -59,6 +60,7 @@ const ASSETS = [
     '/backup',
     '/banners',
     '/chat',
+    '/assistant',
     '/docs',
     '/contact',
     '/migration',
@@ -78,6 +80,7 @@ const ASSETS = [
     '/css/layout/responsive.css',
     '/css/components/buttons.css',
     '/css/components/cards.css',
+    '/css/components/local-ai.css',
     '/css/components/forms.css',
     '/css/components/tables.css',
     '/css/components/modals.css',
@@ -136,6 +139,7 @@ const ASSETS = [
     '/js/events.js',
     '/js/teams.js',
     '/js/rankings.js',
+    '/js/projected-rankings.js',
     '/js/qual-rankings.js',
     '/js/team.js',
     '/js/matches.js',
@@ -157,6 +161,13 @@ const ASSETS = [
     '/js/backup.js',
     '/js/banners.js',
     '/js/chat.js',
+    '/js/assistant.js',
+    '/js/ai/local-ai.js',
+    '/js/ai/ai-ui.js',
+    '/js/ai/ai-data.js',
+    '/js/ai/ai-tools.js',
+    '/js/ai/ai-features.js',
+    '/js/ai/ai-worker.js',
     '/js/contact.js',
     '/js/migration.js',
     '/js/config-migration.js',
@@ -170,6 +181,7 @@ const ASSETS = [
     '/vendor/jabcodeJSLib.min.js',
     '/vendor/plotly-2.32.0.min.js',
     '/vendor/marked.min.js',
+    '/vendor/purify.min.js',
     '/vendor/html5-qrcode.min.js',
     '/vendor/jsQR.js',
     '/i18n/en.json',
@@ -222,7 +234,9 @@ self.addEventListener('activate', (event) => {
         caches.keys().then((keys) => {
             return Promise.all(
                 keys.map((key) => {
-                    if (key !== CACHE_NAME) {
+                    // Only prune our own shell caches. Other caches (e.g. the local AI engines'
+                    // multi-GB model caches) must survive version bumps.
+                    if (key.startsWith('obsidianscout-shell-') && key !== CACHE_NAME) {
                         console.log('[ServiceWorker] Removing old cache:', key);
                         return caches.delete(key);
                     }
@@ -241,6 +255,14 @@ self.addEventListener('fetch', (event) => {
         url.origin !== self.location.origin ||
         url.pathname.startsWith('/api') ||
         (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+        return;
+    }
+
+    // Local AI model weights and inference engines manage their own Cache Storage;
+    // copying them into the shell cache would duplicate gigabytes.
+    if (url.pathname.startsWith('/models/') ||
+        url.pathname.startsWith('/vendor/transformers/') ||
+        url.pathname.startsWith('/vendor/web-llm/')) {
         return;
     }
 

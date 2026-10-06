@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Projected Rankings</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <style>
+        #projection-table td,
+        #projection-table th {
+            white-space: nowrap;
+        }
+
+        #projection-table tr.projection-own-team td {
+            background: rgba(37, 99, 235, 0.08);
+            font-weight: 700;
+        }
+
+        body.theme-dark #projection-table tr.projection-own-team td {
+            background: rgba(59, 130, 246, 0.14);
+        }
+
+        .projection-trend {
+            font-size: 0.72rem;
+            font-weight: 800;
+            margin-left: 4px;
+        }
+
+        .projection-trend.up { color: #16a34a; }
+        .projection-trend.down { color: #dc2626; }
+
+        .projection-bar {
+            display: inline-block;
+            width: 56px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--surface-3);
+            overflow: hidden;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+
+        body.theme-dark .projection-bar {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .projection-bar-fill {
+            display: block;
+            height: 100%;
+            background: var(--accent);
+            border-radius: 999px;
+        }
+
+        .projection-bar-label {
+            font-size: 0.85rem;
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+<body data-page="projected-rankings">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-2"></div>
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+        <main class="main-content">
+            <div class="card" id="projection-card">
+                <div class="row gap-12 wrap justify-between align-center">
+                    <div>
+                        <h1>Projected Final Rankings</h1>
+                        <p class="notice" id="projection-summary">Simulates the remaining qualification matches to estimate where each team will finish.</p>
+                    </div>
+                    <div class="row gap-12 wrap align-center">
+                        <div class="field" style="min-width: 220px; margin-top: 0;">
+                            <select id="event-filter" class="select-wide" title="Event"></select>
+                        </div>
+                        <div class="field" style="margin-top: 0;">
+                            <select id="projection-sims" title="Number of simulated seasons">
+                                <option value="1000">1,000 runs</option>
+                                <option value="2000" selected>2,000 runs</option>
+                                <option value="5000">5,000 runs</option>
+                                <option value="10000">10,000 runs</option>
+                            </select>
+                        </div>
+                        <button class="btn secondary" id="projection-run-btn" type="button">Re-run</button>
+                    </div>
+                </div>
+
+                <div class="table-scroll">
+                    <table class="table" id="projection-table">
+                        <thead>
+                            <tr>
+                                <th id="projection-rank-header" title="Projected final standing, ordered by average simulated finish">Proj. Rank</th>
+                                <th>Team</th>
+                                <th>Name</th>
+                                <th title="Rank from qualification matches played so far">Now</th>
+                                <th title="Wins-Losses-Ties so far">Record</th>
+                                <th title="Ranking points per match so far">RS Now</th>
+                                <th title="Expected ranking points per match at the end of qualifications">RS Final</th>
+                                <th title="80% of simulations finish in this range">Likely Range</th>
+                                <th id="projection-top-header" title="Chance of finishing inside the alliance captain spots">Top 8</th>
+                                <th title="Chance of finishing first">#1</th>
+                                <th title="Qualification matches left">Left</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="11" style="text-align: center; color: var(--muted); padding: 24px;">Loading projection...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script type="module" src="/js/common.js"></script>
+    <script src="/js/projected-rankings.js"></script>
+</body>
+</html>

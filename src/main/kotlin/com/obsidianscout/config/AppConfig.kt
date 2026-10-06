@@ -9,6 +9,9 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.security.SecureRandom
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.config.AppConfig")
+
+
 @Serializable
 data class AppConfig(
     val server: ServerConfig = ServerConfig(),
@@ -187,7 +190,7 @@ object AppConfigLoader {
                     false
                 }
             } ?: run {
-                System.err.println("[AppConfigLoader] Primary config and backup corrupted or unreadable. Generating safe defaults...")
+                consoleLog.error("[AppConfigLoader] Primary config and backup corrupted or unreadable. Generating safe defaults...")
                 val defaultText = JsonSupport.json.encodeToString(AppConfig())
                 com.obsidianscout.utils.SafeFileUtils.atomicWriteString(path, defaultText)
                 defaultText
@@ -225,7 +228,7 @@ object AppConfigLoader {
                     writeStoredSecrets(path, finalSecrets)
                     true
                 } catch (e: Exception) {
-                    System.err.println("[AppConfigLoader] Failed to write ${secretsPathFor(path)}: ${e.message}. Leaving secrets in ${path.fileName}.")
+                    consoleLog.error("[AppConfigLoader] Failed to write ${secretsPathFor(path)}: ${e.message}. Leaving secrets in ${path.fileName}.")
                     false
                 }
             } else true
@@ -259,9 +262,9 @@ object AppConfigLoader {
                 if (path == defaultPath) {
                     cachedConfig = updated
                 }
-                println("[ObsidianScout] Saved updated auto backup configuration to ${path.toAbsolutePath()}")
+                consoleLog.info("[ObsidianScout] Saved updated auto backup configuration to ${path.toAbsolutePath()}")
             } catch (e: Exception) {
-                println("[ObsidianScout] Warning: Failed to save auto backup configuration: ${e.message}")
+                consoleLog.error("[ObsidianScout] Warning: Failed to save auto backup configuration: ${e.message}")
             }
         }
     }
@@ -287,7 +290,7 @@ object AppConfigLoader {
         return try {
             JsonSupport.json.decodeFromString<StoredSecrets>(Files.readString(secretsPath))
         } catch (e: Exception) {
-            System.err.println("[AppConfigLoader] Could not read $secretsPath: ${e.message}")
+            consoleLog.warn("[AppConfigLoader] Could not read $secretsPath: ${e.message}")
             StoredSecrets()
         }
     }
@@ -346,7 +349,7 @@ object AppConfigLoader {
                 )
             }
         } catch (e: Exception) {
-            System.err.println("[AppConfigLoader] Could not check $backupPath for secrets: ${e.message}")
+            consoleLog.warn("[AppConfigLoader] Could not check $backupPath for secrets: ${e.message}")
         }
     }
 
@@ -394,7 +397,7 @@ object AppConfigLoader {
             val keystoreFile = File(config.server.https.keystorePath)
             if (keystoreFile.exists()) {
                 keystoreFile.delete()
-                println("[ObsidianScout] Deleted old keystore (${keystoreFile.path}) — it will be regenerated with the new password.")
+                consoleLog.info("[ObsidianScout] Deleted old keystore (${keystoreFile.path}) — it will be regenerated with the new password.")
             }
         }
 
@@ -411,7 +414,7 @@ object AppConfigLoader {
             )
         )
 
-        println("[ObsidianScout] Default secrets or VAPID keys detected — auto-generated secure values (stored in config/secrets.json).")
+        consoleLog.info("[ObsidianScout] Default secrets or VAPID keys detected — auto-generated secure values (stored in config/secrets.json).")
 
         return updated
     }
@@ -438,9 +441,9 @@ object AppConfigLoader {
             if (path == defaultPath) {
                 cachedConfig = updated
             }
-            println("[ObsidianScout] Synchronized updated cluster secrets (Session & VAPID) to ${secretsPathFor(path).toAbsolutePath()}")
+            consoleLog.info("[ObsidianScout] Synchronized updated cluster secrets (Session & VAPID) to ${secretsPathFor(path).toAbsolutePath()}")
         } catch (e: Exception) {
-            println("[ObsidianScout] Warning: Failed to save cluster secrets to config file: ${e.message}")
+            consoleLog.error("[ObsidianScout] Warning: Failed to save cluster secrets to config file: ${e.message}")
         }
     }
 

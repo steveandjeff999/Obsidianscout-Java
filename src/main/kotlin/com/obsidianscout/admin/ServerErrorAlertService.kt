@@ -42,6 +42,9 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.SSLException
 import javax.net.ssl.SSLHandshakeException
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.admin.ServerErrorAlertService")
+
+
 object ServerErrorAlertService {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -365,10 +368,10 @@ object ServerErrorAlertService {
                         errorType = report.errorType,
                         sync = true
                     )
-                    println("[ServerErrorAlertService] Ingested crash report into ReportedErrors: ${report.errorMessage}")
+                    consoleLog.info("[ServerErrorAlertService] Ingested crash report into ReportedErrors: ${report.errorMessage}")
                 }
             } catch (e: Exception) {
-                System.err.println("[ServerErrorAlertService] Failed to parse and ingest pending crash report: ${e.message}")
+                consoleLog.error("[ServerErrorAlertService] Failed to parse and ingest pending crash report: ${e.message}")
             } finally {
                 try {
                     java.nio.file.Files.deleteIfExists(crashFile.toPath())
@@ -386,9 +389,9 @@ object ServerErrorAlertService {
                     errorType = "OOM_CRASH",
                     sync = true
                 )
-                println("[ServerErrorAlertService] Ingested OOM crash incident into ReportedErrors.")
+                consoleLog.info("[ServerErrorAlertService] Ingested OOM crash incident into ReportedErrors.")
             } catch (e: Exception) {
-                System.err.println("[ServerErrorAlertService] Failed to record OOM crash incident: ${e.message}")
+                consoleLog.error("[ServerErrorAlertService] Failed to record OOM crash incident: ${e.message}")
             } finally {
                 try {
                     java.nio.file.Files.deleteIfExists(oomFile.toPath())

@@ -25,6 +25,7 @@
 @import url('./components/alerts-banners.css');
 @import url('./components/widgets.css');
 @import url('./components/gamepad-settings.css');
+@import url('./components/local-ai.css');
 
 /* 4. Page-Specific Styles */
 @import url('./pages/dashboard.css');

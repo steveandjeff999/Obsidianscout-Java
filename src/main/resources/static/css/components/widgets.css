@@ -355,6 +355,43 @@ body.theme-dark .venue-tz-badge::before {
     gap: 4px;
 }
 
+/* Match video links (TBA-published YouTube videos) */
+.match-video-links {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.match-video-link {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 3px 7px;
+    border-radius: 999px;
+    color: #c4302b;
+    background: rgba(196, 48, 43, 0.1);
+    border: 1px solid rgba(196, 48, 43, 0.25);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.match-video-link:hover {
+    background: rgba(196, 48, 43, 0.18);
+}
+
+body.theme-dark .match-video-link {
+    color: #ff7b72;
+    background: rgba(255, 123, 114, 0.12);
+    border-color: rgba(255, 123, 114, 0.3);
+}
+
+@media print {
+    .match-video-links { display: none !important; }
+}
+
 .schedule-offset-badge {
     position: relative;
     display: inline-flex;

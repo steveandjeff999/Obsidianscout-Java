@@ -10,6 +10,9 @@ import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.util.UUID
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.utils.SafeFileUtils")
+
+
 /**
  * Crash-safe, power-loss-resilient file writing and recovery utilities.
  *
@@ -78,7 +81,7 @@ object SafeFileUtils {
                 try {
                     Files.copy(targetPath, backupPath, StandardCopyOption.REPLACE_EXISTING)
                 } catch (e: Exception) {
-                    System.err.println("[SafeFileUtils] Warning: Failed to create backup file $backupPath: ${e.message}")
+                    consoleLog.error("[SafeFileUtils] Warning: Failed to create backup file $backupPath: ${e.message}")
                 }
             }
 
@@ -135,9 +138,9 @@ object SafeFileUtils {
                 if (validator(text)) {
                     return text
                 }
-                System.err.println("[SafeFileUtils] Primary file $targetPath failed content validation. Attempting backup recovery...")
+                consoleLog.error("[SafeFileUtils] Primary file $targetPath failed content validation. Attempting backup recovery...")
             } catch (e: Exception) {
-                System.err.println("[SafeFileUtils] Failed to read primary file $targetPath (${e.message}). Attempting backup recovery...")
+                consoleLog.error("[SafeFileUtils] Failed to read primary file $targetPath (${e.message}). Attempting backup recovery...")
             }
         }
 
@@ -146,16 +149,16 @@ object SafeFileUtils {
             try {
                 val backupText = Files.readString(backupPath, charset)
                 if (validator(backupText)) {
-                    println("[SafeFileUtils] Successfully recovered valid data from backup $backupPath. Restoring primary file...")
+                    consoleLog.info("[SafeFileUtils] Successfully recovered valid data from backup $backupPath. Restoring primary file...")
                     try {
                         atomicWriteString(targetPath, backupText, createBackup = false, charset = charset)
                     } catch (restoreEx: Exception) {
-                        System.err.println("[SafeFileUtils] Warning: Failed to write back restored content to $targetPath: ${restoreEx.message}")
+                        consoleLog.error("[SafeFileUtils] Warning: Failed to write back restored content to $targetPath: ${restoreEx.message}")
                     }
                     return backupText
                 }
             } catch (e: Exception) {
-                System.err.println("[SafeFileUtils] Failed reading backup file $backupPath: ${e.message}")
+                consoleLog.error("[SafeFileUtils] Failed reading backup file $backupPath: ${e.message}")
             }
         }
 

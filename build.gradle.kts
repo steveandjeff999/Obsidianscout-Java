@@ -28,11 +28,11 @@ dependencies {
     implementation("io.ktor:ktor-server-sessions-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-status-pages-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-call-logging-jvm:$ktorVersion")
-    implementation("io.ktor:ktor-server-cors-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-default-headers-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-compression-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-caching-headers-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-double-receive-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-server-partial-content-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-core-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-cio-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-websockets-jvm:$ktorVersion")
@@ -639,24 +639,33 @@ tasks.register("publish") {
     dependsOn("bumpVersion", "buildjar")
 }
 
+// Developer utilities (src/tools/kotlin) are built against the server code but are not
+// shipped in the server jar or native binary.
+val toolsSourceSet = sourceSets.create("tools") {
+    compileClasspath += sourceSets["main"].output + sourceSets["main"].compileClasspath
+    runtimeClasspath += sourceSets["main"].output + sourceSets["main"].runtimeClasspath
+}
+// Lets the tools use `internal` server code, the same way tests can.
+kotlin.target.compilations.getByName("tools").associateWith(kotlin.target.compilations.getByName("main"))
+
 tasks.register<JavaExec>("verifyMobile") {
     group = "verification"
     description = "Runs the mobile API verification script."
-    classpath = sourceSets["main"].runtimeClasspath
+    classpath = toolsSourceSet.runtimeClasspath
     mainClass.set("com.obsidianscout.utils.VerifyMobileApiKt")
 }
 
 tasks.register<JavaExec>("dumpSettings") {
     group = "verification"
     description = "Dumps app settings from database."
-    classpath = sourceSets["main"].runtimeClasspath
+    classpath = toolsSourceSet.runtimeClasspath
     mainClass.set("com.obsidianscout.utils.DumpSettingsKt")
 }
 
 tasks.register<JavaExec>("regenerateConfigs") {
     group = "build"
     description = "Regenerates all default configuration files from updated defaults in the code."
-    classpath = sourceSets["main"].runtimeClasspath
+    classpath = toolsSourceSet.runtimeClasspath
     mainClass.set("com.obsidianscout.utils.RegenerateConfigsKt")
 }
 

@@ -126,6 +126,8 @@ internal fun checkForgotPasswordRateLimit(ip: String, identifier: String) {
 fun Application.configureRoutes() {
     routing {
         route("/api") {
+            localAiApiRoutes()
+
             get("/version") {
                 val appConfig = AppConfigLoader.load()
                 call.respond(VersionResponse(appConfig.current_version, com.obsidianscout.admin.ClusterManagementService.getLocalExecutionMode()))
@@ -242,6 +244,7 @@ fun Application.configureRoutes() {
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         bugReportPreference = user.bugReportPreference,
+                        localAiEnabled = user.localAiEnabled,
                         sessionId = sessionUuid.toString()
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
@@ -259,6 +262,7 @@ fun Application.configureRoutes() {
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         bugReportPreference = user.bugReportPreference,
+                        localAiEnabled = user.localAiEnabled,
                         sessionId = sessionUuid.toString()
                     )
                     call.respond(LoginResponse(responseSession))
@@ -315,6 +319,7 @@ fun Application.configureRoutes() {
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         bugReportPreference = user.bugReportPreference,
+                        localAiEnabled = user.localAiEnabled,
                         sessionId = sessionUuid.toString()
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
@@ -332,6 +337,7 @@ fun Application.configureRoutes() {
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         bugReportPreference = user.bugReportPreference,
+                        localAiEnabled = user.localAiEnabled,
                         sessionId = sessionUuid.toString()
                     )
                     call.respond(LoginResponse(responseSession))
@@ -366,6 +372,7 @@ fun Application.configureRoutes() {
                         tourProgress = user.tourProgress,
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         bugReportPreference = user.bugReportPreference,
+                        localAiEnabled = user.localAiEnabled,
                         sessionId = session.sessionId
                     )
                     // If session attributes changed in DB (e.g. role, username, program, teamNumber, bugReportPreference), update cookie session WITHOUT bloated profilePicture
@@ -374,6 +381,7 @@ fun Application.configureRoutes() {
                             session.teamNumber != user.teamNumber ||
                             session.program != user.program ||
                             session.bugReportPreference != user.bugReportPreference ||
+                            session.localAiEnabled != user.localAiEnabled ||
                             session.profilePicture != null
                     if (cookieNeedsUpdate) {
                         call.sessions.set(responseSession.copy(profilePicture = null))
@@ -485,6 +493,7 @@ fun Application.configureRoutes() {
                             tourProgress = user.tourProgress,
                             nodeAlertsEnabled = user.nodeAlertsEnabled,
                             bugReportPreference = user.bugReportPreference,
+                            localAiEnabled = user.localAiEnabled,
                             sessionId = sessionUuid.toString()
                         )
                         call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
@@ -502,6 +511,7 @@ fun Application.configureRoutes() {
                             tourProgress = user.tourProgress,
                             nodeAlertsEnabled = user.nodeAlertsEnabled,
                             bugReportPreference = user.bugReportPreference,
+                            localAiEnabled = user.localAiEnabled,
                             sessionId = sessionUuid.toString()
                         )
                         call.respond(LoginResponse(responseSession))
@@ -1639,6 +1649,16 @@ fun Application.configureRoutes() {
                             }
                         }
                     }
+                    // Pick lists follow the board in the same Alliance/Role/Team columns, plus an optional note.
+                    val pickLists = com.obsidianscout.scouting.AllianceSelectionService.getPickLists(session, eventKey).pickLists
+                    fun csvCell(value: String) = "\"" + value.replace("\"", "\"\"") + "\""
+                    listOf("Want" to pickLists.want, "Avoid" to pickLists.avoid, "Do Not Pick" to pickLists.dnp).forEach { (listName, teams) ->
+                        teams.forEachIndexed { idx, team ->
+                            sb.append("${csvCell(listName)},${csvCell("#${idx + 1}")},$team")
+                            pickLists.notes[team.toString()]?.let { sb.append(",${csvCell(it)}") }
+                            sb.append("\n")
+                        }
+                    }
                     call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"alliance_selection_${eventKey}.csv\"")
                     call.respondText(sb.toString(), ContentType.Text.CSV, HttpStatusCode.OK)
                 }
@@ -1647,6 +1667,22 @@ fun Application.configureRoutes() {
                     val request = call.receive<com.obsidianscout.scouting.AllianceSelectionUpdateRequest>()
                     val response = com.obsidianscout.scouting.AllianceSelectionService.updateSelection(session, request)
                     call.respond(response)
+                }
+                route("/pick-lists") {
+                    get {
+                        val session = call.requireSession()
+                        val eventKey = call.request.queryParameters["eventKey"]
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
+                        call.respond(com.obsidianscout.scouting.AllianceSelectionService.getPickLists(session, eventKey))
+                    }
+                    post {
+                        val session = call.requireSession()
+                        val request = call.receive<com.obsidianscout.scouting.PickListsUpdateRequest>()
+                        if (request.eventKey.isBlank()) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey")
+                        }
+                        call.respond(com.obsidianscout.scouting.AllianceSelectionService.updatePickLists(session, request))
+                    }
                 }
             }
 
@@ -1792,6 +1828,18 @@ fun Application.configureRoutes() {
                     val forcePrescout = call.request.queryParameters["usePrescout"]?.toBoolean() ?: false
                     val predictions = PredictorService.predictAll(session, eventKey, forcePrescout)
                     call.respond(predictions)
+                }
+                get("/projected-rankings") {
+                    val session = call.requireSession()
+                    if (!SettingsService.canAccessPage(session.teamNumber, session.program, session.role, "projected-rankings")) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Your role doesn't have access to Projected Rankings")
+                    }
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
+                    val simulations = call.request.queryParameters["simulations"]?.toIntOrNull()
+                        ?: com.obsidianscout.analytics.RankingProjectionService.DEFAULT_SIMULATIONS
+                    val seed = call.request.queryParameters["seed"]?.toLongOrNull()
+                    call.respond(com.obsidianscout.analytics.RankingProjectionService.project(session, eventKey, simulations, seed))
                 }
                 post {
                     call.requireAdmin()
@@ -2151,7 +2199,7 @@ fun Application.configureRoutes() {
                     } ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "Superadmin user not found")
 
                     val hash = userRecord[com.obsidianscout.db.Users.passwordHash]
-                    val verified = at.favre.lib.crypto.bcrypt.BCrypt.verifyer().verify(req.password.toCharArray(), hash).verified
+                    val verified = runCatching { at.favre.lib.crypto.bcrypt.BCrypt.verifyer().verify(req.password.toCharArray(), hash).verified }.getOrDefault(false)
                     if (!verified) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "Invalid password")
                     }
@@ -2245,7 +2293,7 @@ fun Application.configureRoutes() {
                     } ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "User not found")
 
                     val hash = userRecord[com.obsidianscout.db.Users.passwordHash]
-                    val verified = at.favre.lib.crypto.bcrypt.BCrypt.verifyer().verify(req.password.toCharArray(), hash).verified
+                    val verified = runCatching { at.favre.lib.crypto.bcrypt.BCrypt.verifyer().verify(req.password.toCharArray(), hash).verified }.getOrDefault(false)
                     if (!verified) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Unauthorized, "Invalid password")
                     }
@@ -2266,9 +2314,16 @@ fun Application.configureRoutes() {
                         }
 
                         // Delete team's alliance selection data
-                        val ownerKey = "${session.program}_${session.teamNumber}"
-                        com.obsidianscout.db.AllianceSelections.deleteWhere { 
-                            com.obsidianscout.db.AllianceSelections.ownerKey inList listOf(ownerKey, session.teamNumber.toString())
+                        // Board rows are keyed "team_<n>_<program>" (legacy FRC rows "team_<n>"); pick lists have their own key.
+                        val ownerKeys = listOfNotNull(
+                            "team_${session.teamNumber}_${session.program}",
+                            if (session.program.equals("FRC", ignoreCase = true)) "team_${session.teamNumber}" else null,
+                            "${session.program}_${session.teamNumber}",
+                            session.teamNumber.toString(),
+                            com.obsidianscout.scouting.AllianceSelectionService.pickListOwnerKey(session.teamNumber, session.program)
+                        )
+                        com.obsidianscout.db.AllianceSelections.deleteWhere {
+                            com.obsidianscout.db.AllianceSelections.ownerKey inList ownerKeys
                         }
 
                         // Clear the active event and setup wizard state in the settings for this team and program
@@ -2361,13 +2416,13 @@ fun Application.configureRoutes() {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Only superadmins can perform global imports")
                     }
 
-                    val multipart = call.receiveMultipart()
+                    val multipart = call.receiveMultipart(formFieldLimit = com.obsidianscout.db.BackupService.MAX_IMPORT_BYTES)
                     var fileBytes: ByteArray? = null
                     var fileName = ""
                     while (true) {
                         val part = multipart.readPart() ?: break
                         if (part is PartData.FileItem) {
-                            fileBytes = part.streamProvider().readBytes()
+                            fileBytes = part.streamProvider().use { com.obsidianscout.db.BackupService.readLimited(it, com.obsidianscout.db.BackupService.MAX_IMPORT_BYTES) }
                             fileName = part.originalFileName ?: ""
                         }
                         part.dispose()
@@ -2501,7 +2556,8 @@ fun Application.configureRoutes() {
                     clearProfilePicture = request.clearProfilePicture,
                     newNotificationPreference = request.notificationPreference,
                     newNodeAlertsEnabled = if (session.role == UserRole.SUPERADMIN) request.nodeAlertsEnabled else null,
-                    newBugReportPreference = request.bugReportPreference
+                    newBugReportPreference = request.bugReportPreference,
+                    newLocalAiEnabled = request.localAiEnabled
                 )
                 // Refresh the session so /api/auth/me returns the updated details
                 val updatedSession = session.copy(
@@ -2511,7 +2567,8 @@ fun Application.configureRoutes() {
                     notificationPreference = updated.notificationPreference,
                     tourProgress = updated.tourProgress,
                     nodeAlertsEnabled = updated.nodeAlertsEnabled,
-                    bugReportPreference = updated.bugReportPreference
+                    bugReportPreference = updated.bugReportPreference,
+                    localAiEnabled = updated.localAiEnabled
                 )
                 call.sessions.set(updatedSession)
                 call.respond(updated)
@@ -2531,7 +2588,8 @@ fun Application.configureRoutes() {
                     clearProfilePicture = request.clearProfilePicture,
                     newNotificationPreference = request.notificationPreference,
                     newNodeAlertsEnabled = if (session.role == UserRole.SUPERADMIN) request.nodeAlertsEnabled else null,
-                    newBugReportPreference = request.bugReportPreference
+                    newBugReportPreference = request.bugReportPreference,
+                    newLocalAiEnabled = request.localAiEnabled
                 )
                 // Refresh the session so /api/auth/me returns the updated details
                 val updatedSession = session.copy(
@@ -2541,10 +2599,32 @@ fun Application.configureRoutes() {
                     notificationPreference = updated.notificationPreference,
                     tourProgress = updated.tourProgress,
                     nodeAlertsEnabled = updated.nodeAlertsEnabled,
-                    bugReportPreference = updated.bugReportPreference
+                    bugReportPreference = updated.bugReportPreference,
+                    localAiEnabled = updated.localAiEnabled
                 )
                 call.sessions.set(updatedSession)
                 call.respond(updated)
+            }
+
+            // Profile pictures of teammates, referenced by URL from chat messages.
+            get("/users/{id}/avatar") {
+                val session = call.requireSession()
+                val targetUuid = runCatching { UUID.fromString(call.parameters["id"]) }.getOrNull()
+                    ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Not found")
+                val row = com.obsidianscout.db.readTransaction {
+                    com.obsidianscout.db.Users
+                        .select(com.obsidianscout.db.Users.teamNumber, com.obsidianscout.db.Users.program, com.obsidianscout.db.Users.profilePicture)
+                        .where { com.obsidianscout.db.Users.id eq targetUuid }
+                        .firstOrNull()
+                } ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Not found")
+                val sameTeam = row[com.obsidianscout.db.Users.teamNumber] == session.teamNumber &&
+                        row[com.obsidianscout.db.Users.program] == session.program
+                if (!sameTeam && session.role != UserRole.SUPERADMIN) {
+                    throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Not found")
+                }
+                val image = row[com.obsidianscout.db.Users.profilePicture]?.let { AuthService.decodeProfilePicture(it) }
+                    ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Not found")
+                call.respondBytes(image.second, ContentType.parse(image.first))
             }
 
             get("/user/tour-progress") {
@@ -4031,6 +4111,7 @@ fun Application.configureRoutes() {
             "scout" to "scout.html",
             "pit-scout" to "pit-scout.html",
             "qual-scout" to "qual-scout.html",
+            "assistant" to "assistant.html",
             "prescout-scout" to "prescout-scout.html",
             "prescout-pit" to "prescout-pit.html",
             "prescout-qual" to "prescout-qual.html",
@@ -4047,6 +4128,7 @@ fun Application.configureRoutes() {
             "events" to "events.html",
             "teams" to "teams.html",
             "rankings" to "rankings.html",
+            "projected-rankings" to "projected-rankings.html",
             "qual-rankings" to "qual-rankings.html",
             "team" to "team.html",
             "matches" to "matches.html",
@@ -4105,6 +4187,8 @@ fun Application.configureRoutes() {
                 call.respond(HttpStatusCode.NotFound)
             }
         }
+
+        localAiModelFileRoutes()
 
         get("/") {
             call.respondStaticHtml("index.html")

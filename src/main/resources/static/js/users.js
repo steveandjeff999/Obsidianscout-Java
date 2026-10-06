@@ -28,12 +28,14 @@ async function resizeImageToBase64(file, size = 384) {
                 canvas.width = size;
                 canvas.height = size;
                 const ctx = canvas.getContext("2d");
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, size, size);
                 // Centre-crop to square
                 const srcSize = Math.min(img.width, img.height);
                 const sx = (img.width - srcSize) / 2;
                 const sy = (img.height - srcSize) / 2;
                 ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, size, size);
-                resolve(canvas.toDataURL("image/png"));
+                resolve(canvas.toDataURL("image/jpeg", 0.85));
             };
             img.onerror = reject;
             img.src = e.target.result;

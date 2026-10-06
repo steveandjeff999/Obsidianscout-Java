@@ -2052,12 +2052,18 @@
         const fields = dataset.fields.map(f => f.id);
         const headers = dataset.fields.map(f => f.label);
 
-        let csv = headers.join(",") + "\n";
+        // Spreadsheets run cells starting with = + - @ as formulas; show them as text instead.
+        const csvText = (val) => {
+            let text = String(val);
+            if (/^[=+\-@\t\r]/.test(text) && !/^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(text)) text = "'" + text;
+            return `"${text.replace(/"/g, '""')}"`;
+        };
+        let csv = headers.map(h => csvText(h ?? "")).join(",") + "\n";
         entries.forEach(e => {
             const row = fields.map(f => {
                 const val = e[f];
                 if (val === null || val === undefined) return "";
-                if (typeof val === "string") return `"${val.replace(/"/g, '""')}"`;
+                if (typeof val === "string") return csvText(val);
                 return val;
             });
             csv += row.join(",") + "\n";

@@ -19,6 +19,9 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.db.orchestration.CockroachOrchestrator")
+
+
 data class PeerStatus(val dbReady: Boolean, val isDbActive: Boolean)
 
 class CockroachOrchestrator(private val appConfig: AppConfig) {
@@ -56,7 +59,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
      * configured to connect directly to this local CockroachDB gateway.
      */
     fun orchestrate(): DatabaseConfig {
-        println("[Cockroach] Starting autonomous leaderless database lifecycle...")
+        consoleLog.info("[Cockroach] Starting autonomous leaderless database lifecycle...")
 
         // Clean up any orphaned processes from previous runs
         killExistingProcesses()
@@ -69,7 +72,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         this.tailscaleIp = tailscaleIp
         val port = appConfig.cockroach_port
         this.port = port
-        println("[Cockroach] Bound to local Tailscale gateway IP: $tailscaleIp on port $port")
+        consoleLog.info("[Cockroach] Bound to local Tailscale gateway IP: $tailscaleIp on port $port")
 
         // Check local firewall rules for active ports
         val portsToCheck = mutableListOf(appConfig.server.port, port)
@@ -86,11 +89,11 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                 peers = GoogleSheetsManager.fetchPeers(appConfig.google_sheet_url, appConfig.google_sheet_password)
                 break
             } catch (e: Exception) {
-                println("[Cockroach] Failed to fetch peers from Google Sheet, retrying: ${e.message}")
+                consoleLog.error("[Cockroach] Failed to fetch peers from Google Sheet, retrying: ${e.message}")
                 Thread.sleep(2000)
             }
         }
-        println("[Cockroach] Fetched ${peers.size} cluster peers from Google Sheet: ${peers.joinToString { "${it.first}:${it.second}" }}")
+        consoleLog.info("[Cockroach] Fetched ${peers.size} cluster peers from Google Sheet: ${peers.joinToString { "${it.first}:${it.second}" }}")
 
         // 4. Handle secure/insecure certificates
         val isInsecure = appConfig.db_username.isBlank() && appConfig.db_password.isBlank()
@@ -106,21 +109,21 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         isDbActive = true
 
         // 6. Wait for CockroachDB port to open
-        println("[Cockroach] Waiting for CockroachDB to start listening...")
+        consoleLog.info("[Cockroach] Waiting for CockroachDB to start listening...")
         if (!waitForPort(tailscaleIp, port, 45)) {
             val logFile = File(rootDir, "cockroach.log")
             val logSnippet = if (logFile.exists()) logFile.readLines().takeLast(20).joinToString("\n") else "No logs found."
             throw IllegalStateException("CockroachDB failed to bind to $tailscaleIp:$port within timeout. Last logs:\n$logSnippet")
         }
-        println("[Cockroach] CockroachDB is listening on $tailscaleIp:$port")
-        println("[Cockroach] Admin Web UI is active at http://$tailscaleIp:${port + 1}")
+        consoleLog.info("[Cockroach] CockroachDB is listening on $tailscaleIp:$port")
+        consoleLog.info("[Cockroach] Admin Web UI is active at http://$tailscaleIp:${port + 1}")
 
         // 7. Execute cluster initialization (safe on all nodes; CockroachDB handles idempotent initialization)
-        println("[Cockroach] Initializing cluster...")
+        consoleLog.info("[Cockroach] Initializing cluster...")
         initializeCluster(tailscaleIp, port, isInsecure)
 
         // 8. Wait for local SQL engine to be fully ready
-        println("[Cockroach] Waiting for SQL engine to be ready...")
+        consoleLog.info("[Cockroach] Waiting for SQL engine to be ready...")
         var sqlReady = waitForSqlReady(tailscaleIp, port, isInsecure, 60)
         if (!sqlReady) {
             val isAlive = process?.isAlive ?: false
@@ -129,22 +132,22 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                 val logSnippet = if (logFile.exists()) logFile.readLines().takeLast(500).joinToString("\n") else "No logs found."
                 throw IllegalStateException("CockroachDB process crashed during startup (exit code: ${process?.exitValue()}). Last logs:\n$logSnippet")
             } else {
-                println("[Cockroach] WARNING: SQL engine pending readiness (cluster Raft leader catch-up or node join in progress)...")
+                consoleLog.warn("[Cockroach] WARNING: SQL engine pending readiness (cluster Raft leader catch-up or node join in progress)...")
                 sqlReady = waitForSqlReady(tailscaleIp, port, isInsecure, 30)
             }
         }
 
         if (sqlReady) {
-            println("[Cockroach] SQL engine is ready.")
+            consoleLog.info("[Cockroach] SQL engine is ready.")
             configureClusterReplication(tailscaleIp, port, isInsecure)
         } else {
-            println("[Cockroach] WARNING: Cluster quorum recovery pending. Proceeding in degraded mode...")
+            consoleLog.warn("[Cockroach] WARNING: Cluster quorum recovery pending. Proceeding in degraded mode...")
             configureClusterReplication(tailscaleIp, port, isInsecure)
         }
 
         // 9. Setup DB User and Password if requested
         if (!isInsecure && appConfig.db_username.isNotBlank() && appConfig.db_username != "root") {
-            println("[Cockroach] Creating application database user: ${appConfig.db_username}...")
+            consoleLog.info("[Cockroach] Creating application database user: ${appConfig.db_username}...")
             createDatabaseUser(tailscaleIp, port, appConfig.db_username, appConfig.db_password, isInsecure)
         }
 
@@ -169,13 +172,13 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         replicationJob?.cancel()
         process?.let {
             if (it.isAlive) {
-                println("[Cockroach] Stopping local database process...")
+                consoleLog.info("[Cockroach] Stopping local database process...")
                 it.destroy()
                 if (!it.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
-                    println("[Cockroach] Database process did not terminate. Forcing shutdown...")
+                    consoleLog.info("[Cockroach] Database process did not terminate. Forcing shutdown...")
                     it.destroyForcibly()
                 }
-                println("[Cockroach] Database process stopped.")
+                consoleLog.info("[Cockroach] Database process stopped.")
             }
         }
         isDbActive = false
@@ -199,7 +202,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     .start()
                     .waitFor()
             }
-            println("[Cockroach] Cleaned up any existing cockroach processes.")
+            consoleLog.info("[Cockroach] Cleaned up any existing cockroach processes.")
         } catch (e: Exception) {
             // ignore
         }
@@ -211,7 +214,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                 val p = ProcessBuilder("sudo", "ufw", "status").start()
                 if (p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0) {
                     val status = p.inputStream.bufferedReader().use { it.readText() }
-                    println("[Firewall] UFW status:\n$status")
+                    consoleLog.info("[Firewall] UFW status:\n$status")
                 }
             } catch (e: Exception) {
                 // ignore
@@ -219,7 +222,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             return
         }
         
-        println("[Firewall] Checking local Windows Firewall rules for ports: $ports...")
+        consoleLog.info("[Firewall] Checking local Windows Firewall rules for ports: $ports...")
         try {
             val portsString = ports.joinToString(",")
             val pb = ProcessBuilder("powershell", "-Command", 
@@ -229,16 +232,16 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             if (p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0) {
                 val output = p.inputStream.bufferedReader().use { it.readText() }.trim()
                 if (output.isNotEmpty()) {
-                    println("[Firewall] Found inbound allow rules:\n$output")
+                    consoleLog.info("[Firewall] Found inbound allow rules:\n$output")
                 } else {
-                    println("[Firewall] WARNING: No inbound allow rules found for ports $ports. Nodes might not be able to connect to us!")
+                    consoleLog.warn("[Firewall] WARNING: No inbound allow rules found for ports $ports. Nodes might not be able to connect to us!")
                 }
             } else {
                 val err = p.errorStream.bufferedReader().use { it.readText() }.trim()
-                println("[Firewall] Warning checking firewall rules: $err")
+                consoleLog.warn("[Firewall] Warning checking firewall rules: $err")
             }
         } catch (e: Exception) {
-            println("[Firewall] Could not check Windows Firewall rules: ${e.message}")
+            consoleLog.warn("[Firewall] Could not check Windows Firewall rules: ${e.message}")
         }
     }
 
@@ -257,12 +260,12 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     private fun ensureInstalled() {
         if (binaryFile.exists()) {
             if (testBinaryExecution()) {
-                println("[Cockroach] Local binary found and verified at ${binaryFile.absolutePath}")
+                consoleLog.info("[Cockroach] Local binary found and verified at ${binaryFile.absolutePath}")
                 return
             } else {
-                println("[Cockroach] Local binary execution check failed. Deleting stale binary to redownload with correct architecture...")
+                consoleLog.error("[Cockroach] Local binary execution check failed. Deleting stale binary to redownload with correct architecture...")
                 binaryFile.delete()
-                println("[Cockroach] Preserving existing CockroachDB data directory so the node keeps its persisted identity.")
+                consoleLog.info("[Cockroach] Preserving existing CockroachDB data directory so the node keeps its persisted identity.")
             }
         }
 
@@ -279,20 +282,20 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         }
 
         binaryFile.setExecutable(true, false)
-        println("[Cockroach] CockroachDB installation completed successfully.")
+        consoleLog.info("[Cockroach] CockroachDB installation completed successfully.")
     }
 
     private fun downloadAndExtractLinuxTarball() {
         val tgzFile = File(rootDir, "cockroach.tgz")
         val archLabel = if (isArm) "ARM64" else "AMD64"
-        println("[Cockroach] Downloading stable Linux $archLabel tarball from $linuxDownloadUrl...")
+        consoleLog.info("[Cockroach] Downloading stable Linux $archLabel tarball from $linuxDownloadUrl...")
         URI(linuxDownloadUrl).toURL().openStream().use { input ->
             tgzFile.outputStream().use { output ->
                 input.copyTo(output)
             }
         }
 
-        println("[Cockroach] Extracting tarball using native tar...")
+        consoleLog.info("[Cockroach] Extracting tarball using native tar...")
         val tarProcess = ProcessBuilder("tar", "-xzf", tgzFile.name, "-C", ".")
             .directory(rootDir)
             .redirectErrorStream(true)
@@ -319,14 +322,14 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
     private fun downloadAndExtractWindowsZip() {
         val zipFile = File(rootDir, "cockroach.zip")
-        println("[Cockroach] Downloading stable Windows amd64 zip from $windowsDownloadUrl...")
+        consoleLog.info("[Cockroach] Downloading stable Windows amd64 zip from $windowsDownloadUrl...")
         URI(windowsDownloadUrl).toURL().openStream().use { input ->
             zipFile.outputStream().use { output ->
                 input.copyTo(output)
             }
         }
 
-        println("[Cockroach] Extracting zip file...")
+        consoleLog.info("[Cockroach] Extracting zip file...")
         ZipInputStream(zipFile.inputStream().buffered()).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
@@ -356,7 +359,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     }
 
     private fun getTailscaleIp(): String {
-        println("[Cockroach] Locating Tailscale interface...")
+        consoleLog.info("[Cockroach] Locating Tailscale interface...")
         val maxWaitMs = 60_000
         val start = System.currentTimeMillis()
         while (System.currentTimeMillis() - start < maxWaitMs) {
@@ -400,7 +403,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
         val fallbackEnv = System.getenv("COCKROACH_TAILSCALE_FALLBACK")
         if (!fallbackEnv.isNullOrBlank()) {
-            println("[Cockroach] WARNING: Tailscale interface not found. Using fallback env: $fallbackEnv")
+            consoleLog.warn("[Cockroach] WARNING: Tailscale interface not found. Using fallback env: $fallbackEnv")
             return fallbackEnv
         }
         
@@ -414,7 +417,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         }
         certsDir.mkdirs()
 
-        println("[Cockroach] Generating secure cluster certificates...")
+        consoleLog.info("[Cockroach] Generating secure cluster certificates...")
         val binaryPath = binaryFile.absolutePath
         val caKeyPath = File(certsDir, "ca.key").absolutePath
         val certsDirPath = certsDir.absolutePath
@@ -461,7 +464,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             cmd.add("--join=$tailscaleIp:$port")
         }
 
-        println("[Cockroach] Executing command: ${cmd.joinToString(" ")}")
+        consoleLog.info("[Cockroach] Executing command: ${cmd.joinToString(" ")}")
 
         val pb = ProcessBuilder(cmd)
             .directory(rootDir)
@@ -493,7 +496,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
 
         val initProcess = initPb.start()
         val exitCode = initProcess.waitFor()
-        println("[Cockroach] Cluster initialization returned exit code: $exitCode")
+        consoleLog.info("[Cockroach] Cluster initialization returned exit code: $exitCode")
     }
 
     fun startReplicationMonitor() {
@@ -507,9 +510,9 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     val wasLost = isQuorumLost
                     checkQuorumStatus()
                     if (!wasLost && isQuorumLost) {
-                        println("[Cockroach] Cluster quorum loss proactively detected by health probe! Switched read transactions to AS OF SYSTEM TIME offline mode.")
+                        consoleLog.info("[Cockroach] Cluster quorum loss proactively detected by health probe! Switched read transactions to AS OF SYSTEM TIME offline mode.")
                     } else if (wasLost && !isQuorumLost) {
-                        println("[Cockroach] Cluster quorum restored! Resumed live read/write mode.")
+                        consoleLog.info("[Cockroach] Cluster quorum restored! Resumed live read/write mode.")
                     }
                 } catch (_: Exception) {}
                 delay(if (isQuorumLost) 5000L else 3000L)
@@ -524,7 +527,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             var lastQueueHealTime = 0L
             var lastClockSyncTime = 0L
             var consecutiveInvalidLeaseRounds = 0
-            println("[Cockroach] Starting background replication monitor (current replication factor: $currentReplicas)...")
+            consoleLog.info("[Cockroach] Starting background replication monitor (current replication factor: $currentReplicas)...")
             while (isActive) {
                 try {
                     val now = System.currentTimeMillis()
@@ -533,7 +536,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     val localProcess = process
                     if (localProcess != null && !localProcess.isAlive) {
                         val exitCode = localProcess.exitValue()
-                        println("[ProcessMonitor] Local CockroachDB process has died (exit=$exitCode). Preserving data directory and restarting...")
+                        consoleLog.info("[ProcessMonitor] Local CockroachDB process has died (exit=$exitCode). Preserving data directory and restarting...")
                         try {
                             val peers = try {
                                 GoogleSheetsManager.fetchPeers(appConfig.google_sheet_url, appConfig.google_sheet_password)
@@ -544,11 +547,11 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                             val newProc = startCockroachProcess(tailscaleIp, port, joinPeers, isInsecure)
                             process = newProc
                             isDbActive = true
-                            println("[ProcessMonitor] CockroachDB restarted. Waiting for port to open...")
+                            consoleLog.info("[ProcessMonitor] CockroachDB restarted. Waiting for port to open...")
                             waitForPort(tailscaleIp, port, 45)
-                            println("[ProcessMonitor] CockroachDB port open. Node rejoining cluster with preserved identity.")
+                            consoleLog.info("[ProcessMonitor] CockroachDB port open. Node rejoining cluster with preserved identity.")
                         } catch (e: Exception) {
-                            println("[ProcessMonitor] Failed to restart CockroachDB: ${e.message}")
+                            consoleLog.error("[ProcessMonitor] Failed to restart CockroachDB: ${e.message}")
                         }
                     }
 
@@ -558,10 +561,10 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     if (activeNodes >= 3) {
                         nodesBelowThreeStart = 0L
                         if (currentReplicas < 3) {
-                            println("[Cockroach] $activeNodes active nodes detected. Upgrading cluster replication factor to 3...")
+                            consoleLog.info("[Cockroach] $activeNodes active nodes detected. Upgrading cluster replication factor to 3...")
                             if (setReplicationFactor(3)) {
                                 currentReplicas = 3
-                                println("[Cockroach] Replication factor successfully set to 3.")
+                                consoleLog.info("[Cockroach] Replication factor successfully set to 3.")
                                 applySnapshotRateLimits()
                             }
                         }
@@ -583,11 +586,11 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                             val allInvalid = totalLeaders > 0 && leaseholders == 0L && invalidLeases >= totalLeaders
                             if (allInvalid) {
                                 consecutiveInvalidLeaseRounds++
-                                println("[LeaseHealer] All $invalidLeases leases are invalid (round $consecutiveInvalidLeaseRounds). Leaseholders=0. Triggering lease re-acquisition...")
+                                consoleLog.info("[LeaseHealer] All $invalidLeases leases are invalid (round $consecutiveInvalidLeaseRounds). Leaseholders=0. Triggering lease re-acquisition...")
                                 healInvalidLeases()
                             } else {
                                 if (consecutiveInvalidLeaseRounds > 0)
-                                    println("[LeaseHealer] Leases recovered. Leaseholders=$leaseholders, Invalid=$invalidLeases")
+                                    consoleLog.info("[LeaseHealer] Leases recovered. Leaseholders=$leaseholders, Invalid=$invalidLeases")
                                 consecutiveInvalidLeaseRounds = 0
                             }
                         }
@@ -603,10 +606,10 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                         if (pending != null && addReplica != null && snapshots != null && underRep != null) {
                             val queueFrozen = pending > 0 && addReplica == 0L && snapshots == 0L && underRep > 0
                             if (queueFrozen) {
-                                println("[QueueHealer] Replicate queue frozen: pending=$pending, addreplica=0, snapshots=0, underRep=$underRep. Applying remediation...")
+                                consoleLog.info("[QueueHealer] Replicate queue frozen: pending=$pending, addreplica=0, snapshots=0, underRep=$underRep. Applying remediation...")
                                 healFrozenReplicateQueue()
                             } else if (underRep == 0L) {
-                                println("[QueueHealer] Cluster fully replicated.")
+                                consoleLog.info("[QueueHealer] Cluster fully replicated.")
                             }
                         }
                         lastQueueHealTime = now
@@ -616,7 +619,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     if (now - lastClockSyncTime > 60_000) {
                         val closedTsLagMs = (getMetricValue("kv.closed_timestamp.max_behind_nanos") ?: 0L) / 1_000_000
                         if (closedTsLagMs > 3000) {
-                            println("[ClockHealer] ℹ️ Closed_ts=${closedTsLagMs}ms behind. Verifying system clock sync...")
+                            consoleLog.info("[ClockHealer] ℹ️ Closed_ts=${closedTsLagMs}ms behind. Verifying system clock sync...")
                             forceNtpSync()
                         }
                         lastClockSyncTime = now
@@ -627,7 +630,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                         lastDiagnosticsTime = now
                     }
                 } catch (e: Exception) {
-                    println("[ReplicationMonitor] Error in monitor loop: ${e.message}")
+                    consoleLog.error("[ReplicationMonitor] Error in monitor loop: ${e.message}")
                 }
                 delay(10_000)
             }
@@ -718,16 +721,16 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     try {
                         stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '32 MiB'")
                         stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate  = '32 MiB'")
-                        println("[LeaseHealer] Reset snapshot rates to 32 MiB")
+                        consoleLog.info("[LeaseHealer] Reset snapshot rates to 32 MiB")
                     } catch (e: Exception) {
-                        println("[LeaseHealer] Could not set snapshot rates: ${e.message}")
+                        consoleLog.warn("[LeaseHealer] Could not set snapshot rates: ${e.message}")
                     }
 
-                    println("[LeaseHealer] Lease healing check complete.")
+                    consoleLog.info("[LeaseHealer] Lease healing check complete.")
                 }
             }
         } catch (e: Exception) {
-            println("[LeaseHealer] Healing failed: ${e.message}")
+            consoleLog.error("[LeaseHealer] Healing failed: ${e.message}")
         }
     }
 
@@ -741,16 +744,16 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     try {
                         stmt.execute("SET CLUSTER SETTING kv.snapshot_rebalance.max_rate = '32 MiB'")
                         stmt.execute("SET CLUSTER SETTING kv.snapshot_recovery.max_rate  = '32 MiB'")
-                        println("[QueueHealer] Set snapshot rates to 32 MiB to maintain transfer speed")
+                        consoleLog.info("[QueueHealer] Set snapshot rates to 32 MiB to maintain transfer speed")
                     } catch (e: Exception) {
-                        println("[QueueHealer] Could not set snapshot rates: ${e.message}")
+                        consoleLog.warn("[QueueHealer] Could not set snapshot rates: ${e.message}")
                     }
 
-                    println("[QueueHealer] Queue heal check complete.")
+                    consoleLog.info("[QueueHealer] Queue heal check complete.")
                 }
             }
         } catch (e: Exception) {
-            println("[QueueHealer] Healing failed: ${e.message}")
+            consoleLog.error("[QueueHealer] Healing failed: ${e.message}")
         }
     }
 
@@ -769,12 +772,12 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             val exited = p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
             val output = p.inputStream.bufferedReader().use { it.readText() }.trim()
             if (exited && p.exitValue() == 0) {
-                println("[ClockHealer] NTP resync succeeded: $output")
+                consoleLog.info("[ClockHealer] NTP resync succeeded: $output")
             } else {
-                println("[ClockHealer] NTP resync exited=${if(exited) p.exitValue() else -1}: $output")
+                consoleLog.info("[ClockHealer] NTP resync exited=${if(exited) p.exitValue() else -1}: $output")
             }
         } catch (e: Exception) {
-            println("[ClockHealer] Failed to run NTP resync: ${e.message}")
+            consoleLog.error("[ClockHealer] Failed to run NTP resync: ${e.message}")
         }
     }
 
@@ -825,74 +828,74 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     stmt.queryTimeout = 3
                     try { stmt.execute("SET allow_unsafe_internals = true;") } catch (_: Exception) {}
 
-                    println("=========================================================================")
-                    println("[Replication Diagnostics] Running cluster health check...")
+                    consoleLog.info("=========================================================================")
+                    consoleLog.info("[Replication Diagnostics] Running cluster health check...")
 
                     val peerIps = mutableListOf<String>()
-                    println("[Replication Diagnostics] Gossip Nodes:")
+                    consoleLog.info("[Replication Diagnostics] Gossip Nodes:")
                     try {
                         stmt.executeQuery("SELECT node_id, address FROM crdb_internal.gossip_nodes;").use { rs ->
                             var count = 0
                             while (rs.next()) {
                                 val id = rs.getInt("node_id")
                                 val address = rs.getString("address")
-                                println("  - Node #$id: $address")
+                                consoleLog.info("  - Node #$id: $address")
                                 peerIps.add(address)
                                 count++
                             }
-                            println("  Total Gossip Nodes: $count")
+                            consoleLog.info("  Total Gossip Nodes: $count")
                         }
                     } catch (e: Exception) {
-                        println("  Could not query gossip nodes: ${e.message?.substringBefore("\n")}")
+                        consoleLog.warn("  Could not query gossip nodes: ${e.message?.substringBefore("\n")}")
                     }
 
-                    println("[Replication Diagnostics] Outbound Network Connectivity Check (Port 26257):")
+                    consoleLog.info("[Replication Diagnostics] Outbound Network Connectivity Check (Port 26257):")
                     for (addr in peerIps) {
                         val ip = addr.substringBefore(":")
                         val p  = addr.substringAfter(":").toIntOrNull() ?: 26257
                         try {
                             java.net.Socket().use { socket ->
                                 socket.connect(java.net.InetSocketAddress(ip, p), 3000)
-                                println("  - Connection to $ip:$p: SUCCESS")
+                                consoleLog.info("  - Connection to $ip:$p: SUCCESS")
                             }
                         } catch (e: Exception) {
-                            println("  - Connection to $ip:$p: FAILED (${e.message})")
+                            consoleLog.error("  - Connection to $ip:$p: FAILED (${e.message})")
                         }
                     }
 
                     try {
                         stmt.executeQuery("SELECT count(*) FROM crdb_internal.ranges WHERE array_length(replicas, 1) < 3;").use { rs ->
-                            if (rs.next()) println("[Replication Diagnostics] Under-replicated ranges: ${rs.getInt(1)}")
+                            if (rs.next()) consoleLog.info("[Replication Diagnostics] Under-replicated ranges: ${rs.getInt(1)}")
                         }
                     } catch (e: Exception) {
                         val msg = e.message ?: ""
                         if (msg.contains("lost quorum") || msg.contains("replica unavailable") || msg.contains("poisoned latch")) {
-                            println("[Replication Diagnostics] ⚠️  QUORUM LOSS — ${msg.substringBefore("\n").take(120)}")
+                            consoleLog.info("[Replication Diagnostics] ⚠️  QUORUM LOSS — ${msg.substringBefore("\n").take(120)}")
                         } else {
-                            println("[Replication Diagnostics] Under-replicated count unavailable: ${msg.substringBefore("\n").take(80)}")
+                            consoleLog.info("[Replication Diagnostics] Under-replicated count unavailable: ${msg.substringBefore("\n").take(80)}")
                         }
                     }
 
-                    println("[Replication Diagnostics] Lease health: leaseholders=$leaseholders, invalid=$invalidLeases")
-                    println("[Replication Diagnostics] Snapshot queue: generated=$snapGenerated, pending=$queuePending, addreplica=$addReplica")
-                    println("[Replication Diagnostics] Raft commit lag: closed_ts=${closedTsLagMs}ms behind")
+                    consoleLog.info("[Replication Diagnostics] Lease health: leaseholders=$leaseholders, invalid=$invalidLeases")
+                    consoleLog.info("[Replication Diagnostics] Snapshot queue: generated=$snapGenerated, pending=$queuePending, addreplica=$addReplica")
+                    consoleLog.info("[Replication Diagnostics] Raft commit lag: closed_ts=${closedTsLagMs}ms behind")
                     if (invalidLeases > 0 && leaseholders == 0L)
-                        println("[Replication Diagnostics] ⚠️  ALL LEASES INVALID — replication queue frozen")
+                        consoleLog.info("[Replication Diagnostics] ⚠️  ALL LEASES INVALID — replication queue frozen")
                     if (snapGenerated == 0L && queuePending > 0L)
-                        println("[Replication Diagnostics] ⚠️  QUEUE FROZEN — ${queuePending} pending but 0 snapshots sent")
+                        consoleLog.info("[Replication Diagnostics] ⚠️  QUEUE FROZEN — ${queuePending} pending but 0 snapshots sent")
                 }
             }
         } catch (e: Exception) {
-            println("[Replication Diagnostics] Could not complete diagnostics: ${e.message}")
+            consoleLog.warn("[Replication Diagnostics] Could not complete diagnostics: ${e.message}")
         }
 
-        println("[Replication Diagnostics] Recent CockroachDB Warnings/Errors (From Log):")
+        consoleLog.error("[Replication Diagnostics] Recent CockroachDB Warnings/Errors (From Log):")
         if (recentLogLines.isEmpty()) {
-            println("  No recent warnings or replication events found in log.")
+            consoleLog.info("  No recent warnings or replication events found in log.")
         } else {
-            for (line in recentLogLines) println("  $line")
+            for (line in recentLogLines) consoleLog.info("  $line")
         }
-        println("=========================================================================")
+        consoleLog.info("=========================================================================")
     }
 
     private fun runSqlViaJdbc(tailscaleIp: String, port: Int, isInsecure: Boolean, block: (java.sql.Connection) -> Unit) {
@@ -904,7 +907,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                 block(conn)
             }
         } catch (e: Exception) {
-            println("[Cockroach] JDBC connection failed to $tailscaleIp:$port: ${e.message}")
+            consoleLog.error("[Cockroach] JDBC connection failed to $tailscaleIp:$port: ${e.message}")
             throw e
         }
     }
@@ -946,11 +949,11 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     try { stmt.execute("SET CLUSTER SETTING kv.liveness.heartbeat_interval = '4s'") } catch (_: Exception) {}
                     try { stmt.execute("SET CLUSTER SETTING kv.liveness.lease_duration = '12s'") } catch (_: Exception) {}
                     try { stmt.execute("SET CLUSTER SETTING sql.defaults.default_transaction_use_follower_reads.enabled = true") } catch (_: Exception) {}
-                    println("[Cockroach] Snapshot rate limits, follower read defaults, closed timestamp targets, and Tailscale VPN liveness thresholds applied.")
+                    consoleLog.info("[Cockroach] Snapshot rate limits, follower read defaults, closed timestamp targets, and Tailscale VPN liveness thresholds applied.")
                 }
             }
         } catch (e: Exception) {
-            println("[Cockroach] Warning: could not apply snapshot rate limits: ${e.message}")
+            consoleLog.warn("[Cockroach] Warning: could not apply snapshot rate limits: ${e.message}")
         }
     }
 
@@ -996,14 +999,14 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             val dbName = appConfig.database.postgres.database.lowercase()
             ds.connection.use { conn ->
                 conn.createStatement().use { stmt ->
-                    println("[Cockroach] Upgrading cluster replication factor (default, system, database) to $replicas (was $current)...")
+                    consoleLog.info("[Cockroach] Upgrading cluster replication factor (default, system, database) to $replicas (was $current)...")
                     try { stmt.execute("ALTER RANGE default CONFIGURE ZONE USING num_replicas = $replicas") } catch (e: Exception) {}
                     try { stmt.execute("ALTER RANGE system CONFIGURE ZONE USING num_replicas = $replicas") } catch (e: Exception) {}
                     try {
                         stmt.execute("CREATE DATABASE IF NOT EXISTS \"$dbName\"")
                         stmt.execute("ALTER DATABASE \"$dbName\" CONFIGURE ZONE USING num_replicas = $replicas")
                     } catch (e: Exception) {
-                        println("[Cockroach] Note configuring zone for $dbName: ${e.message}")
+                        consoleLog.info("[Cockroach] Note configuring zone for $dbName: ${e.message}")
                     }
                     if (dbName != "obsidianscoutjava") {
                         try {
@@ -1015,7 +1018,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             }
             return true
         } catch (e: Exception) {
-            println("[Cockroach] Error setting replication factor: ${e.message}")
+            consoleLog.error("[Cockroach] Error setting replication factor: ${e.message}")
             return false
         }
     }
@@ -1027,12 +1030,12 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
     ) {
         try {
             val current = getReplicationFactorFromDb()
-            println("[Cockroach] Initial cluster replication factor check: currently at $current replicas.")
+            consoleLog.info("[Cockroach] Initial cluster replication factor check: currently at $current replicas.")
             if (current == 0) {
                 setReplicationFactor(1)
             }
         } catch (e: Exception) {
-            println("[Cockroach] Failed checking cluster replication factor: ${e.message}")
+            consoleLog.error("[Cockroach] Failed checking cluster replication factor: ${e.message}")
         }
     }
 
@@ -1050,9 +1053,9 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
                     stmt.execute("GRANT admin TO \"$dbUser\"")
                 }
             }
-            println("[Cockroach] User SQL setup completed via JDBC")
+            consoleLog.info("[Cockroach] User SQL setup completed via JDBC")
         } catch (e: Exception) {
-            println("[Cockroach] Failed database user setup: ${e.message}")
+            consoleLog.error("[Cockroach] Failed database user setup: ${e.message}")
         }
     }
 
@@ -1157,7 +1160,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
         } else if (error != null && isQuorumLossException(error)) {
             val failCount = ++consecutiveQuorumLossFailures
             if (!isQuorumLost) {
-                println("[Cockroach] ⚠️ Quorum probe failed (check $failCount). Routing reads to local SQLite fallback mirror...")
+                consoleLog.error("[Cockroach] ⚠️ Quorum probe failed (check $failCount). Routing reads to local SQLite fallback mirror...")
                 markQuorumLost(error.message ?: "Database cluster quorum lost.")
             }
         }
@@ -1196,7 +1199,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             }
             if (!wasLost || !isQuorumLossAlertSent) {
                 isQuorumLossAlertSent = true
-                println("[Cockroach] Database quorum loss detected. Dispatching quorum lost alert...")
+                consoleLog.warn("[Cockroach] Database quorum loss detected. Dispatching quorum lost alert...")
                 try {
                     com.obsidianscout.admin.NodeMonitoringService.dispatchQuorumLostAlert(quorumLossDetails)
                 } catch (_: Exception) {}
@@ -1213,7 +1216,7 @@ class CockroachOrchestrator(private val appConfig: AppConfig) {
             quorumLossStartTime = 0L
             isQuorumLossAlertSent = false
             if (wasLost) {
-                println("[Cockroach] Quorum restored${if (durationSec > 0) " after ${durationSec}s" else ""}! Resumed standard CockroachDB read/write operations.")
+                consoleLog.info("[Cockroach] Quorum restored${if (durationSec > 0) " after ${durationSec}s" else ""}! Resumed standard CockroachDB read/write operations.")
             }
             if (wasAlertSent) {
                 try {

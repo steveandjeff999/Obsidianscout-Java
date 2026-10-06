@@ -4,7 +4,8 @@
  */
 
 import { safeGetItem, safeSetItem, safeRemoveItem } from './storage.js';
-import { request } from './http.js';
+import { request, getCachedData } from './http.js';
+import { clearAllHttpCaches } from './idb-cache.js';
 import { loadAndRenderBanners } from '../components/banners.js';
 
 export const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "SCOUT"];
@@ -128,7 +129,7 @@ export async function requireAuth() {
     if (currentPage && settings && (me.role === "SCOUT" || me.role === "ANALYTICS" || me.role === "ADMIN")) {
         const allowedPages = me.role === "SCOUT" ? settings.scoutPages : (me.role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
         if (allowedPages && Array.isArray(allowedPages)) {
-            const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments"];
+            const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant"];
             if (isAdmin(me.role) || isSuperAdmin(me.role)) {
                 bypassPages.push("assignments");
             }
@@ -180,6 +181,23 @@ export async function requireAuth() {
     return me;
 }
 
+/**
+ * Call after a successful sign-in with the response from the login endpoint. If a different
+ * account than the last cached one signed in, cached API responses from the previous account
+ * are cleared so they can't be shown offline. The same account keeps its offline cache.
+ */
+export async function resetCachesForUser(loginResponse) {
+    try {
+        const newUserId = loginResponse?.user?.userId;
+        const previousUserId = getCachedData("/api/auth/me")?.user?.userId;
+        if (!newUserId || newUserId !== previousUserId) {
+            await clearAllHttpCaches(false);
+        }
+    } catch (e) {
+        console.warn("[Auth] Failed to reset caches after sign-in:", e);
+    }
+}
+
 export function wireLogout() {
     const button = document.querySelector("[data-action='logout']");
     if (!button) {
@@ -188,6 +206,9 @@ export function wireLogout() {
     button.addEventListener("click", async () => {
         try {
             await request("/api/auth/logout", { method: "POST" });
+            // Shared tablets: don't leave this account's cached data for the next person.
+            // Offline submission queues and form drafts are stored separately and are kept.
+            await clearAllHttpCaches(false);
             safeRemoveItem("cache:/api/auth/me");
             window.location.href = "/";
         } catch (error) {

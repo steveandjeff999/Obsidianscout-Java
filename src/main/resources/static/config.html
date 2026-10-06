@@ -184,6 +184,29 @@
 
                     </div>
 
+                    <div class="field">
+
+                        <label for="personal-local-ai-pref" data-i18n="ai.settings.label">Local AI Assistant</label>
+
+                        <select id="personal-local-ai-pref">
+
+                            <option value="disabled" data-i18n="ai.settings.disabled">Disabled (Default)</option>
+
+                            <option value="enabled" data-i18n="ai.settings.enabled">Enabled</option>
+
+                        </select>
+
+                        <p class="notice mt-6" style="margin-bottom: 0;" data-i18n="ai.settings.notice">Runs AI models entirely on this device for notes summaries and the Assistant page. Nothing is sent to an AI service, and models are only downloaded when you choose to.</p>
+
+                    </div>
+
+                </div>
+
+                <div id="personal-local-ai-panel" class="card soft mt-16 hidden" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 16px; border-radius: 12px;">
+                    <h4 style="margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-microchip" style="color: var(--accent);"></i> <span data-i18n="ai.settings.models_title">AI models on this device</span>
+                    </h4>
+                    <div id="personal-local-ai-models"></div>
                 </div>
 
                 <div class="card soft mt-16" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">

@@ -22,6 +22,9 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.db.QuorumFallbackStore")
+
+
 @Serializable
 data class QuorumFallbackEventDetailDto(
     val eventKey: String,
@@ -173,6 +176,11 @@ object QuorumFallbackStore {
             ) {
                 SchemaUtils.create(*mirroredTables)
             }
+            // An existing mirror file from an older release may lack newer columns.
+            sqliteDataSource!!.connection.use { conn ->
+                conn.autoCommit = true
+                SqliteSchemaUpgrader.addMissingColumns(conn, mirroredTables.toList())
+            }
 
             // CRITICAL FIX: Database.connect() in Exposed automatically overrides TransactionManager.defaultDatabase.
             // We MUST immediately restore TransactionManager.defaultDatabase to DatabaseFactory.primaryDatabase
@@ -184,11 +192,11 @@ object QuorumFallbackStore {
 
             isAvailable = true
             lastSyncStatus = "Initialized, awaiting initial sync"
-            println("[QuorumFallbackStore] Local SQLite mirror initialized at ${dbFile.absolutePath}")
+            consoleLog.info("[QuorumFallbackStore] Local SQLite mirror initialized at ${dbFile.absolutePath}")
         } catch (e: Throwable) {
             isAvailable = false
             lastSyncStatus = "Initialization failed: ${e.message}"
-            println("[QuorumFallbackStore] Failed to initialize SQLite mirror: ${e.message}")
+            consoleLog.error("[QuorumFallbackStore] Failed to initialize SQLite mirror: ${e.message}")
         } finally {
             if (DatabaseFactory.primaryDatabase != null) {
                 org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = DatabaseFactory.primaryDatabase
@@ -209,7 +217,7 @@ object QuorumFallbackStore {
                         syncFromCockroach()
                     } catch (e: Exception) {
                         lastSyncStatus = "Sync error: ${e.message}"
-                        println("[QuorumFallbackStore] Background sync error: ${e.message}")
+                        consoleLog.error("[QuorumFallbackStore] Background sync error: ${e.message}")
                     }
                 }
                 delay(config.sync_interval_seconds.coerceAtLeast(10L) * 1000L)
@@ -244,7 +252,7 @@ object QuorumFallbackStore {
         if (shmFile.exists()) shmFile.delete()
 
         lastSyncStatus = "Disabled (Storage purged)"
-        println("[QuorumFallbackStore] Quorum fallback disabled and local database files purged.")
+        consoleLog.info("[QuorumFallbackStore] Quorum fallback disabled and local database files purged.")
 
         if (updateConfigFile) {
             try {
@@ -256,7 +264,7 @@ object QuorumFallbackStore {
                 Files.writeString(Paths.get("config", "app-config.json"), text)
                 AppConfigLoader.updateCache(updated)
             } catch (e: Exception) {
-                println("[QuorumFallbackStore] Error updating app-config.json: ${e.message}")
+                consoleLog.error("[QuorumFallbackStore] Error updating app-config.json: ${e.message}")
             }
         }
 
@@ -299,7 +307,7 @@ object QuorumFallbackStore {
                 Files.writeString(Paths.get("config", "app-config.json"), text)
                 AppConfigLoader.updateCache(updated)
             } catch (e: Exception) {
-                println("[QuorumFallbackStore] Error updating app-config.json: ${e.message}")
+                consoleLog.error("[QuorumFallbackStore] Error updating app-config.json: ${e.message}")
             }
         }
 
@@ -556,6 +564,7 @@ object QuorumFallbackStore {
                         it[tourProgress] = row[Users.tourProgress]
                         it[nodeAlertsEnabled] = row[Users.nodeAlertsEnabled]
                         it[bugReportPreference] = row[Users.bugReportPreference]
+                        it[localAiEnabled] = row.getOrNull(Users.localAiEnabled) ?: false
                         it[lastLogin] = row[Users.lastLogin]
                     }
                 }
@@ -963,7 +972,7 @@ object QuorumFallbackStore {
             return true
         } catch (e: Throwable) {
             lastSyncStatus = "Sync failed: ${e.message}"
-            println("[QuorumFallbackStore] Error during SQLite mirror sync: ${e.message}")
+            consoleLog.error("[QuorumFallbackStore] Error during SQLite mirror sync: ${e.message}")
             return false
         } finally {
             isSyncing.set(false)

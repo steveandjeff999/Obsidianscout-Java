@@ -25,6 +25,9 @@ import java.security.Security
 import java.util.UUID
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.db.PushNotificationService")
+
+
 @Serializable
 data class PushPayload(
     val title: String,
@@ -190,13 +193,13 @@ object PushNotificationService {
                         val response = pushService.send(notification, Encoding.AES128GCM)
                         val statusCode = response.statusLine.statusCode
                         if (statusCode == 410 || statusCode == 404) {
-                            println("[Push] Subscription expired or invalid (HTTP $statusCode). Deleting: ${target.endpoint}")
+                            consoleLog.info("[Push] Subscription expired or invalid (HTTP $statusCode). Deleting: ${target.endpoint}")
                             transaction {
                                 PushSubscriptions.deleteWhere { PushSubscriptions.endpoint eq target.endpoint }
                             }
                         }
                     } catch (e: Exception) {
-                        println("[Push] Failed to send push to ${target.endpoint}: ${e.message}")
+                        consoleLog.error("[Push] Failed to send push to ${target.endpoint}: ${e.message}")
                     }
                 }
             } catch (e: Exception) {
@@ -267,11 +270,11 @@ object PushNotificationService {
                             }
                         }
                     } catch (e: Exception) {
-                        println("[Push] Failed to send assignment reminder to ${sub.endpoint}: ${e.message}")
+                        consoleLog.error("[Push] Failed to send assignment reminder to ${sub.endpoint}: ${e.message}")
                     }
                 }
             } catch (e: Exception) {
-                println("[Push] Error dispatching assignment reminder: ${e.message}")
+                consoleLog.error("[Push] Error dispatching assignment reminder: ${e.message}")
             }
         }
     }

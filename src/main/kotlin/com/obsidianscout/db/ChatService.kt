@@ -94,6 +94,13 @@ object ChatService {
         }
     }
 
+    /**
+     * Chat messages reference the sender's picture by URL (served by GET /api/users/{id}/avatar)
+     * instead of embedding the image in every message. The version changes when the picture does.
+     */
+    internal fun avatarUrl(userId: UUID, picture: String?): String? =
+        picture?.takeIf { it.isNotBlank() }?.let { "/api/users/$userId/avatar?v=${Integer.toHexString(it.hashCode())}" }
+
     fun getMessages(teamNumber: Int, program: String = "FRC", groupName: String, userId: String, userRole: UserRole, limit: Int = 200): List<ChatMessageDto> = readTransaction {
         ensureDefaultGroup(teamNumber, program)
         val sanitized = groupName.lowercase().replace(Regex("[^a-z0-9_-]"), "").trim().ifEmpty { "general" }
@@ -109,7 +116,7 @@ object ChatService {
             }
         }
 
-        (ChatMessages innerJoin Users)
+        val rows = (ChatMessages innerJoin Users)
             .select(
                 ChatMessages.id,
                 ChatMessages.teamNumber,
@@ -121,8 +128,7 @@ object ChatService {
                 ChatMessages.createdAt,
                 ChatMessages.reactionsJson,
                 ChatMessages.isEdited,
-                ChatMessages.updatedAt,
-                Users.profilePicture
+                ChatMessages.updatedAt
             )
             .where {
                 (ChatMessages.teamNumber eq teamNumber) and
@@ -131,6 +137,14 @@ object ChatService {
             }
             .orderBy(ChatMessages.createdAt to SortOrder.DESC)
             .limit(limit)
+            .toList()
+        // One picture per sender instead of one copy per message.
+        val senderIds = rows.map { it[ChatMessages.userId] }.distinct()
+        val pictures = if (senderIds.isEmpty()) emptyMap() else Users.select(Users.id, Users.profilePicture)
+            .where { Users.id inList senderIds }
+            .associate { it[Users.id].value to it[Users.profilePicture] }
+
+        rows
             .map { row ->
                 val reactionsJsonStr = row[ChatMessages.reactionsJson]
                 val parsedReactions: Map<String, List<String>> = try {
@@ -148,7 +162,7 @@ object ChatService {
                     content = row[ChatMessages.content],
                     createdAt = row[ChatMessages.createdAt].toString(),
                     reactions = parsedReactions,
-                    profilePicture = row[Users.profilePicture],
+                    profilePicture = avatarUrl(row[ChatMessages.userId].value, pictures[row[ChatMessages.userId].value]),
                     isEdited = row[ChatMessages.isEdited],
                     updatedAt = row[ChatMessages.updatedAt]?.toString(),
                     program = row[ChatMessages.program]
@@ -466,7 +480,7 @@ object ChatService {
             content = row[ChatMessages.content],
             createdAt = row[ChatMessages.createdAt].toString(),
             reactions = parsedReactions,
-            profilePicture = profilePic,
+            profilePicture = avatarUrl(userUuid, profilePic),
             isEdited = row[ChatMessages.isEdited],
             updatedAt = row[ChatMessages.updatedAt]?.toString(),
             program = row[ChatMessages.program]
@@ -525,7 +539,7 @@ object ChatService {
                     content = r[ChatMessages.content],
                     createdAt = r[ChatMessages.createdAt].toString(),
                     reactions = parsedReactions,
-                    profilePicture = r[Users.profilePicture],
+                    profilePicture = avatarUrl(r[ChatMessages.userId].value, r[Users.profilePicture]),
                     isEdited = r[ChatMessages.isEdited],
                     updatedAt = r[ChatMessages.updatedAt]?.toString(),
                     program = r[ChatMessages.program]
@@ -628,7 +642,7 @@ object ChatService {
                     content = r[ChatMessages.content],
                     createdAt = r[ChatMessages.createdAt].toString(),
                     reactions = parsedReactions,
-                    profilePicture = r[Users.profilePicture],
+                    profilePicture = avatarUrl(r[ChatMessages.userId].value, r[Users.profilePicture]),
                     isEdited = r[ChatMessages.isEdited],
                     updatedAt = r[ChatMessages.updatedAt]?.toString(),
                     program = r[ChatMessages.program]

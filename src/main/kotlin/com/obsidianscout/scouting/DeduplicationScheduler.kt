@@ -53,6 +53,10 @@ object DeduplicationScheduler {
         scope = null
     }
     
+    /** Lock held for most of one 30-minute cycle so only one cluster node runs the cleanup. */
+    private const val CLEANUP_LOCK_KEY = "dedup-cleanup"
+    private const val CLEANUP_LOCK_MINUTES = 25L
+
     fun runCleanup() {
         // Skip if cluster has unavailable ranges — touching user tables during
         // initial replication causes "replica unavailable" errors on leaderless ranges.
@@ -60,116 +64,111 @@ object DeduplicationScheduler {
             log.info("Skipping deduplication cleanup — cluster has unavailable ranges (replication in progress)")
             return
         }
+        // Every node runs this scheduler. Two nodes deduplicating at once could each keep a
+        // different copy and delete the other, losing the entry entirely.
+        if (!com.obsidianscout.admin.NodeMonitoringService.claimNotificationLock(CLEANUP_LOCK_KEY, CLEANUP_LOCK_MINUTES)) {
+            log.info("Skipping deduplication cleanup — another node is running it")
+            return
+        }
         log.info("Running background deduplication cleanup...")
 
-        var matchDeleted = 0
-        var pitDeleted = 0
-        var qualDeleted = 0
-        
-        // 1. ScoutingEntries
-        val matchRows = transaction { ScoutingEntries.selectAll().toList() }
-        val matchGrouped = matchRows.groupBy { row ->
-            val owner = row[ScoutingEntries.ownerTeamNumber]
-            val prog = row[ScoutingEntries.program]
-            val target = row[ScoutingEntries.targetTeamNumber]
-            val event = row[ScoutingEntries.eventKey]
-            val match = row[ScoutingEntries.matchKey]
-            val isPrescout = row[ScoutingEntries.isPrescout]
-            MatchGroupKey(owner, prog, event, match, target, isPrescout)
-        }
-        matchGrouped.forEach { (key, group) ->
-            val unique = mutableListOf<org.jetbrains.exposed.v1.core.ResultRow>()
-            val toDelete = mutableListOf<java.util.UUID>()
-            group.forEach { row ->
-                val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
-                val dup = unique.find { uRow ->
-                    val uData = JsonSupport.json.parseToJsonElement(uRow[ScoutingEntries.dataJson]).jsonObject
-                    JsonSupport.scoutingDataAgrees(data, uData)
-                }
-                if (dup != null) {
-                    toDelete.add(row[ScoutingEntries.id].value)
-                } else {
-                    unique.add(row)
-                }
-            }
-            if (toDelete.isNotEmpty()) {
-                transaction {
-                    ScoutingEntries.deleteWhere { ScoutingEntries.id inList toDelete }
-                }
-                matchDeleted += toDelete.size
-            }
-            ScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout)
-        }
-        
-        // 2. PitScoutingEntries
-        val pitRows = transaction { PitScoutingEntries.selectAll().toList() }
-        val pitGrouped = pitRows.groupBy { row ->
-            val owner = row[PitScoutingEntries.ownerTeamNumber]
-            val prog = row[PitScoutingEntries.program]
-            val target = row[PitScoutingEntries.targetTeamNumber]
-            val event = row[PitScoutingEntries.eventKey]
-            val isPrescout = row[PitScoutingEntries.isPrescout]
-            PitGroupKey(owner, prog, event, target, isPrescout)
-        }
-        pitGrouped.forEach { (key, group) ->
-            val unique = mutableListOf<org.jetbrains.exposed.v1.core.ResultRow>()
-            val toDelete = mutableListOf<java.util.UUID>()
-            group.forEach { row ->
-                val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
-                val dup = unique.find { uRow ->
-                    val uData = JsonSupport.json.parseToJsonElement(uRow[PitScoutingEntries.dataJson]).jsonObject
-                    JsonSupport.scoutingDataAgrees(data, uData)
-                }
-                if (dup != null) {
-                    toDelete.add(row[PitScoutingEntries.id].value)
-                } else {
-                    unique.add(row)
-                }
-            }
-            if (toDelete.isNotEmpty()) {
-                transaction {
-                    PitScoutingEntries.deleteWhere { PitScoutingEntries.id inList toDelete }
-                }
-                pitDeleted += toDelete.size
-            }
-            PitScoutingService.recalculateDiscrepancies(key.eventKey, key.targetTeamNumber, key.isPrescout)
-        }
-        
-        // 3. QualitativeScoutingEntries
-        val qualRows = transaction { QualitativeScoutingEntries.selectAll().toList() }
-        val qualGrouped = qualRows.groupBy { row ->
-            val owner = row[QualitativeScoutingEntries.ownerTeamNumber]
-            val prog = row[QualitativeScoutingEntries.program]
-            val target = row[QualitativeScoutingEntries.targetTeamNumber]
-            val event = row[QualitativeScoutingEntries.eventKey]
-            val match = row[QualitativeScoutingEntries.matchKey]
-            val isPrescout = row[QualitativeScoutingEntries.isPrescout]
-            QualitativeGroupKey(owner, prog, event, match, target, isPrescout)
-        }
-        qualGrouped.forEach { (key, group) ->
-            val unique = mutableListOf<org.jetbrains.exposed.v1.core.ResultRow>()
-            val toDelete = mutableListOf<java.util.UUID>()
-            group.forEach { row ->
-                val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
-                val dup = unique.find { uRow ->
-                    val uData = JsonSupport.json.parseToJsonElement(uRow[QualitativeScoutingEntries.dataJson]).jsonObject
-                    JsonSupport.scoutingDataAgrees(data, uData)
-                }
-                if (dup != null) {
-                    toDelete.add(row[QualitativeScoutingEntries.id].value)
-                } else {
-                    unique.add(row)
-                }
-            }
-            if (toDelete.isNotEmpty()) {
-                transaction {
-                    QualitativeScoutingEntries.deleteWhere { QualitativeScoutingEntries.id inList toDelete }
-                }
-                qualDeleted += toDelete.size
-            }
-            QualitativeScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout)
-        }
+        // Duplicates are re-submissions of the same form by the same scout (e.g. offline sync
+        // posting twice). Entries from different scouts are kept even when their data matches.
+        val matchDeleted = dedupe(
+            rows = transaction {
+                ScoutingEntries.selectAll()
+                    .orderBy(ScoutingEntries.createdAt to SortOrder.ASC, ScoutingEntries.id to SortOrder.ASC)
+                    .toList()
+            },
+            id = { it[ScoutingEntries.id].value },
+            dataJson = { it[ScoutingEntries.dataJson] },
+            keyOf = { row ->
+                MatchGroupKey(
+                    row[ScoutingEntries.ownerTeamNumber], row[ScoutingEntries.program], row[ScoutingEntries.eventKey],
+                    row[ScoutingEntries.matchKey], row[ScoutingEntries.targetTeamNumber], row[ScoutingEntries.isPrescout],
+                    row[ScoutingEntries.submittedByUserId].value
+                )
+            },
+            delete = { ids -> transaction { ScoutingEntries.deleteWhere { ScoutingEntries.id inList ids } } },
+            recalculate = { key -> ScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout) }
+        )
+
+        val pitDeleted = dedupe(
+            rows = transaction {
+                PitScoutingEntries.selectAll()
+                    .orderBy(PitScoutingEntries.createdAt to SortOrder.ASC, PitScoutingEntries.id to SortOrder.ASC)
+                    .toList()
+            },
+            id = { it[PitScoutingEntries.id].value },
+            dataJson = { it[PitScoutingEntries.dataJson] },
+            keyOf = { row ->
+                PitGroupKey(
+                    row[PitScoutingEntries.ownerTeamNumber], row[PitScoutingEntries.program], row[PitScoutingEntries.eventKey],
+                    row[PitScoutingEntries.targetTeamNumber], row[PitScoutingEntries.isPrescout],
+                    row[PitScoutingEntries.submittedByUserId].value
+                )
+            },
+            delete = { ids -> transaction { PitScoutingEntries.deleteWhere { PitScoutingEntries.id inList ids } } },
+            recalculate = { key -> PitScoutingService.recalculateDiscrepancies(key.eventKey, key.targetTeamNumber, key.isPrescout) }
+        )
+
+        val qualDeleted = dedupe(
+            rows = transaction {
+                QualitativeScoutingEntries.selectAll()
+                    .orderBy(QualitativeScoutingEntries.createdAt to SortOrder.ASC, QualitativeScoutingEntries.id to SortOrder.ASC)
+                    .toList()
+            },
+            id = { it[QualitativeScoutingEntries.id].value },
+            dataJson = { it[QualitativeScoutingEntries.dataJson] },
+            keyOf = { row ->
+                QualitativeGroupKey(
+                    row[QualitativeScoutingEntries.ownerTeamNumber], row[QualitativeScoutingEntries.program],
+                    row[QualitativeScoutingEntries.eventKey], row[QualitativeScoutingEntries.matchKey],
+                    row[QualitativeScoutingEntries.targetTeamNumber], row[QualitativeScoutingEntries.isPrescout],
+                    row[QualitativeScoutingEntries.submittedByUserId].value
+                )
+            },
+            delete = { ids -> transaction { QualitativeScoutingEntries.deleteWhere { QualitativeScoutingEntries.id inList ids } } },
+            recalculate = { key -> QualitativeScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout) }
+        )
+
         log.info("Deduplication cleanup complete: deleted $matchDeleted match, $pitDeleted pit, $qualDeleted qualitative entries.")
+    }
+
+    /**
+     * Deletes later copies of identical entries within each group, keeping the earliest
+     * ([rows] must be sorted oldest first). Only groups that lost an entry are recalculated.
+     */
+    internal fun <R, K> dedupe(
+        rows: List<R>,
+        id: (R) -> java.util.UUID,
+        dataJson: (R) -> String,
+        keyOf: (R) -> K,
+        delete: (List<java.util.UUID>) -> Unit,
+        recalculate: (K) -> Unit
+    ): Int {
+        var deleted = 0
+        rows.groupBy(keyOf).forEach { (key, group) ->
+            if (group.size < 2) return@forEach
+            val kept = mutableListOf<kotlinx.serialization.json.JsonObject>()
+            val toDelete = mutableListOf<java.util.UUID>()
+            for (row in group) {
+                // Rows whose data can't be parsed are never treated as duplicates.
+                val data = runCatching { JsonSupport.json.parseToJsonElement(dataJson(row)).jsonObject }.getOrNull()
+                    ?: continue
+                if (kept.any { JsonSupport.scoutingDataAgrees(data, it) }) {
+                    toDelete.add(id(row))
+                } else {
+                    kept.add(data)
+                }
+            }
+            if (toDelete.isNotEmpty()) {
+                delete(toDelete)
+                deleted += toDelete.size
+                recalculate(key)
+            }
+        }
+        return deleted
     }
 
     /**
@@ -206,7 +205,8 @@ private data class MatchGroupKey(
     val eventKey: String?,
     val matchKey: String?,
     val targetTeamNumber: Int?,
-    val isPrescout: Boolean
+    val isPrescout: Boolean,
+    val submittedByUserId: java.util.UUID
 )
 
 private data class PitGroupKey(
@@ -214,7 +214,8 @@ private data class PitGroupKey(
     val program: String,
     val eventKey: String?,
     val targetTeamNumber: Int?,
-    val isPrescout: Boolean
+    val isPrescout: Boolean,
+    val submittedByUserId: java.util.UUID
 )
 
 private data class QualitativeGroupKey(
@@ -223,5 +224,6 @@ private data class QualitativeGroupKey(
     val eventKey: String?,
     val matchKey: String?,
     val targetTeamNumber: Int?,
-    val isPrescout: Boolean
+    val isPrescout: Boolean,
+    val submittedByUserId: java.util.UUID
 )

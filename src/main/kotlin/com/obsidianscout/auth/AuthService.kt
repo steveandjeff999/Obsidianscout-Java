@@ -17,7 +17,6 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.obsidianscout.db.readTransaction
-import org.jetbrains.exposed.v1.core.StdOutSqlLogger
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.core.or
 import com.obsidianscout.db.AppSettings
@@ -42,6 +41,9 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.auth.AuthService")
+
 
 @Serializable
 enum class UserRole {
@@ -69,6 +71,7 @@ data class UserRecord(
     val tourProgress: String? = null,
     val nodeAlertsEnabled: Boolean = false,
     val bugReportPreference: String = "ask",
+    val localAiEnabled: Boolean = false,
     val lastLogin: String? = null
 )
 
@@ -114,8 +117,8 @@ object AuthService {
             }
         }
         if (isDefaultPassword) {
-            println("[ObsidianScout] Created superadmin '${seed.adminUsername}' (team ${seed.adminTeamNumber}) with a generated one-time password: $password")
-            println("[ObsidianScout] Sign in and change it now. This password is not stored anywhere else.")
+            consoleLog.warn("[ObsidianScout] Created superadmin '${seed.adminUsername}' (team ${seed.adminTeamNumber}) with a generated one-time password: $password")
+            consoleLog.warn("[ObsidianScout] Sign in and change it now. This password is not stored anywhere else.")
         }
     }
 
@@ -167,7 +170,9 @@ object AuthService {
         } else {
             // BCrypt verification is CPU-heavy (~400 ms). Run it OUTSIDE the transaction
             // so it does not hold a HikariCP connection for its full duration.
-            BCrypt.verifyer().verify(password.toCharArray(), hash).verified
+            // Over-long passwords can never have been stored, and the verifier throws on them.
+            password.toByteArray(Charsets.UTF_8).size <= MAX_PASSWORD_BYTES &&
+                BCrypt.verifyer().verify(password.toCharArray(), hash).verified
         }
         if (verified) {
             val userUuid = runCatching { UUID.fromString(record.id) }.getOrNull()
@@ -290,9 +295,7 @@ object AuthService {
         sortBy: String? = null,
         sortDir: String? = null
     ): List<UserRecord> {
-        println("listUsers: search=$search, teamFilter=$teamFilter, roleFilter=$roleFilter, programFilter=$programFilter, limit=$limit, offset=$offset, sortBy=$sortBy, sortDir=$sortDir")
         return readTransaction {
-            addLogger(StdOutSqlLogger)
             val query = when (callerSession.role) {
                 UserRole.SUPERADMIN -> {
                     val q = Users.selectAll().where { Users.username neq "Deleted User" }
@@ -431,7 +434,8 @@ object AuthService {
         newNotificationPreference: String? = null,
         newTourProgress: String? = null,
         newNodeAlertsEnabled: Boolean? = null,
-        newBugReportPreference: String? = null
+        newBugReportPreference: String? = null,
+        newLocalAiEnabled: Boolean? = null
     ): UserRecord {
         val targetUuid = runCatching { UUID.fromString(targetUserId) }.getOrElse {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
@@ -441,6 +445,7 @@ object AuthService {
             throw ApiException(HttpStatusCode.BadRequest, "Password cannot be blank")
         }
         newPassword?.let { validatePassword(it) }
+        if (newProfilePicture != null && !clearProfilePicture) validateProfilePicture(newProfilePicture)
 
         // Hash outside the transaction if needed
         val newHash = newPassword?.takeIf { it.isNotBlank() }
@@ -525,6 +530,7 @@ object AuthService {
                 if (newNotificationPreference != null) stmt[notificationPreference] = newNotificationPreference
                 if (newNodeAlertsEnabled != null) stmt[nodeAlertsEnabled] = newNodeAlertsEnabled
                 if (newBugReportPreference != null) stmt[bugReportPreference] = newBugReportPreference
+                if (newLocalAiEnabled != null) stmt[localAiEnabled] = newLocalAiEnabled
                 if (newTeamNumber != null && callerSession.role == UserRole.SUPERADMIN) {
                     stmt[teamNumber] = newTeamNumber
                 }
@@ -913,6 +919,7 @@ object AuthService {
             tourProgress = row[Users.tourProgress],
             nodeAlertsEnabled = row.getOrNull(Users.nodeAlertsEnabled) ?: false,
             bugReportPreference = row.getOrNull(Users.bugReportPreference) ?: "ask",
+            localAiEnabled = row.getOrNull(Users.localAiEnabled) ?: false,
             lastLogin = row.getOrNull(Users.lastLogin)?.toString()
         )
     }
@@ -933,11 +940,37 @@ object AuthService {
         }
     }
 
+    /** The web app uploads 384px JPEGs (tens of KB); this leaves plenty of headroom. */
+    const val MAX_PROFILE_PICTURE_CHARS = 1_000_000
+    private val PROFILE_PICTURE_PATTERN = Regex("^data:(image/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$")
+
+    fun validateProfilePicture(picture: String) {
+        if (picture.length > MAX_PROFILE_PICTURE_CHARS) {
+            throw ApiException(HttpStatusCode.BadRequest, "Profile picture is too large. Please choose a smaller image.")
+        }
+        if (decodeProfilePicture(picture) == null) {
+            throw ApiException(HttpStatusCode.BadRequest, "Profile picture must be a PNG, JPEG, WebP or GIF image")
+        }
+    }
+
+    /** Returns the content type and bytes of a stored profile picture data URL, or null if it isn't one. */
+    fun decodeProfilePicture(picture: String): Pair<String, ByteArray>? {
+        val match = PROFILE_PICTURE_PATTERN.matchEntire(picture.trim()) ?: return null
+        val bytes = runCatching { java.util.Base64.getDecoder().decode(match.groupValues[2]) }.getOrNull() ?: return null
+        return match.groupValues[1] to bytes
+    }
+
     const val MIN_PASSWORD_LENGTH = 8
+
+    /** BCrypt only accepts up to 72 bytes; longer passwords make the hasher throw. */
+    const val MAX_PASSWORD_BYTES = 72
 
     fun validatePassword(password: String) {
         if (password.length < MIN_PASSWORD_LENGTH) {
             throw ApiException(HttpStatusCode.BadRequest, "Password must be at least $MIN_PASSWORD_LENGTH characters long")
+        }
+        if (password.toByteArray(Charsets.UTF_8).size > MAX_PASSWORD_BYTES) {
+            throw ApiException(HttpStatusCode.BadRequest, "Password is too long (maximum $MAX_PASSWORD_BYTES bytes; fewer if it uses emoji or accented characters)")
         }
     }
 

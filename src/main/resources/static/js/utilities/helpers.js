@@ -226,3 +226,30 @@ export function escapeHtml(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
+
+/**
+ * Builds a compact "▶ Video" link group for a match's published videos.
+ * Returns null when the match has no videos, so callers can skip it.
+ * Only https YouTube URLs from the server are accepted.
+ */
+export function createMatchVideoLinks(videos) {
+    const list = Array.isArray(videos)
+        ? videos.filter(v => v && typeof v.url === "string" && /^https:\/\/www\.youtube\.com\/watch\?v=/.test(v.url))
+        : [];
+    if (list.length === 0) return null;
+
+    const wrapper = document.createElement("span");
+    wrapper.className = "match-video-links";
+    list.forEach((video, idx) => {
+        const link = document.createElement("a");
+        link.className = "match-video-link";
+        link.href = video.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = list.length > 1 ? `▶ ${idx + 1}` : "▶ Video";
+        link.title = "Watch match video";
+        link.addEventListener("click", (e) => e.stopPropagation());
+        wrapper.appendChild(link);
+    });
+    return wrapper;
+}

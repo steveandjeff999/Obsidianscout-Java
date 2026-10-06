@@ -20,6 +20,7 @@ object Users : UUIDTable("users") {
     val tourProgress = text("tour_progress").nullable()
     val nodeAlertsEnabled = bool("node_alerts_enabled").default(false)
     val bugReportPreference = varchar("bug_report_preference", 16).default("ask")
+    val localAiEnabled = bool("local_ai_enabled").default(false)
     val lastLogin = timestamp("last_login").nullable()
 
     init {

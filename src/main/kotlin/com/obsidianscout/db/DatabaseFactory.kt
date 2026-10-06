@@ -15,6 +15,9 @@ import java.nio.file.Paths
 import java.sql.DriverManager
 import java.util.UUID
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.db.DatabaseFactory")
+
+
 class QuorumLostException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
 object DatabaseFactory {
@@ -95,7 +98,7 @@ object DatabaseFactory {
         } catch (e: Throwable) {
             if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
                 com.obsidianscout.db.orchestration.CockroachOrchestrator.markQuorumLost(e.message ?: "Database cluster quorum lost.")
-                println("[Database] CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Routing read to local SQLite fallback snapshot...")
+                consoleLog.warn("[Database] CockroachDB quorum lost during read (${e.message?.substringBefore("\n")?.take(120)}). Routing read to local SQLite fallback snapshot...")
                 if (QuorumFallbackStore.isEnabled && QuorumFallbackStore.isAvailable) {
                     return QuorumFallbackStore.executeRead(statement)
                 }
@@ -115,9 +118,9 @@ object DatabaseFactory {
                             stmt.execute("PRAGMA wal_checkpoint(TRUNCATE);")
                         }
                     }
-                    println("[Database] SQLite WAL checkpointed and truncated successfully.")
+                    consoleLog.info("[Database] SQLite WAL checkpointed and truncated successfully.")
                 } catch (e: Exception) {
-                    println("[Database] Note on WAL checkpoint during shutdown: ${e.message}")
+                    consoleLog.info("[Database] Note on WAL checkpoint during shutdown: ${e.message}")
                 }
             }
             activeDataSource?.close()
@@ -125,9 +128,9 @@ object DatabaseFactory {
             primaryDatabase = null
             isReady = false
             org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = null
-            println("[Database] Database connection pool closed.")
+            consoleLog.info("[Database] Database connection pool closed.")
         } catch (e: Exception) {
-            println("[Database] Error closing database pool: ${e.message}")
+            consoleLog.error("[Database] Error closing database pool: ${e.message}")
         }
     }
 
@@ -198,9 +201,9 @@ object DatabaseFactory {
             for (conn in conns) {
                 conn.close()
             }
-            println("[Database] Pre-warmed Hikari connection pool with $poolTarget connections.")
+            consoleLog.info("[Database] Pre-warmed Hikari connection pool with $poolTarget connections.")
         } catch (e: Throwable) {
-            println("[Database] Note pre-warming pool: ${e.message}")
+            consoleLog.info("[Database] Note pre-warming pool: ${e.message}")
         }
 
         val primaryDb = Database.connect(
@@ -261,7 +264,7 @@ object DatabaseFactory {
             )
 
             if (isCockroach) {
-                println("[Database] Executing raw DDL schema creation for CockroachDB...")
+                consoleLog.info("[Database] Executing raw DDL schema creation for CockroachDB...")
                 dataSource.connection.use { conn ->
                     conn.autoCommit = true
                     try {
@@ -301,7 +304,7 @@ object DatabaseFactory {
                             try {
                                 stmt.executeUpdate(sql)
                             } catch (e: Exception) {
-                                println("[Database] Note ensuring reported_errors table: ${e.message}")
+                                consoleLog.info("[Database] Note ensuring reported_errors table: ${e.message}")
                             }
                         }
 
@@ -309,7 +312,7 @@ object DatabaseFactory {
                         for (table in tables) {
                             val tableName = table.tableName.lowercase()
                             if (!existingTables.contains(tableName)) {
-                                println("[Database] Table $tableName not found. Auto-creating using Exposed statements...")
+                                consoleLog.warn("[Database] Table $tableName not found. Auto-creating using Exposed statements...")
                                 val statements = transaction { SchemaUtils.createStatements(table) }
                                 for (sql in statements) {
                                     try {
@@ -320,9 +323,9 @@ object DatabaseFactory {
                                                 msg.contains("duplicate", ignoreCase = true) ||
                                                 msg.contains("42P07") || msg.contains("42710")
                                         if (isBenign) {
-                                            println("[Database] Note: Schema object already exists for $tableName ($sql): $msg")
+                                            consoleLog.info("[Database] Note: Schema object already exists for $tableName ($sql): $msg")
                                         } else {
-                                            println("[Database] Error creating table $tableName with statement ($sql): $msg")
+                                            consoleLog.error("[Database] Error creating table $tableName with statement ($sql): $msg")
                                             try {
                                                 com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
                                                     errorMessage = "Database error creating table $tableName: $msg",
@@ -351,7 +354,7 @@ object DatabaseFactory {
                                 for (column in table.columns) {
                                     val columnName = column.name.lowercase()
                                     if (!dbColumns.contains(columnName)) {
-                                        println("[Database] Adding missing column $columnName to table $tableName...")
+                                        consoleLog.warn("[Database] Adding missing column $columnName to table $tableName...")
                                         // Generate column DDL description
                                         val ddlType = when {
                                             column.columnType is org.jetbrains.exposed.v1.core.java.UUIDColumnType -> "UUID"
@@ -413,9 +416,9 @@ object DatabaseFactory {
                                         val sql = "ALTER TABLE $tableName ADD COLUMN IF NOT EXISTS $columnName $ddlType$defaultClause"
                                         try {
                                             stmt.executeUpdate(sql)
-                                            println("[Database] Successfully added missing column $columnName to table $tableName.")
+                                            consoleLog.warn("[Database] Successfully added missing column $columnName to table $tableName.")
                                         } catch (e: Exception) {
-                                            println("[Database] Error adding column $columnName to $tableName: ${e.message}")
+                                            consoleLog.error("[Database] Error adding column $columnName to $tableName: ${e.message}")
 
                                             // Fallback attempt: if not-null constraint was violated, try adding as nullable so schema is not left incomplete
                                             var recovered = false
@@ -424,9 +427,9 @@ object DatabaseFactory {
                                                     val fallbackSql = "ALTER TABLE $tableName ADD COLUMN IF NOT EXISTS $columnName $ddlType NULL"
                                                     stmt.executeUpdate(fallbackSql)
                                                     recovered = true
-                                                    println("[Database] Recovered adding column $columnName to table $tableName using nullable fallback.")
+                                                    consoleLog.info("[Database] Recovered adding column $columnName to table $tableName using nullable fallback.")
                                                 } catch (fallbackEx: Exception) {
-                                                    println("[Database] Fallback addition for column $columnName to $tableName failed: ${fallbackEx.message}")
+                                                    consoleLog.error("[Database] Fallback addition for column $columnName to $tableName failed: ${fallbackEx.message}")
                                                 }
                                             }
 
@@ -440,7 +443,7 @@ object DatabaseFactory {
                                                     sync = true
                                                 )
                                             } catch (logEx: Exception) {
-                                                println("[Database] Note: Could not record migration error to error reporting interface: ${logEx.message}")
+                                                consoleLog.error("[Database] Note: Could not record migration error to error reporting interface: ${logEx.message}")
                                             }
                                         }
                                     }
@@ -453,6 +456,7 @@ object DatabaseFactory {
                             "ALTER TABLE users DROP CONSTRAINT IF EXISTS ux_users_username_team",
                             "ALTER TABLE users ADD CONSTRAINT IF NOT EXISTS ux_users_username_team_program UNIQUE (username, team_number, program)",
                             "ALTER TABLE users ADD COLUMN IF NOT EXISTS bug_report_preference VARCHAR(16) NOT NULL DEFAULT 'ask'",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS local_ai_enabled BOOLEAN NOT NULL DEFAULT FALSE",
                             "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_roles TEXT NOT NULL DEFAULT '[]'",
                             "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'",
                             
@@ -505,9 +509,9 @@ object DatabaseFactory {
                                         msg.contains("duplicate", ignoreCase = true) ||
                                         msg.contains("42P07") || msg.contains("42710")
                                 if (isBenign) {
-                                    println("[Database] Note: Schema object already exists ($sql): $msg")
+                                    consoleLog.info("[Database] Note: Schema object already exists ($sql): $msg")
                                 } else {
-                                    println("[Database] Note/Warning running Cockroach schema migration statement ($sql): $msg")
+                                    consoleLog.warn("[Database] Note/Warning running Cockroach schema migration statement ($sql): $msg")
                                     try {
                                         com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
                                             errorMessage = "CockroachDB schema migration warning: $msg",
@@ -533,6 +537,17 @@ object DatabaseFactory {
                 transaction {
                     SchemaUtils.create(*tables.toTypedArray())
                 }
+                // SchemaUtils.create never alters existing tables: bring older SQLite databases up to date.
+                if (!isPostgresCompatible) {
+                    try {
+                        dataSource.connection.use { conn ->
+                            conn.autoCommit = true
+                            SqliteSchemaUpgrader.addMissingColumns(conn, tables)
+                        }
+                    } catch (e: Exception) {
+                        consoleLog.error("[Database] SQLite column migration failed: ${e.message}")
+                    }
+                }
                 // Explicit column migrations for PostgreSQL (safe to run repeatedly with IF NOT EXISTS)
                 if (isPostgresCompatible) {
                     dataSource.connection.use { conn ->
@@ -542,6 +557,7 @@ object DatabaseFactory {
                                 "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_roles TEXT NOT NULL DEFAULT '[]'",
                                 "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'",
                                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS bug_report_preference VARCHAR(16) NOT NULL DEFAULT 'ask'",
+                                "ALTER TABLE users ADD COLUMN IF NOT EXISTS local_ai_enabled BOOLEAN NOT NULL DEFAULT FALSE",
                                 "CREATE INDEX IF NOT EXISTS idx_api_matches_event_key ON api_matches (event_key)",
                                 "CREATE INDEX IF NOT EXISTS idx_api_teams_event_team_number ON api_teams (event_key, team_number)",
                                 "CREATE INDEX IF NOT EXISTS idx_api_teams_event_key ON api_teams (event_key)",
@@ -566,16 +582,16 @@ object DatabaseFactory {
                             for (sql in pgMigrations) {
                                 try {
                                     stmt.executeUpdate(sql)
-                                    println("[Database] Ran PG migration: $sql")
+                                    consoleLog.info("[Database] Ran PG migration: $sql")
                                 } catch (e: Exception) {
                                     val msg = e.message ?: ""
                                     val isBenign = msg.contains("already exists", ignoreCase = true) ||
                                             msg.contains("duplicate", ignoreCase = true) ||
                                             msg.contains("42P07") || msg.contains("42710")
                                     if (isBenign) {
-                                        println("[Database] Note: Schema object already exists ($sql): $msg")
+                                        consoleLog.info("[Database] Note: Schema object already exists ($sql): $msg")
                                     } else {
-                                        println("[Database] Note running PG migration ($sql): $msg")
+                                        consoleLog.info("[Database] Note running PG migration ($sql): $msg")
                                         try {
                                             com.obsidianscout.admin.ServerErrorAlertService.recordServerError(
                                                 errorMessage = "PostgreSQL schema migration warning: $msg",
@@ -638,7 +654,7 @@ object DatabaseFactory {
                 }
             }
         } catch (e: Exception) {
-            println("[Database] Warning: failed to drop old indices: ${e.message}")
+            consoleLog.error("[Database] Warning: failed to drop old indices: ${e.message}")
         }
     }
 
@@ -698,14 +714,14 @@ object DatabaseFactory {
                 }
 
                 if (hasInterruptedMigration) {
-                    println("[DB Migration] Found interrupted INT→UUID migration. Rebuilding UUID tables from old_* tables...")
+                    consoleLog.info("[DB Migration] Found interrupted INT→UUID migration. Rebuilding UUID tables from old_* tables...")
                     dropTargetTablesForMigrationResume(c, uuidMigratedTables, isPostgres)
                     if (isPostgres) {
                         dropOldPostgresConstraintsAndIndexes(c, uuidMigratedTables)
                     }
                     c.commit()
                 } else {
-                    println("[DB Migration] INT→UUID migration required. Starting migration...")
+                    consoleLog.info("[DB Migration] INT→UUID migration required. Starting migration...")
                 }
 
                 // ── 2. Rename old tables ────────────────────────────────────────
@@ -715,7 +731,7 @@ object DatabaseFactory {
                     c.createStatement().use { stmt ->
                         for (table in tables) {
                             if (tableExists(c, table, isPostgres)) {
-                                println("[DB Migration] Renaming $table -> old_$table")
+                                consoleLog.info("[DB Migration] Renaming $table -> old_$table")
                                 stmt.execute("ALTER TABLE ${quoteIdent(table)} RENAME TO ${quoteIdent("old_$table")}")
                             }
                         }
@@ -791,7 +807,7 @@ object DatabaseFactory {
                     }
                 }
                 c.commit()
-                println("[DB Migration] Migrated ${userIdMap.size} users")
+                consoleLog.info("[DB Migration] Migrated ${userIdMap.size} users")
 
                 // --- scouting_alliances ---
                 val allianceIdMap = mutableMapOf<Int, UUID>()
@@ -825,7 +841,7 @@ object DatabaseFactory {
                     }
                 }
                 c.commit()
-                println("[DB Migration] Migrated ${allianceIdMap.size} alliances")
+                consoleLog.info("[DB Migration] Migrated ${allianceIdMap.size} alliances")
 
                 // --- scouting_entries ---
                 copyScoutingTable(c, "old_scouting_entries", "scouting_entries", userIdMap, isPostgres,
@@ -1109,11 +1125,11 @@ object DatabaseFactory {
                 }
                 c.commit()
 
-                println("[DB Migration] INT→UUID migration complete!")
+                consoleLog.info("[DB Migration] INT→UUID migration complete!")
 
             } catch (e: Exception) {
                 c.rollback()
-                println("[DB Migration] ERROR during migration: ${e.message}")
+                consoleLog.error("[DB Migration] ERROR during migration: ${e.message}")
                 e.printStackTrace()
                 throw e
             }
@@ -1334,9 +1350,9 @@ object DatabaseFactory {
                         }
                         count++
                     }
-                    println("[DB Migration] Migrated $count rows from $srcTable into $dstTable")
+                    consoleLog.info("[DB Migration] Migrated $count rows from $srcTable into $dstTable")
                     if (extraColumns.isNotEmpty()) {
-                        println("[DB Migration] Extra columns preserved for $dstTable: ${extraColumns.joinToString(", ")}")
+                        consoleLog.info("[DB Migration] Extra columns preserved for $dstTable: ${extraColumns.joinToString(", ")}")
                     }
                 }
             } catch (_: Exception) {}
@@ -1367,7 +1383,7 @@ object DatabaseFactory {
                         }
                         count++
                     }
-                    println("[DB Migration] Migrated $count rows from $srcTable")
+                    consoleLog.info("[DB Migration] Migrated $count rows from $srcTable")
                 }
             }
         } catch (_: Exception) {}
@@ -1400,7 +1416,7 @@ object DatabaseFactory {
                         }
                         count++
                     }
-                    println("[DB Migration] Migrated $count rows from $srcTable")
+                    consoleLog.info("[DB Migration] Migrated $count rows from $srcTable")
                 }
             }
         } catch (_: Exception) {}
@@ -1528,7 +1544,7 @@ object DatabaseFactory {
                             .next()
                         if (!exists) {
                             stmt.execute("CREATE DATABASE \"$dbName\"")
-                            println("Created PostgreSQL database: $dbName")
+                            consoleLog.info("Created PostgreSQL database: $dbName")
                         }
                     }
                 }
@@ -1537,7 +1553,7 @@ object DatabaseFactory {
                 lastException = e
                 retries--
                 if (retries > 0) {
-                    println("[Database] Connecting to database failed, retrying in 3 seconds ($retries attempts left): ${e.message}")
+                    consoleLog.error("[Database] Connecting to database failed, retrying in 3 seconds ($retries attempts left): ${e.message}")
                     Thread.sleep(3000)
                 }
             }

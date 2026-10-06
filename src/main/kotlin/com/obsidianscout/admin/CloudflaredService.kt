@@ -11,6 +11,9 @@ import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.admin.CloudflaredService")
+
+
 @Serializable
 data class CloudflaredStatus(
     val enabled: Boolean,
@@ -74,7 +77,7 @@ object CloudflaredService {
                 val p = pb.start()
                 p.waitFor(3, TimeUnit.SECONDS)
             }
-            println("[CloudflaredService] Cleaned up existing cloudflared background processes.")
+            consoleLog.info("[CloudflaredService] Cleaned up existing cloudflared background processes.")
         } catch (e: Throwable) {
             // Ignore if no process was running
         }
@@ -125,7 +128,7 @@ object CloudflaredService {
         }
 
         lastStatusMessage = "Downloading and installing cloudflared binary..."
-        println("[CloudflaredService] cloudflared binary missing. Starting auto-installation...")
+        consoleLog.warn("[CloudflaredService] cloudflared binary missing. Starting auto-installation...")
 
         try {
             val osName = System.getProperty("os.name").lowercase()
@@ -150,7 +153,7 @@ object CloudflaredService {
             val targetFile = getLocalBinaryFile()
             targetFile.parentFile?.mkdirs()
 
-            println("[CloudflaredService] Downloading $downloadUrl -> ${targetFile.absolutePath}...")
+            consoleLog.info("[CloudflaredService] Downloading $downloadUrl -> ${targetFile.absolutePath}...")
 
             val client = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -173,22 +176,22 @@ object CloudflaredService {
                     targetFile.setExecutable(true, false)
                 }
                 if (testBinary(targetFile.absolutePath)) {
-                    println("[CloudflaredService] Successfully auto-installed and verified cloudflared at ${targetFile.absolutePath}")
+                    consoleLog.info("[CloudflaredService] Successfully auto-installed and verified cloudflared at ${targetFile.absolutePath}")
                     lastStatusMessage = "cloudflared auto-installed successfully"
                     return true
                 } else {
-                    println("[CloudflaredService] Downloaded binary at ${targetFile.absolutePath} failed execution test.")
+                    consoleLog.error("[CloudflaredService] Downloaded binary at ${targetFile.absolutePath} failed execution test.")
                     lastStatusMessage = "Error: Downloaded cloudflared binary failed execution test"
                     return false
                 }
             } else {
                 tempFile.delete()
-                println("[CloudflaredService] Download failed with HTTP status ${resp.statusCode()}")
+                consoleLog.error("[CloudflaredService] Download failed with HTTP status ${resp.statusCode()}")
                 lastStatusMessage = "Error downloading cloudflared: HTTP ${resp.statusCode()}"
                 return false
             }
         } catch (e: Throwable) {
-            println("[CloudflaredService] Auto-installation failed: ${e.message}")
+            consoleLog.error("[CloudflaredService] Auto-installation failed: ${e.message}")
             lastStatusMessage = "Error auto-installing cloudflared: ${e.message}"
             return false
         }
@@ -291,10 +294,10 @@ object CloudflaredService {
             process = p
             lastStatusMessage = "Tunnel process launched (PID ${p.pid()})"
             val loggedCommand = command.mapIndexed { i, arg -> if (i > 0 && command[i - 1] == "--token") "<redacted>" else arg }
-            println("[CloudflaredService] Started cloudflared process (PID ${p.pid()}) with command: ${loggedCommand.joinToString(" ")}")
+            consoleLog.info("[CloudflaredService] Started cloudflared process (PID ${p.pid()}) with command: ${loggedCommand.joinToString(" ")}")
         } catch (e: Exception) {
             lastStatusMessage = "Failed to start tunnel: ${e.message}"
-            println("[CloudflaredService] Error starting cloudflared: ${e.message}")
+            consoleLog.error("[CloudflaredService] Error starting cloudflared: ${e.message}")
         }
 
         return getStatus()
@@ -310,9 +313,9 @@ object CloudflaredService {
                     if (p.isAlive) {
                         p.destroyForcibly()
                     }
-                    println("[CloudflaredService] Stopped cloudflared process.")
+                    consoleLog.info("[CloudflaredService] Stopped cloudflared process.")
                 } catch (e: Exception) {
-                    println("[CloudflaredService] Error stopping cloudflared: ${e.message}")
+                    consoleLog.error("[CloudflaredService] Error stopping cloudflared: ${e.message}")
                 }
             }
         }
@@ -336,10 +339,10 @@ object CloudflaredService {
     fun initOnStartup() {
         val settings = SettingsService.getCloudflaredSettings()
         if (settings.enabled) {
-            println("[CloudflaredService] Cloudflared is enabled by configuration. Starting tunnel...")
+            consoleLog.info("[CloudflaredService] Cloudflared is enabled by configuration. Starting tunnel...")
             startTunnel()
         } else {
-            println("[CloudflaredService] Cloudflared is disabled by configuration.")
+            consoleLog.info("[CloudflaredService] Cloudflared is disabled by configuration.")
         }
     }
 }

@@ -65,6 +65,11 @@ import com.obsidianscout.db.orchestration.CockroachOrchestrator
 import io.ktor.http.ContentType
 import kotlin.time.Duration.Companion.seconds
 
+// Raw System.err/println is kept only for the OOM guard, uncaught-exception and shutdown hooks,
+// where logging may not be usable.
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.App")
+
+
 private var cockroachOrchestrator: CockroachOrchestrator? = null
 
 @Serializable
@@ -76,6 +81,17 @@ fun main(args: Array<String>) {
         val firstArg = args[0].lowercase()
         if (firstArg == "--update" || firstArg == "-update" || firstArg == "update" || firstArg == "-u") {
             com.obsidianscout.utils.runUpdateHelper()
+            return
+        }
+        if (firstArg == "--install-ai-models" || firstArg == "install-ai-models") {
+            // e.g. --install-ai-models lite,standard,advanced  (downloads into data/models, then exits)
+            val requested = args.getOrNull(1)?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
+                ?: com.obsidianscout.ai.LocalAiModelService.tiers.map { it.id }
+            for (tierId in requested) {
+                println("[LocalAI] Installing $tierId into ${com.obsidianscout.ai.LocalAiModelService.modelRoot.absolutePath} ...")
+                com.obsidianscout.ai.LocalAiModelService.installBlocking(tierId)
+                println("[LocalAI] $tierId installed.")
+            }
             return
         }
         if (firstArg == "--reset-superadmin" || firstArg == "-reset-superadmin" || firstArg == "reset-superadmin") {
@@ -142,7 +158,7 @@ fun main(args: Array<String>) {
     }
 
     if (appConfig.server.host == "127.0.0.1" || appConfig.server.host == "localhost") {
-        println("[ObsidianScout] Binding HTTP to ${appConfig.server.host} only (loopback). Set server.host to 0.0.0.0 if cluster peers or LAN clients must reach this node directly.")
+        consoleLog.info("[ObsidianScout] Binding HTTP to ${appConfig.server.host} only (loopback). Set server.host to 0.0.0.0 if cluster peers or LAN clients must reach this node directly.")
     }
 
     embeddedServer(
@@ -166,6 +182,15 @@ fun Application.module(appConfig: AppConfig) {
 
     com.obsidianscout.auth.ClusterSecretService.initFromConfig(appConfig)
 
+    // Handlers do blocking work (JDBC transactions, bcrypt, file I/O, blocking HTTP clients).
+    // Run every call on the IO dispatcher so that work can't stall Netty's call threads and
+    // hold up unrelated requests. Registered first so all later interceptors run on it too.
+    intercept(io.ktor.server.application.ApplicationCallPipeline.Setup) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            proceed()
+        }
+    }
+
     install(DoubleReceive)
     install(com.obsidianscout.utils.ServerTimingPlugin)
     install(DefaultHeaders) {
@@ -173,7 +198,7 @@ fun Application.module(appConfig: AppConfig) {
         header("X-Content-Type-Options", "nosniff")
         header("X-XSS-Protection", "1; mode=block")
         header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-        header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: blob:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';")
+        header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: blob:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';")
         header("Referrer-Policy", "strict-origin-when-cross-origin")
         header("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)")
     }
@@ -184,6 +209,8 @@ fun Application.module(appConfig: AppConfig) {
         masking = false
     }
     install(Compression) {
+        // Local AI model weights are already-quantized binaries: gzipping them wastes CPU and breaks Range requests.
+        condition { !request.path().startsWith("/models/") }
         gzip {
             priority = 1.0
             minimumSize(256)
@@ -200,6 +227,9 @@ fun Application.module(appConfig: AppConfig) {
             val method = call.request.local.method.value.uppercase()
             if (path == "/sw.js" || path.endsWith("/sw.js")) {
                 CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
+            } else if (path.startsWith("/models/")) {
+                // Local AI weights/runtime: URLs embed a pinned revision, so they never change.
+                CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 31_536_000, visibility = CacheControl.Visibility.Private))
             } else if (path.contains("/vendor/") || path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) {
                 CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 3600 * 24 * 30, visibility = CacheControl.Visibility.Public))
             } else if (path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".json")) {
@@ -245,7 +275,8 @@ fun Application.module(appConfig: AppConfig) {
         val isSw = path == "/sw.js" || path.endsWith("/sw.js")
         val isAsset = (path.contains("/vendor/") || path.contains("/css/") || path.contains("/js/") ||
                 path.contains("/assets/") || path.endsWith(".js") || path.endsWith(".css") ||
-                path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) && !isSw
+                path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2") ||
+                path.startsWith("/models/")) && !isSw
 
         if (isSw) {
             call.response.headers.append("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, private")
@@ -338,7 +369,11 @@ fun Application.module(appConfig: AppConfig) {
                 path.startsWith("/api/session") ||
                 path.startsWith("/api/cluster/") ||
                 path.startsWith("/api/admin/cluster/") ||
-                path.startsWith("/cluster-management")
+                path.startsWith("/cluster-management") ||
+                // Local AI weights live on each node's disk and are multi-GB; always serve locally.
+                path.startsWith("/models/") ||
+                path.startsWith("/api/local-ai") ||
+                path.startsWith("/api/admin/local-ai")
         if (isExcluded) return@intercept
 
         val best = com.obsidianscout.admin.PeerLoadRouter.selectBestNode()
@@ -396,12 +431,12 @@ fun Application.module(appConfig: AppConfig) {
             val path = call.request.path()
             val method = call.request.local.method.value
             val id = java.util.UUID.randomUUID().toString().take(8)
-            println("[Request Start] [$id] $method $path")
+            consoleLog.info("[Request Start] [$id] $method $path")
             try {
                 proceed()
             } finally {
                 val status = call.response.status()
-                println("[Request End] [$id] $method $path -> ${status?.value ?: "Aborted/Connection Reset"}")
+                consoleLog.info("[Request End] [$id] $method $path -> ${status?.value ?: "Aborted/Connection Reset"}")
             }
         }
     }
@@ -525,6 +560,9 @@ fun Application.module(appConfig: AppConfig) {
     // Mark update boot successful as soon as web engine & routes start
     com.obsidianscout.utils.UpdateRecoveryManager.markBootSuccessful()
 
+    // Auto-download missing local AI models in the background
+    com.obsidianscout.ai.LocalAiModelService.autoInstallMissingModelsOnStartup()
+
     // Run database orchestration and initialization in a background coroutine
     launch(Dispatchers.IO) {
         var initialized = false
@@ -534,7 +572,7 @@ fun Application.module(appConfig: AppConfig) {
             try {
                 attempts++
                 if (attempts > 1) {
-                    println("[Database] Retrying database orchestration and pool startup in 10 seconds (attempt #$attempts)...")
+                    consoleLog.warn("[Database] Retrying database orchestration and pool startup in 10 seconds (attempt #$attempts)...")
                     delay(10000)
                 }
 
@@ -580,7 +618,7 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.db.QuorumFallbackStore.init(appConfig)
                 com.obsidianscout.db.QuorumFallbackStore.start()
                 com.obsidianscout.db.AutoBackupScheduler.start(appConfig)
-                println("[Database] Background database initialization completed successfully.")
+                consoleLog.info("[Database] Background database initialization completed successfully.")
                 
                 // Mark update boot successful once startup completes
                 com.obsidianscout.utils.UpdateRecoveryManager.markBootSuccessful()
@@ -611,6 +649,7 @@ fun Application.module(appConfig: AppConfig) {
         com.obsidianscout.scouting.DeduplicationScheduler.stop()
         com.obsidianscout.scouting.ScoutingReminderScheduler.stop()
         com.obsidianscout.admin.CloudflaredService.stopTunnel()
+        com.obsidianscout.ai.LocalAiModelService.cancelAll()
         try {
             DatabaseFactory.close()
         } catch (closeEx: Exception) {

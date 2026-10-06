@@ -518,7 +518,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const avatar = document.createElement("div");
             avatar.className = "avatar-placeholder";
             if (msg.profilePicture) {
-                avatar.style.backgroundImage = `url(${msg.profilePicture})`;
+                avatar.style.backgroundImage = `url("${msg.profilePicture}")`;
                 avatar.style.backgroundSize = "cover";
                 avatar.style.backgroundPosition = "center";
                 avatar.textContent = "";

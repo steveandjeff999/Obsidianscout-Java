@@ -25,21 +25,24 @@ data class UserBackupDto(
     val createdAt: Long,
     val email: String? = null,
     val profilePicture: String? = null,
-    val notificationPreference: String = "all"
+    val notificationPreference: String = "all",
+    val program: String = "FRC"
 )
 
 @Serializable
 data class ConfigBackupDto(
     val teamNumber: Int,
     val configJson: String,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val program: String = "FRC"
 )
 
 @Serializable
 data class AppSettingsBackupDto(
     val teamNumber: Int,
     val settingsJson: String,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val program: String = "FRC"
 )
 
 @Serializable
@@ -54,7 +57,8 @@ data class ScoutingEntryBackupDto(
     val createdAt: Long,
     val isPrescout: Boolean,
     val hasDiscrepancy: Boolean,
-    val conflictingTeams: String
+    val conflictingTeams: String,
+    val program: String = "FRC"
 )
 
 @Serializable
@@ -67,7 +71,8 @@ data class PitScoutingEntryBackupDto(
     val createdAt: Long,
     val isPrescout: Boolean,
     val hasDiscrepancy: Boolean,
-    val conflictingTeams: String
+    val conflictingTeams: String,
+    val program: String = "FRC"
 )
 
 @Serializable
@@ -82,7 +87,8 @@ data class QualitativeScoutingEntryBackupDto(
     val createdAt: Long,
     val isPrescout: Boolean,
     val hasDiscrepancy: Boolean,
-    val conflictingTeams: String
+    val conflictingTeams: String,
+    val program: String = "FRC"
 )
 
 @Serializable
@@ -137,7 +143,8 @@ data class ChatMessageBackupDto(
     val createdAt: Long,
     val reactionsJson: String,
     val isEdited: Boolean = false,
-    val updatedAt: Long? = null
+    val updatedAt: Long? = null,
+    val program: String = "FRC"
 )
 
 // Global backup DTOs
@@ -307,6 +314,33 @@ data class ImportReport(
 
 object BackupService {
 
+    /** Largest backup file accepted for import. */
+    const val MAX_IMPORT_BYTES = 100L * 1024 * 1024
+    /** Largest total size a CSV backup zip may expand to, so a small zip can't exhaust memory. */
+    const val MAX_UNZIPPED_BYTES = 512L * 1024 * 1024
+    private const val MAX_ZIP_ENTRIES = 1_000
+
+    /** Reads [input] into memory, refusing anything larger than [limit] bytes. */
+    fun readLimited(input: java.io.InputStream, limit: Long): ByteArray {
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(64 * 1024)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            if (total > limit) {
+                throw com.obsidianscout.auth.ApiException(
+                    io.ktor.http.HttpStatusCode.PayloadTooLarge,
+                    "Backup file is too large (limit ${limit / (1024 * 1024)} MB)"
+                )
+            }
+            out.write(buffer, 0, read)
+        }
+        return out.toByteArray()
+    }
+
+
     fun exportBackup(teamNumber: Int, type: String, scope: String = "team", program: String = "FRC"): ObsidianDbBackup {
         return transaction {
             val userMap = Users.selectAll()
@@ -322,7 +356,8 @@ object BackupService {
                         createdAt = row[Users.createdAt].toEpochMilli(),
                         email = row[Users.email],
                         profilePicture = row[Users.profilePicture],
-                        notificationPreference = row[Users.notificationPreference]
+                        notificationPreference = row[Users.notificationPreference],
+                        program = row[Users.program]
                     )
                 }
             } else if (type == "entire") {
@@ -335,48 +370,49 @@ object BackupService {
                         createdAt = row[Users.createdAt].toEpochMilli(),
                         email = row[Users.email],
                         profilePicture = row[Users.profilePicture],
-                        notificationPreference = row[Users.notificationPreference]
+                        notificationPreference = row[Users.notificationPreference],
+                        program = row[Users.program]
                     )
                 }
             } else emptyList()
 
             val scoutingConfigs = if (scope == "global") {
                 ScoutingConfigs.selectAll().map { row ->
-                    ConfigBackupDto(row[ScoutingConfigs.teamNumber], row[ScoutingConfigs.configJson], row[ScoutingConfigs.updatedAt].toEpochMilli())
+                    ConfigBackupDto(row[ScoutingConfigs.teamNumber], row[ScoutingConfigs.configJson], row[ScoutingConfigs.updatedAt].toEpochMilli(), row[ScoutingConfigs.program])
                 }
             } else if (type == "entire") {
                 ScoutingConfigs.selectAll().where { (ScoutingConfigs.teamNumber eq teamNumber) and (ScoutingConfigs.program eq program) }.map { row ->
-                    ConfigBackupDto(row[ScoutingConfigs.teamNumber], row[ScoutingConfigs.configJson], row[ScoutingConfigs.updatedAt].toEpochMilli())
+                    ConfigBackupDto(row[ScoutingConfigs.teamNumber], row[ScoutingConfigs.configJson], row[ScoutingConfigs.updatedAt].toEpochMilli(), row[ScoutingConfigs.program])
                 }
             } else emptyList()
 
             val pitScoutingConfigs = if (scope == "global") {
                 PitScoutingConfigs.selectAll().map { row ->
-                    ConfigBackupDto(row[PitScoutingConfigs.teamNumber], row[PitScoutingConfigs.configJson], row[PitScoutingConfigs.updatedAt].toEpochMilli())
+                    ConfigBackupDto(row[PitScoutingConfigs.teamNumber], row[PitScoutingConfigs.configJson], row[PitScoutingConfigs.updatedAt].toEpochMilli(), row[PitScoutingConfigs.program])
                 }
             } else if (type == "entire") {
                 PitScoutingConfigs.selectAll().where { (PitScoutingConfigs.teamNumber eq teamNumber) and (PitScoutingConfigs.program eq program) }.map { row ->
-                    ConfigBackupDto(row[PitScoutingConfigs.teamNumber], row[PitScoutingConfigs.configJson], row[PitScoutingConfigs.updatedAt].toEpochMilli())
+                    ConfigBackupDto(row[PitScoutingConfigs.teamNumber], row[PitScoutingConfigs.configJson], row[PitScoutingConfigs.updatedAt].toEpochMilli(), row[PitScoutingConfigs.program])
                 }
             } else emptyList()
 
             val qualitativeScoutingConfigs = if (scope == "global") {
                 QualitativeScoutingConfigs.selectAll().map { row ->
-                    ConfigBackupDto(row[QualitativeScoutingConfigs.teamNumber], row[QualitativeScoutingConfigs.configJson], row[QualitativeScoutingConfigs.updatedAt].toEpochMilli())
+                    ConfigBackupDto(row[QualitativeScoutingConfigs.teamNumber], row[QualitativeScoutingConfigs.configJson], row[QualitativeScoutingConfigs.updatedAt].toEpochMilli(), row[QualitativeScoutingConfigs.program])
                 }
             } else if (type == "entire") {
                 QualitativeScoutingConfigs.selectAll().where { (QualitativeScoutingConfigs.teamNumber eq teamNumber) and (QualitativeScoutingConfigs.program eq program) }.map { row ->
-                    ConfigBackupDto(row[QualitativeScoutingConfigs.teamNumber], row[QualitativeScoutingConfigs.configJson], row[QualitativeScoutingConfigs.updatedAt].toEpochMilli())
+                    ConfigBackupDto(row[QualitativeScoutingConfigs.teamNumber], row[QualitativeScoutingConfigs.configJson], row[QualitativeScoutingConfigs.updatedAt].toEpochMilli(), row[QualitativeScoutingConfigs.program])
                 }
             } else emptyList()
 
             val appSettings = if (scope == "global") {
                 AppSettings.selectAll().map { row ->
-                    AppSettingsBackupDto(row[AppSettings.teamNumber], row[AppSettings.settingsJson], row[AppSettings.updatedAt].toEpochMilli())
+                    AppSettingsBackupDto(row[AppSettings.teamNumber], row[AppSettings.settingsJson], row[AppSettings.updatedAt].toEpochMilli(), row[AppSettings.program])
                 }
             } else if (type == "entire") {
                 AppSettings.selectAll().where { (AppSettings.teamNumber eq teamNumber) and (AppSettings.program eq program) }.map { row ->
-                    AppSettingsBackupDto(row[AppSettings.teamNumber], row[AppSettings.settingsJson], row[AppSettings.updatedAt].toEpochMilli())
+                    AppSettingsBackupDto(row[AppSettings.teamNumber], row[AppSettings.settingsJson], row[AppSettings.updatedAt].toEpochMilli(), row[AppSettings.program])
                 }
             } else emptyList()
 
@@ -396,7 +432,8 @@ object BackupService {
                     createdAt = row[ScoutingEntries.createdAt].toEpochMilli(),
                     isPrescout = row[ScoutingEntries.isPrescout],
                     hasDiscrepancy = row[ScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = row[ScoutingEntries.conflictingTeams]
+                    conflictingTeams = row[ScoutingEntries.conflictingTeams],
+                    program = row[ScoutingEntries.program]
                 )
             }
 
@@ -413,7 +450,8 @@ object BackupService {
                     createdAt = row[PitScoutingEntries.createdAt].toEpochMilli(),
                     isPrescout = row[PitScoutingEntries.isPrescout],
                     hasDiscrepancy = row[PitScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = row[PitScoutingEntries.conflictingTeams]
+                    conflictingTeams = row[PitScoutingEntries.conflictingTeams],
+                    program = row[PitScoutingEntries.program]
                 )
             }
 
@@ -432,7 +470,8 @@ object BackupService {
                     createdAt = row[QualitativeScoutingEntries.createdAt].toEpochMilli(),
                     isPrescout = row[QualitativeScoutingEntries.isPrescout],
                     hasDiscrepancy = row[QualitativeScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = row[QualitativeScoutingEntries.conflictingTeams]
+                    conflictingTeams = row[QualitativeScoutingEntries.conflictingTeams],
+                    program = row[QualitativeScoutingEntries.program]
                 )
             }
 
@@ -517,7 +556,8 @@ object BackupService {
                         createdAt = row[ChatMessages.createdAt].toEpochMilli(),
                         reactionsJson = row[ChatMessages.reactionsJson],
                         isEdited = row[ChatMessages.isEdited],
-                        updatedAt = row[ChatMessages.updatedAt]?.toEpochMilli()
+                        updatedAt = row[ChatMessages.updatedAt]?.toEpochMilli(),
+                        program = row[ChatMessages.program]
                     )
                 }
             } else emptyList()
@@ -716,6 +756,10 @@ object BackupService {
                 return if (isGlobalImport) originalTeam else targetTeamNumber
             }
 
+            // A team import writes everything into the importing team's own program. Without this,
+            // rows matched on team number alone and an import overwrote the other program's team.
+            fun programFor(fileProgram: String): String = if (isGlobalImport) fileProgram else targetProgram
+
             // Only superadmins may import elevated roles. Everyone else gets roles clamped to
             // team-level roles so an uploaded file cannot mint a SUPERADMIN account.
             val teamImportableRoles = setOf(
@@ -735,18 +779,19 @@ object BackupService {
             }
 
             // 1. Users mapping: (username, teamNumber) -> target UserId
-            val userMap = mutableMapOf<Pair<String, Int>, UUID>()
+            val userMap = mutableMapOf<Triple<String, Int, String>, UUID>()
             
             // Query current users in target scope to populate map
-            val usersQuery = if (isGlobalImport) Users.selectAll() else Users.selectAll().where { Users.teamNumber eq targetTeamNumber }
+            val usersQuery = if (isGlobalImport) Users.selectAll() else Users.selectAll().where { (Users.teamNumber eq targetTeamNumber) and (Users.program eq targetProgram) }
             usersQuery.forEach { row ->
-                userMap[Pair(row[Users.username], row[Users.teamNumber])] = row[Users.id].value
+                userMap[Triple(row[Users.username], row[Users.teamNumber], row[Users.program])] = row[Users.id].value
             }
 
             if (backup.type == "entire") {
                 for (u in backup.users) {
                     val assignedTeam = getTargetTeam(u.teamNumber)
-                    val mapKey = Pair(u.username, assignedTeam)
+                    val assignedProgram = programFor(u.program)
+                    val mapKey = Triple(u.username, assignedTeam, assignedProgram)
                     val existingId = userMap[mapKey]
                     if (existingId != null) {
                         usersSkipped++
@@ -754,6 +799,7 @@ object BackupService {
                         val newId = Users.insertAndGetId {
                             it[username] = u.username
                             it[teamNumber] = assignedTeam
+                            it[program] = assignedProgram
                             it[passwordHash] = u.passwordHash
                             it[role] = sanitizeImportedRole(u.role)
                             it[createdAt] = Instant.ofEpochMilli(u.createdAt)
@@ -769,9 +815,10 @@ object BackupService {
                 // 2. Import Configs
                 for (c in backup.scoutingConfigs) {
                     val assignedTeam = getTargetTeam(c.teamNumber)
-                    val exists = ScoutingConfigs.selectAll().where { ScoutingConfigs.teamNumber eq assignedTeam }.any()
+                    val assignedProgram = programFor(c.program)
+                    val exists = ScoutingConfigs.selectAll().where { (ScoutingConfigs.teamNumber eq assignedTeam) and (ScoutingConfigs.program eq assignedProgram) }.any()
                     if (exists) {
-                        ScoutingConfigs.update({ ScoutingConfigs.teamNumber eq assignedTeam }) {
+                        ScoutingConfigs.update({ (ScoutingConfigs.teamNumber eq assignedTeam) and (ScoutingConfigs.program eq assignedProgram) }) {
                             it[configJson] = c.configJson
                             it[updatedAt] = Instant.ofEpochMilli(c.updatedAt)
                         }
@@ -779,6 +826,7 @@ object BackupService {
                     } else {
                         ScoutingConfigs.insert {
                             it[teamNumber] = assignedTeam
+                            it[program] = assignedProgram
                             it[configJson] = c.configJson
                             it[updatedAt] = Instant.ofEpochMilli(c.updatedAt)
                         }
@@ -789,9 +837,10 @@ object BackupService {
                 // Pit scouting configs
                 for (c in backup.pitScoutingConfigs) {
                     val assignedTeam = getTargetTeam(c.teamNumber)
-                    val exists = PitScoutingConfigs.selectAll().where { PitScoutingConfigs.teamNumber eq assignedTeam }.any()
+                    val assignedProgram = programFor(c.program)
+                    val exists = PitScoutingConfigs.selectAll().where { (PitScoutingConfigs.teamNumber eq assignedTeam) and (PitScoutingConfigs.program eq assignedProgram) }.any()
                     if (exists) {
-                        PitScoutingConfigs.update({ PitScoutingConfigs.teamNumber eq assignedTeam }) {
+                        PitScoutingConfigs.update({ (PitScoutingConfigs.teamNumber eq assignedTeam) and (PitScoutingConfigs.program eq assignedProgram) }) {
                             it[configJson] = c.configJson
                             it[updatedAt] = Instant.ofEpochMilli(c.updatedAt)
                         }
@@ -799,6 +848,7 @@ object BackupService {
                     } else {
                         PitScoutingConfigs.insert {
                             it[teamNumber] = assignedTeam
+                            it[program] = assignedProgram
                             it[configJson] = c.configJson
                             it[updatedAt] = Instant.ofEpochMilli(c.updatedAt)
                         }
@@ -809,9 +859,10 @@ object BackupService {
                 // Qualitative scouting configs
                 for (c in backup.qualitativeScoutingConfigs) {
                     val assignedTeam = getTargetTeam(c.teamNumber)
-                    val exists = QualitativeScoutingConfigs.selectAll().where { QualitativeScoutingConfigs.teamNumber eq assignedTeam }.any()
+                    val assignedProgram = programFor(c.program)
+                    val exists = QualitativeScoutingConfigs.selectAll().where { (QualitativeScoutingConfigs.teamNumber eq assignedTeam) and (QualitativeScoutingConfigs.program eq assignedProgram) }.any()
                     if (exists) {
-                        QualitativeScoutingConfigs.update({ QualitativeScoutingConfigs.teamNumber eq assignedTeam }) {
+                        QualitativeScoutingConfigs.update({ (QualitativeScoutingConfigs.teamNumber eq assignedTeam) and (QualitativeScoutingConfigs.program eq assignedProgram) }) {
                             it[configJson] = c.configJson
                             it[updatedAt] = Instant.ofEpochMilli(c.updatedAt)
                         }
@@ -819,6 +870,7 @@ object BackupService {
                     } else {
                         QualitativeScoutingConfigs.insert {
                             it[teamNumber] = assignedTeam
+                            it[program] = assignedProgram
                             it[configJson] = c.configJson
                             it[updatedAt] = Instant.ofEpochMilli(c.updatedAt)
                         }
@@ -829,9 +881,10 @@ object BackupService {
                 // App settings
                 for (s in backup.appSettings) {
                     val assignedTeam = getTargetTeam(s.teamNumber)
-                    val exists = AppSettings.selectAll().where { AppSettings.teamNumber eq assignedTeam }.any()
+                    val assignedProgram = programFor(s.program)
+                    val exists = AppSettings.selectAll().where { (AppSettings.teamNumber eq assignedTeam) and (AppSettings.program eq assignedProgram) }.any()
                     if (exists) {
-                        AppSettings.update({ AppSettings.teamNumber eq assignedTeam }) {
+                        AppSettings.update({ (AppSettings.teamNumber eq assignedTeam) and (AppSettings.program eq assignedProgram) }) {
                             it[settingsJson] = s.settingsJson
                             it[updatedAt] = Instant.ofEpochMilli(s.updatedAt)
                         }
@@ -839,6 +892,7 @@ object BackupService {
                     } else {
                         AppSettings.insert {
                             it[teamNumber] = assignedTeam
+                            it[program] = assignedProgram
                             it[settingsJson] = s.settingsJson
                             it[updatedAt] = Instant.ofEpochMilli(s.updatedAt)
                         }
@@ -848,17 +902,25 @@ object BackupService {
             }
 
             // Helpers to resolve UserId
-            fun getUserId(username: String, originalTeam: Int): UUID {
+            // fileProgram is null for global tables that don't record one; those match on username and team.
+            fun getUserId(username: String, originalTeam: Int, fileProgram: String? = null): UUID {
                 val assignedTeam = getTargetTeam(originalTeam)
-                return userMap[Pair(username, assignedTeam)] ?: runCatching { UUID.fromString(currentUserId) }.getOrElse { UUID.randomUUID() }
+                val match = if (fileProgram != null) {
+                    userMap[Triple(username, assignedTeam, programFor(fileProgram))]
+                } else {
+                    userMap.entries.firstOrNull { it.key.first == username && it.key.second == assignedTeam }?.value
+                }
+                return match ?: runCatching { UUID.fromString(currentUserId) }.getOrElse { UUID.randomUUID() }
             }
 
             // 3. Scouting Entries import
             for (e in backup.scoutingEntries) {
                 val assignedTeam = getTargetTeam(e.ownerTeamNumber)
-                val userId = getUserId(e.submittedByUsername, e.ownerTeamNumber)
+                val userId = getUserId(e.submittedByUsername, e.ownerTeamNumber, e.program)
+                val assignedProgram = programFor(e.program)
                 val exists = ScoutingEntries.selectAll().where {
                     (ScoutingEntries.ownerTeamNumber eq assignedTeam) and
+                    (ScoutingEntries.program eq assignedProgram) and
                     (ScoutingEntries.createdAt eq Instant.ofEpochMilli(e.createdAt)) and
                     (ScoutingEntries.targetTeamNumber eq e.targetTeamNumber) and
                     (ScoutingEntries.eventKey eq e.eventKey) and
@@ -870,6 +932,7 @@ object BackupService {
                 } else {
                     ScoutingEntries.insert {
                         it[ownerTeamNumber] = assignedTeam
+                        it[program] = assignedProgram
                         it[ScoutingEntries.targetTeamNumber] = e.targetTeamNumber
                         it[eventKey] = e.eventKey
                         it[matchKey] = e.matchKey
@@ -888,9 +951,11 @@ object BackupService {
             // Pit entries
             for (e in backup.pitScoutingEntries) {
                 val assignedTeam = getTargetTeam(e.ownerTeamNumber)
-                val userId = getUserId(e.submittedByUsername, e.ownerTeamNumber)
+                val userId = getUserId(e.submittedByUsername, e.ownerTeamNumber, e.program)
+                val assignedProgram = programFor(e.program)
                 val exists = PitScoutingEntries.selectAll().where {
                     (PitScoutingEntries.ownerTeamNumber eq assignedTeam) and
+                    (PitScoutingEntries.program eq assignedProgram) and
                     (PitScoutingEntries.createdAt eq Instant.ofEpochMilli(e.createdAt)) and
                     (PitScoutingEntries.targetTeamNumber eq e.targetTeamNumber) and
                     (PitScoutingEntries.eventKey eq e.eventKey)
@@ -901,6 +966,7 @@ object BackupService {
                 } else {
                     PitScoutingEntries.insert {
                         it[ownerTeamNumber] = assignedTeam
+                        it[program] = assignedProgram
                         it[PitScoutingEntries.targetTeamNumber] = e.targetTeamNumber
                         it[eventKey] = e.eventKey
                         it[dataJson] = e.dataJson
@@ -917,9 +983,11 @@ object BackupService {
             // Qualitative entries
             for (e in backup.qualitativeScoutingEntries) {
                 val assignedTeam = getTargetTeam(e.ownerTeamNumber)
-                val userId = getUserId(e.submittedByUsername, e.ownerTeamNumber)
+                val userId = getUserId(e.submittedByUsername, e.ownerTeamNumber, e.program)
+                val assignedProgram = programFor(e.program)
                 val exists = QualitativeScoutingEntries.selectAll().where {
                     (QualitativeScoutingEntries.ownerTeamNumber eq assignedTeam) and
+                    (QualitativeScoutingEntries.program eq assignedProgram) and
                     (QualitativeScoutingEntries.createdAt eq Instant.ofEpochMilli(e.createdAt)) and
                     (QualitativeScoutingEntries.targetTeamNumber eq e.targetTeamNumber) and
                     (QualitativeScoutingEntries.eventKey eq e.eventKey) and
@@ -931,6 +999,7 @@ object BackupService {
                 } else {
                     QualitativeScoutingEntries.insert {
                         it[ownerTeamNumber] = assignedTeam
+                        it[program] = assignedProgram
                         it[QualitativeScoutingEntries.targetTeamNumber] = e.targetTeamNumber
                         it[eventKey] = e.eventKey
                         it[matchKey] = e.matchKey
@@ -950,12 +1019,9 @@ object BackupService {
             if (backup.scope == "global" || backup.type == "entire") {
                 val allianceIdMap = mutableMapOf<String, UUID>()
 
-                // A team import may only create alliances owned by the importing team, in its own program.
-                fun allianceProgram(fileProgram: String): String = if (isGlobalImport) fileProgram else targetProgram
-
                 for (a in backup.alliances) {
                     val assignedTeam = getTargetTeam(a.ownerTeamNumber)
-                    val assignedProgram = allianceProgram(a.program)
+                    val assignedProgram = programFor(a.program)
                     val existingRow = ScoutingAlliances.selectAll().where {
                         (ScoutingAlliances.ownerTeamNumber eq assignedTeam) and
                         (ScoutingAlliances.program eq assignedProgram) and
@@ -989,7 +1055,7 @@ object BackupService {
                 // Alliance Memberships
                 for (m in backup.allianceMemberships) {
                     val targetAllianceId = allianceIdMap[m.allianceId] ?: continue
-                    val memberProgram = allianceProgram(m.program)
+                    val memberProgram = programFor(m.program)
                     val exists = AllianceMemberships.selectAll().where {
                         (AllianceMemberships.allianceId eq targetAllianceId) and
                         (AllianceMemberships.teamNumber eq m.teamNumber) and
@@ -1024,9 +1090,10 @@ object BackupService {
                 // 5. Banners
                 for (b in backup.banners) {
                     val assignedTeam = getTargetTeam(b.teamNumber)
+                    val assignedProgram = programFor(b.program)
                     val exists = Banners.selectAll().where {
                         (Banners.teamNumber eq assignedTeam) and
-                        (Banners.program eq b.program) and
+                        (Banners.program eq assignedProgram) and
                         (Banners.message eq b.message) and
                         (Banners.createdAt eq Instant.ofEpochMilli(b.createdAt))
                     }.any()
@@ -1036,7 +1103,7 @@ object BackupService {
                     } else {
                         Banners.insert {
                             it[teamNumber] = assignedTeam
-                            it[program] = b.program
+                            it[program] = assignedProgram
                             it[message] = b.message
                             it[bannerType] = b.bannerType
                             it[isDismissible] = b.isDismissible
@@ -1053,9 +1120,11 @@ object BackupService {
                 // 6. Chat Messages
                 for (c in backup.chatMessages) {
                     val assignedTeam = getTargetTeam(c.teamNumber)
-                    val userId = getUserId(c.username, c.teamNumber)
+                    val assignedProgram = programFor(c.program)
+                    val userId = getUserId(c.username, c.teamNumber, c.program)
                     val exists = ChatMessages.selectAll().where {
                         (ChatMessages.teamNumber eq assignedTeam) and
+                        (ChatMessages.program eq assignedProgram) and
                         (ChatMessages.content eq c.content) and
                         (ChatMessages.createdAt eq Instant.ofEpochMilli(c.createdAt)) and
                         (ChatMessages.userId eq userId)
@@ -1066,6 +1135,7 @@ object BackupService {
                     } else {
                         ChatMessages.insert {
                             it[teamNumber] = assignedTeam
+                            it[program] = assignedProgram
                             it[groupName] = c.groupName
                             it[ChatMessages.userId] = EntityID(userId, Users)
                             it[username] = c.username
@@ -1331,7 +1401,7 @@ object BackupService {
         val files = mutableMapOf<String, String>()
 
         // Serialize Scouting Entries
-        val scoutHeaders = listOf("owner_team_number", "target_team_number", "event_key", "match_key", "match_number", "data_json", "submitted_by_username", "created_at", "is_prescout", "has_discrepancy", "conflicting_teams")
+        val scoutHeaders = listOf("owner_team_number", "target_team_number", "event_key", "match_key", "match_number", "data_json", "submitted_by_username", "created_at", "is_prescout", "has_discrepancy", "conflicting_teams", "program")
         val scoutRows = backup.scoutingEntries.map { e ->
             listOf(
                 e.ownerTeamNumber.toString(),
@@ -1344,13 +1414,14 @@ object BackupService {
                 e.createdAt.toString(),
                 e.isPrescout.toString(),
                 e.hasDiscrepancy.toString(),
-                e.conflictingTeams
+                e.conflictingTeams,
+                e.program
             )
         }
         files["scouting_entries.csv"] = CSVHelper.toCSV(scoutHeaders, scoutRows)
 
         // Serialize Pit Entries
-        val pitHeaders = listOf("owner_team_number", "target_team_number", "event_key", "data_json", "submitted_by_username", "created_at", "is_prescout", "has_discrepancy", "conflicting_teams")
+        val pitHeaders = listOf("owner_team_number", "target_team_number", "event_key", "data_json", "submitted_by_username", "created_at", "is_prescout", "has_discrepancy", "conflicting_teams", "program")
         val pitRows = backup.pitScoutingEntries.map { e ->
             listOf(
                 e.ownerTeamNumber.toString(),
@@ -1361,13 +1432,14 @@ object BackupService {
                 e.createdAt.toString(),
                 e.isPrescout.toString(),
                 e.hasDiscrepancy.toString(),
-                e.conflictingTeams
+                e.conflictingTeams,
+                e.program
             )
         }
         files["pit_scouting_entries.csv"] = CSVHelper.toCSV(pitHeaders, pitRows)
 
         // Serialize Qualitative Entries
-        val qualHeaders = listOf("owner_team_number", "target_team_number", "event_key", "match_key", "match_number", "data_json", "submitted_by_username", "created_at", "is_prescout", "has_discrepancy", "conflicting_teams")
+        val qualHeaders = listOf("owner_team_number", "target_team_number", "event_key", "match_key", "match_number", "data_json", "submitted_by_username", "created_at", "is_prescout", "has_discrepancy", "conflicting_teams", "program")
         val qualRows = backup.qualitativeScoutingEntries.map { e ->
             listOf(
                 e.ownerTeamNumber.toString(),
@@ -1380,14 +1452,15 @@ object BackupService {
                 e.createdAt.toString(),
                 e.isPrescout.toString(),
                 e.hasDiscrepancy.toString(),
-                e.conflictingTeams
+                e.conflictingTeams,
+                e.program
             )
         }
         files["qualitative_scouting_entries.csv"] = CSVHelper.toCSV(qualHeaders, qualRows)
 
         if (scope == "global" || type == "entire") {
             // Include users
-            val userHeaders = listOf("username", "team_number", "password_hash", "role", "created_at", "email", "profile_picture", "notification_preference")
+            val userHeaders = listOf("username", "team_number", "password_hash", "role", "created_at", "email", "profile_picture", "notification_preference", "program")
             val userRows = backup.users.map { u ->
                 listOf(
                     u.username,
@@ -1397,23 +1470,24 @@ object BackupService {
                     u.createdAt.toString(),
                     u.email ?: "",
                     u.profilePicture ?: "",
-                    u.notificationPreference
+                    u.notificationPreference,
+                    u.program
                 )
             }
             files["users.csv"] = CSVHelper.toCSV(userHeaders, userRows)
 
             // Include Configs
-            val configHeaders = listOf("config_type", "team_number", "config_json", "updated_at")
+            val configHeaders = listOf("config_type", "team_number", "config_json", "updated_at", "program")
             val configRows = mutableListOf<List<String>>()
-            backup.scoutingConfigs.forEach { configRows.add(listOf("game", it.teamNumber.toString(), it.configJson, it.updatedAt.toString())) }
-            backup.pitScoutingConfigs.forEach { configRows.add(listOf("pit", it.teamNumber.toString(), it.configJson, it.updatedAt.toString())) }
-            backup.qualitativeScoutingConfigs.forEach { configRows.add(listOf("qual", it.teamNumber.toString(), it.configJson, it.updatedAt.toString())) }
+            backup.scoutingConfigs.forEach { configRows.add(listOf("game", it.teamNumber.toString(), it.configJson, it.updatedAt.toString(), it.program)) }
+            backup.pitScoutingConfigs.forEach { configRows.add(listOf("pit", it.teamNumber.toString(), it.configJson, it.updatedAt.toString(), it.program)) }
+            backup.qualitativeScoutingConfigs.forEach { configRows.add(listOf("qual", it.teamNumber.toString(), it.configJson, it.updatedAt.toString(), it.program)) }
             files["configs.csv"] = CSVHelper.toCSV(configHeaders, configRows)
 
             // Include AppSettings
-            val settingsHeaders = listOf("team_number", "settings_json", "updated_at")
+            val settingsHeaders = listOf("team_number", "settings_json", "updated_at", "program")
             val settingsRows = backup.appSettings.map { s ->
-                listOf(s.teamNumber.toString(), s.settingsJson, s.updatedAt.toString())
+                listOf(s.teamNumber.toString(), s.settingsJson, s.updatedAt.toString(), s.program)
             }
             files["app_settings.csv"] = CSVHelper.toCSV(settingsHeaders, settingsRows)
 
@@ -1470,7 +1544,7 @@ object BackupService {
             files["banners.csv"] = CSVHelper.toCSV(bannerHeaders, bannerRows)
 
             // Include Chats
-            val chatHeaders = listOf("team_number", "group_name", "username", "content", "created_at", "reactions_json")
+            val chatHeaders = listOf("team_number", "group_name", "username", "content", "created_at", "reactions_json", "program")
             val chatRows = backup.chatMessages.map { c ->
                 listOf(
                     c.teamNumber.toString(),
@@ -1478,7 +1552,8 @@ object BackupService {
                     c.username,
                     c.content,
                     c.createdAt.toString(),
-                    c.reactionsJson
+                    c.reactionsJson,
+                    c.program
                 )
             }
             files["chat_messages.csv"] = CSVHelper.toCSV(chatHeaders, chatRows)
@@ -1561,7 +1636,8 @@ object BackupService {
                     createdAt = r["created_at"]!!.toLong(),
                     email = r["email"]?.takeIf { it.isNotBlank() },
                     profilePicture = r["profile_picture"]?.takeIf { it.isNotBlank() },
-                    notificationPreference = r["notification_preference"] ?: "all"
+                    notificationPreference = r["notification_preference"] ?: "all",
+                    program = r["program"]?.takeIf { it.isNotBlank() } ?: "FRC"
                 )
             }
         } ?: emptyList()
@@ -1576,7 +1652,8 @@ object BackupService {
                 val dto = ConfigBackupDto(
                     teamNumber = r["team_number"]!!.toInt(),
                     configJson = r["config_json"]!!,
-                    updatedAt = r["updated_at"]!!.toLong()
+                    updatedAt = r["updated_at"]!!.toLong(),
+                    program = r["program"]?.takeIf { it.isNotBlank() } ?: "FRC"
                 )
                 when (type) {
                     "game" -> scoutingConfigs.add(dto)
@@ -1591,7 +1668,8 @@ object BackupService {
                 AppSettingsBackupDto(
                     teamNumber = r["team_number"]!!.toInt(),
                     settingsJson = r["settings_json"]!!,
-                    updatedAt = r["updated_at"]!!.toLong()
+                    updatedAt = r["updated_at"]!!.toLong(),
+                    program = r["program"]?.takeIf { it.isNotBlank() } ?: "FRC"
                 )
             }
         } ?: emptyList()
@@ -1609,7 +1687,8 @@ object BackupService {
                     createdAt = r["created_at"]!!.toLong(),
                     isPrescout = r["is_prescout"]!!.toBoolean(),
                     hasDiscrepancy = r["has_discrepancy"]!!.toBoolean(),
-                    conflictingTeams = r["conflicting_teams"] ?: ""
+                    conflictingTeams = r["conflicting_teams"] ?: "",
+                    program = r["program"]?.takeIf { it.isNotBlank() } ?: "FRC"
                 )
             }
         } ?: emptyList()
@@ -1625,7 +1704,8 @@ object BackupService {
                     createdAt = r["created_at"]!!.toLong(),
                     isPrescout = r["is_prescout"]!!.toBoolean(),
                     hasDiscrepancy = r["has_discrepancy"]!!.toBoolean(),
-                    conflictingTeams = r["conflicting_teams"] ?: ""
+                    conflictingTeams = r["conflicting_teams"] ?: "",
+                    program = r["program"]?.takeIf { it.isNotBlank() } ?: "FRC"
                 )
             }
         } ?: emptyList()
@@ -1643,7 +1723,8 @@ object BackupService {
                     createdAt = r["created_at"]!!.toLong(),
                     isPrescout = r["is_prescout"]!!.toBoolean(),
                     hasDiscrepancy = r["has_discrepancy"]!!.toBoolean(),
-                    conflictingTeams = r["conflicting_teams"] ?: ""
+                    conflictingTeams = r["conflicting_teams"] ?: "",
+                    program = r["program"]?.takeIf { it.isNotBlank() } ?: "FRC"
                 )
             }
         } ?: emptyList()
@@ -1705,7 +1786,8 @@ object BackupService {
                     username = r["username"]!!,
                     content = r["content"]!!,
                     createdAt = r["created_at"]!!.toLong(),
-                    reactionsJson = r["reactions_json"]!!
+                    reactionsJson = r["reactions_json"]!!,
+                    program = r["program"]?.takeIf { it.isNotBlank() } ?: "FRC"
                 )
             }
         } ?: emptyList()
@@ -1859,16 +1941,16 @@ object BackupService {
         val zis = ZipInputStream(bis)
         val result = mutableMapOf<String, String>()
         var entry = zis.nextEntry
+        var remaining = MAX_UNZIPPED_BYTES
+        var entries = 0
         while (entry != null) {
+            if (++entries > MAX_ZIP_ENTRIES) {
+                throw com.obsidianscout.auth.ApiException(io.ktor.http.HttpStatusCode.BadRequest, "Backup zip has too many files")
+            }
             if (!entry.isDirectory) {
-                val out = ByteArrayOutputStream()
-                val buffer = ByteArray(1024)
-                var len = zis.read(buffer)
-                while (len > 0) {
-                    out.write(buffer, 0, len)
-                    len = zis.read(buffer)
-                }
-                result[entry.name] = out.toString("UTF-8")
+                val bytes = readLimited(zis, remaining)
+                remaining -= bytes.size
+                result[entry.name] = String(bytes, Charsets.UTF_8)
             }
             entry = zis.nextEntry
         }

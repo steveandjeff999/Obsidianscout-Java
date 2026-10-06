@@ -198,7 +198,7 @@ export function adjustNavForRole(user) {
                 if (allowedPages && Array.isArray(allowedPages)) {
                     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                         const page = link.dataset.page;
-                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments"];
+                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant"];
                         if (isAdmin(role) || isSuperAdmin(role)) {
                             bypassPages.push("assignments");
                         }
@@ -214,6 +214,11 @@ export function adjustNavForRole(user) {
             console.error("Failed to parse settings for dynamic nav adjust:", err);
         }
     }
+
+    // The Scouting Assistant is a per-user opt-in (Personal Settings > Local AI Assistant), not a role page.
+    document.querySelectorAll('.sidebar-link[data-page="assistant"]').forEach((link) => {
+        link.style.display = user.localAiEnabled ? "" : "none";
+    });
 
     // Clean up empty section headers in sidebar
     document.querySelectorAll('.sidebar-section-title').forEach((titleEl) => {
@@ -243,7 +248,7 @@ export function adjustNavForRole(user) {
 
 export function isPageAccessible(page, role) {
     if (isSuperAdmin(role)) return true;
-    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials", "my-assignments"];
+    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials", "my-assignments", "assistant"];
     if (isAdmin(role)) {
         bypassPages.push("assignments");
     }
@@ -295,7 +300,11 @@ export async function ensureSidebarAndFooter(sidebar) {
             try { localStorage.removeItem("obsidianscout:base_html"); } catch (e) {}
             baseHtml = null;
         }
-        if (!baseHtml) {
+        // Refetch the template after a server update so new sidebar links appear. If the fetch
+        // fails (offline), keep using the cached copy.
+        const serverVersion = safeGetItem("obsidianscout:server_version") || "";
+        const templateIsStale = baseHtml && safeGetItem("obsidianscout:base_html_version") !== serverVersion;
+        if (!baseHtml || templateIsStale) {
             try {
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), 5000);
@@ -304,6 +313,7 @@ export async function ensureSidebarAndFooter(sidebar) {
                     baseHtml = await res.text();
                     sessionStorage.setItem("obsidianscout:base_html", baseHtml);
                     safeSetItem("obsidianscout:base_html", baseHtml);
+                    safeSetItem("obsidianscout:base_html_version", serverVersion);
                 }
             } catch (e) {
                 console.warn("[Sidebar] Failed to fetch sidebar base template:", e);

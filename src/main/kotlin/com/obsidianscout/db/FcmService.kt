@@ -19,6 +19,9 @@ import java.net.URI
 import java.time.Instant
 import java.util.UUID
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.db.FcmService")
+
+
 object FcmService {
     @Volatile
     private var lastLoadedTimestamp: Instant = Instant.EPOCH
@@ -42,7 +45,7 @@ object FcmService {
                 try {
                     app.delete()
                 } catch (e: Exception) {
-                    println("[FCM] Warning while deleting existing FirebaseApp instance ${app.name}: ${e.message}")
+                    consoleLog.warn("[FCM] Warning while deleting existing FirebaseApp instance ${app.name}: ${e.message}")
                 }
             }
             isInitialized = false
@@ -54,13 +57,13 @@ object FcmService {
             }
 
             if (configRow == null || !configRow[FcmConfigs.enabled]) {
-                println("[FCM] Firebase Messaging is disabled or unconfigured.")
+                consoleLog.info("[FCM] Firebase Messaging is disabled or unconfigured.")
                 return
             }
 
             val jsonStr = configRow[FcmConfigs.serviceAccountJson].trim()
             if (jsonStr.isEmpty()) {
-                println("[FCM] Service Account JSON is empty.")
+                consoleLog.info("[FCM] Service Account JSON is empty.")
                 return
             }
 
@@ -89,11 +92,11 @@ object FcmService {
             fcmProjectId = configRow[FcmConfigs.projectId]
             isInitialized = true
             lastLoadedTimestamp = configRow[FcmConfigs.updatedAt]
-            println("[FCM] Firebase Admin SDK successfully initialized and OAuth2 authenticated for project: ${configRow[FcmConfigs.projectId]}")
+            consoleLog.info("[FCM] Firebase Admin SDK successfully initialized and OAuth2 authenticated for project: ${configRow[FcmConfigs.projectId]}")
         } catch (e: Throwable) {
             val root = getRootCause(e)
             isInitialized = false
-            println("[FCM] Failed to initialize Firebase Admin SDK: ${e.message} (Root Cause: ${root.javaClass.name}: ${root.message})")
+            consoleLog.error("[FCM] Failed to initialize Firebase Admin SDK: ${e.message} (Root Cause: ${root.javaClass.name}: ${root.message})")
             e.printStackTrace()
         }
     }
@@ -108,7 +111,7 @@ object FcmService {
                 reload()
             }
         } catch (e: Exception) {
-            println("[FCM] Error checking cluster sync: ${e.message}")
+            consoleLog.error("[FCM] Error checking cluster sync: ${e.message}")
         }
     }
 
@@ -334,24 +337,24 @@ object FcmService {
                     if (responseBody.contains("UNREGISTERED") || responseBody.contains("INVALID_ARGUMENT")) {
                         tokensToDelete.add(token)
                     }
-                    println("[FCM] Token send failed ($code): $responseBody")
+                    consoleLog.error("[FCM] Token send failed ($code): $responseBody")
                 }
             } catch (e: Throwable) {
                 failureCount++
-                println("[FCM] Error sending to token: ${e.message}")
+                consoleLog.error("[FCM] Error sending to token: ${e.message}")
             }
         }
 
-        println("[FCM] Sent push notifications: $successCount succeeded, $failureCount failed.")
+        consoleLog.error("[FCM] Sent push notifications: $successCount succeeded, $failureCount failed.")
 
         if (tokensToDelete.isNotEmpty()) {
-            println("[FCM] Pruning ${tokensToDelete.size} stale/unregistered FCM tokens.")
+            consoleLog.info("[FCM] Pruning ${tokensToDelete.size} stale/unregistered FCM tokens.")
             try {
                 transaction {
                     FcmDeviceTokens.deleteWhere { FcmDeviceTokens.deviceToken inList tokensToDelete }
                 }
             } catch (e: Exception) {
-                println("[FCM] Error pruning stale tokens: ${e.message}")
+                consoleLog.error("[FCM] Error pruning stale tokens: ${e.message}")
             }
         }
     }
@@ -396,11 +399,11 @@ object FcmService {
                     successCount++
                 } else {
                     failureCount++
-                    println("[FCM] Test send failed ($code): $responseBody")
+                    consoleLog.error("[FCM] Test send failed ($code): $responseBody")
                 }
             } catch (e: Throwable) {
                 failureCount++
-                println("[FCM] Error sending test notification to token: ${e.message}")
+                consoleLog.error("[FCM] Error sending test notification to token: ${e.message}")
             }
         }
 

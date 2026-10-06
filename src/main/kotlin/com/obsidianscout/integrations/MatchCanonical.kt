@@ -171,6 +171,10 @@ object MatchCanonical {
             hasScores(other) -> other.dataJson
             preferred.dataJson.length >= other.dataJson.length -> preferred.dataJson
             else -> other.dataJson
+        }.let { chosen ->
+            // Only TBA publishes match videos. Keep them when the FIRST record's JSON wins the merge.
+            val otherJson = if (chosen == preferred.dataJson) other.dataJson else preferred.dataJson
+            carryVideos(chosen, otherJson)
         }
         return preferred.copy(
             scheduledTime = preferred.scheduledTime ?: other.scheduledTime,
@@ -339,6 +343,52 @@ object MatchCanonical {
         }
         ScoutingEntries.update({ ScoutingEntries.matchKey eq oldKey }) {
             it[ScoutingEntries.matchKey] = newKey
+        }
+    }
+
+    private val youtubeIdRegex = Regex("^[A-Za-z0-9_-]{6,32}$")
+    private val youtubeStartRegex = Regex("^(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s?)?$")
+
+    /**
+     * Reads the TBA `videos` array from a stored match JSON and returns playable links.
+     * Only YouTube entries are returned; their IDs are validated so a bad key can't
+     * produce an arbitrary URL.
+     */
+    fun extractVideos(json: kotlinx.serialization.json.JsonObject): List<com.obsidianscout.routes.MatchVideo> {
+        val videos = json["videos"] as? kotlinx.serialization.json.JsonArray ?: return emptyList()
+        return videos.mapNotNull { element ->
+            val obj = element as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+            val type = (obj["type"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.lowercase()
+            val key = (obj["key"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.trim()
+            if (type != "youtube" || key.isNullOrBlank()) return@mapNotNull null
+
+            // TBA keys look like "abc123XYZ_-" or "abc123XYZ_-?t=1m30s" (sometimes "#t=").
+            val id = key.substringBefore('?').substringBefore('#').substringBefore('&')
+            if (!youtubeIdRegex.matches(id)) return@mapNotNull null
+            val startParam = Regex("[?#&]t=([0-9hms]+)").find(key)?.groupValues?.get(1)
+            val startSeconds = startParam?.let { youtubeStartRegex.matchEntire(it) }?.let { m ->
+                val (h, mi, s) = m.destructured
+                (h.toIntOrNull() ?: 0) * 3600 + (mi.toIntOrNull() ?: 0) * 60 + (s.toIntOrNull() ?: 0)
+            }?.takeIf { it > 0 }
+            val url = "https://www.youtube.com/watch?v=$id" + (startSeconds?.let { "&t=${it}s" } ?: "")
+            com.obsidianscout.routes.MatchVideo(type = "youtube", url = url)
+        }.distinctBy { it.url }
+    }
+
+    private fun carryVideos(chosenJson: String, otherJson: String): String {
+        if (chosenJson.contains("\"videos\"") || !otherJson.contains("\"videos\"")) return chosenJson
+        return try {
+            val chosen = JsonSupport.json.parseToJsonElement(chosenJson) as? kotlinx.serialization.json.JsonObject
+                ?: return chosenJson
+            val other = JsonSupport.json.parseToJsonElement(otherJson) as? kotlinx.serialization.json.JsonObject
+                ?: return chosenJson
+            val videos = other["videos"] ?: return chosenJson
+            JsonSupport.json.encodeToString(
+                kotlinx.serialization.json.JsonElement.serializer(),
+                kotlinx.serialization.json.JsonObject(chosen + ("videos" to videos))
+            )
+        } catch (_: Exception) {
+            chosenJson
         }
     }
 

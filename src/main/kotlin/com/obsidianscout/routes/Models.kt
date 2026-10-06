@@ -130,7 +130,8 @@ data class UpdateUserRequest(
     val clearProfilePicture: Boolean = false,
     val notificationPreference: String? = null,
     val nodeAlertsEnabled: Boolean? = null,
-    val bugReportPreference: String? = null
+    val bugReportPreference: String? = null,
+    val localAiEnabled: Boolean? = null
 )
 
 @Serializable
@@ -420,7 +421,16 @@ data class MatchRecord(
      *  is purely for display purposes so the browser can show a venue-time tooltip. */
     val eventTimezone: String? = null,
     val redScore: Int? = null,
-    val blueScore: Int? = null
+    val blueScore: Int? = null,
+    /** Match videos published by The Blue Alliance; empty when none are available. */
+    val videos: List<MatchVideo> = emptyList()
+)
+
+@Serializable
+data class MatchVideo(
+    /** Video host, currently always "youtube". */
+    val type: String,
+    val url: String
 )
 
 @Serializable

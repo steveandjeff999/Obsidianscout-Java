@@ -12,6 +12,28 @@
     let targetAllianceNum = null;
     let targetSlotName = null;
 
+    // Pick lists (Want / Avoid / Do Not Pick). Private to this team and stored apart from
+    // the board, which can be shared with scouting-alliance partners.
+    const PICK_LISTS = [
+        { key: "want", label: "Want", chip: "W" },
+        { key: "avoid", label: "Avoid", chip: "A" },
+        { key: "dnp", label: "Do Not Pick", chip: "DNP" }
+    ];
+    let pickLists = emptyPickLists();
+    let pickListsSyncedAt = 0;
+    let pickListSaveChain = Promise.resolve();
+    let activePickTab = "want";
+
+    // Recommendation view: data source (selectedMetric), how to sort, which teams to show, and
+    // the points each pick list adds to a team's data score. Remembered per browser.
+    const VIEW_PREFS_KEY = "obsidian-alliance-rec-view";
+    const DEFAULT_LIST_ADJUSTMENTS = { want: 10, avoid: -10, dnp: -50 };
+    let sortMode = "combined"; // "combined" (score + list adjustment) | "score" | "list"
+    let showFilter = "all";    // "all" | "no-dnp" | "want" | "avoid" | "dnp" | "unlisted"
+    let listAdjustments = { ...DEFAULT_LIST_ADJUSTMENTS };
+    let breakdownTeamNumber = null;
+    let dragTeamNumber = null;
+
     // Rich data caches
     let state = {
         configs: { match: null, pit: null, qualitative: null },
@@ -72,8 +94,11 @@
             const effectiveUseExp = !isFtc && settings.useMatch13Exp;
             const effectiveUseOpr = settings.useTbaOpr;
 
+            loadViewPrefs();
+
             // Filter metric selector options
             const metricSelect = document.getElementById("metric-select");
+            if (metricSelect) metricSelect.value = selectedMetric;
             if (metricSelect) {
                 if (!effectiveUseEpa) {
                     const optEpa = metricSelect.querySelector('option[value="epa"]');
@@ -136,15 +161,12 @@
                 }
             });
 
-            document.getElementById("metric-select").addEventListener("change", (e) => {
-                selectedMetric = e.target.value;
-                updateRecommendations();
-            });
-
             document.getElementById("team-search").addEventListener("input", (e) => {
                 searchQuery = e.target.value.toLowerCase().trim();
                 updateRecommendations();
             });
+
+            wireViewControls();
 
             const exportCsvBtn = document.getElementById("export-csv-btn");
             if (exportCsvBtn) {
@@ -195,6 +217,8 @@
         if (!eventKey) {
             const grid = document.getElementById("alliances-grid-container");
             grid.innerHTML = '<div class="empty-indicator">Please select an event key in settings.</div>';
+            const pickContainer = document.getElementById("pick-list-container");
+            if (pickContainer) pickContainer.innerHTML = '<div class="empty-indicator pick-empty">Select an event to use pick lists.</div>';
             return;
         }
 
@@ -255,6 +279,8 @@
                 }
             }
 
+            await loadPickLists(eventKey);
+
             renderAlliances();
             updateRecommendations();
 
@@ -281,6 +307,330 @@
         } catch (err) {
             console.warn("Polling sync failed:", err);
         }
+
+        try {
+            const res = await Obsidianscout.request(`/api/alliance-selection/pick-lists?eventKey=${encodeURIComponent(currentEventKey)}`);
+            if (res.updatedAt > pickListsSyncedAt) {
+                pickLists = normalizePickLists(res.pickLists);
+                pickListsSyncedAt = res.updatedAt;
+                cachePickListsLocally();
+                refreshPickListViews();
+            }
+        } catch (err) {
+            console.warn("Pick list sync failed:", err);
+        }
+    }
+
+    // ── Pick Lists ──────────────────────────────────────────
+    function emptyPickLists() {
+        return { want: [], avoid: [], dnp: [], notes: {} };
+    }
+
+    function normalizePickLists(raw) {
+        const out = emptyPickLists();
+        if (!raw || typeof raw !== "object") return out;
+        const seen = new Set();
+        PICK_LISTS.forEach(({ key }) => {
+            (Array.isArray(raw[key]) ? raw[key] : []).forEach(value => {
+                const num = parseInt(value, 10);
+                if (num > 0 && !seen.has(num)) {
+                    seen.add(num);
+                    out[key].push(num);
+                }
+            });
+        });
+        if (raw.notes && typeof raw.notes === "object") {
+            Object.entries(raw.notes).forEach(([team, note]) => {
+                if (seen.has(parseInt(team, 10)) && typeof note === "string" && note.trim()) {
+                    out.notes[team] = note;
+                }
+            });
+        }
+        return out;
+    }
+
+    function getTeamPickList(teamNumber) {
+        const found = PICK_LISTS.find(({ key }) => pickLists[key].includes(teamNumber));
+        return found ? found.key : null;
+    }
+
+    function pickListLabel(listKey) {
+        const found = PICK_LISTS.find(({ key }) => key === listKey);
+        return found ? found.label : listKey;
+    }
+
+    function pickListStorageKey(eventKey) {
+        return `obsidian-pick-lists-${eventKey}`;
+    }
+
+    function cachePickListsLocally() {
+        if (!currentEventKey) return;
+        try {
+            localStorage.setItem(pickListStorageKey(currentEventKey), JSON.stringify(pickLists));
+        } catch (_) { }
+    }
+
+    async function loadPickLists(eventKey) {
+        pickLists = emptyPickLists();
+        pickListsSyncedAt = 0;
+        try {
+            const res = await Obsidianscout.request(`/api/alliance-selection/pick-lists?eventKey=${encodeURIComponent(eventKey)}`);
+            pickLists = normalizePickLists(res.pickLists);
+            pickListsSyncedAt = res.updatedAt || 0;
+            cachePickListsLocally();
+        } catch (err) {
+            console.warn("Failed to load pick lists from server, using local copy", err);
+            try {
+                const saved = localStorage.getItem(pickListStorageKey(eventKey));
+                if (saved) pickLists = normalizePickLists(JSON.parse(saved));
+            } catch (_) { }
+        }
+    }
+
+    function savePickLists() {
+        if (!currentEventKey) return pickListSaveChain;
+        cachePickListsLocally();
+        const payload = { eventKey: currentEventKey, pickLists: JSON.parse(JSON.stringify(pickLists)) };
+        // Chain saves so rapid edits reach the server in the order they were made.
+        pickListSaveChain = pickListSaveChain.then(async () => {
+            try {
+                const res = await Obsidianscout.request("/api/alliance-selection/pick-lists", {
+                    method: "POST",
+                    json: payload
+                });
+                pickListsSyncedAt = Math.max(pickListsSyncedAt, res.updatedAt || 0);
+            } catch (err) {
+                console.error("Failed to save pick lists:", err);
+                Obsidianscout.showToast("Failed to save pick lists: " + err.message, "error");
+            }
+        });
+        return pickListSaveChain;
+    }
+
+    function refreshPickListViews() {
+        renderPickLists();
+        updateRecommendations();
+        updateBreakdownPickButtons();
+    }
+
+    /** Puts a team in a list, moving it out of any other. Choosing its current list removes it. */
+    function setTeamPickList(teamNumber, listKey) {
+        const current = getTeamPickList(teamNumber);
+        PICK_LISTS.forEach(({ key }) => {
+            pickLists[key] = pickLists[key].filter(n => n !== teamNumber);
+        });
+        if (listKey && listKey !== current) {
+            pickLists[listKey].push(teamNumber);
+            Obsidianscout.showToast(`Added ${teamNumber} to ${pickListLabel(listKey)}`, "success");
+        } else {
+            delete pickLists.notes[String(teamNumber)];
+            Obsidianscout.showToast(`Removed ${teamNumber} from ${pickListLabel(current)}`, "success");
+        }
+        refreshPickListViews();
+        savePickLists();
+    }
+
+    function moveInPickList(listKey, teamNumber, targetIndex) {
+        const list = pickLists[listKey];
+        const from = list.indexOf(teamNumber);
+        if (from < 0) return;
+        const to = Math.max(0, Math.min(list.length - 1, targetIndex));
+        if (from === to) return;
+        list.splice(from, 1);
+        list.splice(to, 0, teamNumber);
+        refreshPickListViews();
+        savePickLists();
+    }
+
+    function setPickNote(teamNumber, text) {
+        const key = String(teamNumber);
+        const note = text.trim().slice(0, 200);
+        if ((pickLists.notes[key] || "") === note) return;
+        if (note) {
+            pickLists.notes[key] = note;
+        } else {
+            delete pickLists.notes[key];
+        }
+        updateRecommendations();
+        savePickLists();
+    }
+
+    /** Maps each team already on the board to a short label like "A3 First Pick". */
+    function getPickedTeamLabels() {
+        const labels = new Map();
+        Object.entries(boardState).forEach(([allianceKey, alliance]) => {
+            if (!alliance || typeof alliance !== "object") return;
+            const num = allianceKey.replace("alliance", "");
+            ["captain", "firstPick", "secondPick", "backup"].forEach(slot => {
+                if (alliance[slot]) labels.set(alliance[slot], `A${num} ${formatSlotLabel(slot)}`);
+            });
+        });
+        return labels;
+    }
+
+    function renderPickChipsHtml(teamNumber) {
+        const current = getTeamPickList(teamNumber);
+        const chips = PICK_LISTS.map(({ key, label, chip }) => {
+            const active = current === key;
+            const title = active ? `Remove from ${label}` : `Add to ${label}`;
+            return `<button type="button" class="pick-chip pick-chip-${key}${active ? " active" : ""}" data-pick-list="${key}" title="${title}" aria-pressed="${active}">${chip}</button>`;
+        }).join("");
+        return `<span class="pick-chips">${chips}</span>`;
+    }
+
+    function wirePickChips(root, teamNumber) {
+        root.querySelectorAll(".pick-chip").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                setTeamPickList(teamNumber, btn.dataset.pickList);
+            });
+        });
+    }
+
+    function renderPickLists() {
+        const tabs = document.getElementById("pick-list-tabs");
+        const container = document.getElementById("pick-list-container");
+        if (!tabs || !container) return;
+
+        // Don't wipe a note someone is typing when a sync lands; the blur handler re-renders.
+        const active = document.activeElement;
+        if (active && active.classList && active.classList.contains("pick-note") && container.contains(active)) {
+            return;
+        }
+
+        tabs.innerHTML = "";
+        PICK_LISTS.forEach(({ key, label }) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = `pick-tab pick-tab-${key}${key === activePickTab ? " active" : ""}`;
+            btn.textContent = `${label} (${pickLists[key].length})`;
+            btn.addEventListener("click", () => {
+                activePickTab = key;
+                renderPickLists();
+            });
+            tabs.appendChild(btn);
+        });
+
+        container.innerHTML = "";
+        const list = pickLists[activePickTab];
+        if (list.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "empty-indicator pick-empty";
+            empty.textContent = `No teams on your ${pickListLabel(activePickTab)} list. Use the W / A / DNP buttons on a team to add it.`;
+            container.appendChild(empty);
+            return;
+        }
+
+        const esc = Obsidianscout.escapeHtml;
+        const picked = getPickedTeamLabels();
+        const nextWant = activePickTab === "want" ? list.find(n => !picked.has(n)) : null;
+
+        list.forEach((teamNumber, idx) => {
+            const team = allTeams.find(t => t.teamNumber === teamNumber);
+            const name = team ? (team.nickname || team.name || "") : "Not at this event";
+            const pickedLabel = picked.get(teamNumber);
+            const base = team ? getMetricValue(team) : null;
+            const scoreBadge = `<span class="rec-score-badge pick-score" title="${esc(getMetricLabel())}">${base === null ? "–" : base.toFixed(1)}</span>`;
+
+            const row = document.createElement("div");
+            row.className = `pick-row pick-row-${activePickTab}` +
+                (pickedLabel ? " is-picked" : "") +
+                (teamNumber === nextWant ? " is-next" : "");
+            row.draggable = true;
+
+            row.innerHTML = `
+                <div class="pick-row-main">
+                    <span class="pick-handle" title="Drag to reorder" aria-hidden="true">&#8942;&#8942;</span>
+                    <span class="rec-rank">${idx + 1}</span>
+                    <span class="pick-team-number">${teamNumber}</span>
+                    <span class="pick-team-name" title="${esc(name)}">${esc(name)}</span>
+                    ${pickedLabel ? `<span class="pick-status picked" title="Already on the board">${esc(pickedLabel)}</span>` : ""}
+                    ${teamNumber === nextWant ? `<span class="pick-status next" title="Highest team on this list that is still available">Next</span>` : ""}
+                    <span class="pick-row-actions">
+                        <button type="button" class="pick-icon-btn" data-act="up" title="Move up" ${idx === 0 ? "disabled" : ""}>&#9650;</button>
+                        <button type="button" class="pick-icon-btn" data-act="down" title="Move down" ${idx === list.length - 1 ? "disabled" : ""}>&#9660;</button>
+                    </span>
+                </div>
+                <div class="pick-row-sub">
+                    <input type="text" class="pick-note" maxlength="200" placeholder="Add a note..." aria-label="Note for team ${teamNumber}" />
+                    ${scoreBadge}
+                    ${renderPickChipsHtml(teamNumber)}
+                </div>
+            `;
+
+            const noteInput = row.querySelector(".pick-note");
+            noteInput.value = pickLists.notes[String(teamNumber)] || "";
+            noteInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") noteInput.blur();
+            });
+            noteInput.addEventListener("change", () => setPickNote(teamNumber, noteInput.value));
+            noteInput.addEventListener("blur", () => {
+                setPickNote(teamNumber, noteInput.value);
+                // Apply any sync that arrived while typing.
+                setTimeout(renderPickLists, 0);
+            });
+
+            row.querySelector('[data-act="up"]').addEventListener("click", () => moveInPickList(activePickTab, teamNumber, idx - 1));
+            row.querySelector('[data-act="down"]').addEventListener("click", () => moveInPickList(activePickTab, teamNumber, idx + 1));
+            row.querySelector(".pick-team-name").addEventListener("click", () => openTeamBreakdown(teamNumber));
+            row.querySelector(".pick-team-number").addEventListener("click", () => openTeamBreakdown(teamNumber));
+            wirePickChips(row, teamNumber);
+
+            // Drag to reorder within the active list
+            row.addEventListener("dragstart", (e) => {
+                if (e.target.closest && e.target.closest("input")) {
+                    e.preventDefault();
+                    return;
+                }
+                dragTeamNumber = teamNumber;
+                row.classList.add("dragging");
+                if (e.dataTransfer) {
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", String(teamNumber));
+                }
+            });
+            row.addEventListener("dragend", () => {
+                dragTeamNumber = null;
+                row.classList.remove("dragging");
+                container.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
+            });
+            row.addEventListener("dragover", (e) => {
+                if (dragTeamNumber === null || dragTeamNumber === teamNumber) return;
+                e.preventDefault();
+                row.classList.add("drag-over");
+            });
+            row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+            row.addEventListener("drop", (e) => {
+                e.preventDefault();
+                row.classList.remove("drag-over");
+                if (dragTeamNumber !== null && dragTeamNumber !== teamNumber) {
+                    moveInPickList(activePickTab, dragTeamNumber, idx);
+                }
+            });
+
+            container.appendChild(row);
+        });
+    }
+
+    function updateBreakdownPickButtons() {
+        const container = document.getElementById("breakdown-pick-buttons");
+        if (!container) return;
+        if (breakdownTeamNumber === null) {
+            container.innerHTML = "";
+            return;
+        }
+        const current = getTeamPickList(breakdownTeamNumber);
+        container.innerHTML = "";
+        PICK_LISTS.forEach(({ key, label }) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = `btn ghost pick-footer-btn pick-footer-${key}${current === key ? " active" : ""}`;
+            btn.textContent = current === key ? `✓ ${label}` : label;
+            btn.title = current === key ? `Remove from ${label}` : `Add to ${label}`;
+            btn.setAttribute("aria-pressed", String(current === key));
+            btn.addEventListener("click", () => setTeamPickList(breakdownTeamNumber, key));
+            container.appendChild(btn);
+        });
     }
 
     async function pushBoardStateToServer() {
@@ -376,11 +726,6 @@
         const picked = getPickedTeamNumbers();
         let available = allTeams.filter(team => !picked.has(team.teamNumber));
 
-        // Compute scores
-        available.forEach(t => {
-            t.calculatedWeighted = getWeightedScore(t);
-        });
-
         // Search Filter
         if (searchQuery) {
             available = available.filter(t => {
@@ -391,20 +736,170 @@
             });
         }
 
-        // Sorting
-        if (selectedMetric === "scouted") {
-            available.sort((a, b) => (b.averagePoints || -999) - (a.averagePoints || -999));
-        } else if (selectedMetric === "epa") {
-            available.sort((a, b) => (b.epa || -999) - (a.epa || -999));
-        } else if (selectedMetric === "exp") {
-            available.sort((a, b) => (b.exp || -999) - (a.exp || -999));
-        } else if (selectedMetric === "opr") {
-            available.sort((a, b) => (b.opr || -999) - (a.opr || -999));
-        } else {
-            available.sort((a, b) => b.calculatedWeighted - a.calculatedWeighted);
+        available = available.filter(t => matchesShowFilter(getTeamPickList(t.teamNumber)));
+
+        return sortTeams(available);
+    }
+
+    // ── Recommendation view: data source + sort + filter ────
+    function loadViewPrefs() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(VIEW_PREFS_KEY) || "null");
+            if (!saved || typeof saved !== "object") return;
+            if (["weighted", "scouted", "epa", "exp", "opr"].includes(saved.metric)) selectedMetric = saved.metric;
+            if (["combined", "score", "list"].includes(saved.sortMode)) sortMode = saved.sortMode;
+            if (["all", "no-dnp", "want", "avoid", "dnp", "unlisted"].includes(saved.showFilter)) showFilter = saved.showFilter;
+            if (saved.adjustments && typeof saved.adjustments === "object") {
+                PICK_LISTS.forEach(({ key }) => {
+                    const value = Number(saved.adjustments[key]);
+                    if (Number.isFinite(value)) listAdjustments[key] = value;
+                });
+            }
+        } catch (_) { }
+    }
+
+    function saveViewPrefs() {
+        try {
+            localStorage.setItem(VIEW_PREFS_KEY, JSON.stringify({
+                metric: selectedMetric,
+                sortMode,
+                showFilter,
+                adjustments: listAdjustments
+            }));
+        } catch (_) { }
+    }
+
+    function formatAdjustment(value) {
+        return value > 0 ? `+${value}` : `${value}`;
+    }
+
+    function updateAdjustmentSummary() {
+        const summary = document.getElementById("list-adjust-summary");
+        if (summary) {
+            summary.textContent = `W ${formatAdjustment(listAdjustments.want)} · A ${formatAdjustment(listAdjustments.avoid)} · DNP ${formatAdjustment(listAdjustments.dnp)}`;
+        }
+        const details = document.getElementById("list-adjust-details");
+        if (details) details.classList.toggle("inactive", sortMode !== "combined");
+    }
+
+    function wireViewControls() {
+        const metricSelect = document.getElementById("metric-select");
+        const sortSelect = document.getElementById("sort-mode-select");
+        const showSelect = document.getElementById("show-filter-select");
+
+        if (sortSelect) sortSelect.value = sortMode;
+        if (showSelect) showSelect.value = showFilter;
+
+        const refresh = () => {
+            saveViewPrefs();
+            updateAdjustmentSummary();
+            updateRecommendations();
+            renderPickLists();
+        };
+
+        if (metricSelect) metricSelect.addEventListener("change", (e) => { selectedMetric = e.target.value; refresh(); });
+        if (sortSelect) sortSelect.addEventListener("change", (e) => { sortMode = e.target.value; refresh(); });
+        if (showSelect) showSelect.addEventListener("change", (e) => { showFilter = e.target.value; refresh(); });
+
+        PICK_LISTS.forEach(({ key }) => {
+            const input = document.getElementById(`adj-${key}`);
+            if (!input) return;
+            input.value = listAdjustments[key];
+            input.addEventListener("input", () => {
+                const value = Number(input.value);
+                if (input.value.trim() === "" || !Number.isFinite(value)) return;
+                listAdjustments[key] = value;
+                refresh();
+            });
+        });
+
+        const resetBtn = document.getElementById("adj-reset");
+        if (resetBtn) {
+            resetBtn.addEventListener("click", () => {
+                listAdjustments = { ...DEFAULT_LIST_ADJUSTMENTS };
+                PICK_LISTS.forEach(({ key }) => {
+                    const input = document.getElementById(`adj-${key}`);
+                    if (input) input.value = listAdjustments[key];
+                });
+                refresh();
+            });
         }
 
-        return available;
+        updateAdjustmentSummary();
+    }
+
+    function matchesShowFilter(listKey) {
+        switch (showFilter) {
+            case "no-dnp": return listKey !== "dnp";
+            case "want": return listKey === "want";
+            case "avoid": return listKey === "avoid";
+            case "dnp": return listKey === "dnp";
+            case "unlisted": return listKey === null;
+            default: return true;
+        }
+    }
+
+    function finiteOrNull(value) {
+        return value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value);
+    }
+
+    /** The team's value for the selected data source, or null when that source has no data. */
+    function getMetricValue(team) {
+        switch (selectedMetric) {
+            case "scouted": return finiteOrNull(team.averagePoints);
+            case "epa": return finiteOrNull(team.epa);
+            case "exp": return finiteOrNull(team.exp);
+            case "opr": return finiteOrNull(team.opr);
+            default: return getWeightedScore(team);
+        }
+    }
+
+    function getMetricLabel() {
+        const select = document.getElementById("metric-select");
+        const option = select ? select.querySelector(`option[value="${selectedMetric}"]`) : null;
+        return option ? option.textContent : selectedMetric;
+    }
+
+    /** Data score, list adjustment and their total for one team. */
+    function scoreTeam(team) {
+        const listKey = getTeamPickList(team.teamNumber);
+        const base = getMetricValue(team);
+        const adjustment = listKey ? (Number(listAdjustments[listKey]) || 0) : 0;
+        return { listKey, base, adjustment, total: (base ?? 0) + adjustment };
+    }
+
+    function compareNullableDesc(a, b) {
+        if (a === null && b === null) return 0;
+        if (a === null) return 1;
+        if (b === null) return -1;
+        return b - a;
+    }
+
+    /** Sorts teams for the current sort mode and stores each team's score as `_score`. */
+    function sortTeams(teams) {
+        teams.forEach(t => {
+            t.calculatedWeighted = getWeightedScore(t);
+            t._score = scoreTeam(t);
+        });
+
+        const byBase = (a, b) => compareNullableDesc(a._score.base, b._score.base) || a.teamNumber - b.teamNumber;
+
+        if (sortMode === "list") {
+            // Want list in its order, then unlisted teams by data score, then Avoid, then Do Not Pick
+            const groupRank = { want: 0, avoid: 2, dnp: 3 };
+            return teams.sort((a, b) => {
+                const ga = a._score.listKey ? groupRank[a._score.listKey] : 1;
+                const gb = b._score.listKey ? groupRank[b._score.listKey] : 1;
+                if (ga !== gb) return ga - gb;
+                if (ga === 1) return byBase(a, b);
+                const list = pickLists[a._score.listKey];
+                return list.indexOf(a.teamNumber) - list.indexOf(b.teamNumber);
+            });
+        }
+        if (sortMode === "score") {
+            return teams.sort(byBase);
+        }
+        return teams.sort((a, b) => (b._score.total - a._score.total) || byBase(a, b));
     }
 
     async function assignTeam(allianceNum, slotName, teamNumber) {
@@ -456,34 +951,46 @@
 
         available.forEach((team, idx) => {
             const item = document.createElement("div");
-            item.className = "rec-item";
+            const listKey = getTeamPickList(team.teamNumber);
+            item.className = "rec-item" + (listKey ? ` in-list-${listKey}` : "");
             item.addEventListener("click", () => {
                 openTeamBreakdown(team.teamNumber);
             });
 
-            let scoreVal = "";
-            if (selectedMetric === "scouted") {
-                scoreVal = team.averagePoints !== null && team.averagePoints !== undefined ? team.averagePoints.toFixed(1) : "-";
-            } else if (selectedMetric === "epa") {
-                scoreVal = team.epa !== null && team.epa !== undefined ? team.epa.toFixed(1) : "-";
-            } else if (selectedMetric === "exp") {
-                scoreVal = team.exp !== null && team.exp !== undefined ? team.exp.toFixed(1) : "-";
-            } else if (selectedMetric === "opr") {
-                scoreVal = team.opr !== null && team.opr !== undefined ? team.opr.toFixed(1) : "-";
-            } else {
-                scoreVal = team.calculatedWeighted.toFixed(1);
-            }
+            const esc = Obsidianscout.escapeHtml;
+            const { base, adjustment, total } = team._score;
+            const baseText = base === null ? "–" : base.toFixed(1);
+            // The badge always shows the points the team is expected to add (selected data source).
+            // List points only move the team up or down the ranking.
+            const combined = sortMode === "combined";
+            const scoreVal = baseText;
+            const scoreTitle = combined && adjustment
+                ? `Expected points (${getMetricLabel()}): ${baseText}. Ranked as ${total.toFixed(1)} with ${formatAdjustment(adjustment)} for ${pickListLabel(listKey)}.`
+                : `Expected points (${getMetricLabel()}): ${baseText}`;
+            const breakdown = combined && adjustment
+                ? `<span class="rec-breakdown" title="Ranking adjustment from your ${esc(pickListLabel(listKey))} list"><span class="rec-adj rec-adj-${listKey}">${formatAdjustment(adjustment)} ${esc(PICK_LISTS.find(l => l.key === listKey).chip)} rank</span></span>`
+                : "";
 
+            const displayName = team.nickname || team.name || `Team ${team.teamNumber}`;
+            const note = pickLists.notes[String(team.teamNumber)];
             item.innerHTML = `
                 <div class="rec-left">
                     <span class="rec-rank">#${idx + 1}</span>
                     <span class="rec-team-number">${team.teamNumber}</span>
-                    <span class="rec-nickname" title="${team.nickname || team.name || ""}">${team.nickname || team.name || `Team ${team.teamNumber}`}</span>
+                    <div class="rec-name-block">
+                        <span class="rec-nickname" title="${esc(displayName)}">${esc(displayName)}</span>
+                        ${note ? `<span class="rec-note" title="${esc(note)}">${esc(note)}</span>` : ""}
+                    </div>
                 </div>
                 <div class="rec-right">
-                    <span class="rec-score-badge">${scoreVal}</span>
+                    ${renderPickChipsHtml(team.teamNumber)}
+                    <div class="rec-score-block">
+                        <span class="rec-score-badge" title="${esc(scoreTitle)}">${scoreVal}</span>
+                        ${breakdown}
+                    </div>
                 </div>
             `;
+            wirePickChips(item, team.teamNumber);
             container.appendChild(item);
         });
     }
@@ -535,6 +1042,9 @@
 
             container.appendChild(card);
         }
+
+        // Pick list rows show which teams are already on the board.
+        renderPickLists();
     }
 
     function renderSlotHtml(allianceNum, slotName, teamNumber) {
@@ -617,23 +1127,8 @@
 
         let list = allTeams.filter(t => !picked.has(t.teamNumber) || t.teamNumber === currentSelected);
 
-        // Compute scores
-        list.forEach(t => {
-            t.calculatedWeighted = getWeightedScore(t);
-        });
-
-        // Sort by the selected metric (descending)
-        if (selectedMetric === "scouted") {
-            list.sort((a, b) => (b.averagePoints || -999) - (a.averagePoints || -999));
-        } else if (selectedMetric === "epa") {
-            list.sort((a, b) => (b.epa || -999) - (a.epa || -999));
-        } else if (selectedMetric === "exp") {
-            list.sort((a, b) => (b.exp || -999) - (a.exp || -999));
-        } else if (selectedMetric === "opr") {
-            list.sort((a, b) => (b.opr || -999) - (a.opr || -999));
-        } else {
-            list.sort((a, b) => b.calculatedWeighted - a.calculatedWeighted);
-        }
+        // Same data source and sort as the Recommendations panel
+        sortTeams(list);
 
         // Establish ranks based on sorted position
         const teamRanks = {};
@@ -680,11 +1175,21 @@
             const expSpan = effectiveUseExp ? `<span>EXP: ${exp}</span>` : "";
             const oprSpan = effectiveUseOpr ? `<span>${isFtc ? 'FTC OPR' : 'OPR'}: ${opr}</span>` : "";
 
+            const esc = Obsidianscout.escapeHtml;
+            const listKey = getTeamPickList(team.teamNumber);
+            const listNote = pickLists.notes[String(team.teamNumber)];
+            const listBadge = listKey
+                ? `<span class="pick-badge pick-badge-${listKey}" title="${esc(`On your ${pickListLabel(listKey)} list${listNote ? `: ${listNote}` : ""}`)}">${PICK_LISTS.find(l => l.key === listKey).chip}</span>`
+                : "";
+            const noteLine = listNote ? `<span class="rec-note selector-note">${esc(listNote)}</span>` : "";
+
             item.innerHTML = `
                 <div class="selector-team">
                     <span class="rec-rank" style="min-width: 28px; text-align: left;">#${rank}</span>
                     <span>${team.teamNumber}</span>
-                    <span class="selector-nickname" title="${team.nickname || team.name || ""}">${team.nickname || team.name || ""}</span>
+                    <span class="selector-nickname" title="${esc(team.nickname || team.name || "")}">${esc(team.nickname || team.name || "")}</span>
+                    ${listBadge}
+                    ${noteLine}
                 </div>
                 <div class="selector-metrics">
                     <span>Scouted: ${points}</span>
@@ -762,11 +1267,36 @@
         // 3. Render scouter notes
         renderScouterNotes(teamNumber, scoped);
 
+        // 3b. Render AI qualitative notes summary if enabled
+        const aiContainer = document.getElementById("breakdown-ai-summary-container");
+        if (aiContainer) {
+            aiContainer.innerHTML = "";
+            if (window.ObsidianscoutAIFeatures && typeof window.ObsidianscoutAIFeatures.mountSummaryCard === "function") {
+                window.ObsidianscoutAIFeatures.mountSummaryCard(aiContainer, {
+                    teamNumber,
+                    eventKey: currentEventKey
+                });
+            } else {
+                window.addEventListener("obsidianscout:ai-features-ready", () => {
+                    if (breakdownTeamNumber === teamNumber && window.ObsidianscoutAIFeatures && typeof window.ObsidianscoutAIFeatures.mountSummaryCard === "function") {
+                        window.ObsidianscoutAIFeatures.mountSummaryCard(aiContainer, {
+                            teamNumber,
+                            eventKey: currentEventKey
+                        });
+                    }
+                }, { once: true });
+            }
+        }
+
         // 4. Render match schedule
         renderMatchSchedule(teamNumber, teamMatches);
 
         // 5. Draw Plotly Graph
         renderPerformanceGraph(teamNumber, scoped.match);
+
+        // 6. Pick list buttons
+        breakdownTeamNumber = teamNumber;
+        updateBreakdownPickButtons();
 
         modal.classList.add("open");
     }
@@ -774,6 +1304,7 @@
     function closeBreakdownModal() {
         const modal = document.getElementById("breakdown-modal-backdrop");
         modal.classList.remove("open");
+        breakdownTeamNumber = null;
     }
 
     function setupModalTabs() {
@@ -908,6 +1439,8 @@
 
             const labelCell = document.createElement("td");
             labelCell.textContent = m.label || `QM ${m.matchNumber || ""}`;
+            const videoLinks = Obsidianscout.createMatchVideoLinks(m.videos);
+            if (videoLinks) labelCell.appendChild(videoLinks);
             tr.appendChild(labelCell);
 
             // Red alliance

@@ -10,6 +10,9 @@ import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.db.AutoBackupScheduler")
+
+
 object AutoBackupScheduler {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -72,7 +75,7 @@ object AutoBackupScheduler {
     fun start(appConfig: AppConfig? = null) {
         if (job?.isActive == true) return
 
-        println("[AutoBackupScheduler] Initializing automated database backup scheduler (Target: 02:54 UTC daily)...")
+        consoleLog.info("[AutoBackupScheduler] Initializing automated database backup scheduler (Target: 02:54 UTC daily)...")
 
         job = scope.launch {
             // Initial brief delay on startup
@@ -98,23 +101,23 @@ object AutoBackupScheduler {
                     val currentDate = nowUtc.toLocalDate()
                     if (lastRunDate != currentDate) {
                         lastRunDate = currentDate
-                        println("[AutoBackupScheduler] ⏰ Scheduled trigger reached (${config.target_time_utc} UTC). Creating automated SQLite snapshot...")
+                        consoleLog.info("[AutoBackupScheduler] ⏰ Scheduled trigger reached (${config.target_time_utc} UTC). Creating automated SQLite snapshot...")
 
                         val result = SnapshotService.createSnapshot(isAutoBackup = true)
                         lastBackupInstant = Instant.now()
                         lastBackupStatus = if (result.success) "Success (${result.fileName})" else "Failed: ${result.message}"
 
                         if (result.success) {
-                            println("[AutoBackupScheduler] Scheduled auto backup completed: ${result.fileName} (${result.sizeBytes} bytes, ${result.recordsCopied} records).")
+                            consoleLog.info("[AutoBackupScheduler] Scheduled auto backup completed: ${result.fileName} (${result.sizeBytes} bytes, ${result.recordsCopied} records).")
                         } else {
-                            println("[AutoBackupScheduler] ⚠️ Scheduled auto backup failed: ${result.message}")
+                            consoleLog.error("[AutoBackupScheduler] ⚠️ Scheduled auto backup failed: ${result.message}")
                         }
                     }
 
                     // Re-arm delay to avoid immediate re-trigger
                     delay(60_000L)
                 } catch (e: Exception) {
-                    println("[AutoBackupScheduler] Background loop error: ${e.message}")
+                    consoleLog.error("[AutoBackupScheduler] Background loop error: ${e.message}")
                     delay(10_000L)
                 }
             }
@@ -125,6 +128,6 @@ object AutoBackupScheduler {
     fun stop() {
         job?.cancel()
         job = null
-        println("[AutoBackupScheduler] Automated database backup scheduler stopped.")
+        consoleLog.info("[AutoBackupScheduler] Automated database backup scheduler stopped.")
     }
 }

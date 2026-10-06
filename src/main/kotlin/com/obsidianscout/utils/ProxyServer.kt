@@ -27,6 +27,9 @@ import java.security.KeyStore
 import io.ktor.server.engine.sslConnector
 import io.ktor.utils.io.ByteReadChannel
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.utils.ProxyServer")
+
+
 object ProxyServer {
     private val client = HttpClient(CIO) {
         install(ClientWebSockets)
@@ -185,6 +188,6 @@ object ProxyServer {
         )
 
         server.start(wait = false)
-        println("[ProxyServer] Embedded HTTPS reverse proxy started on port $proxyPort (routing to HTTP backend on $targetPort)")
+        consoleLog.info("[ProxyServer] Embedded HTTPS reverse proxy started on port $proxyPort (routing to HTTP backend on $targetPort)")
     }
 }

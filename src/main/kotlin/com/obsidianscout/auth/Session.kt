@@ -43,6 +43,7 @@ data class UserSession(
     val tourProgress: String? = null,
     val nodeAlertsEnabled: Boolean = false,
     val bugReportPreference: String = "ask",
+    val localAiEnabled: Boolean = false,
     val sessionId: String? = null
 )
 
@@ -80,13 +81,15 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             val dbTourProgress = userRow?.get(Users.tourProgress) ?: session.tourProgress
             val dbNodeAlertsEnabled = userRow?.get(Users.nodeAlertsEnabled) ?: session.nodeAlertsEnabled
             val dbBugReportPreference = userRow?.getOrNull(Users.bugReportPreference) ?: session.bugReportPreference
+            val dbLocalAiEnabled = userRow?.getOrNull(Users.localAiEnabled) ?: session.localAiEnabled
 
             val needsSync = userRow != null && (
                             session.role != dbRole ||
                             session.teamNumber != dbTeamNumber ||
                             session.username != dbUsername ||
                             session.program != dbProgram ||
-                            session.bugReportPreference != dbBugReportPreference
+                            session.bugReportPreference != dbBugReportPreference ||
+                            session.localAiEnabled != dbLocalAiEnabled
             )
 
             val effectiveSession = if (needsSync) {
@@ -100,7 +103,8 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                     notificationPreference = dbNotificationPreference,
                     tourProgress = dbTourProgress,
                     nodeAlertsEnabled = dbNodeAlertsEnabled,
-                    bugReportPreference = dbBugReportPreference
+                    bugReportPreference = dbBugReportPreference,
+                    localAiEnabled = dbLocalAiEnabled
                 ).also { updated ->
                     runCatching { sessions.set(updated) }
                 }
@@ -158,12 +162,14 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         val dbTourProgress = userRow[Users.tourProgress]
         val dbNodeAlertsEnabled = userRow[Users.nodeAlertsEnabled]
         val dbBugReportPreference = userRow.getOrNull(Users.bugReportPreference) ?: "ask"
+        val dbLocalAiEnabled = userRow.getOrNull(Users.localAiEnabled) ?: false
 
         val needsSync = session.role != dbRole ||
                         session.teamNumber != dbTeamNumber ||
                         session.username != dbUsername ||
                         session.program != dbProgram ||
-                        session.bugReportPreference != dbBugReportPreference
+                        session.bugReportPreference != dbBugReportPreference ||
+                        session.localAiEnabled != dbLocalAiEnabled
 
         val effectiveSession = if (needsSync) {
             session.copy(
@@ -176,7 +182,8 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                 notificationPreference = dbNotificationPreference,
                 tourProgress = dbTourProgress,
                 nodeAlertsEnabled = dbNodeAlertsEnabled,
-                bugReportPreference = dbBugReportPreference
+                bugReportPreference = dbBugReportPreference,
+                localAiEnabled = dbLocalAiEnabled
             ).also { updated ->
                 runCatching { sessions.set(updated) }
             }

@@ -39,6 +39,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.config.ConfigService")
+
+
 @Serializable
 data class DefaultConfigDTO(
     val id: String? = null,
@@ -149,7 +152,7 @@ object ConfigService {
                                 if (deletedPresets.contains(Triple(presetName.lowercase(), prog.uppercase(), type.lowercase()))) {
                                     try {
                                         Files.deleteIfExists(filePath)
-                                        println("[ConfigService] Removed deleted preset file '$fileName' from disk on startup.")
+                                        consoleLog.info("[ConfigService] Removed deleted preset file '$fileName' from disk on startup.")
                                     } catch (_: Exception) {}
                                     return@forEach
                                 }
@@ -181,7 +184,7 @@ object ConfigService {
                                             it[configJson] = normalizedSourceJson
                                             it[updatedAt] = Instant.now()
                                         }
-                                        println("[ConfigService] Updated default config '$presetName' ($type) to latest from update bundle.")
+                                        consoleLog.info("[ConfigService] Updated default config '$presetName' ($type) to latest from update bundle.")
                                         if (existing[DefaultConfigs.isDefault]) {
                                             syncActiveDefaultToTeamZero(prog, type, normalizedSourceJson)
                                         }
@@ -190,7 +193,7 @@ object ConfigService {
                             }
                         }
                     } catch (e: Exception) {
-                        println("[ConfigService] Warning reading bundle file $filePath: ${e.message}")
+                        consoleLog.warn("[ConfigService] Warning reading bundle file $filePath: ${e.message}")
                     }
                 }
             }
@@ -405,7 +408,7 @@ object ConfigService {
                 }
             }
         } catch (e: Exception) {
-            println("Warning: Could not save preset file to disk: ${e.message}")
+            consoleLog.warn("Warning: Could not save preset file to disk: ${e.message}")
         }
     }
 
@@ -442,15 +445,15 @@ object ConfigService {
                             if (deletedPresets.contains(fName) || (!activeFileNames.contains(fName) && deletedPresets.any { it.equals(fName, ignoreCase = true) })) {
                                 try {
                                     Files.deleteIfExists(diskFilePath)
-                                    println("[ClusterConfigSync] Purged deleted default config '$fName' from local disk.")
+                                    consoleLog.info("[ClusterConfigSync] Purged deleted default config '$fName' from local disk.")
                                 } catch (e: Exception) {
-                                    println("[ClusterConfigSync] Warning deleting preset file $fName: ${e.message}")
+                                    consoleLog.warn("[ClusterConfigSync] Warning deleting preset file $fName: ${e.message}")
                                 }
                             }
                         }
                     }
                 } catch (e: Exception) {
-                    println("[ClusterConfigSync] Warning scanning defaults directory: ${e.message}")
+                    consoleLog.warn("[ClusterConfigSync] Warning scanning defaults directory: ${e.message}")
                 }
             }
 
@@ -469,7 +472,7 @@ object ConfigService {
 
                 if (needsWrite) {
                     com.obsidianscout.utils.SafeFileUtils.atomicWriteString(filePath, jsonContent.trim() + "\n")
-                    println("[ClusterConfigSync] Cloned/Updated default config '$fileName' to local disk.")
+                    consoleLog.info("[ClusterConfigSync] Cloned/Updated default config '$fileName' to local disk.")
                 }
 
                 val (isDefault, progType) = meta
@@ -495,16 +498,16 @@ object ConfigService {
                             try {
                                 primaryFile.parent?.let { if (!Files.exists(it)) Files.createDirectories(it) }
                                 com.obsidianscout.utils.SafeFileUtils.atomicWriteString(primaryFile, jsonContent.trim() + "\n")
-                                println("[ClusterConfigSync] Synced active default config '${primaryFile.fileName}' to local disk.")
+                                consoleLog.info("[ClusterConfigSync] Synced active default config '${primaryFile.fileName}' to local disk.")
                             } catch (e: Exception) {
-                                println("Warning: Could not sync active default config to $primaryFile: ${e.message}")
+                                consoleLog.warn("Warning: Could not sync active default config to $primaryFile: ${e.message}")
                             }
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            println("[ClusterConfigSync] Warning: Failed to sync default configs from database to local disk: ${e.message}")
+            consoleLog.error("[ClusterConfigSync] Warning: Failed to sync default configs from database to local disk: ${e.message}")
         }
     }
 
@@ -520,7 +523,7 @@ object ConfigService {
         if (clusterSyncJob?.isActive == true) return
 
         clusterSyncJob = CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-            println("[ClusterConfigSync] Background cluster default configs sync monitor started (polling every $intervalSeconds seconds)...")
+            consoleLog.info("[ClusterConfigSync] Background cluster default configs sync monitor started (polling every $intervalSeconds seconds)...")
             while (isActive) {
                 try {
                     delay(intervalSeconds * 1000)
@@ -700,9 +703,9 @@ object ConfigService {
                 try {
                     val filePath = getDefaultsDirectory().resolve("$name-$type.json")
                     Files.deleteIfExists(filePath)
-                    println("[ConfigService] Deleted default config file on local disk: $name-$type.json")
+                    consoleLog.info("[ConfigService] Deleted default config file on local disk: $name-$type.json")
                 } catch (e: Exception) {
-                    println("[ConfigService] Warning deleting local preset file: ${e.message}")
+                    consoleLog.warn("[ConfigService] Warning deleting local preset file: ${e.message}")
                 }
             }
             DefaultConfigs.deleteWhere { DefaultConfigs.id eq uuid } > 0

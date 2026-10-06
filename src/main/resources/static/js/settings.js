@@ -22,11 +22,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                     canvas.width = size;
                     canvas.height = size;
                     const ctx = canvas.getContext("2d");
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, size, size);
                     const srcSize = Math.min(img.width, img.height);
                     const sx = (img.width - srcSize) / 2;
                     const sy = (img.height - srcSize) / 2;
                     ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, size, size);
-                    resolve(canvas.toDataURL("image/png"));
+                    resolve(canvas.toDataURL("image/jpeg", 0.85));
                 };
                 img.onerror = reject;
                 img.src = e.target.result;
@@ -251,6 +253,67 @@ document.addEventListener("DOMContentLoaded", async () => {
                 Obsidianscout.showToast("Bug reporting preference updated", "success");
             } catch (err) {
                 Obsidianscout.showToast(err.message || "Failed to update bug reporting preference", "error");
+            }
+        });
+    }
+
+    function wirePersonalLocalAiPrefWidget(currentMe) {
+        const localAiPref = document.getElementById("personal-local-ai-pref");
+        if (!localAiPref) return;
+
+        const panel = document.getElementById("personal-local-ai-panel");
+        const modelsHost = document.getElementById("personal-local-ai-models");
+        const tr = (key, fallback) => (typeof Obsidianscout.t === "function" ? Obsidianscout.t(key, fallback) : fallback);
+
+        // Per-device model picker (loaded only when the feature is on).
+        async function syncPanel() {
+            if (!panel) return;
+            panel.classList.toggle("hidden", !currentMe.localAiEnabled);
+            if (currentMe.localAiEnabled && modelsHost) {
+                try {
+                    const ui = (await import("/js/ai/ai-ui.js")).default;
+                    await ui.mountSettingsPanel(modelsHost);
+                } catch (err) {
+                    modelsHost.textContent = err.message || String(err);
+                }
+            }
+        }
+
+        localAiPref.value = currentMe.localAiEnabled ? "enabled" : "disabled";
+        syncPanel();
+
+        localAiPref.addEventListener("change", async (e) => {
+            const enabled = e.target.value === "enabled";
+            try {
+                const updated = await Obsidianscout.request("/api/user", {
+                    method: "PUT",
+                    json: { localAiEnabled: enabled }
+                });
+                currentMe.localAiEnabled = !!updated.localAiEnabled;
+                localAiPref.value = currentMe.localAiEnabled ? "enabled" : "disabled";
+                try {
+                    localStorage.removeItem("cache:/api/auth/me");
+                    localStorage.removeItem("etag:/api/auth/me");
+                } catch (_) {}
+                if (typeof Obsidianscout.removeHttpCache === "function") {
+                    try { await Obsidianscout.removeHttpCache("/api/auth/me"); } catch (_) {}
+                }
+                Obsidianscout.adjustNavForRole(currentMe);
+                Obsidianscout.showToast(currentMe.localAiEnabled
+                    ? tr("ai.settings.toast_enabled", "Local AI Assistant enabled")
+                    : tr("ai.settings.toast_disabled", "Local AI Assistant disabled"), "success");
+                if (!currentMe.localAiEnabled) {
+                    const ai = (await import("/js/ai/local-ai.js")).default;
+                    if (confirm(tr("ai.settings.confirm_delete", "Also delete AI models downloaded to this device?"))) {
+                        await ai.deleteAllDownloaded();
+                        await ai.idbClear("summaries");
+                        await ai.idbClear("conversations");
+                    }
+                }
+                await syncPanel();
+            } catch (err) {
+                localAiPref.value = currentMe.localAiEnabled ? "enabled" : "disabled";
+                Obsidianscout.showToast(err.message || "Failed to update Local AI preference", "error");
             }
         });
     }
@@ -764,6 +827,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalEmailWidget(me);
     wirePersonalNotificationPrefWidget(me);
     wirePersonalBugReportPrefWidget(me);
+    wirePersonalLocalAiPrefWidget(me);
     wirePersonalNodeAlertsWidget(me);
     wirePersonalDeviceSessionsWidget(me);
     wirePersonalPasskeysWidget();

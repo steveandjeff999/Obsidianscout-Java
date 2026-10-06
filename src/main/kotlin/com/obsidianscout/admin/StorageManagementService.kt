@@ -12,6 +12,9 @@ import java.sql.ResultSet
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.admin.StorageManagementService")
+
+
 @Serializable
 data class StorageCategoryBreakdown(
     val category: String,
@@ -121,7 +124,7 @@ object StorageManagementService {
                 }
             }
         } catch (e: Exception) {
-            println("[StorageManagement] Query error: ${e.message}")
+            consoleLog.error("[StorageManagement] Query error: ${e.message}")
         }
         return results
     }
@@ -397,7 +400,7 @@ object StorageManagementService {
                 )
             }
         } catch (e: Exception) {
-            println("[StorageManagement] Error retrieving event cache storage: ${e.message}")
+            consoleLog.error("[StorageManagement] Error retrieving event cache storage: ${e.message}")
             emptyList()
         }
     }
@@ -535,7 +538,7 @@ object StorageManagementService {
                 )
             }
         } catch (e: Exception) {
-            println("[StorageManagement] Error retrieving team storage usage: ${e.message}")
+            consoleLog.error("[StorageManagement] Error retrieving team storage usage: ${e.message}")
             emptyList()
         }
     }
@@ -615,7 +618,7 @@ object StorageManagementService {
                 }
             }
         } catch (e: Exception) {
-            println("[StorageManagement] Error retrieving team event details: ${e.message}")
+            consoleLog.error("[StorageManagement] Error retrieving team event details: ${e.message}")
         }
 
         return TeamDetailStorageDto(
@@ -642,7 +645,7 @@ object StorageManagementService {
             deletedRecords += ApiEvents.deleteWhere { ApiEvents.eventKey eq trimmedKey }.toLong()
         }
 
-        println("[StorageManagement] Purged API cache for event $trimmedKey: $deletedRecords records deleted.")
+        consoleLog.info("[StorageManagement] Purged API cache for event $trimmedKey: $deletedRecords records deleted.")
         return StorageActionResultDto(
             success = true,
             message = "Successfully cleared API cache for event '$trimmedKey'. Data will re-sync automatically from the API on demand.",
@@ -674,7 +677,7 @@ object StorageManagementService {
             deletedRecords += ApiEvents.deleteWhere { ApiEvents.eventKey inList eventKeysToDelete }.toLong()
         }
 
-        println("[StorageManagement] Purged API caches for ${eventKeysToDelete.size} events in/before $olderThanYear ($deletedRecords records).")
+        consoleLog.info("[StorageManagement] Purged API caches for ${eventKeysToDelete.size} events in/before $olderThanYear ($deletedRecords records).")
         return StorageActionResultDto(
             success = true,
             message = "Successfully cleared API caches for ${eventKeysToDelete.size} events from $olderThanYear or earlier ($deletedRecords records deleted).",
@@ -691,7 +694,7 @@ object StorageManagementService {
             deletedRecords += ApiEvents.deleteAll().toLong()
         }
 
-        println("[StorageManagement] Purged ALL API caches ($deletedRecords total records).")
+        consoleLog.info("[StorageManagement] Purged ALL API caches ($deletedRecords total records).")
         return StorageActionResultDto(
             success = true,
             message = "Successfully cleared all external API caches ($deletedRecords total records deleted). Match and team schedules will re-sync on demand.",
@@ -733,7 +736,7 @@ object StorageManagementService {
         }
 
         val targetDesc = if (teamNumber != null) "Team $teamNumber ($program)" else "all teams ($program)"
-        println("[StorageManagement] DELETED scouting data for event $trimmedKey ($targetDesc): $deletedRecords entries permanently deleted.")
+        consoleLog.info("[StorageManagement] DELETED scouting data for event $trimmedKey ($targetDesc): $deletedRecords entries permanently deleted.")
         return StorageActionResultDto(
             success = true,
             message = "Permanently deleted $deletedRecords scouting records for event '$trimmedKey' ($targetDesc).",
@@ -800,7 +803,7 @@ object StorageManagementService {
             }.toLong()
         }
 
-        println("[StorageManagement] DELETED entire dataset for Team $teamNumber ($program): $deletedRecords records permanently deleted.")
+        consoleLog.info("[StorageManagement] DELETED entire dataset for Team $teamNumber ($program): $deletedRecords records permanently deleted.")
         return StorageActionResultDto(
             success = true,
             message = "Permanently deleted all scouting entries, configs, revisions, chat, and reports for Team $teamNumber ($program) ($deletedRecords records deleted).",
@@ -837,7 +840,7 @@ object StorageManagementService {
             }
         }
 
-        println("[StorageManagement] Pruned config revisions (kept top $keep): $deletedCount revisions deleted.")
+        consoleLog.info("[StorageManagement] Pruned config revisions (kept top $keep): $deletedCount revisions deleted.")
         return StorageActionResultDto(
             success = true,
             message = "Successfully pruned historical config revisions (retained latest $keep per form). Deleted $deletedCount older revisions.",
@@ -856,7 +859,7 @@ object StorageManagementService {
             deletedCount = ChatMessages.deleteWhere { ChatMessages.createdAt lessEq cutoff }.toLong()
         }
 
-        println("[StorageManagement] Pruned chat messages older than $olderThanDays days: $deletedCount deleted.")
+        consoleLog.info("[StorageManagement] Pruned chat messages older than $olderThanDays days: $deletedCount deleted.")
         return StorageActionResultDto(
             success = true,
             message = "Successfully pruned chat messages older than $olderThanDays days ($deletedCount messages deleted).",
@@ -881,7 +884,7 @@ object StorageManagementService {
             }
         }
 
-        println("[StorageManagement] Pruned expired sessions: $deletedCount deleted.")
+        consoleLog.info("[StorageManagement] Pruned expired sessions: $deletedCount deleted.")
         return StorageActionResultDto(
             success = true,
             message = "Successfully cleaned up $deletedCount expired or inactive user sessions and tokens.",
@@ -893,7 +896,7 @@ object StorageManagementService {
         val filter = if (deleteOnlyResolved) "RESOLVED" else "ALL"
         val deletedCount = ServerErrorAlertService.clearReportedErrors(filter).toLong()
         val desc = if (deleteOnlyResolved) "resolved error reports" else "error reports (both open and resolved)"
-        println("[StorageManagement] Pruned $desc: $deletedCount deleted.")
+        consoleLog.info("[StorageManagement] Pruned $desc: $deletedCount deleted.")
         return StorageActionResultDto(
             success = true,
             message = "Successfully deleted $deletedCount $desc.",
@@ -936,7 +939,7 @@ object StorageManagementService {
                 )
             }
         } catch (e: Exception) {
-            println("[StorageManagement] Error executing database reclaim/vacuum: ${e.message}")
+            consoleLog.error("[StorageManagement] Error executing database reclaim/vacuum: ${e.message}")
             StorageActionResultDto(false, "Reclaim operation failed: ${e.message}")
         }
     }

@@ -8,6 +8,9 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.admin.ServerStressTestService")
+
+
 @Serializable
 data class StressStatusResponse(
     val isRunning: Boolean,
@@ -86,7 +89,7 @@ object ServerStressTestService {
                     for (j in 0..10_000) {
                         counter += kotlin.math.sin(j.toDouble()) * kotlin.math.cos(j.toDouble())
                     }
-                    if (counter == 42.0) println(counter)
+                    if (counter == 42.0) consoleLog.info((counter).toString())
                 }
             }, "stress-cpu-$i").apply {
                 isDaemon = true

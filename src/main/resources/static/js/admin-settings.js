@@ -83,6 +83,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         { id: "events", label: "Events" },
         { id: "teams", label: "Teams" },
         { id: "rankings", label: "Rankings" },
+        { id: "projected-rankings", label: "Projected Rankings" },
         { id: "qual-rankings", label: "Qual Rankings" },
         { id: "matches", label: "Matches" },
         { id: "predictor", label: "Predictor" },

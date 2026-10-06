@@ -80,16 +80,27 @@ val DEFAULT_SCOUT_PAGES = listOf(
 val DEFAULT_ANALYTICS_PAGES = listOf(
     "dashboard", "my-assignments", "events", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
-    "teams", "rankings", "qual-rankings", "matches", "predictor",
+    "teams", "rankings", "projected-rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "match-planning", "chat", "backup", "docs", "contact", "scout-history"
 )
 
 val DEFAULT_ADMIN_PAGES = listOf(
     "dashboard", "my-assignments", "assignments", "admin-settings", "users", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
-    "events", "teams", "rankings", "qual-rankings", "matches", "predictor",
+    "events", "teams", "rankings", "projected-rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "match-planning", "chat", "backup", "docs", "contact", "scout-history"
 )
+
+/**
+ * Pages added after teams already had saved page lists. Each is granted once to the listed roles
+ * when a team's saved settings predate it (see [ApiSettings.pageDefaultsVersion]); after that,
+ * admins can remove it like any other page.
+ */
+private val PAGES_ADDED_BY_VERSION: List<Pair<Int, List<Pair<String, Set<String>>>>> = listOf(
+    1 to listOf("projected-rankings" to setOf("ANALYTICS", "ADMIN"))
+)
+
+val CURRENT_PAGE_DEFAULTS_VERSION: Int = PAGES_ADDED_BY_VERSION.maxOf { it.first }
 
 fun canonicalTbaEventCode(code: String): String = code.trim().lowercase().removePrefix("frc")
 
@@ -151,7 +162,9 @@ data class ApiSettings(
     val match13BaseUrl: String = "https://actions.match13.com",
     val assignmentReminderMinutes: Int = 15,
     val enableAssignmentPushReminders: Boolean = true,
-    val enableAssignmentEmailReminders: Boolean = true
+    val enableAssignmentEmailReminders: Boolean = true,
+    /** Which [PAGES_ADDED_BY_VERSION] entries have been applied to this team's page lists. */
+    val pageDefaultsVersion: Int = 0
 ) {
     fun resolvedEventKey(): String {
         val code = eventCode.trim()
@@ -227,7 +240,12 @@ object SettingsService {
             firstKey = if (settings.apiKeys.firstKey == "********") existing.apiKeys.firstKey else settings.apiKeys.firstKey,
             match13Key = if (settings.apiKeys.match13Key == "********") existing.apiKeys.match13Key else settings.apiKeys.match13Key
         )
-        val settingsWithMergedKeys = settings.copy(apiKeys = mergedKeys)
+        // Saving page lists counts as having seen every page added so far, so a page an admin
+        // unchecks isn't granted again on the next load.
+        val settingsWithMergedKeys = settings.copy(
+            apiKeys = mergedKeys,
+            pageDefaultsVersion = maxOf(settings.pageDefaultsVersion, existing.pageDefaultsVersion)
+        )
         val normalized = normalize(settingsWithMergedKeys)
         val jsonText = JsonSupport.json.encodeToString(ApiSettings.serializer(), normalized)
         transaction {
@@ -253,6 +271,17 @@ object SettingsService {
         return normalized
     }
 
+    /** Whether [role] may use [page] under the team's page permissions. Superadmins always may. */
+    fun canAccessPage(teamNumber: Int, program: String, role: com.obsidianscout.auth.UserRole, page: String): Boolean {
+        val settings = getSettings(teamNumber, program)
+        return when (role) {
+            com.obsidianscout.auth.UserRole.SUPERADMIN -> true
+            com.obsidianscout.auth.UserRole.ADMIN -> page in settings.adminPages
+            com.obsidianscout.auth.UserRole.ANALYTICS -> page in settings.analyticsPages
+            com.obsidianscout.auth.UserRole.SCOUT -> page in settings.scoutPages
+        }
+    }
+
     fun dismissSetupWizard(teamNumber: Int, program: String = "FRC"): ApiSettings {
         val current = getSettings(teamNumber, program)
         val updated = current.copy(setupWizardCompleted = true)
@@ -266,11 +295,17 @@ object SettingsService {
         } else {
             canonicalStoredEventKey(settings.year, settings.eventKey)
         }
+        val pending = PAGES_ADDED_BY_VERSION.filter { it.first > settings.pageDefaultsVersion }.flatMap { it.second }
+        fun grantNewPages(pages: MutableList<String>, role: String) {
+            pending.filter { role in it.second && it.first !in pages }.forEach { pages.add(it.first) }
+        }
         val normalizedScoutPages = settings.scoutPages.toMutableList().apply {
+            grantNewPages(this, "SCOUT")
             if ("dashboard" !in this) add("dashboard")
             if ("my-assignments" !in this) add("my-assignments")
         }
         val normalizedAnalyticsPages = settings.analyticsPages.toMutableList().apply {
+            grantNewPages(this, "ANALYTICS")
             if ("dashboard" !in this) add("dashboard")
             if ("events" !in this) add("events")
             if ("custom-analytics" !in this) add("custom-analytics")
@@ -278,6 +313,7 @@ object SettingsService {
             if ("my-assignments" !in this) add("my-assignments")
         }
         val normalizedAdminPages = settings.adminPages.toMutableList().apply {
+            grantNewPages(this, "ADMIN")
             if ("dashboard" !in this) add("dashboard")
             if ("admin-settings" !in this) add("admin-settings")
             if ("events" !in this) add("events")
@@ -305,7 +341,8 @@ object SettingsService {
             adminPages = normalizedAdminPages,
             selfRegisterRoles = normalizeSelfRegisterRoles(settings.selfRegisterRoles),
             statboticsBaseUrl = statboticsUrl,
-            match13BaseUrl = match13Url
+            match13BaseUrl = match13Url,
+            pageDefaultsVersion = maxOf(settings.pageDefaultsVersion, CURRENT_PAGE_DEFAULTS_VERSION)
         )
     }
 

@@ -20,7 +20,8 @@
 
         @media (min-width: 1024px) {
             .page-container {
-                grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+                /* The side panel needs ~340px for its controls; the board takes the rest. */
+                grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr);
                 align-items: start;
             }
         }
@@ -38,84 +39,29 @@
 
         @media (min-width: 768px) {
             .alliances-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                /* Two columns when there's room; one when the side panel leaves the board narrow. */
+                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
             }
         }
 
         .alliance-card {
-            background: rgba(255, 255, 255, 0.08);
+            background: var(--surface);
             border-radius: var(--radius);
             padding: 20px;
-            /* Layer 3: specular rim */
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.55),
-                inset 0 -1px 0 rgba(0,0,0,0.08),
-                inset 1px 0 0 rgba(255,255,255,0.18),
-                0 2px 6px rgba(0,0,0,0.06),
-                0 10px 28px rgba(0,0,0,0.09),
-                0 32px 64px rgba(0,0,0,0.06);
-            border: 1px solid rgba(255,255,255,0.30);
-            /* Layer 2: universal blur frosting */
-            backdrop-filter: blur(36px) saturate(180%) brightness(104%);
-            -webkit-backdrop-filter: blur(36px) saturate(180%) brightness(104%);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             gap: 14px;
             min-width: 0;
             overflow: hidden;
-            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-                        box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-                        border-color 0.3s ease;
-        }
-
-        /* Layer 1: SVG displacement refraction — Firefox */
-        @supports (backdrop-filter: url(#x)) {
-            .alliance-card {
-                backdrop-filter: url(#liquid-glass) blur(18px) saturate(160%) brightness(104%);
-            }
-        }
-
-        body.theme-dark .alliance-card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255,255,255,0.13);
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.18),
-                inset 0 -1px 0 rgba(0,0,0,0.25),
-                inset 1px 0 0 rgba(255,255,255,0.07),
-                0 2px 6px rgba(0,0,0,0.28),
-                0 10px 28px rgba(0,0,0,0.36),
-                0 32px 64px rgba(0,0,0,0.26);
-            backdrop-filter: blur(36px) saturate(180%) brightness(90%);
-            -webkit-backdrop-filter: blur(36px) saturate(180%) brightness(90%);
-        }
-
-        @supports (backdrop-filter: url(#x)) {
-            body.theme-dark .alliance-card {
-                backdrop-filter: url(#liquid-glass) blur(18px) saturate(160%) brightness(90%);
-            }
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
         }
 
         .alliance-card:hover {
             transform: translateY(-2px);
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.70),
-                inset 0 -1px 0 rgba(0,0,0,0.06),
-                inset 1px 0 0 rgba(255,255,255,0.26),
-                0 4px 10px rgba(0,0,0,0.07),
-                0 16px 36px rgba(0,0,0,0.11),
-                0 40px 80px rgba(0,0,0,0.08);
-            border-color: rgba(255,255,255,0.48);
-        }
-
-        body.theme-dark .alliance-card:hover {
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.24),
-                inset 0 -1px 0 rgba(0,0,0,0.22),
-                inset 1px 0 0 rgba(255,255,255,0.09),
-                0 4px 10px rgba(0,0,0,0.32),
-                0 16px 36px rgba(0,0,0,0.42),
-                0 40px 80px rgba(0,0,0,0.30);
-            border-color: rgba(255,255,255,0.20);
+            box-shadow: var(--shadow-md);
+            border-color: var(--accent);
         }
 
         .alliance-card-header {
@@ -366,19 +312,10 @@
         }
 
         .modal {
-            background: rgba(255, 255, 255, 0.08);
+            background: var(--surface);
             border-radius: var(--radius);
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.58),
-                inset 0 -1px 0 rgba(0,0,0,0.08),
-                inset 1px 0 0 rgba(255,255,255,0.22),
-                0 4px 12px rgba(0,0,0,0.07),
-                0 16px 48px rgba(0,0,0,0.12),
-                0 48px 100px rgba(0,0,0,0.10);
-            border: 1px solid rgba(255,255,255,0.35);
-            /* Layer 2: universal blur */
-            backdrop-filter: blur(48px) saturate(180%) brightness(104%);
-            -webkit-backdrop-filter: blur(48px) saturate(180%) brightness(104%);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
             padding: 24px;
             overflow-y: auto;
             position: relative;
@@ -387,33 +324,6 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
-        }
-
-        /* Layer 1: SVG refraction — Firefox */
-        @supports (backdrop-filter: url(#x)) {
-            .modal {
-                backdrop-filter: url(#liquid-glass) blur(24px) saturate(160%) brightness(104%);
-            }
-        }
-
-        body.theme-dark .modal {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255,255,255,0.13);
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.18),
-                inset 0 -1px 0 rgba(0,0,0,0.28),
-                inset 1px 0 0 rgba(255,255,255,0.07),
-                0 4px 12px rgba(0,0,0,0.30),
-                0 16px 48px rgba(0,0,0,0.42),
-                0 48px 100px rgba(0,0,0,0.30);
-            backdrop-filter: blur(48px) saturate(180%) brightness(90%);
-            -webkit-backdrop-filter: blur(48px) saturate(180%) brightness(90%);
-        }
-
-        @supports (backdrop-filter: url(#x)) {
-            body.theme-dark .modal {
-                backdrop-filter: url(#liquid-glass) blur(24px) saturate(160%) brightness(90%);
-            }
         }
 
         .modal-backdrop.open .modal {
@@ -748,6 +658,471 @@
             }
         }
 
+        /* ── Pick Lists (Want / Avoid / Do Not Pick) ── */
+        .pick-lists-card {
+            display: flex;
+            flex-direction: column;
+            flex: 0 0 auto;
+            min-width: 0;
+        }
+
+        /* Pick list rows scroll inside their own box with a guaranteed minimum height. */
+        .pick-lists-card .pick-list-scroll {
+            min-height: 120px;
+            max-height: max(140px, 30vh);
+        }
+
+        /* The side panel holds pick lists, view controls and the recommendation list. Give the
+           list its own height so the controls can never squeeze it to nothing; if everything
+           doesn't fit, the panel scrolls as a whole. */
+        .sticky-panel {
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
+        .sticky-panel .recs-list-card {
+            flex: 0 0 auto;
+            max-height: none;
+            min-height: 0;
+            overflow: visible;
+        }
+
+        .sticky-panel .recs-scroll-area {
+            flex: 0 0 auto;
+            min-height: 240px;
+            max-height: max(240px, calc(100vh - 440px));
+        }
+
+        /* On mouse devices, show only a listed team's active chip until the row is hovered,
+           so team names stay readable in the narrow panel. */
+        @media (hover: hover) {
+            .rec-item .pick-chip:not(.active) { display: none; }
+            .rec-item:hover .pick-chip,
+            .rec-item:focus-within .pick-chip { display: inline-block; }
+        }
+
+        .pick-private-note {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .pick-tabs {
+            display: flex;
+            gap: 6px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .pick-tab {
+            flex: 1 1 auto;
+            font: inherit;
+            font-size: 0.8rem;
+            font-weight: 800;
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--surface-3);
+            background: var(--surface-2);
+            color: var(--muted);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        body.theme-dark .pick-tab {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .pick-tab.active.pick-tab-want { color: #fff; background: #15803d; border-color: #15803d; }
+        .pick-tab.active.pick-tab-avoid { color: #fff; background: #b45309; border-color: #b45309; }
+        .pick-tab.active.pick-tab-dnp { color: #fff; background: #b91c1c; border-color: #b91c1c; }
+
+        .pick-list-scroll {
+            overflow-y: auto;
+            margin-top: 10px;
+            padding-right: 4px;
+            min-height: 0;
+        }
+
+        .pick-empty {
+            padding: 16px 8px;
+            font-size: 0.85rem;
+        }
+
+        .pick-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            border-radius: var(--radius-sm);
+            background: var(--surface-2);
+            border: 1px solid transparent;
+            border-left: 4px solid var(--surface-3);
+            min-width: 0;
+        }
+
+        body.theme-dark .pick-row {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .pick-row-want { border-left-color: #16a34a; }
+        .pick-row-avoid { border-left-color: #d97706; }
+        .pick-row-dnp { border-left-color: #dc2626; }
+
+        .pick-row.is-next {
+            border-color: #16a34a;
+            border-left-width: 4px;
+            box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.25);
+        }
+
+        .pick-row.is-picked .pick-team-number,
+        .pick-row.is-picked .pick-team-name {
+            text-decoration: line-through;
+            opacity: 0.55;
+        }
+
+        .pick-row.dragging { opacity: 0.4; }
+        .pick-row.drag-over { border-color: var(--accent); }
+
+        .pick-row-main,
+        .pick-row-sub {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .pick-handle {
+            cursor: grab;
+            color: var(--muted);
+            font-size: 0.8rem;
+            letter-spacing: -3px;
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        .pick-team-number {
+            font-weight: 900;
+            color: var(--accent);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .pick-team-name {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--ink);
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .pick-status {
+            font-size: 0.68rem;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 999px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .pick-status.picked { background: var(--surface-3); color: var(--muted); }
+        .pick-status.next { background: #16a34a; color: #fff; }
+
+        body.theme-dark .pick-status.picked { background: rgba(255, 255, 255, 0.08); }
+
+        .pick-row-actions {
+            display: flex;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+
+        .pick-icon-btn {
+            font: inherit;
+            font-size: 0.7rem;
+            line-height: 1;
+            padding: 4px 6px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            background: none;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .pick-icon-btn:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--ink);
+        }
+
+        .pick-icon-btn:disabled {
+            opacity: 0.3;
+            cursor: default;
+        }
+
+        .pick-note {
+            flex: 1 1 auto;
+            min-width: 0;
+            font: inherit;
+            font-size: 0.8rem;
+            padding: 4px 8px !important;
+            margin: 0;
+        }
+
+        .pick-chips {
+            display: inline-flex;
+            gap: 3px;
+            flex-shrink: 0;
+        }
+
+        .pick-chip {
+            font: inherit;
+            font-size: 0.66rem;
+            font-weight: 800;
+            line-height: 1;
+            min-width: 22px;
+            padding: 4px 5px;
+            border-radius: 6px;
+            border: 1px solid var(--surface-3);
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        body.theme-dark .pick-chip { border-color: rgba(255, 255, 255, 0.14); }
+
+        .pick-chip-want:hover, .pick-chip-want.active { color: #fff; background: #16a34a; border-color: #16a34a; }
+        .pick-chip-avoid:hover, .pick-chip-avoid.active { color: #fff; background: #d97706; border-color: #d97706; }
+        .pick-chip-dnp:hover, .pick-chip-dnp.active { color: #fff; background: #dc2626; border-color: #dc2626; }
+
+        .rec-item.in-list-want { border-left: 4px solid #16a34a; }
+        .rec-item.in-list-avoid { border-left: 4px solid #d97706; }
+        .rec-item.in-list-dnp { border-left: 4px solid #dc2626; opacity: 0.6; }
+
+        .pick-badge {
+            font-size: 0.66rem;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 6px;
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .pick-badge-want { background: #16a34a; }
+        .pick-badge-avoid { background: #d97706; }
+        .pick-badge-dnp { background: #dc2626; }
+
+        /* Recommendation view controls: data source, sort, filter, list points */
+        .rec-view-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .rec-view-field {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            min-width: 0;
+        }
+
+        .rec-view-field > span,
+        .list-adjust-field > span {
+            font-size: 0.68rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: var(--muted);
+        }
+
+        .rec-view-field select {
+            width: 100%;
+            min-width: 0;
+            padding: 5px 6px;
+            font-size: 0.8rem;
+        }
+
+        .list-adjust {
+            margin-top: 8px;
+            border: 1px solid var(--surface-3);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+        }
+
+        body.theme-dark .list-adjust { border-color: rgba(255, 255, 255, 0.1); }
+
+        .list-adjust.inactive { opacity: 0.6; }
+
+        .list-adjust summary {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: var(--ink);
+            list-style: none;
+        }
+
+        .list-adjust summary::-webkit-details-marker { display: none; }
+        .list-adjust summary::before { content: "▸"; color: var(--muted); margin-right: 2px; }
+        .list-adjust[open] summary::before { content: "▾"; }
+        .list-adjust summary > span:first-of-type { flex: 1 1 auto; }
+
+        .list-adjust-summary {
+            font-weight: 700;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .list-adjust-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(56px, 1fr)) auto;
+            gap: 8px;
+            align-items: end;
+            margin-top: 8px;
+        }
+
+        .list-adjust-field {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            min-width: 0;
+        }
+
+        .list-adjust-field input {
+            width: 100%;
+            min-width: 0;
+            padding: 4px 6px !important;
+            font-size: 0.85rem;
+        }
+
+        .list-adjust-field.want > span { color: #16a34a; }
+        .list-adjust-field.avoid > span { color: #d97706; }
+        .list-adjust-field.dnp > span { color: #dc2626; }
+
+        .list-adjust-reset {
+            padding: 5px 10px;
+            font-size: 0.75rem;
+        }
+
+        .list-adjust-hint {
+            margin: 6px 0 2px;
+            font-size: 0.72rem;
+            color: var(--muted);
+        }
+
+        /* Recommendation rows: name + list note, score + breakdown */
+        .rec-name-block {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .rec-note {
+            font-size: 0.74rem;
+            font-style: italic;
+            line-height: 1.3;
+            color: var(--muted);
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow-wrap: anywhere;
+            min-width: 0;
+        }
+
+        .rec-note::before { content: "✎ "; font-style: normal; }
+
+        .selector-team { flex-wrap: wrap; }
+
+        .selector-note {
+            flex-basis: 100%;
+            max-width: 420px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            padding-left: 36px;
+        }
+
+        .rec-score-block {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .rec-breakdown {
+            font-size: 0.66rem;
+            font-weight: 700;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .rec-adj { font-weight: 800; }
+        .rec-adj-want { color: #16a34a; }
+        .rec-adj-avoid { color: #d97706; }
+        .rec-adj-dnp { color: #dc2626; }
+
+        .pick-score {
+            flex-shrink: 0;
+            font-size: 0.72rem;
+            padding: 2px 6px;
+        }
+
+        .list-adjust .list-adjust-reset {
+            width: auto;
+            min-height: 32px;
+            padding: 4px 12px;
+            font-size: 0.75rem;
+        }
+
+        @media (max-width: 480px) {
+            .list-adjust-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .list-adjust .list-adjust-reset {
+                grid-column: 1 / -1;
+                justify-self: end;
+                min-height: 36px;
+            }
+        }
+
+        .pick-modal-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .pick-footer-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .pick-footer-want.active { color: #fff; background: #16a34a; border-color: #16a34a; }
+        .pick-footer-avoid.active { color: #fff; background: #d97706; border-color: #d97706; }
+        .pick-footer-dnp.active { color: #fff; background: #dc2626; border-color: #dc2626; }
+
+        /* Single-column layout: the panel stacks under the board and scrolls with the page. */
+        @media (max-width: 1023px) {
+            .sticky-panel {
+                position: static;
+                max-height: none;
+                overflow: visible;
+            }
+            .pick-lists-card .pick-list-scroll { max-height: 60vh; }
+            .sticky-panel .recs-scroll-area {
+                min-height: 260px;
+                max-height: 70vh;
+            }
+        }
+
         @media print {
             .sidebar, .sticky-panel, .orb, #export-csv-btn, #print-board-btn, #reset-board-btn, .slot-clear, .slot-info, .select-wide {
                 display: none !important;
@@ -842,27 +1217,82 @@
                     </div>
                 </div>
 
-                <!-- Right: Recommendation Panel -->
+                <!-- Right: Pick Lists + Recommendation Panel -->
                 <div class="sticky-panel">
+                    <div class="card pick-lists-card">
+                        <div class="row justify-between align-center">
+                            <h2>Pick Lists</h2>
+                            <span class="pick-private-note" title="Only your team sees these lists, even when you share the board with a scouting alliance.">Private to your team</span>
+                        </div>
+                        <div class="pick-tabs" id="pick-list-tabs" role="tablist"></div>
+                        <div class="pick-list-scroll" id="pick-list-container">
+                            <div class="empty-indicator">Loading pick lists...</div>
+                        </div>
+                    </div>
+
                     <div class="card recs-list-card">
                         <div class="row justify-between align-center">
                             <h2 data-i18n="alliance-selection.recommendations">Recommendations</h2>
                         </div>
                         
-                        <div class="row gap-12 mt-12">
-                            <div class="field" style="flex-grow: 1; margin-top: 0;">
-                                <input type="text" id="team-search" data-i18n-placeholder="alliance-selection.placeholder_search_team_or_name" placeholder="Search team # or name..." style="padding: 6px 12px; width: 100%;" />
-                            </div>
-                            <div class="field" style="width: 120px; flex-shrink: 0; margin-top: 0;">
-                                <select id="metric-select" style="padding: 6px 8px; width: 100%;">
+                        <div class="field mt-12" style="margin-top: 12px;">
+                            <input type="text" id="team-search" data-i18n-placeholder="alliance-selection.placeholder_search_team_or_name" placeholder="Search team # or name..." style="padding: 6px 12px; width: 100%;" />
+                        </div>
+
+                        <div class="rec-view-controls">
+                            <label class="rec-view-field">
+                                <span>Data</span>
+                                <select id="metric-select" title="Data source for each team's score">
                                     <option value="weighted" data-i18n="alliance-selection.weighted">Weighted</option>
                                     <option value="scouted" data-i18n="scouted">Scouted</option>
                                     <option value="epa" data-i18n="alliance-selection.epa">EPA</option>
                                     <option value="exp" data-i18n="alliance-selection.exp">EXP</option>
                                     <option value="opr" data-i18n="alliance-selection.opr">OPR</option>
                                 </select>
-                            </div>
+                            </label>
+                            <label class="rec-view-field">
+                                <span>Sort</span>
+                                <select id="sort-mode-select" title="How teams are ordered">
+                                    <option value="combined">Score, adjusted by lists</option>
+                                    <option value="score">Score only</option>
+                                    <option value="list">List order</option>
+                                </select>
+                            </label>
+                            <label class="rec-view-field">
+                                <span>Show</span>
+                                <select id="show-filter-select" title="Which teams to list">
+                                    <option value="all">All teams</option>
+                                    <option value="no-dnp">Hide Do Not Pick</option>
+                                    <option value="want">Want only</option>
+                                    <option value="avoid">Avoid only</option>
+                                    <option value="dnp">Do Not Pick only</option>
+                                    <option value="unlisted">Not on a list</option>
+                                </select>
+                            </label>
                         </div>
+
+                        <details class="list-adjust" id="list-adjust-details">
+                            <summary>
+                                <span>List points</span>
+                                <span class="list-adjust-summary" id="list-adjust-summary"></span>
+                            </summary>
+                            <div class="list-adjust-grid">
+                                <label class="list-adjust-field want">
+                                    <span>Want</span>
+                                    <input type="number" id="adj-want" step="1" inputmode="numeric" />
+                                </label>
+                                <label class="list-adjust-field avoid">
+                                    <span>Avoid</span>
+                                    <input type="number" id="adj-avoid" step="1" inputmode="numeric" />
+                                </label>
+                                <label class="list-adjust-field dnp">
+                                    <span>DNP</span>
+                                    <input type="number" id="adj-dnp" step="1" inputmode="numeric" />
+                                </label>
+                                <button type="button" class="btn ghost list-adjust-reset" id="adj-reset">Reset</button>
+                            </div>
+                            <p class="list-adjust-hint">Moves listed teams up or down the ranking when sorting by "Score, adjusted by lists". The number shown is always the team's expected points.</p>
+                        </details>
 
                         <div class="recs-scroll-area" id="recommendations-list-container">
                             <div class="empty-indicator" data-i18n="alliance-selection.no_available_teams">No available teams</div>
@@ -933,6 +1363,7 @@
 
             <!-- Tab Content 1: Overview & Notes -->
             <div class="modal-tab-content active" id="tab-overview">
+                <div id="breakdown-ai-summary-container"></div>
                 <h4 data-i18n="alliance-selection.pit_specifications">Pit Specifications</h4>
                 <div class="pit-specs-grid" id="pit-specs-container">
                     <!-- Pit specs parsed from config -->
@@ -966,7 +1397,8 @@
                 <div id="breakdown-graph-container" style="width: 100%; height: 350px;"></div>
             </div>
 
-            <div class="modal-footer">
+            <div class="modal-footer pick-modal-footer">
+                <div class="pick-footer-buttons" id="breakdown-pick-buttons"></div>
                 <button class="btn" id="breakdown-modal-close-footer" data-i18n="alliance-selection.close">Close</button>
             </div>
         </div>
@@ -975,5 +1407,6 @@
     <script type="module" src="/js/common.js"></script>
     <script defer src="/vendor/plotly-2.32.0.min.js"></script>
     <script defer src="/js/alliance-selection.js"></script>
+    <script type="module" src="/js/ai/ai-features.js"></script>
 </body>
 </html>

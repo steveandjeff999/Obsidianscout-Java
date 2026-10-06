@@ -25,6 +25,9 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.scouting.ScoutingReminderScheduler")
+
+
 object ScoutingReminderScheduler {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var job: Job? = null
@@ -32,12 +35,12 @@ object ScoutingReminderScheduler {
     fun start() {
         if (job != null && job?.isActive == true) return
         job = scope.launch {
-            println("[ScoutingReminderScheduler] Background reminder scheduler started.")
+            consoleLog.info("[ScoutingReminderScheduler] Background reminder scheduler started.")
             while (isActive) {
                 try {
                     checkAndSendReminders()
                 } catch (e: Exception) {
-                    println("[ScoutingReminderScheduler] Error running reminder sweep: ${e.message}")
+                    consoleLog.error("[ScoutingReminderScheduler] Error running reminder sweep: ${e.message}")
                 }
                 delay(60_000) // Run every 60 seconds
             }
@@ -47,7 +50,7 @@ object ScoutingReminderScheduler {
     fun stop() {
         job?.cancel()
         job = null
-        println("[ScoutingReminderScheduler] Background reminder scheduler stopped.")
+        consoleLog.info("[ScoutingReminderScheduler] Background reminder scheduler stopped.")
     }
 
     fun checkAndSendReminders() {
@@ -138,7 +141,7 @@ object ScoutingReminderScheduler {
                         )
                         newlyPushSent = true
                     } catch (e: Exception) {
-                        println("[ScoutingReminderScheduler] Failed to send push reminder for assignment $assignmentId: ${e.message}")
+                        consoleLog.error("[ScoutingReminderScheduler] Failed to send push reminder for assignment $assignmentId: ${e.message}")
                     }
                 }
 
@@ -158,7 +161,7 @@ object ScoutingReminderScheduler {
                             )
                             newlyEmailSent = true
                         } catch (e: Exception) {
-                            println("[ScoutingReminderScheduler] Failed to send email reminder for assignment $assignmentId: ${e.message}")
+                            consoleLog.error("[ScoutingReminderScheduler] Failed to send email reminder for assignment $assignmentId: ${e.message}")
                         }
                     }
                 }
@@ -171,7 +174,7 @@ object ScoutingReminderScheduler {
                             it[updatedAt] = now
                         }
                     }
-                    println("[ScoutingReminderScheduler] Sent reminders for assignment $assignmentId to user ${userRow[Users.username]} for Match #$matchNumber")
+                    consoleLog.info("[ScoutingReminderScheduler] Sent reminders for assignment $assignmentId to user ${userRow[Users.username]} for Match #$matchNumber")
                 }
             }
         }

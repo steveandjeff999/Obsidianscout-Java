@@ -17,6 +17,9 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.db.SnapshotService")
+
+
 @Serializable
 data class SnapshotInfoDto(
     val fileName: String,
@@ -145,7 +148,7 @@ object SnapshotService {
             val timestampStr = fileNameFormatter.format(nowUtc)
             val snapshotFile = File(storageDir, "${prefix}_${timestampStr}.db")
 
-            println("[SnapshotService] Creating full SQLite database snapshot at ${snapshotFile.absolutePath}...")
+            consoleLog.info("[SnapshotService] Creating full SQLite database snapshot at ${snapshotFile.absolutePath}...")
 
             val recordsCopied = copyDatabaseToSqlite(snapshotFile)
             val sizeBytes = if (snapshotFile.exists()) snapshotFile.length() else 0L
@@ -154,7 +157,7 @@ object SnapshotService {
             val config = AppConfigLoader.load().auto_backup
             val pruned = pruneOldSnapshots(config.retention_days)
 
-            println("[SnapshotService] Snapshot created successfully: ${snapshotFile.name} ($sizeBytes bytes, $recordsCopied records). Pruned $pruned old snapshots.")
+            consoleLog.info("[SnapshotService] Snapshot created successfully: ${snapshotFile.name} ($sizeBytes bytes, $recordsCopied records). Pruned $pruned old snapshots.")
             return SnapshotResult(
                 success = true,
                 message = "Snapshot created successfully",
@@ -164,7 +167,7 @@ object SnapshotService {
                 prunedCount = pruned
             )
         } catch (e: Exception) {
-            println("[SnapshotService] Error creating snapshot: ${e.message}")
+            consoleLog.error("[SnapshotService] Error creating snapshot: ${e.message}")
             e.printStackTrace()
             return SnapshotResult(false, "Snapshot failed: ${e.message}")
         } finally {
@@ -190,11 +193,11 @@ object SnapshotService {
                     true
                 } ?: false
                 if (vacuumSuccess && targetFile.exists() && targetFile.length() > 0) {
-                    println("[SnapshotService] VACUUM INTO succeeded for SQLite primary database.")
+                    consoleLog.info("[SnapshotService] VACUUM INTO succeeded for SQLite primary database.")
                     return countTotalRecords()
                 }
             } catch (e: Exception) {
-                println("[SnapshotService] VACUUM INTO failed (${e.message}), falling back to table-by-table copy.")
+                consoleLog.error("[SnapshotService] VACUUM INTO failed (${e.message}), falling back to table-by-table copy.")
             }
         }
 
@@ -274,6 +277,7 @@ object SnapshotService {
                         it[tourProgress] = row[Users.tourProgress]
                         it[nodeAlertsEnabled] = row[Users.nodeAlertsEnabled]
                         it[bugReportPreference] = row[Users.bugReportPreference]
+                        it[localAiEnabled] = row.getOrNull(Users.localAiEnabled) ?: false
                         it[lastLogin] = row[Users.lastLogin]
                     }
                 }
@@ -706,9 +710,11 @@ object SnapshotService {
         ensureSqliteDriver()
 
         try {
-            println("[SnapshotService] ⚠️ Starting full database restoration from ${snapshotFile.absolutePath}...")
+            consoleLog.info("[SnapshotService] ⚠️ Starting full database restoration from ${snapshotFile.absolutePath}...")
 
             val snapshotUrl = "jdbc:sqlite:${snapshotFile.absolutePath}?journal_mode=WAL&busy_timeout=5000&synchronous=NORMAL"
+            // Snapshots taken by older releases lack newer columns; add them (with defaults) so selectAll() works.
+            SqliteSchemaUpgrader.upgradeFile(snapshotUrl, allTables.toList())
             val snapshotDb = Database.connect(
                 snapshotUrl,
                 driver = "org.sqlite.JDBC",
@@ -815,6 +821,7 @@ object SnapshotService {
                         it[tourProgress] = row[Users.tourProgress]
                         it[nodeAlertsEnabled] = row[Users.nodeAlertsEnabled]
                         it[bugReportPreference] = row[Users.bugReportPreference]
+                        it[localAiEnabled] = row.getOrNull(Users.localAiEnabled) ?: false
                         it[lastLogin] = row[Users.lastLogin]
                     }
                 }
@@ -1251,7 +1258,7 @@ object SnapshotService {
 
             val durationMs = System.currentTimeMillis() - startTime
             val totalRecords = restoredCounts.values.sum()
-            println("[SnapshotService] Database restoration completed successfully: $totalRecords records restored in ${durationMs}ms.")
+            consoleLog.info("[SnapshotService] Database restoration completed successfully: $totalRecords records restored in ${durationMs}ms.")
 
             return DatabaseRestoreReport(
                 success = true,
@@ -1262,7 +1269,7 @@ object SnapshotService {
                 durationMs = durationMs
             )
         } catch (e: Exception) {
-            println("[SnapshotService] Database restoration failed: ${e.message}")
+            consoleLog.error("[SnapshotService] Database restoration failed: ${e.message}")
             e.printStackTrace()
             return DatabaseRestoreReport(
                 success = false,
@@ -1380,7 +1387,7 @@ object SnapshotService {
             }
 
             if (epochMs < cutoff) {
-                println("[SnapshotService] Pruning expired snapshot: ${file.name} (age > $days days)")
+                consoleLog.info("[SnapshotService] Pruning expired snapshot: ${file.name} (age > $days days)")
                 if (file.delete()) {
                     deletedCount++
                     File(file.parentFile, "${file.name}-wal").takeIf { it.exists() }?.delete()

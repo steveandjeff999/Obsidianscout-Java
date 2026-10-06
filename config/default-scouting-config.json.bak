@@ -1,87 +1,163 @@
 {
-    "version": 1,
-    "title": "Config With All Element Types",
+    "version": 3,
+    "title": "ObsidianScout",
     "fields": [
         {
-            "id": "sec_auto",
-            "label": "Autonomous Phase",
+            "id": "sectionAuto",
+            "label": "Auto",
             "type": "section",
-            "phase": "auto"
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
         },
         {
-            "id": "auto_notes",
-            "label": "Auto Notes",
+            "id": "autoScore",
+            "label": "Auto Score",
             "type": "counter",
+            "required": false,
+            "phase": null,
+            "options": [],
             "min": 0,
             "max": 10,
             "step": 1,
-            "phase": "auto"
+            "doubleStep": null,
+            "pointsPer": 3.0
         },
         {
-            "id": "teleop_header",
-            "label": "Teleoperated Phase",
+            "id": "sectionTeleop",
+            "label": "Teleop",
             "type": "section",
-            "phase": "teleop"
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
         },
         {
-            "id": "teleop_score",
-            "label": "Teleop Score",
-            "type": "number",
+            "id": "teleopCycles",
+            "label": "Teleop Cycles",
+            "type": "counter",
+            "required": false,
+            "phase": null,
+            "options": [],
             "min": 0,
-            "max": 100,
+            "max": 30,
             "step": 1,
-            "phase": "teleop"
+            "doubleStep": null,
+            "pointsPer": 1.0
         },
         {
-            "id": "driver_rating",
-            "label": "Driver Skill",
-            "type": "rating",
-            "min": 1,
-            "max": 5,
-            "step": 1,
-            "phase": "teleop"
+            "id": "sectionEndgame",
+            "label": "Endgame",
+            "type": "section",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
         },
         {
-            "id": "coopertition",
-            "label": "Coopertition Met",
-            "type": "checkbox",
-            "phase": "teleop"
-        },
-        {
-            "id": "climb_level",
-            "label": "Climb Level",
+            "id": "endgame",
+            "label": "Endgame Result",
             "type": "select",
+            "required": false,
+            "phase": null,
             "options": [
                 {
-                    "label": "None",
-                    "value": "none",
-                    "points": 0.0
+                    "label": "Park",
+                    "value": "Park",
+                    "points": 5.0
                 },
                 {
-                    "label": "Deep",
-                    "value": "deep",
+                    "label": "Climb",
+                    "value": "Climb",
+                    "points": 12.0
+                },
+                {
+                    "label": "Fail",
+                    "value": "Fail",
                     "points": 0.0
                 }
             ],
-            "phase": "endgame"
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
         },
         {
-            "id": "robot_photo",
-            "label": "Robot Photo",
-            "type": "image",
-            "phase": "teleop"
+            "id": "driverRating",
+            "label": "Driver Rating",
+            "type": "rating",
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": 1,
+            "max": 5,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": 2.0
         },
         {
-            "id": "scout_comments",
-            "label": "Comments",
-            "type": "textarea",
-            "phase": "teleop"
-        },
-        {
-            "id": "static_notice",
-            "label": "Inspection Complete",
+            "id": "notes",
+            "label": "Notes",
             "type": "text",
-            "phase": "teleop"
+            "required": false,
+            "phase": null,
+            "options": [],
+            "min": null,
+            "max": null,
+            "step": null,
+            "doubleStep": null,
+            "pointsPer": null
         }
-    ]
+    ],
+    "analytics": [
+        {
+            "id": "entryCount",
+            "title": "Entries Collected",
+            "type": "count",
+            "fieldId": null
+        },
+        {
+            "id": "avgScore",
+            "title": "Average Score",
+            "type": "score_avg",
+            "fieldId": null
+        },
+        {
+            "id": "autoAvg",
+            "title": "Auto Score Avg",
+            "type": "avg",
+            "fieldId": "autoScore"
+        },
+        {
+            "id": "teleopAvg",
+            "title": "Teleop Cycles Avg",
+            "type": "avg",
+            "fieldId": "teleopCycles"
+        },
+        {
+            "id": "totalScore",
+            "title": "Total Points",
+            "type": "score_total",
+            "fieldId": null
+        }
+    ],
+    "tba_key": null,
+    "first_username": null,
+    "first_key": null,
+    "event_code": null,
+    "enable_robot_role_collection": false
 }

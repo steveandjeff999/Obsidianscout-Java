@@ -679,6 +679,8 @@ function renderMatches() {
         const matchLabel = getMatchLabel(match.matchKey, match.matchNumber);
         const matchCell = document.createElement("td");
         matchCell.textContent = matchLabel;
+        const videoLinks = Obsidianscout.createMatchVideoLinks(match.videos);
+        if (videoLinks) matchCell.appendChild(videoLinks);
         tr.appendChild(matchCell);
 
         // Time

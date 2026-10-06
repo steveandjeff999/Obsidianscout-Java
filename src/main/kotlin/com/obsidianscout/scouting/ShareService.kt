@@ -21,7 +21,6 @@ import com.obsidianscout.analytics.AnalyticsReportService
 import com.obsidianscout.analytics.AnalyticsDatasetResponse
 import com.obsidianscout.analytics.PredictorService
 import com.obsidianscout.routes.MatchPredictionResponse
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -131,6 +130,9 @@ object ShareService {
     }
 
     private fun hashPin(pin: String): String {
+        if (pin.toByteArray(Charsets.UTF_8).size > com.obsidianscout.auth.AuthService.MAX_PASSWORD_BYTES) {
+            throw ApiException(HttpStatusCode.BadRequest, "PIN is too long (maximum ${com.obsidianscout.auth.AuthService.MAX_PASSWORD_BYTES} bytes)")
+        }
         return BCrypt.withDefaults().hashToString(10, pin.toCharArray())
     }
 
@@ -349,7 +351,7 @@ object ShareService {
         }
     }
 
-    fun resolveShare(
+    suspend fun resolveShare(
         token: String,
         pin: String? = null,
         session: UserSession? = null,
@@ -700,7 +702,7 @@ object ShareService {
         }
     }
 
-    private fun fetchLiveDataForShare(
+    private suspend fun fetchLiveDataForShare(
         ownerTeamNumber: Int,
         program: String,
         eventKey: String?,
@@ -864,9 +866,7 @@ object ShareService {
                 val matchKey = parsedQuery?.get("matchKey")?.jsonPrimitive?.contentOrNull
                 if (!matchKey.isNullOrBlank()) {
                     runCatching {
-                        runBlocking {
-                            PredictorService.predict(fakeSession, matchKey, false, effectiveEventKey)
-                        }
+                        PredictorService.predict(fakeSession, matchKey, false, effectiveEventKey)
                     }.getOrNull()
                 } else null
             } else null

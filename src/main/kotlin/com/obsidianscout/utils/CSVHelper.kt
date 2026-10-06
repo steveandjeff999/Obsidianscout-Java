@@ -10,9 +10,21 @@ object CSVHelper {
         return sb.toString()
     }
 
+    // Spreadsheet apps run cells starting with these characters as formulas.
+    private val FORMULA_PREFIXES = charArrayOf('=', '+', '-', '@', '\t', '\r')
+    private val PLAIN_NUMBER = Regex("^[+-]?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$")
+
+    /** Prefixes formula-like text with an apostrophe so spreadsheets show it as text. Numbers are left alone. */
+    fun neutralizeFormula(value: String): String =
+        if (value.isNotEmpty() && value[0] in FORMULA_PREFIXES && !PLAIN_NUMBER.matches(value)) "'$value" else value
+
+    /** Reverses [neutralizeFormula] when reading a CSV this app exported. */
+    fun restoreFormula(value: String): String =
+        if (value.length > 1 && value[0] == '\'' && value[1] in FORMULA_PREFIXES && !PLAIN_NUMBER.matches(value.substring(1))) value.substring(1) else value
+
     fun escapeCSV(value: String?): String {
         if (value == null) return ""
-        val escaped = value.replace("\"", "\"\"")
+        val escaped = neutralizeFormula(value).replace("\"", "\"\"")
         return if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n") || escaped.contains("\r")) {
             "\"$escaped\""
         } else {
@@ -82,7 +94,7 @@ object CSVHelper {
         for (rowIdx in 1 until parsedRows.size) {
             val row = parsedRows[rowIdx]
             if (row.size == headers.size) {
-                results.add(headers.zip(row).toMap())
+                results.add(headers.zip(row.map { restoreFormula(it) }).toMap())
             }
         }
         return results

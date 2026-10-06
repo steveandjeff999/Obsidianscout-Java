@@ -602,6 +602,11 @@
                 </div>
 
             </div>
+
+            <div id="local-ai-models-card" class="card mt-20 hidden">
+                <h2 data-i18n="ai.admin.title">Local AI models</h2>
+                <div id="local-ai-admin"></div>
+            </div>
         </main>
     </div>
 
@@ -693,5 +698,14 @@
 
     <script type="module" src="/js/common.js"></script>
     <script defer src="/js/storage-manager.js"></script>
+    <script type="module">
+        import UI from "/js/ai/ai-ui.js";
+        document.addEventListener("DOMContentLoaded", async () => {
+            const me = await window.Obsidianscout.getMe();
+            if (!me || me.role !== "SUPERADMIN") return;
+            document.getElementById("local-ai-models-card").classList.remove("hidden");
+            UI.mountAdminPanel(document.getElementById("local-ai-admin"));
+        });
+    </script>
 </body>
 </html>

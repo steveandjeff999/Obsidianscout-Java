@@ -847,7 +847,8 @@ object IntegrationService {
                 val actualTime: Long?,
                 val rScore: Int?,
                 val bScore: Int?,
-                val isPlayed: Boolean
+                val isPlayed: Boolean,
+                val videos: List<com.obsidianscout.routes.MatchVideo>
             )
 
             val parsedMatches = sortedRows.map { row ->
@@ -856,10 +857,12 @@ object IntegrationService {
                 val matchNumber = row[ApiMatches.matchNumber]
                 val sched = row[ApiMatches.scheduledTime]
                 val act = row[ApiMatches.actualTime]
+                var videos = emptyList<com.obsidianscout.routes.MatchVideo>()
                 val (rScore, bScore) = try {
                     val rawDataJson = row[ApiMatches.dataJson]
                     if (rawDataJson.isNotBlank()) {
                         val json = JsonSupport.json.parseToJsonElement(rawDataJson).jsonObject
+                        videos = MatchCanonical.extractVideos(json)
                         val alliances = json["alliances"]?.jsonObject
                         val red = alliances?.get("red")?.jsonObject
                         val blue = alliances?.get("blue")?.jsonObject
@@ -878,7 +881,7 @@ object IntegrationService {
                 }
                 val hasScore = rScore != null || bScore != null
                 val isPlayed = hasScore || (act != null && act > 0 && sched != null && act != sched)
-                MatchParsed(row, compLevel, setNumber, matchNumber, sched, act, rScore, bScore, isPlayed)
+                MatchParsed(row, compLevel, setNumber, matchNumber, sched, act, rScore, bScore, isPlayed, videos)
             }
 
             val resolveTeams = { teamKeysJson: String ->
@@ -955,7 +958,8 @@ object IntegrationService {
                     label = MatchCanonical.displayLabel(m.compLevel, m.setNumber, m.matchNumber),
                     eventTimezone = eventTimezone,
                     redScore = m.rScore,
-                    blueScore = m.bScore
+                    blueScore = m.bScore,
+                    videos = m.videos
                 )
             }
         }
@@ -1985,7 +1989,7 @@ object IntegrationService {
         }
     }
 
-    fun getFullStatsHistory(settings: ApiSettings, eventKey: String): StatsHistoryResponse {
+    suspend fun getFullStatsHistory(settings: ApiSettings, eventKey: String): StatsHistoryResponse {
         if (settings.program == "FTC") {
             return FtcIntegrationService.getFullStatsHistory(settings, eventKey)
         }
@@ -2001,9 +2005,7 @@ object IntegrationService {
 
         if (cached == null || (needsMatch13 && isCachedMatch13Missing)) {
             try {
-                kotlinx.coroutines.runBlocking {
-                    syncEpaOprHistory(settings, normalizedKey)
-                }
+                syncEpaOprHistory(settings, normalizedKey)
                 cached = transaction {
                     EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
                 }
