@@ -350,6 +350,18 @@
     "allPublicFields": true
   },
   {
+    "name": "javax.net.ssl.SSLSocketFactory",
+    "methods": [
+      { "name": "getDefault", "parameterTypes": [] }
+    ]
+  },
+  {
+    "name": "javax.net.SocketFactory",
+    "methods": [
+      { "name": "getDefault", "parameterTypes": [] }
+    ]
+  },
+  {
     "name": "jakarta.mail.Session",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,

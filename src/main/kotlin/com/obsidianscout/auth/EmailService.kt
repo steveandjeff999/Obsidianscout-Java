@@ -115,9 +115,9 @@ object EmailService {
 
             when (settings.encryption.uppercase()) {
                 "SSL_TLS" -> {
+                    // ssl.enable alone uses the default SSLSocketFactory; the legacy socketFactory.class
+                    // property makes Angus load it by reflection, which fails in the native image.
                     put("mail.smtp.ssl.enable", "true")
-                    put("mail.smtp.socketFactory.port", settings.port.toString())
-                    put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory")
                 }
                 "STARTTLS" -> {
                     put("mail.smtp.starttls.enable", "true")
@@ -150,6 +150,11 @@ object EmailService {
             setContent(body, "text/html; charset=utf-8")
         }
 
-        Transport.send(message)
+        try {
+            Transport.send(message)
+        } catch (e: LinkageError) {
+            // Native-image metadata errors are Errors, which would slip past callers' catch (e: Exception)
+            throw IllegalStateException("Mail transport unavailable: ${e.message}", e)
+        }
     }
 }
