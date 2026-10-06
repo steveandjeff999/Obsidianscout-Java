@@ -670,7 +670,7 @@ object BackupService {
         }
     }
 
-    fun importBackup(targetTeamNumber: Int, backup: ObsidianDbBackup, currentUserId: String, isSuperAdmin: Boolean = false): ImportReport {
+    fun importBackup(targetTeamNumber: Int, backup: ObsidianDbBackup, currentUserId: String, isSuperAdmin: Boolean = false, targetProgram: String = "FRC"): ImportReport {
         return transaction {
             val isGlobalImport = isSuperAdmin && backup.scope == "global"
 
@@ -950,11 +950,15 @@ object BackupService {
             if (backup.scope == "global" || backup.type == "entire") {
                 val allianceIdMap = mutableMapOf<String, UUID>()
 
+                // A team import may only create alliances owned by the importing team, in its own program.
+                fun allianceProgram(fileProgram: String): String = if (isGlobalImport) fileProgram else targetProgram
+
                 for (a in backup.alliances) {
                     val assignedTeam = getTargetTeam(a.ownerTeamNumber)
+                    val assignedProgram = allianceProgram(a.program)
                     val existingRow = ScoutingAlliances.selectAll().where {
                         (ScoutingAlliances.ownerTeamNumber eq assignedTeam) and
-                        (ScoutingAlliances.program eq a.program) and
+                        (ScoutingAlliances.program eq assignedProgram) and
                         (ScoutingAlliances.name eq a.name) and
                         (ScoutingAlliances.eventKey eq a.eventKey)
                     }.firstOrNull()
@@ -966,7 +970,7 @@ object BackupService {
                         val newId = ScoutingAlliances.insertAndGetId {
                             it[name] = a.name
                             it[ownerTeamNumber] = assignedTeam
-                            it[program] = a.program
+                            it[program] = assignedProgram
                             it[eventKey] = a.eventKey
                             it[notes] = a.notes
                             it[createdAt] = Instant.ofEpochMilli(a.createdAt)
@@ -985,22 +989,34 @@ object BackupService {
                 // Alliance Memberships
                 for (m in backup.allianceMemberships) {
                     val targetAllianceId = allianceIdMap[m.allianceId] ?: continue
+                    val memberProgram = allianceProgram(m.program)
                     val exists = AllianceMemberships.selectAll().where {
                         (AllianceMemberships.allianceId eq targetAllianceId) and
                         (AllianceMemberships.teamNumber eq m.teamNumber) and
-                        (AllianceMemberships.program eq m.program)
+                        (AllianceMemberships.program eq memberProgram)
                     }.any()
 
                     if (!exists) {
+                        // A team import cannot make another team a member: an accepted, active membership
+                        // would share that team's scouting data and switch its forms to this alliance's config.
+                        // Other teams come back as pending invites they must accept themselves.
+                        val isOtherTeam = !isGlobalImport && m.teamNumber != targetTeamNumber
                         AllianceMemberships.insert {
                             it[allianceId] = targetAllianceId
                             it[teamNumber] = m.teamNumber
-                            it[program] = m.program
-                            it[status] = m.status
+                            it[program] = memberProgram
                             it[invitedAt] = Instant.ofEpochMilli(m.invitedAt)
-                            it[respondedAt] = m.respondedAt?.let { Instant.ofEpochMilli(it) }
-                            it[disabled] = m.disabled
-                            it[active] = m.active
+                            if (isOtherTeam) {
+                                it[status] = "INVITED"
+                                it[respondedAt] = null
+                                it[disabled] = false
+                                it[active] = false
+                            } else {
+                                it[status] = m.status
+                                it[respondedAt] = m.respondedAt?.let { Instant.ofEpochMilli(it) }
+                                it[disabled] = m.disabled
+                                it[active] = m.active
+                            }
                         }
                     }
                 }
@@ -1531,7 +1547,7 @@ object BackupService {
         return bos.toByteArray()
     }
 
-    fun importCsv(targetTeamNumber: Int, zipBytes: ByteArray, currentUserId: String, isSuperAdmin: Boolean = false): ImportReport {
+    fun importCsv(targetTeamNumber: Int, zipBytes: ByteArray, currentUserId: String, isSuperAdmin: Boolean = false, targetProgram: String = "FRC"): ImportReport {
         val files = readZip(zipBytes)
         
         // Parse CSV entries into objects
@@ -1835,7 +1851,7 @@ object BackupService {
             passwordResetTokens = passwordResetTokens
         )
 
-        return importBackup(targetTeamNumber, backup, currentUserId, isSuperAdmin)
+        return importBackup(targetTeamNumber, backup, currentUserId, isSuperAdmin, targetProgram)
     }
 
     private fun readZip(zipBytes: ByteArray): Map<String, String> {

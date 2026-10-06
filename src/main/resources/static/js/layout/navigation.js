@@ -151,7 +151,7 @@ export function setActiveNav() {
 export function adjustNavForRole(user) {
     if (!user) return;
     const role = user.role;
-    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "fcm-settings", "migration"];
+    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "fcm-settings", "migration", "default-configs"];
 
     // Reset all standard links to visible first before applying role restrictions
     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
@@ -252,7 +252,7 @@ export function isPageAccessible(page, role) {
     if (["users", "banners", "admin-settings", "default-configs", "assignments"].includes(page) && !isAdmin(role)) {
         return false;
     }
-    if (page === "migration" && !isSuperAdmin(role)) {
+    if ((page === "migration" || page === "default-configs") && !isSuperAdmin(role)) {
         return false;
     }
 

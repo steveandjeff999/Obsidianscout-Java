@@ -64,6 +64,20 @@ dependencies {
 
 tasks.test {
     useJUnit()
+    // Tests read and write relative paths (config/, data/, update markers, server binaries), so run
+    // them in a throwaway copy under build/ instead of the project directory.
+    val testWorkDir = layout.buildDirectory.dir("test-workdir").get().asFile
+    val projectConfigDir = file("config")
+    workingDir = testWorkDir
+    systemProperty("obsidianscout.projectDir", projectDir.absolutePath)
+    doFirst {
+        testWorkDir.deleteRecursively()
+        testWorkDir.mkdirs()
+        // Secrets and keystores are never copied; tests generate their own.
+        projectConfigDir.walkTopDown()
+            .filter { it.isFile && !it.name.startsWith("secrets.json") && !it.name.endsWith(".jks") }
+            .forEach { it.copyTo(File(testWorkDir, "config/" + it.relativeTo(projectConfigDir).invariantSeparatorsPath), overwrite = true) }
+    }
     jvmArgs(
         "--add-opens=java.base/java.lang=ALL-UNNAMED",
         "--add-opens=java.base/java.io=ALL-UNNAMED",

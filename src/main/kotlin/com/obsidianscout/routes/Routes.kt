@@ -2381,10 +2381,10 @@ fun Application.configureRoutes() {
                         val jsonString = String(fileBytes!!, Charsets.UTF_8)
                         val backup = JsonSupport.json.decodeFromString<com.obsidianscout.db.ObsidianDbBackup>(jsonString)
                         val importAsGlobal = isSuperAdmin && requestedScope == "global" && backup.scope == "global"
-                        com.obsidianscout.db.BackupService.importBackup(session.teamNumber, backup, session.userId, importAsGlobal)
+                        com.obsidianscout.db.BackupService.importBackup(session.teamNumber, backup, session.userId, importAsGlobal, session.program)
                     } else if (fileName.endsWith(".zip")) {
                         val importAsGlobal = isSuperAdmin && requestedScope == "global"
-                        com.obsidianscout.db.BackupService.importCsv(session.teamNumber, fileBytes!!, session.userId, importAsGlobal)
+                        com.obsidianscout.db.BackupService.importCsv(session.teamNumber, fileBytes!!, session.userId, importAsGlobal, session.program)
                     } else {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Unsupported file format. Please upload .obsidiandb or .zip")
                     }
@@ -3441,25 +3441,26 @@ fun Application.configureRoutes() {
 
             route("/admin") {
                 route("/default-configs") {
+                    // Presets are shared by every team and written to disk on every node: superadmin only.
                     get {
-                        call.requireAdmin()
+                        call.requireSuperAdmin()
                         call.respond(ConfigService.getAllDefaultConfigs())
                     }
                     post {
-                        call.requireAdmin()
+                        call.requireSuperAdmin()
                         val dto = call.receive<com.obsidianscout.config.DefaultConfigDTO>()
                         val created = ConfigService.createDefaultConfig(dto)
                         call.respond(HttpStatusCode.Created, created)
                     }
                     put("/{id}") {
-                        call.requireAdmin()
+                        call.requireSuperAdmin()
                         val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing id parameter")
                         val dto = call.receive<com.obsidianscout.config.DefaultConfigDTO>()
                         val updated = ConfigService.updateDefaultConfig(id, dto)
                         call.respond(updated)
                     }
                     delete("/{id}") {
-                        call.requireAdmin()
+                        call.requireSuperAdmin()
                         val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing id parameter")
                         val success = ConfigService.deleteDefaultConfig(id)
                         if (success) {

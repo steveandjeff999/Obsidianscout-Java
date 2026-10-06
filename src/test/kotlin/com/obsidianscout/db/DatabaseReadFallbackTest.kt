@@ -284,7 +284,8 @@ class DatabaseReadFallbackTest {
 
     @Test
     fun testStaticCodeAnalysisNoMutationsInReadTransactions() {
-        val srcDir = java.io.File("src/main/kotlin")
+        // Tests run in a scratch directory under build/; Gradle passes the real project path.
+        val srcDir = java.io.File(System.getProperty("obsidianscout.projectDir") ?: ".", "src/main/kotlin")
         assertTrue(srcDir.exists(), "Source directory src/main/kotlin should exist")
 
         val ktFiles = srcDir.walkTopDown().filter { it.extension == "kt" }.toList()
