@@ -63,8 +63,8 @@ data class QuorumFallbackConfig(
 /** On-device AI model hosting. Models are only downloaded on boot when listed in [auto_install_tiers]. */
 @Serializable
 data class LocalAiConfig(
-    /** Tier ids to download automatically at startup, e.g. ["lite"]. Default = ["lite"]. */
-    val auto_install_tiers: List<String> = listOf("lite"),
+    /** Tier ids to download automatically at startup, e.g. ["lite", "gemma4e2b", "gemma4e4b"]. Default = ["lite", "gemma4e2b", "gemma4e4b"]. */
+    val auto_install_tiers: List<String> = listOf("lite", "gemma4e2b", "gemma4e4b"),
     /** Installs are refused when they would leave less than this much free disk space. */
     val min_free_disk_mb: Long = 2048
 )

@@ -276,7 +276,6 @@ object LocalAiModelService {
         }
         putJsonObject("knownTiers") { tiers.forEach { put(it.id, it.version) } }
         putJsonArray("tiers") {
-            if (!runtimeOk) return@putJsonArray
             for (tier in tiers) {
                 val marker = installedMarker(tier) ?: continue
                 val base = "/models/${tier.id}/${tier.version}/"
@@ -468,6 +467,7 @@ object LocalAiModelService {
     fun startupMaintenance(): Job = scope.launch {
         try {
             pruneObsoleteModels()
+            ensureRuntime()
             val wanted = autoInstallTiers.mapNotNull { id ->
                 tier(id) ?: run { consoleLog.warn("[LocalAI] Unknown tier '$id' in local_ai.auto_install_tiers"); null }
             }

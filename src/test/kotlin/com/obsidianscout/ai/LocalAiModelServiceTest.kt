@@ -10,7 +10,8 @@ class LocalAiModelServiceTest {
 
     private val root = File("build/test_models_${System.currentTimeMillis()}")
     private val lite = LocalAiModelService.tier("lite")!!
-    private val standard = LocalAiModelService.tier("standard")!!
+    private val e2b = LocalAiModelService.tier("gemma4e2b")!!
+    private val e4b = LocalAiModelService.tier("gemma4e4b")!!
 
     @BeforeTest
     fun setUp() {
@@ -38,25 +39,25 @@ class LocalAiModelServiceTest {
 
     @Test
     fun servesInstalledFilesIncludingWebLlmResolvePaths() {
-        installFake(standard, mapOf("mlc/params_shard_0.bin" to "abc", "mlc/lib/model.wasm" to "w", "mlc/mlc-chat-config.json" to "{}"))
-        val v = standard.version
+        installFake(lite, mapOf("mlc/params_shard_0.bin" to "abc", "mlc/lib/model.wasm" to "w", "mlc/mlc-chat-config.json" to "{}"))
+        val v = lite.version
 
-        val shard = LocalAiModelService.resolveServedFile(listOf("standard", v, "mlc", "resolve", "main", "params_shard_0.bin"))
+        val shard = LocalAiModelService.resolveServedFile(listOf("lite", v, "mlc", "resolve", "main", "params_shard_0.bin"))
         assertNotNull(shard)
         assertEquals("abc", shard.readText())
-        assertNotNull(LocalAiModelService.resolveServedFile(listOf("standard", v, "mlc", "lib", "model.wasm")))
+        assertNotNull(LocalAiModelService.resolveServedFile(listOf("lite", v, "mlc", "lib", "model.wasm")))
         assertEquals("application/wasm", LocalAiModelService.contentTypeFor(File("model.wasm")))
         assertNotNull(LocalAiModelService.resolveServedFile(listOf("runtime", LocalAiModelService.RUNTIME_VERSION, "web-llm.js")))
     }
 
     @Test
     fun rejectsTraversalWrongVersionsMarkerAndUninstalledTiers() {
-        installFake(standard, mapOf("mlc/params_shard_0.bin" to "abc"))
-        val v = standard.version
-        assertNull(LocalAiModelService.resolveServedFile(listOf("standard", v, "mlc", "..", "..", "installed.json")))
-        assertNull(LocalAiModelService.resolveServedFile(listOf("standard", v, "installed.json")))
-        assertNull(LocalAiModelService.resolveServedFile(listOf("standard", "deadbeef", "mlc", "params_shard_0.bin")))
-        assertNull(LocalAiModelService.resolveServedFile(listOf("advanced", LocalAiModelService.tier("advanced")!!.version, "mlc", "x")))
+        installFake(lite, mapOf("mlc/params_shard_0.bin" to "abc"))
+        val v = lite.version
+        assertNull(LocalAiModelService.resolveServedFile(listOf("lite", v, "mlc", "..", "..", "installed.json")))
+        assertNull(LocalAiModelService.resolveServedFile(listOf("lite", v, "installed.json")))
+        assertNull(LocalAiModelService.resolveServedFile(listOf("lite", "deadbeef", "mlc", "params_shard_0.bin")))
+        assertNull(LocalAiModelService.resolveServedFile(listOf("gemma4e4b", e4b.version, "gpu", "x")))
         assertNull(LocalAiModelService.resolveServedFile(listOf("runtime", LocalAiModelService.RUNTIME_VERSION, "secrets.json")))
         assertNull(LocalAiModelService.resolveServedFile(listOf("nope", "1", "mlc", "x")))
     }
@@ -78,7 +79,7 @@ class LocalAiModelServiceTest {
     @Test
     fun adminStatusReportsNotInstalledByDefault() {
         val status = LocalAiModelService.adminStatus()
-        assertEquals(listOf("lite", "standard", "gemma4e2b", "advanced", "gemma4e4b"), status.tiers.map { it.id })
+        assertEquals(listOf("lite", "gemma4e2b", "gemma4e4b"), status.tiers.map { it.id })
         assertTrue(status.tiers.all { it.state == "not_installed" })
     }
 
@@ -98,19 +99,22 @@ class LocalAiModelServiceTest {
 
     @Test
     fun pruneRemovesRetiredTiersAndOldVersionsButKeepsCurrentOnes() {
-        installFake(standard, mapOf("mlc/params_shard_0.bin" to "abc"))
-        File(root, "gemma2b/de9cc76f0d4b/mlc").mkdirs()             // retired Gemma 2 tier
+        installFake(lite, mapOf("mlc/params_shard_0.bin" to "abc"))
+        File(root, "standard/9bd564b06463/mlc").mkdirs()             // retired Qwen tiers
+        File(root, "advanced/7690aaaa46df/mlc").mkdirs()
+        File(root, "gemma2b/de9cc76f0d4b/mlc").mkdirs()             // retired Gemma 2 tiers
         File(root, "gemma9b/e5cddd463237/mlc").mkdirs()
-        File(root, "standard/0000oldversion/mlc").mkdirs()          // superseded version
+        File(root, "lite/0000oldversion/mlc").mkdirs()              // superseded version
         File(root, "runtime/tjs1.0.0-webllm0.1.0").mkdirs()         // old runtime
 
         val removed = LocalAiModelService.pruneObsoleteModels()
 
-        assertTrue("gemma2b" in removed && "gemma9b" in removed, "retired tiers removed: $removed")
-        assertTrue("standard/0000oldversion" in removed)
+        assertTrue("standard" in removed && "advanced" in removed && "gemma2b" in removed && "gemma9b" in removed, "retired tiers removed: $removed")
+        assertTrue("lite/0000oldversion" in removed)
         assertTrue("runtime/tjs1.0.0-webllm0.1.0" in removed)
+        assertFalse(File(root, "standard").exists())
         assertFalse(File(root, "gemma2b").exists())
-        assertTrue(File(root, "standard/${standard.version}/installed.json").isFile, "current install kept")
+        assertTrue(File(root, "lite/${lite.version}/installed.json").isFile, "current install kept")
         assertTrue(File(root, "runtime/${LocalAiModelService.RUNTIME_VERSION}").isDirectory, "current runtime kept")
     }
 

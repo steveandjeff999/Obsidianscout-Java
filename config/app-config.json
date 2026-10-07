@@ -86,7 +86,9 @@
     },
     "local_ai": {
         "auto_install_tiers": [
-            "lite"
+            "lite",
+            "gemma4e2b",
+            "gemma4e4b"
         ],
         "min_free_disk_mb": 2048
     }
