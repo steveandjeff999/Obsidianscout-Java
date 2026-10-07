@@ -275,6 +275,13 @@ object LocalAiModelService {
             put("webllm", runtimeBase + "web-llm.js")
         }
         putJsonObject("knownTiers") { tiers.forEach { put(it.id, it.version) } }
+        putJsonArray("installing") {
+            for (tier in tiers) {
+                if (jobs[tier.id]?.isActive == true || progress[tier.id]?.state == "downloading") {
+                    add(tier.name)
+                }
+            }
+        }
         putJsonArray("tiers") {
             for (tier in tiers) {
                 val marker = installedMarker(tier) ?: continue

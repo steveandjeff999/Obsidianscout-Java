@@ -217,15 +217,23 @@ export async function ensureModelReady({ tierId } = {}) {
 export async function mountSettingsPanel(container) {
     if (!container) return;
     container.innerHTML = `<p class="notice">${esc(t("ai.settings.checking", "Checking this device..."))}</p>`;
+    let manifest = null;
     let tiers = [];
     try {
-        tiers = (await AI.getManifest(true)).tiers || [];
+        manifest = await AI.getManifest(true);
+        tiers = manifest.tiers || [];
     } catch (err) {
         container.innerHTML = `<p class="notice ai-warn">${esc(err.message)}</p>`;
         return;
     }
     if (!tiers.length) {
-        container.innerHTML = `<p class="notice">${esc(t("ai.err.none_installed", "No AI models are installed on this server yet. Ask a site admin to install one."))}</p>`;
+        const installing = manifest && manifest.installing && manifest.installing.length;
+        if (installing) {
+            container.innerHTML = `<p class="notice"><span class="spinner" style="display:inline-block;width:14px;height:14px;margin-right:8px;vertical-align:middle;"></span>${esc(fmt(t("ai.settings.server_downloading", "The server is currently downloading AI models ({names}). They will appear here once ready."), { names: manifest.installing.join(", ") }))}</p>`;
+            setTimeout(() => { if (document.body.contains(container)) mountSettingsPanel(container); }, 5000);
+        } else {
+            container.innerHTML = `<p class="notice">${esc(t("ai.err.none_installed", "No AI models are installed on this server yet. Ask a site admin to install one."))}</p>`;
+        }
         return;
     }
     const caps = await AI.capabilities(true);

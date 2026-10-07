@@ -1733,6 +1733,7 @@
   "ai.settings.notice": "Runs AI models entirely on this device for notes summaries and the Assistant page. Nothing is sent to an AI service, and models are only downloaded when you choose to.",
   "ai.settings.ready": "Model downloaded and ready",
   "ai.settings.selected": "{name} model selected for this device",
+  "ai.settings.server_downloading": "The server is currently downloading AI models ({names}). They will appear here once ready.",
   "ai.settings.size": "Download {size} · {backend}",
   "ai.settings.storage": "Browser storage used: {used} of {quota}",
   "ai.settings.toast_disabled": "Local AI Assistant disabled",

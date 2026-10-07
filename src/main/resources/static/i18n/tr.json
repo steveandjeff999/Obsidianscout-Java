@@ -1729,6 +1729,7 @@
   "ai.settings.notice": "Not özetleri ve Asistan sayfası için yapay zekâ modellerini tamamen bu cihazda çalıştırır. Hiçbir şey bir yapay zekâ hizmetine gönderilmez ve modeller yalnızca siz seçtiğinizde indirilir.",
   "ai.settings.ready": "Model indirildi ve hazır",
   "ai.settings.selected": "Bu cihaz için {name} modeli seçildi",
+  "ai.settings.server_downloading": "Sunucu şu anda yapay zekâ modellerini indiriyor ({names}). Hazır olduklarında burada görünecektir.",
   "ai.settings.size": "{size} indirme · {backend}",
   "ai.settings.storage": "Kullanılan tarayıcı depolaması: {used} / {quota}",
   "ai.settings.toast_disabled": "Yerel Yapay Zekâ Asistanı kapatıldı",

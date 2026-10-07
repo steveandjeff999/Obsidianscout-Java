@@ -1729,6 +1729,7 @@
   "ai.settings.notice": "Ejecuta modelos de IA por completo en este dispositivo para resúmenes de notas y la página del Asistente. Nada se envía a un servicio de IA y los modelos solo se descargan cuando tú lo decides.",
   "ai.settings.ready": "Modelo descargado y listo",
   "ai.settings.selected": "Modelo {name} seleccionado para este dispositivo",
+  "ai.settings.server_downloading": "El servidor está descargando modelos de IA ({names}). Aparecerán aquí una vez listos.",
   "ai.settings.size": "Descarga de {size} · {backend}",
   "ai.settings.storage": "Almacenamiento del navegador usado: {used} de {quota}",
   "ai.settings.toast_disabled": "Asistente de IA local desactivado",

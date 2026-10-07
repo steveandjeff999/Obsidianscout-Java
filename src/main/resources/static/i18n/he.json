@@ -1729,6 +1729,7 @@
   "ai.settings.notice": "מריץ מודלי AI כולם במכשיר זה לסיכומי הערות ולדף העוזר. שום דבר לא נשלח לשירות AI, והמודלים מורדים רק כשתבחרו בכך.",
   "ai.settings.ready": "המודל הורד ומוכן",
   "ai.settings.selected": "מודל {name} נבחר למכשיר זה",
+  "ai.settings.server_downloading": "השרת מוריד כעת מודלי AI ({names}). הם יופיעו כאן ברגע שיהיו מוכנים.",
   "ai.settings.size": "הורדה של {size} · {backend}",
   "ai.settings.storage": "אחסון דפדפן בשימוש: {used} מתוך {quota}",
   "ai.settings.toast_disabled": "עוזר ה-AI המקומי כובה",
