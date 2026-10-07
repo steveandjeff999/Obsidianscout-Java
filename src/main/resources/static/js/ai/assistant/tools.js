@@ -7,11 +7,65 @@ import AI from "../local-ai.js";
 import Data from "../ai-data.js";
 import Features from "../ai-features.js";
 import { getDocGuide } from "./docs-guide.js";
+import { BUILDER_TOOLS } from "./builder.js";
+import { EXTRA_TOOLS } from "./tools-extra.js";
 import { evaluate, fmtTeamPage, metricOrDefault, r1, t, toTeamNumbers, unknownTeams } from "./shared.js";
 
 // ------------------------------------------------------------------ tools
 
+/** Admin-settings flag + metric id for each external data source. */
+const EXTERNAL_SOURCES = {
+    epa: { id: "ext:epa", label: "EPA", setting: "useStatboticsEpa", source: "Statbotics EPA" },
+    opr: { id: "ext:opr", label: "OPR", setting: "useTbaOpr", source: "TBA / FTC Scout OPR" },
+    xp: { id: "ext:exp", label: "xP", setting: "useMatch13Exp", source: "Match 13 xP" }
+};
+
+function externalMetricTool(kind) {
+    const src = EXTERNAL_SOURCES[kind];
+    return {
+        description: `${src.label} data (${src.source}) for one team or ranked for all teams. Returns a "metric not enabled" error if ${src.label} is disabled in admin settings.`,
+        params: { team: `optional team number (omit to rank all teams by ${src.label})`, n: "how many teams when ranking", order: "desc or asc", chart: "true to include visual chart" },
+        async run(ctx, args) {
+            const flag = ctx.settings ? ctx.settings[src.setting] : undefined;
+            const metric = ctx.metrics.find((m) => m.id === src.id);
+            // Admin setting wins; if the server didn't expose it, fall back to whether data exists.
+            const enabled = flag === undefined || flag === null ? !!metric : !!flag;
+            if (!enabled) {
+                return { facts: { error: `Metric not enabled: ${src.label} (${src.source}) is not enabled in admin settings.` } };
+            }
+            if (!metric) {
+                return { facts: { error: `Metric not enabled: no ${src.label} data is available for this event.` } };
+            }
+            const [team] = args.team ? toTeamNumbers(ctx, args.team) : [];
+            if (args.team && !team) return { facts: { error: `Team ${args.team} has no data at this event.` } };
+            if (team) {
+                const s = ctx.stats.get(team);
+                const m = s && s.metrics[metric.id];
+                if (!m || m.avg === null || m.avg === undefined) {
+                    return { facts: { team, error: `Metric not enabled: ${src.label} is not available for team ${team}.` } };
+                }
+                const ranked = Data.rankTeams(ctx, metric);
+                const rank = ranked.findIndex((r) => r.teamNumber === team) + 1;
+                const series = (s.perMatch || []).filter((p) => p.values && p.values[metric.id] !== null && p.values[metric.id] !== undefined);
+                return {
+                    facts: { team, name: s.name || undefined, metric: src.label, source: src.source, average: r1(m.avg), max: r1(m.max), min: r1(m.min), samples: m.n, rank: rank ? `${rank} of ${ranked.length}` : undefined },
+                    table: { columns: [t("ai.col.metric", "Metric"), t("ai.col.avg", "Avg"), t("ai.col.max", "Max"), t("ai.col.n", "N")], rows: [[src.label, r1(m.avg), r1(m.max), m.n]] },
+                    chart: (args.chart && series.length > 1) ? {
+                        type: "line", title: `${Data.teamLabel(ctx, team)} - ${src.label}`, xTitle: t("ai.chart.match", "Match"), yTitle: src.label,
+                        series: [{ name: src.label, x: series.map((p) => (p.matchNumber ? `Q${p.matchNumber}` : "?")), y: series.map((p) => r1(p.values[metric.id])) }]
+                    } : null
+                };
+            }
+            return TOOLS.top_teams.run(ctx, { metric: src.label, n: args.n, order: args.order, chart: args.chart });
+        }
+    };
+}
+
 export const TOOLS = {
+    epa_data: externalMetricTool("epa"),
+    opr_data: externalMetricTool("opr"),
+    xp_data: externalMetricTool("xp"),
+
     team_overview: {
         description: "Key stats, pit info, match counts (played vs scouted vs scheduled), and notes summary for one team.",
         params: { team: "team number", chart: "true to include visual chart" },
@@ -326,6 +380,134 @@ export const TOOLS = {
                     rows: metrics.map((m) => [m.label, ...teams.map((team) => { const v = ctx.stats.get(team)?.metrics[m.id]; return v ? r1(v.avg) : "-"; })])
                 },
                 chart
+            };
+        }
+    },
+
+    compare_all_teams: {
+        description: "Generate a comprehensive comparative matrix and artifact of all teams (or top N) at the event across Scouted data (Total, Auto, Teleop, Endgame) and external analytics (EPA, OPR, xP).",
+        params: { n: "optional number of teams (default all)", sort_by: "optional metric name to sort by", order: "desc or asc", chart: "true to include visual comparison chart" },
+        async run(ctx, args) {
+            const allTeams = Array.from(ctx.stats.keys());
+            if (!allTeams.length) return { facts: { error: "No teams found for this event." } };
+
+            const sortMetric = args.sort_by ? Data.findMetric(ctx, args.sort_by, { minScore: 1 }) : (ctx.metrics.find((m) => m.id === "score_total") || ctx.metrics[0]);
+            const order = args.order === "asc" ? "asc" : "desc";
+
+            const ranked = Data.rankTeams(ctx, sortMetric || ctx.metrics[0], { order, minMatches: 0 });
+            const count = args.n ? Math.max(1, Math.min(ranked.length, parseInt(args.n, 10))) : ranked.length;
+            const targetTeams = ranked.slice(0, count).map((r) => r.teamNumber);
+
+            const autoM = ctx.metrics.find((m) => m.id === "score_auto");
+            const teleM = ctx.metrics.find((m) => m.id === "score_teleop");
+            const endM = ctx.metrics.find((m) => m.id === "score_endgame");
+            const totM = ctx.metrics.find((m) => m.id === "score_total") || { id: "score_total", label: "Scouted Total" };
+            const epaM = ctx.metrics.find((m) => m.id === "ext:epa");
+            const oprM = ctx.metrics.find((m) => m.id === "ext:opr");
+            const expM = ctx.metrics.find((m) => m.id === "ext:exp");
+
+            const rowsData = targetTeams.map((team, idx) => {
+                const s = ctx.stats.get(team);
+                const scoutedN = s ? s.matchesScouted : 0;
+                const totAvg = s?.metrics.score_total?.avg;
+                const autoAvg = autoM ? s?.metrics[autoM.id]?.avg : undefined;
+                const teleAvg = teleM ? s?.metrics[teleM.id]?.avg : undefined;
+                const endAvg = endM ? s?.metrics[endM.id]?.avg : undefined;
+                const epaVal = epaM ? s?.metrics[epaM.id]?.avg : undefined;
+                const oprVal = oprM ? s?.metrics[oprM.id]?.avg : undefined;
+                const expVal = expM ? s?.metrics[expM.id]?.avg : undefined;
+
+                return {
+                    rank: idx + 1,
+                    team,
+                    name: s ? s.name : "",
+                    scouted_matches: scoutedN,
+                    scouted_total: totAvg !== undefined && totAvg !== null ? r1(totAvg) : "-",
+                    auto: autoAvg !== undefined && autoAvg !== null ? r1(autoAvg) : "-",
+                    teleop: teleAvg !== undefined && teleAvg !== null ? r1(teleAvg) : "-",
+                    endgame: endAvg !== undefined && endAvg !== null ? r1(endAvg) : "-",
+                    epa: epaVal !== undefined && epaVal !== null ? r1(epaVal) : "-",
+                    opr: oprVal !== undefined && oprVal !== null ? r1(oprVal) : "-",
+                    xp: expVal !== undefined && expVal !== null ? r1(expVal) : "-"
+                };
+            });
+
+            const columns = ["#", t("ai.col.team", "Team"), "Scouted Matches", totM.label, "Auto", "Teleop", "Endgame", "EPA", "OPR", "xP"];
+            const tableRows = rowsData.map((r) => [
+                r.rank,
+                Data.teamLabel(ctx, r.team),
+                r.scouted_matches,
+                r.scouted_total,
+                r.auto,
+                r.teleop,
+                r.endgame,
+                r.epa,
+                r.opr,
+                r.xp
+            ]);
+
+            const md = [
+                `# 📊 Comprehensive Team Analytics Matrix: ${ctx.eventKey.toUpperCase()}`,
+                `**Total Teams:** ${rowsData.length} | **Sorted by:** ${sortMetric?.label || "Total points"} (${order === "asc" ? "lowest first" : "highest first"})`,
+                "",
+                "---",
+                "",
+                `## 📋 Team Performance & Cross-Metric Data Table`,
+                `| # | Team | Scouted N | Scouted Total | Auto | Teleop | Endgame | EPA | OPR | xP |`,
+                `| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |`,
+                ...rowsData.map((r) => `| **${r.rank}** | **${Data.teamLabel(ctx, r.team)}** | ${r.scouted_matches} | ${r.scouted_total} | ${r.auto} | ${r.teleop} | ${r.endgame} | ${r.epa} | ${r.opr} | ${r.xp} |`),
+                "",
+                "---",
+                "",
+                "### 🔍 Key Takeaways & Source Summary:",
+                `- **Scouted Match Data:** Locally logged reports from our scouting team.`,
+                `- **Statbotics EPA:** Expected Points Added contribution rating.`,
+                `- **TBA / FTC Scout OPR:** Offensive Power Rating.`,
+                `- **Match 13 xP:** Predictive statistical model expected scoring.`
+            ].join("\n");
+
+            const artifact = {
+                id: `team-matrix-${ctx.eventKey}`,
+                title: `Team Analytics Matrix (${ctx.eventKey.toUpperCase()})`,
+                type: "worksheet",
+                summary: `Comprehensive cross-metric comparison table of all ${rowsData.length} teams at ${ctx.eventKey.toUpperCase()} comparing Scouted data, EPA, OPR, and xP.`,
+                markdown: md
+            };
+
+            const chartRows = rowsData.slice(0, 15);
+            const chart = args.chart ? {
+                type: "groupedBar",
+                title: `${sortMetric?.label || "Total points"} - top ${chartRows.length} (${ctx.eventKey.toUpperCase()})`,
+                x: chartRows.map((r) => String(r.team)),
+                xTitle: t("ai.col.team", "Team"),
+                yTitle: t("ai.chart.points", "Points"),
+                series: [["scouted_total", totM.label], ["epa", "EPA"], ["opr", "OPR"], ["xp", "xP"]]
+                    .filter(([key]) => chartRows.some((r) => r[key] !== "-"))
+                    .map(([key, name]) => ({ name, y: chartRows.map((r) => (r[key] === "-" ? null : Number(r[key]))) }))
+            } : null;
+
+            // Leaders per column, so the model can comment on the whole table without seeing every row.
+            const leader = (key) => {
+                const best = rowsData.filter((r) => r[key] !== "-").sort((a, b) => Number(b[key]) - Number(a[key]))[0];
+                return best ? { team: best.team, value: best[key] } : undefined;
+            };
+            return {
+                facts: {
+                    event: ctx.eventKey,
+                    total_teams: rowsData.length,
+                    table_rows: rowsData.length,
+                    sorted_by: sortMetric?.label || "Total points",
+                    leaders: { scouted_total: leader("scouted_total"), auto: leader("auto"), teleop: leader("teleop"), endgame: leader("endgame"), epa: leader("epa"), opr: leader("opr"), xp: leader("xp") },
+                    teams_without_scouting: rowsData.filter((r) => !r.scouted_matches).length,
+                    teams: rowsData.map((r) => ({ rank: r.rank, team: r.team, scouted: r.scouted_total, epa: r.epa, opr: r.opr, xp: r.xp }))
+                },
+                table: {
+                    columns,
+                    rows: tableRows
+                },
+                chart,
+                artifact,
+                markdown: `Created Artifact: **[${artifact.title}](#)**. Click **Open Artifact** to inspect the full event comparison spreadsheet.`
             };
         }
     },
@@ -1055,30 +1237,50 @@ export const TOOLS = {
         params: {},
         async run(ctx) {
             const md = [
-                `# 🧭 ObsidianScout AI Assistant Capabilities & Skills`,
+                `# 🧭 ObsidianScout AI Assistant Capabilities & Data Sources`,
                 `The Local AI Assistant runs 100% locally on your device with access to all event scouting data, match schedules, and analytics tools.`,
                 "",
                 "---",
                 "",
-                "## 📊 1. Charts & Visualizations",
-                "- **Match-by-Match Line Trends:** Multi-line progression across qualification matches (`metric_trend`).",
-                "- **2D Scatter Plots:** Two-metric correlation analysis (e.g., Total Points vs Auto, OPR vs EPA) (`scatter`).",
+                "## 🗄️ Available Data Sources",
+                "- **Scouted Match Data:** Local scouting match reports (Total points, Auto, Teleop, Endgame, custom game counters, and qualitative notes).",
+                "- **Statbotics EPA (Expected Points Added):** Model-computed rating of expected scoring contribution per match.",
+                "- **Match 13 xP (Expected Points):** Predictive statistical metric reflecting expected point generation.",
+                "- **TBA / FTC Scout OPR (Offensive Power Rating):** Traditional linear algebra offensive scoring power.",
+                "",
+                "## 📊 Charts & Visualizations",
+                "- **Match-by-Match Line Trends:** Multi-line progression across qualification matches (`metric_trend` / `match_by_match`).",
+                "- **2D Scatter Plots:** Two-metric correlation analysis (e.g., Total Points vs Auto, OPR vs EPA, xP vs Total) (`scatter`).",
                 "- **Phase Breakdown Stacked Bars:** Auto, Teleop, and Endgame phase contributions (`stacked_breakdown`).",
                 "- **Radar / Spider Charts:** Multi-axis robot skill profiling (`team_radar`).",
                 "- **Box Plot Distributions:** Score variance, spread, and match-to-match consistency (`score_distribution`).",
                 "- **Ranking Bar Charts:** Top teams by any metric (`top_teams`).",
                 "",
-                "## 📑 2. Tactical Artifacts & Reports",
+                "## 📑 Tactical Artifacts & Reports",
                 "- **Match Strategy Briefs:** Full pre-match tactical game plan and win probabilities (`create_strategy_brief`).",
                 "- **Alliance Selection Worksheets:** Tiered draft pick list with first-pick anchors & specialists (`create_alliance_sheet`).",
                 "- **Team Scouting Dossiers:** In-depth profiles with pit specs, match history, and scoring metrics (`create_team_dossier`).",
                 "- **Tournament Projections:** Monte Carlo simulation of final qualification standings and RP (`projected_rankings`).",
                 "",
-                "## 🔍 3. Data Query & Team Analytics",
-                "- **Team Overviews & Comparisons:** Compare 2+ teams across all scoring metrics (`compare_teams`).",
-                "- **Match Previews:** Upcoming alliance strength and expected scores (`match_preview`).",
+                "## 🔍 Data Query & Team Analytics",
+                "- **Team Overviews & Comparisons:** Compare 2+ teams across all scoring metrics (`compare_teams`, `team_overview`).",
+                "- **Match Schedules & Previews:** Upcoming alliance strength and match lists (`match_preview`, `all_matches`).",
                 "- **Scout Notes Summaries:** Synthesize qualitative notes and observer comments (`summarize_notes`).",
-                "- **Pick Recommendations:** Filter candidates based on defense, consistency, or autonomous power (`pick_candidates`)."
+                "- **Pick Recommendations:** Filter candidates based on defense, consistency, or autonomous power (`pick_candidates`).",
+                "- **Documentation Guide:** Site manuals, export instructions, and setup help (`read_docs`).",
+                "",
+                "## 🛠️ Custom Tables & Charts",
+                "- **Any table:** pick the teams, columns (any metric, max / min / std dev, matches scouted or played, official rank, record, or arithmetic like `EPA - xP`), filters, sorting and row limit (`make_table`).",
+                "- **Any chart:** bar, grouped, stacked, line, scatter, radar, box or pie, for any metrics and teams (`make_chart`).",
+                "- **Edit what is on screen:** \"remove OPR from that table\", \"only the top 10\", \"sort by xP\", \"add auto\", \"as a pie chart\".",
+                "",
+                "## 🧮 More Analysis Tools",
+                "- **Schedules & Head-to-Head:** Any team's matches with partners, opponents, results and expected scores (`team_schedule`), and two teams' history together or against each other (`head_to_head`).",
+                "- **Consistency & Recent Form:** Most / least consistent teams (`consistency`) and who is improving or slumping over their last matches (`recent_form`).",
+                "- **Alliance Builder:** Expected points by phase for any 2-3 teams, optionally against an opposing alliance with a win chance (`alliance_builder`).",
+                "- **Event Statistics & Percentiles:** Mean, median and spread of any metric with a histogram (`metric_summary`), and where one team ranks on every metric (`team_percentiles`).",
+                "- **Search:** Find words in scout notes (`search_notes`) or pit answers such as drivetrain type (`pit_search`).",
+                "- **Event Status:** Event at a glance (`event_summary`), missing scouting reports (`scouting_coverage`) and every available metric (`list_metrics`)."
             ].join("\n");
 
             const artifact = {
@@ -1093,8 +1295,9 @@ export const TOOLS = {
                 facts: {
                     event: ctx.eventKey,
                     total_teams: ctx.stats.size,
-                    metrics_available: ctx.metrics.map((m) => m.label).slice(0, 15),
-                    summary: "I can generate match-by-match trend lines, 2D scatter plots, phase stacked bars, radar charts, box plot distributions, alliance selection worksheets, match strategy briefs, team dossiers, Monte Carlo tournament projections, match schedules, full team rosters, win predictions, and site manuals."
+                    data_sources: ["Scouted Match Data", "Statbotics EPA", "Match 13 xP", "TBA / FTC Scout OPR"],
+                    metrics_available: ctx.metrics.map((m) => m.label).slice(0, 20),
+                    summary: "I can query 4 data sources (Scouted Data, Statbotics EPA, Match 13 xP, TBA/FTC OPR) and generate match-by-match trend lines, 2D scatter plots, phase stacked bars, radar charts, box plot distributions, alliance selection worksheets, match strategy briefs, team dossiers, Monte Carlo tournament projections, match schedules, team schedules, head-to-head records, consistency and recent-form rankings, alliance strength estimates, event-wide statistics, team percentiles, scout-note and pit-data search, scouting coverage checks, full team rosters, win predictions, and site manuals."
                 },
                 artifact,
                 markdown: md
@@ -1405,7 +1608,8 @@ export const TOOLS = {
         async run(ctx, args) {
             const focus = args.focus ? metricOrDefault(ctx, args.focus) : ctx.metrics[0];
             const n = Math.max(1, Math.min(24, parseInt(args.n, 10) || 8));
-            const rows = Data.rankTeams(ctx, focus, { exclude: ctx.ourTeam ? [ctx.ourTeam] : [], minMatches: 2 }).slice(0, n);
+            const minMatches = focus.kind === "external" ? 0 : (ctx.stats && Array.from(ctx.stats.values()).some((s) => s.matchesScouted >= 2) ? 2 : 1);
+            const rows = Data.rankTeams(ctx, focus, { exclude: ctx.ourTeam ? [ctx.ourTeam] : [], minMatches }).slice(0, n);
             const phases = ctx.metrics.filter((m) => m.kind === "score" && m.id !== "score_total");
             return {
                 facts: {
@@ -1482,5 +1686,7 @@ export const TOOLS = {
         }
     }
 };
+
+Object.assign(TOOLS, EXTRA_TOOLS, BUILDER_TOOLS);
 
 /** Built-in ObsidianScout documentation knowledge base. */

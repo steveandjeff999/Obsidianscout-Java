@@ -121,7 +121,7 @@ function sorted(clauses, labels, lab, limit) {
     return clauses.filter((_, i) => labels[i] === lab).sort((a, b) => b.count - a.count).slice(0, limit);
 }
 
-/** Lite: the summary is assembled from the scouts' own words (the 0.5B model invents details when writing prose). */
+/** Lite: the summary is assembled from the scouts' own words (the smallest model invents details when writing prose). */
 function extractiveSummary(clauses, labels, notesCount, ratings) {
     const none = `- ${t("ai.summary.nothing_noted", "Nothing noted")}`;
     const strengths = sorted(clauses, labels, "S", 6).map(clauseLine);

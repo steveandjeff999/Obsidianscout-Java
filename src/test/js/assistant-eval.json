@@ -189,6 +189,141 @@
       "lang": "he",
       "q": "את מי כדאי לנו לבחור?",
       "tool": "pick_candidates"
+    },
+    {
+      "lang": "en",
+      "q": "which teams are the most consistent in teleop?",
+      "tool": "consistency"
+    },
+    {
+      "lang": "en",
+      "q": "who has improved the most in their last 3 matches?",
+      "tool": "recent_form"
+    },
+    {
+      "lang": "en",
+      "q": "schedule for 254",
+      "tool": "team_schedule"
+    },
+    {
+      "lang": "en",
+      "q": "upcoming matches for 1678",
+      "tool": "team_schedule"
+    },
+    {
+      "lang": "en",
+      "q": "has 254 played against 1678?",
+      "tool": "head_to_head"
+    },
+    {
+      "lang": "en",
+      "q": "how strong would an alliance of 254, 1678 and 118 be?",
+      "tool": "alliance_builder"
+    },
+    {
+      "lang": "en",
+      "q": "254, 1678 and 118 together vs 2056, 1323 and 4414",
+      "tool": "alliance_builder"
+    },
+    {
+      "lang": "en",
+      "q": "what is the event average for endgame?",
+      "tool": "metric_summary"
+    },
+    {
+      "lang": "en",
+      "q": "what are 4414's strengths and weaknesses?",
+      "tool": "team_percentiles"
+    },
+    {
+      "lang": "en",
+      "q": "which teams were noted for defense?",
+      "tool": "search_notes"
+    },
+    {
+      "lang": "en",
+      "q": "which teams have swerve drive?",
+      "tool": "pit_search"
+    },
+    {
+      "lang": "en",
+      "q": "what metrics are available?",
+      "tool": "list_metrics"
+    },
+    {
+      "lang": "en",
+      "q": "give me an event summary",
+      "tool": "event_summary"
+    },
+    {
+      "lang": "en",
+      "q": "which teams still need scouting?",
+      "tool": "scouting_coverage"
+    },
+    {
+      "lang": "es",
+      "q": "¿qué equipos son más consistentes?",
+      "tool": "consistency"
+    },
+    {
+      "lang": "es",
+      "q": "resumen del evento",
+      "tool": "event_summary"
+    },
+    {
+      "lang": "tr",
+      "q": "en tutarlı takımlar",
+      "tool": "consistency"
+    },
+    {
+      "lang": "tr",
+      "q": "eksik rapor olan takımlar",
+      "tool": "scouting_coverage"
+    },
+    {
+      "lang": "he",
+      "q": "סיכום האירוע",
+      "tool": "event_summary"
+    },
+    {
+      "lang": "he",
+      "q": "אילו קבוצות הכי עקביות?",
+      "tool": "consistency"
+    },
+    {
+      "lang": "en",
+      "q": "make a  table with epa scouted opr and xP for all teams",
+      "tool": "make_table"
+    },
+    {
+      "lang": "en",
+      "q": "table of teams with EPA over 60 showing EPA and OPR",
+      "tool": "make_table"
+    },
+    {
+      "lang": "en",
+      "q": "pie chart of total points for the top 6 teams",
+      "tool": "make_chart"
+    },
+    {
+      "lang": "en",
+      "q": "bar chart of epa opr and xp for the top 5",
+      "tool": "make_chart"
+    },
+    {
+      "lang": "es",
+      "q": "tabla de epa y opr para todos los equipos",
+      "tool": "make_table"
+    },
+    {
+      "lang": "tr",
+      "q": "tüm takımlar için epa ve opr tablosu",
+      "tool": "make_table"
+    },
+    {
+      "lang": "he",
+      "q": "טבלה של epa ו-opr לכל הקבוצות",
+      "tool": "make_table"
     }
   ]
 }

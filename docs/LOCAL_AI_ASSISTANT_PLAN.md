@@ -313,6 +313,15 @@ The rule router still runs first on Standard and Advanced for obvious requests s
 4. **Final prose:** the system prompt says "Use only the facts in tool results. If something isn't there, say you don't know. Never state a number that isn't in a tool result."
 5. **Guardrail:** after generation, check that every number in the answer appears in that turn's tool results. If one doesn't, add an "unverified number" marker.
 
+**As built (tool understanding):**
+- 43 tools (`assistant/tools.js` + `assistant/tools-extra.js`). Added: `team_schedule`, `head_to_head`, `consistency`, `recent_form`, `alliance_builder`, `metric_summary`, `team_percentiles`, `search_notes`, `pit_search`, `list_metrics`, `event_summary`, `scouting_coverage`.
+- `TOOL_GUIDE` in `assistant/tool-calls.js` gives each tool a one-line "use when", what it shows, retrieval tags and an example. The router prompt lists only a per-question shortlist (~12 tools; 6 on Lite), because the full catalogue no longer fit the prompt budget and was being cut mid-list.
+- Model-written arguments are normalised (`coerceArgs`: "frc254", "254, 1678", "our team", "true").
+- `assistant/display.js` builds a manifest of the tables, charts and documents drawn above the answer ("table 'Ranking' - all 46 rows (every team at the event)"). The answer prompt (`assistant/prompts.js`) is built around it, history turns carry a note of what each earlier reply showed, and long fact lists are abbreviated with "+N more; every one is listed in the table shown above" instead of being cut off.
+- Guards in `assistant/verify.js`: sentences denying a visual that is on screen are dropped, tables the model re-types under the real one are removed (code briefs fill in if nothing is left), and "X has the highest <metric>" claims naming the wrong team are rewritten from the facts.
+
+**As built (custom tables and charts):** `assistant/builder.js` adds `make_table` / `make_chart`, driven by a small spec (teams / exclude / match / conditions, columns or metrics incl. max/min/stdev, counts, rank, record and arithmetic such as `EPA - xP`, sort_by / order / limit, rows: matches, by: match, chart type). New table / chart requests get a keyword draft (`specFromQuestion`); follow-ups such as "remove OPR from that table" are applied to the previous spec in code (`editSpec`; earlier tables without a spec are converted with `specFromDisplay`). Drafts or edits with words the code does not account for go to JSON-capable tiers for one refine step; Lite uses the draft. `verify.js` checks highest / lowest claims and team-number pairs against the tables on screen, drops repeated sentences and re-typed row lists.
+
 ### 7.6 Evaluation harness
 `scratch/assistant-eval.html` runs about 60 canned questions, each with expected tools and arguments: 30 single-step and 30 multi-step or follow-up. It reports per-tier tool accuracy, numeric-guardrail violations, and latency. Release targets:
 

@@ -149,45 +149,32 @@ object LocalAiModelService {
     val tiers: List<LocalAiTier> = listOf(
         LocalAiTier(
             id = "lite",
-            name = "Lite",
-            model = "Qwen2.5-0.5B-Instruct",
-            params = "0.5B",
-            license = "Apache-2.0",
+            name = "Lite (Llama 3.2 1B)",
+            model = "Llama-3.2-1B-Instruct",
+            params = "1B",
+            license = "Llama 3.2 Community License",
             webllm = WebLlmSource(
-                repo = "mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-                revision = "32ff081fe7e4dfe4ffb167b94c66fdf11e02b8ad",
-                mlcModelId = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-                modelLibFile = "Qwen2-0.5B-Instruct-q4f16_1_cs1k-webgpu.wasm"
+                repo = "mlc-ai/Llama-3.2-1B-Instruct-q4f16_1-MLC",
+                revision = "2a37b0a5ecb622d51ddc2fac74de0b95872affd7",
+                mlcModelId = "Llama-3.2-1B-Instruct-q4f16_1-MLC",
+                modelLibFile = "Llama-3.2-1B-Instruct-q4f16_1_cs1k-webgpu.wasm"
             ),
+            contextTokens = 2048,
+            // CPU (WASM) fallback for devices without usable WebGPU.
             cpu = OnnxSource(
-                repo = "onnx-community/Qwen2.5-0.5B-Instruct",
-                revision = "cc5cc01a65cc3ff17bdb73a7de33d879f62599b0",
+                repo = "onnx-community/Llama-3.2-1B-Instruct-ONNX",
+                revision = "14007543b6dc92de88daf96a9aa85d2f95ace6ef",
                 files = listOf(
                     "config.json", "generation_config.json", "tokenizer.json", "tokenizer_config.json",
-                    "special_tokens_map.json", "added_tokens.json", "onnx/model_quantized.onnx"
+                    "special_tokens_map.json", "chat_template.jinja", "onnx/model_q4.onnx", "onnx/model_q4.onnx_data"
                 ),
-                dtype = mapOf("model" to "q8")
+                dtype = mapOf("model" to "q4")
             ),
-            vramMB = 945
-        ),
-        LocalAiTier(
-            id = "standard",
-            name = "Standard",
-            model = "Qwen2.5-1.5B-Instruct",
-            params = "1.5B",
-            license = "Apache-2.0",
-            webllm = WebLlmSource(
-                repo = "mlc-ai/Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
-                revision = "9bd564b064631febf14deadcac492efb761d60c3",
-                mlcModelId = "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
-                modelLibFile = "Qwen2-1.5B-Instruct-q4f16_1_cs1k-webgpu.wasm"
-            ),
-            vramMB = 1630,
-            mobile = "slow"
+            vramMB = 780
         ),
         LocalAiTier(
             id = "gemma4e2b",
-            name = "Gemma 4 E2B",
+            name = "Standard (Gemma 4 E2B)",
             model = "gemma-4-E2B-it (QAT mobile)",
             params = "E2B",
             license = "Apache-2.0",
@@ -197,24 +184,8 @@ object LocalAiModelService {
             mobile = "slow"
         ),
         LocalAiTier(
-            id = "advanced",
-            name = "Advanced",
-            model = "Qwen2.5-3B-Instruct",
-            params = "3B",
-            license = "Qwen Research License (non-commercial use)",
-            webllm = WebLlmSource(
-                repo = "mlc-ai/Qwen2.5-3B-Instruct-q4f16_1-MLC",
-                revision = "7690aaaa46df36b1be0fe93b9c9abac0497eff6c",
-                mlcModelId = "Qwen2.5-3B-Instruct-q4f16_1-MLC",
-                modelLibFile = "Qwen2.5-3B-Instruct-q4f16_1_cs1k-webgpu.wasm"
-            ),
-            vramMB = 2505,
-            minDeviceMemoryGB = 8,
-            mobile = "no"
-        ),
-        LocalAiTier(
             id = "gemma4e4b",
-            name = "Gemma 4 E4B",
+            name = "Advanced (Gemma 4 E4B)",
             model = "gemma-4-E4B-it (QAT mobile)",
             params = "E4B",
             license = "Apache-2.0",

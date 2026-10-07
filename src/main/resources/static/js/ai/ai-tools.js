@@ -3,36 +3,87 @@
  *
  * The model never computes statistics. Questions are answered by:
  *   1. a deterministic rule router (handles most common questions instantly), else
- *   2. the model picking a read-only tool (JSON; grammar-constrained on WebLLM tiers), possibly several (Advanced),
- *   3. JavaScript executing the tool against ai-data.js (tables + charts are built by code),
- *   4. the model writing a short answer grounded only in the tool results,
+ *   2. the model picking read-only tools (JSON; grammar-constrained on WebLLM tiers) from a per-question shortlist,
+ *   3. JavaScript executing the tools against ai-data.js (tables + charts are built by code),
+ *   4. the model writing a short answer grounded in the tool results, told exactly what is drawn above it,
  *   5. a guardrail flagging any number in the answer that does not appear in the tool results.
  *
- * Split into modules under ./assistant/: router, tools, tool-calls, briefs, verify, docs-guide, shared.
+ * Split into modules under ./assistant/: router, tools, tools-extra, tool-calls, display, prompts, briefs, verify,
+ * docs-guide, shared.
  */
 
 import AI from "./local-ai.js";
-import UI from "./ai-ui.js";
 import { briefFor } from "./assistant/briefs.js";
+import { lastVisualSpec } from "./assistant/builder.js";
+import { digestFacts, displayManifest, historyDisplayNote, normalizeChart } from "./assistant/display.js";
+import { answerSystemPrompt, displayReminder } from "./assistant/prompts.js";
 import { hasIntent, ruleRoute } from "./assistant/router.js";
-import { currentLanguage, evaluate, t } from "./assistant/shared.js";
-import { compactFacts, eventDigest, parseJsonLoose, parseToolCalls, routerSystemPrompt, stepSchema } from "./assistant/tool-calls.js";
+import { evaluate, t } from "./assistant/shared.js";
+import { coerceArgs, eventDigest, parseJsonLoose, parseToolCalls, routerSystemPrompt, stepSchema } from "./assistant/tool-calls.js";
 import { TOOLS } from "./assistant/tools.js";
 import { cleanGraphRefusalText, unverifiedNumbers, verifyAndCorrectAnswer } from "./assistant/verify.js";
 
 export { briefFor } from "./assistant/briefs.js";
+export { editSpec, isEditRequest, lastVisualSpec, resolveColumn, specFromDisplay, specFromQuestion } from "./assistant/builder.js";
 export { getDocGuide } from "./assistant/docs-guide.js";
+export { displayManifest, digestFacts, historyDisplayNote, normalizeChart, toolTitle } from "./assistant/display.js";
 export { ruleRoute } from "./assistant/router.js";
 export { evaluate } from "./assistant/shared.js";
-export { parseJsonLoose, parseToolCalls } from "./assistant/tool-calls.js";
+export { coerceArgs, parseJsonLoose, parseToolCalls, selectTools } from "./assistant/tool-calls.js";
 export { TOOLS } from "./assistant/tools.js";
-export { unverifiedNumbers, cleanGraphRefusalText, verifyAndCorrectAnswer } from "./assistant/verify.js";
+export { unverifiedNumbers, cleanGraphRefusalText, correctLeaderClaims, correctTableClaims, stripMarkdownTables, verifyAndCorrectAnswer } from "./assistant/verify.js";
 
-// ------------------------------------------------------------------ orchestration
+// Tools that draw a chart when the question asks for one ("graph ...") even if the model forgot chart:true.
+const CHARTABLE = ["top_teams", "epa_data", "opr_data", "xp_data", "compare_teams", "team_overview", "projected_rankings", "match_preview",
+    "pick_candidates", "current_rankings", "compare_all_teams", "compare_metrics", "make_table"];
+// Same subject = same answer for these, whatever the other arguments say.
+const SUBJECT_TOOLS = ["compare_teams", "team_overview", "match_preview", "summarize_notes", "projected_rankings", "team_schedule", "team_percentiles"];
+
+/** Keeps the system prompt and latest question; trims, then drops, older turns; then shortens the DATA section. */
+function enforceMessageBudget(messages, maxChars = 5000) {
+    let total = messages.reduce((sum, m) => sum + (m.content ? m.content.length : 0), 0);
+    if (total <= maxChars) return messages;
+
+    const result = [...messages];
+    if (result.length > 2) {
+        for (let i = 1; i < result.length - 1; i++) {
+            if (result[i].content && result[i].content.length > 200) {
+                result[i] = { ...result[i], content: result[i].content.slice(0, 200) + "..." };
+            }
+        }
+        total = result.reduce((sum, m) => sum + (m.content ? m.content.length : 0), 0);
+    }
+    while (result.length > 2 && total > maxChars) {
+        const removed = result.splice(1, 1)[0];
+        total -= (removed.content ? removed.content.length : 0);
+    }
+    if (total > maxChars && result[0] && result[0].content) {
+        const excess = total - maxChars;
+        const sys = result[0].content;
+        const dataIdx = sys.lastIndexOf("DATA:");
+        if (dataIdx > 0) {
+            const head = sys.slice(0, dataIdx + 5);
+            const dataBody = sys.slice(dataIdx + 5);
+            const keepLen = Math.max(200, dataBody.length - excess - 50);
+            result[0] = { ...result[0], content: `${head}${dataBody.slice(0, keepLen)}\n(more data left out for space; the table on screen is complete)` };
+        } else {
+            result[0] = { ...result[0], content: sys.slice(0, Math.max(500, sys.length - excess)) + "..." };
+        }
+    }
+    return result;
+}
+
+/** A history turn for the model: earlier replies carry a note of the tables/charts they showed. */
+function historyMessage(h, maxChars) {
+    const note = h.role === "assistant" ? historyDisplayNote(h.display) : "";
+    const text = String(h.content || "").slice(0, maxChars);
+    return { role: h.role, content: note ? `${note}\n${text}` : text };
+}
 
 /**
  * Answers one question. onEvent receives:
  *   {type:'status', text} | {type:'tool', name, args, result} | {type:'token', full} | {type:'done', text, unverified, results}
+ * history items are {role, content, display?}; display is what an earlier reply showed (tables, charts, documents).
  */
 export async function answerQuestion({ question, history = [], ctx, tier, signal, onEvent = () => {}, route = null }) {
     const profile = AI.tierProfile(tier);
@@ -43,18 +94,17 @@ export async function answerQuestion({ question, history = [], ctx, tier, signal
     const runTool = async (name, args) => {
         const tool = TOOLS[name];
         if (!tool) return { facts: { error: `Tool ${name} does not exist.` } };
-        const toolArgs = { ...(args || {}) };
-        if (wantsChart && toolArgs.chart === undefined && ["top_teams", "compare_teams", "team_overview", "projected_rankings", "match_preview", "pick_candidates"].includes(name)) {
-            toolArgs.chart = true;
-        }
+        const toolArgs = coerceArgs(ctx, args);
+        if (wantsChart && toolArgs.chart === undefined && CHARTABLE.includes(name)) toolArgs.chart = true;
         onEvent({ type: "status", text: t("ai.status.tool", "Looking up data ({tool})...").replace("{tool}", name.replace(/_/g, " ")) });
         try {
             const result = await tool.run(ctx, toolArgs, { signal });
-            const entry = { tool: name, args: toolArgs, ...result };
+            const entry = { tool: name, args: toolArgs, ...result, chart: normalizeChart(result.chart) };
             results.push(entry);
             onEvent({ type: "tool", name, args: toolArgs, result: entry });
             return entry;
         } catch (err) {
+            if (err && err.name === "AbortError") throw err;
             const errEntry = { tool: name, args: toolArgs, facts: { error: err.message } };
             results.push(errEntry);
             onEvent({ type: "tool", name, args: toolArgs, result: errEntry });
@@ -62,51 +112,90 @@ export async function answerQuestion({ question, history = [], ctx, tier, signal
         }
     };
 
-    // 1. Deterministic routing first.
-    const routed = route || ruleRoute(question, ctx, history);
-    if (routed) await runTool(routed.tool, routed.args);
+    // A rule-router draft that did not account for every word (or an edit it could not apply) is checked by a
+    // capable model, which writes the complete spec; small tiers use the draft (or normal routing).
+    const refineRoute = async (draft) => {
+        const fallback = () => (draft.unchanged ? ruleRoute(question, ctx, history, { skipEdit: true }) : draft);
+        if (profile.toolMode !== "json" || !(profile.maxToolCalls > 0)) return fallback();
+        onEvent({ type: "status", text: t("ai.status.planning", "Working out what data is needed...") });
+        const kind = (draft.previous || draft).tool === "make_chart" ? "chart" : "table";
+        const lines = [`Question: ${question}`];
+        if (draft.edit) {
+            lines.push(`The user is changing the ${kind} on screen. Its current spec: ${JSON.stringify(draft.previous)}`);
+            if (!draft.unchanged) lines.push(`Keyword matching suggests: ${JSON.stringify({ tool: draft.tool, args: draft.args })} (check it against the question).`);
+        } else {
+            lines.push(`Keyword matching drafted: ${JSON.stringify({ tool: draft.tool, args: draft.args })}`);
+            if (draft.leftover && draft.leftover.length) lines.push(`Words it did not understand: ${draft.leftover.join(", ")}.`);
+        }
+        lines.push("Reply with ONE call whose args are the COMPLETE spec that does exactly what the question asks (fix the draft, or choose a better tool).");
+        lines.push("Keep every column, team and filter from the draft that the question asks for. Do not add sorting, limits or columns the question does not ask for.");
+        const messages = [
+            { role: "system", content: routerSystemPrompt(ctx, allowed, 1, { question, include: ["make_table", "make_chart"] }) },
+            { role: "user", content: lines.join("\n") }
+        ];
+        const raw = await AI.generate(enforceMessageBudget(messages, Math.max(3500, profile.contextChars || 0)), {
+            maxTokens: 320, temperature: 0, signal, jsonSchema: stepSchema(allowed)
+        });
+        const [call] = parseToolCalls(raw, allowed);
+        if (!call) return fallback();
+        return { tool: call.tool, args: call.args, fallback: draft.unchanged ? null : draft };
+    };
 
-    // 2. Model routing (more steps on bigger tiers).
+    // 1. Deterministic routing first.
+    let routed = route || ruleRoute(question, ctx, history);
+    if (routed && routed.refine && !route) routed = await refineRoute(routed);
+    if (routed) {
+        const entry = await runTool(routed.tool, routed.args);
+        // The model's spec failed (e.g. a column that does not exist): use the keyword draft instead.
+        if (entry && entry.facts && entry.facts.error && routed.fallback) {
+            results.splice(results.indexOf(entry), 1);
+            await runTool(routed.fallback.tool, routed.fallback.args);
+        }
+    }
+
+    // 2. Model routing (more steps on bigger tiers), from a shortlist of tools relevant to the question.
     const maxCalls = routed ? (profile.routedFollowUps || 0) : profile.maxToolCalls;
+    const isCompact = (profile.contextChars <= 3000);
     if (maxCalls > 0) {
         onEvent({ type: "status", text: t("ai.status.planning", "Working out what data is needed...") });
-        const routerMessages = [{ role: "system", content: routerSystemPrompt(ctx, allowed, maxCalls) }];
-        history.slice(-2).forEach((h) => routerMessages.push({ role: h.role, content: String(h.content).slice(0, 250) }));
+        const routerMessages = [{ role: "system", content: routerSystemPrompt(ctx, allowed, maxCalls, { compact: isCompact, question }) }];
+        history.slice(-2).forEach((h) => routerMessages.push(historyMessage(h, 250)));
         let pending = `Question: ${question}`;
-        if (results.length) pending += `\nAlready retrieved:\n${compactFacts(results, 800)}`;
-        for (let step = 0; step < maxCalls; step++) {
+        if (results.length) pending += `\nAlready retrieved (and shown to the user):\n${digestFacts(results, 900)}`;
+        const onScreen = lastVisualSpec(history, ctx);
+        if (onScreen) pending += `\nOn screen from the previous reply (to change it, call the same tool with the complete new spec): ${JSON.stringify(onScreen)}`;
+        let callsLeft = maxCalls;
+        for (let step = 0; step < maxCalls && callsLeft > 0; step++) {
             if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError");
             routerMessages.push({ role: "user", content: pending });
-            const cappedRouterMessages = enforceMessageBudget(routerMessages, 3500);
-            const raw = await AI.generate(cappedRouterMessages, {
+            const raw = await AI.generate(enforceMessageBudget(routerMessages, isCompact ? 1600 : Math.max(3500, profile.contextChars || 0)), {
                 maxTokens: 280, temperature: 0, signal,
                 jsonSchema: profile.toolMode === "json" ? stepSchema(allowed) : null
             });
             routerMessages.push({ role: "assistant", content: raw });
-            const toolCalls = parseToolCalls(raw, allowed);
+            const toolCalls = parseToolCalls(raw, allowed).slice(0, callsLeft);
             if (!toolCalls.length) break;
 
             const subject = (a) => JSON.stringify((a && (a.teams || a.team || a.match)) ?? null);
             const stepFeedback = [];
             let executedCount = 0;
-
             for (const call of toolCalls) {
+                const args = coerceArgs(ctx, call.args);
                 const dup = results.some((r) => r.tool === call.tool &&
-                    (JSON.stringify(r.args) === JSON.stringify(call.args || {}) ||
-                     (["compare_teams", "team_overview", "match_preview", "summarize_notes", "projected_rankings"].includes(r.tool) && subject(r.args) === subject(call.args))));
+                    (JSON.stringify(r.args) === JSON.stringify(args) || (SUBJECT_TOOLS.includes(r.tool) && subject(r.args) === subject(args))));
                 if (dup) continue;
-
-                const entry = await runTool(call.tool, call.args || {});
+                const entry = await runTool(call.tool, args);
                 executedCount++;
+                callsLeft--;
                 if (entry && entry.facts && entry.facts.error) {
-                    stepFeedback.push(`Execution result for ${call.tool}: ERROR - ${entry.facts.error}`);
+                    stepFeedback.push(`Result of ${call.tool}: ERROR - ${entry.facts.error}`);
                 } else {
-                    stepFeedback.push(`Execution result for ${call.tool}: SUCCESS\nData:\n${JSON.stringify(entry.facts).slice(0, 1000)}`);
+                    const shown = displayManifest([entry], ctx);
+                    stepFeedback.push(`Result of ${call.tool}: SUCCESS${shown ? ` (shown to the user: ${shown.replace(/^\d+\.\s*/gm, "")})` : ""}\n${digestFacts([entry], 1000)}`);
                 }
             }
-
             if (executedCount === 0) break;
-            pending = `${stepFeedback.join("\n\n")}\n\nCall additional tools if needed, or reply with {"action":"answer"}.`;
+            pending = `${stepFeedback.join("\n\n")}\n\nCall another tool only if the question still needs different data; otherwise reply {"action":"answer"}.`;
         }
     }
 
@@ -134,7 +223,7 @@ export async function answerQuestion({ question, history = [], ctx, tier, signal
         return { text: finalTool.markdown, results };
     }
 
-    // 3a. Lite: answer with the code-built briefs (accurate by construction) rather than 0.5B prose.
+    // 3a. Lite: answer with the code-built briefs (accurate by construction) rather than small-model prose.
     const briefs = results.map(briefFor).filter(Boolean);
     if (profile.codeAnswers && briefs.length) {
         const text = briefs.join("\n\n");
@@ -142,101 +231,33 @@ export async function answerQuestion({ question, history = [], ctx, tier, signal
         return { text, results, unverified: [] };
     }
 
-    // 3b. Grounded answer.
+    // 3b. Grounded answer. The facts get whatever room is left after the instructions, history and question.
     onEvent({ type: "status", text: t("ai.status.writing", "Writing answer...") });
-    let factsText = results.length ? compactFacts(results, profile.contextChars - 1800) : JSON.stringify(eventDigest(ctx));
-    if (briefs.length) factsText = `KEY POINTS (computed, 100% verified facts):\n${briefs.join("\n")}\n\n${factsText}`;
-    const system = [
-        "You are the ObsidianScout scouting assistant for a FIRST Robotics team.",
-        `Our team: ${ctx.ourTeam || "unknown"}. Event: ${ctx.eventKey || "unknown"}.`,
-        "",
-        "SYSTEM CAPABILITIES & LOCAL TOOLS:",
-        "- You have full access to local scouting analytics tools: match schedule (`all_matches`), team roster (`all_teams`), win predictions (`match_predictions`), official rankings (`current_rankings`), site user manuals and documentation (`read_docs`), match-by-match line graphs (`match_by_match`, `metric_trend`), ranking bar charts (`top_teams`), team comparisons (`compare_teams`), 2D scatter plots (`scatter`), radar skill charts (`team_radar`), phase breakdown stacked charts (`stacked_breakdown`), score distributions (`score_distribution`), match previews (`match_preview`), strategy briefs (`create_strategy_brief`), alliance pick sheets (`create_alliance_sheet`), team dossiers (`create_team_dossier`), and Monte Carlo projections (`projected_rankings`).",
-        "- The UI system AUTOMATICALLY plots and renders interactive charts, graphs, and tables directly above your message whenever data or visualisations are requested.",
-        "- NEVER state 'As a text-based AI, I don't have access to tools/APIs' or 'I cannot create charts'. You are connected to local ObsidianScout tools and data.",
-        "- When the user asks to graph/chart or when a chart is shown, refer directly to the displayed graph/chart above (e.g., 'As shown in the graph above...').",
-        "",
-        // Written-out reasoning costs hundreds of tokens; only fast tiers get it (see TIER_PROFILES.visibleReasoning).
-        ...(profile.visibleReasoning ? [
-            "REASONING & CHAIN-OF-THOUGHT:",
-            "- You can think step-by-step before producing your final response.",
-            "- Wrap your internal chain-of-thought, calculations, and data checks inside <thought>...</thought> tags at the beginning of your response.",
-            "- In your <thought> block: check team numbers, verify match numbers/averages, review rankings, and reason through tactical trade-offs.",
-            "- After </thought>, output only your clear, direct, and verified final markdown answer for the user.",
-            ""
-        ] : ["Answer directly and concisely. Do not write out your reasoning.", ""]),
-        "CONVERSATIONAL FOCUS & FRESHNESS:",
-        "- Always address the USER'S LATEST QUESTION directly as your primary focus. Never repeat old answers or keep analyzing a previously discussed team unless the user specifically asks a follow-up about them.",
-        "- Use conversation history ONLY for pronoun resolution or context when the latest question is a direct continuation (e.g., 'how does that compare?', 'what about their teleop?').",
-        "- If the latest question is general, greeting, or meta (such as 'what can you do?', 'help', 'who are you?'), answer the question directly without referring back to older team graphs.",
-        "",
-        "SCOUTED VS PLAYED MATCHES DISTINCTION:",
-        "- 'matches_scouted_by_our_team' indicates how many match reports OUR team's scouts submitted locally.",
-        "- 'matches_played_at_event' indicates how many official matches the team has competed in at the event (from match schedule / Statbotics).",
-        "- If a team has matches_scouted = 0 but has played matches (or has EPA/OPR/xP data from N > 0 matches), ALWAYS state that the team has played in matches at the event, but our scouting team has not submitted local match reports for them yet.",
-        "- NEVER say a team has played 0 matches when only their locally scouted count is 0.",
-        "",
-        "STRICT FACT-CHECKING RULES:",
-        "- Answer using ONLY the DATA below. Never state any statistic or number not present in the DATA.",
-        "- STRICT TEAM ATTRIBUTION: Only attribute scores, averages, or rankings to the EXACT team that achieved them. Never confuse 'our team' with other teams.",
-        `- If asked about our team (${ctx.ourTeam || "our team"}) and our team is not in the DATA, explicitly state that data for our team is not in the retrieved results.`,
-        "- Never invent robot capabilities (defense, game strategy, shooter speed) not explicitly mentioned in the scout notes or pit data.",
-        "- Do not repeat entire tables row by row: summarise the key takeaways in 2-5 concise sentences or short bullets.",
-        profile.strategy ? "When asked for strategy (picks, defense, match plans), reason step by step from the verified DATA." : "",
-        `Reply in ${currentLanguage()}.`,
-        "",
-        "DATA:",
-        factsText
-    ].filter(Boolean).join("\n");
-function enforceMessageBudget(messages, maxChars = 5000) {
-    let total = messages.reduce((sum, m) => sum + (m.content ? m.content.length : 0), 0);
-    if (total <= maxChars) return messages;
-
-    // 1. Trim history items (keep system at index 0 and latest user at last index)
-    const result = [...messages];
-    if (result.length > 2) {
-        for (let i = 1; i < result.length - 1; i++) {
-            if (result[i].content && result[i].content.length > 200) {
-                result[i] = { ...result[i], content: result[i].content.slice(0, 200) + "..." };
-            }
-        }
-        total = result.reduce((sum, m) => sum + (m.content ? m.content.length : 0), 0);
+    const budget = profile.contextChars || 5000;
+    const manifest = displayManifest(results, ctx);
+    const historyMsgs = history.slice(-profile.historyTurns * 2).map((h) => historyMessage(h, 300));
+    const promptArgs = { ctx, profile, results, manifest, compact: isCompact };
+    const userTurn = question + displayReminder(results);
+    const fixedChars = answerSystemPrompt({ ...promptArgs, facts: "" }).length
+        + historyMsgs.reduce((sum, m) => sum + m.content.length, 0) + userTurn.length;
+    const factsBudget = Math.max(700, budget - fixedChars - 60);
+    let factsText;
+    if (results.length) {
+        const keyPoints = briefs.length ? `KEY POINTS (computed by code, exact):\n${briefs.join("\n")}`.slice(0, Math.floor(factsBudget * 0.4)) : "";
+        factsText = [keyPoints, digestFacts(results, factsBudget - keyPoints.length - 2)].filter(Boolean).join("\n\n");
+    } else {
+        factsText = JSON.stringify(eventDigest(ctx));
     }
+    const system = answerSystemPrompt({ ...promptArgs, facts: factsText });
 
-    // 2. Drop older history if still over budget
-    while (result.length > 2 && total > maxChars) {
-        const removed = result.splice(1, 1)[0];
-        total -= (removed.content ? removed.content.length : 0);
-    }
-
-    // 3. Truncate system prompt DATA section if still over budget
-    if (total > maxChars && result[0] && result[0].content) {
-        const excess = total - maxChars;
-        const sys = result[0].content;
-        const dataIdx = sys.indexOf("DATA:");
-        if (dataIdx > 0) {
-            const head = sys.slice(0, dataIdx + 5);
-            const dataBody = sys.slice(dataIdx + 5);
-            const keepLen = Math.max(200, dataBody.length - excess - 50);
-            result[0] = { ...result[0], content: head + "\n" + dataBody.slice(0, keepLen) + "\n...(truncated for context limit)" };
-        } else {
-            result[0] = { ...result[0], content: sys.slice(0, Math.max(500, sys.length - excess)) + "..." };
-        }
-    }
-    return result;
-}
-
-    const messages = [{ role: "system", content: system }];
-    history.slice(-profile.historyTurns * 2).forEach((h) => messages.push({ role: h.role, content: String(h.content).slice(0, 300) }));
-    messages.push({ role: "user", content: question });
-
-    const cappedMessages = enforceMessageBudget(messages, profile.contextChars || 5000);
-
-    const rawText = await AI.generate(cappedMessages, {
+    const messages = [{ role: "system", content: system }, ...historyMsgs, { role: "user", content: userTurn }];
+    const hasVisual = results.some((r) => r.chart || r.table || r.artifact);
+    const hasTable = results.some((r) => r.table && r.table.rows && r.table.rows.length);
+    const rawText = await AI.generate(enforceMessageBudget(messages, budget), {
         maxTokens: profile.maxAnswerTokens,
         temperature: 0,
         signal,
-        onToken: (_d, full) => onEvent({ type: "token", full: cleanGraphRefusalText(full, results.some((r) => r.chart || r.table)) })
+        onToken: (_d, full) => onEvent({ type: "token", full: cleanGraphRefusalText(full, hasVisual, hasTable) })
     });
 
     const verification = verifyAndCorrectAnswer(rawText, results.length ? results : [{ facts: eventDigest(ctx), args: {} }], question, ctx);

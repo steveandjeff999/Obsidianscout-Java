@@ -1,7 +1,7 @@
 
 
 
-const CACHE_NAME = 'obsidianscout-shell-v0-6-3-1';
+const CACHE_NAME = 'obsidianscout-shell-v0-6-3-11';
 
 
 const NAVIGATION_TIMEOUT_MS = 4000;
@@ -173,6 +173,10 @@ const ASSETS = [
     '/js/ai/assistant/tool-calls.js',
     '/js/ai/assistant/briefs.js',
     '/js/ai/assistant/verify.js',
+    '/js/ai/assistant/display.js',
+    '/js/ai/assistant/prompts.js',
+    '/js/ai/assistant/tools-extra.js',
+    '/js/ai/assistant/builder.js',
     '/js/ai/ai-features.js',
     '/js/ai/ai-worker.js',
     '/js/contact.js',

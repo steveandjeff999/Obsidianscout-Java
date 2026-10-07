@@ -26,7 +26,7 @@ export async function setCpuForced(value) {
     capsPromise = null;
     await unload();
 }
-export const TIER_ORDER = ["lite", "standard", "gemma4e2b", "advanced", "gemma4e4b"];
+export const TIER_ORDER = ["lite", "gemma4e2b", "gemma4e4b"];
 
 /**
  * Per-tier behaviour. Features check these flags, never tier ids, so new tiers only need an entry here.
@@ -40,11 +40,10 @@ export const TIER_ORDER = ["lite", "standard", "gemma4e2b", "advanced", "gemma4e
  *  visibleReasoning  ask for a <thought> block before the answer (costly; only for fast WebLLM tiers).
  */
 export const TIER_PROFILES = {
-    lite: { maxAnswerTokens: 450, contextChars: 4200, toolMode: "router", maxToolCalls: 1, routedFollowUps: 0, historyTurns: 3, codeAnswers: true, extractiveSummaries: true, calculate: false, strategy: false, visibleReasoning: false },
-    standard: { maxAnswerTokens: 500, contextChars: 4500, toolMode: "json", maxToolCalls: 2, routedFollowUps: 0, historyTurns: 3, codeAnswers: false, extractiveSummaries: false, calculate: false, strategy: false, visibleReasoning: false },
-    // Gemma 4 runs through Transformers.js at a few tokens per second: fewer model-picked calls, shorter answers, no written reasoning.
+    lite: { maxAnswerTokens: 300, contextChars: 3000, toolMode: "router", maxToolCalls: 1, routedFollowUps: 0, historyTurns: 2, codeAnswers: true, extractiveSummaries: true, calculate: false, strategy: false, visibleReasoning: false },
+    standard: { maxAnswerTokens: 400, contextChars: 6000, toolMode: "json", maxToolCalls: 1, routedFollowUps: 0, historyTurns: 3, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: false },
     gemma4e2b: { maxAnswerTokens: 400, contextChars: 6000, toolMode: "json", maxToolCalls: 1, routedFollowUps: 0, historyTurns: 3, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: false },
-    advanced: { maxAnswerTokens: 750, contextChars: 5000, toolMode: "json", maxToolCalls: 4, routedFollowUps: 2, historyTurns: 4, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true },
+    advanced: { maxAnswerTokens: 500, contextChars: 7000, toolMode: "json", maxToolCalls: 2, routedFollowUps: 0, historyTurns: 4, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: false },
     gemma4e4b: { maxAnswerTokens: 500, contextChars: 7000, toolMode: "json", maxToolCalls: 2, routedFollowUps: 0, historyTurns: 4, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: false }
 };
 
@@ -167,12 +166,14 @@ export async function capabilities(force = false) {
                 deviceMemory: navigator.deviceMemory || null,
                 mobile: false,
                 quota: null,
-                usage: null
+                usage: null,
+                forcedCpu: false
             };
             caps.mobile = !!(navigator.userAgentData && navigator.userAgentData.mobile) ||
                 /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
             let forceCpu = false;
             try { forceCpu = localStorage.getItem(PREF_FORCE_CPU) === "1"; } catch (_) { /* storage blocked */ }
+            caps.forcedCpu = forceCpu;
             try {
                 if (navigator.gpu && !forceCpu) {
                     let adapter = null;
@@ -236,7 +237,9 @@ export function assessTier(tier, caps) {
             status: "unsupported",
             backend: "webgpu",
             downloadBytes: (tier.webgpu && tier.webgpu.downloadBytes) || 0,
-            reason: !caps.webgpu
+            reason: caps.forcedCpu
+                ? t("ai.cap.gpu_off", "The GPU is switched off on this device (\"don't use the GPU\" is ticked in Settings → AI models).")
+                : !caps.webgpu
                 ? t("ai.cap.requires_webgpu", "Requires a browser with WebGPU (recent Chrome, Edge or Safari).")
                 : t("ai.cap.requires_f16", "This GPU/browser lacks 16-bit shader support (shader-f16).")
         };
@@ -448,7 +451,7 @@ export function generate(messages, options = {}) {
             }
             return result.text || "";
         } catch (err) {
-            const isDisposedOrUnloaded = /disposed|not loaded|MLCEngine\.reload|Device lost|GrammarMatcher/i.test(err.message || "");
+            const isDisposedOrUnloaded = /disposed|not loaded|MLCEngine\.reload|Device lost|GrammarMatcher|GPUBuffer|mapAsync|unmapped/i.test(err.message || "");
             if (isDisposedOrUnloaded && engine.tierId) {
                 const currentTierId = engine.tierId;
                 await unload();

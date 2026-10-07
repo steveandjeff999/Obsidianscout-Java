@@ -83,5 +83,9 @@
         "target_time_utc": "02:54",
         "retention_days": 30,
         "storage_directory": "data/snapshots"
+    },
+    "local_ai": {
+        "auto_install_tiers": ["lite"],
+        "min_free_disk_mb": 2048
     }
 }

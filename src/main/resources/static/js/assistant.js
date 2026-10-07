@@ -6,7 +6,7 @@
 import AI from "./ai/local-ai.js";
 import UI from "./ai/ai-ui.js";
 import Data from "./ai/ai-data.js";
-import Tools from "./ai/ai-tools.js";
+import Tools, { normalizeChart, toolTitle } from "./ai/ai-tools.js";
 
 function t(key, fallback) {
     return (window.Obsidianscout && typeof Obsidianscout.t === "function") ? Obsidianscout.t(key, fallback) : fallback;
@@ -466,7 +466,9 @@ function themeTokens() {
     };
 }
 
-function chartCard(spec) {
+function chartCard(rawSpec) {
+    // Older saved conversations may hold charts in a pre-normalised shape.
+    const spec = normalizeChart(rawSpec) || rawSpec;
     const card = document.createElement("div");
     card.className = "assistant-card";
     const head = document.createElement("div");
@@ -628,7 +630,7 @@ async function ask(question, route = null) {
     try {
         const tierId = el.tier.value || undefined;
         const { tier } = await UI.ensureModelReady({ tierId });
-        const history = state.history.map((h) => ({ role: h.role, content: h.content }));
+        const history = state.history.map((h) => ({ role: h.role, content: h.content, display: h.display }));
         await Tools.answerQuestion({
             question,
             history,
@@ -641,11 +643,13 @@ async function ask(question, route = null) {
                 else if (ev.type === "tool") {
                     const d = {
                         tool: ev.name,
-                        title: ev.result.table ? toolTitle(ev.name) : "",
+                        title: ev.result.table ? ((ev.result.facts && ev.result.facts.title) || toolTitle(ev.name)) : "",
                         table: ev.result.table || null,
                         chart: ev.result.chart || null,
                         artifact: ev.result.artifact || null,
-                        links: ev.result.links || null
+                        links: ev.result.links || null,
+                        // The spec behind a built table / chart, so a follow-up can edit it ("remove OPR from that table").
+                        spec: ev.result.spec || null
                     };
                     display.push(d);
                     renderToolCards(cards, d);
@@ -681,24 +685,4 @@ async function ask(question, route = null) {
         setBusy(false);
         el.input.focus();
     }
-}
-
-function toolTitle(name) {
-    return {
-        team_overview: t("ai.card.team_overview", "Team overview"),
-        top_teams: t("ai.card.top_teams", "Ranking"),
-        compare_teams: t("ai.card.compare", "Comparison"),
-        metric_trend: "Match-by-Match Trend",
-        match_preview: t("ai.card.match_preview", "Match preview"),
-        pick_candidates: t("ai.card.picks", "Pick candidates"),
-        projected_rankings: "Projected Rankings",
-        stacked_breakdown: "Scoring Phase Breakdown",
-        team_radar: "Team Radar Profile",
-        score_distribution: "Score Distribution",
-        create_strategy_brief: "Strategy Brief",
-        create_alliance_sheet: "Alliance Selection Worksheet",
-        create_team_dossier: "Team Dossier",
-        create_artifact: "Artifact",
-        filter_teams: t("ai.card.filter", "Matching teams")
-    }[name] || t("ai.card.data", "Data");
 }

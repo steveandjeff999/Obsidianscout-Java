@@ -29,6 +29,19 @@ export function briefFor(result) {
             if (f.pit && f.pit.length) lines.push(`${t("ai.brief.pit", "Pit")}: ${f.pit.slice(0, 3).join("; ")}`);
             return lines.join("\n\n");
         }
+        case "epa_data":
+        case "opr_data":
+        case "xp_data": {
+            if (f.team) {
+                const tmName = f.name ? `Team ${f.team} (${f.name})` : `Team ${f.team}`;
+                return `${tmName} has an average ${f.metric} of ${f.average} (${f.source}, rank ${f.rank || "-"}, max ${f.max}, N=${f.samples}).`;
+            }
+            if (f.teams) {
+                return [fmt(t("ai.brief.top", "Top {n} by {metric}:"), { n: f.teams.length, metric: f.metric }),
+                    ...f.teams.map((r) => `${r.rank}. ${nameOf(r)} - ${r.avg}`)].join("\n");
+            }
+            return "";
+        }
         case "top_teams":
             return [fmt(t("ai.brief.top", "Top {n} by {metric}:"), { n: f.teams.length, metric: f.metric }),
                 ...f.teams.map((r) => `${r.rank}. ${nameOf(r)} - ${r.avg}`)].join("\n");
@@ -90,6 +103,11 @@ export function briefFor(result) {
             return fmt(t("ai.brief.filter", "{count} teams match {conditions}: {teams}"), {
                 count: f.count, conditions: (f.conditions || []).join(" & "), teams: (f.matching_teams || []).join(", ") || "-"
             });
+        case "compare_all_teams": {
+            const leaders = Object.entries(f.leaders || {}).filter(([, v]) => v).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v.team} (${v.value})`);
+            return `The table compares all ${f.total_teams} teams at ${f.event ? f.event.toUpperCase() : "the event"} on scouted data, EPA, OPR and xP.`
+                + (leaders.length ? ` Leaders - ${leaders.join("; ")}.` : "");
+        }
         case "capabilities_help":
             return f.summary || "I can analyze match data, plot trends, generate alliance selection worksheets, simulate projected event rankings, and build tactical strategy artifacts.";
         case "all_matches":
@@ -104,6 +122,67 @@ export function briefFor(result) {
             return f.summary || `ObsidianScout Documentation: ${f.title}`;
         case "calculate":
             return `${f.expression} = ${f.result}`;
+        case "make_table":
+        case "make_chart": {
+            const what = result.tool === "make_chart"
+                ? `The ${f.chart_type || "chart"} shows ${f.metrics ? f.metrics.join(", ") : "the data"} for ${f.teams_shown} team(s)`
+                : `The table has ${f.row_count} row(s) (${f.rows_are || "one per team"}) with ${f.columns ? f.columns.join(", ") : ""}`;
+            const extras = [f.sorted_by && `sorted by ${f.sorted_by}`, f.filters && `filtered to ${f.filters.join(" & ")}`].filter(Boolean).join(", ");
+            const lines = [`${what}${extras ? `, ${extras}` : ""}.`];
+            Object.entries(f.highlights || {}).slice(0, 6).forEach(([label, h]) => {
+                lines.push(h.highest.team === h.lowest.team
+                    ? `- ${label}: ${h.highest.team} ${h.highest.value}.`
+                    : `- ${label}: highest ${h.highest.team} (${h.highest.value}), lowest ${h.lowest.team} (${h.lowest.value}), average ${h.average} over ${h.teams_with_data}.`);
+            });
+            if (f.unknown_columns || f.unknown_metrics) lines.push(f.unknown_columns || f.unknown_metrics);
+            if (f.note) lines.push(f.note);
+            return lines.join("\n");
+        }
+        case "team_schedule": {
+            const tmName = f.name ? `Team ${f.team} (${f.name})` : `Team ${f.team}`;
+            const lines = [`${tmName}: record ${f.record} over ${f.matches_played} played match${f.matches_played === 1 ? "" : "es"}, ${f.matches_upcoming} still to play.`];
+            const nx = f.next_match;
+            if (nx) lines.push(`Next: ${nx.match} on ${nx.alliance} with ${nx.partners.join(" & ") || "-"} against ${nx.opponents.join(", ") || "-"} (expected ${nx.expected}, win chance ${nx.win_chance}).`);
+            return lines.join("\n");
+        }
+        case "head_to_head": {
+            if (f.never_met) return `${f.team_a} and ${f.team_b} have not been in the same match at this event.`;
+            return `${f.team_a} and ${f.team_b}: ${(f.matches_as_partners || []).length} match(es) as partners, ${(f.matches_as_opponents || []).length} as opponents (head-to-head ${f.head_to_head_record}).`;
+        }
+        case "consistency":
+            return [`${f.order === "least consistent first" ? "Least" : "Most"} consistent on ${f.metric} (lower spread = more predictable):`,
+                ...(f.teams || []).slice(0, 8).map((r) => `${r.rank}. ${nameOf(r)} - avg ${r.avg}, std dev ${r.stdev} (${r.cv_pct}%)`)].join("\n");
+        case "recent_form": {
+            const lastKey = `last_${f.recent_matches}_avg`;
+            return [`${f.metric}, last ${f.recent_matches} matches vs overall (${f.order}):`,
+                ...(f.teams || []).slice(0, 8).map((r) => `- ${nameOf(r)}: ${r.overall_avg} → ${r[lastKey]} (${r.change >= 0 ? "+" : ""}${r.change})`)].join("\n");
+        }
+        case "alliance_builder": {
+            const lines = [`Alliance ${(f.alliance || []).map((a) => a.team).join(", ")} expects about ${f.alliance_expected_total} points${f.weakest_phase ? ` (weakest phase: ${f.weakest_phase})` : ""}.`];
+            if (f.opponents) lines.push(`Opponents ${f.opponents.map((a) => a.team).join(", ")} expect about ${f.opponents_expected_total}; win chance ${f.alliance_win_chance}.`);
+            return lines.join("\n");
+        }
+        case "metric_summary": {
+            const lines = [`${f.metric} across ${f.teams_with_data} teams: mean ${f.mean}, median ${f.median}, middle half ${f.q1}-${f.q3}, range ${f.min} (${f.worst_team}) to ${f.max} (${f.best_team}).`];
+            if (f.team) lines.push(`Team ${f.team.team}: ${f.team.value}, rank ${f.team.rank}.`);
+            return lines.join("\n");
+        }
+        case "team_percentiles":
+            return `Team ${f.team}${f.name ? ` (${f.name})` : ""} is strongest in ${(f.strongest || []).join(", ")} and weakest in ${(f.weakest || []).join(", ")}.`;
+        case "search_notes":
+            return f.matching_notes
+                ? `${f.matching_notes} note(s) about ${f.teams_mentioned} team(s) mention "${f.query}": ${(f.teams || []).slice(0, 10).map((x) => x.team).join(", ")}.`
+                : `No scout notes mention "${f.query}".`;
+        case "pit_search":
+            return f.matching_answers
+                ? `${f.matching_answers} pit answer(s)${f.query ? ` mention "${f.query}"` : ""} for team(s) ${(f.teams_matching || []).slice(0, 12).join(", ")}.`
+                : `No pit answers${f.query ? ` mention "${f.query}"` : ""} (pit data exists for ${f.teams_with_pit_data} team(s)).`;
+        case "list_metrics":
+            return `${f.metric_count} metrics are available: ${(f.metrics || []).map((m) => m.metric).join(", ")}.`;
+        case "event_summary":
+            return `${f.teams} teams, ${f.matches_played} of ${f.matches_scheduled} matches played, ${f.scouting_reports} scouting reports${f.scouting_coverage_pct !== undefined ? ` (${f.scouting_coverage_pct}% coverage)` : ""}.`;
+        case "scouting_coverage":
+            return `Scouting coverage ${f.coverage_pct}% (${f.scouted_team_matches} of ${f.played_team_matches} team-matches); ${(f.teams_missing_reports || []).length} team(s) have missing reports across ${f.matches_with_missing_reports} match(es).`;
         default:
             return "";
     }

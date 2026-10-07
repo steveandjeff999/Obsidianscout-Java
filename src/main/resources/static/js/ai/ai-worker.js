@@ -158,20 +158,30 @@ async function loadTransformers(id, source, runtime, origin, device) {
     state.model = await ModelClass.from_pretrained(source.modelId, { dtype, device });
     state.kind = "transformers";
     state.backend = device === "wasm" ? "cpu" : "webgpu";
+    state.modelId = source.modelId;
 }
 
 async function loadWebLLM(id, tier, runtime, origin) {
     const gpu = tier.webgpu;
     const webllm = await import(origin + runtime.webllm);
+    const isLlama = /llama/i.test(gpu.mlcModelId || "");
+    const contextSize = isLlama ? (tier.contextTokens || 2048) : ((gpu.modelLibUrl && gpu.modelLibUrl.includes("_cs1k")) ? 1024 : (tier.contextTokens || 4096));
+    const overrides = isLlama ? {
+        context_window_size: contextSize,
+        ...(gpu.overrides || tier.overrides || {})
+    } : {
+        context_window_size: contextSize,
+        sliding_window_size: -1,
+        attention_sink_size: -1,
+        ...(gpu.overrides || tier.overrides || {})
+    };
     const appConfig = {
         model_list: [{
             model: origin + gpu.modelUrl,
             model_id: gpu.mlcModelId,
             model_lib: origin + gpu.modelLibUrl,
             vram_required_MB: tier.vramMB,
-            overrides: {
-                context_window_size: tier.contextTokens || 4096
-            }
+            overrides
         }],
         cacheBackend: "cache"
     };
@@ -185,11 +195,35 @@ async function loadWebLLM(id, tier, runtime, origin) {
     });
     state.kind = "webllm";
     state.backend = "webgpu";
+    state.modelId = gpu.mlcModelId;
+}
+
+function normalizeChatMessages(messages, isGemma = false) {
+    if (!isGemma) return messages;
+    const mapped = [];
+    let pendingSystem = "";
+    for (const m of messages || []) {
+        if (m.role === "system") {
+            pendingSystem += (pendingSystem ? "\n\n" : "") + (m.content || "");
+        } else if (m.role === "user") {
+            const content = pendingSystem ? `${pendingSystem}\n\n${m.content || ""}` : (m.content || "");
+            pendingSystem = "";
+            mapped.push({ role: "user", content });
+        } else {
+            mapped.push({ role: m.role || "assistant", content: m.content || "" });
+        }
+    }
+    if (pendingSystem) {
+        mapped.unshift({ role: "user", content: pendingSystem });
+    }
+    return mapped.length ? mapped : [{ role: "user", content: "Hello" }];
 }
 
 async function generateTransformers(id, messages, options) {
     const { T, tokenizer, model } = state;
-    const inputs = tokenizer.apply_chat_template(messages, { add_generation_prompt: true, return_dict: true });
+    const isGemma = /gemma/i.test(state.modelId || "");
+    const cleanMessages = normalizeChatMessages(messages, isGemma);
+    const inputs = tokenizer.apply_chat_template(cleanMessages, { add_generation_prompt: true, return_dict: true });
     let full = "";
     const streamer = new T.TextStreamer(tokenizer, {
         skip_prompt: true,
@@ -215,12 +249,15 @@ async function generateTransformers(id, messages, options) {
 }
 
 async function generateWebLLM(id, messages, options) {
+    const isGemma = /gemma/i.test(state.modelId || "");
+    const cleanMessages = normalizeChatMessages(messages, isGemma);
+    const temp = (options.temperature == null || options.temperature === 0) ? 0.05 : options.temperature;
     const request = {
-        messages,
+        messages: cleanMessages,
         stream: true,
-        temperature: options.temperature,
+        temperature: temp,
         top_p: 0.9,
-        max_tokens: options.maxTokens
+        max_tokens: options.maxTokens || 256
     };
     let full = "";
     const chunks = await state.webllm.chat.completions.create(request);

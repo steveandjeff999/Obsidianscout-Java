@@ -131,10 +131,10 @@ function words(text) {
 function buildMetrics(config, qualConfig, teams) {
     const metrics = [
         // Aliases include Spanish / Turkish / Hebrew words so questions match whatever the UI language is.
-        { id: "score_total", label: t("ai.metric.total", "Total points"), kind: "score", scope: "total", aliases: ["total", "points", "score", "overall", "total points", "total point", "scoring", "best", "strongest", "scouted total", "scouted points", "scouted score", "scouted data", "scouted", "puntos", "puntaje", "toplam", "puan", "סך", "נקודות"] },
-        { id: "score_auto", label: t("ai.metric.auto", "Auto points"), kind: "score", scope: "auto", aliases: ["auto", "autonomous", "auto points", "auto point", "scouted auto", "scouted autonomous", "autónomo", "autonomo", "otonom", "אוטונומי", "אוטו"] },
-        { id: "score_teleop", label: t("ai.metric.teleop", "Teleop points"), kind: "score", scope: "teleop", aliases: ["teleop", "tele op", "tele-op", "driver controlled", "teleop points", "teleop point", "scouted teleop", "teleoperado", "טלאופ"] },
-        { id: "score_endgame", label: t("ai.metric.endgame", "Endgame points"), kind: "score", scope: "endgame", aliases: ["endgame", "end game", "endgame points", "endgame point", "scouted endgame", "juego final", "oyun sonu", "סיום"] }
+        { id: "score_total", label: t("ai.metric.total", "Total points"), kind: "score", scope: "total", aliases: ["total points", "total point", "total", "points", "score", "overall", "scoring", "scouted total", "scouted points", "scouted score", "scouted data", "scouted", "puntos", "puntaje", "toplam", "puan", "סך", "נקודות"] },
+        { id: "score_auto", label: t("ai.metric.auto", "Auto points"), kind: "score", scope: "auto", aliases: ["auto points", "auto point", "auto", "autonomous", "scouted auto", "scouted autonomous", "autónomo", "autonomo", "otonom", "אוטונומי", "אוטו"] },
+        { id: "score_teleop", label: t("ai.metric.teleop", "Teleop points"), kind: "score", scope: "teleop", aliases: ["teleop points", "teleop point", "teleop", "tele op", "tele-op", "driver controlled", "scouted teleop", "teleoperado", "טלאופ"] },
+        { id: "score_endgame", label: t("ai.metric.endgame", "Endgame points"), kind: "score", scope: "endgame", aliases: ["endgame points", "endgame point", "endgame", "end game", "scouted endgame", "juego final", "oyun sonu", "סיום"] }
     ];
     (config && config.fields || []).forEach((field) => {
         if (field.type === "section" || RESERVED_FIELDS.has(field.id)) return;
@@ -155,14 +155,16 @@ function buildMetrics(config, qualConfig, teams) {
         metrics.push({ id: `qual:${field.id}`, label: `${label} (${t("ai.metric.qual", "qualitative")})`, kind: "qual", fieldId: field.id, field, aliases: [label.toLowerCase(), "rating", "qualitative"] });
     });
     const hasExternal = (key) => teams.some((tm) => tm[key] !== null && tm[key] !== undefined);
-    if (hasExternal("epa")) metrics.push({ id: "ext:epa", label: "EPA", kind: "external", key: "epa", aliases: ["epa", "statbotics", "statbotics epa", "expected points added"] });
-    if (hasExternal("opr")) metrics.push({ id: "ext:opr", label: "OPR", kind: "external", key: "opr", aliases: ["opr", "tba opr", "ftc scout opr", "offensive power rating"] });
-    if (hasExternal("exp")) metrics.push({ id: "ext:exp", label: "xP", kind: "external", key: "exp", aliases: ["xp", "exp", "expected points", "match 13 xp", "match 13 exp"] });
+    if (hasExternal("epa")) metrics.push({ id: "ext:epa", label: "EPA", kind: "external", key: "epa", aliases: ["epa", "statbotics", "statbotics epa", "expected points added", "epa datasource", "epa data"] });
+    if (hasExternal("opr")) metrics.push({ id: "ext:opr", label: "OPR", kind: "external", key: "opr", aliases: ["opr", "tba opr", "ftc scout opr", "offensive power rating", "opr datasource", "opr data"] });
+    if (hasExternal("exp")) metrics.push({ id: "ext:exp", label: "xP", kind: "external", key: "exp", aliases: ["xp", "exp", "expected points", "expected pts", "match 13 xp", "match 13 exp", "match 13", "match13", "xp datasource", "xp data"] });
     metrics.forEach((m) => {
         m.aliases = Array.from(new Set([m.label.toLowerCase(), ...(m.aliases || [])]));
     });
     return metrics;
 }
+
+const WEAK_ALIAS_WORDS = new Set(["match", "data", "datasource", "points", "point", "score", "scouted", "team", "teams", "rating", "power", "pts"]);
 
 /** Finds the metric a free-text phrase refers to (deterministic fuzzy match). Returns null when unsure. */
 export function findMetric(ctx, phrase, { minScore = 2 } = {}) {
@@ -180,9 +182,13 @@ export function findMetric(ctx, phrase, { minScore = 2 } = {}) {
         metric.aliases.forEach((alias) => {
             const a = words(alias).join(" ");
             if (!a) return;
-            if (text.includes(` ${a} `)) score = Math.max(score, 2 + a.length / 10);
-            else {
-                const aliasWords = a.split(" ").filter((w) => w.length > 2);
+            if (text.includes(` ${a} `)) {
+                const isShortAcronym = ["xp", "epa", "opr", "exp"].includes(a);
+                const phraseScore = isShortAcronym ? 15 : (10 + a.length);
+                score = Math.max(score, phraseScore);
+            } else {
+                // Generic words never count as a partial hit ("match 12" is not xP's alias "match 13").
+                const aliasWords = a.split(" ").filter((w) => w.length > 2 && !WEAK_ALIAS_WORDS.has(w) && !/\d/.test(w));
                 const hits = aliasWords.filter(stemHit).length;
                 if (aliasWords.length && hits) score = Math.max(score, (hits / aliasWords.length) * 2);
             }
@@ -510,12 +516,16 @@ export function rankTeams(ctx, metric, { order = "desc", minMatches = 1, exclude
     const rows = [];
     ctx.stats.forEach((s) => {
         if (exclude.includes(s.teamNumber)) return;
-        const m = s.metrics[metric.id];
-        if (!m) return;
-        if (metric.kind !== "external" && metric.kind !== "qual" && s.matchesScouted < minMatches) return;
-        rows.push({ teamNumber: s.teamNumber, name: s.name, avg: m.avg, max: m.max, min: m.min, n: m.n, stdev: m.stdev });
+        const m = metric ? s.metrics[metric.id] : null;
+        if (minMatches > 0 && metric && metric.kind !== "external" && metric.kind !== "qual" && s.matchesScouted < minMatches) return;
+        rows.push({ teamNumber: s.teamNumber, name: s.name, avg: m?.avg ?? null, max: m?.max ?? null, min: m?.min ?? null, n: m?.n ?? 0, stdev: m?.stdev ?? 0 });
     });
-    rows.sort((a, b) => (order === "asc" ? a.avg - b.avg : b.avg - a.avg));
+    rows.sort((a, b) => {
+        if (a.avg === null && b.avg === null) return a.teamNumber - b.teamNumber;
+        if (a.avg === null) return 1;
+        if (b.avg === null) return -1;
+        return order === "asc" ? a.avg - b.avg : b.avg - a.avg;
+    });
     return rows;
 }
 
