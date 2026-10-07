@@ -37,22 +37,47 @@ async function ensureChunkedFile(cache, url, bytes, onBytes) {
         const end = Math.min(bytes, start + CHUNK_BYTES) - 1;
         const size = end - start + 1;
         if (!(await cache.match(key))) {
-            const res = await fetch(url, { headers: { Range: `bytes=${start}-${end}` }, credentials: "same-origin" });
-            if (!(res.status === 206 || (res.status === 200 && chunks === 1))) {
+            // no-store: the worker keeps its own copy, and a stale HTTP-cached error must never be reused.
+            const res = await fetch(url, { headers: { Range: `bytes=${start}-${end}` }, credentials: "same-origin", cache: "no-store" });
+            if (res.status === 206) {
+                const reader = res.body.getReader();
+                const parts = [];
+                let got = 0;
+                for (;;) {
+                    const { done: finished, value } = await reader.read();
+                    if (finished) break;
+                    parts.push(value);
+                    got += value.byteLength;
+                    onBytes(done + got);
+                }
+                if (got !== size) throw new Error(`Incomplete download for ${url} (chunk ${i}: expected ${size}, got ${got})`);
+                await cache.put(key, new Response(new Blob(parts)));
+            } else if (res.status === 200) {
+                if (i === 0) {
+                    const reader = res.body.getReader();
+                    const allParts = [];
+                    let gotTotal = 0;
+                    for (;;) {
+                        const { done: finished, value } = await reader.read();
+                        if (finished) break;
+                        allParts.push(value);
+                        gotTotal += value.byteLength;
+                        onBytes(gotTotal);
+                    }
+                    const fullBlob = new Blob(allParts);
+                    for (let c = 0; c < chunks; c++) {
+                        const cStart = c * CHUNK_BYTES;
+                        const cEnd = Math.min(bytes, cStart + CHUNK_BYTES);
+                        const chunkBlob = fullBlob.slice(cStart, cEnd);
+                        await cache.put(`${url}?chunk=${c}`, new Response(chunkBlob));
+                    }
+                    break;
+                } else {
+                    throw new Error(`Unexpected 200 OK for chunk ${i} of ${url}`);
+                }
+            } else {
                 throw new Error(`Download failed (${res.status}) for ${url}`);
             }
-            const reader = res.body.getReader();
-            const parts = [];
-            let got = 0;
-            for (;;) {
-                const { done: finished, value } = await reader.read();
-                if (finished) break;
-                parts.push(value);
-                got += value.byteLength;
-                onBytes(done + got);
-            }
-            if (got !== size) throw new Error(`Incomplete download for ${url}`);
-            await cache.put(key, new Response(new Blob(parts)));
         }
         done += size;
         onBytes(done);
@@ -76,14 +101,18 @@ async function readChunkedFile(cache, url) {
 
 // ------------------------------------------------------------------ engines
 
-async function loadTransformersCpu(id, tier, runtime, origin) {
-    const cpu = tier.cpu;
+/**
+ * Loads a Transformers.js ONNX build: Lite's CPU fallback (device "wasm") or Gemma 4 on WebGPU.
+ * Files are pre-downloaded into chunked Cache Storage (with progress) and served back through a custom cache,
+ * because Chromium can't store the multi-hundred-MB files as single cache entries.
+ */
+async function loadTransformers(id, source, runtime, origin, device) {
     const cache = await caches.open(CPU_FILE_CACHE);
 
     // 1. Download (or confirm cached) every file, with byte-level progress.
-    const total = cpu.files.reduce((sum, f) => sum + f.bytes, 0);
+    const total = source.files.reduce((sum, f) => sum + f.bytes, 0);
     let completed = 0;
-    for (const file of cpu.files) {
+    for (const file of source.files) {
         const url = origin + file.url;
         const base = completed;
         await ensureChunkedFile(cache, url, file.bytes, (n) => {
@@ -93,12 +122,12 @@ async function loadTransformersCpu(id, tier, runtime, origin) {
         completed += file.bytes;
     }
 
-    // 2. Load from that cache via a custom cache adapter (Transformers' own browser cache can't store large files).
+    // 2. Load from that cache via a custom cache adapter.
     const T = await import(origin + runtime.transformers);
     T.env.allowRemoteModels = false;
     T.env.allowLocalModels = true;
     // Must stay a relative path: transformers.js treats http(s) URLs as remote and skips local loading.
-    T.env.localModelPath = cpu.localModelPath;
+    T.env.localModelPath = source.localModelPath;
     T.env.useBrowserCache = false;
     T.env.useCustomCache = true;
     T.env.customCache = {
@@ -114,11 +143,21 @@ async function loadTransformersCpu(id, tier, runtime, origin) {
     T.env.backends.onnx.wasm.wasmPaths = { mjs: origin + runtime.ortMjs, wasm: origin + runtime.ortWasm };
 
     post({ type: "progress", id, loaded: total, total, ratio: 1, text: "init" });
+    const ModelClass = T[source.modelClass] || T.AutoModelForCausalLM;
+    // A single-session model (Lite) takes a plain dtype string; multi-session models (Gemma 4) a per-session map.
+    const dtypeKeys = Object.keys(source.dtype || {});
+    const dtype = dtypeKeys.length === 1 && dtypeKeys[0] === "model" ? source.dtype.model : source.dtype;
     state.T = T;
-    state.tokenizer = await T.AutoTokenizer.from_pretrained(cpu.modelId);
-    state.model = await T.AutoModelForCausalLM.from_pretrained(cpu.modelId, { dtype: cpu.dtype, device: "wasm" });
+    state.tokenizer = await T.AutoTokenizer.from_pretrained(source.modelId);
+    if (!state.tokenizer.chat_template) {
+        // Newer repos (e.g. Gemma 4) ship the template as chat_template.jinja, which the tokenizer doesn't read itself.
+        const templateFile = (source.files || []).find((f) => f.url.endsWith("/chat_template.jinja"));
+        const res = templateFile ? await readChunkedFile(cache, origin + templateFile.url) : null;
+        if (res) state.tokenizer.chat_template = await res.text();
+    }
+    state.model = await ModelClass.from_pretrained(source.modelId, { dtype, device });
     state.kind = "transformers";
-    state.backend = "cpu";
+    state.backend = device === "wasm" ? "cpu" : "webgpu";
 }
 
 async function loadWebLLM(id, tier, runtime, origin) {
@@ -216,7 +255,9 @@ self.addEventListener("message", async (event) => {
         if (msg.type === "load") {
             await unloadAll();
             if (msg.backend === "cpu") {
-                await loadTransformersCpu(msg.id, msg.tier, msg.runtime, msg.origin);
+                await loadTransformers(msg.id, msg.tier.cpu, msg.runtime, msg.origin, "wasm");
+            } else if (msg.tier.webgpu && msg.tier.webgpu.engine === "transformers") {
+                await loadTransformers(msg.id, msg.tier.webgpu, msg.runtime, msg.origin, "webgpu");
             } else {
                 await loadWebLLM(msg.id, msg.tier, msg.runtime, msg.origin);
             }

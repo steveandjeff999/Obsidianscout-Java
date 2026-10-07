@@ -90,6 +90,15 @@ export function applyTranslations() {
         }
     });
 
+    document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+        const key = el.dataset.i18nTitle;
+        if (!key) return;
+        const text = t(key);
+        if (text && text !== key && el.getAttribute('title') !== text) {
+            el.setAttribute('title', text);
+        }
+    });
+
     document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
         const key = el.dataset.i18nPlaceholder;
         if (!key) return;

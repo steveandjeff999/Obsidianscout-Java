@@ -8,7 +8,11 @@
 > - Runtimes (Transformers.js, ONNX Runtime Web, web-llm) are **not vendored**: the server installer downloads them into `data/models/runtime/<version>/` alongside the weights, so the repo/native image stay small. Layout: `data/models/<tier>/<version>/{mlc,cpu}/…`.
 > - **Lite never writes free prose about data.** Assistant answers on Lite are deterministic "briefs" built by code from tool results; notes summaries on Lite are extractive (clauses classified strength/weakness by keyword rules plus the model, then quoted). Standard/Advanced rewrite pre-sorted observations and get the briefs as key points, which removed invented strengths in testing.
 > - The rule router understands English, Spanish, Turkish and Hebrew keywords; suggestion chips pass their tool route directly. Standard/Advanced pick tools with grammar-constrained JSON (`response_format` JSON schema in WebLLM); Advanced can chain up to 4 tool calls.
-> - Model files are served with Range support, `/models/**` requires a session, and those paths are excluded from gzip and cluster peer forwarding.
+> - Model files are served with Range support, `/models/**` requires a session, and those paths are excluded from gzip and cluster peer forwarding. Only successful file responses get the one-year cache header (a cached 404 would break later installs).
+> - **Gemma 4 E2B / E4B** (Apache-2.0) replaced the Gemma 2 tiers. No WebLLM builds exist, so they use Google's QAT "mobile" ONNX builds on WebGPU through Transformers.js (same chunked-cache path as Lite's CPU fallback; `chat_template.jinja` is loaded explicitly). They are noticeably slower to write than the WebLLM tiers, so their profiles skip written reasoning and extra model-planned tool calls.
+> - Tier behaviour is driven by flags in `TIER_PROFILES` (`codeAnswers`, `extractiveSummaries`, `calculate`, `strategy`, `visibleReasoning`, `routedFollowUps`), never by tier ids. Device rules (`mobile`, `minDeviceMemoryGB`, `vramMB`) come from the server manifest.
+> - The server deletes retired models on startup (`pruneObsoleteModels`), and browsers delete cached copies using the manifest's `knownTiers`. Startup auto-install only covers `local_ai.auto_install_tiers` (empty by default) and checks free disk space.
+> - `ai-tools.js` is split into `js/ai/assistant/*` modules; `node --test src/test/js/ai-assistant.test.mjs` (part of `gradlew check`) covers routing in four languages, tool existence and every tool's output.
 
 **Models (all run in the browser, weights served by the ObsidianScout server):**
 

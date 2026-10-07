@@ -26,11 +26,13 @@ Al desactivar la opción se ocultan todas las funciones de IA, y se te ofrece bo
 |---|---|---|---|
 | **Lite** (Qwen2.5 0.5B) | ~300 MB (GPU) o ~520 MB (CPU) | Casi cualquier dispositivo; no necesita GPU (más lento) | Resúmenes de notas y consultas rápidas. Las respuestas se construyen directamente a partir de tus datos. |
 | **Estándar** (Qwen2.5 1.5B) | ~880 MB | Portátiles y teléfonos recientes con WebGPU | Respuestas escritas mejores y mejor comprensión de preguntas |
+| **Gemma 4 E2B** (QAT para dispositivos) | ~2,5 GB | Portátiles con WebGPU; teléfonos recientes de gama alta (lento) | Mejor razonamiento y uso de herramientas que los modelos Qwen de velocidad similar |
 | **Avanzado** (Qwen2.5 3B) | ~1,75 GB | Portátiles y ordenadores con una GPU capaz | Preguntas de varios pasos y estrategia (selecciones, planes de partido) |
+| **Gemma 4 E4B** (QAT para dispositivos) | ~3,5 GB | Portátiles y ordenadores con GPU capaz y 8 GB+ de memoria | El modelo más capaz: preguntas de varios pasos, estrategia y documentos |
 
 La elección del modelo se guarda **por dispositivo**. Los modelos que tu dispositivo no puede ejecutar aparecen deshabilitados con el motivo.
 
-**Navegadores:** Estándar y Avanzado necesitan WebGPU con soporte de shaders de 16 bits (Chrome o Edge recientes, Safari 26+). Lite también funciona sin WebGPU, en la CPU.
+**Navegadores:** todos los modelos salvo Lite necesitan WebGPU con soporte de shaders de 16 bits (Chrome o Edge recientes, Safari 26+). Lite también funciona sin WebGPU, en la CPU. Los modelos Gemma 4 escriben más despacio que los Qwen, pero razonan mejor.
 
 **Problemas:** si las respuestas salen sin sentido o la página falla, marca "no usar la GPU" en el panel de modelos, o borra y vuelve a descargar el modelo.
 
@@ -40,7 +42,9 @@ Los modelos se instalan una vez en el servidor y luego los navegadores los desca
 
 - **Desde la web:** Administrador de almacenamiento (administrador del sitio) → **Modelos de IA locales** → **Instalar**. El progreso se muestra en vivo; las descargas interrumpidas se reanudan y cada archivo se verifica con su hash SHA-256.
 - **Desde la línea de comandos:** `obsidianscout-server --install-ai-models lite,standard,advanced`.
-- Los archivos se guardan en `data/models/`. Usa `OBSIDIANSCOUT_MODELS_DIR` para otra carpeta. Los tres modelos ocupan unos 3,6 GB.
+- Los archivos se guardan en `data/models/`. Usa `OBSIDIANSCOUT_MODELS_DIR` para otra carpeta. Los cinco modelos ocupan unos 9,5 GB; la instalación se rechaza si dejaría menos de `local_ai.min_free_disk_mb` (2048 MB por defecto) libres.
 - En un clúster, instala los modelos en cada nodo que atiende usuarios.
+- **Instalación automática:** no se descarga nada al iniciar salvo los modelos listados en `config/app-config.json`, p. ej. `"local_ai": { "auto_install_tiers": ["lite"] }`.
+- **Limpieza automática:** al iniciar, el servidor borra los archivos de modelos que la versión actual ya no usa; los navegadores borran sus copias en caché la próxima vez que abren el sitio.
 
-**Licencias:** Qwen2.5 0.5B y 1.5B son Apache-2.0. Qwen2.5 3B usa la Qwen Research License (uso no comercial).
+**Licencias:** Qwen2.5 0.5B y 1.5B y Gemma 4 E2B/E4B son Apache-2.0. Qwen2.5 3B usa la Qwen Research License (uso no comercial).

@@ -54,6 +54,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     await initEventSelect();
     wireForm();
     await loadEvent(state.eventKey);
+    // "?q=" asks a question straight away (used by "Ask the assistant" links), then cleans the URL.
+    const params = new URLSearchParams(location.search);
+    const linkedQuestion = (params.get("q") || "").trim().slice(0, 500);
+    if (linkedQuestion) {
+        window.history.replaceState(null, "", location.pathname);
+        ask(linkedQuestion);
+    }
 });
 
 // ------------------------------------------------------------------ selectors
@@ -92,6 +99,9 @@ async function initEventSelect() {
         settings = res.settings || res;
     } catch (_) { /* offline */ }
     state.eventKey = String(settings.eventKey || "").toLowerCase();
+    // Links from other pages (e.g. a team profile's "Ask the assistant") may pick the event.
+    const linkedEvent = new URLSearchParams(location.search).get("event");
+    if (linkedEvent) state.eventKey = linkedEvent.toLowerCase();
     let events = [];
     try {
         events = await Obsidianscout.request(`/api/events?year=${settings.year || new Date().getFullYear()}&cached=1`) || [];
@@ -351,7 +361,16 @@ function openArtifactModal(artifact) {
 
     if (titleEl) titleEl.textContent = artifact.title || "Artifact";
     if (badgeEl) badgeEl.textContent = artifact.type ? artifact.type.toUpperCase() : "ARTIFACT";
-    if (contentEl) contentEl.innerHTML = UI.renderMarkdown(artifact.markdown || "");
+    if (contentEl) {
+        contentEl.innerHTML = UI.renderMarkdown(artifact.markdown || "");
+        if (artifact.unverified && artifact.unverified.length) {
+            markUnverified(contentEl, artifact.unverified);
+            const warn = document.createElement("p");
+            warn.className = "notice ai-warn";
+            warn.textContent = t("ai.artifact.unverified", "Some numbers in this document were written by the AI and could not be found in your scouting data. They are underlined - double-check them.");
+            contentEl.prepend(warn);
+        }
+    }
 
     modal.classList.remove("hidden");
 }

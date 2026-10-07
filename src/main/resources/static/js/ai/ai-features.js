@@ -184,7 +184,7 @@ export async function summarizeTeam({ teamNumber, eventKey, onToken, signal, for
     const cached = await AI.idbGet("summaries", key);
     if (cached && cached.hash === hash && !force) return { ...cached, cached: true };
 
-    const profile = AI.TIER_PROFILES[tier.id] || AI.TIER_PROFILES.lite;
+    const profile = AI.tierProfile(tier);
     const label = Data.teamLabel(ctx, teamNumber);
     const ratings = ratingFacts(ctx, teamNumber);
 
@@ -193,7 +193,7 @@ export async function summarizeTeam({ teamNumber, eventKey, onToken, signal, for
     const labels = await labelClauses(clauses, signal);
 
     let text;
-    if (tier.id === "lite") {
+    if (profile.extractiveSummaries) {
         text = extractiveSummary(clauses, labels, notes.length, ratings);
     } else {
         text = await AI.generate(rewritePrompt(tier.id, label, ratings, clauses, labels, profile.contextChars - 1500), {
@@ -379,7 +379,9 @@ async function hookTeamPage() {
     holder.className = "mt-12";
     const list = document.getElementById("team-qual-list");
     card.insertBefore(holder, list || null);
-    mountSummaryCard(holder, { teamNumber, eventKey });
+    const summary = await mountSummaryCard(holder, { teamNumber, eventKey });
+    const actions = summary && summary.querySelector(".ai-summary-actions");
+    if (actions) actions.prepend(askLink(fmt(t("ai.ask_team_question", "Tell me about team {team}"), { team: teamNumber }), eventKey));
 }
 
 function hookQualDataPage() {
@@ -387,23 +389,34 @@ function hookQualDataPage() {
     Data.loadContext().then((ctx) => { settingsEvent = ctx.eventKey; check(); }).catch(() => {});
     let scheduled = false;
     // The page re-renders (and even replaces) its panels, so look the elements up fresh on every change.
+    const eventKeyNow = () => {
+        const eventSelect = document.getElementById("qual-event-filter");
+        const value = eventSelect ? eventSelect.value : "";
+        return !value || value === "all" ? settingsEvent || "" : value;
+    };
     function check() {
         scheduled = false;
+        // The page can rebuild its panels after loading, so (re)attach the "Summarize all teams" bar here too.
+        const rankTable = document.getElementById("qual-rank-table");
+        if (rankTable) mountPrewarmBar(rankTable.closest(".card") || rankTable, eventKeyNow);
         const detail = document.getElementById("qual-team-detail");
         const title = document.getElementById("qual-team-title");
         if (!detail || !title) return;
         const match = (title.textContent || "").match(/\d+/);
-        const existing = detail.querySelector(".ai-summary-card");
+        // mountSummaryCard clears its container, so give it a dedicated holder inside the detail panel.
+        let holder = detail.querySelector(":scope > .ai-summary-holder");
         if (!match) {
-            if (existing) existing.remove();
+            if (holder) holder.remove();
             return;
         }
-        if (existing && existing.dataset.team === match[0]) return;
-        if (existing) existing.remove();
-        const eventSelect = document.getElementById("qual-event-filter");
-        let eventKey = eventSelect ? eventSelect.value : "";
-        if (!eventKey || eventKey === "all") eventKey = settingsEvent || "";
-        mountSummaryCard(detail, { teamNumber: Number(match[0]), eventKey });
+        if (holder && holder.dataset.team === match[0]) return;
+        if (!holder) {
+            holder = document.createElement("div");
+            holder.className = "ai-summary-holder";
+            detail.appendChild(holder);
+        }
+        holder.dataset.team = match[0];
+        mountSummaryCard(holder, { teamNumber: Number(match[0]), eventKey: eventKeyNow() });
     }
     new MutationObserver(() => {
         if (!scheduled) {
@@ -424,16 +437,91 @@ function hookAllianceSelectionPage() {
     const modal = document.getElementById("breakdown-modal-backdrop");
     const container = document.getElementById("breakdown-ai-summary-container");
     if (!modal || !container) return;
-
-    if (modal.classList.contains("open")) {
+    // The team profile modal opens long after page load; mount the summary card each time it opens for a team.
+    const sync = () => {
+        if (!modal.classList.contains("open")) return;
         const title = document.getElementById("breakdown-modal-title");
-        const match = (title?.textContent || "").match(/\d+/);
-        if (match) {
-            const eventFilter = document.getElementById("event-filter");
-            const eventKey = eventFilter ? eventFilter.value : "";
-            mountSummaryCard(container, { teamNumber: Number(match[0]), eventKey });
-        }
+        const match = (title && title.textContent || "").match(/\d+/);
+        if (!match) return;
+        const existing = container.querySelector(".ai-summary-card");
+        if (existing && existing.dataset.team === match[0]) return;
+        container.innerHTML = "";
+        const eventFilter = document.getElementById("event-filter");
+        mountSummaryCard(container, { teamNumber: Number(match[0]), eventKey: eventFilter ? eventFilter.value : "" });
+    };
+    new MutationObserver(sync).observe(modal, { attributes: true, attributeFilter: ["class"], subtree: true, childList: true, characterData: true });
+    sync();
+}
+
+/** Link that opens the Assistant with a question already asked. */
+function askLink(question, eventKey) {
+    const a = document.createElement("a");
+    a.className = "btn ghost btn-sm";
+    a.href = `/assistant?q=${encodeURIComponent(question)}${eventKey ? `&event=${encodeURIComponent(eventKey)}` : ""}`;
+    a.innerHTML = `<i class="fa-solid fa-robot"></i> `;
+    a.appendChild(document.createTextNode(t("ai.ask_assistant", "Ask the assistant")));
+    return a;
+}
+
+// ------------------------------------------------------------------ "event mode": pre-generate every summary
+
+/**
+ * Summarizes every team with notes at an event, one at a time (cached ones are skipped instantly), so summaries
+ * are ready before alliance selection. onProgress({ done, total, team }).
+ */
+export async function summarizeAllTeams({ eventKey, onProgress, signal } = {}) {
+    const ctx = await Data.loadContext({ eventKey });
+    const teams = Array.from(ctx.stats.keys()).filter((n) => Data.teamNotes(ctx, n).length > 0).sort((a, b) => a - b);
+    let done = 0;
+    for (const team of teams) {
+        if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError");
+        if (onProgress) onProgress({ done, total: teams.length, team });
+        await summarizeTeam({ teamNumber: team, eventKey: ctx.eventKey, ctx, signal });
+        done++;
     }
+    if (onProgress) onProgress({ done, total: teams.length, team: null });
+    return done;
+}
+
+function mountPrewarmBar(anchor, getEventKey) {
+    if (!anchor || document.querySelector(".ai-prewarm-bar")) return;
+    const bar = document.createElement("div");
+    bar.className = "ai-prewarm-bar card soft";
+    const label = document.createElement("span");
+    label.className = "ai-muted";
+    label.textContent = t("ai.prewarm.hint", "Generate AI note summaries for every team now, so they're ready instantly during alliance selection.");
+    const run = document.createElement("button");
+    run.type = "button";
+    run.className = "btn btn-sm";
+    run.textContent = t("ai.prewarm.run", "Summarize all teams");
+    const stop = document.createElement("button");
+    stop.type = "button";
+    stop.className = "btn ghost btn-sm";
+    stop.textContent = t("ai.stop", "Stop");
+    stop.hidden = true;
+    bar.append(label, run, stop);
+    anchor.parentNode.insertBefore(bar, anchor);
+    let controller = null;
+    run.addEventListener("click", async () => {
+        controller = new AbortController();
+        run.disabled = true;
+        stop.hidden = false;
+        try {
+            await UI.ensureModelReady();
+            const n = await summarizeAllTeams({
+                eventKey: getEventKey(), signal: controller.signal,
+                onProgress: ({ done, total }) => { label.textContent = fmt(t("ai.prewarm.progress", "Summarizing teams: {done} of {total}..."), { done, total }); }
+            });
+            label.textContent = fmt(t("ai.prewarm.done", "{n} team summaries are ready on this device."), { n });
+        } catch (err) {
+            label.textContent = err.name === "AbortError" ? t("ai.stopped", "Stopped.") : (err.userCancelled ? "" : err.message);
+        } finally {
+            run.disabled = false;
+            stop.hidden = true;
+            controller = null;
+        }
+    });
+    stop.addEventListener("click", () => controller && controller.abort());
 }
 
 async function init() {
@@ -451,15 +539,20 @@ async function init() {
     }
 }
 
-if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => init());
-} else {
-    init();
+// Page hooks only run in a browser page (the module is also imported by Node tests).
+if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => init());
+    } else {
+        init();
+    }
 }
 
-const features = { summarizeTeam, getCachedSummary, mountSummaryCard };
-window.ObsidianscoutAIFeatures = features;
-try {
-    window.dispatchEvent(new CustomEvent("obsidianscout:ai-features-ready"));
-} catch (_) { /* ignore */ }
+const features = { summarizeTeam, summarizeAllTeams, getCachedSummary, mountSummaryCard };
+if (typeof window !== "undefined") {
+    window.ObsidianscoutAIFeatures = features;
+    try {
+        window.dispatchEvent(new CustomEvent("obsidianscout:ai-features-ready"));
+    } catch (_) { /* ignore */ }
+}
 export default features;

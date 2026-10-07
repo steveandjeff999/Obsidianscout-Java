@@ -262,7 +262,7 @@ export async function mountSettingsPanel(container) {
                     backend: assessment.backend === "cpu" ? t("ai.backend.cpu", "CPU") : t("ai.backend.gpu", "GPU (WebGPU)")
                 }))}</div>
                 ${assessment.reason ? `<div class="ai-muted ai-warn">${esc(assessment.reason)}</div>` : ""}
-                ${tier.id === "advanced" ? `<div class="ai-muted">${esc(fmt(t("ai.settings.license", "License: {license}"), { license: tier.license }))}</div>` : ""}
+                <div class="ai-muted">${esc(fmt(t("ai.settings.license", "License: {license}"), { license: tier.license }))}</div>
             </div>
             <div class="ai-tier-actions"></div>`;
         const actions = card.querySelector(".ai-tier-actions");
@@ -373,6 +373,7 @@ export async function mountAdminPanel(container) {
                 <div class="ai-tier-main">
                     <div class="ai-tier-title"><strong>${esc(t("ai.tier." + tier.id, tier.name))}</strong> <span class="ai-muted">${esc(tier.model)} · ${esc(tier.license)}</span></div>
                     <div class="ai-muted">${esc(stateText)}</div>
+                    ${(status.autoInstallTiers || []).includes(tier.id) ? `<div class="ai-muted">${esc(t("ai.admin.auto_install", "Installed automatically at startup (local_ai.auto_install_tiers)"))}</div>` : ""}
                     ${running ? `<div class="ai-progress"><div class="ai-progress-bar" style="width:${pct}%"></div></div>` : ""}
                 </div>
                 <div class="ai-tier-actions"></div>`;
@@ -410,5 +411,5 @@ export async function mountAdminPanel(container) {
 }
 
 const ui = { ensureMarkdownLibs, renderMarkdown, parseThoughtAndContent, aiBadge, confirmDownload, showProgress, ensureModelReady, mountSettingsPanel, mountAdminPanel };
-window.ObsidianscoutAIUI = ui;
+if (typeof window !== "undefined") window.ObsidianscoutAIUI = ui;
 export default ui;

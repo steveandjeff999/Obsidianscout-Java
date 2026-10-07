@@ -18,6 +18,7 @@ import com.obsidianscout.routes.MobileApiException
 import com.obsidianscout.routes.MobileErrorResponse
 import com.obsidianscout.routes.respondStaticHtml
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.isSuccess
 import io.ktor.http.HttpHeaders
 import io.ktor.http.content.OutgoingContent
 import io.ktor.server.response.ApplicationSendPipeline
@@ -38,6 +39,8 @@ import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.compression.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.doublereceive.DoubleReceive
+import io.ktor.server.plugins.partialcontent.PartialContent
+import io.ktor.server.plugins.autohead.AutoHeadResponse
 import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.plugins.cachingheaders.CachingHeaders
@@ -192,6 +195,8 @@ fun Application.module(appConfig: AppConfig) {
     }
 
     install(DoubleReceive)
+    install(PartialContent)
+    install(AutoHeadResponse)
     install(com.obsidianscout.utils.ServerTimingPlugin)
     install(DefaultHeaders) {
         header("X-Frame-Options", "DENY")
@@ -222,14 +227,21 @@ fun Application.module(appConfig: AppConfig) {
         identity()
     }
     install(CachingHeaders) {
-        options { call, _ ->
+        options { call, content ->
             val path = call.request.path()
             val method = call.request.local.method.value.uppercase()
             if (path == "/sw.js" || path.endsWith("/sw.js")) {
                 CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
             } else if (path.startsWith("/models/")) {
-                // Local AI weights/runtime: URLs embed a pinned revision, so they never change.
-                CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 31_536_000, visibility = CacheControl.Visibility.Private))
+                // Local AI weights/runtime: URLs embed a pinned revision, so files never change. Errors (401/404) must
+                // not be cached, or a browser keeps failing after the model is installed.
+                // (The file content is wrapped by PartialContent, so decide by status rather than content type.)
+                val status = content.status ?: call.response.status()
+                if (status == null || status.isSuccess()) {
+                    CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 31_536_000, visibility = CacheControl.Visibility.Private))
+                } else {
+                    CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
+                }
             } else if (path.contains("/vendor/") || path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) {
                 CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 3600 * 24 * 30, visibility = CacheControl.Visibility.Public))
             } else if (path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".json")) {
@@ -560,8 +572,10 @@ fun Application.module(appConfig: AppConfig) {
     // Mark update boot successful as soon as web engine & routes start
     com.obsidianscout.utils.UpdateRecoveryManager.markBootSuccessful()
 
-    // Auto-download missing local AI models in the background
-    com.obsidianscout.ai.LocalAiModelService.autoInstallMissingModelsOnStartup()
+    // Local AI models: delete retired models, then install only the tiers listed in local_ai.auto_install_tiers.
+    com.obsidianscout.ai.LocalAiModelService.autoInstallTiers = appConfig.local_ai.auto_install_tiers
+    com.obsidianscout.ai.LocalAiModelService.minFreeDiskMb = appConfig.local_ai.min_free_disk_mb
+    com.obsidianscout.ai.LocalAiModelService.startupMaintenance()
 
     // Run database orchestration and initialization in a background coroutine
     launch(Dispatchers.IO) {

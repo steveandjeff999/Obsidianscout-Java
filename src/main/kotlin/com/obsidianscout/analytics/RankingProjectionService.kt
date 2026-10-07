@@ -81,6 +81,20 @@ object RankingProjectionService {
     const val MIN_SIMULATIONS = 200
     const val MAX_SIMULATIONS = 10000
 
+    /** Simulations are cached per event for this long, as long as their inputs are unchanged. */
+    private const val CACHE_TTL_MS = 5 * 60_000L
+    private data class CachedSim(val inputHash: Int, val createdAt: Long, val result: SimResult)
+    private val simCache = java.util.concurrent.ConcurrentHashMap<String, CachedSim>()
+
+    /** Runs [simulate], reusing a recent result for identical inputs (same schedule, scores, strengths, seed). */
+    internal fun simulateCached(cacheKey: String, input: SimInput, now: Long = System.currentTimeMillis()): SimResult {
+        val hash = input.hashCode()
+        simCache[cacheKey]?.let { if (it.inputHash == hash && now - it.createdAt < CACHE_TTL_MS) return it.result }
+        val result = simulate(input)
+        simCache[cacheKey] = CachedSim(hash, now, result)
+        return result
+    }
+
     data class SimMatch(
         val red: List<Int>,
         val blue: List<Int>,
@@ -502,7 +516,8 @@ object RankingProjectionService {
             )
         }
 
-        val result = simulate(
+        val result = simulateCached(
+            "$eventKey|${session.program}|${session.teamNumber}",
             SimInput(
                 teams = teams.map { it.teamNumber },
                 matches = simMatches,

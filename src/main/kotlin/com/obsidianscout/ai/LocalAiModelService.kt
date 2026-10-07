@@ -23,16 +23,20 @@ data class WebLlmSource(
     val repo: String,
     val revision: String,
     val mlcModelId: String,
-    val modelLibFile: String,
-    val vramMB: Int
+    val modelLibFile: String
 )
 
-/** Transformers.js ONNX build used as a CPU (WASM) fallback when the device has no usable WebGPU. */
-data class OnnxCpuSource(
+/**
+ * Transformers.js ONNX build. Used for WebGPU when no WebLLM build exists (Gemma 4) and as Lite's CPU fallback.
+ * [dtype] is either one dtype for every session or a per-session map (e.g. decoder_model_merged -> q2f16).
+ */
+data class OnnxSource(
     val repo: String,
     val revision: String,
-    val dtype: String,
-    val files: List<String>
+    val files: List<String>,
+    val dtype: Map<String, String>,
+    /** Transformers.js model class to load, e.g. AutoModelForCausalLM or Gemma4ForConditionalGeneration. */
+    val modelClass: String = "AutoModelForCausalLM"
 )
 
 /**
@@ -45,11 +49,25 @@ data class LocalAiTier(
     val model: String,
     val params: String,
     val license: String,
-    val webllm: WebLlmSource,
-    val cpu: OnnxCpuSource? = null,
+    /** GPU build via WebLLM, or [gpuOnnx] via Transformers.js (exactly one of the two). */
+    val webllm: WebLlmSource? = null,
+    val gpuOnnx: OnnxSource? = null,
+    /** Optional CPU (WASM) fallback. */
+    val cpu: OnnxSource? = null,
+    /** Approximate GPU memory needed while running. */
+    val vramMB: Int,
+    /** Devices reporting less memory than this (navigator.deviceMemory) are told the tier is unsupported. */
+    val minDeviceMemoryGB: Int = 0,
+    /** "ok", "slow" (warn) or "no" (unsupported) on phones/tablets. */
+    val mobile: String = "ok",
     val contextTokens: Int = 4096
 ) {
-    val version: String get() = webllm.revision.take(12) + (cpu?.let { "-" + it.revision.take(12) } ?: "")
+    init {
+        require((webllm == null) != (gpuOnnx == null)) { "Tier $id needs exactly one GPU source" }
+    }
+
+    val version: String
+        get() = listOfNotNull(webllm?.revision, gpuOnnx?.revision, cpu?.revision).joinToString("-") { it.take(12) }
 }
 
 data class RuntimeFile(val name: String, val url: String)
@@ -88,6 +106,7 @@ data class LocalAiAdminStatus(
     val modelDir: String,
     val freeDiskBytes: Long,
     val runtimeInstalled: Boolean,
+    val autoInstallTiers: List<String> = emptyList(),
     val tiers: List<LocalAiTierStatus>
 )
 
@@ -103,8 +122,29 @@ object LocalAiModelService {
     private val EXCLUDED_REPO_FILES = setOf(".gitattributes", "README.md")
     private const val MARKER_FILE = "installed.json"
     private const val MLC_DIR = "mlc"
+    private const val GPU_DIR = "gpu"
     private const val CPU_DIR = "cpu"
     private const val MODEL_LIB_PATH = "$MLC_DIR/lib/model.wasm"
+    private val SOURCE_DIRS = setOf(MLC_DIR, GPU_DIR, CPU_DIR)
+
+    /** Gemma 4 QAT "mobile" ONNX builds: per-session dtypes from the repos' transformers.js_config. */
+    private fun gemma4Qat(repo: String, revision: String) = OnnxSource(
+        repo = repo,
+        revision = revision,
+        files = listOf(
+            "config.json", "generation_config.json", "tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
+            "preprocessor_config.json", "processor_config.json",
+            "onnx/embed_tokens_q2f16.onnx", "onnx/embed_tokens_q2f16.onnx_data",
+            "onnx/decoder_model_merged_q2f16.onnx", "onnx/decoder_model_merged_q2f16.onnx_data",
+            "onnx/audio_encoder_q2f16.onnx", "onnx/audio_encoder_q2f16.onnx_data",
+            "onnx/vision_encoder_fp16.onnx", "onnx/vision_encoder_fp16.onnx_data"
+        ),
+        dtype = mapOf(
+            "decoder_model_merged" to "q2f16", "embed_tokens" to "q2f16",
+            "audio_encoder" to "q2f16", "vision_encoder" to "fp16"
+        ),
+        modelClass = "Gemma4ForConditionalGeneration"
+    )
 
     val tiers: List<LocalAiTier> = listOf(
         LocalAiTier(
@@ -117,18 +157,18 @@ object LocalAiModelService {
                 repo = "mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
                 revision = "32ff081fe7e4dfe4ffb167b94c66fdf11e02b8ad",
                 mlcModelId = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-                modelLibFile = "Qwen2-0.5B-Instruct-q4f16_1_cs1k-webgpu.wasm",
-                vramMB = 945
+                modelLibFile = "Qwen2-0.5B-Instruct-q4f16_1_cs1k-webgpu.wasm"
             ),
-            cpu = OnnxCpuSource(
+            cpu = OnnxSource(
                 repo = "onnx-community/Qwen2.5-0.5B-Instruct",
                 revision = "cc5cc01a65cc3ff17bdb73a7de33d879f62599b0",
-                dtype = "q8",
                 files = listOf(
                     "config.json", "generation_config.json", "tokenizer.json", "tokenizer_config.json",
                     "special_tokens_map.json", "added_tokens.json", "onnx/model_quantized.onnx"
-                )
-            )
+                ),
+                dtype = mapOf("model" to "q8")
+            ),
+            vramMB = 945
         ),
         LocalAiTier(
             id = "standard",
@@ -140,23 +180,21 @@ object LocalAiModelService {
                 repo = "mlc-ai/Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
                 revision = "9bd564b064631febf14deadcac492efb761d60c3",
                 mlcModelId = "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
-                modelLibFile = "Qwen2-1.5B-Instruct-q4f16_1_cs1k-webgpu.wasm",
-                vramMB = 1630
-            )
+                modelLibFile = "Qwen2-1.5B-Instruct-q4f16_1_cs1k-webgpu.wasm"
+            ),
+            vramMB = 1630,
+            mobile = "slow"
         ),
         LocalAiTier(
-            id = "gemma2b",
-            name = "Gemma 2B",
-            model = "Gemma-2-2B-IT",
-            params = "2B",
-            license = "Gemma Terms of Use",
-            webllm = WebLlmSource(
-                repo = "mlc-ai/gemma-2-2b-it-q4f16_1-MLC",
-                revision = "de9cc76f0d4b3a49a0f718df424944054bf1eec1",
-                mlcModelId = "gemma-2-2b-it-q4f16_1-MLC",
-                modelLibFile = "gemma-2-2b-it-q4f16_1_cs1k-webgpu.wasm",
-                vramMB = 1895
-            )
+            id = "gemma4e2b",
+            name = "Gemma 4 E2B",
+            model = "gemma-4-E2B-it (QAT mobile)",
+            params = "E2B",
+            license = "Apache-2.0",
+            gpuOnnx = gemma4Qat("onnx-community/gemma-4-E2B-it-qat-mobile-ONNX", "5cd5514efd375abf2801c856a3936b259cc00133"),
+            vramMB = 2600,
+            minDeviceMemoryGB = 4,
+            mobile = "slow"
         ),
         LocalAiTier(
             id = "advanced",
@@ -168,23 +206,22 @@ object LocalAiModelService {
                 repo = "mlc-ai/Qwen2.5-3B-Instruct-q4f16_1-MLC",
                 revision = "7690aaaa46df36b1be0fe93b9c9abac0497eff6c",
                 mlcModelId = "Qwen2.5-3B-Instruct-q4f16_1-MLC",
-                modelLibFile = "Qwen2.5-3B-Instruct-q4f16_1_cs1k-webgpu.wasm",
-                vramMB = 2505
-            )
+                modelLibFile = "Qwen2.5-3B-Instruct-q4f16_1_cs1k-webgpu.wasm"
+            ),
+            vramMB = 2505,
+            minDeviceMemoryGB = 8,
+            mobile = "no"
         ),
         LocalAiTier(
-            id = "gemma9b",
-            name = "Gemma 9B",
-            model = "Gemma-2-9B-IT",
-            params = "9B",
-            license = "Gemma Terms of Use",
-            webllm = WebLlmSource(
-                repo = "mlc-ai/gemma-2-9b-it-q4f16_1-MLC",
-                revision = "e5cddd463237ecdd1249ef4d304d6c86a4701bd4",
-                mlcModelId = "gemma-2-9b-it-q4f16_1-MLC",
-                modelLibFile = "gemma-2-9b-it-q4f16_1_cs1k-webgpu.wasm",
-                vramMB = 5750
-            )
+            id = "gemma4e4b",
+            name = "Gemma 4 E4B",
+            model = "gemma-4-E4B-it (QAT mobile)",
+            params = "E4B",
+            license = "Apache-2.0",
+            gpuOnnx = gemma4Qat("onnx-community/gemma-4-E4B-it-qat-mobile-ONNX", "4d18aa8b54e354bec4705e4a4894f5bbf8956c3d"),
+            vramMB = 3800,
+            minDeviceMemoryGB = 8,
+            mobile = "no"
         )
     )
 
@@ -204,6 +241,10 @@ object LocalAiModelService {
     private val jobs = ConcurrentHashMap<String, Job>()
     private val progress = ConcurrentHashMap<String, LocalAiTierStatus>()
     private val markerCache = ConcurrentHashMap<String, Pair<Long, LocalAiInstallMarker?>>()
+
+    /** Overridable for tests; normally read from app-config.json (local_ai). */
+    @Volatile var minFreeDiskMb: Long = 2048
+    @Volatile var autoInstallTiers: List<String> = emptyList()
 
     private val http: HttpClient by lazy {
         HttpClient.newBuilder()
@@ -234,7 +275,23 @@ object LocalAiModelService {
 
     // ---------------------------------------------------------------- client manifest
 
-    /** What a browser needs to load the installed tiers. Only fully installed tiers are listed. */
+    private fun JsonObjectBuilder.putOnnx(source: OnnxSource, base: String, dir: String, files: List<LocalAiFileInfo>) {
+        put("engine", "transformers")
+        // Transformers.js resolves <localModelPath><modelId>/<file>; both must stay relative paths.
+        put("localModelPath", base)
+        put("modelId", dir)
+        put("modelClass", source.modelClass)
+        putJsonObject("dtype") { source.dtype.forEach { (k, v) -> put(k, v) } }
+        put("downloadBytes", files.sumOf { it.bytes })
+        putJsonArray("files") {
+            files.forEach { f -> addJsonObject { put("url", base + f.path); put("bytes", f.bytes) } }
+        }
+    }
+
+    /**
+     * What a browser needs to load the installed tiers. Only fully installed tiers are listed in `tiers`;
+     * `knownTiers` lists every current tier id and version so browsers can delete cached files of retired models.
+     */
     fun clientManifest(): JsonObject = buildJsonObject {
         val runtimeBase = "/models/runtime/$RUNTIME_VERSION/"
         val runtimeOk = isRuntimeInstalled()
@@ -246,13 +303,13 @@ object LocalAiModelService {
             put("ortWasm", runtimeBase + "ort-wasm-simd-threaded.asyncify.wasm")
             put("webllm", runtimeBase + "web-llm.js")
         }
+        putJsonObject("knownTiers") { tiers.forEach { put(it.id, it.version) } }
         putJsonArray("tiers") {
             if (!runtimeOk) return@putJsonArray
             for (tier in tiers) {
                 val marker = installedMarker(tier) ?: continue
                 val base = "/models/${tier.id}/${tier.version}/"
-                val mlcFiles = marker.files.filter { it.path.startsWith("$MLC_DIR/") }
-                val cpuFiles = marker.files.filter { it.path.startsWith("$CPU_DIR/") }
+                val byDir = { dir: String -> marker.files.filter { it.path.startsWith("$dir/") } }
                 addJsonObject {
                     put("id", tier.id)
                     put("name", tier.name)
@@ -261,34 +318,31 @@ object LocalAiModelService {
                     put("license", tier.license)
                     put("version", tier.version)
                     put("contextTokens", tier.contextTokens)
-                    put("vramMB", tier.webllm.vramMB)
+                    put("vramMB", tier.vramMB)
+                    put("minDeviceMemoryGB", tier.minDeviceMemoryGB)
+                    put("mobile", tier.mobile)
                     putJsonObject("webgpu") {
-                        put("engine", "webllm")
-                        put("mlcModelId", tier.webllm.mlcModelId)
-                        put("modelUrl", base + "$MLC_DIR/resolve/main/")
-                        put("modelLibUrl", base + MODEL_LIB_PATH)
-                        put("downloadBytes", mlcFiles.sumOf { it.bytes })
-                        putJsonArray("files") {
-                            mlcFiles.forEach { f ->
-                                val rel = f.path.removePrefix("$MLC_DIR/")
-                                // Absolute URL path the engine fetches for this file.
-                                add(if (f.path == MODEL_LIB_PATH) base + MODEL_LIB_PATH else base + "$MLC_DIR/resolve/main/" + rel)
-                            }
-                        }
-                    }
-                    if (tier.cpu != null && cpuFiles.isNotEmpty()) {
-                        putJsonObject("cpu") {
-                            put("engine", "transformers")
-                            put("dtype", tier.cpu.dtype)
-                            put("localModelPath", base)
-                            put("modelId", CPU_DIR)
-                            put("downloadBytes", cpuFiles.sumOf { it.bytes })
+                        if (tier.webllm != null) {
+                            val mlcFiles = byDir(MLC_DIR)
+                            put("engine", "webllm")
+                            put("mlcModelId", tier.webllm.mlcModelId)
+                            put("modelUrl", base + "$MLC_DIR/resolve/main/")
+                            put("modelLibUrl", base + MODEL_LIB_PATH)
+                            put("downloadBytes", mlcFiles.sumOf { it.bytes })
                             putJsonArray("files") {
-                                cpuFiles.forEach { f ->
-                                    addJsonObject { put("url", base + f.path); put("bytes", f.bytes) }
+                                mlcFiles.forEach { f ->
+                                    val rel = f.path.removePrefix("$MLC_DIR/")
+                                    // Absolute URL path the engine fetches for this file.
+                                    add(if (f.path == MODEL_LIB_PATH) base + MODEL_LIB_PATH else base + "$MLC_DIR/resolve/main/" + rel)
                                 }
                             }
+                        } else if (tier.gpuOnnx != null) {
+                            putOnnx(tier.gpuOnnx, base, GPU_DIR, byDir(GPU_DIR))
                         }
+                    }
+                    val cpuFiles = byDir(CPU_DIR)
+                    if (tier.cpu != null && cpuFiles.isNotEmpty()) {
+                        putJsonObject("cpu") { putOnnx(tier.cpu, base, CPU_DIR, cpuFiles) }
                     }
                 }
             }
@@ -301,7 +355,7 @@ object LocalAiModelService {
      * Maps a `/models/...` request to a file on disk, or null when it is not an installed, servable file.
      *  - `/models/runtime/<runtimeVersion>/<file>`
      *  - `/models/<tier>/<version>/mlc/[resolve/main/]<path>` (WebLLM appends `resolve/main/` to model URLs)
-     *  - `/models/<tier>/<version>/cpu/<path>`
+     *  - `/models/<tier>/<version>/{gpu,cpu}/<path>` (Transformers.js)
      */
     fun resolveServedFile(segments: List<String>): File? {
         if (segments.size < 3) return null
@@ -318,7 +372,7 @@ object LocalAiModelService {
             if (rest.size > 3 && rest[0] == MLC_DIR && rest[1] == "resolve" && rest[2] == "main") {
                 rest = listOf(MLC_DIR) + rest.drop(3)
             }
-            if (rest.firstOrNull() != MLC_DIR && rest.firstOrNull() != CPU_DIR) return null
+            if (rest.firstOrNull() !in SOURCE_DIRS) return null
             tierDir(tier) to rest
         }
 
@@ -334,7 +388,7 @@ object LocalAiModelService {
         "json" -> "application/json"
         "wasm" -> "application/wasm"
         "js", "mjs" -> "text/javascript"
-        "txt" -> "text/plain"
+        "txt", "jinja" -> "text/plain"
         else -> "application/octet-stream"
     }
 
@@ -346,6 +400,7 @@ object LocalAiModelService {
             modelDir = root.absolutePath,
             freeDiskBytes = root.usableSpace,
             runtimeInstalled = isRuntimeInstalled(),
+            autoInstallTiers = autoInstallTiers,
             tiers = tiers.map { tierStatus(it) }
         )
     }
@@ -404,28 +459,56 @@ object LocalAiModelService {
     }
 
     /**
-     * Checks all model tiers on startup and automatically downloads any missing model tiers in the background.
+     * Deletes model files that the current code no longer uses: tiers that were removed or renamed (e.g. the old
+     * Gemma 2 tiers), superseded versions of current tiers, and runtimes from previous releases.
+     * Returns the deleted paths (relative to the model folder).
      */
-    fun autoInstallMissingModelsOnStartup(): Job = scope.launch {
-        try {
-            consoleLog.info("[LocalAI] Checking for missing model tiers on startup...")
-            if (!isRuntimeInstalled()) {
-                consoleLog.info("[LocalAI] Web runtime is not installed. Downloading runtime...")
-                ensureRuntime()
-                consoleLog.info("[LocalAI] Web runtime download completed.")
-            }
-            for (tier in tiers) {
-                if (installedMarker(tier) == null) {
-                    consoleLog.info("[LocalAI] Auto-downloading missing tier '${tier.id}' (${tier.name} - ${tier.model})...")
-                    startInstall(tier.id)
-                    jobs[tier.id]?.join()
+    fun pruneObsoleteModels(): List<String> {
+        val root = modelRoot
+        if (!root.isDirectory) return emptyList()
+        val removed = mutableListOf<String>()
+        fun remove(dir: File) {
+            if (dir.deleteRecursively()) removed += dir.relativeTo(root).invariantSeparatorsPath
+            else consoleLog.warn("[LocalAI] Could not fully delete obsolete model folder ${dir.absolutePath}")
+        }
+        root.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
+            when {
+                dir.name == "runtime" ->
+                    dir.listFiles()?.filter { it.isDirectory && it.name != RUNTIME_VERSION }?.forEach(::remove)
+                tier(dir.name) == null -> remove(dir)
+                else -> {
+                    val tier = tier(dir.name)!!
+                    if (jobs[tier.id]?.isActive == true) return@forEach
+                    dir.listFiles()?.filter { it.isDirectory && it.name != tier.version }?.forEach(::remove)
                 }
             }
-            consoleLog.info("[LocalAI] Startup model check completed.")
+        }
+        if (removed.isNotEmpty()) {
+            markerCache.clear()
+            consoleLog.info("[LocalAI] Removed obsolete model files: ${removed.joinToString()}")
+        }
+        return removed
+    }
+
+    /**
+     * Startup housekeeping: remove obsolete models, then install the tiers listed in app-config `local_ai.auto_install_tiers`
+     * (nothing by default). Uninstalling a tier from Storage Manager is therefore permanent unless it is listed there.
+     */
+    fun startupMaintenance(): Job = scope.launch {
+        try {
+            pruneObsoleteModels()
+            val wanted = autoInstallTiers.mapNotNull { id ->
+                tier(id) ?: run { consoleLog.warn("[LocalAI] Unknown tier '$id' in local_ai.auto_install_tiers"); null }
+            }
+            for (tier in wanted) {
+                if (installedMarker(tier) != null) continue
+                consoleLog.info("[LocalAI] Auto-installing '${tier.id}' (${tier.model}) from local_ai.auto_install_tiers...")
+                if (startInstall(tier.id)) jobs[tier.id]?.join()
+            }
         } catch (e: CancellationException) {
-            consoleLog.info("[LocalAI] Auto-install on startup cancelled.")
+            consoleLog.info("[LocalAI] Startup model maintenance cancelled.")
         } catch (e: Throwable) {
-            consoleLog.warn("[LocalAI] Auto-install on startup encountered error: ${e.message}")
+            consoleLog.warn("[LocalAI] Startup model maintenance failed: ${e.message}")
         }
     }
 
@@ -443,6 +526,17 @@ object LocalAiModelService {
 
     private data class PlannedFile(val path: String, val url: String, val size: Long?, val sha256: String?)
 
+    /** Throws when downloading [neededBytes] more would leave less than [minFreeDiskMb] free. */
+    internal fun checkDiskSpace(neededBytes: Long, freeBytes: Long = modelRoot.also { it.mkdirs() }.usableSpace) {
+        val reserve = minFreeDiskMb * 1024 * 1024
+        if (freeBytes - neededBytes < reserve) {
+            val mb = { b: Long -> b / (1024 * 1024) }
+            throw IllegalStateException(
+                "Not enough disk space: needs ${mb(neededBytes)} MB plus ${mb(reserve)} MB reserve, but only ${mb(freeBytes)} MB is free"
+            )
+        }
+    }
+
     private suspend fun install(tier: LocalAiTier) {
         update(tier) { baseStatus(tier, "downloading").copy(currentFile = "runtime") }
         ensureRuntime()
@@ -450,8 +544,10 @@ object LocalAiModelService {
         val planned = planFiles(tier)
         val total = planned.sumOf { it.size ?: 0L }
         val dir = tierDir(tier).also { it.mkdirs() }
-        // Remove older versions of this tier.
+        // Remove older versions of this tier first so their space counts as free.
         File(modelRoot, tier.id).listFiles()?.filter { it.isDirectory && it.name != tier.version }?.forEach { it.deleteRecursively() }
+        val alreadyHave = planned.sumOf { p -> File(dir, p.path).takeIf { it.isFile }?.length() ?: 0L }
+        checkDiskSpace((total - alreadyHave).coerceAtLeast(0))
 
         var completedBytes = 0L
         update(tier) { it.copy(totalBytes = total, downloadedBytes = 0) }
@@ -495,21 +591,37 @@ object LocalAiModelService {
         File(modelRoot, "runtime").listFiles()?.filter { it.isDirectory && it.name != RUNTIME_VERSION }?.forEach { it.deleteRecursively() }
     }
 
+    private fun planOnnx(source: OnnxSource, dir: String): List<PlannedFile> {
+        val tree = repoTree(source.repo, source.revision)
+        return expandExternalData(source.files, tree.keys).map { path ->
+            val entry = tree[path] ?: throw IllegalStateException("File $path not found in ${source.repo}@${source.revision}")
+            plannedFrom(source.repo, source.revision, path, entry, "$dir/")
+        }
+    }
+
+    /**
+     * Large ONNX weights are split into `x.onnx_data`, `x.onnx_data_1`, ... (e.g. Gemma 4 E4B's decoder has two parts).
+     * Listing `x.onnx_data` is enough: every numbered part present in the repo is added after it.
+     */
+    internal fun expandExternalData(files: List<String>, repoFiles: Set<String>): List<String> = files.flatMap { path ->
+        if (!path.endsWith(".onnx_data")) return@flatMap listOf(path)
+        val parts = repoFiles.mapNotNull { f ->
+            f.removePrefix("${path}_").takeIf { f.startsWith("${path}_") }?.toIntOrNull()?.let { it to f }
+        }.sortedBy { it.first }.map { it.second }
+        listOf(path) + parts
+    }
+
     private fun planFiles(tier: LocalAiTier): List<PlannedFile> {
         val planned = mutableListOf<PlannedFile>()
-        val mlc = repoTree(tier.webllm.repo, tier.webllm.revision)
-        mlc.keys.filter { it !in EXCLUDED_REPO_FILES }.sorted().forEach { path ->
-            planned += plannedFrom(tier.webllm.repo, tier.webllm.revision, path, mlc.getValue(path), "$MLC_DIR/")
-        }
-        planned += PlannedFile(MODEL_LIB_PATH, WEBLLM_LIB_PREFIX + tier.webllm.modelLibFile, null, null)
-
-        tier.cpu?.let { cpu ->
-            val onnx = repoTree(cpu.repo, cpu.revision)
-            cpu.files.forEach { path ->
-                val entry = onnx[path] ?: throw IllegalStateException("File $path not found in ${cpu.repo}@${cpu.revision}")
-                planned += plannedFrom(cpu.repo, cpu.revision, path, entry, "$CPU_DIR/")
+        tier.webllm?.let { w ->
+            val mlc = repoTree(w.repo, w.revision)
+            mlc.keys.filter { it !in EXCLUDED_REPO_FILES }.sorted().forEach { path ->
+                planned += plannedFrom(w.repo, w.revision, path, mlc.getValue(path), "$MLC_DIR/")
             }
+            planned += PlannedFile(MODEL_LIB_PATH, WEBLLM_LIB_PREFIX + w.modelLibFile, null, null)
         }
+        tier.gpuOnnx?.let { planned += planOnnx(it, GPU_DIR) }
+        tier.cpu?.let { planned += planOnnx(it, CPU_DIR) }
         return planned
     }
 

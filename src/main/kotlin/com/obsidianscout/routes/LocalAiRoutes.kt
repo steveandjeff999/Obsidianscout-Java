@@ -7,7 +7,6 @@ import com.obsidianscout.auth.requireSuperAdmin
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.http.content.LocalFileContent
-import io.ktor.server.plugins.partialcontent.PartialContent
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -65,7 +64,6 @@ fun Route.localAiApiRoutes() {
 /** `/models/...`: model weights and inference runtimes, served from disk (never bundled in the app). */
 fun Route.localAiModelFileRoutes() {
     route("/models") {
-        install(PartialContent)
         get("{segments...}") {
             // Signed-in users only, so the multi-GB files can't be hotlinked.
             call.requireSession()

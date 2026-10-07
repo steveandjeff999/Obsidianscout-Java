@@ -33,6 +33,7 @@ dependencies {
     implementation("io.ktor:ktor-server-caching-headers-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-double-receive-jvm:$ktorVersion")
     implementation("io.ktor:ktor-server-partial-content-jvm:$ktorVersion")
+    implementation("io.ktor:ktor-server-auto-head-response-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-core-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-cio-jvm:$ktorVersion")
     implementation("io.ktor:ktor-client-websockets-jvm:$ktorVersion")
@@ -61,6 +62,16 @@ dependencies {
     implementation("com.webauthn4j:webauthn4j-core:0.31.11.RELEASE")
     testImplementation(kotlin("test"))
 }
+
+// Local AI assistant tests (routing, tools, guardrails) run with Node; skipped when Node isn't installed.
+val jsTest = tasks.register<Exec>("jsTest") {
+    description = "Runs the Local AI assistant JavaScript tests (node --test)."
+    group = "verification"
+    val nodeAvailable = runCatching { ProcessBuilder("node", "--version").start().waitFor() == 0 }.getOrDefault(false)
+    onlyIf { nodeAvailable }
+    commandLine("node", "--test", "src/test/js/ai-assistant.test.mjs")
+}
+tasks.named("check") { dependsOn(jsTest) }
 
 tasks.test {
     useJUnit()

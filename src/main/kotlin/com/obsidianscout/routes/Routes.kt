@@ -2425,7 +2425,7 @@ fun Application.configureRoutes() {
                             fileBytes = part.streamProvider().use { com.obsidianscout.db.BackupService.readLimited(it, com.obsidianscout.db.BackupService.MAX_IMPORT_BYTES) }
                             fileName = part.originalFileName ?: ""
                         }
-                        part.dispose()
+                        part.release()
                     }
 
                     if (fileBytes == null) {
@@ -2523,7 +2523,7 @@ fun Application.configureRoutes() {
                                 }
                                 uploadedFile = tempFile
                             }
-                            part.dispose()
+                            part.release()
                         }
 
                         val file = uploadedFile ?: throw com.obsidianscout.auth.ApiException(

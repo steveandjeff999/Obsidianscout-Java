@@ -28,7 +28,8 @@ data class AppConfig(
     val current_version: String = "0.6.3.1", // The version this server is running — update this on each release
     val gist_update: GistUpdateConfig = GistUpdateConfig(),
     val quorum_fallback: QuorumFallbackConfig = QuorumFallbackConfig(),
-    val auto_backup: AutoBackupConfig = AutoBackupConfig()
+    val auto_backup: AutoBackupConfig = AutoBackupConfig(),
+    val local_ai: LocalAiConfig = LocalAiConfig()
 ) {
     fun getEffectiveSiteUrl(): String {
         val trimmed = site_url.trim()
@@ -57,6 +58,15 @@ data class QuorumFallbackConfig(
     val mirror_chat: Boolean = true,
     val mirror_notifications_secrets: Boolean = true,
     val mirror_custom_analytics: Boolean = true
+)
+
+/** On-device AI model hosting. Models are only downloaded on boot when listed in [auto_install_tiers]. */
+@Serializable
+data class LocalAiConfig(
+    /** Tier ids to download automatically at startup, e.g. ["lite"]. Empty = install only from Storage Manager / CLI. */
+    val auto_install_tiers: List<String> = emptyList(),
+    /** Installs are refused when they would leave less than this much free disk space. */
+    val min_free_disk_mb: Long = 2048
 )
 
 @Serializable

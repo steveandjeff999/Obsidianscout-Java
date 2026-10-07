@@ -81,22 +81,22 @@
             <div class="card" id="projection-card">
                 <div class="row gap-12 wrap justify-between align-center">
                     <div>
-                        <h1>Projected Final Rankings</h1>
+                        <h1 data-i18n="projected.title">Projected Final Rankings</h1>
                         <p class="notice" id="projection-summary">Simulates the remaining qualification matches to estimate where each team will finish.</p>
                     </div>
                     <div class="row gap-12 wrap align-center">
                         <div class="field" style="min-width: 220px; margin-top: 0;">
-                            <select id="event-filter" class="select-wide" title="Event"></select>
+                            <select id="event-filter" class="select-wide" title="Event" data-i18n-title="projected.tip.event"></select>
                         </div>
                         <div class="field" style="margin-top: 0;">
-                            <select id="projection-sims" title="Number of simulated seasons">
-                                <option value="1000">1,000 runs</option>
-                                <option value="2000" selected>2,000 runs</option>
-                                <option value="5000">5,000 runs</option>
-                                <option value="10000">10,000 runs</option>
+                            <select id="projection-sims" title="Number of simulated seasons" data-i18n-title="projected.tip.sims">
+                                <option value="1000" data-i18n="projected.runs_1000">1,000 runs</option>
+                                <option value="2000" selected data-i18n="projected.runs_2000">2,000 runs</option>
+                                <option value="5000" data-i18n="projected.runs_5000">5,000 runs</option>
+                                <option value="10000" data-i18n="projected.runs_10000">10,000 runs</option>
                             </select>
                         </div>
-                        <button class="btn secondary" id="projection-run-btn" type="button">Re-run</button>
+                        <button class="btn secondary" id="projection-run-btn" type="button" data-i18n="projected.rerun">Re-run</button>
                     </div>
                 </div>
 
@@ -105,20 +105,20 @@
                         <thead>
                             <tr>
                                 <th id="projection-rank-header" title="Projected final standing, ordered by average simulated finish">Proj. Rank</th>
-                                <th>Team</th>
-                                <th>Name</th>
-                                <th title="Rank from qualification matches played so far">Now</th>
-                                <th title="Wins-Losses-Ties so far">Record</th>
-                                <th title="Ranking points per match so far">RS Now</th>
-                                <th title="Expected ranking points per match at the end of qualifications">RS Final</th>
-                                <th title="80% of simulations finish in this range">Likely Range</th>
+                                <th data-i18n="projected.col.team">Team</th>
+                                <th data-i18n="projected.col.name">Name</th>
+                                <th title="Rank from qualification matches played so far" data-i18n-title="projected.tip.now" data-i18n="projected.col.now">Now</th>
+                                <th title="Wins-Losses-Ties so far" data-i18n-title="projected.tip.record" data-i18n="projected.col.record">Record</th>
+                                <th title="Ranking points per match so far" data-i18n-title="projected.tip.rs_now" data-i18n="projected.col.rs_now">RS Now</th>
+                                <th title="Expected ranking points per match at the end of qualifications" data-i18n-title="projected.tip.rs_final" data-i18n="projected.col.rs_final">RS Final</th>
+                                <th title="80% of simulations finish in this range" data-i18n-title="projected.tip.range" data-i18n="projected.col.range">Likely Range</th>
                                 <th id="projection-top-header" title="Chance of finishing inside the alliance captain spots">Top 8</th>
-                                <th title="Chance of finishing first">#1</th>
-                                <th title="Qualification matches left">Left</th>
+                                <th title="Chance of finishing first" data-i18n-title="projected.tip.first">#1</th>
+                                <th title="Qualification matches left" data-i18n-title="projected.tip.left" data-i18n="projected.col.left">Left</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="11" style="text-align: center; color: var(--muted); padding: 24px;">Loading projection...</td></tr>
+                            <tr><td colspan="11" style="text-align: center; color: var(--muted); padding: 24px;" data-i18n="projected.loading">Loading projection...</td></tr>
                         </tbody>
                     </table>
                 </div>

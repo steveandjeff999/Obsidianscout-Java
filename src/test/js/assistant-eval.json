@@ -1,0 +1,194 @@
+{
+  "description": "Assistant routing evaluation set. 'tool' is the tool the deterministic rule router must pick (null = the router should defer to the model). The browser eval (scripts in docs/LOCAL_AI_ASSISTANT.md) also runs these against each model tier.",
+  "teams": [
+    254,
+    1678,
+    118,
+    2056,
+    1323,
+    4414,
+    6328,
+    3476,
+    971,
+    1114,
+    2910,
+    5940
+  ],
+  "cases": [
+    {
+      "lang": "en",
+      "q": "top 5 teams by auto",
+      "tool": "top_teams"
+    },
+    {
+      "lang": "en",
+      "q": "who has the best endgame?",
+      "tool": "top_teams"
+    },
+    {
+      "lang": "en",
+      "q": "worst 3 teams in teleop",
+      "tool": "top_teams"
+    },
+    {
+      "lang": "en",
+      "q": "rank teams by total points",
+      "tool": "top_teams"
+    },
+    {
+      "lang": "en",
+      "q": "graph endgame points",
+      "tool": "top_teams"
+    },
+    {
+      "lang": "en",
+      "q": "compare 254 and 1678",
+      "tool": "compare_teams"
+    },
+    {
+      "lang": "en",
+      "q": "254 vs 2056",
+      "tool": "compare_teams"
+    },
+    {
+      "lang": "en",
+      "q": "compare 118, 4414 and 6328 on auto",
+      "tool": "compare_teams"
+    },
+    {
+      "lang": "en",
+      "q": "how good is 4414?",
+      "tool": "team_overview"
+    },
+    {
+      "lang": "en",
+      "q": "tell me about 971",
+      "tool": "team_overview"
+    },
+    {
+      "lang": "en",
+      "q": "1323",
+      "tool": "team_overview"
+    },
+    {
+      "lang": "en",
+      "q": "what do scouts say about 5940?",
+      "tool": "summarize_notes"
+    },
+    {
+      "lang": "en",
+      "q": "summarize the notes on 254",
+      "tool": "summarize_notes"
+    },
+    {
+      "lang": "en",
+      "q": "preview match 12",
+      "tool": "match_preview"
+    },
+    {
+      "lang": "en",
+      "q": "who wins qm 7?",
+      "tool": "match_preview"
+    },
+    {
+      "lang": "en",
+      "q": "preview our next match",
+      "tool": "match_preview"
+    },
+    {
+      "lang": "en",
+      "q": "who should we pick?",
+      "tool": "pick_candidates"
+    },
+    {
+      "lang": "en",
+      "q": "build me a pick list",
+      "tool": "pick_candidates"
+    },
+    {
+      "lang": "en",
+      "q": "which teams are good at both auto and climbing?",
+      "tool": "compare_metrics"
+    },
+    {
+      "lang": "en",
+      "q": "scatter auto vs teleop",
+      "tool": "compare_metrics"
+    },
+    {
+      "lang": "en",
+      "q": "how has 254 improved over time?",
+      "tool": "team_matches"
+    },
+    {
+      "lang": "en",
+      "q": "show 1678 auto by match",
+      "tool": "team_matches"
+    },
+    {
+      "lang": "es",
+      "q": "los 5 mejores equipos en autónomo",
+      "tool": "top_teams"
+    },
+    {
+      "lang": "es",
+      "q": "compara 254 y 1678",
+      "tool": "compare_teams"
+    },
+    {
+      "lang": "es",
+      "q": "resume las notas de 5940",
+      "tool": "summarize_notes"
+    },
+    {
+      "lang": "es",
+      "q": "vista previa del partido 12",
+      "tool": "match_preview"
+    },
+    {
+      "lang": "es",
+      "q": "¿a quién deberíamos elegir?",
+      "tool": "pick_candidates"
+    },
+    {
+      "lang": "tr",
+      "q": "en iyi 5 takım teleop",
+      "tool": "top_teams"
+    },
+    {
+      "lang": "tr",
+      "q": "254 ve 1678 karşılaştır",
+      "tool": "compare_teams"
+    },
+    {
+      "lang": "tr",
+      "q": "12. maçı önizle",
+      "tool": "match_preview"
+    },
+    {
+      "lang": "tr",
+      "q": "kimi seçmeliyiz?",
+      "tool": "pick_candidates"
+    },
+    {
+      "lang": "he",
+      "q": "השווה בין 254 ל-1678",
+      "tool": "compare_teams"
+    },
+    {
+      "lang": "he",
+      "q": "סכם את ההערות על 5940",
+      "tool": "summarize_notes"
+    },
+    {
+      "lang": "he",
+      "q": "5 הקבוצות המובילות לפי טלאופ",
+      "tool": "top_teams"
+    },
+    {
+      "lang": "he",
+      "q": "את מי כדאי לנו לבחור?",
+      "tool": "pick_candidates"
+    }
+  ]
+}

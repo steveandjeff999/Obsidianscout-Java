@@ -26,16 +26,33 @@ export async function setCpuForced(value) {
     capsPromise = null;
     await unload();
 }
-export const TIER_ORDER = ["lite", "standard", "gemma2b", "advanced", "gemma9b"];
+export const TIER_ORDER = ["lite", "standard", "gemma4e2b", "advanced", "gemma4e4b"];
 
-/** Per-tier behaviour. All bundled model libraries use a 4k-token context window. */
+/**
+ * Per-tier behaviour. Features check these flags, never tier ids, so new tiers only need an entry here.
+ *  toolMode        "router" = rule router first, at most one model-picked tool (results that error are dropped);
+ *                  "json" = the model picks tools with JSON (grammar-constrained on WebLLM).
+ *  maxToolCalls    model-picked tool calls when the rule router doesn't recognise the question.
+ *  routedFollowUps extra model-picked calls allowed after a rule-routed tool.
+ *  codeAnswers     answer with code-built briefs instead of model prose (tiny models invent details).
+ *  extractiveSummaries  notes summaries quote scouts instead of being rewritten by the model.
+ *  calculate / strategy  enable the calculator tool and the strategy-reasoning prompt.
+ *  visibleReasoning  ask for a <thought> block before the answer (costly; only for fast WebLLM tiers).
+ */
 export const TIER_PROFILES = {
-    lite: { maxAnswerTokens: 320, contextChars: 3500, toolMode: "router", maxToolCalls: 1, historyTurns: 2 },
-    standard: { maxAnswerTokens: 500, contextChars: 4500, toolMode: "json", maxToolCalls: 2, historyTurns: 3 },
-    gemma2b: { maxAnswerTokens: 600, contextChars: 4500, toolMode: "json", maxToolCalls: 3, historyTurns: 3 },
-    advanced: { maxAnswerTokens: 750, contextChars: 5000, toolMode: "json", maxToolCalls: 4, historyTurns: 4 },
-    gemma9b: { maxAnswerTokens: 800, contextChars: 5500, toolMode: "json", maxToolCalls: 4, historyTurns: 4 }
+    lite: { maxAnswerTokens: 450, contextChars: 4200, toolMode: "router", maxToolCalls: 1, routedFollowUps: 0, historyTurns: 3, codeAnswers: true, extractiveSummaries: true, calculate: false, strategy: false, visibleReasoning: false },
+    standard: { maxAnswerTokens: 500, contextChars: 4500, toolMode: "json", maxToolCalls: 2, routedFollowUps: 0, historyTurns: 3, codeAnswers: false, extractiveSummaries: false, calculate: false, strategy: false, visibleReasoning: false },
+    // Gemma 4 runs through Transformers.js at a few tokens per second: fewer model-picked calls, shorter answers, no written reasoning.
+    gemma4e2b: { maxAnswerTokens: 400, contextChars: 6000, toolMode: "json", maxToolCalls: 1, routedFollowUps: 0, historyTurns: 3, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: false },
+    advanced: { maxAnswerTokens: 750, contextChars: 5000, toolMode: "json", maxToolCalls: 4, routedFollowUps: 2, historyTurns: 4, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true },
+    gemma4e4b: { maxAnswerTokens: 500, contextChars: 7000, toolMode: "json", maxToolCalls: 2, routedFollowUps: 0, historyTurns: 4, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: false }
 };
+
+/** Profile for a tier (object or id); unknown tiers get Lite's conservative settings. */
+export function tierProfile(tierOrId) {
+    const id = typeof tierOrId === "string" ? tierOrId : tierOrId && tierOrId.id;
+    return TIER_PROFILES[id] || TIER_PROFILES.lite;
+}
 
 function t(key, fallback) {
     return (window.Obsidianscout && typeof window.Obsidianscout.t === "function") ? window.Obsidianscout.t(key, fallback) : fallback;
@@ -72,12 +89,44 @@ export async function getManifest(force = false) {
                 if (!res.ok) throw new Error(`Manifest request failed (${res.status})`);
                 return res.json();
             })
+            .then((manifest) => {
+                pruneRetiredCaches(manifest).catch(() => {});
+                return manifest;
+            })
             .catch((err) => {
                 manifestPromise = null;
                 throw err;
             });
     }
     return manifestPromise;
+}
+
+/**
+ * Deletes browser-cached model files for tiers the server no longer has (e.g. the retired Gemma 2 tiers),
+ * superseded versions of current tiers, and old runtimes. Runs at most once per browser session.
+ */
+export async function pruneRetiredCaches(manifest) {
+    if (!manifest || !manifest.knownTiers || !("caches" in window)) return 0;
+    try {
+        if (sessionStorage.getItem("obsidianscout:ai_cache_pruned") === manifest.runtime.version) return 0;
+        sessionStorage.setItem("obsidianscout:ai_cache_pruned", manifest.runtime.version);
+    } catch (_) { /* storage blocked: prune anyway */ }
+    const known = manifest.knownTiers;
+    let removed = 0;
+    for (const name of await caches.keys()) {
+        if (!(name.startsWith("webllm/") || name === CPU_FILE_CACHE || name === "transformers-cache")) continue;
+        const cache = await caches.open(name);
+        for (const req of await cache.keys()) {
+            const parts = new URL(req.url).pathname.split("/").filter(Boolean); // models, <tier|runtime>, <version>, ...
+            if (parts[0] !== "models" || parts.length < 3) continue;
+            const stale = parts[1] === "runtime" ? parts[2] !== manifest.runtime.version : known[parts[1]] !== parts[2];
+            if (stale) {
+                await cache.delete(req);
+                removed++;
+            }
+        }
+    }
+    return removed;
 }
 
 export async function getInstalledTiers() {
@@ -196,15 +245,16 @@ export function assessTier(tier, caps) {
     if (caps.quota && caps.usage !== null && caps.quota - caps.usage < base.downloadBytes * 1.05) {
         return { ...base, status: "unsupported", reason: t("ai.cap.no_storage", "Not enough browser storage for this model.") };
     }
-    if (tier.id === "advanced") {
-        if (caps.mobile) {
-            return { ...base, status: "unsupported", reason: t("ai.cap.desktop_only", "Needs a laptop or desktop GPU (~2.6 GB of GPU memory).") };
-        }
-        if (caps.deviceMemory && caps.deviceMemory < 8) {
-            return { ...base, status: "slow", reason: t("ai.cap.low_memory", "This device reports limited memory; the model may fail to load.") };
-        }
+    // Device rules come from the server manifest (mobile: ok|slow|no, minDeviceMemoryGB, vramMB).
+    const gb = Math.max(1, Math.round((tier.vramMB || 0) / 1024 * 10) / 10);
+    if (caps.mobile && tier.mobile === "no") {
+        return { ...base, status: "unsupported", reason: t("ai.cap.desktop_only_gb", "Needs a laptop or desktop GPU (~{gb} GB of GPU memory).").replace("{gb}", gb) };
     }
-    if ((tier.id === "standard" || tier.id === "gemma2b") && caps.mobile) {
+    // navigator.deviceMemory is capped at 8 by browsers, so 8 GB requirements pass on any large machine.
+    if (tier.minDeviceMemoryGB && caps.deviceMemory && caps.deviceMemory < tier.minDeviceMemoryGB) {
+        return { ...base, status: "unsupported", reason: t("ai.cap.low_memory_gb", "Needs at least {gb} GB of device memory.").replace("{gb}", tier.minDeviceMemoryGB) };
+    }
+    if (caps.mobile && tier.mobile === "slow") {
         return { ...base, status: "slow", reason: t("ai.cap.mobile_slow", "May be slow or run out of memory on phones.") };
     }
     return { ...base, status: "supported", reason: "" };
@@ -226,13 +276,15 @@ export const CPU_FILE_CACHE = "obsidianscout-ai-files";
 export async function isDownloaded(tier, backend) {
     if (!("caches" in window)) return false;
     try {
-        if (backend === "cpu") {
-            if (!tier.cpu) return false;
+        const onnx = backend === "cpu" ? tier.cpu : (tier.webgpu && tier.webgpu.engine === "transformers" ? tier.webgpu : null);
+        if (backend === "cpu" || onnx) {
+            // Transformers.js builds are stored by the worker in chunked Cache Storage entries (see ai-worker.js).
+            if (!onnx || !(onnx.files || []).length) return false;
             const cache = await caches.open(CPU_FILE_CACHE);
-            for (const file of tier.cpu.files || []) {
+            for (const file of onnx.files) {
                 if (!(await cache.match(new URL(file.url + "?meta", location.origin).href))) return false;
             }
-            return (tier.cpu.files || []).length > 0;
+            return true;
         }
         // WebLLM stores weight shards and config in its own webllm/* caches, keyed by URL. (The small model
         // library .wasm goes through the regular HTTP cache, so it isn't checked here.)
@@ -541,7 +593,7 @@ export function hashString(text) {
     return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 
-window.addEventListener("pagehide", () => {
+if (typeof window !== "undefined") window.addEventListener("pagehide", () => {
     if (engine.worker) {
         engine.worker.terminate();
         engine.worker = null;
@@ -552,6 +604,8 @@ window.addEventListener("pagehide", () => {
 const api = {
     TIER_ORDER,
     TIER_PROFILES,
+    tierProfile,
+    pruneRetiredCaches,
     getMe,
     isEnabled,
     getManifest,
@@ -579,5 +633,5 @@ const api = {
     hashString
 };
 
-window.ObsidianscoutAI = Object.assign(window.ObsidianscoutAI || {}, api);
+if (typeof window !== "undefined") window.ObsidianscoutAI = Object.assign(window.ObsidianscoutAI || {}, api);
 export default api;

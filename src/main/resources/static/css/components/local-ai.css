@@ -488,3 +488,15 @@ label.ai-tier-card .ai-muted { font-size: 13px; color: var(--muted); }
     display: none !important;
 }
 
+
+/* "Summarize all teams" bar on the qualitative data page */
+.ai-prewarm-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 14px;
+    margin: 0 0 16px;
+}
+.ai-prewarm-bar .ai-muted { flex: 1 1 260px; }
+.ai-prewarm-bar [hidden] { display: none !important; }
