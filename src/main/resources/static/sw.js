@@ -118,6 +118,7 @@ const ASSETS = [
     '/js/utilities/helpers.js',
     '/js/utilities/haptics.js',
     '/js/utilities/media.js',
+    '/js/utilities/config-duplicates.js',
     '/js/utilities/svg-filters.js',
     '/js/login.js',
     '/js/reset-password.js',

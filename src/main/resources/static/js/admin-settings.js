@@ -1432,6 +1432,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!visualFieldsList) return;
         visualFieldsList.classList.remove("view-only-editor");
         visualFieldsList.innerHTML = "";
+        refreshDuplicateWarning();
 
         const fields = currentConfig.fields || [];
         if (fields.length === 0) {
@@ -2345,6 +2346,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
 
         editor.value = JSON.stringify(cleanedConfig, null, 2);
+        refreshDuplicateWarning();
+    }
+
+    function refreshDuplicateWarning() {
+        if (visualFieldsList && window.ObsidianscoutConfigDuplicates) {
+            window.ObsidianscoutConfigDuplicates.renderDuplicateWarning(visualFieldsList, currentConfig);
+        }
     }
 });
 

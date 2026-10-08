@@ -1036,7 +1036,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
     }
 
     fun getGameConfigWithSettings(teamNumber: Int, program: String = "FRC"): ScoutingConfig {
-        val config = ConfigService.getConfig(teamNumber)
+        val config = ConfigService.getConfig(teamNumber, program)
         val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber, program)
         return config.copy(
             tbaKey = if (settings.apiKeys.tbaKey.isNotBlank()) "********" else "",
@@ -1047,7 +1047,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
     }
 
     fun getPitConfigWithSettings(teamNumber: Int, program: String = "FRC"): ScoutingConfig {
-        val config = ConfigService.getPitConfig(teamNumber)
+        val config = ConfigService.getPitConfig(teamNumber, program)
         val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber, program)
         return config.copy(
             tbaKey = if (settings.apiKeys.tbaKey.isNotBlank()) "********" else "",
@@ -1058,7 +1058,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
     }
 
     fun getQualitativeConfigWithSettings(teamNumber: Int, program: String = "FRC"): ScoutingConfig {
-        val config = ConfigService.getQualitativeConfig(teamNumber)
+        val config = ConfigService.getQualitativeConfig(teamNumber, program)
         val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber, program)
         return config.copy(
             tbaKey = if (settings.apiKeys.tbaKey.isNotBlank()) "********" else "",
@@ -1858,7 +1858,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     val teamData = req.teamData
                         ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing required field: team_data", "MISSING_FIELD")
 
-                    val config = ConfigService.getQualitativeConfig(session.teamNumber)
+                    val config = ConfigService.getQualitativeConfig(session.teamNumber, session.program)
 
                     var lastId = ""
                     transaction {
@@ -1932,13 +1932,15 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         }
                     }
 
-                    val config = ConfigService.getConfig(session.teamNumber)
+                    val config = ConfigService.getConfig(session.teamNumber, session.program)
                     val entry = try {
                         ScoutingService.createEntry(
                             session = session,
                             request = ScoutingEntryRequest(mergedData),
                             config = config
                         )
+                    } catch (e: com.obsidianscout.auth.ApiException) {
+                        throw MobileApiException(e.status, e.message, if (e.status == HttpStatusCode.BadRequest) "VALIDATION_ERROR" else "SUBMIT_ERROR")
                     } catch (e: Exception) {
                         throw MobileApiException(HttpStatusCode.InternalServerError, e.message ?: "Submit error", "SUBMIT_ERROR")
                     }
@@ -1962,7 +1964,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 var submittedCount = 0
                 var failedCount = 0
 
-                val config = ConfigService.getConfig(session.teamNumber)
+                val config = ConfigService.getConfig(session.teamNumber, session.program)
 
                 val teamUuids = req.entries.map { it.teamId }.distinct().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
                 val matchUuids = req.entries.map { it.matchId }.distinct().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
@@ -2140,13 +2142,15 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     }
                 }
 
-                val config = ConfigService.getPitConfig(session.teamNumber)
+                val config = ConfigService.getPitConfig(session.teamNumber, session.program)
                 val entry = try {
                     PitScoutingService.createEntry(
                         session = session,
                         request = ScoutingEntryRequest(mergedData),
                         config = config
                     )
+                } catch (e: com.obsidianscout.auth.ApiException) {
+                    throw MobileApiException(e.status, e.message, if (e.status == HttpStatusCode.BadRequest) "VALIDATION_ERROR" else "SUBMIT_ERROR")
                 } catch (e: Exception) {
                     throw MobileApiException(HttpStatusCode.InternalServerError, e.message ?: "Submit error", "SUBMIT_ERROR")
                 }
@@ -2211,7 +2215,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val matchesList = IntegrationService.listMatches(eventKey, session.program)
                 
                 val scoutedEntries = ScoutingService.listEntries(session, includePrescout = false)
-                val config = ConfigService.getConfig(session.teamNumber)
+                val config = ConfigService.getConfig(session.teamNumber, session.program)
 
                 var filterTeams = teamsList
                 if (body.teamNumber != null) {
@@ -2457,17 +2461,17 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             // Qualitative configuration
             get("/config/qualitative") {
                 val session = call.requireMobileSession(secret)
-                val config = getQualitativeConfigWithSettings(session.teamNumber)
+                val config = getQualitativeConfigWithSettings(session.teamNumber, session.program)
                 call.respond(MobileConfigResponse(config = config))
             }
             get("/config/qualitative/active") {
                 val session = call.requireMobileSession(secret)
-                val config = getQualitativeConfigWithSettings(session.teamNumber)
+                val config = getQualitativeConfigWithSettings(session.teamNumber, session.program)
                 call.respond(MobileConfigResponse(config = config))
             }
             get("/config/qualitative/team") {
                 val session = call.requireMobileSession(secret)
-                val config = getQualitativeConfigWithSettings(session.teamNumber)
+                val config = getQualitativeConfigWithSettings(session.teamNumber, session.program)
                 call.respond(MobileConfigResponse(config = config))
             }
 
@@ -3410,7 +3414,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     throw MobileApiException(HttpStatusCode.BadRequest, "No team numbers provided", "MISSING_TEAMS_OR_DATA")
                 }
 
-                val config = ConfigService.getConfig(session.teamNumber)
+                val config = ConfigService.getConfig(session.teamNumber, session.program)
                 val allEntries = ScoutingService.listEntries(session, includePrescout = true)
 
                 val traces = targetTeamNumbers.map { num ->

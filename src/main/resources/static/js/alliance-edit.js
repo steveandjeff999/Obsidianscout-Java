@@ -742,6 +742,7 @@
         }
 
         visualFieldsList.innerHTML = "";
+        refreshDuplicateWarning();
 
         const fields = currentConfig.fields || [];
         if (fields.length === 0) {
@@ -1213,14 +1214,17 @@
                             } else {
                                 opt.label = val;
                             }
-                            if (!opt.value || opt.value === slugify(inputs[0].defaultValue)) {
-                                opt.value = slugify(ev.target.value);
+                            if (!opt.value || opt.value === opt._autoValue || opt.value === slugify(inputs[0].defaultValue)) {
+                                const otherValues = (field.options || []).filter((o) => o !== opt).map((o) => o.value).filter(Boolean);
+                                opt.value = ensureUniqueSlug(slugify(ev.target.value), otherValues);
+                                opt._autoValue = opt.value;
                                 inputs[1].value = opt.value;
                             }
                             updateRawFromVisual();
                         });
                         inputs[1].addEventListener("input", (ev) => {
                             opt.value = ev.target.value;
+                            opt._autoValue = null;
                             updateRawFromVisual();
                         });
                         if (supportsPointsConfig() && inputs[2]) {
@@ -1241,7 +1245,9 @@
 
                 addOptBtn.addEventListener("click", () => {
                     if (!field.options) field.options = [];
-                    field.options.push({ label: "Option " + (field.options.length + 1), value: "option_" + (field.options.length + 1), points: 0 });
+                    const optNumber = field.options.length + 1;
+                    const optValue = ensureUniqueSlug("option_" + optNumber, field.options.map((o) => o.value).filter(Boolean));
+                    field.options.push({ label: "Option " + optNumber, value: optValue, points: 0 });
                     renderOptions();
                     updateRawFromVisual();
                 });
@@ -1440,6 +1446,13 @@
 
         editor.value = JSON.stringify(cleanedConfig, null, 2);
         sendConfigEdit(editor.value);
+        refreshDuplicateWarning();
+    }
+
+    function refreshDuplicateWarning() {
+        if (visualFieldsList && window.ObsidianscoutConfigDuplicates) {
+            window.ObsidianscoutConfigDuplicates.renderDuplicateWarning(visualFieldsList, currentConfig);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────

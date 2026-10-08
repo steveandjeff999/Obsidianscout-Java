@@ -364,6 +364,7 @@
     </div>
 
     <script type="module" src="/js/common.js"></script>
+    <script src="/js/utilities/config-duplicates.js"></script>
     <script>
         let allPresets = [];
         let currentPresetConfig = { title: "", version: 1, fields: [], analytics: [] };
@@ -507,10 +508,13 @@
             const supportsPts = supportsPointsConfig();
             const supportsPhs = supportsPhasesConfig();
 
+            const usedIds = new Set((raw.fields || []).map(f => f.id).filter(Boolean));
             const cleanedFields = (raw.fields || []).map(f => {
                 const canonicalType = canonicalizePresetFieldType(f.type);
+                const fieldId = f.id || newFieldId(usedIds);
+                usedIds.add(fieldId);
                 const cleaned = {
-                    id: f.id || `field_${Date.now().toString().slice(-4)}`,
+                    id: fieldId,
                     label: typeof f.label === 'object' ? (f.label.en || Object.values(f.label)[0] || '') : (f.label || ''),
                     type: canonicalType
                 };
@@ -553,10 +557,32 @@
         function updateRawFromVisual() {
             currentPresetConfig = cleanPresetConfigForSave(currentPresetConfig);
             document.getElementById('preset-json').value = JSON.stringify(currentPresetConfig, null, 2);
+            refreshDuplicateWarning();
+        }
+
+        // Shared duplicate checker (js/utilities/config-duplicates.js); fall back to long, timestamp-based IDs if it failed to load.
+        function newFieldId(existing, prefix = 'field_') {
+            const tools = window.ObsidianscoutConfigDuplicates;
+            return tools ? tools.uniqueFieldId(existing, prefix) : `${prefix}${Date.now()}`;
+        }
+
+        function uniqueOptionValue(field, option, base) {
+            const tools = window.ObsidianscoutConfigDuplicates;
+            if (!base || !tools) return base;
+            const others = (field.options || []).filter(o => o !== option).map(o => o.value).filter(Boolean);
+            return tools.uniqueValue(base, others);
+        }
+
+        function refreshDuplicateWarning() {
+            const list = document.getElementById('visual-fields-list');
+            if (list && window.ObsidianscoutConfigDuplicates) {
+                window.ObsidianscoutConfigDuplicates.renderDuplicateWarning(list, currentPresetConfig);
+            }
         }
 
         function renderVisualFields() {
             const list = document.getElementById('visual-fields-list');
+            refreshDuplicateWarning();
             const fields = currentPresetConfig.fields || [];
             const supportsPts = supportsPointsConfig();
             const supportsPhs = supportsPhasesConfig();
@@ -776,21 +802,21 @@
             if (!field) return;
             if (!field.options) field.options = [];
             const optNumber = field.options.length + 1;
-            field.options.push({
-                label: `Option ${optNumber}`,
-                value: `option_${optNumber}`,
-                points: 0
-            });
+            const newOption = { label: `Option ${optNumber}`, value: '', points: 0 };
+            field.options.push(newOption);
+            newOption.value = uniqueOptionValue(field, newOption, `option_${optNumber}`);
             renderVisualFields();
         }
 
         function updateSelectOption(fieldIdx, optIdx, prop, val) {
             const field = currentPresetConfig.fields[fieldIdx];
             if (!field || !field.options || !field.options[optIdx]) return;
-            field.options[optIdx][prop] = val;
-            if (prop === 'label' && (!field.options[optIdx].value || field.options[optIdx].value.startsWith('option_'))) {
-                field.options[optIdx].value = val.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            const option = field.options[optIdx];
+            option[prop] = val;
+            if (prop === 'label' && (!option.value || option.value.startsWith('option_'))) {
+                option.value = uniqueOptionValue(field, option, val.toLowerCase().replace(/[^a-z0-9]/g, '_'));
             }
+            refreshDuplicateWarning();
         }
 
         function removeSelectOption(fieldIdx, optIdx) {
@@ -804,7 +830,7 @@
             const field = currentPresetConfig.fields[idx];
             if (!field) return;
             const copy = JSON.parse(JSON.stringify(field));
-            copy.id = `${field.id}_copy_${Date.now().toString().slice(-4)}`;
+            copy.id = newFieldId(currentPresetConfig.fields, `${field.id}_copy_`);
             const labelVal = typeof field.label === 'object' ? (field.label.en || Object.values(field.label)[0] || '') : (field.label || '');
             copy.label = `${labelVal} (Copy)`;
             currentPresetConfig.fields.splice(idx + 1, 0, copy);
@@ -813,9 +839,16 @@
 
         function updateVisualField(idx, prop, val) {
             if (!currentPresetConfig.fields[idx]) return;
-            currentPresetConfig.fields[idx][prop] = val;
-            if (prop === 'label' && !currentPresetConfig.fields[idx].id) {
-                currentPresetConfig.fields[idx].id = val.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            const field = currentPresetConfig.fields[idx];
+            field[prop] = val;
+            if (prop === 'label' && !field.id) {
+                const base = val.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                const tools = window.ObsidianscoutConfigDuplicates;
+                const otherIds = currentPresetConfig.fields.filter(f => f !== field).map(f => f.id).filter(Boolean);
+                field.id = base && tools ? tools.uniqueValue(base, otherIds) : base;
+            }
+            if (prop === 'id' || prop === 'label') {
+                refreshDuplicateWarning();
             }
         }
 
@@ -824,7 +857,7 @@
             const supportsPts = supportsPointsConfig();
             const supportsPhs = supportsPhasesConfig();
             currentPresetConfig.fields.push({
-                id: `field_${Date.now().toString().slice(-4)}`,
+                id: newFieldId(currentPresetConfig.fields),
                 label: "New Field",
                 type: "counter",
                 min: 0,

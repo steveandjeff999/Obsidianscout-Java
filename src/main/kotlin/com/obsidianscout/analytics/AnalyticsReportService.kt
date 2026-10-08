@@ -466,7 +466,7 @@ object AnalyticsReportService {
             val totalScore = AnalyticsService.scoreEntry(matchConfig, entry)
             val autoScore = scoreSection(matchConfig, entry, "auto")
             val teleopScore = scoreSection(matchConfig, entry, "teleop")
-            val endgameScore = scoreSection(matchConfig, entry, "endgame") + scoreSection(matchConfig, entry, "climb")
+            val endgameScore = scoreSection(matchConfig, entry, "endgame", "climb")
             val tNum = entry.targetTeamNumber ?: 0
 
             buildJsonObject {
@@ -555,16 +555,13 @@ object AnalyticsReportService {
         else -> "string"
     }
 
-    private fun scoreSection(config: com.obsidianscout.config.ScoutingConfig, entry: com.obsidianscout.scouting.ScoutingEntryRecord, sectionSubstring: String): Double {
+    // Fields are matched by phase (id only when no phase is set) and counted once; scoring matches AnalyticsService (incl. select option points).
+    internal fun scoreSection(config: com.obsidianscout.config.ScoutingConfig, entry: com.obsidianscout.scouting.ScoutingEntryRecord, vararg sectionSubstrings: String): Double {
         return config.fields
-            .filter { (it.phase ?: "").contains(sectionSubstring, ignoreCase = true) || it.id.contains(sectionSubstring, ignoreCase = true) }
-            .sumOf { field ->
-                val elem = entry.data[field.id] ?: return@sumOf 0.0
-                val num = (elem as? JsonPrimitive)?.content?.toDoubleOrNull()
-                val boolVal = (elem as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
-                if (num != null) (field.pointsPer ?: 0.0) * num
-                else if (boolVal == true) field.pointsPer ?: 0.0
-                else 0.0
+            .filter { field ->
+                val key = field.phase?.ifBlank { null } ?: field.id
+                sectionSubstrings.any { s -> key.contains(s, ignoreCase = true) }
             }
+            .sumOf { field -> AnalyticsService.fieldScore(field, entry.data[field.id]) }
     }
 }

@@ -1218,7 +1218,7 @@ fun Application.configureRoutes() {
                 post {
                     val session = call.requireSession()
                     val request = call.receive<ScoutingEntryRequest>()
-                    val config = ConfigService.getConfig(session.teamNumber)
+                    val config = ConfigService.getConfig(session.teamNumber, session.program)
                     val entry = ScoutingService.createEntry(session, request, config)
                     call.respond(entry)
                 }
@@ -1227,7 +1227,7 @@ fun Application.configureRoutes() {
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     val request = call.receive<ScoutingEntryRequest>()
-                    val config = ConfigService.getConfig(session.teamNumber)
+                    val config = ConfigService.getConfig(session.teamNumber, session.program)
                     val entry = ScoutingService.updateEntry(session, id, request, config)
                     call.respond(entry)
                 }
@@ -1251,7 +1251,7 @@ fun Application.configureRoutes() {
                 post {
                     val session = call.requireSession()
                     val request = call.receive<ScoutingEntryRequest>()
-                    val config = ConfigService.getPitConfig(session.teamNumber)
+                    val config = ConfigService.getPitConfig(session.teamNumber, session.program)
                     val entry = PitScoutingService.createEntry(session, request, config)
                     call.respond(entry)
                 }
@@ -1260,7 +1260,7 @@ fun Application.configureRoutes() {
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     val request = call.receive<ScoutingEntryRequest>()
-                    val config = ConfigService.getPitConfig(session.teamNumber)
+                    val config = ConfigService.getPitConfig(session.teamNumber, session.program)
                     val entry = PitScoutingService.updateEntry(session, id, request, config)
                     call.respond(entry)
                 }
@@ -1285,7 +1285,7 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val reqJson = call.receiveText()
                     val elem = JsonSupport.json.parseToJsonElement(reqJson)
-                    val config = ConfigService.getQualitativeConfig(session.teamNumber)
+                    val config = ConfigService.getQualitativeConfig(session.teamNumber, session.program)
                     if (elem is JsonObject && elem.containsKey("entries") && elem["entries"] is kotlinx.serialization.json.JsonArray) {
                         val entriesArr = elem["entries"]!!.jsonArray
                         val results = mutableListOf<QualitativeScoutingEntryRecord>()
@@ -1305,7 +1305,7 @@ fun Application.configureRoutes() {
                     val session = call.requireSession()
                     val reqJson = call.receiveText()
                     val elem = JsonSupport.json.parseToJsonElement(reqJson)
-                    val config = ConfigService.getQualitativeConfig(session.teamNumber)
+                    val config = ConfigService.getQualitativeConfig(session.teamNumber, session.program)
                     val entriesArr = when (elem) {
                         is kotlinx.serialization.json.JsonArray -> elem
                         is JsonObject -> elem["entries"]?.jsonArray ?: (elem["data"]?.jsonArray ?: throw ApiException(HttpStatusCode.BadRequest, "Missing 'entries' array"))
@@ -1324,7 +1324,7 @@ fun Application.configureRoutes() {
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     val request = call.receive<ScoutingEntryRequest>()
-                    val config = ConfigService.getQualitativeConfig(session.teamNumber)
+                    val config = ConfigService.getQualitativeConfig(session.teamNumber, session.program)
                     val entry = QualitativeScoutingService.updateEntry(session, id, request, config)
                     call.respond(entry)
                 }
@@ -1348,7 +1348,7 @@ fun Application.configureRoutes() {
                     post {
                         val session = call.requireSession()
                         val request = call.receive<ScoutingEntryRequest>()
-                        val config = ConfigService.getConfig(session.teamNumber)
+                        val config = ConfigService.getConfig(session.teamNumber, session.program)
                         val entry = ScoutingService.createEntry(session, request, config, isPrescout = true)
                         call.respond(entry)
                     }
@@ -1363,7 +1363,7 @@ fun Application.configureRoutes() {
                     post {
                         val session = call.requireSession()
                         val request = call.receive<ScoutingEntryRequest>()
-                        val config = ConfigService.getPitConfig(session.teamNumber)
+                        val config = ConfigService.getPitConfig(session.teamNumber, session.program)
                         val entry = PitScoutingService.createEntry(session, request, config, isPrescout = true)
                         call.respond(entry)
                     }
@@ -1378,7 +1378,7 @@ fun Application.configureRoutes() {
                     post {
                         val session = call.requireSession()
                         val request = call.receive<ScoutingEntryRequest>()
-                        val config = ConfigService.getQualitativeConfig(session.teamNumber)
+                        val config = ConfigService.getQualitativeConfig(session.teamNumber, session.program)
                         val entry = QualitativeScoutingService.createEntry(session, request, config, isPrescout = true)
                         call.respond(entry)
                     }

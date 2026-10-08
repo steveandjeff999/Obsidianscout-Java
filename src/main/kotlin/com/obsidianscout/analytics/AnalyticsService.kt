@@ -409,7 +409,7 @@ object AnalyticsService {
         return config.fields.sumOf { field -> fieldScore(field, entry.data[field.id]) }
     }
 
-    private fun fieldScore(field: ScoutingField, element: JsonElement?): Double {
+    fun fieldScore(field: ScoutingField, element: JsonElement?): Double {
         if (element == null) {
             return 0.0
         }
