@@ -93,6 +93,122 @@ body.theme-dark .sidebar::-webkit-scrollbar-thumb:hover {
     min-width: 0;
 }
 
+/* Sidebar Search Bar */
+.sidebar-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm, 8px);
+    padding: 0 8px 0 10px;
+    height: 34px;
+    min-height: 34px;
+    margin-bottom: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    transition: border-color var(--transition-fast, 0.15s ease), box-shadow var(--transition-fast, 0.15s ease), background var(--transition-fast, 0.15s ease);
+}
+
+.sidebar-search:focus-within {
+    border-color: var(--accent, #3b82f6);
+    background: var(--surface, #18181f);
+    box-shadow: 0 0 0 2px var(--accent-subtle, rgba(59, 130, 246, 0.15));
+}
+
+.sidebar-search-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--muted, #94a3b8);
+    flex-shrink: 0;
+    pointer-events: none;
+    transition: color var(--transition-fast, 0.15s ease);
+}
+
+.sidebar-search:focus-within .sidebar-search-icon {
+    color: var(--accent, #3b82f6);
+}
+
+.sidebar-search-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--ink, #f8fafc);
+    font-size: 12.5px;
+    font-family: inherit;
+    font-weight: 500;
+    padding: 0;
+    line-height: 1.4;
+}
+
+.sidebar-search-input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    display: none;
+}
+
+.sidebar-search-input::placeholder {
+    color: var(--muted, #94a3b8);
+    opacity: 0.85;
+}
+
+.sidebar-search-clear {
+    border: none;
+    background: transparent;
+    color: var(--muted, #94a3b8);
+    cursor: pointer;
+    padding: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: color var(--transition-fast, 0.15s ease), background var(--transition-fast, 0.15s ease);
+}
+
+.sidebar-search-clear:hover {
+    color: var(--ink, #ffffff);
+    background: var(--surface-3, rgba(255, 255, 255, 0.1));
+}
+
+.sidebar-search-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-family: inherit;
+    font-weight: 600;
+    color: var(--muted, #94a3b8);
+    background: var(--surface-3, rgba(255, 255, 255, 0.07));
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    line-height: 1.2;
+    user-select: none;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+.sidebar-search:focus-within .sidebar-search-kbd {
+    display: none;
+}
+
+.sidebar-search-empty {
+    padding: 18px 12px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted, #94a3b8);
+    background: var(--surface-2, rgba(255, 255, 255, 0.03));
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm, 8px);
+    margin: 4px 0 12px;
+}
+
 .sidebar-section-title {
     font-size: 11px;
     text-transform: uppercase;
@@ -397,6 +513,40 @@ body.theme-dark .nav-avatar-initials {
     width: 32px;
     height: 26px;
     border-radius: 6px;
+}
+
+.sidebar.collapsed .sidebar-search {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    margin: 0 auto 14px;
+    justify-content: center;
+    cursor: pointer;
+    background: var(--surface-2);
+}
+
+.sidebar.collapsed .sidebar-search:hover {
+    background: var(--surface-3);
+    border-color: var(--border-focus, #3b82f6);
+}
+
+.sidebar.collapsed .sidebar-search:hover .sidebar-search-icon {
+    color: var(--ink);
+}
+
+.sidebar.collapsed .sidebar-search-input,
+.sidebar.collapsed .sidebar-search-clear,
+.sidebar.collapsed .sidebar-search-kbd,
+.sidebar.collapsed .sidebar-search-empty {
+    display: none !important;
+}
+
+.sidebar-link.sidebar-search-selected {
+    background: var(--surface-2) !important;
+    border-color: var(--accent) !important;
+    color: var(--ink) !important;
+    box-shadow: 0 0 0 1px var(--accent) !important;
 }
 
 .sidebar.collapsed .sidebar-nav {

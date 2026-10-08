@@ -42,10 +42,25 @@
 
         <main class="main-content assistant-page">
 
-            <div class="card assistant-hero">
-                <div class="assistant-hero-text">
-                    <h1 data-i18n="ai.assistant.title">Scouting Assistant</h1>
-                    <p class="notice" data-i18n="ai.assistant.notice">Ask questions about your team's scouting data. The AI runs entirely on this device; nothing you type is sent to an AI service.</p>
+            <div class="card assistant-hero" id="assistant-hero">
+                <div class="assistant-hero-main">
+                    <div class="tutorial-zachary-spotlight hidden" id="assistant-zachary-spotlight">
+                        <img src="/assets/images/zachary.png" alt="Zachary" class="tutorial-hero-avatar" id="assistant-zachary-avatar" title="Click me for a scouting tip!" />
+                        <div class="zachary-speech-bubble" id="assistant-zachary-bubble">
+                            <div class="zachary-bubble-header">
+                                <span class="zachary-name">Zachary</span>
+                                <span class="zachary-badge">Your Assistant</span>
+                                <button type="button" class="btn-assistant-audio-toggle" id="assistant-audio-toggle" title="Toggle voice" aria-label="Toggle voice"></button>
+                            </div>
+                            <p class="zachary-bubble-text" id="assistant-zachary-bubble-text">
+                                I'm Zachary! Ask me anything about our team's scouting data, match predictions, picklists, or custom charts.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="assistant-hero-text" id="assistant-hero-text">
+                        <h1 id="assistant-page-title" data-i18n="ai.assistant.title">Scouting Assistant</h1>
+                        <p class="notice" id="assistant-page-notice" data-i18n="ai.assistant.notice">Ask questions about your team's scouting data. The AI runs entirely on this device; nothing you type is sent to an AI service.</p>
+                    </div>
                 </div>
                 <div class="assistant-controls">
                     <div class="field">

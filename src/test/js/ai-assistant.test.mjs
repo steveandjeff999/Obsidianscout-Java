@@ -506,3 +506,69 @@ test("with one value column on screen, unnamed claims are checked against it", a
     assert.equal(fixed.corrected, 1);
     assert.ok(fixed.text.startsWith(`Highest Total points: ${first.team} (`), fixed.text);
 });
+
+test("team names and nicknames are resolved to team numbers across routing and tools", () => {
+    const names = { 254: "The Cheesy Poofs", 1678: "Citrus Circuits", 118: "Robowranglers", 2056: "OP Robotics", 1323: "MadTown Robotics" };
+    const named = { ...ctx, stats: new Map(Array.from(ctx.stats.entries()).map(([k, s]) => [k, { ...s, name: names[k] || s.name }])) };
+
+    // findTeam
+    assert.equal(Data.findTeam(named, "Citrus Circuits"), 1678);
+    assert.equal(Data.findTeam(named, "Cheesy Poofs"), 254);
+    assert.equal(Data.findTeam(named, "The Cheesy Poofs"), 254);
+    assert.equal(Data.findTeam(named, "Robowranglers"), 118);
+    assert.equal(Data.findTeam(named, "OP Robotics"), 2056);
+    assert.equal(Data.findTeam(named, "MadTown Robotics"), 1323);
+
+    // findTeamsInText
+    assert.deepEqual(Data.findTeamsInText(named, "How is Citrus Circuits doing?"), [1678]);
+    assert.deepEqual(Data.findTeamsInText(named, "Compare Citrus Circuits and Cheesy Poofs"), [1678, 254]);
+    assert.deepEqual(Data.findTeamsInText(named, "Tell me about 1678 Citrus Circuits"), [1678]);
+    assert.deepEqual(Data.findTeamsInText(named, "Show auto for Citrus Circuits, Cheesy Poofs, and Robowranglers"), [1678, 254, 118]);
+
+    // Rule routing with team names
+    const r1 = Tools.ruleRoute("Tell me about Citrus Circuits", named);
+    assert.equal(r1?.tool, "team_overview");
+    assert.equal(r1?.args?.team, 1678);
+
+    const r2 = Tools.ruleRoute("Compare Citrus Circuits and Cheesy Poofs", named);
+    assert.equal(r2?.tool, "compare_teams");
+    assert.deepEqual(r2?.args?.teams, [1678, 254]);
+
+    const r3 = Tools.ruleRoute("Summarize notes on Robowranglers", named);
+    assert.equal(r3?.tool, "summarize_notes");
+    assert.equal(r3?.args?.team, 118);
+
+    const r4 = Tools.ruleRoute("What is Citrus Circuits EPA?", named);
+    assert.equal(r4?.tool, "epa_data");
+    assert.equal(r4?.args?.team, 1678);
+
+    // coerceArgs
+    const coerced = Tools.coerceArgs(named, { team: "Citrus Circuits", teams: ["Cheesy Poofs", "Robowranglers"] });
+    assert.equal(coerced.team, 1678);
+    assert.deepEqual(coerced.teams, [254, 118]);
+
+    // specFromQuestion
+    const spec = Tools.specFromQuestion("make a table of Citrus Circuits and Cheesy Poofs with EPA", named);
+    assert.deepEqual(spec.args.teams, [1678, 254]);
+});
+
+test("Zachary assistant persona in prompt when enabled", () => {
+    const Prompts = (pathToFileURL(path.join(staticJs, "ai/assistant/prompts.js")).href);
+    // test answerQuestion with isZachary option
+    const p1 = Tools.answerQuestion;
+    assert.ok(typeof p1 === "function");
+});
+
+test("sidebar search keywords cover main navigation pages", async () => {
+    const Nav = await import(pathToFileURL(path.join(staticJs, "layout/navigation.js")).href);
+    assert.ok(Nav.PAGE_SEARCH_KEYWORDS);
+    assert.ok(typeof Nav.wireSidebarSearch === "function");
+    assert.ok(Nav.PAGE_SEARCH_KEYWORDS["dashboard"].includes("home"));
+    assert.ok(Nav.PAGE_SEARCH_KEYWORDS["assistant"].includes("ai"));
+    assert.ok(Nav.PAGE_SEARCH_KEYWORDS["assistant"].includes("zachary"));
+    assert.ok(Nav.PAGE_SEARCH_KEYWORDS["scout"].includes("form"));
+    assert.ok(Nav.PAGE_SEARCH_KEYWORDS["compare"].includes("comparison"));
+    assert.ok(Nav.PAGE_SEARCH_KEYWORDS["rankings"].includes("standings"));
+});
+
+

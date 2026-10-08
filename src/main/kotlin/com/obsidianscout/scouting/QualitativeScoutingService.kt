@@ -406,6 +406,7 @@ object QualitativeScoutingService {
             throw ApiException(HttpStatusCode.BadRequest, "Team and match are required")
         }
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
+        val completeness = computeCompleteness(config, request.data)
 
         return transaction {
             val row = QualitativeScoutingEntries.selectAll().where { QualitativeScoutingEntries.id eq entryUuid }.firstOrNull()
@@ -437,6 +438,7 @@ object QualitativeScoutingService {
                 it[matchKey] = meta.matchKey
                 it[matchNumber] = meta.matchNumber
                 it[QualitativeScoutingEntries.dataJson] = dataJson
+                it[completenessPct] = completeness
             }
 
             recalculateDiscrepancies(oldEventKey, oldMatchKey, oldTargetTeamNumber, oldIsPrescout)
@@ -465,7 +467,8 @@ object QualitativeScoutingService {
                 isPrescout = updatedRow[QualitativeScoutingEntries.isPrescout],
                 matchPlayedTime = matchPlayedTime,
                 hasDiscrepancy = updatedRow[QualitativeScoutingEntries.hasDiscrepancy],
-                conflictingTeams = conflicting
+                conflictingTeams = conflicting,
+                completenessPct = completeness
             )
         }
     }

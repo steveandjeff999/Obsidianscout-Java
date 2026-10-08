@@ -24,13 +24,33 @@ export function metricOrDefault(ctx, phrase, fallbackId = "score_total") {
 }
 
 export function toTeamNumbers(ctx, value) {
-    const list = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
-    return Array.from(new Set(list.map((v) => parseInt(String(v).replace(/^frc/i, ""), 10)).filter((n) => Number.isFinite(n) && ctx.stats.has(n))));
+    if (value === undefined || value === null || value === "") return [];
+    if (Array.isArray(value)) {
+        const out = [];
+        value.forEach((v) => {
+            const found = toTeamNumbers(ctx, v);
+            found.forEach((t) => { if (!out.includes(t)) out.push(t); });
+        });
+        return out;
+    }
+    if (typeof value === "number" && ctx.stats && ctx.stats.has(value)) {
+        return [value];
+    }
+    const str = String(value).trim();
+    if (!str) return [];
+    const extracted = Data.findTeamsInText ? Data.findTeamsInText(ctx, str) : [];
+    if (extracted.length > 0) return extracted;
+    const single = Data.findTeam ? Data.findTeam(ctx, str) : null;
+    if (single && ctx.stats && ctx.stats.has(single)) {
+        return [single];
+    }
+    const n = parseInt(str.replace(/^frc|^ftc/i, ""), 10);
+    return Number.isFinite(n) && ctx.stats && ctx.stats.has(n) ? [n] : [];
 }
 
 export function unknownTeams(ctx, value) {
     const list = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
-    return list.map((v) => parseInt(String(v).replace(/^frc/i, ""), 10)).filter((n) => Number.isFinite(n) && !ctx.stats.has(n));
+    return list.filter((v) => toTeamNumbers(ctx, v).length === 0);
 }
 
 

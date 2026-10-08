@@ -9,11 +9,16 @@ import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.config.ScoutingConfig
 import com.obsidianscout.config.SqliteConfig
 import com.obsidianscout.db.DatabaseFactory
+import com.obsidianscout.db.PitScoutingEntries
+import com.obsidianscout.db.QualitativeScoutingEntries
+import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.Users
 import com.obsidianscout.routes.ScoutingEntryRequest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.File
 import java.time.Instant
@@ -93,6 +98,42 @@ class ScoutingSubmissionReadinessTest {
             PitScoutingService.createEntry(s, ScoutingEntryRequest(untouchedFormPayload(pit, 20 + i)), pit)
             QualitativeScoutingService.createEntry(s, ScoutingEntryRequest(untouchedFormPayload(qual, 30 + i)), qual)
         }
+    }
+
+    @Test
+    fun editingAnEntryRecomputesStoredCompleteness() {
+        val s = session("FRC")
+        fun storedPct(table: org.jetbrains.exposed.v1.core.Table, idCol: org.jetbrains.exposed.v1.core.Column<org.jetbrains.exposed.v1.core.dao.id.EntityID<UUID>>, pctCol: org.jetbrains.exposed.v1.core.Column<Float?>, id: String): Float? =
+            transaction { table.selectAll().where { idCol eq UUID.fromString(id) }.first()[pctCol] }
+
+        // Match: create without the counters, then edit to fill them in.
+        val match = preset("frc2026-match")
+        val fullMatch = untouchedFormPayload(match, 50)
+        val counterIds = match.fields.filter { it.type == "counter" }.map { it.id }.toSet()
+        val partialMatch = JsonObject(fullMatch.filterKeys { it !in counterIds })
+        val m = ScoutingService.createEntry(s, ScoutingEntryRequest(partialMatch), match)
+        val mEdited = ScoutingService.updateEntry(s, m.id, ScoutingEntryRequest(fullMatch), match)
+        assertTrue(m.completenessPct!! < 100f)
+        assertEquals(ScoutingService.computeCompleteness(match, fullMatch), mEdited.completenessPct)
+        assertEquals(mEdited.completenessPct, storedPct(ScoutingEntries, ScoutingEntries.id, ScoutingEntries.completenessPct, m.id))
+
+        // Pit and qualitative: create untouched, then edit to fill in the text areas.
+        fun withNotes(config: ScoutingConfig, base: JsonObject) = JsonObject(base + config.fields
+            .filter { it.type == "textarea" }.associate { it.id to JsonPrimitive("notes") })
+
+        val pit = preset("frc2026-pit")
+        val p = PitScoutingService.createEntry(s, ScoutingEntryRequest(untouchedFormPayload(pit, 51)), pit)
+        val pitFull = withNotes(pit, untouchedFormPayload(pit, 51))
+        val pEdited = PitScoutingService.updateEntry(s, p.id, ScoutingEntryRequest(pitFull), pit)
+        assertTrue(pEdited.completenessPct!! > p.completenessPct!!)
+        assertEquals(pEdited.completenessPct, storedPct(PitScoutingEntries, PitScoutingEntries.id, PitScoutingEntries.completenessPct, p.id))
+
+        val qual = preset("frc2026-qualitative")
+        val q = QualitativeScoutingService.createEntry(s, ScoutingEntryRequest(untouchedFormPayload(qual, 52)), qual)
+        val qualFull = withNotes(qual, untouchedFormPayload(qual, 52))
+        val qEdited = QualitativeScoutingService.updateEntry(s, q.id, ScoutingEntryRequest(qualFull), qual)
+        assertTrue(qEdited.completenessPct!! > q.completenessPct!!)
+        assertEquals(qEdited.completenessPct, storedPct(QualitativeScoutingEntries, QualitativeScoutingEntries.id, QualitativeScoutingEntries.completenessPct, q.id))
     }
 
     @Test

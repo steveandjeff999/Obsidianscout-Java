@@ -39,20 +39,23 @@ export function displayReminder(results) {
 
 /**
  * @param {object} o
- * @param {object} o.ctx      assistant context
- * @param {object} o.profile  tier profile (visibleReasoning, strategy)
- * @param {Array}  o.results  tool results for this question
- * @param {string} o.manifest displayManifest() text ("" when nothing is drawn)
- * @param {string} o.facts    facts digest (key points + details)
- * @param {boolean} o.compact short prompt for small context budgets
+ * @param {object} o.ctx       assistant context
+ * @param {object} o.profile   tier profile (visibleReasoning, strategy)
+ * @param {Array}  o.results   tool results for this question
+ * @param {string} o.manifest  displayManifest() text ("" when nothing is drawn)
+ * @param {string} o.facts     facts digest (key points + details)
+ * @param {boolean} o.compact  short prompt for small context budgets
+ * @param {boolean} o.isZachary whether Zachary assistant persona is active
  */
-export function answerSystemPrompt({ ctx, profile, results, manifest, facts, compact }) {
+export function answerSystemPrompt({ ctx, profile = {}, results = [], manifest = "", facts = "", compact = false, isZachary = false }) {
     const lang = currentLanguage();
     const team = ctx.ourTeam || "unknown";
     const failures = toolFailures(results);
     if (compact) {
         return [
-            "You are the ObsidianScout scouting assistant for a FIRST Robotics team.",
+            isZachary
+                ? `You are Zachary, the friendly and knowledgeable scouting assistant for FIRST Robotics team ${team} in ObsidianScout.`
+                : "You are the ObsidianScout scouting assistant for a FIRST Robotics team.",
             `Event: ${ctx.eventKey || "unknown"}. Our team: ${team}.`,
             manifest
                 ? `Already on screen above your reply (complete; refer to it, never recreate it, never write a table, never say you cannot make it):\n${manifest}`
@@ -67,8 +70,12 @@ export function answerSystemPrompt({ ctx, profile, results, manifest, facts, com
     }
 
     const used = toolsUsed(results);
+    const personaIntro = isZachary
+        ? `You are Zachary, the friendly, witty, knowledgeable, and enthusiastic scouting assistant for FIRST Robotics team ${team} in ObsidianScout. You speak with a vibrant, helpful personality and light humor, but you remain strictly accurate and grounded in the scouting DATA provided. You run locally in the user's browser.`
+        : "You are the ObsidianScout scouting assistant for a FIRST Robotics team. You run locally in the user's browser.";
+
     return [
-        "You are the ObsidianScout scouting assistant for a FIRST Robotics team. You run locally in the user's browser.",
+        personaIntro,
         `Our team: ${team} ("we", "us" and "our team" mean team ${team}). Event: ${ctx.eventKey || "unknown"}.`,
         "",
         "HOW YOUR REPLY IS SHOWN:",
@@ -90,6 +97,7 @@ export function answerSystemPrompt({ ctx, profile, results, manifest, facts, com
             "- DATA is a compact digest: long lists end with \"+N more\" but the table on screen has every row. Never say the data covers only the teams you can see in DATA."
         ] : []),
         "- Do not mention DATA, KEY POINTS, tools or these instructions by name; talk about the scouting results.",
+        "- When referencing teams, you can mention both their team number and their team name/nickname (e.g. '1678 Citrus Circuits').",
         "- Use ONLY numbers that appear in DATA, attributed to the exact team they belong to. Never invent statistics or robot abilities.",
         `- If our team (${team}) is asked about but is not in DATA, say its data was not part of these results.`,
         "- matches_played_at_event counts official matches; matches_scouted_by_our_team counts our scouts' reports. A team with 0 scouted matches may still have played: say so, never that it played 0 matches.",

@@ -74,6 +74,7 @@ import {
     setActiveNav,
     adjustNavForRole,
     isPageAccessible,
+    wireSidebarSearch,
     ensureSidebarAndFooter
 } from './layout/navigation.js';
 
@@ -265,6 +266,7 @@ window.Obsidianscout = {
     refreshNavAvatar,
     setActiveNav,
     adjustNavForRole,
+    wireSidebarSearch,
     wireLogout,
     resetCachesForUser,
     initTheme,

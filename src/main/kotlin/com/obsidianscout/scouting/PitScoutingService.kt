@@ -361,6 +361,7 @@ object PitScoutingService {
         }
         val cleanData = sanitizePitData(request.data)
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), cleanData)
+        val completeness = computeCompleteness(config, cleanData)
 
         return transaction {
             val row = PitScoutingEntries.selectAll().where { PitScoutingEntries.id eq entryUuid }.firstOrNull()
@@ -389,6 +390,7 @@ object PitScoutingService {
                 it[targetTeamNumber] = meta.targetTeamNumber
                 it[eventKey] = meta.eventKey
                 it[PitScoutingEntries.dataJson] = dataJson
+                it[completenessPct] = completeness
             }
 
             recalculateDiscrepancies(oldEventKey, oldTargetTeamNumber, oldIsPrescout)
@@ -407,7 +409,8 @@ object PitScoutingService {
                 createdAt = updatedRow[PitScoutingEntries.createdAt].toString(),
                 isPrescout = updatedRow[PitScoutingEntries.isPrescout],
                 hasDiscrepancy = updatedRow[PitScoutingEntries.hasDiscrepancy],
-                conflictingTeams = conflicting
+                conflictingTeams = conflicting,
+                completenessPct = completeness
             )
         }
     }

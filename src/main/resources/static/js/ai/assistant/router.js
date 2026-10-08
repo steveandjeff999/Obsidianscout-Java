@@ -100,7 +100,7 @@ export function ruleRoute(question, ctx, history = [], { skipEdit = false } = {}
     const kind = kinds[0];
     if (routed && !["top_teams", "team_overview", "pick_candidates"].includes(routed.tool)) return routed;
     if (routed && routed.tool === "pick_candidates") return routed;
-    const nums = (q.match(/\d{1,5}/g) || []).map(Number).filter((x) => ctx.stats.has(x));
+    const nums = Data.findTeamsInText(ctx, q);
     const small = (q.match(/\b(?:top|best|worst|bottom|lowest|highest)\s+(\d{1,2})\b/i) || [])[1];
     return {
         tool: kind.tool,
@@ -117,13 +117,17 @@ function baseRuleRoute(question, ctx, history = []) {
     const q = ` ${String(question).toLocaleLowerCase()} `;
     // "match 35" / "partido 35" / "משחק 35", or Turkish word order "35. maç".
     const matchRef = q.match(/(?:match|qm|q|partido|maç|משחק)\s*#?\s*(\d{1,3})(?!\d)/) || q.match(/(?<!\d)(\d{1,3})\.?\s*(?:maç|partido)/);
+    const matchNum = matchRef ? Number(matchRef[1]) : null;
     const allNumbers = (q.match(/\d{1,5}/g) || []).map(Number);
-    const rawTeams = Array.from(new Set(allNumbers.filter((x) => ctx.stats.has(x) && (!matchRef || x !== Number(matchRef[1])))));
+    const rawTeams = Data.findTeamsInText(ctx, question, { excludeMatch: matchNum });
 
-    // Filter out teams that are explicitly negated ("1209 and 1561 arent in...", "not 1209", "dont include 1209")
+    // Filter out teams that are explicitly negated ("1209 and 1561 arent in...", "not 1209", "dont include Citrus Circuits")
     const negatedTeams = new Set();
     rawTeams.forEach((t) => {
-        const negPattern = new RegExp(`(?:aren'?t|isn'?t|not|except|excluding|dont|don'?t|without)\\s+(?:in\\s+)?(?:match\\s+\\d+\\s+)?(?:[\\w\\s,]*?)\\b${t}\\b|\\b${t}\\b\\s+(?:(?:and\\s+\\d+\\s+)?(?:aren'?t|isn'?t|are\\s+not|not\\s+in))`, "i");
+        const tName = Data.teamName(ctx, t);
+        const escapedName = tName ? tName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
+        const namePart = escapedName ? `|\\b${escapedName}\\b` : "";
+        const negPattern = new RegExp(`(?:aren'?t|isn'?t|not|except|excluding|dont|don'?t|without)\\s+(?:in\\s+)?(?:match\\s+\\d+\\s+)?(?:[\\w\\s,]*?)(?:\\b${t}\\b${namePart})|(?:\\b${t}\\b${namePart})\\s+(?:(?:and\\s+(?:\\d+|[\\w\\s]+)\\s+)?(?:aren'?t|isn'?t|are\\s+not|not\\s+in))`, "i");
         if (negPattern.test(q)) negatedTeams.add(t);
     });
     const teams = rawTeams.filter((t) => !negatedTeams.has(t));
@@ -134,10 +138,9 @@ function baseRuleRoute(question, ctx, history = []) {
     if (conversationTeams.length === 0 && Array.isArray(history) && history.length > 0) {
         for (let i = history.length - 1; i >= 0; i--) {
             const hText = String(history[i]?.content || "");
-            const hNumbers = (hText.match(/\d{1,5}/g) || []).map(Number);
-            const hTeams = hNumbers.filter((x) => ctx.stats.has(x));
+            const hTeams = Data.findTeamsInText(ctx, hText);
             if (hTeams.length > 0) {
-                conversationTeams = Array.from(new Set(hTeams));
+                conversationTeams = hTeams;
                 break;
             }
         }

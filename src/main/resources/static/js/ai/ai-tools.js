@@ -85,7 +85,7 @@ function historyMessage(h, maxChars) {
  *   {type:'status', text} | {type:'tool', name, args, result} | {type:'token', full} | {type:'done', text, unverified, results}
  * history items are {role, content, display?}; display is what an earlier reply showed (tables, charts, documents).
  */
-export async function answerQuestion({ question, history = [], ctx, tier, signal, onEvent = () => {}, route = null }) {
+export async function answerQuestion({ question, history = [], ctx, tier, signal, onEvent = () => {}, route = null, isZachary = undefined }) {
     const profile = AI.tierProfile(tier);
     const allowed = Object.keys(TOOLS).filter((name) => name !== "calculate" || profile.calculate);
     const results = [];
@@ -236,7 +236,11 @@ export async function answerQuestion({ question, history = [], ctx, tier, signal
     const budget = profile.contextChars || 5000;
     const manifest = displayManifest(results, ctx);
     const historyMsgs = history.slice(-profile.historyTurns * 2).map((h) => historyMessage(h, 300));
-    const promptArgs = { ctx, profile, results, manifest, compact: isCompact };
+    let zacharyActive = isZachary;
+    if (zacharyActive === undefined) {
+        try { zacharyActive = (typeof window !== "undefined" && window.localStorage && window.localStorage.getItem("obsidianscout:tutorial_mode") === "zachary"); } catch (_) {}
+    }
+    const promptArgs = { ctx, profile, results, manifest, compact: isCompact, isZachary: !!zacharyActive };
     const userTurn = question + displayReminder(results);
     const fixedChars = answerSystemPrompt({ ...promptArgs, facts: "" }).length
         + historyMsgs.reduce((sum, m) => sum + m.content.length, 0) + userTurn.length;

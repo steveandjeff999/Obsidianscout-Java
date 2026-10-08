@@ -70,17 +70,24 @@ export function setZacharyMuted(muted) {
     }
 }
 
+let currentSpeechCallbacks = null;
+
 export function stopZacharySpeech() {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
         try {
             window.speechSynthesis.cancel();
+            if (currentSpeechCallbacks && typeof currentSpeechCallbacks.onEnd === 'function') {
+                try { currentSpeechCallbacks.onEnd(); } catch (_) {}
+            }
+            currentSpeechCallbacks = null;
+            window.dispatchEvent(new CustomEvent('obsidianscout:zachary-speech-stop'));
         } catch (e) {
             // ignore
         }
     }
 }
 
-export function speakZachary(text) {
+export function speakZachary(text, options = {}) {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     const mode = getTutorialMode();
     if (isZacharyMuted() || !mode || mode === 'standard' || mode === 'concise' || mode === 'disabled' || mode !== 'zachary') return;
@@ -107,14 +114,47 @@ export function speakZachary(text) {
         utterance.rate = 1.08;  // Brisk, professional cadence
         utterance.volume = 1.0;
 
+        currentSpeechCallbacks = options;
+
+        utterance.onstart = () => {
+            if (typeof options.onStart === 'function') {
+                try { options.onStart(); } catch (_) {}
+            }
+        };
+
+        utterance.onend = () => {
+            if (typeof options.onEnd === 'function') {
+                try { options.onEnd(); } catch (_) {}
+            }
+            currentSpeechCallbacks = null;
+            window.dispatchEvent(new CustomEvent('obsidianscout:zachary-speech-stop'));
+        };
+
+        utterance.onerror = (err) => {
+            if (typeof options.onError === 'function') {
+                try { options.onError(err); } catch (_) {}
+            }
+            currentSpeechCallbacks = null;
+            window.dispatchEvent(new CustomEvent('obsidianscout:zachary-speech-stop'));
+        };
+
         setTimeout(() => {
             const currentMode = getTutorialMode();
             if (!isZacharyMuted() && currentMode === 'zachary') {
                 window.speechSynthesis.speak(utterance);
+            } else {
+                if (typeof options.onEnd === 'function') {
+                    try { options.onEnd(); } catch (_) {}
+                }
+                currentSpeechCallbacks = null;
+                window.dispatchEvent(new CustomEvent('obsidianscout:zachary-speech-stop'));
             }
         }, 100);
     } catch (e) {
         console.warn('[Tour TTS] Speech synthesis error:', e);
+        if (typeof options.onError === 'function') {
+            try { options.onError(e); } catch (_) {}
+        }
     }
 }
 

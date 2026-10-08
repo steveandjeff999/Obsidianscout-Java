@@ -609,5 +609,222 @@ export function teamNotes(ctx, teamNumber) {
     });
 }
 
-const api = { loadContext, clearContextCache, findMetric, rankTeams, findMatch, matchLabel, teamLabel, teamName, teamNumberFromKey, pitHighlights, teamNotes, round, entryData, readNumber };
+function normalizeTeamQuery(str) {
+    return String(str || "")
+        .toLowerCase()
+        .replace(/['’]/g, "")
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .trim();
+}
+
+function escapeRe(s) {
+    return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const GENERIC_TEAM_WORDS = new Set([
+    "the", "team", "robotics", "robot", "club", "engineering", "frc", "ftc",
+    "scouting", "scout", "match", "game", "high", "school", "academy", "boys", "girls"
+]);
+
+/**
+ * Resolves a single query (number, string, team name, alias, "our team") to a team number.
+ */
+export function findTeam(ctx, query) {
+    if (!ctx || query === null || query === undefined || query === "") return null;
+    if (typeof query === "number") {
+        return (ctx.stats && ctx.stats.has(query)) || (ctx.teams && ctx.teams.has(query)) ? query : null;
+    }
+    const qStr = String(query).trim();
+    if (!qStr) return null;
+
+    // "our team", "we", "us", "our"
+    if (/^\s*(?:our(?:\s+team)?|ours|us|we|nosotros|bizim|שלנו)\s*$/i.test(qStr)) {
+        return ctx.ourTeam && ctx.stats && ctx.stats.has(ctx.ourTeam) ? ctx.ourTeam : null;
+    }
+
+    // Direct digits: "254", "frc254", "Team 254", "#254"
+    const numMatch = qStr.match(/^\s*(?:frc|ftc|team\s*#?|#)?\s*(\d{1,5})\s*$/i);
+    if (numMatch) {
+        const num = Number(numMatch[1]);
+        if (ctx.stats && ctx.stats.has(num)) return num;
+        if (ctx.teams && ctx.teams.has(num)) return num;
+    }
+
+    const normQ = normalizeTeamQuery(qStr);
+    if (!normQ) return null;
+
+    const teamNamesMap = new Map();
+    const addNames = (tmNum, ...namesList) => {
+        if (!tmNum) return;
+        if (!teamNamesMap.has(tmNum)) teamNamesMap.set(tmNum, new Set());
+        const set = teamNamesMap.get(tmNum);
+        namesList.filter(Boolean).forEach((n) => set.add(String(n)));
+    };
+
+    if (ctx.stats) {
+        ctx.stats.forEach((s, num) => {
+            const tmObj = ctx.teams ? ctx.teams.get(num) : null;
+            addNames(num, s.name, tmObj?.nickname, tmObj?.teamName, tmObj?.name);
+        });
+    }
+    if (ctx.teams) {
+        ctx.teams.forEach((t, num) => {
+            addNames(num, t.nickname, t.teamName, t.name);
+        });
+    }
+
+    // 1. Exact normalized name match
+    for (const [teamNumber, nameSet] of teamNamesMap.entries()) {
+        for (const name of nameSet) {
+            if (normalizeTeamQuery(name) === normQ) return teamNumber;
+        }
+    }
+
+    // 2. Strip generic prefixes/suffixes ("the", "robotics", "team") and match
+    const stripGenerics = (s) => s.split(" ").filter((w) => !GENERIC_TEAM_WORDS.has(w)).join(" ");
+    const strippedQ = stripGenerics(normQ);
+    if (strippedQ.length >= 3) {
+        for (const [teamNumber, nameSet] of teamNamesMap.entries()) {
+            for (const name of nameSet) {
+                const strippedName = stripGenerics(normalizeTeamQuery(name));
+                if (strippedName && strippedName === strippedQ) return teamNumber;
+            }
+        }
+    }
+
+    // 3. Substring / Token subset match if unique
+    if (strippedQ.length >= 4) {
+        const matches = [];
+        for (const [teamNumber, nameSet] of teamNamesMap.entries()) {
+            let matched = false;
+            for (const name of nameSet) {
+                const normN = normalizeTeamQuery(name);
+                const strippedN = stripGenerics(normN);
+                if (normN.includes(normQ) || (strippedN && (strippedN.includes(strippedQ) || strippedQ.includes(strippedN)))) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (matched) matches.push(teamNumber);
+        }
+        if (matches.length === 1) return matches[0];
+    }
+
+    return null;
+}
+
+/**
+ * Finds all teams mentioned in a sentence or question by number ("254", "frc254")
+ * or by team name / nickname ("Citrus Circuits", "The Cheesy Poofs", "Robowranglers").
+ * Returns an array of team numbers in order of appearance in the text.
+ */
+export function findTeamsInText(ctx, text, { excludeMatch = null } = {}) {
+    if (!text || !ctx) return [];
+    const raw = String(text);
+    const mentions = []; // [{ team, start, end }]
+
+    // 1. Direct numbers (\b\d{1,5}\b)
+    const numRe = /\b(?:frc|ftc|team\s*#?|#)?\s*(\d{1,5})\b/gi;
+    let m;
+    while ((m = numRe.exec(raw))) {
+        const num = Number(m[1]);
+        if (excludeMatch !== null && num === excludeMatch) continue;
+        if (!/(?:q|qm|match|partido|maç|משחק)\s*#?\s*$/i.test(raw.slice(Math.max(0, m.index - 10), m.index)) &&
+            ((ctx.stats && ctx.stats.has(num)) || (ctx.teams && ctx.teams.has(num)))) {
+            mentions.push({ team: num, start: m.index, end: m.index + m[0].length });
+        }
+    }
+
+    // 2. Team names & distinctive aliases
+    const nameAliases = []; // [{ team, alias, re, priority }]
+    const registered = new Set();
+
+    const addAlias = (tmNum, aliasStr, priority = 10) => {
+        if (!aliasStr) return;
+        const cleanStr = String(aliasStr).trim();
+        const norm = normalizeTeamQuery(cleanStr);
+        if (norm.length < 3 || GENERIC_TEAM_WORDS.has(norm)) return;
+        const key = `${tmNum}:${norm}`;
+        if (registered.has(key)) return;
+        registered.add(key);
+        const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(cleanStr)}(?![\\p{L}\\p{N}])`, "giu");
+        nameAliases.push({ team: tmNum, alias: cleanStr, norm, re, priority });
+    };
+
+    const teamNamesMap = new Map();
+    const collectTeamNames = (tmNum, ...namesList) => {
+        if (!tmNum) return;
+        if (!teamNamesMap.has(tmNum)) teamNamesMap.set(tmNum, new Set());
+        const set = teamNamesMap.get(tmNum);
+        namesList.filter(Boolean).forEach((n) => set.add(String(n).trim()));
+    };
+
+    if (ctx.stats) {
+        ctx.stats.forEach((s, num) => {
+            const tmObj = ctx.teams ? ctx.teams.get(num) : null;
+            collectTeamNames(num, s.name, tmObj?.nickname, tmObj?.teamName, tmObj?.name);
+        });
+    }
+    if (ctx.teams) {
+        ctx.teams.forEach((t, num) => {
+            collectTeamNames(num, t.nickname, t.teamName, t.name);
+        });
+    }
+
+    teamNamesMap.forEach((namesSet, num) => {
+        namesSet.forEach((name) => {
+            if (!name) return;
+            addAlias(num, name, 20 + name.length);
+            if (/^the\s+/i.test(name)) {
+                addAlias(num, name.replace(/^the\s+/i, "").trim(), 18 + name.length);
+            }
+            if (/^team\s+/i.test(name)) {
+                addAlias(num, name.replace(/^team\s+/i, "").trim(), 16 + name.length);
+            }
+            const noRobo = name.replace(/\s+(?:robotics|team|club|engineering)\b/gi, "").trim();
+            if (noRobo && noRobo !== name && noRobo.length >= 4) {
+                addAlias(num, noRobo, 15 + noRobo.length);
+            }
+        });
+    });
+
+    nameAliases.sort((a, b) => b.priority - a.priority || b.norm.length - a.norm.length);
+
+    const aliasTeams = new Map();
+    nameAliases.forEach((item) => {
+        if (!aliasTeams.has(item.norm)) aliasTeams.set(item.norm, new Set());
+        aliasTeams.get(item.norm).add(item.team);
+    });
+
+    nameAliases.forEach(({ team, re, norm }) => {
+        if (aliasTeams.get(norm)?.size > 1) return;
+        re.lastIndex = 0;
+        let hit;
+        while ((hit = re.exec(raw))) {
+            const span = { team, start: hit.index, end: hit.index + hit[0].length };
+            const existingSame = mentions.find((x) => x.team === team && (
+                (span.start >= x.start && span.start <= x.end + 4) ||
+                (x.start >= span.start && x.start <= span.end + 4)
+            ));
+            if (existingSame) {
+                existingSame.start = Math.min(existingSame.start, span.start);
+                existingSame.end = Math.max(existingSame.end, span.end);
+            } else {
+                const overlapDiff = mentions.some((x) => x.team !== team && !(span.end <= x.start || span.start >= x.end));
+                if (!overlapDiff) {
+                    mentions.push(span);
+                }
+            }
+        }
+    });
+
+    mentions.sort((a, b) => a.start - b.start);
+    const result = [];
+    mentions.forEach((item) => {
+        if (!result.includes(item.team)) result.push(item.team);
+    });
+    return result;
+}
+
+const api = { loadContext, clearContextCache, findMetric, rankTeams, findMatch, matchLabel, teamLabel, teamName, teamNumberFromKey, findTeam, findTeamsInText, pitHighlights, teamNotes, round, entryData, readNumber };
 export default api;

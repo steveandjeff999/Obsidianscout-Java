@@ -62,6 +62,10 @@ body.nav-layout-topbar .sidebar-toggle {
     display: none !important;
 }
 
+body.nav-layout-topbar .sidebar-search {
+    display: none !important;
+}
+
 body.nav-layout-topbar .sidebar-nav {
     display: flex !important;
     flex-direction: row !important;

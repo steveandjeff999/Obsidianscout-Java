@@ -6,7 +6,7 @@
 import { safeGetItem, safeSetItem } from '../base/storage.js';
 import { wireThemeToggle } from './theme.js';
 import { wireLogout } from '../base/auth.js';
-import { setUserBadge, setActiveNav, lastUser } from './navigation.js';
+import { setUserBadge, setActiveNav, wireSidebarSearch, lastUser } from './navigation.js';
 
 export const sidebarCollapseKey = "obsidian-sidebar-collapsed";
 
@@ -245,6 +245,7 @@ export function restoreSidebarLayout(sidebar) {
     sidebar.classList.remove("topbar-dropdowns-ready");
     wireThemeToggle(sidebar);
     wireLogout();
+    wireSidebarSearch(sidebar);
     setActiveNav();
 }
 

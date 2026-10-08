@@ -1200,12 +1200,17 @@
                         optRow.style.alignItems = "center";
                         const localizedOptLabel = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(opt.label) : (opt.label || "");
                         optRow.innerHTML = `
-                            <input type="text" placeholder="Option Label" value="${localizedOptLabel}" style="flex:1;" />
-                            <input type="text" placeholder="Option Value" value="${opt.value || ''}" style="flex:1;" />
+                            <input type="text" placeholder="Option Label" style="flex:1;" />
+                            <input type="text" placeholder="Option Value" style="flex:1;" />
                             ${supportsPointsConfig() ? `<input type="number" placeholder="Points" value="${opt.points !== undefined ? opt.points : 0}" style="width:70px;" />` : ''}
                             <button type="button" class="btn-control-icon delete" title="Delete Option">×</button>
                         `;
                         const inputs = optRow.querySelectorAll("input");
+                        // Set as properties rather than in the template so quotes or "<" in a label/value can't break the markup.
+                        inputs[0].defaultValue = localizedOptLabel || "";
+                        inputs[0].value = localizedOptLabel || "";
+                        inputs[1].defaultValue = opt.value || "";
+                        inputs[1].value = opt.value || "";
                         inputs[0].addEventListener("input", (ev) => {
                             const lang = (window.Obsidianscout && typeof Obsidianscout.safeGetItem === 'function') ? (Obsidianscout.safeGetItem('obsidianscout:lang') || 'en') : 'en';
                             const val = ev.target.value;

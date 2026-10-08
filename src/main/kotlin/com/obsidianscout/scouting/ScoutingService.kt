@@ -412,6 +412,7 @@ object ScoutingService {
             throw ApiException(HttpStatusCode.BadRequest, "Team and match are required")
         }
         val dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), request.data)
+        val completeness = computeCompleteness(config, request.data)
 
         return transaction {
             val row = ScoutingEntries.selectAll().where { ScoutingEntries.id eq entryUuid }.firstOrNull()
@@ -443,6 +444,7 @@ object ScoutingService {
                 it[matchKey] = meta.matchKey
                 it[matchNumber] = meta.matchNumber
                 it[ScoutingEntries.dataJson] = dataJson
+                it[completenessPct] = completeness
             }
 
             // Recalculate for both old and new groups
@@ -472,7 +474,8 @@ object ScoutingService {
                 isPrescout = updatedRow[ScoutingEntries.isPrescout],
                 matchPlayedTime = matchPlayedTime,
                 hasDiscrepancy = updatedRow[ScoutingEntries.hasDiscrepancy],
-                conflictingTeams = conflicting
+                conflictingTeams = conflicting,
+                completenessPct = completeness
             )
         }
     }

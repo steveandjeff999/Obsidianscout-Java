@@ -636,12 +636,15 @@ export function specFromQuestion(question, ctx, { chart = false } = {}) {
     if (limitRef) used.add(Number(limitRef[1]));
     const conditions = conditionsIn(ctx, q);
     conditions.forEach((c) => used.add(c.value));
-    const nums = (lower.match(/\b\d{1,5}\b/g) || []).map(Number);
+    const rawTeams = Data.findTeamsInText ? Data.findTeamsInText(ctx, q, { excludeMatch: matchRef ? Number(matchRef[1]) : null }) : (lower.match(/\b\d{1,5}\b/g) || []).map(Number).filter((n) => ctx.stats.has(n));
     const exclude = [];
-    const exRe = /\b(?:except|excluding|without|not|but not|minus)\s+((?:(?:team\s+)?\d{1,5}(?:\s*(?:,|and|&)\s*)?)+)/gi;
+    const exRe = /\b(?:except|excluding|without|not|but not|minus)\s+((?:(?:team\s+)?[\w\d]+(?:\s*(?:,|and|&)\s*)?)+)/gi;
     let ex;
-    while ((ex = exRe.exec(lower))) (ex[1].match(/\d{1,5}/g) || []).map(Number).filter((n) => ctx.stats.has(n)).forEach((n) => { exclude.push(n); used.add(n); });
-    const teams = Array.from(new Set(nums.filter((n) => ctx.stats.has(n) && !used.has(n))));
+    while ((ex = exRe.exec(lower))) {
+        const exTeams = Data.findTeamsInText ? Data.findTeamsInText(ctx, ex[1]) : (ex[1].match(/\d{1,5}/g) || []).map(Number).filter((n) => ctx.stats.has(n));
+        exTeams.forEach((n) => { exclude.push(n); used.add(n); });
+    }
+    const teams = Array.from(new Set(rawTeams.filter((n) => !exclude.includes(n) && !used.has(n))));
 
     const { metrics } = findMetricsInText(ctx, q);
     const exprs = expressionsIn(ctx, q);

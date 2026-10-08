@@ -243,6 +243,156 @@ body.theme-dark .ai-thought-content {
 
 .assistant-empty i { font-size: 32px; color: var(--accent-3); }
 
+/* Zachary Assistant Page Enhancements */
+.assistant-hero.zachary-hero {
+    align-items: center;
+}
+
+.assistant-hero-main {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex: 1 1 360px;
+    flex-wrap: wrap;
+}
+
+.assistant-hero.zachary-hero .tutorial-zachary-spotlight {
+    flex-direction: row;
+    max-width: none;
+    align-items: center;
+    gap: 14px;
+}
+
+.assistant-hero.zachary-hero .tutorial-hero-avatar {
+    width: 64px;
+    height: 64px;
+}
+
+.assistant-hero.zachary-hero .zachary-speech-bubble {
+    max-width: 380px;
+}
+
+.btn-assistant-audio-toggle {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--accent);
+    padding: 2px 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    border-radius: 4px;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.btn-assistant-audio-toggle:hover {
+    transform: scale(1.1);
+}
+
+.btn-assistant-audio-toggle.muted {
+    opacity: 0.55;
+}
+
+/* Assistant Message Zachary Header */
+.assistant-bot-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.assistant-bot-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: contain;
+    cursor: pointer;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.assistant-bot-avatar:hover {
+    transform: scale(1.15) rotate(5deg);
+}
+
+.assistant-bot-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+}
+
+.assistant-bot-name {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--accent);
+}
+
+.assistant-bot-badge {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    background: var(--accent);
+    color: white;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 700;
+}
+
+.btn-assistant-audio-speak {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 13px;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.btn-assistant-audio-speak:hover {
+    color: var(--accent);
+    transform: scale(1.1);
+}
+
+.btn-assistant-audio-speak.is-speaking {
+    color: #ef4444;
+    animation: zacharyPulseSpeak 1.2s infinite ease-in-out;
+}
+
+@keyframes zacharyPulseSpeak {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.18); opacity: 0.8; }
+}
+
+/* Zachary Empty State */
+.assistant-empty.zachary-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-width: 480px;
+    margin: 40px auto;
+}
+
+.assistant-empty.zachary-empty .zachary-avatar-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.assistant-empty.zachary-empty .tutorial-hero-avatar {
+    width: 80px;
+    height: 80px;
+}
+
 .assistant-msg {
     max-width: min(860px, 100%);
     border-radius: var(--radius-sm);

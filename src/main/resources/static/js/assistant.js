@@ -7,6 +7,7 @@ import AI from "./ai/local-ai.js";
 import UI from "./ai/ai-ui.js";
 import Data from "./ai/ai-data.js";
 import Tools, { normalizeChart, toolTitle } from "./ai/ai-tools.js";
+import { getTutorialMode, speakZachary, stopZacharySpeech, isZacharyMuted, setZacharyMuted } from "./components/tour-wizard.js";
 
 function t(key, fallback) {
     return (window.Obsidianscout && typeof Obsidianscout.t === "function") ? Obsidianscout.t(key, fallback) : fallback;
@@ -14,6 +15,17 @@ function t(key, fallback) {
 
 function fmt(template, values) {
     return String(template).replace(/\{(\w+)\}/g, (_, k) => (values[k] !== undefined ? values[k] : `{${k}}`));
+}
+
+const audioIconPlaying = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>`;
+const audioIconMuted = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`;
+
+function isZacharyMode() {
+    try {
+        return (typeof getTutorialMode === "function" ? getTutorialMode() : localStorage.getItem("obsidianscout:tutorial_mode")) === "zachary";
+    } catch (_) {
+        return false;
+    }
 }
 
 const state = {
@@ -42,6 +54,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         el[id] = document.getElementById(`assistant-${id}`);
     });
 
+    initHeroPersona();
+
     if (!me.localAiEnabled) {
         el.disabled.classList.remove("hidden");
         el.tier.disabled = true;
@@ -62,6 +76,85 @@ document.addEventListener("DOMContentLoaded", async () => {
         ask(linkedQuestion);
     }
 });
+
+let currentlySpeakingButton = null;
+
+function resetAllAudioButtons() {
+    document.querySelectorAll(".btn-assistant-audio-speak").forEach((btn) => {
+        btn.innerHTML = `<i class="fa-solid fa-volume-high"></i>`;
+        btn.classList.remove("is-speaking");
+        btn.title = "Listen to Zachary";
+        btn.setAttribute("aria-label", "Listen to Zachary");
+    });
+    currentlySpeakingButton = null;
+}
+
+window.addEventListener("obsidianscout:zachary-speech-stop", resetAllAudioButtons);
+
+function updateAudioToggleIcon() {
+    const audioBtn = document.getElementById("assistant-audio-toggle");
+    if (!audioBtn) return;
+    const muted = isZacharyMuted();
+    audioBtn.innerHTML = muted ? audioIconMuted : audioIconPlaying;
+    audioBtn.className = `btn-assistant-audio-toggle ${muted ? 'muted' : ''}`;
+    audioBtn.title = muted ? "Unmute Zachary voice" : "Mute Zachary voice";
+}
+
+function initHeroPersona() {
+    const isZachary = isZacharyMode();
+    const spotlight = document.getElementById("assistant-zachary-spotlight");
+    const title = document.getElementById("assistant-page-title");
+    const notice = document.getElementById("assistant-page-notice");
+    const hero = document.getElementById("assistant-hero");
+
+    if (isZachary) {
+        if (hero) hero.classList.add("zachary-hero");
+        if (spotlight) {
+            spotlight.classList.remove("hidden");
+            updateAudioToggleIcon();
+        }
+        if (title) title.textContent = "Zachary · Scouting Assistant";
+        if (notice) notice.textContent = "Your local AI scouting companion powered by on-device intelligence. Ask about teams, rankings, stats, or match strategy!";
+    } else {
+        if (hero) hero.classList.remove("zachary-hero");
+        if (spotlight) spotlight.classList.add("hidden");
+        if (title) title.textContent = t("ai.assistant.title", "Scouting Assistant");
+        if (notice) notice.textContent = t("ai.assistant.notice", "Ask questions about your team's scouting data. The AI runs entirely on this device; nothing you type is sent to an AI service.");
+    }
+
+    const av = document.getElementById("assistant-zachary-avatar");
+    if (av && !av._wired) {
+        av._wired = true;
+        av.addEventListener("click", () => {
+            av.classList.add("zachary-wiggle");
+            setTimeout(() => av.classList.remove("zachary-wiggle"), 600);
+            stopZacharySpeech();
+            resetAllAudioButtons();
+            const quips = [
+                "I'm Zachary! I analyze event statistics and ensure our scouting data integrity.",
+                "Clean quantitative data is what wins alliance selections. Don't let the team down!",
+                "You can ask me to compare teams by name (like 'Citrus Circuits') or by number!",
+                "Try asking me to make a scatter plot or summarize what scouts wrote in qualitative notes!"
+            ];
+            const q = quips[Math.floor(Math.random() * quips.length)];
+            const txt = document.getElementById("assistant-zachary-bubble-text");
+            if (txt) txt.textContent = q;
+            if (!isZacharyMuted()) speakZachary(q);
+        });
+    }
+
+    const audioBtn = document.getElementById("assistant-audio-toggle");
+    if (audioBtn && !audioBtn._wired) {
+        audioBtn._wired = true;
+        audioBtn.addEventListener("click", () => {
+            stopZacharySpeech();
+            resetAllAudioButtons();
+            const nextMuted = !isZacharyMuted();
+            setZacharyMuted(nextMuted);
+            updateAudioToggleIcon();
+        });
+    }
+}
 
 // ------------------------------------------------------------------ selectors
 
@@ -185,9 +278,45 @@ function renderTranscript() {
     el.transcript.innerHTML = "";
     if (!state.history.length) {
         const empty = document.createElement("div");
-        empty.className = "assistant-empty";
-        empty.innerHTML = `<i class="fa-solid fa-robot"></i><p></p>`;
-        empty.querySelector("p").textContent = t("ai.assistant.empty", "Ask a question, or pick a suggestion below. Example: \"Who has the best endgame?\"");
+        if (isZacharyMode()) {
+            empty.className = "assistant-empty zachary-empty";
+            empty.innerHTML = `
+                <div class="zachary-avatar-column">
+                    <img src="/assets/images/zachary.png" alt="Zachary" class="tutorial-hero-avatar zachary-interactive-avatar" id="assistant-empty-zachary-avatar" title="Click me for a tip!" />
+                    <span class="zachary-avatar-badge">Zachary</span>
+                </div>
+                <div class="zachary-speech-bubble">
+                    <div class="zachary-bubble-header">
+                        <span class="zachary-name">Zachary</span>
+                        <span class="zachary-badge">Your Assistant</span>
+                    </div>
+                    <p class="zachary-bubble-text" id="assistant-empty-zachary-text">
+                        Hey there! I'm Zachary, your scouting assistant. Ask me anything about our teams, matches, alliance picks, rankings, or click a suggestion below!
+                    </p>
+                </div>
+            `;
+            const av = empty.querySelector("#assistant-empty-zachary-avatar");
+            if (av) {
+                av.addEventListener("click", () => {
+                    av.classList.add("zachary-wiggle");
+                    setTimeout(() => av.classList.remove("zachary-wiggle"), 600);
+                    const quips = [
+                        "Did you know you can ask me to compare teams by name (like 'Citrus Circuits') or by number?",
+                        "I can search through our scouts' qualitative notes for key phrases like 'defense' or 'fast intake'!",
+                        "Try asking 'Who should we pick?' for alliance selection recommendations.",
+                        "Need a deep dive on any team? Just ask 'Tell me about team 254' or by their name!"
+                    ];
+                    const q = quips[Math.floor(Math.random() * quips.length)];
+                    const txt = empty.querySelector("#assistant-empty-zachary-text");
+                    if (txt) txt.textContent = q;
+                    if (!isZacharyMuted()) speakZachary(q);
+                });
+            }
+        } else {
+            empty.className = "assistant-empty";
+            empty.innerHTML = `<i class="fa-solid fa-robot"></i><p></p>`;
+            empty.querySelector("p").textContent = t("ai.assistant.empty", "Ask a question, or pick a suggestion below. Example: \"Who has the best endgame?\"");
+        }
         el.transcript.appendChild(empty);
         return;
     }
@@ -211,7 +340,67 @@ function appendUser(text) {
 function appendAssistant() {
     const bubble = document.createElement("div");
     bubble.className = "assistant-msg bot";
-    bubble.innerHTML = `<div class="assistant-cards"></div><div class="assistant-text ai-markdown"></div><div class="assistant-status ai-muted"></div><div class="assistant-meta"></div>`;
+    const isZachary = isZacharyMode();
+    const zacharyHeaderHtml = isZachary ? `
+        <div class="assistant-bot-header">
+            <img src="/assets/images/zachary.png" alt="Zachary" class="assistant-bot-avatar" title="Zachary" />
+            <div class="assistant-bot-meta">
+                <span class="assistant-bot-name">Zachary</span>
+                <span class="assistant-bot-badge">Assistant</span>
+            </div>
+            <button type="button" class="btn-assistant-audio-speak" title="Listen to Zachary" aria-label="Listen to Zachary">
+                <i class="fa-solid fa-volume-high"></i>
+            </button>
+        </div>
+    ` : "";
+    bubble.innerHTML = `${zacharyHeaderHtml}<div class="assistant-cards"></div><div class="assistant-text ai-markdown"></div><div class="assistant-status ai-muted"></div><div class="assistant-meta"></div>`;
+
+    if (isZachary) {
+        const audioBtn = bubble.querySelector(".btn-assistant-audio-speak");
+        const av = bubble.querySelector(".assistant-bot-avatar");
+        if (av) {
+            av.addEventListener("click", () => {
+                av.classList.add("zachary-wiggle");
+                setTimeout(() => av.classList.remove("zachary-wiggle"), 600);
+            });
+        }
+        if (audioBtn) {
+            audioBtn.addEventListener("click", () => {
+                if (currentlySpeakingButton === audioBtn || audioBtn.classList.contains("is-speaking")) {
+                    stopZacharySpeech();
+                    resetAllAudioButtons();
+                    return;
+                }
+
+                stopZacharySpeech();
+                resetAllAudioButtons();
+
+                const textEl = bubble.querySelector(".assistant-text .ai-answer-body") || bubble.querySelector(".assistant-text");
+                const rawText = textEl ? textEl.textContent : "";
+                const cleanSpeakText = rawText.replace(/<thought>[\s\S]*?<\/thought>/gi, "").replace(/[#*`_]/g, "").trim();
+                if (!cleanSpeakText) return;
+
+                audioBtn.innerHTML = `<i class="fa-solid fa-circle-stop"></i>`;
+                audioBtn.classList.add("is-speaking");
+                audioBtn.title = "Stop listening";
+                audioBtn.setAttribute("aria-label", "Stop listening");
+                currentlySpeakingButton = audioBtn;
+
+                speakZachary(cleanSpeakText, {
+                    onEnd: () => {
+                        if (currentlySpeakingButton === audioBtn) {
+                            resetAllAudioButtons();
+                        }
+                    },
+                    onError: () => {
+                        if (currentlySpeakingButton === audioBtn) {
+                            resetAllAudioButtons();
+                        }
+                    }
+                });
+            });
+        }
+    }
     el.transcript.appendChild(bubble);
     return bubble;
 }
@@ -615,6 +804,7 @@ function wireForm() {
 
 async function ask(question, route = null) {
     if (!question || state.busy || !state.ctx) return;
+    stopZacharySpeech();
     el.input.value = "";
     setBusy(true);
     appendUser(question);
@@ -669,6 +859,7 @@ async function ask(question, route = null) {
         await saveConversation();
     } catch (err) {
         status.textContent = "";
+        stopZacharySpeech();
         if (err.name === "AbortError") {
             const partial = bubble.querySelector(".assistant-text").textContent;
             if (!partial) bubble.querySelector(".assistant-text").textContent = t("ai.stopped", "Stopped.");

@@ -176,17 +176,33 @@ export function stepSchema(allowed) {
 export function coerceArgs(ctx, args) {
     const out = { ...(args || {}) };
     const ours = (v) => (typeof v === "string" && /^\s*(?:our(?:\s+team)?|ours|us|we)\s*$/i.test(v) && ctx.ourTeam ? ctx.ourTeam : v);
-    const toInt = (v) => {
-        const n = parseInt(String(v).replace(/^\s*(?:frc|ftc)/i, ""), 10);
+    const resolveTeam = (v) => {
+        if (v === undefined || v === null || v === "") return undefined;
+        if (typeof v === "number" && ctx.stats && ctx.stats.has(v)) return v;
+        const vOurs = ours(v);
+        if (typeof vOurs === "number") return vOurs;
+        const str = String(vOurs).trim();
+        const list = Data.findTeamsInText ? Data.findTeamsInText(ctx, str) : [];
+        if (list.length === 1) return list[0];
+        const single = Data.findTeam ? Data.findTeam(ctx, str) : null;
+        if (single && ctx.stats && ctx.stats.has(single)) return single;
+        const n = parseInt(str.replace(/^\s*(?:frc|ftc|team\s*#?)/i, ""), 10);
         return Number.isFinite(n) ? n : v;
     };
-    if (out.team !== undefined && out.team !== null && out.team !== "") out.team = toInt(ours(out.team));
+    if (out.team !== undefined && out.team !== null && out.team !== "") out.team = resolveTeam(out.team);
     ["teams", "opponents", "exclude"].forEach((key) => {
         let v = out[key];
         if (v === undefined || v === null || v === "") return;
-        if (typeof v === "string") v = ours(v) === v ? v.split(/\s*(?:,|;|&|\band\b|\bvs\.?\b|\s)\s*/i).filter(Boolean) : [ours(v)];
+        if (typeof v === "string") {
+            const extracted = Data.findTeamsInText ? Data.findTeamsInText(ctx, v) : [];
+            if (extracted.length) {
+                v = extracted;
+            } else {
+                v = v.split(/\s*(?:,|;|&|\band\b|\bvs\.?\b|\s)\s*/i).filter(Boolean);
+            }
+        }
         if (!Array.isArray(v)) v = [v];
-        out[key] = v.map(ours).map(toInt).filter((x) => Number.isFinite(x));
+        out[key] = Array.from(new Set(v.map(resolveTeam).filter((x) => Number.isFinite(x) && ctx.stats && ctx.stats.has(x))));
     });
     ["columns", "metrics"].forEach((key) => {
         if (typeof out[key] === "string") out[key] = out[key].split(/\s*[,;]\s*|\s+and\s+/i).filter(Boolean);
@@ -341,10 +357,12 @@ export function routerSystemPrompt(ctx, allowed, maxCalls, { compact = false, qu
         ].join("\n");
     }
     const names = Array.from(new Set([...include.filter((n) => allowed.includes(n)), ...selectTools(question, allowed, 12)]));
+    const teamEntries = Array.from(ctx.stats ? ctx.stats.entries() : []);
+    const teamListFormatted = teamEntries.slice(0, 40).map(([num, s]) => s.name ? `${num} (${s.name})` : String(num)).join(", ");
     return [
         "You choose data tools for a FIRST Robotics scouting assistant. Reply with JSON only.",
         `Event: ${ctx.eventKey || "unknown"}. Our team: ${ctx.ourTeam || "unknown"} ("we", "us" and "our team" mean team ${ctx.ourTeam || "unknown"}).`,
-        `Teams at the event (${ctx.stats.size}): ${Array.from(ctx.stats.keys()).slice(0, 40).join(", ")}${ctx.stats.size > 40 ? ", ..." : ""}.`,
+        `Teams at the event (${teamEntries.length}): ${teamListFormatted}${teamEntries.length > 40 ? ", ..." : ""}.`,
         `Metrics (use these exact names): ${metricList(ctx)}.`,
         "",
         "TOOLS (most relevant to this question; each shows its result to the user as a table, chart or document):",
@@ -354,6 +372,7 @@ export function routerSystemPrompt(ctx, allowed, maxCalls, { compact = false, qu
         "- Pick the tool whose purpose matches the question. Prefer ONE call.",
         `- Up to ${maxCalls} call${maxCalls === 1 ? "" : "s"} in total; use more than one only when the question needs different data (e.g. two different questions in one).`,
         "- Tables and charts are drawn automatically from the tool result. When the user asks for a graph, chart or plot, add \"chart\": true.",
+        "- When the user references a team by their name or nickname (e.g. 'Citrus Circuits' -> 1678, 'Cheesy Poofs' -> 254), map it to their team number in tool arguments.",
         "- Use team numbers exactly as written. Leave out optional arguments you do not need.",
         "- Reply {\"action\":\"answer\"} for small talk or when the data already retrieved answers the question.",
         "",
