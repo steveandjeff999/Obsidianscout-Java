@@ -114,12 +114,12 @@ function initHeroPersona() {
             updateAudioToggleIcon();
         }
         if (title) title.textContent = "Zachary · Scouting Assistant";
-        if (notice) notice.textContent = "Your local AI scouting companion powered by on-device intelligence. Ask about teams, rankings, stats, or match strategy!";
+        if (notice) notice.textContent = "Your local AI scouting companion powered by on-device intelligence. Ask about teams, rankings, stats, or match strategy! We take no responsibility for anything the AI says.";
     } else {
         if (hero) hero.classList.remove("zachary-hero");
         if (spotlight) spotlight.classList.add("hidden");
         if (title) title.textContent = t("ai.assistant.title", "Scouting Assistant");
-        if (notice) notice.textContent = t("ai.assistant.notice", "Ask questions about your team's scouting data. The AI runs entirely on this device; nothing you type is sent to an AI service.");
+        if (notice) notice.textContent = t("ai.assistant.notice", "Ask questions about your team's scouting data. The AI runs entirely on this device; nothing you type is sent to an AI service. We take no responsibility for anything the AI says.");
     }
 
     const av = document.getElementById("assistant-zachary-avatar");

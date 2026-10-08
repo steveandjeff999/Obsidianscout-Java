@@ -10,9 +10,13 @@
     let isAllianceAdmin = false;
 
     // Collaboration & Editor State
-    let collabWs = null;
+    const Collab = window.ObsidianscoutConfigCollab || null;
+    let collab = null;
+    let collabStatusBar = null;
+    let viewKeys = [];          // live-editing key of each entry in currentConfig.fields
+    let rawBase = null;         // the view the raw JSON text was last synced from
+    let rawStale = false;       // others changed the config while the raw JSON editor had focus
     let activeConfigKind = "game";
-    let isEditingFromBroadcast = false;
     let currentConfig = { version: 1, title: "ObsidianScout Alliance Form", fields: [], analytics: [] };
 
     // DOM Elements
@@ -429,8 +433,8 @@
                     configTitleInput.value = currentConfig.title || "";
                     configVersionInput.value = currentConfig.version || 1;
 
+                    updateRawFromVisual();
                     renderVisualFields();
-                    sendConfigEdit(text);
                     showToast("Imported local team configurations!", "success");
                     setTimeout(loadAllianceData, 400);
                 }
@@ -454,15 +458,20 @@
                     return;
                 }
                 try {
-                    currentConfig = JSON.parse(text);
-                    if (!currentConfig.fields) currentConfig.fields = [];
-                    if (!currentConfig.analytics) currentConfig.analytics = [];
-                    
+                    if (collab) {
+                        commitRawEditor();
+                        applyView(collab.lastView);
+                    } else {
+                        currentConfig = JSON.parse(text);
+                        if (!currentConfig.fields) currentConfig.fields = [];
+                        if (!currentConfig.analytics) currentConfig.analytics = [];
+                    }
+
                     configTitleInput.value = currentConfig.title || "";
                     configVersionInput.value = currentConfig.version || 1;
-                    
+
                     renderVisualFields();
-                    
+
                     btnRaw.classList.remove("active");
                     btnVisual.classList.add("active");
                     containerRaw.classList.add("hidden");
@@ -505,16 +514,34 @@
         if (btnAddField) btnAddField.addEventListener("click", addField);
         if (btnAddSection) btnAddSection.addEventListener("click", addSectionHeader);
 
-        // Manual Save Configuration (Sends current state over WS)
-        saveButton?.addEventListener("click", () => {
+        // Save. Live edits already autosave, so this just makes sure they're stored; offline it merges with
+        // the latest stored form and saves over REST.
+        saveButton?.addEventListener("click", async () => {
             const text = editor.value.trim();
             if (!isValidJson(text)) {
                 showToast("Config JSON is invalid", "error");
                 return;
             }
-            sendConfigEdit(text);
-            showToast("Alliance config saved", "success");
-            setTimeout(loadAllianceData, 400);
+            if (!collab) return;
+            if (!containerRaw.classList.contains("hidden")) commitRawEditor();
+            const configUrl = `/api/alliances/${allianceId}/config/${activeConfigKind}`;
+            saveButton.disabled = true;
+            try {
+                if (collab.isLive) {
+                    await collab.saveVersion();
+                } else {
+                    await collab.saveViaRest(
+                        () => request(configUrl),
+                        (doc) => request(configUrl, { method: "PUT", json: doc })
+                    );
+                }
+                showToast("Alliance config saved", "success");
+                setTimeout(loadAllianceData, 400);
+            } catch (err) {
+                showToast(err.message || "Save failed", "error");
+            } finally {
+                saveButton.disabled = !canEditConfig();
+            }
         });
 
         // Export config
@@ -546,9 +573,9 @@
                         
                         configTitleInput.value = currentConfig.title || "";
                         configVersionInput.value = currentConfig.version || 1;
-                        
+
+                        updateRawFromVisual();
                         renderVisualFields();
-                        sendConfigEdit(text);
                         showToast("Config imported and updated", "success");
                     } catch (err) {
                         showToast("Imported JSON structure has errors", "error");
@@ -561,171 +588,179 @@
         });
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // Live editing (see /js/services/config-collab.js)
+    // ─────────────────────────────────────────────────────────────────
+
+    function projectTop(doc) {
+        // Keep an emptied title empty (instead of the default) so it doesn't jump back while being retyped.
+        const top = cleanConfigForEditor({
+            title: typeof doc.title === "string" ? doc.title : configModes[activeConfigKind].defaultTitle,
+            version: doc.version,
+            fields: [],
+            analytics: Array.isArray(doc.analytics) ? doc.analytics : []
+        });
+        delete top.fields;
+        return top;
+    }
+
+    function projectField(field) {
+        if (!field || typeof field !== "object" || Array.isArray(field)) return null;
+        try {
+            return cleanFieldForEditor({ ...field });
+        } catch (e) {
+            return field;
+        }
+    }
+
+    async function connectCollaboration(allianceId, kind) {
+        if (collab) collab.close();
+        collab = null;
+        viewKeys = [];
+
+        const existing = document.getElementById('collaboration-bar');
+        if (existing) existing.remove();
+        const cardHeader = document.querySelector('main.main-content h1').parentElement;
+        const host = document.createElement('div');
+        host.id = 'collaboration-bar';
+        cardHeader.appendChild(host);
+        if (!Collab) return;
+        collabStatusBar = Collab.createStatusBar(host);
+
+        const session = new Collab.ConfigCollabSession({
+            url: `/api/alliances/${allianceId}/collaborate/${kind}`,
+            projectField,
+            projectRest: projectTop,
+            onView: (view) => { if (collab === session) applyView(view); },
+            onStatus: (status) => { if (collab === session) showCollabStatus(status); },
+            onPresence: (editors) => {
+                if (collab !== session) return;
+                collabStatusBar.setEditors(editors, session.sid);
+                Collab.decorateCards(visualFieldsList, editors, session.sid);
+            },
+            onNotice: (level, message) => {
+                if (collab !== session || !message) return;
+                showToast(message, level === "error" ? "error" : (level === "success" ? "success" : "info"));
+            }
+        });
+        collab = session;
+        showCollabStatus(session.status);
+
+        // Show the stored form right away; the live connection then takes over (or Save falls back to REST).
+        let stored = {};
+        try {
+            stored = await request(`/api/alliances/${allianceId}/config/${kind}`) || {};
+        } catch (err) {
+            console.warn("Could not load the alliance form", err);
+        }
+        if (collab !== session) return;
+        applyView(session.load(stored));
+        session.connect();
+    }
+
+    /** Shows the live config (as this editor displays it) without losing the user's place. */
+    function applyView(view) {
+        if (!view) return;
+        const autoIds = new Map();
+        (currentConfig.fields || []).forEach((f, i) => {
+            if (f && f._autoId && viewKeys[i]) autoIds.set(viewKeys[i], f._autoId);
+        });
+        currentConfig = JSON.parse(JSON.stringify(view.doc));
+        currentConfig.fields.forEach((f, i) => {
+            const autoId = autoIds.get(view.keys[i]);
+            if (f && autoId && autoId === f.id) f._autoId = autoId;
+        });
+        viewKeys = view.keys.slice();
+
+        setInputValue(configTitleInput, currentConfig.title || "", (a, b) => a.trim() === b);
+        setInputValue(configVersionInput, String(currentConfig.version || 1), (a, b) => String(Number(a) || 1) === b);
+
+        if (document.activeElement === editor) {
+            rawStale = true;
+        } else {
+            editor.value = JSON.stringify(view.doc, null, 2);
+            rawBase = view;
+            rawStale = false;
+        }
+        Collab.preserveFocus(visualFieldsList, renderVisualFields);
+        Collab.decorateCards(visualFieldsList, collab ? collab.editors : [], collab ? collab.sid : null);
+    }
+
+    function setInputValue(input, value, same) {
+        if (!input || same(input.value, value)) return;
+        const focused = document.activeElement === input;
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        input.value = value;
+        if (focused && typeof start === "number") {
+            try { input.setSelectionRange(Math.min(start, value.length), Math.min(end, value.length)); } catch (e) { /* number inputs */ }
+        }
+    }
+
+    function canEditConfig() {
+        if (collab && collab.status === "readonly") return false;
+        return isAllianceAdmin || isAdmin(currentUser?.role);
+    }
+
+    function showCollabStatus(status) {
+        if (collabStatusBar) collabStatusBar.update(status);
+        if (status === "readonly") {
+            visualFieldsList.classList.add("view-only-editor");
+            if (saveButton) {
+                saveButton.disabled = true;
+                saveButton.textContent = "Alliance Config (ReadOnly)";
+            }
+        } else if (saveButton && canEditConfig()) {
+            saveButton.textContent = status === "live" ? "Save now" : "Save config";
+            saveButton.title = status === "live" ? "Changes save automatically." : "";
+        }
+    }
+
+    /** Sends edits typed into the raw JSON editor, merged with anything others changed meanwhile. */
+    function commitRawEditor() {
+        if (!collab || !canEditConfig()) return false;
+        let parsed;
+        try { parsed = JSON.parse(editor.value); } catch (e) { return false; }
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+        rawBase = collab.commit(parsed, rawBase || collab.lastView);
+        if (rawStale && document.activeElement !== editor) {
+            editor.value = JSON.stringify(collab.lastView.doc, null, 2);
+            rawBase = collab.lastView;
+            rawStale = false;
+        }
+        return true;
+    }
+
     function setupRawEditorBroadcast() {
         let rawEditTimer = null;
         editor.addEventListener("input", () => {
-            if (isEditingFromBroadcast) return;
-            const text = editor.value.trim();
-            try {
-                JSON.parse(text);
-                clearTimeout(rawEditTimer);
-                rawEditTimer = setTimeout(() => {
-                    sendConfigEdit(text);
-                }, 500);
-            } catch (e) {}
+            clearTimeout(rawEditTimer);
+            rawEditTimer = setTimeout(commitRawEditor, 400);
         });
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Collaborative Live Socket Connection
-    // ─────────────────────────────────────────────────────────────────
-
-    function connectCollaboration(allianceId, kind) {
-        if (collabWs) {
-            collabWs.close();
-            collabWs = null;
-        }
-        
-        const existing = document.getElementById('collaboration-bar');
-        if (existing) existing.remove();
-
-        const cardHeader = document.querySelector('main.main-content h1').parentElement;
-        const bar = document.createElement('div');
-        bar.id = 'collaboration-bar';
-        bar.className = 'collaboration-bar';
-        bar.innerHTML = `
-            <span class="pulse-dot"></span>
-            <span class="collab-text">Collaborating live on <strong>${configModes[kind].kindName}</strong></span>
-            <div class="collab-editors" id="collab-editors-list"></div>
-        `;
-        cardHeader.appendChild(bar);
-
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/api/alliances/${allianceId}/collaborate/${kind}`;
-        
-        collabWs = new WebSocket(wsUrl);
-        
-        collabWs.onmessage = (event) => {
-            try {
-                const msg = JSON.parse(event.data);
-                if (msg.type === 'init') {
-                    updateEditorsList(msg.editors);
-                    if (msg.configJson) {
-                        updateLocalConfig(msg.configJson, false);
-                    }
-                } else if (msg.type === 'presence') {
-                    updateEditorsList(msg.editors);
-                } else if (msg.type === 'update') {
-                    if (msg.configJson) {
-                        updateLocalConfig(msg.configJson, true, msg.editor);
-                    }
-                }
-            } catch (e) {
-                console.error("Error parsing WebSocket message", e);
+        editor.addEventListener("blur", () => {
+            clearTimeout(rawEditTimer);
+            commitRawEditor();
+            if (rawStale && collab) {
+                editor.value = JSON.stringify(collab.lastView.doc, null, 2);
+                rawBase = collab.lastView;
+                rawStale = false;
             }
-        };
-        
-        collabWs.onclose = () => {
-            const collabBar = document.getElementById('collaboration-bar');
-            if (collabBar) collabBar.style.display = 'none';
-        };
-    }
-
-    function sendConfigEdit(configJson) {
-        if (isEditingFromBroadcast) return;
-        if (!isAllianceAdmin && !isAdmin(currentUser?.role)) return; // read-only
-        if (collabWs && collabWs.readyState === WebSocket.OPEN) {
-            collabWs.send(JSON.stringify({
-                type: 'edit',
-                configJson: configJson
-            }));
-        }
-    }
-
-    function updateEditorsList(editors) {
-        const listEl = document.getElementById('collab-editors-list');
-        if (!listEl) return;
-        
-        listEl.innerHTML = (editors || []).map(ed => {
-            const initials = ed.username.substring(0, 2).toUpperCase();
-            const roleLabel = ed.role === 'SUPERADMIN' ? 'SA' : (ed.role === 'ADMIN' ? 'Admin' : 'Scout');
-            return `
-                <div class="collab-avatar" title="${ed.username} (Team ${ed.teamNumber} — ${roleLabel})">
-                    ${initials}
-                </div>
-            `;
-        }).join('');
-    }
-
-    function updateLocalConfig(newJson, isFromBroadcast, editorUser) {
-        if (isFromBroadcast) {
-            if (document.activeElement === editor) {
-                showPendingMergeBanner(newJson, editorUser);
-                return;
+        });
+        visualFieldsList.addEventListener("focusin", (e) => {
+            const card = e.target.closest("[data-collab-key]");
+            if (collab) collab.setFocus(card ? card.dataset.collabKey : null);
+        });
+        visualFieldsList.addEventListener("focusout", () => {
+            setTimeout(() => {
+                if (collab && !visualFieldsList.contains(document.activeElement)) collab.setFocus(null);
+            }, 0);
+        });
+        window.addEventListener("beforeunload", (e) => {
+            if (collab && collab.hasUnsavedChanges && !collab.isLive) {
+                e.preventDefault();
+                e.returnValue = "";
             }
-        }
-        
-        hidePendingMergeBanner();
-        
-        isEditingFromBroadcast = true;
-        editor.value = newJson;
-        try {
-            currentConfig = JSON.parse(newJson);
-            if (!currentConfig.fields) currentConfig.fields = [];
-            if (!currentConfig.analytics) currentConfig.analytics = [];
-            
-            if (configTitleInput) configTitleInput.value = currentConfig.title || "";
-            if (configVersionInput) configVersionInput.value = currentConfig.version || 1;
-            
-            renderVisualFields();
-            
-            if (isFromBroadcast && editorUser) {
-                showToast(`Forms updated in real-time by ${editorUser}`, "info");
-            }
-        } catch (e) {
-            console.error("Error parsing config from broadcast", e);
-        } finally {
-            isEditingFromBroadcast = false;
-        }
-    }
-
-    function showPendingMergeBanner(newJson, editorUser) {
-        let banner = document.getElementById('raw-pending-merge-banner');
-        if (!banner) {
-            banner = document.createElement('div');
-            banner.id = 'raw-pending-merge-banner';
-            banner.className = 'sharing-notice mb-12';
-            banner.style.borderColor = '#e67e22';
-            banner.style.background = 'rgba(230, 126, 34, 0.08)';
-            containerRaw.insertBefore(banner, containerRaw.firstChild);
-        }
-        
-        banner.innerHTML = `
-            <span class="icon">⚠️</span>
-            <div style="flex:1;">
-                <strong>Conflict Warning:</strong> ${editorUser} has modified this configuration. 
-                What would you like to do?
-                <div style="margin-top:6px; display:flex; gap:8px;">
-                    <button class="btn-xs" id="btn-merge-load" type="button">Load their changes</button>
-                    <button class="btn-xs ghost" id="btn-merge-ignore" type="button">Keep my draft</button>
-                </div>
-            </div>
-        `;
-        
-        document.getElementById('btn-merge-load').onclick = () => {
-            updateLocalConfig(newJson, false);
-            hidePendingMergeBanner();
-        };
-        
-        document.getElementById('btn-merge-ignore').onclick = () => {
-            hidePendingMergeBanner();
-            sendConfigEdit(editor.value);
-        };
-    }
-    
-    function hidePendingMergeBanner() {
-        const banner = document.getElementById('raw-pending-merge-banner');
-        if (banner) banner.remove();
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -797,6 +832,7 @@
     function createFieldCard(field, index) {
         const card = document.createElement("div");
         card.className = "field-card";
+        if (viewKeys[index]) card.dataset.collabKey = viewKeys[index];
         
         const canonicalType = canonicalizeFieldType(field.type);
         field.type = canonicalType;
@@ -1263,7 +1299,7 @@
         card.appendChild(body);
         
         // Disable controls if read-only
-        if (!isAllianceAdmin && !isAdmin(currentUser?.role)) {
+        if (!canEditConfig()) {
             card.querySelectorAll("input, select, textarea, button").forEach(c => c.disabled = true);
         }
 
@@ -1287,8 +1323,8 @@
         };
         
         fields.push(newField);
-        renderVisualFields();
         updateRawFromVisual();
+        renderVisualFields();
 
         // Scroll to bottom
         setTimeout(() => {
@@ -1315,8 +1351,8 @@
         };
         
         fields.push(newSection);
-        renderVisualFields();
         updateRawFromVisual();
+        renderVisualFields();
 
         setTimeout(() => {
             const cards = visualFieldsList.querySelectorAll(".field-card");
@@ -1334,124 +1370,129 @@
         const temp = fields[index];
         fields[index] = fields[target];
         fields[target] = temp;
-        renderVisualFields();
         updateRawFromVisual();
+        renderVisualFields();
     }
 
     function deleteField(index) {
         const fields = currentConfig.fields || [];
         if (confirm(`Delete field "${fields[index].label || fields[index].id}"?`)) {
             fields.splice(index, 1);
-            renderVisualFields();
             updateRawFromVisual();
+            renderVisualFields();
         }
     }
 
     function updateRawFromVisual() {
-        if (isEditingFromBroadcast) return;
-        
-        const titleVal = configTitleInput.value.trim() || configModes[activeConfigKind].defaultTitle;
-        const versionVal = Number(configVersionInput.value) || 1;
-        const fields = currentConfig.fields || [];
+        currentConfig.title = configTitleInput.value.trim();
+        currentConfig.version = Number(configVersionInput.value) || 1;
 
-        const cleanedFields = fields.map((field) => {
-            const rawType = field.type || "text";
-            const canonicalType = canonicalizeFieldType(rawType);
-
-            let normalizedLabel = "";
-            if (field.label !== undefined && field.label !== null) {
-                if (typeof field.label === 'string') {
-                    normalizedLabel = field.label.trim();
-                } else if (typeof field.label === 'object') {
-                    const obj = {};
-                    Object.keys(field.label).forEach((k) => {
-                        const v = field.label[k];
-                        obj[k] = (typeof v === 'string') ? v.trim() : v;
-                    });
-                    normalizedLabel = obj;
-                }
-            }
-
-            const cleaned = {
-                id: field.id ? field.id.trim() : "",
-                label: normalizedLabel,
-                type: canonicalType,
-                required: (canonicalType === "text" || canonicalType === "section") ? false : !!field.required
-            };
-            
-            const type = cleaned.type;
-
-            if (supportsPhasesConfig() && field.phase) {
-                cleaned.phase = String(field.phase);
-            }
-            
-            if (type === "number" || type === "counter" || type === "rating") {
-                if (field.min !== undefined && field.min !== null && field.min !== "") {
-                    cleaned.min = Number(field.min);
-                }
-                if (field.max !== undefined && field.max !== null && field.max !== "") {
-                    cleaned.max = Number(field.max);
-                }
-                if (field.step !== undefined && field.step !== null && field.step !== "") {
-                    cleaned.step = Number(field.step);
-                }
-                const dStep = field.doubleStep !== undefined ? field.doubleStep : field.double_step;
-                if (dStep !== undefined && dStep !== null && dStep !== "") {
-                    cleaned.doubleStep = Number(dStep);
-                }
-            }
-            
-            if (supportsPointsConfig() && (type === "number" || type === "counter" || type === "rating" || type === "checkbox")) {
-                if (field.pointsPer !== undefined && field.pointsPer !== null && field.pointsPer !== "") {
-                    cleaned.pointsPer = Number(field.pointsPer);
-                }
-            }
-            
-            if (type === "section" || type === "text" || type === "image") {
-                delete cleaned.min;
-                delete cleaned.max;
-                delete cleaned.step;
-                delete cleaned.doubleStep;
-                delete cleaned.pointsPer;
-                delete cleaned.options;
-            }
-            
-            if (type === "select") {
-                cleaned.options = (field.options || []).map((opt) => {
-                    let normalizedOptLabel = "";
-                    if (opt.label !== undefined && opt.label !== null) {
-                        if (typeof opt.label === 'string') {
-                            normalizedOptLabel = opt.label.trim();
-                        } else if (typeof opt.label === 'object') {
-                            const o = {};
-                            Object.keys(opt.label).forEach((k) => {
-                                const v = opt.label[k];
-                                o[k] = (typeof v === 'string') ? v.trim() : v;
-                            });
-                            normalizedOptLabel = o;
-                        }
-                    }
-                    return {
-                        label: normalizedOptLabel,
-                        value: opt.value ? opt.value.trim() : "",
-                        ...(supportsPointsConfig() ? { points: opt.points !== undefined && opt.points !== null ? Number(opt.points) : 0 } : {})
-                    };
-                });
-            }
-            
-            return cleaned;
-        });
-
-        const cleanedConfig = {
-            title: titleVal,
-            version: versionVal,
-            fields: cleanedFields,
-            analytics: currentConfig.analytics || []
-        };
-
+        const cleanedConfig = cleanConfigForEditor(currentConfig);
         editor.value = JSON.stringify(cleanedConfig, null, 2);
-        sendConfigEdit(editor.value);
         refreshDuplicateWarning();
+        if (collab && canEditConfig()) {
+            viewKeys = collab.commit(cleanedConfig).keys;
+            rawBase = collab.lastView;
+            rawStale = false;
+        }
+    }
+
+    /** A field as the editor saves it. Stored fields are shown the same way, so untouched fields never diff. */
+    function cleanFieldForEditor(field) {
+        const rawType = field.type || "text";
+        const canonicalType = canonicalizeFieldType(rawType);
+
+        let normalizedLabel = "";
+        if (field.label !== undefined && field.label !== null) {
+            if (typeof field.label === 'string') {
+                normalizedLabel = field.label.trim();
+            } else if (typeof field.label === 'object') {
+                const obj = {};
+                Object.keys(field.label).forEach((k) => {
+                    const v = field.label[k];
+                    obj[k] = (typeof v === 'string') ? v.trim() : v;
+                });
+                normalizedLabel = obj;
+            }
+        }
+
+        const cleaned = {
+            id: field.id ? field.id.trim() : "",
+            label: normalizedLabel,
+            type: canonicalType,
+            required: (canonicalType === "text" || canonicalType === "section") ? false : !!field.required
+        };
+        
+        const type = cleaned.type;
+
+        if (supportsPhasesConfig() && field.phase) {
+            cleaned.phase = String(field.phase);
+        }
+        
+        if (type === "number" || type === "counter" || type === "rating") {
+            if (field.min !== undefined && field.min !== null && field.min !== "") {
+                cleaned.min = Number(field.min);
+            }
+            if (field.max !== undefined && field.max !== null && field.max !== "") {
+                cleaned.max = Number(field.max);
+            }
+            if (field.step !== undefined && field.step !== null && field.step !== "") {
+                cleaned.step = Number(field.step);
+            }
+            const dStep = field.doubleStep !== undefined ? field.doubleStep : field.double_step;
+            if (dStep !== undefined && dStep !== null && dStep !== "") {
+                cleaned.doubleStep = Number(dStep);
+            }
+        }
+        
+        if (supportsPointsConfig() && (type === "number" || type === "counter" || type === "rating" || type === "checkbox")) {
+            if (field.pointsPer !== undefined && field.pointsPer !== null && field.pointsPer !== "") {
+                cleaned.pointsPer = Number(field.pointsPer);
+            }
+        }
+        
+        if (type === "section" || type === "text" || type === "image") {
+            delete cleaned.min;
+            delete cleaned.max;
+            delete cleaned.step;
+            delete cleaned.doubleStep;
+            delete cleaned.pointsPer;
+            delete cleaned.options;
+        }
+        
+        if (type === "select") {
+            cleaned.options = (field.options || []).map((opt) => {
+                let normalizedOptLabel = "";
+                if (opt.label !== undefined && opt.label !== null) {
+                    if (typeof opt.label === 'string') {
+                        normalizedOptLabel = opt.label.trim();
+                    } else if (typeof opt.label === 'object') {
+                        const o = {};
+                        Object.keys(opt.label).forEach((k) => {
+                            const v = opt.label[k];
+                            o[k] = (typeof v === 'string') ? v.trim() : v;
+                        });
+                        normalizedOptLabel = o;
+                    }
+                }
+                return {
+                    label: normalizedOptLabel,
+                    value: opt.value ? opt.value.trim() : "",
+                    ...(supportsPointsConfig() ? { points: opt.points !== undefined && opt.points !== null ? Number(opt.points) : 0 } : {})
+                };
+            });
+        }
+        
+        return cleaned;
+    }
+
+    function cleanConfigForEditor(config) {
+        return {
+            title: String(config.title ?? "").trim(),
+            version: Number(config.version) || 1,
+            fields: (config.fields || []).map(cleanFieldForEditor),
+            analytics: config.analytics || []
+        };
     }
 
     function refreshDuplicateWarning() {

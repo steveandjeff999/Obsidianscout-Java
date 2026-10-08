@@ -133,15 +133,21 @@ function baseRuleRoute(question, ctx, history = []) {
     const teams = rawTeams.filter((t) => !negatedTeams.has(t));
     const hasAllTeams = /\b(?:all|all teams|all of the teams|every team|everyone|todos)\b/i.test(q);
 
-    // Fallback: if no team is in the query, extract the most recent team referenced in history
+    // Fallback: if no team is in the query, only extract from previous turn if there is an explicit pronoun or follow-up reference
+    const hasPronounRef = /\b(?:they|them|their|theirs|that team|the team|this team|same team|these teams|those teams|it|do it|that|that graph|the graph|teh graph|that chart|the chart|teh chart|that table|the table)\b/i.test(q);
     let conversationTeams = [...teams];
-    if (conversationTeams.length === 0 && Array.isArray(history) && history.length > 0) {
-        for (let i = history.length - 1; i >= 0; i--) {
-            const hText = String(history[i]?.content || "");
-            const hTeams = Data.findTeamsInText(ctx, hText);
-            if (hTeams.length > 0) {
-                conversationTeams = hTeams;
-                break;
+    if (conversationTeams.length === 0 && hasPronounRef && Array.isArray(history) && history.length > 0) {
+        const lastSpec = lastVisualSpec(history, ctx);
+        if (lastSpec && Array.isArray(lastSpec.args?.teams) && lastSpec.args.teams.length > 0) {
+            conversationTeams = lastSpec.args.teams;
+        } else {
+            for (let i = history.length - 1; i >= 0; i--) {
+                const hText = String(history[i]?.content || "");
+                const hTeams = Data.findTeamsInText(ctx, hText);
+                if (hTeams.length > 0) {
+                    conversationTeams = hTeams;
+                    break;
+                }
             }
         }
     }
@@ -427,8 +433,11 @@ function baseRuleRoute(question, ctx, history = []) {
         }
         return { tool: "top_teams", args: { metric: metric ? metric.label : (ctx.metrics[0]?.label || "Total points"), n: n, chart: true } };
     }
-    if ((teams.length === 1 || conversationTeams.length === 1 || allNumbers.length === 1) && (hasIntent(q, "overview") || hasIntent(q, "match_count") || q.trim().split(/\s+/).length <= 4)) {
-        return { tool: "team_overview", args: { team: teams[0] || conversationTeams[0] || allNumbers[0], chart: wantsChart } };
+    if ((teams.length === 1 || allNumbers.length === 1) && (hasIntent(q, "overview") || hasIntent(q, "match_count") || q.trim().split(/\s+/).length <= 4)) {
+        return { tool: "team_overview", args: { team: teams[0] || allNumbers[0], chart: wantsChart } };
+    }
+    if (conversationTeams.length === 1 && hasPronounRef && (hasIntent(q, "overview") || hasIntent(q, "match_count"))) {
+        return { tool: "team_overview", args: { team: conversationTeams[0], chart: wantsChart } };
     }
     // Bare metric mention or availability question ("epa", "the EPA metric you mentioned", "can you get epa and opr and xP").
     if (teams.length === 0 && conversationTeams.length === 0 || (metric && teams.length === 0)) {

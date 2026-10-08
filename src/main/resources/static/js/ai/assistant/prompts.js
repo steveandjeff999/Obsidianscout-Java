@@ -60,7 +60,10 @@ export function answerSystemPrompt({ ctx, profile = {}, results = [], manifest =
             manifest
                 ? `Already on screen above your reply (complete; refer to it, never recreate it, never write a table, never say you cannot make it):\n${manifest}`
                 : "Nothing is drawn above your reply.",
-            "Answer directly in 1-3 sentences using ONLY the DATA below. Long lists in DATA are shortened (\"+N more\"); the table on screen has every row.",
+            ...(profile.visibleReasoning ? [
+                "- Think first inside <thought>...</thought> (reason step by step and verify numbers against DATA), then write the final answer after </thought>."
+            ] : []),
+            "Answer using ONLY the DATA below. Long lists in DATA are shortened (\"+N more\"); the table on screen has every row.",
             "Never invent statistics. If a tool failed, say what could not be retrieved.",
             `Reply in ${lang}.`,
             "",
@@ -104,10 +107,10 @@ export function answerSystemPrompt({ ctx, profile = {}, results = [], manifest =
         "- External metrics: Statbotics EPA, Match 13 xP and TBA / FTC Scout OPR. If one returned \"not enabled\", tell the user an admin can enable it.",
         ...(failures.length ? [`- These lookups failed; tell the user plainly what could not be retrieved:\n${failures.join("\n")}`] : []),
         `- If the user wants another view, suggest a follow-up they can ask (you can: ${OTHER_SKILLS}).`,
-        "- Answer the LATEST question. Use earlier turns only to resolve references like \"them\" or \"that team\".",
+        "- Earlier conversation history and previous visual states are provided for CONTEXT ONLY (e.g. to resolve pronouns like \"them\", \"that team\", or follow-up edits). Answer the LATEST question; use previous context only when needed, and let DATA and the latest prompt guide your answer.",
         profile.strategy ? "- For strategy questions (picks, defense, match plans), reason from the numbers in DATA and name the trade-offs." : null,
         ...(profile.visibleReasoning ? [
-            "- Think first inside <thought>...</thought> (check team numbers and values against DATA), then write the final answer after </thought>."
+            "- Think first inside <thought>...</thought> (reason through your analysis step by step, verify team numbers, rankings, and stats against DATA), then write the final answer after </thought>."
         ] : ["- Answer directly and concisely. Do not write out your reasoning."]),
         `- Reply in ${lang}, in markdown.`,
         "",

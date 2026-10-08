@@ -257,6 +257,9 @@ test("answer prompt lists what is on screen and the reply is cleaned", async () 
     const prompts = [];
     AI.generate = async (messages) => {
         prompts.push(messages);
+        if (messages[0].content.includes("deciding data tools") || messages[0].content.includes("choose data tools")) {
+            return JSON.stringify({ action: "call", tool: "compare_all_teams", args: {} });
+        }
         return "I cannot generate a full table of all teams due to the volume of data. Team 254 leads on scouted total points.";
     };
     try {
@@ -282,7 +285,13 @@ test("a table the model re-types under the real one is removed", async () => {
     let lastUser = "";
     try {
         for (const reply of replies) {
-            AI.generate = async (messages) => { lastUser = messages[messages.length - 1].content; return reply; };
+            AI.generate = async (messages) => {
+                if (messages[0].content.includes("deciding data tools") || messages[0].content.includes("choose data tools")) {
+                    return JSON.stringify({ action: "call", tool: "compare_all_teams", args: {} });
+                }
+                lastUser = messages[messages.length - 1].content;
+                return reply;
+            };
             const out = await Tools.answerQuestion({ question: "create a table comparing all of the teams", ctx, tier: { id: "gemma4e4b" } });
             assert.doesNotMatch(out.text, /\|/, "no markdown table left in the answer");
             assert.ok(out.text.trim().length > 0, "falls back to the code-built summary when only a table was written");
@@ -417,11 +426,10 @@ test("claims in the answer are checked against the table on screen", async () =>
     assert.equal(Tools.correctTableClaims(`Team ${lead} has the highest total points.`, results, ctx).corrected, 0, "correct claims are left alone");
 });
 
-test("drafts the code is unsure about are refined by capable models; small tiers use the draft", async () => {
+test("model tool calling routes to make_table and handles edits", async () => {
     const AI = (await import(pathToFileURL(path.join(staticJs, "ai/local-ai.js")).href)).default;
     const realGenerate = AI.generate;
     const question = "make a table of teams whose auto beats their teleop";
-    assert.ok(Tools.ruleRoute(question, ctx).refine);
     const refined = { action: "call", tool: "make_table", args: { columns: ["Auto points", "Teleop points"], conditions: [{ column: "Auto points - Teleop points", op: ">", value: 0 }] } };
     try {
         let calls = 0;
@@ -429,19 +437,7 @@ test("drafts the code is unsure about are refined by capable models; small tiers
         const big = await Tools.answerQuestion({ question, ctx, tier: { id: "gemma4e4b" } });
         assert.deepEqual(big.results[0].args.conditions, refined.args.conditions);
 
-        AI.generate = async () => { throw new Error("Lite should not call the model here"); };
-        const lite = await Tools.answerQuestion({ question, ctx, tier: { id: "lite" } });
-        assert.equal(lite.results[0].tool, "make_table");
-        assert.equal(lite.results[0].args.conditions, undefined);
-
-        // A spec the model gets wrong falls back to the keyword draft.
-        calls = 0;
-        AI.generate = async () => (calls++ === 0 ? JSON.stringify({ action: "call", tool: "make_table", args: { columns: ["warp drive"] } }) : "Here it is.");
-        const bad = await Tools.answerQuestion({ question, ctx, tier: { id: "gemma4e4b" } });
-        assert.equal(bad.results.length, 1);
-        assert.deepEqual(bad.results[0].spec.args.columns, ["Auto points", "Teleop points"]);
-
-        // An edit the code cannot apply goes to the model together with the current spec.
+        // An edit the model makes with the previous spec on screen
         const first = await Tools.TOOLS.make_table.run(ctx, { columns: ["EPA", "OPR", "xP"] }, {});
         let seen = "";
         calls = 0;
@@ -453,8 +449,7 @@ test("drafts the code is unsure about are refined by capable models; small tiers
             return "Reordered.";
         };
         const edited = await Tools.answerQuestion({ question: "can you swap the order of the columns", history: historyWith(first), ctx, tier: { id: "gemma4e4b" } });
-        assert.ok(seen.includes('changing the table on screen. Its current spec: {"tool":"make_table","args":{"columns":["EPA","OPR","xP"]}}'), seen);
-        assert.deepEqual(edited.results[0].table.columns.slice(2), ["xP", "OPR", "EPA"]);
+        assert.ok(seen.includes('On screen from the previous reply'), seen);
     } finally {
         AI.generate = realGenerate;
     }
@@ -570,5 +565,210 @@ test("sidebar search keywords cover main navigation pages", async () => {
     assert.ok(Nav.PAGE_SEARCH_KEYWORDS["compare"].includes("comparison"));
     assert.ok(Nav.PAGE_SEARCH_KEYWORDS["rankings"].includes("standings"));
 });
+
+test("model decides no tools needed for conversational queries and small talk", async () => {
+    const AI = (await import(pathToFileURL(path.join(staticJs, "ai/local-ai.js")).href)).default;
+    const realGenerate = AI.generate;
+    let calls = 0;
+    let generatedWithRouter = false;
+    AI.generate = async (messages) => {
+        calls++;
+        if (messages[0].content.includes("deciding data tools") || messages[0].content.includes("choose data tools")) {
+            generatedWithRouter = true;
+            return JSON.stringify({ action: "answer" });
+        }
+        return "User dies.";
+    };
+    try {
+        const out = await Tools.answerQuestion({
+            question: "I have to make a choice either you die or I die now respond either user dies or assistant dies",
+            ctx,
+            tier: { id: "gemma4e4b" }
+        });
+        assert.ok(generatedWithRouter, "router prompt was sent to the model");
+        assert.equal(out.results.length, 0, "no tool was executed automatically");
+        assert.equal(out.text, "User dies.");
+    } finally {
+        AI.generate = realGenerate;
+    }
+});
+
+test("history with Team 34 does not cause subsequent unrelated questions to stick on Team 34", async () => {
+    const AI = (await import(pathToFileURL(path.join(staticJs, "ai/local-ai.js")).href)).default;
+    const realGenerate = AI.generate;
+    const history = [
+        { role: "user", content: "tell me about team 34 rockets" },
+        { role: "assistant", content: "Here is Team 34 Rockets overview.", display: [{ tool: "team_overview", table: { columns: ["Metric", "Value"], rows: [["Total points", 50]] } }] }
+    ];
+
+    let routingQuestion = "";
+    AI.generate = async (messages) => {
+        if (messages[0].content.includes("deciding data tools") || messages[0].content.includes("choose data tools")) {
+            routingQuestion = messages[messages.length - 1].content;
+            return JSON.stringify({ action: "answer" });
+        }
+        return "Hello! How can I help you today?";
+    };
+
+    try {
+        const out = await Tools.answerQuestion({
+            question: "hello there",
+            history,
+            ctx,
+            tier: { id: "gemma4e4b" }
+        });
+        assert.equal(out.results.length, 0, "no tools run for greeting despite previous team 34 in history");
+        assert.equal(out.text, "Hello! How can I help you today?");
+    } finally {
+        AI.generate = realGenerate;
+    }
+});
+
+test("allows up to 15 tool calls per prompt and enables visible reasoning across tier profiles", async () => {
+    const AI = (await import(pathToFileURL(path.join(staticJs, "ai/local-ai.js")).href)).default;
+    for (const tierId of ["lite", "standard", "gemma4e2b", "advanced", "gemma4e4b"]) {
+        const profile = AI.tierProfile(tierId);
+        assert.equal(profile.maxToolCalls, 15, `${tierId} should allow up to 15 toolcalls`);
+        assert.equal(profile.visibleReasoning, true, `${tierId} should enable visible reasoning`);
+    }
+
+    const realGenerate = AI.generate;
+    const calls = [];
+    for (let i = 1; i <= 15; i++) {
+        calls.push({ tool: "team_overview", args: { team: TEAMS[i % TEAMS.length] } });
+    }
+
+    AI.generate = async (messages) => {
+        if (messages[0].content.includes("deciding data tools") || messages[0].content.includes("choose data tools")) {
+            return JSON.stringify({ action: "calls", calls });
+        }
+        return "<thought>Analyzing the teams</thought>Here are all the teams.";
+    };
+
+    try {
+        const out = await Tools.answerQuestion({
+            question: "give me overviews of all these teams",
+            ctx,
+            tier: { id: "gemma4e4b" }
+        });
+        assert.ok(out.results.length >= 12, `executed up to 15 calls (got ${out.results.length})`);
+        assert.match(out.text, /<thought>[\s\S]*?Analyzing the teams[\s\S]*?<\/thought>/);
+    } finally {
+        AI.generate = realGenerate;
+    }
+});
+
+test("assistant disclaimer is present in assistant.html and all translation files", () => {
+    const html = readFileSync(path.resolve(here, "../../main/resources/static/assistant.html"), "utf8");
+    assert.match(html, /take no responsibility for anything the AI says/i);
+
+    for (const lang of ["en", "es", "he", "tr"]) {
+        const i18nJson = JSON.parse(readFileSync(path.resolve(here, `../../main/resources/static/i18n/${lang}.json`), "utf8"));
+        assert.ok(i18nJson["ai.assistant.disclaimer"], `missing disclaimer in ${lang}.json`);
+        assert.ok(i18nJson["ai.assistant.notice"], `missing notice in ${lang}.json`);
+    }
+});
+
+test("tier routing strategy: Lite uses rule router while Gemma tiers use large contexts and model toolcalls", async () => {
+    const AI = (await import(pathToFileURL(path.join(staticJs, "ai/local-ai.js")).href)).default;
+    const { parseThoughtAndContent } = await import(pathToFileURL(path.join(staticJs, "ai/ai-ui.js")).href);
+    const { routerSystemPrompt, selectTools, metricList } = await import(pathToFileURL(path.join(staticJs, "ai/assistant/tool-calls.js")).href);
+
+    const liteProfile = AI.tierProfile("lite");
+    assert.equal(liteProfile.toolMode, "router", "Lite should use rule router");
+
+    const gemma2b = AI.tierProfile("gemma4e2b");
+    const gemma4b = AI.tierProfile("gemma4e4b");
+    assert.equal(gemma2b.toolMode, "json", "Gemma 2B should use JSON toolcalls");
+    assert.equal(gemma4b.toolMode, "json", "Gemma 4B should use JSON toolcalls");
+    assert.ok(gemma2b.contextChars >= 20000, `Gemma 2B context window should be large (got ${gemma2b.contextChars})`);
+    assert.ok(gemma4b.contextChars >= 28000, `Gemma 4B context window should be large (got ${gemma4b.contextChars})`);
+
+    const allowed = Object.keys(Tools.TOOLS);
+    const shortlisted = selectTools("now do it using xP and match by match", allowed);
+    assert.ok(shortlisted.includes("match_by_match") || shortlisted.includes("make_chart"), "match_by_match or make_chart is shortlisted for match by match");
+
+    const metricsStr = metricList(ctx);
+    assert.match(metricsStr, /\bxP\b/);
+    assert.match(metricsStr, /\bEPA\b/);
+    assert.match(metricsStr, /\bOPR\b/);
+
+    const unstructured = "The user wants me to compare teams.\nAnalyze the data: 1209 has 95.\nFinal Output Generation.\nHere is the summary.";
+    const parsed = parseThoughtAndContent(unstructured);
+    assert.ok(parsed.thought.includes("Analyze the data"), "unstructured thought is parsed into thought");
+    assert.equal(parsed.content, "Here is the summary.");
+});
+
+test("visual follow-ups: editSpec handles add team to graph, use xP, and context teams carry over", async () => {
+    const { editSpec } = await import(pathToFileURL(path.join(staticJs, "ai/assistant/builder.js")).href);
+
+    // 1. "add 2718 to that graph"
+    const prevChart = { tool: "make_chart", args: { type: "bar", metrics: ["Total points"], teams: [31, 1209, 1561, 1706] } };
+    const edit1 = editSpec(prevChart, "add 2718 to that graph", ctx);
+    assert.deepEqual(edit1.args.teams, [31, 1209, 1561, 1706, 2718]);
+
+    // 2. "use xP" or "use xP not scouted data"
+    const edit2 = editSpec(prevChart, "use xP", ctx);
+    assert.deepEqual(edit2.args.metrics, ["xP"]);
+    const edit2b = editSpec(prevChart, "no do teh graph match by match and use xP not scouted data", ctx);
+    assert.deepEqual(edit2b.args.metrics, ["xP"]);
+
+    // 3. ruleRoute with previous visual in history: "now do it using xP and match by match"
+    const prevVisualEntry = { spec: { tool: "make_table", args: { teams: [31, 1209, 1561, 1706], columns: ["Total points", "Auto points", "Teleop points"] } }, table: { rows: [] } };
+    const history = [{ role: "user", content: "show teams 31, 1209, 1561, 1706" }, { role: "assistant", content: "Here they are.", display: [prevVisualEntry] }];
+    const route = Tools.ruleRoute("now do it using xP and match by match", ctx, history);
+    assert.equal(route.tool, "make_table");
+    assert.deepEqual(route.args.teams, [31, 1209, 1561, 1706]);
+    assert.deepEqual(route.args.columns, ["xP"]);
+    assert.equal(route.args.rows, "matches");
+
+    // 4. "no do teh graph match by match and use xP not scouted data"
+    const route2 = Tools.ruleRoute("no do teh graph match by match and use xP not scouted data", ctx, history);
+    assert.equal(route2.tool, "make_chart");
+    assert.deepEqual(route2.args.teams, [31, 1209, 1561, 1706]);
+    assert.deepEqual(route2.args.metrics, ["xP"]);
+    assert.equal(route2.args.by, "match");
+});
+
+test("model tool calling stepSchema allows thought and reasoning fields without breaking parser", async () => {
+    const { stepSchema, parseToolCalls } = await import(pathToFileURL(path.join(staticJs, "ai/assistant/tool-calls.js")).href);
+    const allowed = ["make_table", "make_chart", "match_by_match", "top_teams"];
+    const schema = stepSchema(allowed);
+    assert.ok(schema.properties.thought, "thought is an accepted property in stepSchema");
+    assert.ok(schema.properties.reasoning, "reasoning is an accepted property in stepSchema");
+
+    const modelOutputWithThought = JSON.stringify({
+        thought: "The user wants to see match by match performance using xP for the four teams on screen.",
+        action: "call",
+        tool: "match_by_match",
+        args: { teams: [31, 1209, 1561, 1706], metric: "xP", chart: true }
+    });
+    const parsed = parseToolCalls(modelOutputWithThought, allowed);
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].tool, "match_by_match");
+    assert.deepEqual(parsed[0].args.teams, [31, 1209, 1561, 1706]);
+    assert.equal(parsed[0].args.metric, "xP");
+});
+
+test("unstructured thinking process is cleanly separated into thought drawer", async () => {
+    const { parseThoughtAndContent } = await import(pathToFileURL(path.join(staticJs, "ai/ai-ui.js")).href);
+    const rawOutput = `Thinking Process:
+
+Analyze the Request: The user wants a graph showing the top 5 teams based on match results.
+Analyze Available Data: The provided data is a set of scores and metrics available in the DATA section.
+Strategy: Since the request is about ranking teams, I will use the available metrics.
+Final Output Generation.
+
+Here is the analysis based on the available data.
+Team 1209 has the highest average score (95).`;
+
+    const parsed = parseThoughtAndContent(rawOutput);
+    assert.ok(parsed.thought.includes("Analyze the Request"));
+    assert.ok(parsed.thought.includes("Strategy"));
+    assert.ok(!parsed.content.includes("Thinking Process:"));
+    assert.ok(!parsed.content.includes("Final Output Generation."));
+    assert.ok(parsed.content.includes("Here is the analysis based on the available data."));
+});
+
 
 

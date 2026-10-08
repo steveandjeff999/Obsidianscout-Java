@@ -1,0 +1,3143 @@
+{
+  "apply": [
+    {
+      "name": "set top-level",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "title"
+          ],
+          "value": "New"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "New",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "set creates nested objects",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "meta",
+            "a",
+            "b"
+          ],
+          "value": 3
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ],
+          "meta": {
+            "a": {
+              "b": 3
+            }
+          }
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "set replaces non-object intermediate",
+      "state": {
+        "doc": {
+          "title": "x",
+          "fields": []
+        },
+        "keys": []
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "title",
+            "en"
+          ],
+          "value": "y"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": {
+            "en": "y"
+          },
+          "fields": []
+        },
+        "keys": []
+      }
+    },
+    {
+      "name": "unset top-level",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "unset",
+          "path": [
+            "version"
+          ]
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "unset missing is a no-op",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "unset",
+          "path": [
+            "nope",
+            "deeper"
+          ]
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "set field property",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k2",
+            "label"
+          ],
+          "value": "Bee"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "Bee",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "set field property on missing key",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "zz",
+            "label"
+          ],
+          "value": "x"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "set whole field",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k1"
+          ],
+          "value": {
+            "id": "a2",
+            "type": "text"
+          }
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a2",
+              "type": "text"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "unset whole field is a no-op",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "unset",
+          "path": [
+            "fields",
+            "k1"
+          ]
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "set label language on string label",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k1",
+            "label",
+            "en"
+          ],
+          "value": "Hi"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": {
+                "en": "Hi"
+              },
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "unset nested through non-object",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "unset",
+          "path": [
+            "fields",
+            "k1",
+            "label",
+            "en"
+          ]
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "set on fields itself is a no-op",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "fields"
+          ],
+          "value": []
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "insert at start",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "insert",
+          "key": "n",
+          "after": null,
+          "value": {
+            "id": "n",
+            "label": "N",
+            "type": "counter"
+          }
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "n",
+              "label": "N",
+              "type": "counter"
+            },
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "n",
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "insert after middle",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "insert",
+          "key": "n",
+          "after": "k2",
+          "value": {
+            "id": "n",
+            "label": "N",
+            "type": "counter"
+          }
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "n",
+              "label": "N",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "n",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "insert after missing goes last",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "insert",
+          "key": "n",
+          "after": "gone",
+          "value": {
+            "id": "n",
+            "label": "N",
+            "type": "counter"
+          }
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            },
+            {
+              "id": "n",
+              "label": "N",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3",
+          "n"
+        ]
+      }
+    },
+    {
+      "name": "insert existing key is a no-op",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "insert",
+          "key": "k1",
+          "after": null,
+          "value": {
+            "id": "dup",
+            "label": "DUP",
+            "type": "counter"
+          }
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "delete",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "delete",
+          "key": "k2"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "delete missing",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "delete",
+          "key": "zz"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "move to start",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "move",
+          "key": "k3",
+          "after": null
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            },
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k3",
+          "k1",
+          "k2"
+        ]
+      }
+    },
+    {
+      "name": "move after other",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "move",
+          "key": "k1",
+          "after": "k3"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            },
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k2",
+          "k3",
+          "k1"
+        ]
+      }
+    },
+    {
+      "name": "move after missing goes last",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "move",
+          "key": "k1",
+          "after": "gone"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            },
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k2",
+          "k3",
+          "k1"
+        ]
+      }
+    },
+    {
+      "name": "move after itself is a no-op",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "move",
+          "key": "k2",
+          "after": "k2"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "move missing key",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "move",
+          "key": "zz",
+          "after": null
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "unknown op ignored",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "explode",
+          "key": "k1"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      }
+    },
+    {
+      "name": "sequence",
+      "state": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "ops": [
+        {
+          "op": "delete",
+          "key": "k1"
+        },
+        {
+          "op": "insert",
+          "key": "n1",
+          "after": "k3",
+          "value": {
+            "id": "n1",
+            "label": "N1",
+            "type": "counter"
+          }
+        },
+        {
+          "op": "move",
+          "key": "k3",
+          "after": null
+        },
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "n1",
+            "min"
+          ],
+          "value": 0
+        },
+        {
+          "op": "set",
+          "path": [
+            "title"
+          ],
+          "value": "Seq"
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "Seq",
+          "version": 1,
+          "fields": [
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "n1",
+              "label": "N1",
+              "type": "counter",
+              "min": 0
+            }
+          ]
+        },
+        "keys": [
+          "k3",
+          "k2",
+          "n1"
+        ]
+      }
+    },
+    {
+      "name": "doc without fields",
+      "state": {
+        "doc": {
+          "title": "x"
+        },
+        "keys": []
+      },
+      "ops": [
+        {
+          "op": "insert",
+          "key": "n",
+          "after": null,
+          "value": {
+            "id": "n",
+            "label": "N",
+            "type": "counter"
+          }
+        }
+      ],
+      "expect": {
+        "doc": {
+          "title": "x",
+          "fields": [
+            {
+              "id": "n",
+              "label": "N",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "n"
+        ]
+      }
+    }
+  ],
+  "diff": [
+    {
+      "name": "identical",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [],
+      "keys": [
+        "k1",
+        "k2",
+        "k3"
+      ]
+    },
+    {
+      "name": "title changed",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T2",
+        "version": 1,
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "title"
+          ],
+          "value": "T2"
+        }
+      ],
+      "keys": [
+        "k1",
+        "k2",
+        "k3"
+      ]
+    },
+    {
+      "name": "label changed",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "b",
+            "label": "Bee",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k2",
+            "label"
+          ],
+          "value": "Bee"
+        }
+      ],
+      "keys": [
+        "k1",
+        "k2",
+        "k3"
+      ]
+    },
+    {
+      "name": "label and id changed",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "bee",
+            "label": "Bee",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k2",
+            "id"
+          ],
+          "value": "bee"
+        },
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k2",
+            "label"
+          ],
+          "value": "Bee"
+        }
+      ],
+      "keys": [
+        "k1",
+        "k2",
+        "k3"
+      ]
+    },
+    {
+      "name": "append",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          },
+          {
+            "id": "d",
+            "label": "D",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "insert",
+          "key": "n0",
+          "after": "k3",
+          "value": {
+            "id": "d",
+            "label": "D",
+            "type": "counter"
+          }
+        }
+      ],
+      "keys": [
+        "k1",
+        "k2",
+        "k3",
+        "n0"
+      ]
+    },
+    {
+      "name": "prepend",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "d",
+            "label": "D",
+            "type": "counter"
+          },
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "insert",
+          "key": "n0",
+          "after": null,
+          "value": {
+            "id": "d",
+            "label": "D",
+            "type": "counter"
+          }
+        }
+      ],
+      "keys": [
+        "n0",
+        "k1",
+        "k2",
+        "k3"
+      ]
+    },
+    {
+      "name": "insert middle",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "d",
+            "label": "D",
+            "type": "counter"
+          },
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "insert",
+          "key": "n0",
+          "after": "k1",
+          "value": {
+            "id": "d",
+            "label": "D",
+            "type": "counter"
+          }
+        }
+      ],
+      "keys": [
+        "k1",
+        "n0",
+        "k2",
+        "k3"
+      ]
+    },
+    {
+      "name": "delete middle",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "delete",
+          "key": "k2"
+        }
+      ],
+      "keys": [
+        "k1",
+        "k3"
+      ]
+    },
+    {
+      "name": "swap",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          },
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "move",
+          "key": "k2",
+          "after": null
+        }
+      ],
+      "keys": [
+        "k2",
+        "k1",
+        "k3"
+      ]
+    },
+    {
+      "name": "first to last",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          },
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "move",
+          "key": "k1",
+          "after": "k3"
+        }
+      ],
+      "keys": [
+        "k2",
+        "k3",
+        "k1"
+      ]
+    },
+    {
+      "name": "reverse",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          },
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          },
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "move",
+          "key": "k3",
+          "after": null
+        },
+        {
+          "op": "move",
+          "key": "k2",
+          "after": "k3"
+        }
+      ],
+      "keys": [
+        "k3",
+        "k2",
+        "k1"
+      ]
+    },
+    {
+      "name": "combined",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 3,
+        "fields": [
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter",
+            "min": 2
+          },
+          {
+            "id": "x",
+            "label": "X",
+            "type": "counter"
+          },
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "y",
+            "label": "Y",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "move",
+          "key": "k3",
+          "after": null
+        },
+        {
+          "op": "move",
+          "key": "k2",
+          "after": "k3"
+        },
+        {
+          "op": "insert",
+          "key": "n0",
+          "after": "k1",
+          "value": {
+            "id": "y",
+            "label": "Y",
+            "type": "counter"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "version"
+          ],
+          "value": 3
+        },
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k3",
+            "min"
+          ],
+          "value": 2
+        },
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k2",
+            "id"
+          ],
+          "value": "x"
+        },
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k2",
+            "label"
+          ],
+          "value": "X"
+        }
+      ],
+      "keys": [
+        "k3",
+        "k2",
+        "k1",
+        "n0"
+      ]
+    },
+    {
+      "name": "duplicates",
+      "base": {
+        "doc": {
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "delete",
+          "key": "k2"
+        }
+      ],
+      "keys": [
+        "k1",
+        "k3"
+      ]
+    },
+    {
+      "name": "nested label",
+      "base": {
+        "doc": {
+          "fields": [
+            {
+              "id": "a",
+              "label": {
+                "en": "A"
+              },
+              "type": "text"
+            }
+          ]
+        },
+        "keys": [
+          "k1"
+        ]
+      },
+      "target": {
+        "fields": [
+          {
+            "id": "a",
+            "label": {
+              "en": "A",
+              "es": "Ah"
+            },
+            "type": "text"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k1",
+            "label",
+            "es"
+          ],
+          "value": "Ah"
+        }
+      ],
+      "keys": [
+        "k1"
+      ]
+    },
+    {
+      "name": "property removed and added",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1,
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter",
+            "max": 9
+          },
+          {
+            "id": "b",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k1",
+            "max"
+          ],
+          "value": 9
+        },
+        {
+          "op": "unset",
+          "path": [
+            "fields",
+            "k2",
+            "label"
+          ]
+        }
+      ],
+      "keys": [
+        "k1",
+        "k2",
+        "k3"
+      ]
+    },
+    {
+      "name": "top-level keys",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          },
+          {
+            "id": "c",
+            "label": "C",
+            "type": "counter"
+          }
+        ],
+        "extra": {
+          "on": true
+        }
+      },
+      "ops": [
+        {
+          "op": "unset",
+          "path": [
+            "version"
+          ]
+        },
+        {
+          "op": "set",
+          "path": [
+            "extra"
+          ],
+          "value": {
+            "on": true
+          }
+        }
+      ],
+      "keys": [
+        "k1",
+        "k2",
+        "k3"
+      ]
+    },
+    {
+      "name": "target without fields",
+      "base": {
+        "doc": {
+          "title": "T",
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            {
+              "id": "b",
+              "label": "B",
+              "type": "counter"
+            },
+            {
+              "id": "c",
+              "label": "C",
+              "type": "counter"
+            }
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "title": "T",
+        "version": 1
+      },
+      "ops": [
+        {
+          "op": "delete",
+          "key": "k1"
+        },
+        {
+          "op": "delete",
+          "key": "k2"
+        },
+        {
+          "op": "delete",
+          "key": "k3"
+        }
+      ],
+      "keys": []
+    },
+    {
+      "name": "non-object fields",
+      "base": {
+        "doc": {
+          "fields": [
+            "x",
+            {
+              "id": "a",
+              "label": "A",
+              "type": "counter"
+            },
+            3
+          ]
+        },
+        "keys": [
+          "k1",
+          "k2",
+          "k3"
+        ]
+      },
+      "target": {
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          "y",
+          3
+        ]
+      },
+      "ops": [
+        {
+          "op": "delete",
+          "key": "k1"
+        },
+        {
+          "op": "insert",
+          "key": "n0",
+          "after": "k2",
+          "value": "y"
+        }
+      ],
+      "keys": [
+        "k2",
+        "n0",
+        "k3"
+      ]
+    },
+    {
+      "name": "numbers",
+      "base": {
+        "doc": {
+          "version": 1,
+          "fields": [
+            {
+              "id": "a",
+              "type": "counter",
+              "pointsPer": 1.5
+            }
+          ]
+        },
+        "keys": [
+          "k1"
+        ]
+      },
+      "target": {
+        "version": 2,
+        "fields": [
+          {
+            "id": "a",
+            "type": "counter",
+            "pointsPer": 2
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "version"
+          ],
+          "value": 2
+        },
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k1",
+            "pointsPer"
+          ],
+          "value": 2
+        }
+      ],
+      "keys": [
+        "k1"
+      ]
+    },
+    {
+      "name": "options array",
+      "base": {
+        "doc": {
+          "fields": [
+            {
+              "id": "s",
+              "type": "select",
+              "options": [
+                {
+                  "label": "A",
+                  "value": "a"
+                }
+              ]
+            }
+          ]
+        },
+        "keys": [
+          "k1"
+        ]
+      },
+      "target": {
+        "fields": [
+          {
+            "id": "s",
+            "type": "select",
+            "options": [
+              {
+                "label": "A",
+                "value": "a"
+              },
+              {
+                "label": "B",
+                "value": "b"
+              }
+            ]
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "fields",
+            "k1",
+            "options"
+          ],
+          "value": [
+            {
+              "label": "A",
+              "value": "a"
+            },
+            {
+              "label": "B",
+              "value": "b"
+            }
+          ]
+        }
+      ],
+      "keys": [
+        "k1"
+      ]
+    },
+    {
+      "name": "empty base",
+      "base": {
+        "doc": {
+          "fields": []
+        },
+        "keys": []
+      },
+      "target": {
+        "title": "New",
+        "fields": [
+          {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          },
+          {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          }
+        ]
+      },
+      "ops": [
+        {
+          "op": "insert",
+          "key": "n0",
+          "after": null,
+          "value": {
+            "id": "a",
+            "label": "A",
+            "type": "counter"
+          }
+        },
+        {
+          "op": "insert",
+          "key": "n1",
+          "after": "n0",
+          "value": {
+            "id": "b",
+            "label": "B",
+            "type": "counter"
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "title"
+          ],
+          "value": "New"
+        }
+      ],
+      "keys": [
+        "n0",
+        "n1"
+      ]
+    }
+  ]
+}

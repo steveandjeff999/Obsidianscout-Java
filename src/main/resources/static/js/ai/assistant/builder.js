@@ -690,8 +690,8 @@ export function specFromQuestion(question, ctx, { chart = false } = {}) {
 
 // ------------------------------------------------------------------ follow-up edits
 
-const EDIT_START = /^\s*(?:(?:ok(?:ay)?|now|and|also|then|please|pls|can you|could you|would you|can u|actually|but|instead)[\s,]+)*(?:remove|drop|delete|hide|exclude|take out|get rid of|leave out|add|include|put|insert|append|sort|order|rank|reverse|flip|only|just|limit|filter|keep|show only|make it|make that|turn it|turn that|change|switch|use|swap|replace|rename|title|call it|transpose|same|without|plus|with only)\b/i;
-const EDIT_REFERENCE = /\b(?:that|this|the|same|previous|last|above)\s+(?:table|chart|graph|plot|list|one|data|columns?)\b|\b(?:it|them|that)\s+(?:as|into|by)\b|\bas an?\s+(?:bar|line|pie|scatter|radar|box|stacked|table|chart|graph)\b|\binstead\b/i;
+const EDIT_START = /^\s*(?:(?:ok(?:ay)?|now|and|also|then|please|pls|can you|could you|would you|can u|actually|but|instead|no|nope|nah)[\s,]+)*(?:remove|drop|delete|hide|exclude|take out|get rid of|leave out|add|include|put|insert|append|sort|order|rank|reverse|flip|only|just|limit|filter|keep|show only|make it|make that|turn it|turn that|change|switch|use|swap|replace|rename|title|call it|transpose|same|without|plus|with only|do (?:it|that|the|teh|this)?)\b/i;
+const EDIT_REFERENCE = /\b(?:that|this|the|teh|same|previous|last|above)\s+(?:table|chart|graph|plot|list|one|data|columns?)\b|\b(?:it|them|that)\s+(?:as|into|by)\b|\bas an?\s+(?:bar|line|pie|scatter|radar|box|stacked|table|chart|graph)\b|\binstead\b/i;
 
 export function isEditRequest(question) {
     return EDIT_START.test(String(question || "")) || EDIT_REFERENCE.test(String(question || ""));
@@ -730,7 +730,11 @@ export function lastVisualSpec(history, ctx) {
 }
 
 function itemsIn(ctx, phrase) {
-    const teams = (String(phrase).match(/\b\d{1,5}\b/g) || []).map(Number).filter((n) => ctx.stats.has(n));
+    const foundTeams = Data.findTeamsInText ? Data.findTeamsInText(ctx, phrase) : [];
+    const directNums = (String(phrase).match(/\b\d{1,5}\b/g) || []).map(Number);
+    const validTeams = directNums.filter((n) => (ctx.stats && ctx.stats.has(n)) || (ctx.teams && ctx.teams.has(n)));
+    const fallbackTeams = directNums.filter((n) => n > 30 || /\bteam\s*#?\s*\d+/i.test(phrase));
+    const teams = Array.from(new Set([...foundTeams, ...(validTeams.length ? validTeams : fallbackTeams)]));
     const cols = [];
     SPECIALS.forEach((s) => { if (s.re.test(phrase)) cols.push(s.label); });
     expressionsIn(ctx, phrase).forEach((e) => cols.push(e));
@@ -778,7 +782,7 @@ export function editSpec(previous, question, ctx) {
 
     // Table <-> chart and chart type.
     const type = chartTypeIn(lower);
-    if ((type || /\b(?:graph|chart|plot)\b/.test(lower)) && /\b(?:as|into|make it|turn it|make that|turn that|switch to|change to|graph it|chart it|plot it|show it|draw)\b/.test(lower)) {
+    if ((type || /\b(?:graph|chart|plot)\b/.test(lower)) && /\b(?:as|into|make it|turn it|make that|turn that|switch to|change to|graph it|chart it|plot it|show it|draw|do (?:the|that|teh|this|it as a?) (?:graph|chart|plot)|as (?:a|an) (?:graph|chart|plot))\b/.test(lower)) {
         const cols = (args.columns || args.metrics || []).filter((c) => { const r = resolveColumn(ctx, c); return r && !(r.special && r.special.text); });
         tool = "make_chart";
         args.type = type || "bar";
@@ -820,6 +824,23 @@ export function editSpec(previous, question, ctx) {
             if (args.sort_by || valueCols.length !== 1) args.sort_by = cols[0];
             accounted.push(q);
             changed = true;
+        }
+    } else {
+        const metricChange = q.match(/\b(?:use|switch to|change to|change metric to|with|using)\s+([a-zA-Z0-9_\s%]+?)(?:\s+(?:and|also|not|per|by|each)\b|[,.;!?]|$)/i);
+        if (metricChange) {
+            const { cols } = itemsIn(ctx, metricChange[1]);
+            if (cols.length) {
+                const targetCol = cols[0];
+                const arr = list();
+                if (tool === "make_chart") {
+                    args.metrics = [targetCol];
+                } else {
+                    args.columns = [targetCol];
+                }
+                if (args.sort_by) args.sort_by = targetCol;
+                accounted.push(metricChange[0]);
+                changed = true;
+            }
         }
     }
 
@@ -919,4 +940,4 @@ export function editSpec(previous, question, ctx) {
 
 const EDIT_WORDS = new Set(("remove drop delete hide exclude take out get rid leave without add include put insert append sort order rank reverse flip only just limit "
     + "filter keep make turn change switch use swap replace rename title call name transpose same instead into back okay ok actually it them that this "
-    + "previous last above also then please pls u column columns row rows chart graph plot table more no").split(/\s+/));
+    + "previous last above also then please pls u column columns row rows chart graph plot table more no teh do").split(/\s+/));

@@ -318,6 +318,9 @@
                     </label>
                 </div>
 
+                <!-- Live editing status (filled by config-collab.js) -->
+                <div id="preset-collab-status"></div>
+
                 <!-- Editor Sub-Tabs -->
                 <div class="editor-tabs">
                     <button type="button" id="tab-visual" class="editor-tab-btn active"><i class="fa-solid fa-bolt"></i> Simple / Visual Editor</button>
@@ -365,6 +368,7 @@
 
     <script type="module" src="/js/common.js"></script>
     <script src="/js/utilities/config-duplicates.js"></script>
+    <script src="/js/services/config-collab.js"></script>
     <script>
         let allPresets = [];
         let currentPresetConfig = { title: "", version: 1, fields: [], analytics: [] };
@@ -454,7 +458,13 @@
             if (tab === 'visual') {
                 const rawText = document.getElementById('preset-json').value.trim();
                 try {
-                    if (rawText) {
+                    if (rawText && presetCollab) {
+                        JSON.parse(rawText);
+                        commitPresetRaw();
+                        currentPresetConfig = JSON.parse(JSON.stringify(presetCollab.lastView.doc));
+                        document.getElementById('config-title').value = currentPresetConfig.title || '';
+                        document.getElementById('config-version').value = currentPresetConfig.version || 1;
+                    } else if (rawText) {
                         const parsed = JSON.parse(rawText);
                         currentPresetConfig = parsed;
                         if (!currentPresetConfig.fields) currentPresetConfig.fields = [];
@@ -505,45 +515,11 @@
         }
 
         function cleanPresetConfigForSave(raw) {
-            const supportsPts = supportsPointsConfig();
-            const supportsPhs = supportsPhasesConfig();
-
             const usedIds = new Set((raw.fields || []).map(f => f.id).filter(Boolean));
             const cleanedFields = (raw.fields || []).map(f => {
-                const canonicalType = canonicalizePresetFieldType(f.type);
                 const fieldId = f.id || newFieldId(usedIds);
                 usedIds.add(fieldId);
-                const cleaned = {
-                    id: fieldId,
-                    label: typeof f.label === 'object' ? (f.label.en || Object.values(f.label)[0] || '') : (f.label || ''),
-                    type: canonicalType
-                };
-                if (canonicalType !== 'text' && canonicalType !== 'section') {
-                    cleaned.required = !!f.required;
-                }
-                if (supportsPhs) {
-                    cleaned.phase = f.phase || 'teleop';
-                }
-                if (canonicalType === 'number' || canonicalType === 'counter' || canonicalType === 'rating') {
-                    if (f.min !== undefined && f.min !== null && f.min !== '') cleaned.min = Number(f.min);
-                    if (f.max !== undefined && f.max !== null && f.max !== '') cleaned.max = Number(f.max);
-                    if (f.step !== undefined && f.step !== null && f.step !== '') cleaned.step = Number(f.step);
-                    const dStep = f.doubleStep !== undefined ? f.doubleStep : f.double_step;
-                    if (dStep !== undefined && dStep !== null && dStep !== '') cleaned.doubleStep = Number(dStep);
-                }
-                if (supportsPts && (canonicalType === 'number' || canonicalType === 'counter' || canonicalType === 'rating' || canonicalType === 'checkbox')) {
-                    if (f.pointsPer !== undefined && f.pointsPer !== null && f.pointsPer !== '') {
-                        cleaned.pointsPer = Number(f.pointsPer);
-                    }
-                }
-                if (canonicalType === 'select') {
-                    cleaned.options = (f.options || []).map(opt => ({
-                        label: typeof opt.label === 'object' ? (opt.label.en || Object.values(opt.label)[0] || '') : (opt.label || ''),
-                        value: opt.value ? opt.value.trim() : (typeof opt.label === 'string' ? opt.label.trim() : ''),
-                        ...(supportsPts ? { points: opt.points !== undefined && opt.points !== null && opt.points !== '' ? Number(opt.points) : 0 } : {})
-                    }));
-                }
-                return cleaned;
+                return cleanPresetField({ ...f, id: fieldId });
             });
 
             return {
@@ -554,10 +530,161 @@
             };
         }
 
+        /** One field as the editor saves it (also how live edits are compared, so untouched fields never diff). */
+        function cleanPresetField(f) {
+            const supportsPts = supportsPointsConfig();
+            const supportsPhs = supportsPhasesConfig();
+            const canonicalType = canonicalizePresetFieldType(f.type);
+            const cleaned = {
+                id: f.id || '',
+                label: typeof f.label === 'object' && f.label !== null ? (f.label.en || Object.values(f.label)[0] || '') : (f.label || ''),
+                type: canonicalType
+            };
+            if (canonicalType !== 'text' && canonicalType !== 'section') {
+                cleaned.required = !!f.required;
+            }
+            if (supportsPhs) {
+                cleaned.phase = f.phase || 'teleop';
+            }
+            if (canonicalType === 'number' || canonicalType === 'counter' || canonicalType === 'rating') {
+                if (f.min !== undefined && f.min !== null && f.min !== '') cleaned.min = Number(f.min);
+                if (f.max !== undefined && f.max !== null && f.max !== '') cleaned.max = Number(f.max);
+                if (f.step !== undefined && f.step !== null && f.step !== '') cleaned.step = Number(f.step);
+                const dStep = f.doubleStep !== undefined ? f.doubleStep : f.double_step;
+                if (dStep !== undefined && dStep !== null && dStep !== '') cleaned.doubleStep = Number(dStep);
+            }
+            if (supportsPts && (canonicalType === 'number' || canonicalType === 'counter' || canonicalType === 'rating' || canonicalType === 'checkbox')) {
+                if (f.pointsPer !== undefined && f.pointsPer !== null && f.pointsPer !== '') {
+                    cleaned.pointsPer = Number(f.pointsPer);
+                }
+            }
+            if (canonicalType === 'select') {
+                cleaned.options = (f.options || []).map(opt => ({
+                    label: typeof opt.label === 'object' && opt.label !== null ? (opt.label.en || Object.values(opt.label)[0] || '') : (opt.label || ''),
+                    value: opt.value ? String(opt.value).trim() : (typeof opt.label === 'string' ? opt.label.trim() : ''),
+                    ...(supportsPts ? { points: opt.points !== undefined && opt.points !== null && opt.points !== '' ? Number(opt.points) : 0 } : {})
+                }));
+            }
+            return cleaned;
+        }
+
         function updateRawFromVisual() {
             currentPresetConfig = cleanPresetConfigForSave(currentPresetConfig);
             document.getElementById('preset-json').value = JSON.stringify(currentPresetConfig, null, 2);
             refreshDuplicateWarning();
+        }
+
+        /* --- Live editing of a saved preset (see /js/services/config-collab.js) --- */
+        const Collab = window.ObsidianscoutConfigCollab || null;
+        let presetCollab = null;
+        let presetStatusBar = null;
+        let presetViewKeys = [];
+        let presetRawBase = null;
+        let applyingRemotePreset = false;
+
+        function presetProjectTop(doc) {
+            return {
+                title: typeof doc.title === 'string' ? doc.title.trim() : 'ObsidianScout',
+                version: Number(doc.version || 1),
+                analytics: Array.isArray(doc.analytics) ? doc.analytics : []
+            };
+        }
+
+        function presetProjectField(field) {
+            if (!field || typeof field !== 'object' || Array.isArray(field)) return null;
+            try {
+                return cleanPresetField(field);
+            } catch (e) {
+                return field;
+            }
+        }
+
+        /** The editor's current form, as live edits compare it (field ids are only filled in on save). */
+        function presetEditorView() {
+            return {
+                title: (document.getElementById('config-title').value || '').trim(),
+                version: Number(document.getElementById('config-version').value || 1),
+                fields: (currentPresetConfig.fields || []).map(cleanPresetField),
+                analytics: currentPresetConfig.analytics || []
+            };
+        }
+
+        /** Shares the latest local edit with everyone else editing this preset. */
+        function syncPresetLive() {
+            if (!presetCollab || applyingRemotePreset) return;
+            presetViewKeys = presetCollab.commit(presetEditorView()).keys;
+            presetRawBase = presetCollab.lastView;
+        }
+
+        function startPresetLiveEditing(presetId) {
+            stopPresetLiveEditing();
+            const host = document.getElementById('preset-collab-status');
+            if (!Collab || !presetId || !host) return;
+            presetStatusBar = Collab.createStatusBar(host);
+            const session = new Collab.ConfigCollabSession({
+                url: `/api/config-collab/preset/${encodeURIComponent(presetId)}`,
+                projectField: presetProjectField,
+                projectRest: presetProjectTop,
+                onView: (view) => { if (presetCollab === session) applyPresetView(view); },
+                onStatus: (status) => {
+                    if (presetCollab !== session) return;
+                    presetStatusBar.update(status);
+                    document.getElementById('btn-cancel-modal').textContent = status === 'live' ? 'Close' : 'Cancel';
+                },
+                onPresence: (editors) => {
+                    if (presetCollab !== session) return;
+                    presetStatusBar.setEditors(editors, session.sid);
+                    Collab.decorateCards(document.getElementById('visual-fields-list'), editors, session.sid);
+                },
+                onNotice: (level, message) => {
+                    if (presetCollab !== session || !message) return;
+                    if (window.Obsidianscout) Obsidianscout.showToast(message, level === 'error' ? 'error' : (level === 'success' ? 'success' : 'info'));
+                }
+            });
+            presetCollab = session;
+            presetStatusBar.update(session.status);
+            applyPresetView(session.load(currentPresetConfig));
+            session.connect();
+        }
+
+        function stopPresetLiveEditing() {
+            if (presetCollab) presetCollab.close();
+            presetCollab = null;
+            presetViewKeys = [];
+            presetRawBase = null;
+            const host = document.getElementById('preset-collab-status');
+            if (host) host.innerHTML = '';
+            document.getElementById('btn-cancel-modal').textContent = 'Cancel';
+        }
+
+        function applyPresetView(view) {
+            currentPresetConfig = JSON.parse(JSON.stringify(view.doc));
+            presetViewKeys = view.keys.slice();
+            const title = document.getElementById('config-title');
+            const version = document.getElementById('config-version');
+            if (title.value.trim() !== (currentPresetConfig.title || '')) title.value = currentPresetConfig.title || '';
+            if (String(Number(version.value) || 1) !== String(currentPresetConfig.version || 1)) version.value = currentPresetConfig.version || 1;
+            const raw = document.getElementById('preset-json');
+            if (document.activeElement !== raw) {
+                raw.value = JSON.stringify(view.doc, null, 2);
+                presetRawBase = view;
+            }
+            const list = document.getElementById('visual-fields-list');
+            applyingRemotePreset = true;
+            try {
+                Collab.preserveFocus(list, renderVisualFields);
+            } finally {
+                applyingRemotePreset = false;
+            }
+            Collab.decorateCards(list, presetCollab ? presetCollab.editors : [], presetCollab ? presetCollab.sid : null);
+        }
+
+        function commitPresetRaw() {
+            if (!presetCollab) return;
+            let parsed;
+            try { parsed = JSON.parse(document.getElementById('preset-json').value); } catch (e) { return; }
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+            presetRawBase = presetCollab.commit(parsed, presetRawBase || presetCollab.lastView);
         }
 
         // Shared duplicate checker (js/utilities/config-duplicates.js); fall back to long, timestamp-based IDs if it failed to load.
@@ -581,6 +708,7 @@
         }
 
         function renderVisualFields() {
+            syncPresetLive();
             const list = document.getElementById('visual-fields-list');
             refreshDuplicateWarning();
             const fields = currentPresetConfig.fields || [];
@@ -608,7 +736,7 @@
                 const isStandardType = ['counter', 'number', 'rating', 'checkbox', 'select', 'section', 'text', 'textarea', 'image'].includes(typeVal);
 
                 return `
-                    <div class="visual-field-card" data-index="${idx}">
+                    <div class="visual-field-card" data-index="${idx}"${presetViewKeys[idx] ? ` data-collab-key="${escapeHtml(presetViewKeys[idx])}"` : ""}>
                         <div class="visual-field-header">
                             <strong>Field #${idx + 1}: ${escapeHtml(labelVal || field.id || 'Untitled')}</strong>
                             <div style="display: flex; gap: 6px; align-items: center;">
@@ -817,6 +945,7 @@
                 option.value = uniqueOptionValue(field, option, val.toLowerCase().replace(/[^a-z0-9]/g, '_'));
             }
             refreshDuplicateWarning();
+            syncPresetLive();
         }
 
         function removeSelectOption(fieldIdx, optIdx) {
@@ -850,6 +979,7 @@
             if (prop === 'id' || prop === 'label') {
                 refreshDuplicateWarning();
             }
+            syncPresetLive();
         }
 
         function addVisualField() {
@@ -921,9 +1051,12 @@
 
             switchEditorTab('visual');
             document.getElementById('preset-modal').style.display = 'flex';
+            // Saved presets are edited live with anyone else who has them open; new ones once created.
+            if (preset && preset.id) startPresetLiveEditing(preset.id); else stopPresetLiveEditing();
         }
 
         function closeModal() {
+            stopPresetLiveEditing();
             document.getElementById('preset-modal').style.display = 'none';
         }
 
@@ -998,6 +1131,33 @@
         document.getElementById('tab-raw').addEventListener('click', () => switchEditorTab('raw'));
         document.getElementById('preset-type').addEventListener('change', renderVisualFields);
 
+        document.getElementById('config-title').addEventListener('input', syncPresetLive);
+        document.getElementById('config-version').addEventListener('input', syncPresetLive);
+        let presetRawTimer = null;
+        document.getElementById('preset-json').addEventListener('input', () => {
+            clearTimeout(presetRawTimer);
+            presetRawTimer = setTimeout(commitPresetRaw, 400);
+        });
+        document.getElementById('preset-json').addEventListener('blur', (e) => {
+            clearTimeout(presetRawTimer);
+            commitPresetRaw();
+            // Show anything others changed while the text had focus.
+            if (presetCollab && !presetCollab.hasUnsavedChanges) {
+                e.target.value = JSON.stringify(presetCollab.lastView.doc, null, 2);
+                presetRawBase = presetCollab.lastView;
+            }
+        });
+        document.getElementById('visual-fields-list').addEventListener('focusin', (e) => {
+            const card = e.target.closest('[data-collab-key]');
+            if (presetCollab) presetCollab.setFocus(card ? card.dataset.collabKey : null);
+        });
+        document.getElementById('visual-fields-list').addEventListener('focusout', () => {
+            setTimeout(() => {
+                const list = document.getElementById('visual-fields-list');
+                if (presetCollab && !list.contains(document.activeElement)) presetCollab.setFocus(null);
+            }, 0);
+        });
+
         document.getElementById('btn-format-json').addEventListener('click', () => {
             const textarea = document.getElementById('preset-json');
             const errDiv = document.getElementById('json-error');
@@ -1019,6 +1179,8 @@
             // Ensure Raw JSON is up to date if submitting from Visual tab
             if (activeEditorTab === 'visual') {
                 updateRawFromVisual();
+            } else {
+                commitPresetRaw();
             }
 
             const id = document.getElementById('preset-id').value;
@@ -1057,7 +1219,22 @@
             try {
                 const method = id ? 'PUT' : 'POST';
                 const url = id ? `/api/admin/default-configs/${id}` : '/api/admin/default-configs';
-                if (window.Obsidianscout) {
+                if (presetCollab && id && !presetCollab.isLive && window.Obsidianscout) {
+                    // Live editing is down: merge with anything saved meanwhile instead of overwriting it.
+                    await presetCollab.saveViaRest(
+                        async () => {
+                            const current = (await Obsidianscout.request('/api/admin/default-configs')).find(p => p.id === id);
+                            return current ? JSON.parse(current.configJson) : {};
+                        },
+                        (doc) => {
+                            document.getElementById('config-title').value = doc.title || '';
+                            document.getElementById('config-version').value = doc.version || 1;
+                            dto.configJson = JSON.stringify(cleanPresetConfigForSave(doc), null, 2);
+                            return Obsidianscout.request(url, { method, json: dto });
+                        }
+                    );
+                } else if (window.Obsidianscout) {
+                    if (presetCollab && presetCollab.isLive) await presetCollab.saveVersion();
                     await Obsidianscout.request(url, {
                         method,
                         json: dto

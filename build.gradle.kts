@@ -63,13 +63,13 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
-// Local AI assistant tests (routing, tools, guardrails) run with Node; skipped when Node isn't installed.
+// Local AI assistant and live config editing tests run with Node; skipped when Node isn't installed.
 val jsTest = tasks.register<Exec>("jsTest") {
-    description = "Runs the Local AI assistant JavaScript tests (node --test)."
+    description = "Runs the JavaScript tests (node --test)."
     group = "verification"
     val nodeAvailable = runCatching { ProcessBuilder("node", "--version").start().waitFor() == 0 }.getOrDefault(false)
     onlyIf { nodeAvailable }
-    commandLine("node", "--test", "src/test/js/ai-assistant.test.mjs")
+    commandLine("node", "--test", "src/test/js/ai-assistant.test.mjs", "src/test/js/config-collab.test.mjs")
 }
 tasks.named("check") { dependsOn(jsTest) }
 

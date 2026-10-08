@@ -40,11 +40,11 @@ export const TIER_ORDER = ["lite", "gemma4e2b", "gemma4e4b"];
  *  visibleReasoning  ask for a <thought> block before the answer (costly; only for fast WebLLM tiers).
  */
 export const TIER_PROFILES = {
-    lite: { maxAnswerTokens: 300, contextChars: 3000, toolMode: "router", maxToolCalls: 1, routedFollowUps: 0, historyTurns: 2, codeAnswers: true, extractiveSummaries: true, calculate: false, strategy: false, visibleReasoning: false },
-    standard: { maxAnswerTokens: 400, contextChars: 6000, toolMode: "json", maxToolCalls: 1, routedFollowUps: 0, historyTurns: 3, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: false },
-    gemma4e2b: { maxAnswerTokens: 400, contextChars: 6000, toolMode: "json", maxToolCalls: 1, routedFollowUps: 0, historyTurns: 3, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: false },
-    advanced: { maxAnswerTokens: 500, contextChars: 7000, toolMode: "json", maxToolCalls: 2, routedFollowUps: 0, historyTurns: 4, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: false },
-    gemma4e4b: { maxAnswerTokens: 500, contextChars: 7000, toolMode: "json", maxToolCalls: 2, routedFollowUps: 0, historyTurns: 4, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: false }
+    lite: { maxAnswerTokens: 600, contextChars: 6000, toolMode: "router", maxToolCalls: 15, routedFollowUps: 15, historyTurns: 3, codeAnswers: true, extractiveSummaries: true, calculate: true, strategy: true, visibleReasoning: true },
+    standard: { maxAnswerTokens: 1200, contextChars: 16000, toolMode: "json", maxToolCalls: 15, routedFollowUps: 15, historyTurns: 6, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true },
+    gemma4e2b: { maxAnswerTokens: 1500, contextChars: 24000, toolMode: "json", maxToolCalls: 15, routedFollowUps: 15, historyTurns: 8, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true },
+    advanced: { maxAnswerTokens: 2000, contextChars: 32000, toolMode: "json", maxToolCalls: 15, routedFollowUps: 15, historyTurns: 10, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true },
+    gemma4e4b: { maxAnswerTokens: 2000, contextChars: 32000, toolMode: "json", maxToolCalls: 15, routedFollowUps: 15, historyTurns: 10, codeAnswers: false, extractiveSummaries: false, calculate: true, strategy: true, visibleReasoning: true }
 };
 
 /** Profile for a tier (object or id); unknown tiers get Lite's conservative settings. */

@@ -54,6 +54,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     let activeConfigKind = "game";
     let currentConfig = { version: 1, title: "ObsidianScout", fields: [], analytics: [] };
 
+    // Live editing (see /js/services/config-collab.js): edits sync with everyone else editing this form.
+    const Collab = window.ObsidianscoutConfigCollab || null;
+    const RESERVED_FIELD_IDS = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
+    let collab = null;
+    let collabStatusBar = null;
+    let viewKeys = [];          // live-editing key of each entry in currentConfig.fields
+    let rawBase = null;         // the view the raw JSON text was last synced from
+    let rawStale = false;       // others changed the config while the raw JSON editor had focus
+
     function supportsPointsConfig() {
         return activeConfigKind === "game";
     }
@@ -217,6 +226,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             btnAddField = document.getElementById("btn-add-field");
             visualFieldsList = document.getElementById("visual-fields-list");
             configModeButtons = document.querySelectorAll("[data-config-kind]");
+            wireLiveEditing();
 
             // Sub-tab switching logic
             if (btnVisual && btnRaw && containerVisual && containerRaw) {
@@ -226,17 +236,22 @@ document.addEventListener("DOMContentLoaded", async () => {
                         Obsidianscout.showToast("Raw JSON is invalid. Fix syntax errors before switching to Visual Editor.", "error");
                         return;
                     }
-                    
+
                     try {
-                        currentConfig = JSON.parse(text);
-                        if (!currentConfig.fields) currentConfig.fields = [];
-                        if (!currentConfig.analytics) currentConfig.analytics = [];
-                        
+                        if (collab) {
+                            commitRawEditor();
+                            applyView(collab.lastView);
+                        } else {
+                            currentConfig = JSON.parse(text);
+                            if (!currentConfig.fields) currentConfig.fields = [];
+                            if (!currentConfig.analytics) currentConfig.analytics = [];
+                        }
+
                         configTitleInput.value = currentConfig.title || "";
                         configVersionInput.value = currentConfig.version || 1;
-                        
+
                         renderVisualFields();
-                        
+
                         btnRaw.classList.remove("active");
                         btnVisual.classList.add("active");
                         containerRaw.classList.add("hidden");
@@ -283,6 +298,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (!nextKind || nextKind === activeConfigKind || !configModes[nextKind]) {
                         return;
                     }
+                    if (collab) {
+                        collab.close();
+                        collab = null;
+                    }
                     activeConfigKind = nextKind;
                     updateConfigModeButtons();
                     await loadActiveConfig();
@@ -303,6 +322,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             renderVisualFields();
             showVisualEditor();
+            startLiveEditing(configResponse);
             await updateDefaultPresetsDropdown();
 
             // Helper functions to safely assign values/checked states
@@ -475,7 +495,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 
-            // Save configuration
+            // Save configuration. While live, edits already autosave; Save records a version (revision
+            // history + migration check). Otherwise it merges with the latest saved config and saves over REST.
             saveButton.addEventListener("click", async () => {
                 let text = editor.value.trim();
                 if (!isValidJson(text)) {
@@ -483,14 +504,38 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return;
                 }
 
+                if (collab) {
+                    const kind = activeConfigKind;
+                    const apiPath = configModes[kind].apiPath;
+                    if (!containerRaw.classList.contains("hidden")) commitRawEditor();
+                    saveButton.disabled = true;
+                    try {
+                        const saveRes = collab.isLive
+                            ? await collab.saveVersion()
+                            : await collab.saveViaRest(
+                                () => Obsidianscout.request(apiPath + "?local=true"),
+                                (doc) => Obsidianscout.request(apiPath, { method: "PUT", json: { configJson: JSON.stringify(doc) } })
+                            );
+                        Obsidianscout.showToast(collab.isLive ? t('settings.version_saved', "Version saved") : "Config saved", "success");
+                        if (saveRes && saveRes.hasFieldChanges && saveRes.entryCount > 0) {
+                            showMigrationPromptModal(kind, saveRes.entryCount, saveRes.changedFields || []);
+                        }
+                    } catch (error) {
+                        Obsidianscout.showToast(error.message || "Save failed", "error");
+                    } finally {
+                        saveButton.disabled = false;
+                    }
+                    return;
+                }
+
                 try {
                     currentConfig = JSON.parse(text);
                     if (!currentConfig.fields) currentConfig.fields = [];
                     if (!currentConfig.analytics) currentConfig.analytics = [];
-                    
+
                     if (configTitleInput) configTitleInput.value = currentConfig.title || "";
                     if (configVersionInput) configVersionInput.value = currentConfig.version || 1;
-                    
+
                     renderVisualFields();
                 } catch (err) {}
 
@@ -542,7 +587,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                             
                             if (configTitleInput) configTitleInput.value = currentConfig.title || "";
                             if (configVersionInput) configVersionInput.value = currentConfig.version || 1;
-                            
+
+                            if (collab) {
+                                currentConfig = normalizeConfig(currentConfig, configModes[activeConfigKind].defaultTitle);
+                                updateRawFromVisual();
+                            }
                             renderVisualFields();
                             Obsidianscout.showToast("Config imported successfully", "success");
                         } catch (err) {
@@ -588,6 +637,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         editor.value = JSON.stringify(currentConfig, null, 2);
                         if (configTitleInput) configTitleInput.value = currentConfig.title || "";
                         if (configVersionInput) configVersionInput.value = currentConfig.version || 1;
+                        if (collab) updateRawFromVisual();
                         renderVisualFields();
 
                         Obsidianscout.showToast(`Reset ${activeConfigKind} config editor to ${label} successfully!`, "success");
@@ -1050,6 +1100,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             renderVisualFields();
             showVisualEditor();
+            startLiveEditing(config);
             await updateDefaultPresetsDropdown();
         } catch (error) {
             Obsidianscout.showToast("Unable to load config", "error");
@@ -1096,9 +1147,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function normalizeConfig(config, defaultTitle) {
         const parsed = typeof config === "string" ? JSON.parse(config) : (config || {});
-        const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
         const fields = (Array.isArray(parsed.fields) ? parsed.fields : [])
-            .filter((field) => field && !reserved.has(field.id))
+            .filter((field) => field && !RESERVED_FIELD_IDS.has(field.id))
             .map((field) => ({
                 ...field,
                 type: canonicalizeFieldType(field.type)
@@ -1108,7 +1158,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             version: Number(parsed.version) || 1,
             fields: fields,
             analytics: Array.isArray(parsed.analytics) ? parsed.analytics : [],
-            enableRobotRoleCollection: !!parsed.enableRobotRoleCollection
+            // The server and app use the snake_case key; older web saves wrote camelCase.
+            enableRobotRoleCollection: !!(parsed.enableRobotRoleCollection || parsed.enable_robot_role_collection)
         };
     }
 
@@ -1418,6 +1469,170 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // ── Live editing ─────────────────────────────────────────────────
+
+    function projectTop(doc, defaultTitle) {
+        const normalized = normalizeConfig({ ...doc, fields: [] }, defaultTitle);
+        // Keep an emptied title empty (instead of the default) so it doesn't jump back while being retyped.
+        normalized.title = typeof doc.title === "string" ? doc.title : defaultTitle;
+        const top = cleanConfigForEditor(normalized);
+        delete top.fields;
+        return top;
+    }
+
+    function projectField(field) {
+        if (!field || typeof field !== "object" || Array.isArray(field) || RESERVED_FIELD_IDS.has(field.id)) return null;
+        try {
+            return cleanFieldForEditor({ ...field });
+        } catch (e) {
+            return field;
+        }
+    }
+
+    function startLiveEditing(loadedConfig) {
+        if (collab) collab.close();
+        collab = null;
+        viewKeys = [];
+        if (!Collab) return;
+        const kind = activeConfigKind;
+        const defaultTitle = configModes[kind].defaultTitle;
+        const session = new Collab.ConfigCollabSession({
+            url: `/api/config-collab/team/${kind}`,
+            projectField,
+            projectRest: (doc) => projectTop(doc, defaultTitle),
+            onView: (view) => { if (collab === session) applyView(view); },
+            onStatus: (status) => { if (collab === session) showCollabStatus(status); },
+            onPresence: (editors) => {
+                if (collab !== session) return;
+                if (collabStatusBar) collabStatusBar.setEditors(editors, session.sid);
+                Collab.decorateCards(visualFieldsList, editors, session.sid);
+            },
+            onNotice: (level, message) => {
+                if (collab !== session || !message) return;
+                Obsidianscout.showToast(message, level === "error" ? "error" : (level === "success" ? "success" : "info"));
+            }
+        });
+        collab = session;
+        applyView(session.load(loadedConfig));
+        showCollabStatus(session.status);
+        session.connect();
+    }
+
+    /** Shows the live config (as this editor displays it) without losing the user's place. */
+    function applyView(view) {
+        if (!view) return;
+        const autoIds = new Map();
+        (currentConfig.fields || []).forEach((f, i) => {
+            if (f && f._autoId && viewKeys[i]) autoIds.set(viewKeys[i], f._autoId);
+        });
+        currentConfig = JSON.parse(JSON.stringify(view.doc));
+        currentConfig.fields.forEach((f, i) => {
+            const autoId = autoIds.get(view.keys[i]);
+            if (f && autoId && autoId === f.id) f._autoId = autoId;
+        });
+        viewKeys = view.keys.slice();
+
+        setInputValue(configTitleInput, currentConfig.title || "", (a, b) => a.trim() === b);
+        setInputValue(configVersionInput, String(currentConfig.version || 1), (a, b) => String(Number(a) || 1) === b);
+        const roleCheckbox = document.getElementById("config-enable-role-collection");
+        if (roleCheckbox) roleCheckbox.checked = !!currentConfig.enableRobotRoleCollection;
+
+        if (editor) {
+            if (document.activeElement === editor) {
+                rawStale = true;
+            } else {
+                editor.value = JSON.stringify(view.doc, null, 2);
+                rawBase = view;
+                rawStale = false;
+            }
+        }
+        if (visualFieldsList) {
+            Collab.preserveFocus(visualFieldsList, renderVisualFields);
+            Collab.decorateCards(visualFieldsList, collab ? collab.editors : [], collab ? collab.sid : null);
+        }
+    }
+
+    function setInputValue(input, value, same) {
+        if (!input || same(input.value, value)) return;
+        const focused = document.activeElement === input;
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        input.value = value;
+        if (focused && typeof start === "number") {
+            try { input.setSelectionRange(Math.min(start, value.length), Math.min(end, value.length)); } catch (e) { /* number inputs */ }
+        }
+    }
+
+    /** Sends edits typed into the raw JSON editor, merged with anything others changed meanwhile. */
+    function commitRawEditor() {
+        if (!collab || !editor) return false;
+        let parsed;
+        try { parsed = JSON.parse(editor.value); } catch (e) { return false; }
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+        rawBase = collab.commit(parsed, rawBase || collab.lastView);
+        if (rawStale && document.activeElement !== editor) {
+            editor.value = JSON.stringify(collab.lastView.doc, null, 2);
+            rawBase = collab.lastView;
+            rawStale = false;
+        }
+        return true;
+    }
+
+    function showCollabStatus(status) {
+        if (collabStatusBar) collabStatusBar.update(status);
+        if (saveButton) {
+            const live = status === "live";
+            saveButton.textContent = live ? t('settings.save_version', "Save version") : t('settings.save', "Save config");
+            saveButton.title = live
+                ? "Changes save automatically. Saving a version records it in Schema History and checks existing scouting data."
+                : "";
+        }
+    }
+
+    /** Status bar, presence tracking and raw-editor syncing; re-run whenever the panel is re-rendered. */
+    function wireLiveEditing() {
+        if (!Collab) return;
+        const host = document.getElementById("config-collab-status");
+        if (host) {
+            host.innerHTML = "";
+            collabStatusBar = Collab.createStatusBar(host);
+        }
+        if (visualFieldsList) {
+            visualFieldsList.addEventListener("focusin", (e) => {
+                const card = e.target.closest("[data-collab-key]");
+                if (collab) collab.setFocus(card ? card.dataset.collabKey : null);
+            });
+            visualFieldsList.addEventListener("focusout", () => {
+                setTimeout(() => {
+                    if (collab && visualFieldsList && !visualFieldsList.contains(document.activeElement)) collab.setFocus(null);
+                }, 0);
+            });
+        }
+        if (editor) {
+            let rawTimer = null;
+            editor.addEventListener("input", () => {
+                clearTimeout(rawTimer);
+                rawTimer = setTimeout(commitRawEditor, 400);
+            });
+            editor.addEventListener("blur", () => {
+                clearTimeout(rawTimer);
+                commitRawEditor();
+                if (rawStale && collab) {
+                    editor.value = JSON.stringify(collab.lastView.doc, null, 2);
+                    rawBase = collab.lastView;
+                    rawStale = false;
+                }
+            });
+        }
+    }
+
+    window.addEventListener("beforeunload", (e) => {
+        if (collab && collab.hasUnsavedChanges && !collab.isLive) {
+            e.preventDefault();
+            e.returnValue = "";
+        }
+    });
+
     function showVisualEditor() {
         if (!btnVisual || !btnRaw || !containerVisual || !containerRaw) {
             return;
@@ -1492,7 +1707,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     function createFieldCard(field, index) {
         const card = document.createElement("div");
         card.className = "field-card";
-        
+        if (viewKeys[index]) card.dataset.collabKey = viewKeys[index];
+
         const canonicalType = canonicalizeFieldType(field.type);
         field.type = canonicalType;
         if (canonicalType === "section") {
@@ -2235,118 +2451,124 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function updateRawFromVisual() {
-        const titleVal = configTitleInput ? configTitleInput.value.trim() : "ObsidianScout";
-        const versionVal = configVersionInput ? (Number(configVersionInput.value) || 1) : 1;
+        currentConfig.title = configTitleInput ? configTitleInput.value.trim() : "ObsidianScout";
+        currentConfig.version = configVersionInput ? (Number(configVersionInput.value) || 1) : 1;
 
-        currentConfig.title = titleVal;
-        currentConfig.version = versionVal;
-
-        const cleanedFields = (currentConfig.fields || []).map((field) => {
-            const rawType = field.type || "text";
-            const canonicalType = canonicalizeFieldType(rawType);
-
-            let normalizedLabel = "";
-            if (field.label !== undefined && field.label !== null) {
-                if (typeof field.label === 'string') {
-                    normalizedLabel = field.label.trim();
-                } else if (typeof field.label === 'object') {
-                    const obj = {};
-                    Object.keys(field.label).forEach((k) => {
-                        const v = field.label[k];
-                        obj[k] = (typeof v === 'string') ? v.trim() : v;
-                    });
-                    normalizedLabel = obj;
-                }
-            }
-
-            const cleaned = {
-                id: field.id ? field.id.trim() : "",
-                label: normalizedLabel,
-                type: canonicalType,
-                required: (canonicalType === "text" || canonicalType === "section") ? false : !!field.required
-            };
-            
-            const type = cleaned.type;
-
-            if (supportsPhasesConfig()) {
-                if (field.phase) {
-                    const p = String(field.phase).trim();
-                    cleaned.phase = (p.toLowerCase() === "general" || p === "") ? "teleop" : p;
-                } else {
-                    cleaned.phase = resolveFieldPhase(field) || "teleop";
-                }
-            }
-            
-            if (type === "number" || type === "counter" || type === "rating") {
-                if (field.min !== undefined && field.min !== null && field.min !== "") {
-                    cleaned.min = Number(field.min);
-                }
-                if (field.max !== undefined && field.max !== null && field.max !== "") {
-                    cleaned.max = Number(field.max);
-                }
-                if (field.step !== undefined && field.step !== null && field.step !== "") {
-                    cleaned.step = Number(field.step);
-                }
-                const dStep = field.doubleStep !== undefined ? field.doubleStep : field.double_step;
-                if (dStep !== undefined && dStep !== null && dStep !== "") {
-                    cleaned.doubleStep = Number(dStep);
-                }
-            }
-            
-            if (supportsPointsConfig() && (type === "number" || type === "counter" || type === "rating" || type === "checkbox")) {
-                if (field.pointsPer !== undefined && field.pointsPer !== null && field.pointsPer !== "") {
-                    cleaned.pointsPer = Number(field.pointsPer);
-                }
-            }
-            
-            if (type === "section" || type === "text" || type === "image") {
-                delete cleaned.min;
-                delete cleaned.max;
-                delete cleaned.step;
-                delete cleaned.doubleStep;
-                delete cleaned.pointsPer;
-                delete cleaned.options;
-            }
-            
-            if (type === "select") {
-                cleaned.options = (field.options || []).map((opt) => {
-                    let normalizedOptLabel = "";
-                    if (opt.label !== undefined && opt.label !== null) {
-                        if (typeof opt.label === 'string') {
-                            normalizedOptLabel = opt.label.trim();
-                        } else if (typeof opt.label === 'object') {
-                            const o = {};
-                            Object.keys(opt.label).forEach((k) => {
-                                const v = opt.label[k];
-                                o[k] = (typeof v === 'string') ? v.trim() : v;
-                            });
-                            normalizedOptLabel = o;
-                        }
-                    }
-                    return {
-                        label: normalizedOptLabel,
-                        value: opt.value ? opt.value.trim() : "",
-                        ...(supportsPointsConfig() ? { points: opt.points !== undefined && opt.points !== null ? Number(opt.points) : 0 } : {})
-                    };
-                });
-            }
-            
-            return cleaned;
-        });
-
-        const roleCheckbox = document.getElementById("config-enable-role-collection");
-        const enableRoles = roleCheckbox ? roleCheckbox.checked : !!currentConfig.enableRobotRoleCollection;
-
-        const cleanedConfig = {
-            title: titleVal,
-            version: versionVal,
-            fields: cleanedFields,
-            analytics: currentConfig.analytics || [],
-            enableRobotRoleCollection: activeConfigKind === "qual" ? enableRoles : false
-        };
-
+        const cleanedConfig = cleanConfigForEditor(currentConfig);
         editor.value = JSON.stringify(cleanedConfig, null, 2);
         refreshDuplicateWarning();
+        if (collab) {
+            viewKeys = collab.commit(cleanedConfig).keys;
+            rawBase = collab.lastView;
+            rawStale = false;
+        }
+    }
+
+    /** A field as the editor saves it. Stored fields are shown the same way, so untouched fields never diff. */
+    function cleanFieldForEditor(field) {
+        const rawType = field.type || "text";
+        const canonicalType = canonicalizeFieldType(rawType);
+
+        let normalizedLabel = "";
+        if (field.label !== undefined && field.label !== null) {
+            if (typeof field.label === 'string') {
+                normalizedLabel = field.label.trim();
+            } else if (typeof field.label === 'object') {
+                const obj = {};
+                Object.keys(field.label).forEach((k) => {
+                    const v = field.label[k];
+                    obj[k] = (typeof v === 'string') ? v.trim() : v;
+                });
+                normalizedLabel = obj;
+            }
+        }
+
+        const cleaned = {
+            id: field.id ? field.id.trim() : "",
+            label: normalizedLabel,
+            type: canonicalType,
+            required: (canonicalType === "text" || canonicalType === "section") ? false : !!field.required
+        };
+        
+        const type = cleaned.type;
+
+        if (supportsPhasesConfig()) {
+            if (field.phase) {
+                const p = String(field.phase).trim();
+                cleaned.phase = (p.toLowerCase() === "general" || p === "") ? "teleop" : p;
+            } else {
+                cleaned.phase = resolveFieldPhase(field) || "teleop";
+            }
+        }
+        
+        if (type === "number" || type === "counter" || type === "rating") {
+            if (field.min !== undefined && field.min !== null && field.min !== "") {
+                cleaned.min = Number(field.min);
+            }
+            if (field.max !== undefined && field.max !== null && field.max !== "") {
+                cleaned.max = Number(field.max);
+            }
+            if (field.step !== undefined && field.step !== null && field.step !== "") {
+                cleaned.step = Number(field.step);
+            }
+            const dStep = field.doubleStep !== undefined ? field.doubleStep : field.double_step;
+            if (dStep !== undefined && dStep !== null && dStep !== "") {
+                cleaned.doubleStep = Number(dStep);
+            }
+        }
+        
+        if (supportsPointsConfig() && (type === "number" || type === "counter" || type === "rating" || type === "checkbox")) {
+            if (field.pointsPer !== undefined && field.pointsPer !== null && field.pointsPer !== "") {
+                cleaned.pointsPer = Number(field.pointsPer);
+            }
+        }
+        
+        if (type === "section" || type === "text" || type === "image") {
+            delete cleaned.min;
+            delete cleaned.max;
+            delete cleaned.step;
+            delete cleaned.doubleStep;
+            delete cleaned.pointsPer;
+            delete cleaned.options;
+        }
+        
+        if (type === "select") {
+            cleaned.options = (field.options || []).map((opt) => {
+                let normalizedOptLabel = "";
+                if (opt.label !== undefined && opt.label !== null) {
+                    if (typeof opt.label === 'string') {
+                        normalizedOptLabel = opt.label.trim();
+                    } else if (typeof opt.label === 'object') {
+                        const o = {};
+                        Object.keys(opt.label).forEach((k) => {
+                            const v = opt.label[k];
+                            o[k] = (typeof v === 'string') ? v.trim() : v;
+                        });
+                        normalizedOptLabel = o;
+                    }
+                }
+                return {
+                    label: normalizedOptLabel,
+                    value: opt.value ? opt.value.trim() : "",
+                    ...(supportsPointsConfig() ? { points: opt.points !== undefined && opt.points !== null ? Number(opt.points) : 0 } : {})
+                };
+            });
+        }
+        
+        return cleaned;
+    }
+
+    function cleanConfigForEditor(config) {
+        const enableRoles = activeConfigKind === "qual" && !!config.enableRobotRoleCollection;
+        return {
+            title: String(config.title ?? "").trim(),
+            version: Number(config.version) || 1,
+            fields: (config.fields || []).map(cleanFieldForEditor),
+            analytics: config.analytics || [],
+            enableRobotRoleCollection: enableRoles,
+            // Scouting forms read the snake_case key.
+            ...(activeConfigKind === "qual" ? { enable_robot_role_collection: enableRoles } : {})
+        };
     }
 
     function refreshDuplicateWarning() {

@@ -259,8 +259,24 @@ async function generateWebLLM(id, messages, options) {
         top_p: 0.9,
         max_tokens: options.maxTokens || 256
     };
+    if (options.jsonSchema) {
+        request.response_format = {
+            type: "json_object",
+            schema: typeof options.jsonSchema === "string" ? options.jsonSchema : JSON.stringify(options.jsonSchema)
+        };
+    }
     let full = "";
-    const chunks = await state.webllm.chat.completions.create(request);
+    let chunks;
+    try {
+        chunks = await state.webllm.chat.completions.create(request);
+    } catch (err) {
+        if (request.response_format) {
+            delete request.response_format;
+            chunks = await state.webllm.chat.completions.create(request);
+        } else {
+            throw err;
+        }
+    }
     for await (const chunk of chunks) {
         const text = (chunk.choices && chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) || "";
         if (text) {

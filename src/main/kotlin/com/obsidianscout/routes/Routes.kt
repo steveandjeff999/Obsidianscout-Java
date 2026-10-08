@@ -97,7 +97,6 @@ import io.ktor.server.sessions.get
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.close
-import com.obsidianscout.scouting.AllianceCollaborationManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.obsidianscout.utils.*
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -185,6 +184,7 @@ fun Application.configureRoutes() {
                     val localLoad = com.obsidianscout.admin.PeerLoadRouter.getLocalNodeLoad()
                     call.respond(localLoad)
                 }
+                configCollabClusterRoutes()
             }
             route("/auth") {
                 post("/login") {
@@ -3157,6 +3157,24 @@ fun Application.configureRoutes() {
                     } ?: "{}"
                     call.respondText(configJson, ContentType.Application.Json)
                 }
+                // Saves an alliance form directly; the editor uses this when live editing can't connect.
+                put("/{id}/config/{kind}") {
+                    val session = call.requireSession()
+                    val idUuid = runCatching { java.util.UUID.fromString(call.parameters["id"]) }.getOrElse {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id format")
+                    }
+                    val kind = com.obsidianscout.collab.ConfigCollabScope.normalizeKind(call.parameters["kind"])
+                        ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid kind")
+                    if (!AllianceService.isAllianceAdmin(session.teamNumber, idUuid)) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Only alliance admins can edit alliance forms")
+                    }
+                    val body = call.receiveText()
+                    if (runCatching { JsonSupport.json.parseToJsonElement(body) as? JsonObject }.getOrNull() == null) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Config must be a JSON object")
+                    }
+                    com.obsidianscout.collab.ConfigCollabScope.Alliance(idUuid, kind).persist(body)
+                    call.respond(HttpStatusCode.NoContent)
+                }
                 post("/{id}/toggle-active") {
                     val session = call.requireSession()
                     val id = call.parameters["id"]
@@ -3182,40 +3200,10 @@ fun Application.configureRoutes() {
                     AllianceService.promoteMember(session, id, targetTeam)
                     call.respond(HttpStatusCode.NoContent)
                 }
-                webSocket("/{id}/collaborate/{kind}") {
-                    val session = runCatching { call.requireSession() }.getOrNull() ?: return@webSocket this.close(
-                        CloseReason(CloseReason.Codes.VIOLATED_POLICY, "No session")
-                    )
-                    val id = call.parameters["id"] ?: return@webSocket this.close(
-                        CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid alliance ID")
-                    )
-                    val idUuid = runCatching { UUID.fromString(id) }.getOrElse {
-                        return@webSocket this.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid alliance ID"))
-                    }
-                    val kind = call.parameters["kind"] ?: return@webSocket this.close(
-                        CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Invalid config kind")
-                    )
-                    
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        // Verify user is a member of this alliance
-                        val isMember = com.obsidianscout.db.readTransaction {
-                            AllianceMemberships
-                                .selectAll().where {
-                                    (AllianceMemberships.allianceId eq idUuid) and
-                                    (AllianceMemberships.teamNumber eq session.teamNumber) and
-                                    (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED"))
-                                }
-                                .any()
-                        }
-                        if (!isMember) {
-                            this@webSocket.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Not a member"))
-                            return@withContext
-                        }
-                        
-                        AllianceCollaborationManager.handleConnection(this@webSocket, idUuid, kind, session)
-                    }
-                }
+                allianceConfigCollabRoute()
             }
+
+            configCollabRoutes()
 
             route("/banners") {
                 get("/login") {

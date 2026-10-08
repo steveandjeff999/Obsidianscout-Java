@@ -83,7 +83,17 @@ export function parseThoughtAndContent(raw) {
         };
     }
 
-    // 3. No thought tags found
+    // 3. Fallback: unstructured model thinking before final output
+    const markerMatch = str.match(/^([\s\S]*?\b(?:Self-Correction|Constraint Check|Final Output(?:\s+Generation)?|Final Answer|Action)\.?\s*[:\.\n]\s*)([\s\S]+)$/i);
+    if (markerMatch && markerMatch[1].length > 30 && markerMatch[2].trim().length > 0) {
+        return {
+            thought: markerMatch[1].trim(),
+            content: markerMatch[2].trim(),
+            isThinking: false
+        };
+    }
+
+    // 4. No thought tags found
     return {
         thought: "",
         content: str.trim(),

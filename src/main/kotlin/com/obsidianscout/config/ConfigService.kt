@@ -1189,7 +1189,7 @@ object ConfigService {
         return ""
     }
 
-    private fun normalizeConfigJson(text: String): String {
+    internal fun normalizeConfigJson(text: String): String {
         val element = JsonSupport.json.parseToJsonElement(text)
         val obj = element as? JsonObject ?: return text
         val fields = obj["fields"] as? JsonArray ?: return text

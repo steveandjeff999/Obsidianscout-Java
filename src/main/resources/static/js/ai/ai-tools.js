@@ -14,7 +14,7 @@
 
 import AI from "./local-ai.js";
 import { briefFor } from "./assistant/briefs.js";
-import { lastVisualSpec } from "./assistant/builder.js";
+import { isEditRequest, lastVisualSpec } from "./assistant/builder.js";
 import { digestFacts, displayManifest, historyDisplayNote, normalizeChart } from "./assistant/display.js";
 import { answerSystemPrompt, displayReminder } from "./assistant/prompts.js";
 import { hasIntent, ruleRoute } from "./assistant/router.js";
@@ -91,6 +91,7 @@ export async function answerQuestion({ question, history = [], ctx, tier, signal
     const results = [];
 
     const wantsChart = hasIntent(question, "chart");
+    const isCompact = (profile.contextChars <= 3000);
     const runTool = async (name, args) => {
         const tool = TOOLS[name];
         if (!tool) return { facts: { error: `Tool ${name} does not exist.` } };
@@ -112,64 +113,34 @@ export async function answerQuestion({ question, history = [], ctx, tier, signal
         }
     };
 
-    // A rule-router draft that did not account for every word (or an edit it could not apply) is checked by a
-    // capable model, which writes the complete spec; small tiers use the draft (or normal routing).
-    const refineRoute = async (draft) => {
-        const fallback = () => (draft.unchanged ? ruleRoute(question, ctx, history, { skipEdit: true }) : draft);
-        if (profile.toolMode !== "json" || !(profile.maxToolCalls > 0)) return fallback();
-        onEvent({ type: "status", text: t("ai.status.planning", "Working out what data is needed...") });
-        const kind = (draft.previous || draft).tool === "make_chart" ? "chart" : "table";
-        const lines = [`Question: ${question}`];
-        if (draft.edit) {
-            lines.push(`The user is changing the ${kind} on screen. Its current spec: ${JSON.stringify(draft.previous)}`);
-            if (!draft.unchanged) lines.push(`Keyword matching suggests: ${JSON.stringify({ tool: draft.tool, args: draft.args })} (check it against the question).`);
-        } else {
-            lines.push(`Keyword matching drafted: ${JSON.stringify({ tool: draft.tool, args: draft.args })}`);
-            if (draft.leftover && draft.leftover.length) lines.push(`Words it did not understand: ${draft.leftover.join(", ")}.`);
-        }
-        lines.push("Reply with ONE call whose args are the COMPLETE spec that does exactly what the question asks (fix the draft, or choose a better tool).");
-        lines.push("Keep every column, team and filter from the draft that the question asks for. Do not add sorting, limits or columns the question does not ask for.");
-        const messages = [
-            { role: "system", content: routerSystemPrompt(ctx, allowed, 1, { question, include: ["make_table", "make_chart"] }) },
-            { role: "user", content: lines.join("\n") }
-        ];
-        const raw = await AI.generate(enforceMessageBudget(messages, Math.max(3500, profile.contextChars || 0)), {
-            maxTokens: 320, temperature: 0, signal, jsonSchema: stepSchema(allowed)
-        });
-        const [call] = parseToolCalls(raw, allowed);
-        if (!call) return fallback();
-        return { tool: call.tool, args: call.args, fallback: draft.unchanged ? null : draft };
-    };
-
-    // 1. Deterministic routing first.
-    let routed = route || ruleRoute(question, ctx, history);
-    if (routed && routed.refine && !route) routed = await refineRoute(routed);
-    if (routed) {
-        const entry = await runTool(routed.tool, routed.args);
-        // The model's spec failed (e.g. a column that does not exist): use the keyword draft instead.
-        if (entry && entry.facts && entry.facts.error && routed.fallback) {
-            results.splice(results.indexOf(entry), 1);
-            await runTool(routed.fallback.tool, routed.fallback.args);
-        }
+    // 1. Explicit programmatic route, or deterministic rule-based route for "router" toolMode (Lite tier)
+    let routed = route;
+    if (!routed && profile.toolMode === "router") {
+        routed = ruleRoute(question, ctx, history);
     }
-
-    // 2. Model routing (more steps on bigger tiers), from a shortlist of tools relevant to the question.
-    const maxCalls = routed ? (profile.routedFollowUps || 0) : profile.maxToolCalls;
-    const isCompact = (profile.contextChars <= 3000);
-    if (maxCalls > 0) {
+    if (routed && routed.tool) {
+        await runTool(routed.tool, routed.args);
+    } else if (profile.maxToolCalls > 0) {
+        // 2. Model routing: JSON tiers (Gemma 2B, Gemma 4B, Advanced) decide and execute tool calls themselves.
+        const maxCalls = Math.min(15, Math.max(1, profile.maxToolCalls || 15));
         onEvent({ type: "status", text: t("ai.status.planning", "Working out what data is needed...") });
-        const routerMessages = [{ role: "system", content: routerSystemPrompt(ctx, allowed, maxCalls, { compact: isCompact, question }) }];
-        history.slice(-2).forEach((h) => routerMessages.push(historyMessage(h, 250)));
-        let pending = `Question: ${question}`;
-        if (results.length) pending += `\nAlready retrieved (and shown to the user):\n${digestFacts(results, 900)}`;
         const onScreen = lastVisualSpec(history, ctx);
-        if (onScreen) pending += `\nOn screen from the previous reply (to change it, call the same tool with the complete new spec): ${JSON.stringify(onScreen)}`;
+        const includeTools = (onScreen && onScreen.tool) ? [onScreen.tool] : [];
+        const routerMessages = [{ role: "system", content: routerSystemPrompt(ctx, allowed, maxCalls, { compact: isCompact, question, include: includeTools }) }];
+        history.slice(-profile.historyTurns * 2).forEach((h) => routerMessages.push(historyMessage(h, 250)));
+        let pending = `Question: ${question}`;
+        if (results.length) {
+            pending += `\nAlready retrieved (and shown to the user - context only):\n${digestFacts(results, 900)}`;
+        }
+        if (onScreen) {
+            pending += `\nOn screen from the previous reply (context only; to change it, call the same tool with the complete new spec): ${JSON.stringify(onScreen)}`;
+        }
         let callsLeft = maxCalls;
         for (let step = 0; step < maxCalls && callsLeft > 0; step++) {
             if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError");
             routerMessages.push({ role: "user", content: pending });
-            const raw = await AI.generate(enforceMessageBudget(routerMessages, isCompact ? 1600 : Math.max(3500, profile.contextChars || 0)), {
-                maxTokens: 280, temperature: 0, signal,
+            const raw = await AI.generate(enforceMessageBudget(routerMessages, isCompact ? 1800 : Math.max(3500, profile.contextChars || 0)), {
+                maxTokens: 600, temperature: 0, signal,
                 jsonSchema: profile.toolMode === "json" ? stepSchema(allowed) : null
             });
             routerMessages.push({ role: "assistant", content: raw });
@@ -196,15 +167,6 @@ export async function answerQuestion({ question, history = [], ctx, tier, signal
             }
             if (executedCount === 0) break;
             pending = `${stepFeedback.join("\n\n")}\n\nCall another tool only if the question still needs different data; otherwise reply {"action":"answer"}.`;
-        }
-    }
-
-    // Lite's free-form tool picks are unreliable: drop model-chosen calls that failed, so the answer falls
-    // back to the event digest instead of the model improvising around an error.
-    if (profile.toolMode === "router") {
-        for (let i = results.length - 1; i >= 0; i--) {
-            const r = results[i];
-            if (r.facts && r.facts.error && !(routed && r.tool === routed.tool)) results.splice(i, 1);
         }
     }
 
