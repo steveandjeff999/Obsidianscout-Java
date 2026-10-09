@@ -42,34 +42,11 @@ private fun JsonObject.readDouble(key: String): Double? {
 object PredictorService {
     suspend fun predict(session: UserSession, matchKey: String, forcePrescout: Boolean = false, eventKeyParam: String? = null): MatchPredictionResponse {
         val matchKeyLower = matchKey.lowercase().trim()
-        var eventKey = readTransaction {
+        val eventKey = readTransaction {
             ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKeyLower }
                 .limit(1)
                 .map { it[ApiMatches.eventKey] }
                 .firstOrNull()
-        }
-
-        if (eventKey == null) {
-            val inferredEventKey = eventKeyParam?.lowercase()?.trim() ?: "^([0-9]{4}[a-zA-Z0-9]+)".toRegex().find(matchKeyLower)?.value
-            if (inferredEventKey != null) {
-                val count = readTransaction {
-                    ApiMatches.selectAll().where { ApiMatches.eventKey eq inferredEventKey }.count()
-                }
-                if (count == 0L) {
-                    val settings = readTransaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
-                    try {
-                        com.obsidianscout.integrations.IntegrationService.syncCustomEventData(settings, inferredEventKey)
-                    } catch (e: Exception) {
-                        // ignore or log
-                    }
-                }
-                eventKey = readTransaction {
-                    ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKeyLower }
-                        .limit(1)
-                        .map { it[ApiMatches.eventKey] }
-                        .firstOrNull()
-                }
-            }
         }
 
         if (eventKey == null) {
@@ -368,18 +345,6 @@ object PredictorService {
 
     suspend fun predictAll(session: UserSession, eventKeyParam: String, forcePrescout: Boolean = false): List<MatchPredictionResponse> {
         val eventKeyLower = eventKeyParam.lowercase().trim()
-
-        val count = readTransaction {
-            ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKeyLower }.count()
-        }
-        if (count == 0L) {
-            val settings = readTransaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
-            try {
-                com.obsidianscout.integrations.IntegrationService.syncCustomEventData(settings, eventKeyLower)
-            } catch (e: Exception) {
-                // ignore or log
-            }
-        }
 
         return readTransaction {
             val matches = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKeyLower }

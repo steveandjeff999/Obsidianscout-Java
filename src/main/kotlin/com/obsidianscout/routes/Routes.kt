@@ -1177,8 +1177,8 @@ fun Application.configureRoutes() {
                     val payload = call.receive<ApiSettingsPayload>()
                     val targetProgram = if (payload.program.isNotBlank()) payload.program else session.program
                     // Pages that save only part of the settings don't send selfRegisterRoles; keep the saved value then.
-                    val selfRegisterRoles = payload.selfRegisterRoles
-                        ?: SettingsService.getSettings(session.teamNumber, targetProgram).selfRegisterRoles
+                    val previous = SettingsService.getSettings(session.teamNumber, targetProgram)
+                    val selfRegisterRoles = payload.selfRegisterRoles ?: previous.selfRegisterRoles
                     val updated = SettingsService.updateSettings(
                         session.teamNumber,
                         payload.toSettings().copy(program = targetProgram, selfRegisterRoles = selfRegisterRoles)
@@ -1191,6 +1191,10 @@ fun Application.configureRoutes() {
                             updated.eventCode,
                             updated.eventKey
                         )
+                    }
+                    if (syncInputsChanged(previous, updated) && !com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                        val effective = AllianceService.getEffectiveSettings(session.teamNumber, targetProgram)
+                        SyncScheduler.enqueueEventDataSync(session.teamNumber, effective)
                     }
                     call.respond(SettingsResponse(updated.toPayload()))
                 }
@@ -1763,17 +1767,7 @@ fun Application.configureRoutes() {
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
                     val eventKeyLower = eventKey.lowercase().trim()
-                    val count = com.obsidianscout.db.readTransaction {
-                        com.obsidianscout.db.ApiTeams.selectAll().where { com.obsidianscout.db.ApiTeams.eventKey eq eventKeyLower }.count()
-                    }
-                    if (count == 0L && !com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-                        val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-                        try {
-                            IntegrationService.syncCustomEventData(settings, eventKeyLower)
-                        } catch (e: Exception) {
-                            // ignore or log
-                        }
-                    }
+                    // Serve what's cached; syncing happens on settings change and via SyncScheduler.
                     call.respond(IntegrationService.listTeams(eventKeyLower, session))
                 }
                 post {
@@ -1799,17 +1793,7 @@ fun Application.configureRoutes() {
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
                     val eventKeyLower = eventKey.lowercase().trim()
-                    val count = com.obsidianscout.db.readTransaction {
-                        com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.eventKey eq eventKeyLower }.count()
-                    }
-                    if (count == 0L && !com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
-                        val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-                        try {
-                            IntegrationService.syncCustomEventData(settings, eventKeyLower)
-                        } catch (e: Exception) {
-                            // ignore or log
-                        }
-                    }
+                    // Serve what's cached; syncing happens on settings change and via SyncScheduler.
                     call.respond(IntegrationService.listMatches(eventKeyLower, session.program))
                 }
                 get("/predict") {
@@ -4241,6 +4225,18 @@ internal suspend fun ApplicationCall.respondStaticHtml(fileName: String, status:
     response.headers.append("Cloudflare-CDN-Cache-Control", "no-cache")
     respondText(rendered, ContentType.Text.Html, status)
 }
+
+/** True when a settings save changes anything that affects what an event data sync would fetch. */
+private fun syncInputsChanged(before: ApiSettings, after: ApiSettings): Boolean =
+    before.resolvedEventKey() != after.resolvedEventKey() ||
+        before.timezone != after.timezone ||
+        before.preferredSource != after.preferredSource ||
+        before.apiKeys != after.apiKeys ||
+        before.useStatboticsEpa != after.useStatboticsEpa ||
+        before.useTbaOpr != after.useTbaOpr ||
+        before.useMatch13Exp != after.useMatch13Exp ||
+        before.statboticsBaseUrl != after.statboticsBaseUrl ||
+        before.match13BaseUrl != after.match13BaseUrl
 
 private fun ApiSettings.toPayload(): ApiSettingsPayload {
     val activeTheme = themes.firstOrNull { it.name == activeThemeName } ?: themes.firstOrNull() ?: theme

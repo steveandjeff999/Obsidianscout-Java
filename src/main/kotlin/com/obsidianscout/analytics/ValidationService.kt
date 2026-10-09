@@ -38,40 +38,7 @@ object ValidationService {
     ): ValidationSummaryResponse {
         val eventKeyLower = eventKeyParam.lowercase().trim()
 
-        val count = readTransaction {
-            ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKeyLower }.count()
-        }
-        if (count == 0L) {
-            val settings = readTransaction {
-                com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-            }
-            try {
-                com.obsidianscout.integrations.IntegrationService.syncCustomEventData(settings, eventKeyLower)
-            } catch (e: Exception) {
-                // Log or continue
-            }
-        }
-
         val isFtc = session.program.equals("FTC", ignoreCase = true)
-        val needsStatsSync = readTransaction {
-            val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-            val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyLower }.toList()
-            val checkEpa = !isFtc && settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
-            val checkExp = !isFtc && settings.useMatch13Exp && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.match13Exp] == null || it[ApiTeams.match13Exp] == 0.0 }
-            val checkOpr = settings.useTbaOpr && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.opr] == null || it[ApiTeams.opr] == 0.0 }
-            checkEpa || checkExp || checkOpr
-        }
-
-        if (needsStatsSync) {
-            try {
-                val settings = readTransaction {
-                    com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-                }
-                com.obsidianscout.integrations.IntegrationService.syncStats(settings, eventKeyLower)
-            } catch (e: Exception) {
-                // Non-fatal, EPA/EXP/OPR can still be null
-            }
-        }
 
         return readTransaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)

@@ -1868,7 +1868,8 @@ object IntegrationService {
             val element = client.get(url) {
                 header("X-TBA-Auth-Key", key)
             }.body<JsonElement>()
-            val oprs = element.jsonObject["oprs"] as? JsonObject ?: return emptyMap()
+            // TBA returns a bare `null` until the event has played matches.
+            val oprs = (element as? JsonObject)?.get("oprs") as? JsonObject ?: return emptyMap()
             oprs.entries.associate { entry ->
                 val primitive = entry.value as? JsonPrimitive
                 entry.key to primitive?.content?.toDoubleOrNull().orZero()
