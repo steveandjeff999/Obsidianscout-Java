@@ -114,6 +114,7 @@ const ASSETS = [
     '/js/services/offline-sync.js',
     '/js/services/data-compression.js',
     '/js/services/chat-poller.js',
+    '/js/services/theme-sync.js',
     '/js/services/form-draft.js',
     '/js/utilities/helpers.js',
     '/js/utilities/haptics.js',

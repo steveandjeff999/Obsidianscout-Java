@@ -1167,7 +1167,15 @@ fun Application.configureRoutes() {
                         if (local) {
                             SettingsService.getSettings(session.teamNumber, session.program)
                         } else {
-                            AllianceService.getEffectiveSettings(session.teamNumber, session.program)
+                            // Effective settings are cached per node and a save only clears the cache on the
+                            // node that handled it, so read the theme fresh: open pages poll this to pick up a
+                            // theme change, and other nodes would otherwise serve the old one for up to a minute.
+                            val fresh = SettingsService.getSettings(session.teamNumber, session.program)
+                            AllianceService.getEffectiveSettings(session.teamNumber, session.program).copy(
+                                theme = fresh.theme,
+                                themes = fresh.themes,
+                                activeThemeName = fresh.activeThemeName
+                            )
                         }
                     }
                     call.respond(SettingsResponse(settings.toPayload()))
