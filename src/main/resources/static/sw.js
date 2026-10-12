@@ -1,7 +1,7 @@
 
 
 
-const CACHE_NAME = 'obsidianscout-shell-v0-6-4-5';
+const CACHE_NAME = 'obsidianscout-shell-v0-6-4-6';
 
 
 const NAVIGATION_TIMEOUT_MS = 4000;
