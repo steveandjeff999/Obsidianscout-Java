@@ -131,7 +131,8 @@ data class UpdateUserRequest(
     val notificationPreference: String? = null,
     val nodeAlertsEnabled: Boolean? = null,
     val bugReportPreference: String? = null,
-    val localAiEnabled: Boolean? = null
+    val localAiEnabled: Boolean? = null,
+    val nonScoutingToolsEnabled: Boolean? = null
 )
 
 @Serializable

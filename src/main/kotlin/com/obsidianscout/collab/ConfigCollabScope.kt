@@ -7,6 +7,7 @@ import com.obsidianscout.config.ScoutingConfig
 import com.obsidianscout.db.DefaultConfigs
 import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.readTransaction
+import com.obsidianscout.scouting.MatchChecklistService
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -34,6 +35,9 @@ sealed class ConfigCollabScope {
 
     /** Stores [json] and returns the text as stored (storage may normalize it). */
     abstract fun persist(json: String): String
+
+    /** Stores [json] on behalf of [editor] (the last person to change it); most scopes don't track that. */
+    open fun persistAs(json: String, editor: String): String = persist(json)
 
     /** Records an explicit "save version" from [username]; [base] is the config at the previous version. */
     open fun commit(base: ScoutingConfig?, current: ScoutingConfig, username: String, summaryPrefix: String? = null): CommitResult =
@@ -133,6 +137,27 @@ sealed class ConfigCollabScope {
         }
     }
 
+    /**
+     * A drive-team match checklist: the team's template ([matchKey] = TEMPLATE_KEY, [eventKey] = "") or one
+     * match's filled-out copy. Not a scouting config, so it has no revisions or migration checks.
+     */
+    data class Checklist(val teamNumber: Int, val program: String, val eventKey: String, val matchKey: String) : ConfigCollabScope() {
+        override val roomKey get() = "checklist:$teamNumber:$program:${eventKey.ifEmpty { "-" }}:$matchKey"
+        override val kind: String get() = "checklist"
+        private val owner get() = MatchChecklistService.ownerKey(teamNumber, program)
+
+        override fun loadRaw(): String? = runCatching {
+            MatchChecklistService.load(owner, eventKey, matchKey)?.dataJson ?: "{}"
+        }.getOrNull()
+
+        override fun persist(json: String): String = persistAs(json, "")
+
+        override fun persistAs(json: String, editor: String): String {
+            MatchChecklistService.store(owner, eventKey, matchKey, json, editor)
+            return json
+        }
+    }
+
     companion object {
         val KINDS = setOf("game", "pit", "qual")
 
@@ -150,6 +175,9 @@ sealed class ConfigCollabScope {
                     "team" -> if (parts.size == 4) Team(parts[1].toInt(), parts[2], normalizeKind(parts[3])!!) else null
                     "alliance" -> if (parts.size == 3) Alliance(UUID.fromString(parts[1]), normalizeKind(parts[2])!!) else null
                     "preset" -> if (parts.size == 2) Preset(UUID.fromString(parts[1])) else null
+                    "checklist" -> if (parts.size == 5) {
+                        Checklist(parts[1].toInt(), parts[2], parts[3].takeUnless { it == "-" } ?: "", parts[4])
+                    } else null
                     else -> null
                 }
             }.getOrNull()

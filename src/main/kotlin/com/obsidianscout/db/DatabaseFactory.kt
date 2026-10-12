@@ -244,6 +244,7 @@ object DatabaseFactory {
                 PasswordResetTokens,
                 AllianceSelections,
                 MatchPlans,
+                MatchChecklists,
                 Banners,
                 ChatMessages,
                 UserChatLastRead,
@@ -457,6 +458,7 @@ object DatabaseFactory {
                             "ALTER TABLE users ADD CONSTRAINT IF NOT EXISTS ux_users_username_team_program UNIQUE (username, team_number, program)",
                             "ALTER TABLE users ADD COLUMN IF NOT EXISTS bug_report_preference VARCHAR(16) NOT NULL DEFAULT 'ask'",
                             "ALTER TABLE users ADD COLUMN IF NOT EXISTS local_ai_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS non_scouting_tools_enabled BOOLEAN NOT NULL DEFAULT FALSE",
                             "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_roles TEXT NOT NULL DEFAULT '[]'",
                             "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'",
                             
@@ -558,6 +560,7 @@ object DatabaseFactory {
                                 "ALTER TABLE chat_groups ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT NOT NULL DEFAULT '[]'",
                                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS bug_report_preference VARCHAR(16) NOT NULL DEFAULT 'ask'",
                                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS local_ai_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+                                "ALTER TABLE users ADD COLUMN IF NOT EXISTS non_scouting_tools_enabled BOOLEAN NOT NULL DEFAULT FALSE",
                                 "CREATE INDEX IF NOT EXISTS idx_api_matches_event_key ON api_matches (event_key)",
                                 "CREATE INDEX IF NOT EXISTS idx_api_teams_event_team_number ON api_teams (event_key, team_number)",
                                 "CREATE INDEX IF NOT EXISTS idx_api_teams_event_key ON api_teams (event_key)",

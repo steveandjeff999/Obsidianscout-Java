@@ -72,6 +72,7 @@ data class UserRecord(
     val nodeAlertsEnabled: Boolean = false,
     val bugReportPreference: String = "ask",
     val localAiEnabled: Boolean = false,
+    val nonScoutingToolsEnabled: Boolean = false,
     val lastLogin: String? = null
 )
 
@@ -435,7 +436,8 @@ object AuthService {
         newTourProgress: String? = null,
         newNodeAlertsEnabled: Boolean? = null,
         newBugReportPreference: String? = null,
-        newLocalAiEnabled: Boolean? = null
+        newLocalAiEnabled: Boolean? = null,
+        newNonScoutingToolsEnabled: Boolean? = null
     ): UserRecord {
         val targetUuid = runCatching { UUID.fromString(targetUserId) }.getOrElse {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
@@ -531,6 +533,7 @@ object AuthService {
                 if (newNodeAlertsEnabled != null) stmt[nodeAlertsEnabled] = newNodeAlertsEnabled
                 if (newBugReportPreference != null) stmt[bugReportPreference] = newBugReportPreference
                 if (newLocalAiEnabled != null) stmt[localAiEnabled] = newLocalAiEnabled
+                if (newNonScoutingToolsEnabled != null) stmt[nonScoutingToolsEnabled] = newNonScoutingToolsEnabled
                 if (newTeamNumber != null && callerSession.role == UserRole.SUPERADMIN) {
                     stmt[teamNumber] = newTeamNumber
                 }
@@ -920,6 +923,7 @@ object AuthService {
             nodeAlertsEnabled = row.getOrNull(Users.nodeAlertsEnabled) ?: false,
             bugReportPreference = row.getOrNull(Users.bugReportPreference) ?: "ask",
             localAiEnabled = row.getOrNull(Users.localAiEnabled) ?: false,
+            nonScoutingToolsEnabled = row.getOrNull(Users.nonScoutingToolsEnabled) ?: false,
             lastLogin = row.getOrNull(Users.lastLogin)?.toString()
         )
     }

@@ -173,6 +173,7 @@ export const PAGE_SEARCH_KEYWORDS = {
     "alliances": ["alliance selection", "partners", "captain", "picks", "alianzas"],
     "alliance-selection": ["draft board", "pick list", "captain board", "seleccion de alianzas"],
     "match-planning": ["strategy", "whiteboard", "game plan", "match plan", "planificacion"],
+    "match-checklist": ["pre-match", "checklist", "drive team", "on the field", "pit crew", "lista de verificacion"],
     "events": ["event list", "competitions", "regional", "district", "eventos"],
     "assignments": ["scout assignments", "matrix", "scheduler", "assign scouts", "asignar scouts"],
     "users": ["accounts", "roster", "roles", "permissions", "team members", "usuarios"],
@@ -260,7 +261,7 @@ export function adjustNavForRole(user) {
                 if (allowedPages && Array.isArray(allowedPages)) {
                     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                         const page = link.dataset.page;
-                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant"];
+                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant", "match-checklist"];
                         if (isAdmin(role) || isSuperAdmin(role)) {
                             bypassPages.push("assignments");
                         }
@@ -281,6 +282,13 @@ export function adjustNavForRole(user) {
     // The Scouting Assistant is a per-user opt-in (Personal Settings > Local AI Assistant), not a role page.
     document.querySelectorAll('.sidebar-link[data-page="assistant"]').forEach((link) => {
         const allowed = Boolean(user.localAiEnabled);
+        link.dataset.roleHidden = (!allowed).toString();
+        link.style.display = allowed ? "" : "none";
+    });
+
+    // Drive-team tools are a per-user opt-in (Personal Settings > Non-Scouting Tools), not role pages.
+    document.querySelectorAll('.sidebar-link[data-non-scouting-tool]').forEach((link) => {
+        const allowed = Boolean(user.nonScoutingToolsEnabled);
         link.dataset.roleHidden = (!allowed).toString();
         link.style.display = allowed ? "" : "none";
     });
@@ -308,7 +316,7 @@ export function adjustNavForRole(user) {
 
 export function isPageAccessible(page, role) {
     if (isSuperAdmin(role)) return true;
-    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials", "my-assignments", "assistant"];
+    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials", "my-assignments", "assistant", "match-checklist"];
     if (isAdmin(role)) {
         bypassPages.push("assignments");
     }

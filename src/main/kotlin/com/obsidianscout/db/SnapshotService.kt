@@ -278,6 +278,7 @@ object SnapshotService {
                         it[nodeAlertsEnabled] = row[Users.nodeAlertsEnabled]
                         it[bugReportPreference] = row[Users.bugReportPreference]
                         it[localAiEnabled] = row.getOrNull(Users.localAiEnabled) ?: false
+                        it[nonScoutingToolsEnabled] = row.getOrNull(Users.nonScoutingToolsEnabled) ?: false
                         it[lastLogin] = row[Users.lastLogin]
                     }
                 }
@@ -822,6 +823,7 @@ object SnapshotService {
                         it[nodeAlertsEnabled] = row[Users.nodeAlertsEnabled]
                         it[bugReportPreference] = row[Users.bugReportPreference]
                         it[localAiEnabled] = row.getOrNull(Users.localAiEnabled) ?: false
+                        it[nonScoutingToolsEnabled] = row.getOrNull(Users.nonScoutingToolsEnabled) ?: false
                         it[lastLogin] = row[Users.lastLogin]
                     }
                 }

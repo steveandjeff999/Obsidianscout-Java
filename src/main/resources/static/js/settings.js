@@ -318,6 +318,39 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalNonScoutingToolsPrefWidget(currentMe) {
+        const pref = document.getElementById("personal-non-scouting-tools-pref");
+        if (!pref) return;
+
+        pref.value = currentMe.nonScoutingToolsEnabled ? "enabled" : "disabled";
+
+        pref.addEventListener("change", async (e) => {
+            const enabled = e.target.value === "enabled";
+            try {
+                const updated = await Obsidianscout.request("/api/user", {
+                    method: "PUT",
+                    json: { nonScoutingToolsEnabled: enabled }
+                });
+                currentMe.nonScoutingToolsEnabled = !!updated.nonScoutingToolsEnabled;
+                pref.value = currentMe.nonScoutingToolsEnabled ? "enabled" : "disabled";
+                try {
+                    localStorage.removeItem("cache:/api/auth/me");
+                    localStorage.removeItem("etag:/api/auth/me");
+                } catch (_) {}
+                if (typeof Obsidianscout.removeHttpCache === "function") {
+                    try { await Obsidianscout.removeHttpCache("/api/auth/me"); } catch (_) {}
+                }
+                Obsidianscout.adjustNavForRole(currentMe);
+                Obsidianscout.showToast(currentMe.nonScoutingToolsEnabled
+                    ? "Non-scouting tools enabled"
+                    : "Non-scouting tools disabled", "success");
+            } catch (err) {
+                pref.value = currentMe.nonScoutingToolsEnabled ? "enabled" : "disabled";
+                Obsidianscout.showToast(err.message || "Failed to update Non-Scouting Tools preference", "error");
+            }
+        });
+    }
+
     function wirePersonalTutorialPrefWidget(currentMe) {
         const tutorialPref = document.getElementById("personal-tutorial-pref");
         if (!tutorialPref) return;
@@ -828,6 +861,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalNotificationPrefWidget(me);
     wirePersonalBugReportPrefWidget(me);
     wirePersonalLocalAiPrefWidget(me);
+    wirePersonalNonScoutingToolsPrefWidget(me);
     wirePersonalNodeAlertsWidget(me);
     wirePersonalDeviceSessionsWidget(me);
     wirePersonalPasskeysWidget();

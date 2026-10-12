@@ -360,7 +360,7 @@ object ConfigCollabHub {
         pullExternalChanges(room)
         val stored = try {
             val json = encode(room.state.doc)
-            withContext(Dispatchers.IO) { room.scope.persist(json) }
+            withContext(Dispatchers.IO) { room.scope.persistAs(json, room.lastEditor) }
         } catch (e: Throwable) {
             if (!room.persistFailing) {
                 room.persistFailing = true

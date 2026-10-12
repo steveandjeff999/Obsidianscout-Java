@@ -245,6 +245,7 @@ fun Application.configureRoutes() {
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         bugReportPreference = user.bugReportPreference,
                         localAiEnabled = user.localAiEnabled,
+                        nonScoutingToolsEnabled = user.nonScoutingToolsEnabled,
                         sessionId = sessionUuid.toString()
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
@@ -263,6 +264,7 @@ fun Application.configureRoutes() {
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         bugReportPreference = user.bugReportPreference,
                         localAiEnabled = user.localAiEnabled,
+                        nonScoutingToolsEnabled = user.nonScoutingToolsEnabled,
                         sessionId = sessionUuid.toString()
                     )
                     call.respond(LoginResponse(responseSession))
@@ -320,6 +322,7 @@ fun Application.configureRoutes() {
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         bugReportPreference = user.bugReportPreference,
                         localAiEnabled = user.localAiEnabled,
+                        nonScoutingToolsEnabled = user.nonScoutingToolsEnabled,
                         sessionId = sessionUuid.toString()
                     )
                     call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
@@ -338,6 +341,7 @@ fun Application.configureRoutes() {
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         bugReportPreference = user.bugReportPreference,
                         localAiEnabled = user.localAiEnabled,
+                        nonScoutingToolsEnabled = user.nonScoutingToolsEnabled,
                         sessionId = sessionUuid.toString()
                     )
                     call.respond(LoginResponse(responseSession))
@@ -373,6 +377,7 @@ fun Application.configureRoutes() {
                         nodeAlertsEnabled = user.nodeAlertsEnabled,
                         bugReportPreference = user.bugReportPreference,
                         localAiEnabled = user.localAiEnabled,
+                        nonScoutingToolsEnabled = user.nonScoutingToolsEnabled,
                         sessionId = session.sessionId
                     )
                     // If session attributes changed in DB (e.g. role, username, program, teamNumber, bugReportPreference), update cookie session WITHOUT bloated profilePicture
@@ -382,6 +387,7 @@ fun Application.configureRoutes() {
                             session.program != user.program ||
                             session.bugReportPreference != user.bugReportPreference ||
                             session.localAiEnabled != user.localAiEnabled ||
+                            session.nonScoutingToolsEnabled != user.nonScoutingToolsEnabled ||
                             session.profilePicture != null
                     if (cookieNeedsUpdate) {
                         call.sessions.set(responseSession.copy(profilePicture = null))
@@ -494,6 +500,7 @@ fun Application.configureRoutes() {
                             nodeAlertsEnabled = user.nodeAlertsEnabled,
                             bugReportPreference = user.bugReportPreference,
                             localAiEnabled = user.localAiEnabled,
+                            nonScoutingToolsEnabled = user.nonScoutingToolsEnabled,
                             sessionId = sessionUuid.toString()
                         )
                         call.attributes.put(com.obsidianscout.auth.KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY, request.keepMeLoggedIn)
@@ -512,6 +519,7 @@ fun Application.configureRoutes() {
                             nodeAlertsEnabled = user.nodeAlertsEnabled,
                             bugReportPreference = user.bugReportPreference,
                             localAiEnabled = user.localAiEnabled,
+                            nonScoutingToolsEnabled = user.nonScoutingToolsEnabled,
                             sessionId = sessionUuid.toString()
                         )
                         call.respond(LoginResponse(responseSession))
@@ -1934,6 +1942,38 @@ fun Application.configureRoutes() {
                 }
             }
 
+            // Drive-team pre-match / on-field checklists (Personal Settings > Non-Scouting Tools).
+            route("/match-checklist") {
+                get("/template") {
+                    val session = call.requireSession()
+                    call.respond(com.obsidianscout.scouting.MatchChecklistService.getTemplate(session))
+                }
+                put("/template") {
+                    val session = call.requireSession()
+                    val request = call.receive<com.obsidianscout.scouting.MatchChecklistTemplateRequest>()
+                    call.respond(com.obsidianscout.scouting.MatchChecklistService.saveTemplate(session, request))
+                }
+                get("/event") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing eventKey parameter"))
+                    call.respond(com.obsidianscout.scouting.MatchChecklistService.listForEvent(session, eventKey))
+                }
+                get {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing eventKey parameter"))
+                    val matchKey = call.request.queryParameters["matchKey"]
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing matchKey parameter"))
+                    call.respond(com.obsidianscout.scouting.MatchChecklistService.getMatch(session, eventKey, matchKey))
+                }
+                put {
+                    val session = call.requireSession()
+                    val request = call.receive<com.obsidianscout.scouting.MatchChecklistUpdateRequest>()
+                    call.respond(com.obsidianscout.scouting.MatchChecklistService.saveMatch(session, request))
+                }
+            }
+
             route("/stats") {
                 get("/history") {
                     val session = call.requireSession()
@@ -2554,7 +2594,8 @@ fun Application.configureRoutes() {
                     newNotificationPreference = request.notificationPreference,
                     newNodeAlertsEnabled = if (session.role == UserRole.SUPERADMIN) request.nodeAlertsEnabled else null,
                     newBugReportPreference = request.bugReportPreference,
-                    newLocalAiEnabled = request.localAiEnabled
+                    newLocalAiEnabled = request.localAiEnabled,
+                    newNonScoutingToolsEnabled = request.nonScoutingToolsEnabled
                 )
                 // Refresh the session so /api/auth/me returns the updated details
                 val updatedSession = session.copy(
@@ -2565,7 +2606,8 @@ fun Application.configureRoutes() {
                     tourProgress = updated.tourProgress,
                     nodeAlertsEnabled = updated.nodeAlertsEnabled,
                     bugReportPreference = updated.bugReportPreference,
-                    localAiEnabled = updated.localAiEnabled
+                    localAiEnabled = updated.localAiEnabled,
+                    nonScoutingToolsEnabled = updated.nonScoutingToolsEnabled
                 )
                 call.sessions.set(updatedSession)
                 call.respond(updated)
@@ -2586,7 +2628,8 @@ fun Application.configureRoutes() {
                     newNotificationPreference = request.notificationPreference,
                     newNodeAlertsEnabled = if (session.role == UserRole.SUPERADMIN) request.nodeAlertsEnabled else null,
                     newBugReportPreference = request.bugReportPreference,
-                    newLocalAiEnabled = request.localAiEnabled
+                    newLocalAiEnabled = request.localAiEnabled,
+                    newNonScoutingToolsEnabled = request.nonScoutingToolsEnabled
                 )
                 // Refresh the session so /api/auth/me returns the updated details
                 val updatedSession = session.copy(
@@ -2597,7 +2640,8 @@ fun Application.configureRoutes() {
                     tourProgress = updated.tourProgress,
                     nodeAlertsEnabled = updated.nodeAlertsEnabled,
                     bugReportPreference = updated.bugReportPreference,
-                    localAiEnabled = updated.localAiEnabled
+                    localAiEnabled = updated.localAiEnabled,
+                    nonScoutingToolsEnabled = updated.nonScoutingToolsEnabled
                 )
                 call.sessions.set(updatedSession)
                 call.respond(updated)
@@ -3201,6 +3245,7 @@ fun Application.configureRoutes() {
             }
 
             configCollabRoutes()
+            matchChecklistCollabRoute()
 
             route("/banners") {
                 get("/login") {
@@ -4123,6 +4168,7 @@ fun Application.configureRoutes() {
             "alliance-edit" to "alliance-edit.html",
             "alliance-selection" to "alliance-selection.html",
             "match-planning" to "match-planning.html",
+            "match-checklist" to "match-checklist.html",
             "assignments" to "assignments.html",
             "my-assignments" to "my-assignments.html",
             "users" to "users.html",

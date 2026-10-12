@@ -9,6 +9,7 @@ import com.obsidianscout.collab.ConfigCollabRelay
 import com.obsidianscout.collab.ConfigCollabScope
 import com.obsidianscout.db.AllianceMemberships
 import com.obsidianscout.scouting.AllianceService
+import com.obsidianscout.scouting.MatchChecklistService
 import io.ktor.server.routing.Route
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.server.websocket.webSocket
@@ -60,6 +61,37 @@ fun Route.configCollabRoutes() {
             canEdit = true
         )
         ConfigCollabHub.connect(this, ConfigCollabScope.Preset(id), participant)
+    }
+}
+
+/**
+ * Live drive-team checklists, mounted under /api. Any member of the team can edit.
+ *  - /api/match-checklist/collab?template=1                       the team's checklist template
+ *  - /api/match-checklist/collab?eventKey=E&matchKey=M            one match's filled-out checklist
+ */
+fun Route.matchChecklistCollabRoute() {
+    webSocket("/match-checklist/collab") {
+        val session = runCatching { call.requireSession() }.getOrNull() ?: return@webSocket reject("No session")
+        val q = call.request.queryParameters
+        val scope = if (q["template"] == "1") {
+            ConfigCollabScope.Checklist(session.teamNumber, session.program, "", MatchChecklistService.TEMPLATE_KEY)
+        } else {
+            val eventKey = q["eventKey"].orEmpty()
+            val matchKey = q["matchKey"].orEmpty()
+            if (!MatchChecklistService.isValidKey(eventKey) || !MatchChecklistService.isValidKey(matchKey)) {
+                return@webSocket reject("Invalid match")
+            }
+            ConfigCollabScope.Checklist(session.teamNumber, session.program, eventKey, matchKey)
+        }
+        val participant = CollabParticipant(
+            sid = CollabParticipant.sanitizeSid(q["sid"]),
+            userId = session.userId,
+            username = session.username,
+            teamNumber = session.teamNumber,
+            role = session.role.name,
+            canEdit = true
+        )
+        ConfigCollabHub.connect(this, scope, participant)
     }
 }
 

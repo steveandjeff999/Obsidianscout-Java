@@ -21,6 +21,7 @@ object Users : UUIDTable("users") {
     val nodeAlertsEnabled = bool("node_alerts_enabled").default(false)
     val bugReportPreference = varchar("bug_report_preference", 16).default("ask")
     val localAiEnabled = bool("local_ai_enabled").default(false)
+    val nonScoutingToolsEnabled = bool("non_scouting_tools_enabled").default(false)
     val lastLogin = timestamp("last_login").nullable()
 
     init {
@@ -308,6 +309,20 @@ object MatchPlans : UUIDTable("match_plans") {
 
     init {
         uniqueIndex("ux_match_plans_owner_event_match", ownerKey, eventKey, matchKey)
+    }
+}
+
+/** Drive-team checklists: one template row per team (matchKey = "__template__") plus one completion row per match. */
+object MatchChecklists : UUIDTable("match_checklists") {
+    val ownerKey = varchar("owner_key", 64)
+    val eventKey = varchar("event_key", 64)
+    val matchKey = varchar("match_key", 64)
+    val dataJson = text("data_json")
+    val updatedBy = varchar("updated_by", 64).default("")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_match_checklists_owner_event_match", ownerKey, eventKey, matchKey)
     }
 }
 
