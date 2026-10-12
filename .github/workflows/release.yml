@@ -123,7 +123,15 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Platform Bundle
-        run: ${{ matrix.build_cmd }}
+        # GraalVM 25's parallel analysis occasionally crashes with internal errors
+        # (e.g. "mismatch with existing registration"); retry before failing the job.
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            ${{ matrix.build_cmd }} && exit 0
+            echo "::warning::Build attempt $attempt failed"
+          done
+          exit 1
 
       - name: Install Linux Packaging Dependencies (RPM)
         if: runner.os == 'Linux'

@@ -703,9 +703,6 @@ graalvmNative {
             buildArgs.addAll(
                 "-H:+UnlockExperimentalVMOptions",
                 "-H:+ReportExceptionStackTraces",
-                // Class-initializer simulation races under parallel analysis (seen on linux-aarch64:
-                // "mismatch with existing registration: io.netty.util.internal.TypeParameterMatcher")
-                "-H:-SimulateClassInitializer",
                 "-H:EnableURLProtocols=http,https",
                 "-H:ReflectionConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/com.obsidianscout/obsidianscout-server/reflect-config.json",
                 "-H:ResourceConfigurationFiles=${projectDir}/src/main/resources/META-INF/native-image/com.obsidianscout/obsidianscout-server/resource-config.json",
