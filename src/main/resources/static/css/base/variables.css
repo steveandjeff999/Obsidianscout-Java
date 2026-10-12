@@ -25,6 +25,7 @@
     --radius-pill: 9999px;
     --bg: #f8fafc;
     --primary: var(--accent);
+    --on-primary: #ffffff;
     --ink-muted: var(--muted);
     --danger: #ef4444;
     --danger-surface: rgba(239, 68, 68, 0.08);
@@ -70,7 +71,7 @@ body.theme-dark {
     --success: #34d399;
     --warning: #fbbf24;
     --primary: var(--accent);
-    --on-primary: #09090b;
+    --on-primary: #ffffff;
     --text-primary: var(--ink);
     --text-muted: var(--muted);
     --text: var(--ink);

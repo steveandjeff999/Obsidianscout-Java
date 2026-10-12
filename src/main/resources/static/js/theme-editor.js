@@ -331,6 +331,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         previewBox.style.setProperty('--preview-card-radius', cardRadius);
 
+        function getContrastColor(hexColor) {
+            if (!hexColor || typeof hexColor !== 'string') return '#ffffff';
+            const match = hexColor.match(/#(?:[0-9a-fA-F]{3,8})/);
+            if (!match) return '#ffffff';
+            let hex = match[0].replace('#', '');
+            if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+            if (hex.length >= 6) {
+                const r = parseInt(hex.substring(0, 2), 16);
+                const g = parseInt(hex.substring(2, 4), 16);
+                const b = parseInt(hex.substring(4, 6), 16);
+                const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+                return yiq >= 165 ? '#09090b' : '#ffffff';
+            }
+            return '#ffffff';
+        }
+
         if (isDarkPreview) {
             const bg = document.getElementById("theme-dark-bg").value.trim() || "radial-gradient(ellipse at 20% 10%, #1a1f2e 0%, #13161c 45%, #0d1015 100%)";
             const accent = document.getElementById("theme-dark-accent").value;
@@ -342,6 +358,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             previewBox.style.background = bg;
             previewBox.style.setProperty('--preview-accent', accent);
+            previewBox.style.setProperty('--preview-on-accent', getContrastColor(accent));
             previewBox.style.setProperty('--preview-accent2', accent2);
             previewBox.style.setProperty('--preview-accent3', accent3);
             previewBox.style.setProperty('--preview-ink', ink);
@@ -359,6 +376,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             previewBox.style.background = bg;
             previewBox.style.setProperty('--preview-accent', accent);
+            previewBox.style.setProperty('--preview-on-accent', getContrastColor(accent));
             previewBox.style.setProperty('--preview-accent2', accent2);
             previewBox.style.setProperty('--preview-accent3', accent3);
             previewBox.style.setProperty('--preview-ink', ink);

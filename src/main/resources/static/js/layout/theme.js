@@ -37,6 +37,13 @@ function blendRgb(c1, c2, weight) {
     };
 }
 
+export function getContrastColor(hexColor) {
+    const rgb = parseHexColor(hexColor);
+    if (!rgb) return '#ffffff';
+    const yiq = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+    return yiq >= 165 ? '#09090b' : '#ffffff';
+}
+
 function computeCardRadius(radiusStr) {
     if (!radiusStr) return '18px';
     const clean = radiusStr.trim();
@@ -90,6 +97,9 @@ export function applyCustomTheme(themeOrSettings) {
         target.style.removeProperty('--border');
         target.style.removeProperty('--border-subtle');
         target.style.removeProperty('--border-color');
+        target.style.removeProperty('--primary');
+        target.style.removeProperty('--on-primary');
+        target.style.removeProperty('--accent-glow');
     } else {
         // Custom theme active: style cards and surfaces harmoniously
         const cardRadius = computeCardRadius(activeRadius);
@@ -168,8 +178,20 @@ export function applyCustomTheme(themeOrSettings) {
     }
     
     if (isDark) {
-        if (theme.darkAccent) target.style.setProperty('--accent', theme.darkAccent);
-        else target.style.removeProperty('--accent');
+        if (theme.darkAccent) {
+            target.style.setProperty('--accent', theme.darkAccent);
+            target.style.setProperty('--primary', theme.darkAccent);
+            target.style.setProperty('--on-primary', getContrastColor(theme.darkAccent));
+            const accParsed = parseHexColor(theme.darkAccent);
+            if (accParsed) {
+                target.style.setProperty('--accent-glow', `rgba(${accParsed.r}, ${accParsed.g}, ${accParsed.b}, 0.35)`);
+            }
+        } else {
+            target.style.removeProperty('--accent');
+            target.style.removeProperty('--primary');
+            target.style.removeProperty('--on-primary');
+            target.style.removeProperty('--accent-glow');
+        }
         
         if (theme.darkAccent2) target.style.setProperty('--accent-2', theme.darkAccent2);
         else target.style.removeProperty('--accent-2');
@@ -191,8 +213,20 @@ export function applyCustomTheme(themeOrSettings) {
         if (theme.darkBg) target.style.setProperty('--bg', theme.darkBg);
         else target.style.removeProperty('--bg');
     } else {
-        if (theme.lightAccent) target.style.setProperty('--accent', theme.lightAccent);
-        else target.style.removeProperty('--accent');
+        if (theme.lightAccent) {
+            target.style.setProperty('--accent', theme.lightAccent);
+            target.style.setProperty('--primary', theme.lightAccent);
+            target.style.setProperty('--on-primary', getContrastColor(theme.lightAccent));
+            const accParsed = parseHexColor(theme.lightAccent);
+            if (accParsed) {
+                target.style.setProperty('--accent-glow', `rgba(${accParsed.r}, ${accParsed.g}, ${accParsed.b}, 0.25)`);
+            }
+        } else {
+            target.style.removeProperty('--accent');
+            target.style.removeProperty('--primary');
+            target.style.removeProperty('--on-primary');
+            target.style.removeProperty('--accent-glow');
+        }
         
         if (theme.lightAccent2) target.style.setProperty('--accent-2', theme.lightAccent2);
         else target.style.removeProperty('--accent-2');
