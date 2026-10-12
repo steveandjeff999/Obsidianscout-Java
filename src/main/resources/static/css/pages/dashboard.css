@@ -13,6 +13,8 @@
     overflow: hidden;
     background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
     border: 1px solid var(--border);
+    border-radius: var(--card-radius, var(--radius));
+    transition: background var(--transition-smooth), border-color var(--transition-smooth);
 }
 
 .dashboard-hero::after {
@@ -193,7 +195,7 @@
     flex-direction: column;
     justify-content: space-between;
     padding: 20px 22px;
-    border-radius: var(--radius);
+    border-radius: var(--card-radius, var(--radius));
     background: var(--surface);
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
@@ -201,6 +203,7 @@
     color: inherit;
     position: relative;
     overflow: hidden;
+    transition: transform var(--transition-fast), border-color var(--transition-fast), background-color var(--transition-smooth);
 }
 
 .dashboard-kpi-header {

@@ -62,7 +62,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 darkMuted: legacyTheme.darkMuted || "#94a3b8",
                 darkBg: legacyTheme.darkBg || "#09090b",
                 darkRadius: legacyTheme.darkRadius || legacyTheme.btnRadius || "999px",
-                btnRadius: legacyTheme.darkRadius || legacyTheme.btnRadius || "999px"
+                btnRadius: legacyTheme.darkRadius || legacyTheme.btnRadius || "999px",
+                lightCard: legacyTheme.lightCard || "#ffffff",
+                darkCard: legacyTheme.darkCard || "#111116"
             });
             activeThemeName = "Default";
         }
@@ -238,6 +240,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("theme-light-accent3").value = theme.lightAccent3 || "#255a9c";
         document.getElementById("theme-light-ink").value = theme.lightInk || "#1d1a17";
         document.getElementById("theme-light-muted").value = theme.lightMuted || "#5f5b55";
+        const lightCardEl = document.getElementById("theme-light-card");
+        if (lightCardEl) lightCardEl.value = theme.lightCard || "#ffffff";
         setRadiusSelectValue("theme-light-radius", theme.lightRadius || theme.btnRadius || "999px");
         parseAndPopulateBg("light", theme.lightBg);
 
@@ -246,6 +250,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("theme-dark-accent3").value = theme.darkAccent3 || "#6aa2ff";
         document.getElementById("theme-dark-ink").value = theme.darkInk || "#f4f2ed";
         document.getElementById("theme-dark-muted").value = theme.darkMuted || "#c3bfb8";
+        const darkCardEl = document.getElementById("theme-dark-card");
+        if (darkCardEl) darkCardEl.value = theme.darkCard || "#111116";
         setRadiusSelectValue("theme-dark-radius", theme.darkRadius || theme.btnRadius || "999px");
         parseAndPopulateBg("dark", theme.darkBg);
     }
@@ -260,6 +266,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         themes[selectedPresetIndex].lightAccent3 = document.getElementById("theme-light-accent3").value;
         themes[selectedPresetIndex].lightInk = document.getElementById("theme-light-ink").value;
         themes[selectedPresetIndex].lightMuted = document.getElementById("theme-light-muted").value;
+        const lightCardEl = document.getElementById("theme-light-card");
+        if (lightCardEl) themes[selectedPresetIndex].lightCard = lightCardEl.value;
         themes[selectedPresetIndex].lightBg = document.getElementById("theme-light-bg").value.trim();
         themes[selectedPresetIndex].lightRadius = lightRadiusVal;
 
@@ -268,6 +276,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         themes[selectedPresetIndex].darkAccent3 = document.getElementById("theme-dark-accent3").value;
         themes[selectedPresetIndex].darkInk = document.getElementById("theme-dark-ink").value;
         themes[selectedPresetIndex].darkMuted = document.getElementById("theme-dark-muted").value;
+        const darkCardEl = document.getElementById("theme-dark-card");
+        if (darkCardEl) themes[selectedPresetIndex].darkCard = darkCardEl.value;
         themes[selectedPresetIndex].darkBg = document.getElementById("theme-dark-bg").value.trim();
         themes[selectedPresetIndex].darkRadius = darkRadiusVal;
         themes[selectedPresetIndex].btnRadius = darkRadiusVal; // fallback for legacy
@@ -309,6 +319,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         previewBox.style.setProperty('--preview-radius', radiusVal);
 
+        let cardRadius = "16px";
+        if (radiusVal === "0px") cardRadius = "0px";
+        else if (radiusVal === "6px") cardRadius = "8px";
+        else if (radiusVal === "8px") cardRadius = "12px";
+        else if (radiusVal === "12px") cardRadius = "16px";
+        else if (radiusVal === "999px" || parseInt(radiusVal) >= 999) cardRadius = "20px";
+        else {
+            const num = parseInt(radiusVal);
+            cardRadius = isNaN(num) ? "16px" : Math.min(24, Math.max(0, num)) + "px";
+        }
+        previewBox.style.setProperty('--preview-card-radius', cardRadius);
+
         if (isDarkPreview) {
             const bg = document.getElementById("theme-dark-bg").value.trim() || "radial-gradient(ellipse at 20% 10%, #1a1f2e 0%, #13161c 45%, #0d1015 100%)";
             const accent = document.getElementById("theme-dark-accent").value;
@@ -316,6 +338,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const accent3 = document.getElementById("theme-dark-accent3").value;
             const ink = document.getElementById("theme-dark-ink").value;
             const muted = document.getElementById("theme-dark-muted").value;
+            const cardBg = document.getElementById("theme-dark-card") ? document.getElementById("theme-dark-card").value : "#111116";
             
             previewBox.style.background = bg;
             previewBox.style.setProperty('--preview-accent', accent);
@@ -323,6 +346,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             previewBox.style.setProperty('--preview-accent3', accent3);
             previewBox.style.setProperty('--preview-ink', ink);
             previewBox.style.setProperty('--preview-muted', muted);
+            previewBox.style.setProperty('--preview-card-bg', cardBg);
+            previewBox.style.setProperty('--preview-card-border', 'rgba(255, 255, 255, 0.12)');
         } else {
             const bg = document.getElementById("theme-light-bg").value.trim() || "radial-gradient(ellipse at 20% 10%, #ffecd2 0%, #f6f1e8 40%, #daeef0 100%)";
             const accent = document.getElementById("theme-light-accent").value;
@@ -330,6 +355,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const accent3 = document.getElementById("theme-light-accent3").value;
             const ink = document.getElementById("theme-light-ink").value;
             const muted = document.getElementById("theme-light-muted").value;
+            const cardBg = document.getElementById("theme-light-card") ? document.getElementById("theme-light-card").value : "#ffffff";
             
             previewBox.style.background = bg;
             previewBox.style.setProperty('--preview-accent', accent);
@@ -337,6 +363,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             previewBox.style.setProperty('--preview-accent3', accent3);
             previewBox.style.setProperty('--preview-ink', ink);
             previewBox.style.setProperty('--preview-muted', muted);
+            previewBox.style.setProperty('--preview-card-bg', cardBg);
+            previewBox.style.setProperty('--preview-card-border', 'rgba(0, 0, 0, 0.1)');
         }
     }
 
@@ -355,8 +383,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const themeInputs = [
-        "theme-light-accent", "theme-light-accent2", "theme-light-accent3", "theme-light-ink", "theme-light-muted",
-        "theme-dark-accent", "theme-dark-accent2", "theme-dark-accent3", "theme-dark-ink", "theme-dark-muted"
+        "theme-light-accent", "theme-light-accent2", "theme-light-accent3", "theme-light-ink", "theme-light-muted", "theme-light-card",
+        "theme-dark-accent", "theme-dark-accent2", "theme-dark-accent3", "theme-dark-ink", "theme-dark-muted", "theme-dark-card"
     ];
     themeInputs.forEach(id => {
         const el = document.getElementById(id);
@@ -527,6 +555,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("theme-light-accent3").value = "#255a9c";
             document.getElementById("theme-light-ink").value = "#1d1a17";
             document.getElementById("theme-light-muted").value = "#5f5b55";
+            if (document.getElementById("theme-light-card")) document.getElementById("theme-light-card").value = "#ffffff";
             setRadiusSelectValue("theme-light-radius", "999px");
             parseAndPopulateBg("light", "");
 
@@ -535,6 +564,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("theme-dark-accent3").value = "#6aa2ff";
             document.getElementById("theme-dark-ink").value = "#f4f2ed";
             document.getElementById("theme-dark-muted").value = "#c3bfb8";
+            if (document.getElementById("theme-dark-card")) document.getElementById("theme-dark-card").value = "#111116";
             setRadiusSelectValue("theme-dark-radius", "999px");
             parseAndPopulateBg("dark", "");
             

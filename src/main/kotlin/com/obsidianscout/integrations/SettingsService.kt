@@ -132,7 +132,9 @@ data class ThemeSettings(
     val darkInk: String = "",
     val darkMuted: String = "",
     val darkRadius: String = "999px",
-    val btnRadius: String = "999px"
+    val btnRadius: String = "999px",
+    val lightCard: String = "",
+    val darkCard: String = ""
 )
 
 /**

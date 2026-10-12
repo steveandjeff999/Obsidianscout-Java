@@ -38,6 +38,9 @@
     --card-bg: var(--surface);
     --bg-card: var(--surface);
     --card-hover-bg: var(--surface-2);
+    --card-radius: var(--radius);
+    --surface-glass: rgba(255, 255, 255, 0.7);
+    --border-glass: rgba(255, 255, 255, 0.4);
     --border-color: var(--border);
     --primary-light: #4338ca;
     --secondary-light: #0284c7;
@@ -76,6 +79,9 @@ body.theme-dark {
     --card-bg: var(--surface);
     --bg-card: var(--surface);
     --card-hover-bg: var(--surface-2);
+    --card-radius: var(--radius);
+    --surface-glass: rgba(10, 10, 13, 0.85);
+    --border-glass: rgba(255, 255, 255, 0.12);
     --border-color: var(--border);
     --primary-light: #a78bfa;
     --secondary-light: #38bdf8;

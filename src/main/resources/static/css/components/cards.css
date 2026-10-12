@@ -3,11 +3,12 @@
    ══════════════════════════════════════════════════════════════════════════ */
 .card {
     background: var(--surface);
-    border-radius: var(--radius);
+    border-radius: var(--card-radius, var(--radius));
     box-shadow: var(--shadow);
     padding: 24px;
     border: 1px solid var(--border);
     position: relative;
+    transition: background-color var(--transition-smooth), border-color var(--transition-smooth), box-shadow var(--transition-smooth);
 }
 
 body.theme-dark .card {
@@ -29,17 +30,17 @@ body.theme-dark .card.soft {
 }
 
 .card.glass {
-    background: rgba(255, 255, 255, 0.7);
+    background: var(--surface-glass, rgba(255, 255, 255, 0.7));
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    border: 1px solid var(--border-glass, rgba(255, 255, 255, 0.4));
 }
 
 body.theme-dark .card.glass {
-    background: rgba(10, 10, 13, 0.85);
+    background: var(--surface-glass, rgba(10, 10, 13, 0.85));
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--border-glass, rgba(255, 255, 255, 0.12));
 }
 
 .login-hero {
@@ -76,12 +77,13 @@ body.theme-dark .card.glass {
     flex-direction: column;
     justify-content: space-between;
     padding: 20px 24px;
-    border-radius: var(--radius);
+    border-radius: var(--card-radius, var(--radius));
     background: var(--surface);
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
     position: relative;
     overflow: hidden;
+    transition: background-color var(--transition-smooth), border-color var(--transition-smooth);
 }
 
 .metric-card-header {

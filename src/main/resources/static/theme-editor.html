@@ -96,6 +96,10 @@
                                 <label for="theme-light-muted">Muted Text Color</label>
                                 <input id="theme-light-muted" type="color" value="#71717a" style="width: 55px; height: 35px; padding: 0; border: none; border-radius: 6px; cursor: pointer;" />
                             </div>
+                            <div class="field" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                                <label for="theme-light-card">Card Surface / Background</label>
+                                <input id="theme-light-card" type="color" value="#ffffff" style="width: 55px; height: 35px; padding: 0; border: none; border-radius: 6px; cursor: pointer;" />
+                            </div>
                             <div class="field" style="display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.15); margin-top: 6px;">
                                 <label style="font-weight: bold; font-size: 13px;">Background Creator</label>
                                 
@@ -179,6 +183,10 @@
                             <div class="field" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
                                 <label for="theme-dark-muted">Muted Text Color</label>
                                 <input id="theme-dark-muted" type="color" value="#a1a1aa" style="width: 55px; height: 35px; padding: 0; border: none; border-radius: 6px; cursor: pointer;" />
+                            </div>
+                            <div class="field" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                                <label for="theme-dark-card">Card Surface / Background</label>
+                                <input id="theme-dark-card" type="color" value="#111116" style="width: 55px; height: 35px; padding: 0; border: none; border-radius: 6px; cursor: pointer;" />
                             </div>
                             <div class="field" style="display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.15); margin-top: 6px;">
                                 <label style="font-weight: bold; font-size: 13px;">Background Creator</label>
@@ -266,6 +274,16 @@
                             <p style="margin: 0; color: var(--preview-ink, inherit); font-size: 15px; font-weight: 500;">
                                 Body text content matches preset choice. 
                                 <span style="color: var(--preview-muted, inherit); font-size: 13px; display: block; margin-top: 4px;">Muted secondary labels and descriptive text display here.</span>
+                            </p>
+                        </div>
+
+                        <div id="theme-preview-card" style="padding: 16px 20px; border-radius: var(--preview-card-radius, 16px); background: var(--preview-card-bg, #111116); border: 1px solid var(--preview-card-border, rgba(255,255,255,0.12)); box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: all 0.25s;">
+                            <div style="font-weight: 700; font-size: 14px; color: var(--preview-ink, inherit); display: flex; align-items: center; justify-content: space-between;">
+                                <span>Card Surface Preview</span>
+                                <span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--preview-accent, #0b8f88); color: #fff;">Custom Style</span>
+                            </div>
+                            <p style="margin: 6px 0 0 0; color: var(--preview-muted, inherit); font-size: 13px;">
+                                Cards, metric overviews, and dialog surfaces dynamically adapt to custom themes.
                             </p>
                         </div>
                     </div>
