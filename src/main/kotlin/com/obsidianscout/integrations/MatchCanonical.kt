@@ -4,6 +4,7 @@ import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.ApiMatches
+import com.obsidianscout.db.MatchChecklists
 import com.obsidianscout.db.MatchPlans
 import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.ScoutingAssignments
@@ -281,7 +282,8 @@ object MatchCanonical {
             val rows = ApiMatches
                 .selectAll().where { ApiMatches.eventKey eq normalizedEvent }
                 .toList()
-            if (rows.size <= 1) {
+            // A single row still goes through below so it gets its canonical key.
+            if (rows.isEmpty()) {
                 return@transaction 0
             }
 
@@ -376,7 +378,7 @@ object MatchCanonical {
 
     /**
      * Points every row that references [oldKey] at [newKey]. Must run inside a transaction.
-     * Match plans are unique per owner/event/match, so when both keys already have a plan the newer one is kept.
+     * Match plans and checklists are unique per owner/event/match, so when both keys already have one the newer is kept.
      */
     fun remapMatchKey(oldKey: String, newKey: String) {
         if (oldKey == newKey) {
@@ -392,26 +394,36 @@ object MatchCanonical {
             it[ScoutingAssignments.matchKey] = newKey
         }
 
-        MatchPlans.selectAll().where { MatchPlans.matchKey eq oldKey }.toList().forEach { plan ->
-            val ownerKey = plan[MatchPlans.ownerKey]
-            val eventKey = plan[MatchPlans.eventKey]
-            val clash = MatchPlans.selectAll().where {
-                (MatchPlans.ownerKey eq ownerKey) and (MatchPlans.eventKey eq eventKey) and (MatchPlans.matchKey eq newKey)
+        remapOwnerScoped(MatchPlans, MatchPlans.ownerKey, MatchPlans.eventKey, MatchPlans.matchKey, MatchPlans.updatedAt, oldKey, newKey, "Match plan")
+        remapOwnerScoped(MatchChecklists, MatchChecklists.ownerKey, MatchChecklists.eventKey, MatchChecklists.matchKey, MatchChecklists.updatedAt, oldKey, newKey, "Match checklist")
+    }
+
+    /** Rows unique per (owner, event, match): re-key to [newKey], keeping the newer row on a clash. */
+    private fun remapOwnerScoped(
+        table: org.jetbrains.exposed.v1.core.dao.id.java.UUIDTable,
+        owner: Column<String>,
+        event: Column<String>,
+        match: Column<String>,
+        updatedAt: Column<java.time.Instant>,
+        oldKey: String,
+        newKey: String,
+        label: String
+    ) {
+        table.selectAll().where { match eq oldKey }.toList().forEach { row ->
+            val ownerKey = row[owner]
+            val clash = table.selectAll().where {
+                (owner eq ownerKey) and (event eq row[event]) and (match eq newKey)
             }.limit(1).firstOrNull()
 
             if (clash == null) {
-                MatchPlans.update({ MatchPlans.id eq plan[MatchPlans.id] }) {
-                    it[MatchPlans.matchKey] = newKey
-                }
-            } else if (plan[MatchPlans.updatedAt] > clash[MatchPlans.updatedAt]) {
-                MatchPlans.deleteWhere { MatchPlans.id eq clash[MatchPlans.id] }
-                MatchPlans.update({ MatchPlans.id eq plan[MatchPlans.id] }) {
-                    it[MatchPlans.matchKey] = newKey
-                }
-                log.warn("Match plan conflict for $ownerKey on $newKey: kept newer plan from $oldKey, dropped older one")
+                table.update({ table.id eq row[table.id] }) { it[match] = newKey }
+            } else if (row[updatedAt] > clash[updatedAt]) {
+                table.deleteWhere { table.id eq clash[table.id] }
+                table.update({ table.id eq row[table.id] }) { it[match] = newKey }
+                log.warn("$label conflict for $ownerKey on $newKey: kept newer one from $oldKey, dropped older one")
             } else {
-                MatchPlans.deleteWhere { MatchPlans.id eq plan[MatchPlans.id] }
-                log.warn("Match plan conflict for $ownerKey on $newKey: kept existing plan, dropped older one from $oldKey")
+                table.deleteWhere { table.id eq row[table.id] }
+                log.warn("$label conflict for $ownerKey on $newKey: kept existing one, dropped older one from $oldKey")
             }
         }
     }
@@ -442,6 +454,8 @@ object MatchCanonical {
                     .forEach { row -> row[ScoutingAssignments.matchKey]?.let { add(it) } }
                 MatchPlans.select(MatchPlans.matchKey).withDistinct()
                     .forEach { row -> add(row[MatchPlans.matchKey]) }
+                MatchChecklists.select(MatchChecklists.matchKey).withDistinct()
+                    .forEach { row -> add(row[MatchChecklists.matchKey]) }
             }
 
             var repaired = 0

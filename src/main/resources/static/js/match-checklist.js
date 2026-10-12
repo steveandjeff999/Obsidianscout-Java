@@ -42,13 +42,21 @@ const STARTER_ITEMS = {
     ]
 };
 
-const STATUS_LABELS = {
+function t(key, fallback) {
+    return (window.Obsidianscout && typeof Obsidianscout.t === "function") ? Obsidianscout.t(key, fallback) : (fallback || key);
+}
+
+const DEFAULT_STATUS_LABELS = {
     connecting: "Connecting to live editing…",
     live: "Live — changes save automatically",
     readonly: "Live — view only",
     reconnecting: "Reconnecting… your changes are kept",
     offline: "Offline — your changes are kept on this device"
 };
+
+function statusLabel(status) {
+    return t(`checklist.status.${status}`, DEFAULT_STATUS_LABELS[status] || status);
+}
 
 const state = {
     me: null,
@@ -96,11 +104,12 @@ function priorityRank(priority) {
 }
 
 function priorityLabel(priority) {
-    return PRIORITIES[priorityRank(priority)].label;
+    const p = PRIORITIES[priorityRank(priority)];
+    return t(`checklist.priority.${p.id}`, p.label);
 }
 
 function priorityOptions(selected) {
-    return PRIORITIES.map((p) => `<option value="${p.id}" ${p.id === selected ? "selected" : ""}>${p.label}</option>`).join("");
+    return PRIORITIES.map((p) => `<option value="${p.id}" ${p.id === selected ? "selected" : ""}>${esc(priorityLabel(p.id))}</option>`).join("");
 }
 
 // ------------------------------------------------------------------ documents
@@ -170,7 +179,8 @@ function makeStatusBar(host) {
     const update = bar.update;
     bar.update = (status) => {
         update(status);
-        bar.element.querySelector(".collab-status-text").textContent = STATUS_LABELS[status] || status;
+        const textEl = bar.element.querySelector(".collab-status-text");
+        if (textEl) textEl.textContent = statusLabel(status);
     };
     return bar;
 }
@@ -212,9 +222,9 @@ async function saveOffline(session, button) {
             async () => parseJson((await session.restGet())?.dataJson, {}),
             (doc) => session.restPut(JSON.stringify(doc))
         );
-        Obsidianscout.showToast("Changes saved", "success");
+        Obsidianscout.showToast(t("checklist.toast.changes_saved", "Changes saved"), "success");
     } catch (err) {
-        Obsidianscout.showToast(err.message || "Could not save yet", "error");
+        Obsidianscout.showToast(err.message || t("checklist.toast.save_error", "Could not save yet"), "error");
     }
     updateOfflineButton(session, button);
 }
@@ -245,7 +255,7 @@ async function openTemplateSession() {
     try {
         state.tpl.load(parseJson((await restGet())?.dataJson, {}));
     } catch (err) {
-        Obsidianscout.showToast(err.message || "Failed to load checklists", "error");
+        Obsidianscout.showToast(err.message || t("checklist.toast.load_templates_error", "Failed to load checklists"), "error");
     }
     state.tpl.connect();
 }
@@ -278,7 +288,7 @@ async function openMatchSession(eventKey, matchKey) {
         if (state.match !== session) return;
         session.load(doc);
     } catch (err) {
-        Obsidianscout.showToast(err.message || "Failed to load checklist", "error");
+        Obsidianscout.showToast(err.message || t("checklist.toast.load_match_error", "Failed to load checklist"), "error");
     }
     if (state.match === session) session.connect();
 }
@@ -310,7 +320,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
     if (!collab()) {
-        Obsidianscout.showToast("Live editing failed to load; refresh the page", "error");
+        Obsidianscout.showToast(t("checklist.toast.live_failed", "Live editing failed to load; refresh the page"), "error");
         return;
     }
 
@@ -325,6 +335,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     await openTemplateSession();
     await initEventSelect();
     setMode(currentTemplate().sections.some((s) => fillableItems(s).length) ? "fill" : "edit");
+
+    window.addEventListener("obsidianscout:languagechange", () => {
+        refreshMatchOptionMarks();
+        renderMatchOptions();
+        renderAll();
+        if (window.Obsidianscout && typeof Obsidianscout.applyTranslations === "function") {
+            Obsidianscout.applyTranslations();
+        }
+    });
 
     window.addEventListener("beforeunload", (e) => {
         if (state.tpl?.hasUnsavedChanges || state.match?.hasUnsavedChanges) {
@@ -384,12 +403,12 @@ async function initEventSelect() {
         opt.textContent = label;
         el.event.appendChild(opt);
     };
-    if (state.eventKey) add(state.eventKey, `${state.eventKey} (current)`);
+    if (state.eventKey) add(state.eventKey, `${state.eventKey} (${t("checklist.event.current", "current")})`);
     (Array.isArray(events) ? events : []).forEach((ev) => add(String(ev.eventKey).toLowerCase(), `${ev.name || ev.eventKey} (${ev.eventKey})`));
     if (!keys.size) {
         const opt = document.createElement("option");
         opt.value = "";
-        opt.textContent = "No event selected";
+        opt.textContent = t("checklist.event.none", "No event selected");
         el.event.appendChild(opt);
     }
     el.event.value = state.eventKey;
@@ -435,6 +454,18 @@ function allianceOf(match) {
     return "";
 }
 
+function allianceName(color) {
+    if (color === "Red") return t("checklist.alliance.red", "Red");
+    if (color === "Blue") return t("checklist.alliance.blue", "Blue");
+    return color;
+}
+
+function sectionDisplayTitle(section) {
+    if (section.id === "pre" && section.title === "Pre-Match") return t("checklist.section.pre", "Pre-Match");
+    if (section.id === "field" && section.title === "On the Field") return t("checklist.section.field", "On the Field");
+    return section.title;
+}
+
 async function loadEvent(eventKey) {
     state.eventKey = eventKey || "";
     state.matches = [];
@@ -468,16 +499,16 @@ function renderMatchOptions() {
     el.match.innerHTML = "";
     const placeholder = document.createElement("option");
     placeholder.value = "";
-    placeholder.textContent = !state.eventKey ? "Select an event first"
-        : visible.length ? "— Select Match —"
-        : onlyOurs && state.matches.length ? "No matches for our team yet" : "No matches found";
+    placeholder.textContent = !state.eventKey ? t("checklist.match.select_event_first", "Select an event first")
+        : visible.length ? t("checklist.match.select_match_placeholder", "— Select Match —")
+        : onlyOurs && state.matches.length ? t("checklist.match.no_matches_for_team", "No matches for our team yet") : t("checklist.match.no_matches_found", "No matches found");
     el.match.appendChild(placeholder);
 
     visible.forEach((m) => {
         const opt = document.createElement("option");
         opt.value = m.matchKey;
         const alliance = allianceOf(m);
-        opt.textContent = alliance ? `${matchLabel(m)} (${alliance})` : matchLabel(m);
+        opt.textContent = alliance ? `${matchLabel(m)} (${allianceName(alliance)})` : matchLabel(m);
         el.match.appendChild(opt);
     });
 
@@ -494,7 +525,7 @@ function renderMatchOptions() {
     if (state.eventKey) {
         const custom = document.createElement("option");
         custom.value = "__custom__";
-        custom.textContent = "+ Custom / practice match...";
+        custom.textContent = t("checklist.match.custom_option", "+ Custom / practice match...");
         el.match.appendChild(custom);
     }
     refreshMatchOptionMarks();
@@ -518,7 +549,7 @@ function renderMatchOptions() {
 
 async function onMatchSelected(matchKey) {
     if (matchKey === "__custom__") {
-        const name = (prompt("Name this match (e.g. Practice 3):") || "").trim();
+        const name = (prompt(t("checklist.match.custom_prompt", "Name this match (e.g. Practice 3):")) || "").trim();
         const slug = name.replace(/[^A-Za-z0-9 _-]/g, "").trim().replace(/\s+/g, "_").slice(0, 50);
         if (!slug) {
             el.match.value = state.matchKey;
@@ -544,8 +575,10 @@ async function onMatchSelected(matchKey) {
 function renderFill() {
     const hasMatch = Boolean(state.matchKey && state.match);
     const match = state.matches.find((m) => m.matchKey === state.matchKey);
-    el.matchTitle.textContent = !state.matchKey ? "Select a match"
-        : match ? `${matchLabel(match)}${allianceOf(match) ? ` · ${allianceOf(match)} alliance` : ""}`
+    const alliance = allianceOf(match);
+    const allianceStr = alliance ? ` · ${t("checklist.alliance_label", "{alliance} alliance").replace("{alliance}", allianceName(alliance))}` : "";
+    el.matchTitle.textContent = !state.matchKey ? t("checklist.select_match", "Select a match")
+        : match ? `${matchLabel(match)}${allianceStr}`
         : state.matchKey.replace(/^custom_/, "").replace(/_/g, " ");
     el.reset.disabled = !hasMatch;
     el.notes.disabled = !hasMatch;
@@ -556,7 +589,7 @@ function renderFill() {
 
     const template = currentTemplate();
     if (!template.sections.some((s) => fillableItems(s).length)) {
-        el.fillSections.innerHTML = `<div class="card"><p class="checklist-empty" style="margin:0;">No checklist items yet. Use <strong>Edit Checklists</strong> to create your pre-match and on-the-field lists.</p></div>`;
+        el.fillSections.innerHTML = `<div class="card"><p class="checklist-empty" style="margin:0;">${t("checklist.fill.empty_template", "No checklist items yet. Use <strong>Edit Checklists</strong> to create your pre-match and on-the-field lists.")}</p></div>`;
         return;
     }
 
@@ -580,24 +613,30 @@ function renderFill() {
                 </label>
             </li>`;
         }).join("");
+        const secTitle = sectionDisplayTitle(section);
         return `<div class="card checklist-section">
-            <h2><span>${esc(section.title)}</span><span class="checklist-status">${done}/${total}</span></h2>
+            <h2><span>${esc(secTitle)}</span><span class="checklist-status">${done}/${total}</span></h2>
             <div class="checklist-progress${total && done === total ? " done" : ""}"><span style="width:${pct}%"></span></div>
-            ${total ? `<ul class="checklist-items">${rows}</ul>` : `<p class="checklist-empty">No items in this list.</p>`}
+            ${total ? `<ul class="checklist-items">${rows}</ul>` : `<p class="checklist-empty">${t("checklist.fill.empty_section", "No items in this list.")}</p>`}
         </div>`;
     }).join("");
 }
 
 function renderStatus(completion) {
     if (!state.matchKey) {
-        el.status.textContent = "Pick a match to start checking items off.";
+        el.status.textContent = t("checklist.status.pick_match", "Pick a match to start checking items off.");
         return;
     }
     const items = currentTemplate().sections.flatMap(fillableItems);
     const done = items.filter((it) => completion.checked[it.id]).length;
-    const parts = [items.length && done === items.length ? "All checks complete ✓" : `${done} of ${items.length} done`];
+    const doneText = items.length && done === items.length
+        ? t("checklist.status.all_complete", "All checks complete ✓")
+        : t("checklist.status.done_count", "{done} of {total} done").replace("{done}", done).replace("{total}", items.length);
+    const parts = [doneText];
     const criticalLeft = items.filter((it) => it.priority === "critical" && !completion.checked[it.id]).length;
-    if (criticalLeft) parts.push(`${criticalLeft} critical left`);
+    if (criticalLeft) {
+        parts.push(t("checklist.status.critical_left", "{count} critical left").replace("{count}", criticalLeft));
+    }
     el.status.textContent = parts.join(" · ");
 }
 
@@ -626,7 +665,7 @@ function wireFill() {
 
     el.reset.addEventListener("click", () => {
         if (!state.match) return;
-        if (!confirm("Uncheck every item for this match?")) return;
+        if (!confirm(t("checklist.reset_confirm", "Uncheck every item for this match?"))) return;
         edit(state.match, (doc) => { doc.checked = {}; });
         state.eventCompletions[state.matchKey] = currentCompletion();
         refreshMatchOptionMarks();
@@ -642,22 +681,22 @@ function renderEdit() {
     el.editSections.innerHTML = template.sections.map((section) => {
         const rows = section.items.map((it, idx) => `
             <li class="checklist-edit-row" data-collab-key="${esc(it.key)}" data-index="${it.index}">
-                <input type="text" value="${esc(it.text)}" maxlength="200" aria-label="Checklist item" data-field="text" />
-                <select data-field="priority" aria-label="Priority" class="checklist-priority-select">${priorityOptions(it.priority)}</select>
-                <button type="button" class="btn ghost" data-action="up" data-section="${esc(section.id)}" title="Move up" aria-label="Move up" ${idx === 0 ? "disabled" : ""}>&uarr;</button>
-                <button type="button" class="btn ghost" data-action="down" data-section="${esc(section.id)}" title="Move down" aria-label="Move down" ${idx === section.items.length - 1 ? "disabled" : ""}>&darr;</button>
-                <button type="button" class="btn ghost" data-action="remove" title="Remove" aria-label="Remove">&times;</button>
+                <input type="text" value="${esc(it.text)}" maxlength="200" aria-label="${esc(t("checklist.edit.item_aria", "Checklist item"))}" data-field="text" />
+                <select data-field="priority" aria-label="${esc(t("checklist.edit.priority_aria", "Priority"))}" class="checklist-priority-select">${priorityOptions(it.priority)}</select>
+                <button type="button" class="btn ghost" data-action="up" data-section="${esc(section.id)}" title="${esc(t("checklist.edit.move_up", "Move up"))}" aria-label="${esc(t("checklist.edit.move_up", "Move up"))}" ${idx === 0 ? "disabled" : ""}>&uarr;</button>
+                <button type="button" class="btn ghost" data-action="down" data-section="${esc(section.id)}" title="${esc(t("checklist.edit.move_down", "Move down"))}" aria-label="${esc(t("checklist.edit.move_down", "Move down"))}" ${idx === section.items.length - 1 ? "disabled" : ""}>&darr;</button>
+                <button type="button" class="btn ghost" data-action="remove" title="${esc(t("checklist.edit.remove", "Remove"))}" aria-label="${esc(t("checklist.edit.remove", "Remove"))}">&times;</button>
             </li>`).join("");
         return `<div class="card checklist-section" data-section="${esc(section.id)}">
             <div class="field" style="margin-top:0;" data-collab-key="title-${esc(section.id)}">
-                <label>List name</label>
-                <input type="text" value="${esc(section.title)}" maxlength="60" data-field="title" data-section="${esc(section.id)}" />
+                <label>${esc(t("checklist.edit.list_name", "List name"))}</label>
+                <input type="text" value="${esc(sectionDisplayTitle(section))}" maxlength="60" data-field="title" data-section="${esc(section.id)}" />
             </div>
-            <ul class="checklist-items">${rows || `<li class="checklist-empty">No items yet.</li>`}</ul>
+            <ul class="checklist-items">${rows || `<li class="checklist-empty">${esc(t("checklist.edit.no_items", "No items yet."))}</li>`}</ul>
             <form class="checklist-edit-row mt-12" data-add="${esc(section.id)}" data-collab-key="add-${esc(section.id)}" data-no-loading="true" autocomplete="off">
-                <input type="text" placeholder="Add an item..." maxlength="200" aria-label="New checklist item" />
-                <select aria-label="Priority" class="checklist-priority-select">${priorityOptions(DEFAULT_PRIORITY)}</select>
-                <button type="submit" class="btn">Add</button>
+                <input type="text" placeholder="${esc(t("checklist.edit.add_placeholder", "Add an item..."))}" maxlength="200" aria-label="${esc(t("checklist.edit.new_item_aria", "New checklist item"))}" />
+                <select aria-label="${esc(t("checklist.edit.priority_aria", "Priority"))}" class="checklist-priority-select">${priorityOptions(DEFAULT_PRIORITY)}</select>
+                <button type="submit" class="btn">${esc(t("checklist.edit.add_btn", "Add"))}</button>
             </form>
         </div>`;
     }).join("");
@@ -740,7 +779,7 @@ function wireEdit() {
     el.starter.addEventListener("click", () => {
         const template = currentTemplate();
         const hasItems = template.sections.some((s) => s.items.length);
-        if (hasItems && !confirm("Add the starter items to your lists? Existing items are kept.")) return;
+        if (hasItems && !confirm(t("checklist.edit.starter_confirm", "Add the starter items to your lists? Existing items are kept."))) return;
         edit(state.tpl, (doc) => {
             doc.fields = Array.isArray(doc.fields) ? doc.fields : [];
             template.sections.forEach((s) => {

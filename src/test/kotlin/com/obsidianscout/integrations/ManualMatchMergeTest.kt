@@ -4,6 +4,7 @@ import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.db.ApiMatches
+import com.obsidianscout.db.MatchChecklists
 import com.obsidianscout.db.MatchPlans
 import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.ScoutingAssignments
@@ -38,7 +39,7 @@ class ManualMatchMergeTest {
         if (testDbFile.exists()) testDbFile.delete()
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
         transaction {
-            SchemaUtils.create(Users, ApiMatches, ScoutingEntries, QualitativeScoutingEntries, ScoutingAssignments, MatchPlans)
+            SchemaUtils.create(Users, ApiMatches, ScoutingEntries, QualitativeScoutingEntries, ScoutingAssignments, MatchPlans, MatchChecklists)
             userId = Users.insertAndGetId {
                 it[username] = "admin"
                 it[passwordHash] = "hash"

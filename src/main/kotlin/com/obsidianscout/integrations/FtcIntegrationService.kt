@@ -121,6 +121,7 @@ object FtcIntegrationService {
                 val timezone = obj["timezone"]?.jsonPrimitive?.content ?: "UTC"
                 val eventKey = "${year}${code.lowercase()}"
 
+                EventTeamCanonical.adoptManualEvents(eventKey, year, code)
                 val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.limit(1).firstOrNull()
                 if (existing == null) {
                     ApiEvents.insert {
@@ -259,6 +260,7 @@ object FtcIntegrationService {
 
         val now = Instant.now()
         transaction {
+            EventTeamCanonical.adoptManualEvents(eventKey, year, code)
             val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.limit(1).firstOrNull()
             if (existing == null) {
                 ApiEvents.insert {
@@ -332,6 +334,7 @@ object FtcIntegrationService {
                     processedTeamKeys.add(teamKey)
                 }
             }
+            EventTeamCanonical.deduplicateTeamsForEvent(eventKey)
         }
 
         // Matches Sync

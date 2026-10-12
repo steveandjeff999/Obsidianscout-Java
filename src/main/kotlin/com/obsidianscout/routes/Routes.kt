@@ -1792,9 +1792,9 @@ fun Application.configureRoutes() {
                     call.respond(IntegrationService.listTeams(eventKeyLower, session))
                 }
                 post {
-                    call.requireAdmin()
+                    val session = call.requireAdmin()
                     val request = call.receive<TeamRecord>()
-                    val saved = IntegrationService.saveTeam(request)
+                    val saved = IntegrationService.saveTeam(request, session.program)
                     call.respond(saved)
                 }
                 delete {
@@ -1847,9 +1847,9 @@ fun Application.configureRoutes() {
                     call.respond(com.obsidianscout.analytics.RankingProjectionService.project(session, eventKey, simulations, seed))
                 }
                 post {
-                    call.requireAdmin()
+                    val session = call.requireAdmin()
                     val request = call.receive<MatchRecord>()
-                    val saved = IntegrationService.saveMatch(request)
+                    val saved = IntegrationService.saveMatch(request, session.program)
                     call.respond(saved)
                 }
                 delete {

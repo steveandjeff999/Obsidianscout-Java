@@ -255,6 +255,7 @@ object IntegrationService {
                         }
                     }
                 }
+                EventTeamCanonical.deduplicateTeamsForEvent(eventKey)
 
                 val existingMatchesMap = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }
                     .associateBy { it[ApiMatches.matchKey] }
@@ -391,6 +392,8 @@ object IntegrationService {
                         }
                     }
                 }
+
+                EventTeamCanonical.deduplicateTeamsForEvent(key)
 
                 val existingMatchesMap = ApiMatches.selectAll().where { ApiMatches.eventKey eq key }
                     .associateBy { it[ApiMatches.matchKey] }
@@ -1238,12 +1241,15 @@ object IntegrationService {
 
     fun saveEvent(event: EventRecord): EventRecord {
         return transaction {
-            // Store exactly what the user typed — no year prefixing.
+            // Store exactly what the user typed — no year prefixing (custom/off-season keys are allowed).
             // TBA synced events already come in with the canonical year-prefixed key.
             val key = event.eventKey.lowercase().trim()
             val eventCode = event.eventCode ?: key.removePrefix(event.year.toString())
 
+            // If this event is already stored under another key (e.g. typed "okok" while the API's
+            // "2026okok" exists), save into that row instead of creating a second copy.
             val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq key }.limit(1).firstOrNull()
+                ?: EventTeamCanonical.findEquivalentEvent(key, event.year, eventCode)
             val now = Instant.now()
             if (existing == null) {
                 ApiEvents.insert {
@@ -1257,34 +1263,23 @@ object IntegrationService {
                     it[dataJson] = "{\"manual\":true}"
                     it[updatedAt] = now
                 }
+                event.copy(eventKey = key, eventCode = eventCode)
             } else {
-                val oldStoredKey = existing[ApiEvents.eventKey]
+                val storedKey = existing[ApiEvents.eventKey]
+                val isApiRow = !existing[ApiEvents.dataJson].contains("\"manual\":true")
                 ApiEvents.update({ ApiEvents.id eq existing[ApiEvents.id] }) {
-                    it[ApiEvents.eventKey] = key
                     it[ApiEvents.year] = event.year
-                    it[ApiEvents.eventCode] = eventCode
+                    if (!isApiRow) it[ApiEvents.eventCode] = eventCode
                     it[name] = event.name
                     it[startDate] = event.startDate
                     it[endDate] = event.endDate
                     it[timezone] = event.timezone
-                    it[dataJson] = "{\"manual\":true}"
+                    // Keep the provider's JSON on synced rows; the next sync refreshes them anyway.
+                    if (!isApiRow) it[dataJson] = "{\"manual\":true}"
                     it[updatedAt] = now
                 }
-                // Propagate if the stored key actually changed (e.g. legacy records)
-                if (oldStoredKey != key) {
-                    ApiTeams.update({ ApiTeams.eventKey eq oldStoredKey }) { it[ApiTeams.eventKey] = key }
-                    ApiMatches.update({ ApiMatches.eventKey eq oldStoredKey }) { it[ApiMatches.eventKey] = key }
-                    MatchPlans.update({ MatchPlans.eventKey eq oldStoredKey }) { it[MatchPlans.eventKey] = key }
-                    ScoutingAssignments.update({ ScoutingAssignments.eventKey eq oldStoredKey }) { it[ScoutingAssignments.eventKey] = key }
-                    ScoutingEntries.update({ ScoutingEntries.eventKey eq oldStoredKey }) { it[ScoutingEntries.eventKey] = key }
-                    PitScoutingEntries.update({ PitScoutingEntries.eventKey eq oldStoredKey }) { it[PitScoutingEntries.eventKey] = key }
-                    QualitativeScoutingEntries.update({ QualitativeScoutingEntries.eventKey eq oldStoredKey }) { it[QualitativeScoutingEntries.eventKey] = key }
-                    EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq oldStoredKey }) { it[EpaOprHistoryCache.eventKey] = key }
-                    AllianceSelections.update({ AllianceSelections.eventKey eq oldStoredKey }) { it[AllianceSelections.eventKey] = key }
-                    ScoutingAlliances.update({ ScoutingAlliances.eventKey eq oldStoredKey }) { it[ScoutingAlliances.eventKey] = key }
-                }
+                event.copy(eventKey = storedKey, eventCode = existing[ApiEvents.eventCode] ?: eventCode)
             }
-            event.copy(eventKey = key, eventCode = eventCode)
         }
     }
 
@@ -1338,61 +1333,30 @@ object IntegrationService {
             // Propagate key rename across all dependent tables using the RAW stored key
             // (which may be the legacy bare key, the old norm, or the new norm if unchanged)
             if (rawStoredKey != newNorm) {
-                ApiTeams.update({ ApiTeams.eventKey eq rawStoredKey }) {
-                    it[ApiTeams.eventKey] = newNorm
-                }
-                ApiMatches.update({ ApiMatches.eventKey eq rawStoredKey }) {
-                    it[ApiMatches.eventKey] = newNorm
-                }
-                MatchPlans.update({ MatchPlans.eventKey eq rawStoredKey }) {
-                    it[MatchPlans.eventKey] = newNorm
-                }
-                ScoutingAssignments.update({ ScoutingAssignments.eventKey eq rawStoredKey }) {
-                    it[ScoutingAssignments.eventKey] = newNorm
-                }
-                // Rewrite match keys that embed the old event key as a prefix
-                val affectedMatches = ApiMatches.selectAll().where { ApiMatches.eventKey eq newNorm }.toList()
-                for (mRow in affectedMatches) {
-                    val oldMatchKey = mRow[ApiMatches.matchKey]
-                    if (oldMatchKey.startsWith(rawStoredKey)) {
-                        val newMatchKey = newNorm + oldMatchKey.removePrefix(rawStoredKey)
-                        ApiMatches.update({ ApiMatches.matchKey eq oldMatchKey }) {
-                            it[ApiMatches.matchKey] = newMatchKey
-                        }
-                        MatchCanonical.remapMatchKey(oldMatchKey, newMatchKey)
-                    }
-                }
-                ScoutingEntries.update({ ScoutingEntries.eventKey eq rawStoredKey }) {
-                    it[ScoutingEntries.eventKey] = newNorm
-                }
-                PitScoutingEntries.update({ PitScoutingEntries.eventKey eq rawStoredKey }) {
-                    it[PitScoutingEntries.eventKey] = newNorm
-                }
-                QualitativeScoutingEntries.update({ QualitativeScoutingEntries.eventKey eq rawStoredKey }) {
-                    it[QualitativeScoutingEntries.eventKey] = newNorm
-                }
-                EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq rawStoredKey }) {
-                    it[EpaOprHistoryCache.eventKey] = newNorm
-                }
-                AllianceSelections.update({ AllianceSelections.eventKey eq rawStoredKey }) {
-                    it[AllianceSelections.eventKey] = newNorm
-                }
-                ScoutingAlliances.update({ ScoutingAlliances.eventKey eq rawStoredKey }) {
-                    it[ScoutingAlliances.eventKey] = newNorm
-                }
+                EventTeamCanonical.moveEventData(rawStoredKey, newNorm)
             }
 
             event.copy(eventKey = newNorm, eventCode = newCode)
         }
     }
 
-    fun saveTeam(team: TeamRecord): TeamRecord {
+    fun saveTeam(team: TeamRecord, program: String = "FRC"): TeamRecord {
         return transaction {
             val eventKey = team.eventKey.lowercase().trim()
-            val teamKey = team.teamKey.ifBlank { "frc${team.teamNumber}" }.lowercase().trim()
+            // `{frc|ftc}{number}` for the session's program: team lists filter by that prefix, and it is
+            // the key the API sync writes, so the manual row and the synced row are the same row.
+            val teamKey = EventTeamCanonical.canonicalTeamKey(team.teamKey, program, team.teamNumber)
+            val prefix = EventTeamCanonical.teamPrefix(program)
             val existing = ApiTeams.selectAll().where {
                 (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamKey eq teamKey)
             }.limit(1).firstOrNull()
+                // Same team stored under a legacy key (bare number, or the old frc default in an FTC event).
+                ?: ApiTeams.selectAll().where {
+                    (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamNumber eq team.teamNumber)
+                }.toList().firstOrNull { row ->
+                    val k = row[ApiTeams.teamKey].lowercase()
+                    k == team.teamNumber.toString() || (k == "frc${team.teamNumber}" && prefix == "ftc" && row[ApiTeams.dataJson].trim() == "{}")
+                }
             val now = Instant.now()
             if (existing == null) {
                 ApiTeams.insert {
@@ -1412,6 +1376,7 @@ object IntegrationService {
                 }
             } else {
                 ApiTeams.update({ ApiTeams.id eq existing[ApiTeams.id] }) {
+                    it[ApiTeams.teamKey] = teamKey
                     it[teamNumber] = team.teamNumber
                     it[name] = team.name ?: ""
                     it[nickname] = team.nickname ?: ""
@@ -1428,7 +1393,7 @@ object IntegrationService {
         }
     }
 
-    fun saveMatch(match: MatchRecord): MatchRecord {
+    fun saveMatch(match: MatchRecord, program: String = "FRC"): MatchRecord {
         val saved = transaction {
             val eventKey = match.eventKey.lowercase().trim()
             // Use the same canonical key API syncs produce (e.g. `2026okok_qm5`) so a manual match and
@@ -1450,33 +1415,9 @@ object IntegrationService {
             val matchNumber = identity.matchNumber
             val generatedKey = identity.toMatchKey()
 
-            // Normalize team lists to prefix with frc
-            val normalizedRed = match.redTeams.map { key ->
-                val trimmed = key.trim().lowercase()
-                when {
-                    trimmed.contains('/') -> {
-                        val parts = trimmed.split('/')
-                        val num = parts.last().trim().removePrefix("frc")
-                        "frc$num"
-                    }
-                    trimmed.startsWith("frc") -> trimmed
-                    trimmed.all { it.isDigit() } -> "frc$trimmed"
-                    else -> trimmed
-                }
-            }
-            val normalizedBlue = match.blueTeams.map { key ->
-                val trimmed = key.trim().lowercase()
-                when {
-                    trimmed.contains('/') -> {
-                        val parts = trimmed.split('/')
-                        val num = parts.last().trim().removePrefix("frc")
-                        "frc$num"
-                    }
-                    trimmed.startsWith("frc") -> trimmed
-                    trimmed.all { it.isDigit() } -> "frc$trimmed"
-                    else -> trimmed
-                }
-            }
+            // Normalize team lists to `{frc|ftc}{number}` for the session's program (same keys the API sync uses).
+            val normalizedRed = match.redTeams.map { EventTeamCanonical.canonicalTeamKey(it, program) }.filter { it.isNotBlank() }
+            val normalizedBlue = match.blueTeams.map { EventTeamCanonical.canonicalTeamKey(it, program) }.filter { it.isNotBlank() }
 
             // Editing a match submits its current key, which may be a legacy one: update that row in place.
             val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq generatedKey }.limit(1).firstOrNull()
@@ -1705,6 +1646,8 @@ object IntegrationService {
         val clippedStart = event.startDate.clipEventDate()
         val clippedEnd = event.endDate.clipEventDate()
         val clippedTimezone = event.timezone.clipTimezone()
+        // A manually created copy of this event (e.g. typed as "okok") moves onto the synced key first.
+        EventTeamCanonical.adoptManualEvents(resolvedKey, event.year, resolvedCode)
         val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq resolvedKey }.limit(1).firstOrNull()
         if (existing == null) {
             ApiEvents.insert {

@@ -141,37 +141,37 @@
             <div class="card">
                 <div class="checklist-toolbar">
                     <div>
-                        <h1 style="margin: 0;">Match Checklist</h1>
-                        <p class="notice" style="margin: 4px 0 0;">Pre-match and on-the-field checks for the drive team. Every match gets its own copy, shared with your team.</p>
+                        <h1 style="margin: 0;" data-i18n="checklist.title">Match Checklist</h1>
+                        <p class="notice" style="margin: 4px 0 0;" data-i18n="checklist.subtitle">Pre-match and on-the-field checks for the drive team. Every match gets its own copy, shared with your team.</p>
                     </div>
                     <div class="checklist-tabs" role="tablist">
-                        <button type="button" class="btn" id="checklist-tab-fill" role="tab" aria-selected="true">Fill Out</button>
-                        <button type="button" class="btn ghost" id="checklist-tab-edit" role="tab" aria-selected="false">Edit Checklists</button>
+                        <button type="button" class="btn" id="checklist-tab-fill" role="tab" aria-selected="true" data-i18n="checklist.tab.fill">Fill Out</button>
+                        <button type="button" class="btn ghost" id="checklist-tab-edit" role="tab" aria-selected="false" data-i18n="checklist.tab.edit">Edit Checklists</button>
                     </div>
                 </div>
 
                 <div class="checklist-controls" id="checklist-match-controls">
                     <div class="field">
-                        <label for="checklist-event">Event</label>
+                        <label for="checklist-event" data-i18n="checklist.event">Event</label>
                         <select id="checklist-event"></select>
                     </div>
                     <div class="field">
-                        <label for="checklist-match">Match</label>
+                        <label for="checklist-match" data-i18n="checklist.match">Match</label>
                         <select id="checklist-match"></select>
                     </div>
                     <div class="field">
                         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <input type="checkbox" id="checklist-our-matches" checked />
-                            Only our matches
+                            <span data-i18n="checklist.only_our_matches">Only our matches</span>
                         </label>
                     </div>
                 </div>
             </div>
 
             <div id="checklist-disabled" class="card mt-20 hidden">
-                <h2>Non-scouting tools are turned off</h2>
-                <p class="notice">Turn on "Non-Scouting Tools" in Personal Settings to use the Match Checklist.</p>
-                <a class="btn mt-12" href="/config">Open settings</a>
+                <h2 data-i18n="checklist.disabled.title">Non-scouting tools are turned off</h2>
+                <p class="notice" data-i18n="checklist.disabled.notice">Turn on "Non-Scouting Tools" in Personal Settings to use the Match Checklist.</p>
+                <a class="btn mt-12" href="/config" data-i18n="checklist.disabled.open_settings">Open settings</a>
             </div>
 
             <!-- Fill out a checklist for the selected match -->
@@ -179,12 +179,12 @@
                 <div class="card mt-20">
                     <div class="checklist-toolbar">
                         <div>
-                            <strong id="checklist-match-title">Select a match</strong>
+                            <strong id="checklist-match-title" data-i18n="checklist.select_match">Select a match</strong>
                             <div class="checklist-status" id="checklist-status"></div>
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button type="button" class="btn btn-sm hidden" id="checklist-match-offline">Save offline changes</button>
-                            <button type="button" class="btn ghost btn-sm" id="checklist-reset">Reset this match</button>
+                            <button type="button" class="btn btn-sm hidden" id="checklist-match-offline" data-i18n="checklist.save_offline">Save offline changes</button>
+                            <button type="button" class="btn ghost btn-sm" id="checklist-reset" data-i18n="checklist.reset_match">Reset this match</button>
                         </div>
                     </div>
                     <!-- Live editing status (filled by config-collab.js) -->
@@ -193,8 +193,8 @@
                 <div class="checklist-sections" id="checklist-fill-sections"></div>
                 <div class="card mt-20">
                     <div class="field" style="margin: 0;">
-                        <label for="checklist-notes">Match notes</label>
-                        <textarea id="checklist-notes" rows="3" placeholder="Anything the drive team should remember about this match..."></textarea>
+                        <label for="checklist-notes" data-i18n="checklist.match_notes">Match notes</label>
+                        <textarea id="checklist-notes" rows="3" placeholder="Anything the drive team should remember about this match..." data-i18n-placeholder="checklist.notes_placeholder"></textarea>
                     </div>
                 </div>
             </section>
@@ -203,10 +203,10 @@
             <section id="checklist-edit" class="hidden">
                 <div class="card mt-20">
                     <div class="checklist-toolbar">
-                        <span class="checklist-status">Your whole team edits these lists together, live. Changes apply to every match, and checks already made on renamed items are kept.</span>
+                        <span class="checklist-status" data-i18n="checklist.edit.notice">Your whole team edits these lists together, live. Changes apply to every match, and checks already made on renamed items are kept.</span>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button type="button" class="btn hidden" id="checklist-tpl-offline">Save offline changes</button>
-                            <button type="button" class="btn ghost" id="checklist-starter">Load starter items</button>
+                            <button type="button" class="btn hidden" id="checklist-tpl-offline" data-i18n="checklist.save_offline">Save offline changes</button>
+                            <button type="button" class="btn ghost" id="checklist-starter" data-i18n="checklist.load_starter">Load starter items</button>
                         </div>
                     </div>
                     <!-- Live editing status (filled by config-collab.js) -->

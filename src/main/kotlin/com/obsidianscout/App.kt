@@ -616,6 +616,12 @@ fun Application.module(appConfig: AppConfig) {
                 ConfigService.startBackgroundClusterSync(30)
                 SettingsService.ensureDefaultSettings()
                 try {
+                    // Events/teams first: merging a manual event re-keys its matches, which the match repair then checks.
+                    com.obsidianscout.integrations.EventTeamCanonical.repairAll()
+                } catch (e: Exception) {
+                    environment.log.warn("Manual event/team merge repair skipped: ${e.message}")
+                }
+                try {
                     com.obsidianscout.integrations.MatchCanonical.repairOrphanedMatchKeys()
                 } catch (e: Exception) {
                     environment.log.warn("Orphaned match key repair skipped: ${e.message}")
