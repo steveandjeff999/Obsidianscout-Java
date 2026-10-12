@@ -135,6 +135,36 @@ data class ThemeSettings(
     val btnRadius: String = "999px"
 )
 
+/**
+ * Weights recent scouted matches more heavily when averaging a team's performance.
+ * Off by default, in which case every match counts equally.
+ */
+@Serializable
+data class RecencyBiasSettings(
+    val enabled: Boolean = false,
+    /** "exponential" (weight halves every [halfLifeMatches]) or "lastN" (only the last [windowSize] matches count). */
+    val mode: String = MODE_EXPONENTIAL,
+    val halfLifeMatches: Double = 4.0,
+    val windowSize: Int = 6,
+    /** Teams with fewer distinct scouted matches than this get a plain average. */
+    val minMatches: Int = 4,
+    /** Multiplier applied to prescout entries when they're mixed in with event data. */
+    val prescoutWeight: Double = 0.5
+) {
+    fun normalized(): RecencyBiasSettings = copy(
+        mode = if (mode == MODE_LAST_N) MODE_LAST_N else MODE_EXPONENTIAL,
+        halfLifeMatches = halfLifeMatches.takeIf { it.isFinite() }?.coerceIn(1.0, 20.0) ?: 4.0,
+        windowSize = windowSize.coerceIn(1, 30),
+        minMatches = minMatches.coerceIn(1, 15),
+        prescoutWeight = prescoutWeight.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.5
+    )
+
+    companion object {
+        const val MODE_EXPONENTIAL = "exponential"
+        const val MODE_LAST_N = "lastN"
+    }
+}
+
 @Serializable
 data class ApiSettings(
     val year: Int = Year.now().value,
@@ -146,6 +176,7 @@ data class ApiSettings(
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
     val useMatch13Exp: Boolean = false,
+    val recencyBias: RecencyBiasSettings = RecencyBiasSettings(),
     val chatEnabled: Boolean = true,
     val apiKeys: ApiKeys = ApiKeys(),
     val scoutPages: List<String> = DEFAULT_SCOUT_PAGES,
@@ -336,6 +367,7 @@ object SettingsService {
             preferredSource = settings.preferredSource.lowercase(),
             useStatboticsEpa = normalizedUseStatboticsEpa,
             useMatch13Exp = normalizedUseMatch13Exp,
+            recencyBias = settings.recencyBias.normalized(),
             scoutPages = normalizedScoutPages,
             analyticsPages = normalizedAnalyticsPages,
             adminPages = normalizedAdminPages,

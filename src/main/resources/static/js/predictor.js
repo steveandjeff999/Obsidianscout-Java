@@ -2,6 +2,8 @@
 function t(key, fallback) {
     return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
 }
+// Team render loops name their item `t`, which shadows the helper above; use this alias inside them.
+const translateText = t;
 
 let originalMainContentHTML = "";
 let mainContentWrapper = null;
@@ -617,6 +619,10 @@ function renderTeamList(listId, teams, selectedSource, effectiveUseEpa, effectiv
             if (t.exp !== null && t.exp !== undefined && effectiveUseExp) {
                 metricsHtml += `<span class="metric-pill">EXP: ${t.exp.toFixed(1)}</span>`;
             }
+        }
+
+        if (t.recencyWeighted) {
+            metricsHtml += `<span class="metric-pill" title="${translateText('predictor.recency_weighted_tip', "Recent matches count more in this team's scouted average (Recency Bias setting).")}">${translateText('predictor.recency_weighted', 'Recency-weighted')}</span>`;
         }
 
         const displayNum = Obsidianscout.formatTeam(t.teamKey, t.teamNumber);

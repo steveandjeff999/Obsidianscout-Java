@@ -8,9 +8,11 @@ import com.obsidianscout.db.ApiMatches
 import com.obsidianscout.db.ApiTeams
 import com.obsidianscout.db.AllianceSelections
 import com.obsidianscout.db.EpaOprHistoryCache
+import com.obsidianscout.db.MatchPlans
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.ScoutingAlliances
+import com.obsidianscout.db.ScoutingAssignments
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.Users
 import com.obsidianscout.db.AppSettings
@@ -658,6 +660,7 @@ object IntegrationService {
             val teamNumbers = teamRows.map { it[ApiTeams.teamNumber] }
 
             val config = ConfigService.getConfig(session.teamNumber, session.program)
+            val recencyBias = AllianceService.getEffectiveSettings(session.teamNumber, session.program).recencyBias
             val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
             val visibleTeams = partnerTeams + session.teamNumber
 
@@ -705,12 +708,8 @@ object IntegrationService {
                     currentEventEntries
                 }
 
-                val avgScore = if (mergedEntries.isNotEmpty()) {
-                    mergedEntries.map { entry ->
-                        AnalyticsService.scoreEntry(config, entry)
-                    }.average()
-                } else {
-                    null
+                val avgScore = com.obsidianscout.analytics.RecencyWeighting.weightedAverage(mergedEntries, recencyBias) { entry ->
+                    AnalyticsService.scoreEntry(config, entry)
                 }
 
                 TeamRecord(
@@ -1275,6 +1274,8 @@ object IntegrationService {
                 if (oldStoredKey != key) {
                     ApiTeams.update({ ApiTeams.eventKey eq oldStoredKey }) { it[ApiTeams.eventKey] = key }
                     ApiMatches.update({ ApiMatches.eventKey eq oldStoredKey }) { it[ApiMatches.eventKey] = key }
+                    MatchPlans.update({ MatchPlans.eventKey eq oldStoredKey }) { it[MatchPlans.eventKey] = key }
+                    ScoutingAssignments.update({ ScoutingAssignments.eventKey eq oldStoredKey }) { it[ScoutingAssignments.eventKey] = key }
                     ScoutingEntries.update({ ScoutingEntries.eventKey eq oldStoredKey }) { it[ScoutingEntries.eventKey] = key }
                     PitScoutingEntries.update({ PitScoutingEntries.eventKey eq oldStoredKey }) { it[PitScoutingEntries.eventKey] = key }
                     QualitativeScoutingEntries.update({ QualitativeScoutingEntries.eventKey eq oldStoredKey }) { it[QualitativeScoutingEntries.eventKey] = key }
@@ -1343,6 +1344,12 @@ object IntegrationService {
                 ApiMatches.update({ ApiMatches.eventKey eq rawStoredKey }) {
                     it[ApiMatches.eventKey] = newNorm
                 }
+                MatchPlans.update({ MatchPlans.eventKey eq rawStoredKey }) {
+                    it[MatchPlans.eventKey] = newNorm
+                }
+                ScoutingAssignments.update({ ScoutingAssignments.eventKey eq rawStoredKey }) {
+                    it[ScoutingAssignments.eventKey] = newNorm
+                }
                 // Rewrite match keys that embed the old event key as a prefix
                 val affectedMatches = ApiMatches.selectAll().where { ApiMatches.eventKey eq newNorm }.toList()
                 for (mRow in affectedMatches) {
@@ -1352,12 +1359,7 @@ object IntegrationService {
                         ApiMatches.update({ ApiMatches.matchKey eq oldMatchKey }) {
                             it[ApiMatches.matchKey] = newMatchKey
                         }
-                        ScoutingEntries.update({ ScoutingEntries.matchKey eq oldMatchKey }) {
-                            it[ScoutingEntries.matchKey] = newMatchKey
-                        }
-                        QualitativeScoutingEntries.update({ QualitativeScoutingEntries.matchKey eq oldMatchKey }) {
-                            it[QualitativeScoutingEntries.matchKey] = newMatchKey
-                        }
+                        MatchCanonical.remapMatchKey(oldMatchKey, newMatchKey)
                     }
                 }
                 ScoutingEntries.update({ ScoutingEntries.eventKey eq rawStoredKey }) {
@@ -1427,15 +1429,27 @@ object IntegrationService {
     }
 
     fun saveMatch(match: MatchRecord): MatchRecord {
-        return transaction {
+        val saved = transaction {
             val eventKey = match.eventKey.lowercase().trim()
-            val compLevel = match.compLevel.ifBlank { "qm" }.lowercase().trim()
-            val setNumber = match.setNumber ?: 1
-            val matchNumber = match.matchNumber ?: 1
-            val generatedKey = match.matchKey.ifBlank {
-                "${eventKey}_${compLevel}_s${setNumber}_m${matchNumber}".lowercase()
-            }.lowercase().trim()
-            
+            // Use the same canonical key API syncs produce (e.g. `2026okok_qm5`) so a manual match and
+            // its later API copy share one row instead of being merged after the fact.
+            val previousKey = match.matchKey.lowercase().trim()
+            val identity = MatchCanonical.identityFrom(
+                MatchSyncRecord(
+                    // Only fall back to the submitted key when no match number was sent; otherwise an edit
+                    // that changes the number would be overridden by the number embedded in the old key.
+                    matchKey = if (match.matchNumber == null) previousKey else "",
+                    eventKey = eventKey,
+                    compLevel = match.compLevel.ifBlank { "qm" },
+                    setNumber = match.setNumber,
+                    matchNumber = match.matchNumber
+                )
+            )
+            val compLevel = identity.compLevel
+            val setNumber = identity.setNumber
+            val matchNumber = identity.matchNumber
+            val generatedKey = identity.toMatchKey()
+
             // Normalize team lists to prefix with frc
             val normalizedRed = match.redTeams.map { key ->
                 val trimmed = key.trim().lowercase()
@@ -1464,13 +1478,17 @@ object IntegrationService {
                 }
             }
 
+            // Editing a match submits its current key, which may be a legacy one: update that row in place.
             val existing = ApiMatches.selectAll().where { ApiMatches.matchKey eq generatedKey }.limit(1).firstOrNull()
+                ?: previousKey.takeIf { it.isNotBlank() }?.let { key ->
+                    ApiMatches.selectAll().where { ApiMatches.matchKey eq key }.limit(1).firstOrNull()
+                }
             val now = Instant.now()
             val redTeamsJson = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), normalizedRed)
             val blueTeamsJson = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), normalizedBlue)
             if (existing == null) {
                 ApiMatches.insert {
-                    it[matchKey] = generatedKey
+                    it[ApiMatches.matchKey] = generatedKey
                     it[ApiMatches.eventKey] = eventKey
                     it[ApiMatches.compLevel] = compLevel
                     it[ApiMatches.setNumber] = setNumber
@@ -1483,7 +1501,9 @@ object IntegrationService {
                     it[updatedAt] = now
                 }
             } else {
+                val existingKey = existing[ApiMatches.matchKey]
                 ApiMatches.update({ ApiMatches.id eq existing[ApiMatches.id] }) {
+                    it[ApiMatches.matchKey] = generatedKey
                     it[ApiMatches.eventKey] = eventKey
                     it[ApiMatches.compLevel] = compLevel
                     it[ApiMatches.setNumber] = setNumber
@@ -1494,6 +1514,7 @@ object IntegrationService {
                     it[blueTeams] = blueTeamsJson
                     it[updatedAt] = now
                 }
+                MatchCanonical.remapMatchKey(existingKey, generatedKey)
             }
             match.copy(
                 matchKey = generatedKey,
@@ -1507,6 +1528,9 @@ object IntegrationService {
                 blueTeams = normalizedBlue
             )
         }
+        // Merge with any API copy of the same match that's already stored.
+        MatchCanonical.deduplicateDatabaseForEvent(saved.eventKey)
+        return saved
     }
 
     fun deleteEvent(eventKey: String): Boolean {

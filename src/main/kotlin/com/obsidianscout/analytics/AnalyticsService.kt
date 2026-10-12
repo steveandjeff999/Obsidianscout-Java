@@ -99,6 +99,8 @@ object AnalyticsService {
     fun compareTeams(session: UserSession, teamNumbers: List<Int>, eventKeyParam: String?): TeamComparisonResponse {
         val config = ConfigService.getConfig(session.teamNumber, session.program)
         val eventKey = eventKeyParam?.trim()?.ifBlank { null }
+        val recencyBias = com.obsidianscout.scouting.AllianceService
+            .getEffectiveSettings(session.teamNumber, session.program).recencyBias
         
         val allEntries = ScoutingService.listEntries(session, includePrescout = true, all = true)
         
@@ -128,7 +130,19 @@ object AnalyticsService {
             }
 
             val count = entries.size
-            val avgTotal = if (count > 0) entries.map { scoreEntry(config, it) }.average() else 0.0
+            val weights = RecencyWeighting.weights(entries, recencyBias)
+            // Weighted mean over the entries that have a value; weights stay tied to their entry.
+            fun weightedMean(value: (ScoutingEntryRecord) -> Double?): Double? {
+                var sum = 0.0
+                var totalWeight = 0.0
+                entries.forEachIndexed { i, entry ->
+                    val v = value(entry) ?: return@forEachIndexed
+                    sum += v * weights[i]
+                    totalWeight += weights[i]
+                }
+                return if (totalWeight > 0.0) sum / totalWeight else null
+            }
+            val avgTotal = weightedMean { scoreEntry(config, it) } ?: 0.0
             val maxTotal = if (count > 0) entries.maxOf { scoreEntry(config, it) } else 0.0
             
             val autoFields = config.fields.filter { it.phase?.lowercase()?.contains("auto") == true }
@@ -138,9 +152,9 @@ object AnalyticsService {
                 !p.contains("auto") && !p.contains("end")
             }
 
-            val avgAuto = if (count > 0) entries.map { e -> autoFields.sumOf { fieldScore(it, e.data[it.id]) } }.average() else 0.0
-            val avgEndgame = if (count > 0) entries.map { e -> endgameFields.sumOf { fieldScore(it, e.data[it.id]) } }.average() else 0.0
-            val avgTeleop = if (count > 0) entries.map { e -> teleopFields.sumOf { fieldScore(it, e.data[it.id]) } }.average() else 0.0
+            val avgAuto = weightedMean { e -> autoFields.sumOf { fieldScore(it, e.data[it.id]) } } ?: 0.0
+            val avgEndgame = weightedMean { e -> endgameFields.sumOf { fieldScore(it, e.data[it.id]) } } ?: 0.0
+            val avgTeleop = weightedMean { e -> teleopFields.sumOf { fieldScore(it, e.data[it.id]) } } ?: 0.0
 
             val metrics = mutableMapOf<String, Double>()
             val metricSeries = mutableMapOf<String, List<AnalyticsSeriesPoint>>()
@@ -156,11 +170,10 @@ object AnalyticsService {
                 val fType = field.type.lowercase()
                 if (fType in listOf("label", "divider", "section", "header")) return@forEach
                 if (fType in listOf("counter", "number", "slider", "rating")) {
-                    val vals = entries.mapNotNull { readNumber(it.data[field.id]) }
-                    metrics[field.id] = if (vals.isNotEmpty()) vals.average() else 0.0
+                    metrics[field.id] = weightedMean { readNumber(it.data[field.id]) } ?: 0.0
                 } else if (fType in listOf("checkbox", "toggle", "boolean")) {
-                    val bools = entries.mapNotNull { readBoolean(it.data[field.id]) }
-                    metrics[field.id] = if (bools.isNotEmpty()) (bools.count { it }.toDouble() / bools.size * 100.0) else 0.0
+                    val share = weightedMean { e -> readBoolean(e.data[field.id])?.let { if (it) 1.0 else 0.0 } }
+                    metrics[field.id] = (share ?: 0.0) * 100.0
                 } else if (fType in listOf("select", "radio")) {
                     val counts = mutableMapOf<String, Int>()
                     entries.forEach { e ->

@@ -4,6 +4,9 @@ import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.ApiMatches
+import com.obsidianscout.db.MatchPlans
+import com.obsidianscout.db.QualitativeScoutingEntries
+import com.obsidianscout.db.ScoutingAssignments
 import com.obsidianscout.db.ScoutingEntries
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -36,6 +39,8 @@ object MatchCanonical {
 
     private val TBA_KEY_SUFFIX = Regex("""^([a-z]+)(\d+)(?:m(\d+))?$""", RegexOption.IGNORE_CASE)
     private val KNOWN_COMP_LEVELS = setOf("qm", "qf", "sf", "f", "ef", "practice", "playoff")
+    /** Key format older manual match saves produced, e.g. `2026okok_qm_s1_m5`. */
+    private val LEGACY_MANUAL_KEY = Regex("""^(.+)_([a-z]+)_s(\d+)_m(\d+)$""", RegexOption.IGNORE_CASE)
 
     data class Identity(
         val eventKey: String,
@@ -63,6 +68,18 @@ object MatchCanonical {
             compact == "playoff" || compact == "playoffs" -> "playoff"
             else -> compact.take(16)
         }
+    }
+
+    /** Chronological order of competition levels within an event (practice first). */
+    fun compLevelRank(compLevel: String): Int = when (normalizeCompLevel(compLevel)) {
+        "practice" -> 0
+        "qm" -> 1
+        "qf" -> 2
+        "sf" -> 3
+        "f" -> 4
+        "ef" -> 5
+        "playoff" -> 6
+        else -> 7
     }
 
     /** FIRST often labels playoffs only as "Playoff"; map set number to TBA-style levels. */
@@ -99,9 +116,29 @@ object MatchCanonical {
         }
     }
 
+    /**
+     * Parses the `{event}_{level}_s{set}_m{match}` keys that manual match saves used to generate.
+     * [parseTbaMatchKey] can't handle these: it only sees the `m{match}` suffix and reads every one as a qual.
+     */
+    fun parseLegacyManualKey(matchKey: String): Identity? {
+        val match = LEGACY_MANUAL_KEY.matchEntire(matchKey.trim()) ?: return null
+        val (eventKey, compRaw, setRaw, matchRaw) = match.destructured
+        val setNumber = (setRaw.toIntOrNull() ?: 1).coerceAtLeast(1)
+        var compLevel = normalizeCompLevel(compRaw)
+        if (compLevel == "playoff") {
+            compLevel = playoffSetToCompLevel(setNumber)
+        }
+        return Identity(
+            eventKey = eventKey.lowercase(),
+            compLevel = compLevel,
+            setNumber = setNumber,
+            matchNumber = (matchRaw.toIntOrNull() ?: 1).coerceAtLeast(1)
+        )
+    }
+
     fun identityFrom(record: MatchSyncRecord): Identity {
         val eventKey = record.eventKey.lowercase()
-        val parsedFromKey = parseTbaMatchKey(record.matchKey)
+        val parsedFromKey = parseLegacyManualKey(record.matchKey) ?: parseTbaMatchKey(record.matchKey)
         var compLevel = normalizeCompLevel(record.compLevel)
         var setNumber = record.setNumber ?: parsedFromKey?.setNumber ?: 1
         var matchNumber = record.matchNumber ?: parsedFromKey?.matchNumber ?: 1
@@ -337,12 +374,88 @@ object MatchCanonical {
         }
     }
 
-    private fun remapMatchKey(oldKey: String, newKey: String) {
+    /**
+     * Points every row that references [oldKey] at [newKey]. Must run inside a transaction.
+     * Match plans are unique per owner/event/match, so when both keys already have a plan the newer one is kept.
+     */
+    fun remapMatchKey(oldKey: String, newKey: String) {
         if (oldKey == newKey) {
             return
         }
         ScoutingEntries.update({ ScoutingEntries.matchKey eq oldKey }) {
             it[ScoutingEntries.matchKey] = newKey
+        }
+        QualitativeScoutingEntries.update({ QualitativeScoutingEntries.matchKey eq oldKey }) {
+            it[QualitativeScoutingEntries.matchKey] = newKey
+        }
+        ScoutingAssignments.update({ ScoutingAssignments.matchKey eq oldKey }) {
+            it[ScoutingAssignments.matchKey] = newKey
+        }
+
+        MatchPlans.selectAll().where { MatchPlans.matchKey eq oldKey }.toList().forEach { plan ->
+            val ownerKey = plan[MatchPlans.ownerKey]
+            val eventKey = plan[MatchPlans.eventKey]
+            val clash = MatchPlans.selectAll().where {
+                (MatchPlans.ownerKey eq ownerKey) and (MatchPlans.eventKey eq eventKey) and (MatchPlans.matchKey eq newKey)
+            }.limit(1).firstOrNull()
+
+            if (clash == null) {
+                MatchPlans.update({ MatchPlans.id eq plan[MatchPlans.id] }) {
+                    it[MatchPlans.matchKey] = newKey
+                }
+            } else if (plan[MatchPlans.updatedAt] > clash[MatchPlans.updatedAt]) {
+                MatchPlans.deleteWhere { MatchPlans.id eq clash[MatchPlans.id] }
+                MatchPlans.update({ MatchPlans.id eq plan[MatchPlans.id] }) {
+                    it[MatchPlans.matchKey] = newKey
+                }
+                log.warn("Match plan conflict for $ownerKey on $newKey: kept newer plan from $oldKey, dropped older one")
+            } else {
+                MatchPlans.deleteWhere { MatchPlans.id eq plan[MatchPlans.id] }
+                log.warn("Match plan conflict for $ownerKey on $newKey: kept existing plan, dropped older one from $oldKey")
+            }
+        }
+    }
+
+    /**
+     * Reconnects rows left behind by older merges that only remapped match scouting entries.
+     * Finds match keys in child tables with no ApiMatches row, works out the canonical key, and remaps
+     * when that match exists. Safe to run repeatedly; returns how many keys were repaired.
+     */
+    fun repairOrphanedMatchKeys(): Int {
+        // Canonicalize any stored rows still using the legacy manual key format first.
+        val legacyEvents = transaction {
+            ApiMatches.select(ApiMatches.matchKey, ApiMatches.eventKey).toList()
+                .filter { LEGACY_MANUAL_KEY.matches(it[ApiMatches.matchKey]) }
+                .map { it[ApiMatches.eventKey] }
+                .distinct()
+        }
+        legacyEvents.forEach { deduplicateDatabaseForEvent(it) }
+
+        return transaction {
+            val knownKeys = ApiMatches.select(ApiMatches.matchKey).map { it[ApiMatches.matchKey] }.toHashSet()
+            val referencedKeys = buildSet {
+                ScoutingEntries.select(ScoutingEntries.matchKey).withDistinct()
+                    .forEach { row -> row[ScoutingEntries.matchKey]?.let { add(it) } }
+                QualitativeScoutingEntries.select(QualitativeScoutingEntries.matchKey).withDistinct()
+                    .forEach { row -> row[QualitativeScoutingEntries.matchKey]?.let { add(it) } }
+                ScoutingAssignments.select(ScoutingAssignments.matchKey).withDistinct()
+                    .forEach { row -> row[ScoutingAssignments.matchKey]?.let { add(it) } }
+                MatchPlans.select(MatchPlans.matchKey).withDistinct()
+                    .forEach { row -> add(row[MatchPlans.matchKey]) }
+            }
+
+            var repaired = 0
+            referencedKeys.filter { it !in knownKeys }.forEach { orphanKey ->
+                val canonicalKey = parseLegacyManualKey(orphanKey)?.toMatchKey() ?: return@forEach
+                if (canonicalKey in knownKeys) {
+                    remapMatchKey(orphanKey, canonicalKey)
+                    repaired++
+                }
+            }
+            if (repaired > 0) {
+                log.info("Repaired $repaired orphaned match key(s)")
+            }
+            repaired
         }
     }
 

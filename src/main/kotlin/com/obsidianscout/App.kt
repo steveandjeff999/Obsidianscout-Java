@@ -615,6 +615,11 @@ fun Application.module(appConfig: AppConfig) {
                 ConfigService.syncFromDatabaseToLocalDisk()
                 ConfigService.startBackgroundClusterSync(30)
                 SettingsService.ensureDefaultSettings()
+                try {
+                    com.obsidianscout.integrations.MatchCanonical.repairOrphanedMatchKeys()
+                } catch (e: Exception) {
+                    environment.log.warn("Orphaned match key repair skipped: ${e.message}")
+                }
                 AuthService.ensureSeedSuperAdmin(appConfig.seed)
                 com.obsidianscout.admin.ServerErrorAlertService.processPendingCrashReports()
 

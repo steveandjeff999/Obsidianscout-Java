@@ -319,6 +319,8 @@ data class ApiSettingsPayload(
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
     val useMatch13Exp: Boolean = false,
+    /** Omitted (null) on save keeps the team's current value. */
+    val recencyBias: com.obsidianscout.integrations.RecencyBiasSettings? = null,
     val chatEnabled: Boolean = true,
     val apiKeys: ApiKeysPayload = ApiKeysPayload(),
     val scoutPages: List<String> = emptyList(),
@@ -490,7 +492,9 @@ data class MatchTeamPrediction(
     val opr: Double?,
     val exp: Double? = null,
     val match13TeamExp: Match13TeamExpDetail? = null,
-    val hasDiscrepancy: Boolean = false
+    val hasDiscrepancy: Boolean = false,
+    /** True when [averageScoutedScore] gives recent matches more weight. */
+    val recencyWeighted: Boolean = false
 )
 
 @Serializable
@@ -511,7 +515,8 @@ data class MatchPredictionResponse(
     val useStatboticsEpa: Boolean,
     val useTbaOpr: Boolean,
     val useMatch13Exp: Boolean = false,
-    val match13Pred: Match13PredictionDetail? = null
+    val match13Pred: Match13PredictionDetail? = null,
+    val recencyWeighted: Boolean = false
 )
 
 // ─────────────────────────────────────

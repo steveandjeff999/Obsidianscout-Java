@@ -362,6 +362,60 @@ document.addEventListener("DOMContentLoaded", async () => {
                 document.querySelectorAll(".self-register-role").forEach(cb => { cb.disabled = locked; });
             };
 
+            // Recency bias: mirrors RecencyBiasSettings on the server (defaults and clamping included).
+            const RECENCY_DEFAULTS = { enabled: false, mode: "exponential", halfLifeMatches: 4, windowSize: 6, minMatches: 4, prescoutWeight: 0.5 };
+            const clampNum = (value, min, max, fallback) => {
+                const n = Number(value);
+                return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+            };
+            const getRecencyBias = () => ({
+                enabled: getChecked("settings-recency-enabled"),
+                mode: getVal("settings-recency-mode") === "lastN" ? "lastN" : "exponential",
+                halfLifeMatches: clampNum(getVal("settings-recency-halflife"), 1, 20, RECENCY_DEFAULTS.halfLifeMatches),
+                windowSize: Math.round(clampNum(getVal("settings-recency-window"), 1, 30, RECENCY_DEFAULTS.windowSize)),
+                minMatches: Math.round(clampNum(getVal("settings-recency-min"), 1, 15, RECENCY_DEFAULTS.minMatches)),
+                prescoutWeight: clampNum(getVal("settings-recency-prescout"), 0, 1, RECENCY_DEFAULTS.prescoutWeight)
+            });
+            const syncRecencyControls = () => {
+                const r = getRecencyBias();
+                const options = document.getElementById("settings-recency-options");
+                if (options) options.style.opacity = r.enabled ? "1" : "0.5";
+                const halfLifeField = document.getElementById("settings-recency-halflife-field");
+                const windowField = document.getElementById("settings-recency-window-field");
+                if (halfLifeField) halfLifeField.style.display = r.mode === "exponential" ? "" : "none";
+                if (windowField) windowField.style.display = r.mode === "lastN" ? "" : "none";
+                const preview = document.getElementById("settings-recency-preview");
+                if (preview) {
+                    const weights = Array.from({ length: 8 }, (_, age) =>
+                        r.mode === "lastN" ? (age < r.windowSize ? 1 : 0) : Math.pow(0.5, age / r.halfLifeMatches));
+                    // The page translator tags leaf text matching an English string and later re-applies it,
+                    // which would overwrite the live weights; this text is translated here instead.
+                    preview.removeAttribute("data-i18n");
+                    preview.textContent = r.enabled
+                        ? t("config.recency_preview", "Weights from newest to oldest match: {weights}…")
+                            .replace("{weights}", weights.map(w => w.toFixed(2)).join(", "))
+                        : t("config.recency_preview_off", "Off: every scouted match counts equally.");
+                }
+            };
+            window.addEventListener("obsidianscout:languagechange", syncRecencyControls);
+            const setRecencyBias = (saved) => {
+                const r = { ...RECENCY_DEFAULTS, ...(saved || {}) };
+                setChecked("settings-recency-enabled", r.enabled);
+                setVal("settings-recency-mode", r.mode);
+                setVal("settings-recency-halflife", r.halfLifeMatches);
+                setVal("settings-recency-window", r.windowSize);
+                setVal("settings-recency-min", r.minMatches);
+                setVal("settings-recency-prescout", r.prescoutWeight);
+                syncRecencyControls();
+            };
+            ["settings-recency-enabled", "settings-recency-mode", "settings-recency-halflife", "settings-recency-window"].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener("input", syncRecencyControls);
+                    el.addEventListener("change", syncRecencyControls);
+                }
+            });
+
             // Populate settings
             loadedSettings = settingsResponse.settings;
             setVal("settings-year", loadedSettings.year);
@@ -373,6 +427,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             setChecked("settings-epa", loadedSettings.useStatboticsEpa);
             setChecked("settings-exp", loadedSettings.useMatch13Exp);
             setChecked("settings-opr", loadedSettings.useTbaOpr);
+            setRecencyBias(loadedSettings.recencyBias);
             setChecked("settings-chat", loadedSettings.chatEnabled);
             setChecked("settings-lock-registration", loadedSettings.registrationLocked || false);
             setSelfRegisterRoles(loadedSettings.selfRegisterRoles);
@@ -658,6 +713,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.useStatboticsEpa = getChecked("settings-epa");
                     loadedSettings.useMatch13Exp = getChecked("settings-exp");
                     loadedSettings.useTbaOpr = getChecked("settings-opr");
+                    loadedSettings.recencyBias = getRecencyBias();
                     loadedSettings.chatEnabled = getChecked("settings-chat");
                     loadedSettings.registrationLocked = getChecked("settings-lock-registration");
                     loadedSettings.selfRegisterRoles = getSelfRegisterRoles();

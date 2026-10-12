@@ -1187,9 +1187,14 @@ fun Application.configureRoutes() {
                     // Pages that save only part of the settings don't send selfRegisterRoles; keep the saved value then.
                     val previous = SettingsService.getSettings(session.teamNumber, targetProgram)
                     val selfRegisterRoles = payload.selfRegisterRoles ?: previous.selfRegisterRoles
+                    val recencyBias = payload.recencyBias ?: previous.recencyBias
                     val updated = SettingsService.updateSettings(
                         session.teamNumber,
-                        payload.toSettings().copy(program = targetProgram, selfRegisterRoles = selfRegisterRoles)
+                        payload.toSettings().copy(
+                            program = targetProgram,
+                            selfRegisterRoles = selfRegisterRoles,
+                            recencyBias = recencyBias
+                        )
                     )
                     val activeAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, targetProgram)
                     if (activeAllianceId != null && AllianceService.isAllianceAdmin(session.teamNumber, activeAllianceId)) {
@@ -4257,6 +4262,7 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         useStatboticsEpa = useStatboticsEpa,
         useTbaOpr = useTbaOpr,
         useMatch13Exp = useMatch13Exp,
+        recencyBias = recencyBias,
         chatEnabled = chatEnabled,
         apiKeys = ApiKeysPayload(
             tbaKey = if (apiKeys.tbaKey.isNotBlank()) "********" else "",
@@ -4288,6 +4294,7 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         useStatboticsEpa = useStatboticsEpa,
         useTbaOpr = useTbaOpr,
         useMatch13Exp = useMatch13Exp,
+        recencyBias = recencyBias ?: com.obsidianscout.integrations.RecencyBiasSettings(),
         chatEnabled = chatEnabled,
         apiKeys = com.obsidianscout.integrations.ApiKeys(
             tbaKey = apiKeys.tbaKey,

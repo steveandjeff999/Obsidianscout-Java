@@ -366,6 +366,72 @@
 
                         </div>
 
+                        <div class="card soft" id="settings-recency-card">
+
+                            <h3 data-i18n="config.recency_title">Recency Bias</h3>
+
+                            <p class="notice mt-6" data-i18n="config.recency_desc">Weights recent scouted matches more heavily in predictions, team averages, rankings and compare. Data validation always uses plain averages.</p>
+
+                            <div class="field">
+
+                                <label><input id="settings-recency-enabled" type="checkbox" /> <span data-i18n="config.recency_enable">Weight recent matches more</span> <i class="fa-solid fa-circle-info recency-tip" tabindex="0" role="img" title="When on, a team's scouted average counts its most recent matches more than its early ones. Useful when robots improve or break during an event." data-i18n-title="config.recency_enable_tip"></i></label>
+
+                            </div>
+
+                            <div id="settings-recency-options">
+
+                                <div class="field">
+
+                                    <label for="settings-recency-mode"><span data-i18n="config.recency_mode">Mode</span> <i class="fa-solid fa-circle-info recency-tip" tabindex="0" role="img" title="Exponential decay fades older matches gradually. Last N ignores everything except the most recent N matches." data-i18n-title="config.recency_mode_tip"></i></label>
+
+                                    <select id="settings-recency-mode">
+
+                                        <option value="exponential" data-i18n="config.recency_mode_exponential">Exponential decay</option>
+
+                                        <option value="lastN" data-i18n="config.recency_mode_last_n">Last N matches only</option>
+
+                                    </select>
+
+                                </div>
+
+                                <div class="field" id="settings-recency-halflife-field">
+
+                                    <label for="settings-recency-halflife"><span data-i18n="config.recency_half_life">Half-life (matches)</span> <i class="fa-solid fa-circle-info recency-tip" tabindex="0" role="img" title="How many matches back a match's weight drops to half. Smaller numbers react faster to recent changes but are noisier." data-i18n-title="config.recency_half_life_tip"></i></label>
+
+                                    <input id="settings-recency-halflife" type="number" min="1" max="20" step="0.5" />
+
+                                </div>
+
+                                <div class="field" id="settings-recency-window-field">
+
+                                    <label for="settings-recency-window"><span data-i18n="config.recency_window">Matches to count (N)</span> <i class="fa-solid fa-circle-info recency-tip" tabindex="0" role="img" title="Only this many of a team's most recent matches are counted; older matches are ignored." data-i18n-title="config.recency_window_tip"></i></label>
+
+                                    <input id="settings-recency-window" type="number" min="1" max="30" step="1" />
+
+                                </div>
+
+                                <div class="field">
+
+                                    <label for="settings-recency-min"><span data-i18n="config.recency_min_matches">Minimum matches before weighting</span> <i class="fa-solid fa-circle-info recency-tip" tabindex="0" role="img" title="Teams with fewer scouted matches than this keep a plain average, so one or two matches don't dominate early in an event." data-i18n-title="config.recency_min_matches_tip"></i></label>
+
+                                    <input id="settings-recency-min" type="number" min="1" max="15" step="1" />
+
+                                </div>
+
+                                <div class="field">
+
+                                    <label for="settings-recency-prescout"><span data-i18n="config.recency_prescout_weight">Prescout weight (0–1)</span> <i class="fa-solid fa-circle-info recency-tip" tabindex="0" role="img" title="How much prescout data counts when it is mixed in (0 = ignore, 1 = same as an event match). Prescout always counts as older than event matches." data-i18n-title="config.recency_prescout_weight_tip"></i></label>
+
+                                    <input id="settings-recency-prescout" type="number" min="0" max="1" step="0.05" />
+
+                                </div>
+
+                                <p id="settings-recency-preview" class="notice mt-6"></p>
+
+                            </div>
+
+                        </div>
+
                     </div>
 
                     <div class="mt-18">

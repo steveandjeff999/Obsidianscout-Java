@@ -277,17 +277,14 @@ object PredictorService {
                 } else null
 
                 val teamEntries = entriesByTeam[teamNumber] ?: emptyList()
-                val avgScore = if (teamEntries.isNotEmpty()) {
-                    teamEntries.map { entry ->
-                        AnalyticsService.scoreEntry(config, entry)
-                    }.average()
-                } else {
-                    null
+                val avgScore = RecencyWeighting.weightedAverage(teamEntries, settings.recencyBias) { entry ->
+                    AnalyticsService.scoreEntry(config, entry)
                 }
 
                 val hasDiscrepancy = teamEntries.any { it.hasDiscrepancy }
 
                 return MatchTeamPrediction(
+                    recencyWeighted = RecencyWeighting.isActive(teamEntries, settings.recencyBias),
                     teamNumber = teamNumber,
                     teamKey = resolvedKey,
                     nickname = nickname,
@@ -338,7 +335,8 @@ object PredictorService {
                 useStatboticsEpa = useStatboticsEpa,
                 useMatch13Exp = useMatch13Exp,
                 useTbaOpr = useTbaOpr,
-                match13Pred = match13Pred
+                match13Pred = match13Pred,
+                recencyWeighted = (redPredictions + bluePredictions).any { it.recencyWeighted }
             )
         }
     }
@@ -501,17 +499,14 @@ object PredictorService {
                     val opr = teamRow?.get(ApiTeams.opr)
 
                     val teamEntries = entriesByTeam[teamNumber] ?: emptyList()
-                    val avgScore = if (teamEntries.isNotEmpty()) {
-                        teamEntries.map { entry ->
-                            AnalyticsService.scoreEntry(config, entry)
-                        }.average()
-                    } else {
-                        null
+                    val avgScore = RecencyWeighting.weightedAverage(teamEntries, settings.recencyBias) { entry ->
+                        AnalyticsService.scoreEntry(config, entry)
                     }
 
                     val hasDiscrepancy = teamEntries.any { it.hasDiscrepancy }
 
                     MatchTeamPrediction(
+                        recencyWeighted = RecencyWeighting.isActive(teamEntries, settings.recencyBias),
                         teamNumber = teamNumber,
                         teamKey = resolvedKey,
                         nickname = nickname,
@@ -617,7 +612,8 @@ object PredictorService {
                     useStatboticsEpa = useStatboticsEpa,
                     useMatch13Exp = useMatch13Exp,
                     useTbaOpr = useTbaOpr,
-                    match13Pred = match13Pred
+                    match13Pred = match13Pred,
+                    recencyWeighted = (redPredictions + bluePredictions).any { it.recencyWeighted }
                 )
             }
         }
