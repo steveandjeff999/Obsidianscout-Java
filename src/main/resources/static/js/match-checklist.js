@@ -1,19 +1,27 @@
 /**
  * Match Checklist page - ObsidianScout
- * Drive-team pre-match and on-the-field checklists. The team edits one template; each match gets its own
- * completion record. Shown only when "Non-Scouting Tools" is enabled in Personal Settings.
+ * Drive-team checklists. The team builds any number of lists; each list has a frequency that decides how
+ * often it is filled out. Shown only when "Non-Scouting Tools" is enabled in Personal Settings.
  *
- * Both documents are edited live, the same way as the config editors (js/services/config-collab.js):
- * everyone's edits merge as they happen and autosave on the server.
+ * Every document is edited live, the same way as the config editors (js/services/config-collab.js):
+ * everyone's edits merge as they happen and autosave on the server. Edits that can't reach the server are
+ * kept on this device (localStorage drafts) and saved automatically once it is reachable again.
  *
- * Template doc:   { sections: { pre: { title }, field: { title } }, fields: [{ id, section, text, priority }] }
- * Completion doc: { checked: { [itemId]: { by, at } }, notes, fields: [] }
+ * Template doc:
+ *   { lists: { [listId]: { title, order, frequency, every } }, fields: [{ id, section: listId, text, priority }] }
+ *   (Older templates have no `lists`; they had the fixed lists "pre" and "field", titled by `sections`.)
+ * Completion doc (one per match, per day "day_YYYY-MM-DD", or per event "event"):
+ *   { checked: { [itemId]: { by, at } }, notes, fields: [] }
+ *
+ * Frequencies: "match" (every match), "every_n" (every `every` of our matches, starting with our first),
+ * "daily" (once a day, shared by all matches that day), "event" (once for the whole event).
+ * The app (lib/screens/match_checklist_screen.dart) reads and writes the same documents.
  */
 
-const SECTION_DEFS = [
-    { id: "pre", title: "Pre-Match" },
-    { id: "field", title: "On the Field" }
-];
+const TEMPLATE_KEY = "__template__";
+const EVENT_SCOPE_KEY = "event";
+const FREQUENCIES = ["match", "every_n", "daily", "event"];
+const LEGACY_LISTS = ["pre", "field"];
 
 // Highest priority first; items are listed in this order when filling out a checklist.
 const PRIORITIES = [
@@ -42,8 +50,15 @@ const STARTER_ITEMS = {
     ]
 };
 
+const REST_RETRY_MS = 20000;
+const TICK_MS = 1000;
+
 function t(key, fallback) {
     return (window.Obsidianscout && typeof Obsidianscout.t === "function") ? Obsidianscout.t(key, fallback) : (fallback || key);
+}
+
+function fmt(text, values) {
+    return String(text).replace(/\{(\w+)\}/g, (m, k) => (values[k] !== undefined ? values[k] : m));
 }
 
 const DEFAULT_STATUS_LABELS = {
@@ -65,10 +80,11 @@ const state = {
     matchKey: "",
     eventCompletions: {},   // matchKey -> completion (for the ✓ in the match picker)
     mode: "fill",
-    tpl: null,              // live session for the template
-    match: null,            // live session for the selected match
+    tpl: null,              // template room
+    fillRooms: {},          // scope ("match" | "day" | "event") -> room shown in Fill Out
     tplBar: null,
-    matchBar: null
+    matchBar: null,
+    hadPendingOffline: false
 };
 
 const el = {};
@@ -98,6 +114,10 @@ function parseJson(text, fallback) {
     }
 }
 
+function isPlainObject(v) {
+    return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
 function priorityRank(priority) {
     const i = PRIORITIES.findIndex((p) => p.id === priority);
     return i < 0 ? PRIORITIES.findIndex((p) => p.id === DEFAULT_PRIORITY) : i;
@@ -112,19 +132,55 @@ function priorityOptions(selected) {
     return PRIORITIES.map((p) => `<option value="${p.id}" ${p.id === selected ? "selected" : ""}>${esc(priorityLabel(p.id))}</option>`).join("");
 }
 
-// ------------------------------------------------------------------ documents
+function todayKey() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `day_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// ------------------------------------------------------------------ template documents
+
+/** The lists defined by a template doc, in display order. */
+function listsOf(doc) {
+    if (isPlainObject(doc?.lists)) {
+        return Object.entries(doc.lists)
+            .filter(([, l]) => isPlainObject(l))
+            .map(([id, l]) => ({
+                id,
+                title: typeof l.title === "string" ? l.title : "",
+                order: Number.isFinite(l.order) ? l.order : 0,
+                frequency: FREQUENCIES.includes(l.frequency) ? l.frequency : "match",
+                every: Math.max(2, Math.min(99, parseInt(l.every, 10) || 2))
+            }))
+            .sort((a, b) => (a.order - b.order) || a.id.localeCompare(b.id));
+    }
+    // Older template: the fixed Pre-Match / On the Field lists.
+    return LEGACY_LISTS.map((id, order) => ({
+        id, order, frequency: "match", every: 2,
+        title: typeof doc?.sections?.[id]?.title === "string" ? doc.sections[id].title : ""
+    }));
+}
+
+/** Converts an older template to the `lists` form before changing its lists. */
+function ensureLists(doc) {
+    if (isPlainObject(doc.lists)) return doc.lists;
+    doc.lists = {};
+    listsOf(doc).forEach((l) => {
+        doc.lists[l.id] = { title: l.title, order: l.order, frequency: l.frequency, every: l.every };
+    });
+    return doc.lists;
+}
 
 /** The template as the page shows it, built from the live view ({doc, keys}). */
 function templateOf(view) {
     const doc = view?.doc || {};
     const fields = Array.isArray(doc.fields) ? doc.fields : [];
     return {
-        sections: SECTION_DEFS.map((def) => ({
-            id: def.id,
-            title: doc.sections?.[def.id]?.title || def.title,
+        lists: listsOf(doc).map((list) => ({
+            ...list,
             items: fields
                 .map((f, index) => ({ f, index, key: view.keys?.[index] }))
-                .filter(({ f }) => f && (f.section || "pre") === def.id)
+                .filter(({ f }) => f && (f.section || "pre") === list.id)
                 .map(({ f, index, key }) => ({
                     id: String(f.id || ""),
                     text: typeof f.text === "string" ? f.text : "",
@@ -137,33 +193,81 @@ function templateOf(view) {
 }
 
 function currentTemplate() {
-    return templateOf(state.tpl?.lastView);
+    return templateOf(state.tpl?.session?.lastView);
 }
 
 /** Items that count when filling out (blank items still being typed are skipped). */
-function fillableItems(section) {
-    return section.items.filter((it) => it.id && it.text.trim());
+function fillableItems(list) {
+    return list.items.filter((it) => it.id && it.text.trim());
 }
 
-function allItemIds() {
-    return currentTemplate().sections.flatMap((s) => fillableItems(s).map((it) => it.id));
+function listTitle(list) {
+    const title = list.title.trim();
+    if (list.id === "pre" && (!title || title === "Pre-Match")) return t("checklist.section.pre", "Pre-Match");
+    if (list.id === "field" && (!title || title === "On the Field")) return t("checklist.section.field", "On the Field");
+    return title || t("checklist.list.untitled", "Untitled list");
+}
+
+function frequencyLabel(list) {
+    switch (list.frequency) {
+        case "every_n": return fmt(t("checklist.freq.every_n", "Every {n} matches"), { n: list.every });
+        case "daily": return t("checklist.freq.daily", "Once a day");
+        case "event": return t("checklist.freq.event", "Once per event");
+        default: return t("checklist.freq.match", "Every match");
+    }
+}
+
+function frequencyOptions(selected) {
+    const labels = {
+        match: t("checklist.freq.match", "Every match"),
+        every_n: t("checklist.freq.every_n_option", "Every few matches"),
+        daily: t("checklist.freq.daily", "Once a day"),
+        event: t("checklist.freq.event", "Once per event")
+    };
+    return FREQUENCIES.map((f) => `<option value="${f}" ${f === selected ? "selected" : ""}>${esc(labels[f])}</option>`).join("");
+}
+
+/** Which completion doc a list is filled out in: "match", "day" or "event". */
+function scopeOf(list) {
+    if (list.frequency === "daily") return "day";
+    if (list.frequency === "event") return "event";
+    return "match";
 }
 
 function completionOf(view) {
     const doc = view?.doc || {};
     return {
-        checked: doc.checked && typeof doc.checked === "object" && !Array.isArray(doc.checked) ? doc.checked : {},
+        checked: isPlainObject(doc.checked) ? doc.checked : {},
         notes: typeof doc.notes === "string" ? doc.notes : ""
     };
 }
 
-function currentCompletion() {
-    return completionOf(state.match?.lastView);
+// ------------------------------------------------------------------ "every N matches" scheduling
+
+function ourMatches() {
+    return state.matches.filter(isOurMatch);
 }
 
-function isComplete(completion) {
-    const ids = allItemIds();
-    return ids.length > 0 && ids.every((id) => completion?.checked?.[id]);
+/** Whether a list is filled out for a match. Matches outside our schedule (custom/practice) always are. */
+function isDueForMatch(list, matchKey) {
+    if (list.frequency !== "every_n") return true;
+    const idx = ourMatches().findIndex((m) => m.matchKey === matchKey);
+    return idx < 0 || idx % list.every === 0;
+}
+
+function nextDueMatch(list, matchKey) {
+    const ours = ourMatches();
+    const idx = ours.findIndex((m) => m.matchKey === matchKey);
+    return ours.find((m, i) => i > idx && i % list.every === 0) || null;
+}
+
+/** A match is done when every item of its per-match lists that are due for it is checked. */
+function isMatchComplete(matchKey, completion) {
+    if (!completion) return false;
+    const ids = currentTemplate().lists
+        .filter((l) => scopeOf(l) === "match" && isDueForMatch(l, matchKey))
+        .flatMap((l) => fillableItems(l).map((it) => it.id));
+    return ids.length > 0 && ids.every((id) => completion.checked?.[id]);
 }
 
 // <option> elements can't be styled with ::after in most browsers, so finished matches get a text prefix.
@@ -172,125 +276,245 @@ function markOptionDone(opt, done) {
     opt.textContent = done ? `✓ ${label}` : label;
 }
 
-// ------------------------------------------------------------------ live sessions
+// ------------------------------------------------------------------ offline drafts
 
-function makeStatusBar(host) {
-    const bar = collab().createStatusBar(host);
-    const update = bar.update;
-    bar.update = (status) => {
-        update(status);
-        const textEl = bar.element.querySelector(".collab-status-text");
-        if (textEl) textEl.textContent = statusLabel(status);
-    };
-    return bar;
+function draftStorageKey() {
+    return `obsidianscout:checklist-drafts:${state.me.teamNumber}:${state.me.program || "FRC"}:${state.me.userId || state.me.id || state.me.username}`;
 }
 
-/** A live session plus the REST calls used to load it and to save while the socket can't connect. */
-function openSession({ url, restGet, restPut, bar, offlineButton, onChange }) {
-    const session = new (collab().ConfigCollabSession)({
-        url,
-        onView: () => onChange(),
-        onStatus: (status) => {
-            bar.update(status);
-            updateOfflineButton(session, offlineButton);
-        },
-        onPresence: (editors) => {
-            bar.setEditors(editors, session.sid);
-            if (session === state.tpl) decorateEditors();
-        },
+function readDrafts() {
+    return parseJson(Obsidianscout.safeGetItem(draftStorageKey()), {});
+}
+
+function writeDrafts(drafts) {
+    if (Object.keys(drafts).length) Obsidianscout.safeSetItem(draftStorageKey(), JSON.stringify(drafts));
+    else Obsidianscout.safeRemoveItem(draftStorageKey());
+}
+
+/** Keeps a room's unsaved edits on this device until the server has them. */
+function persistDraft(room) {
+    const drafts = readDrafts();
+    const session = room.session;
+    if (session.hasUnsavedChanges) {
+        drafts[room.id] = {
+            eventKey: room.eventKey,
+            matchKey: room.matchKey,
+            base: clone(session.confirmed?.doc || {}),
+            local: clone(session.lastView.doc),
+            at: Date.now()
+        };
+    } else if (drafts[room.id]) {
+        delete drafts[room.id];
+    } else {
+        return;
+    }
+    writeDrafts(drafts);
+}
+
+// ------------------------------------------------------------------ live rooms
+
+const rooms = new Map(); // room id -> { id, eventKey, matchKey, session, uses, ready, lastRestTry }
+
+function roomIdFor(eventKey, matchKey) {
+    return matchKey === TEMPLATE_KEY ? "template" : `${eventKey}|${matchKey}`;
+}
+
+function roomEndpoints(eventKey, matchKey) {
+    if (matchKey === TEMPLATE_KEY) {
+        return {
+            url: "/api/match-checklist/collab?template=1",
+            get: () => Obsidianscout.request("/api/match-checklist/template"),
+            put: (dataJson) => Obsidianscout.request("/api/match-checklist/template", { method: "PUT", json: { dataJson } })
+        };
+    }
+    const q = `eventKey=${encodeURIComponent(eventKey)}&matchKey=${encodeURIComponent(matchKey)}`;
+    return {
+        url: `/api/match-checklist/collab?${q}`,
+        get: () => Obsidianscout.request(`/api/match-checklist?${q}`),
+        put: (dataJson) => Obsidianscout.request("/api/match-checklist", { method: "PUT", json: { eventKey, matchKey, dataJson } })
+    };
+}
+
+/** Opens (or reuses) the live document for a template/match/day/event. Resumes any draft left on this device. */
+async function acquireRoom(eventKey, matchKey) {
+    const id = roomIdFor(eventKey, matchKey);
+    let room = rooms.get(id);
+    if (room) {
+        room.uses++;
+        await room.ready;
+        return room;
+    }
+    const endpoints = roomEndpoints(eventKey, matchKey);
+    room = { id, eventKey, matchKey, uses: 1, lastRestTry: 0, endpoints };
+    rooms.set(id, room);
+    room.session = new (collab().ConfigCollabSession)({
+        url: endpoints.url,
+        onView: () => onRoomChange(room),
+        onStatus: (status) => onRoomStatus(room, status),
+        onPresence: (editors) => onRoomPresence(room, editors),
         onNotice: (level, message) => {
             if (message) Obsidianscout.showToast(message, level === "error" ? "error" : level === "success" ? "success" : "info");
         }
     });
-    session.restGet = restGet;
-    session.restPut = restPut;
-    bar.update("connecting");
-    bar.setEditors([], session.sid);
-    return session;
+    room.ready = (async () => {
+        const draft = readDrafts()[id];
+        if (draft) {
+            // Unsaved edits from an earlier visit: replay them; they merge into the server's copy on connect.
+            room.session.load(draft.base || {});
+            room.session.commit(draft.local || {});
+        } else {
+            let doc = {};
+            try {
+                doc = parseJson((await endpoints.get())?.dataJson, {});
+            } catch (_) { /* offline: start empty, the server copy arrives on connect */ }
+            room.session.load(doc);
+        }
+        room.session.connect();
+    })();
+    await room.ready;
+    return room;
 }
 
-function updateOfflineButton(session, button) {
-    if (!button) return;
-    button.classList.toggle("hidden", !(session && !session.isLive && session.hasUnsavedChanges));
+/** Stops showing a room. It stays open in the background until any unsaved edits reach the server. */
+function releaseRoom(room) {
+    if (!room) return;
+    room.uses = Math.max(0, room.uses - 1);
+    closeIdleRoom(room);
 }
 
-/** Saves edits made while offline by merging them into the latest saved copy. */
-async function saveOffline(session, button) {
-    if (!session) return;
-    try {
-        await session.saveViaRest(
-            async () => parseJson((await session.restGet())?.dataJson, {}),
-            (doc) => session.restPut(JSON.stringify(doc))
-        );
-        Obsidianscout.showToast(t("checklist.toast.changes_saved", "Changes saved"), "success");
-    } catch (err) {
-        Obsidianscout.showToast(err.message || t("checklist.toast.save_error", "Could not save yet"), "error");
+function closeIdleRoom(room) {
+    if (room.uses > 0 || room.session.hasUnsavedChanges || room === state.tpl) return;
+    room.session.close();
+    rooms.delete(room.id);
+}
+
+function onRoomChange(room) {
+    persistDraft(room);
+    if (room.matchKey !== TEMPLATE_KEY && room.eventKey === state.eventKey) {
+        state.eventCompletions[room.matchKey] = completionOf(room.session.lastView);
     }
-    updateOfflineButton(session, button);
+    refreshMatchOptionMarks();
+    // A list's frequency may have changed, which can need a day/event document opened.
+    if (room === state.tpl && state.mode === "fill") syncFillRooms();
+    else renderAll();
+    updateOfflineBanner();
 }
 
-/** Applies a change to a live document; re-renders unless the change came from the input being typed in. */
-function edit(session, mutate, rerender = true) {
-    if (!session) return;
+function onRoomStatus(room, status) {
+    if (room === state.tpl) state.tplBar?.update(status);
+    if (room === state.fillRooms.match) state.matchBar?.update(status);
+    updateOfflineBanner();
+}
+
+function onRoomPresence(room, editors) {
+    if (room === state.tpl) {
+        state.tplBar?.setEditors(editors, room.session.sid);
+        decorateEditors();
+    }
+    if (room === state.fillRooms.match) state.matchBar?.setEditors(editors, room.session.sid);
+}
+
+/**
+ * Housekeeping every second: keeps drafts current, saves over plain HTTP when the live connection can't be
+ * made but the network is up, and closes background rooms once everything in them is saved.
+ */
+function tick() {
+    const now = Date.now();
+    for (const room of [...rooms.values()]) {
+        const s = room.session;
+        persistDraft(room);
+        if (s.hasUnsavedChanges && !s.isLive && navigator.onLine && now - room.lastRestTry > REST_RETRY_MS) {
+            room.lastRestTry = now;
+            saveViaRest(room);
+        }
+        closeIdleRoom(room);
+    }
+    updateOfflineBanner();
+}
+
+async function saveViaRest(room) {
+    try {
+        await room.session.saveViaRest(
+            async () => parseJson((await room.endpoints.get())?.dataJson, {}),
+            (doc) => room.endpoints.put(JSON.stringify(doc))
+        );
+        persistDraft(room);
+        updateOfflineBanner();
+    } catch (_) { /* still unreachable; retried later */ }
+}
+
+function updateOfflineBanner() {
+    if (!el.offlineBanner) return;
+    const pending = [...rooms.values()].filter((r) => r.session.hasUnsavedChanges && !r.session.isLive);
+    const show = pending.length > 0;
+    if (show) {
+        el.offlineBannerText.textContent = fmt(t("checklist.offline.banner",
+            "You're offline. Changes to {count} checklist(s) can't be saved until you're back online. They're kept on this device and will save automatically when you reconnect."),
+            { count: pending.length });
+        state.hadPendingOffline = true;
+    } else if (state.hadPendingOffline && ![...rooms.values()].some((r) => r.session.hasUnsavedChanges)) {
+        state.hadPendingOffline = false;
+        Obsidianscout.showToast(t("checklist.offline.saved", "All offline changes saved"), "success");
+    }
+    el.offlineBanner.classList.toggle("hidden", !show);
+}
+
+/** Opens any drafts left from an earlier visit so they save as soon as the server is reachable. */
+async function resumeDrafts() {
+    const drafts = readDrafts();
+    for (const [id, draft] of Object.entries(drafts)) {
+        if (rooms.has(id)) continue;
+        const room = await acquireRoom(draft.eventKey || "", draft.matchKey || TEMPLATE_KEY);
+        releaseRoom(room);
+    }
+}
+
+/** Edits a live document and shares it; re-renders unless the change came from the input being typed in. */
+function edit(room, mutate, rerender = true) {
+    if (!room) return;
+    const session = room.session;
     const next = clone(session.lastView.doc);
     mutate(next);
     session.commit(next);
-    updateOfflineButton(session, session === state.tpl ? el.tplOffline : el.matchOffline);
+    persistDraft(room);
+    if (room.matchKey !== TEMPLATE_KEY && room.eventKey === state.eventKey) {
+        state.eventCompletions[room.matchKey] = completionOf(session.lastView);
+        refreshMatchOptionMarks();
+    }
+    updateOfflineBanner();
     if (rerender) renderAll();
 }
 
-async function openTemplateSession() {
-    const restGet = () => Obsidianscout.request("/api/match-checklist/template");
-    state.tpl = openSession({
-        url: "/api/match-checklist/collab?template=1",
-        restGet,
-        restPut: (dataJson) => Obsidianscout.request("/api/match-checklist/template", { method: "PUT", json: { dataJson } }),
-        bar: state.tplBar,
-        offlineButton: el.tplOffline,
-        onChange: () => {
-            refreshMatchOptionMarks();
-            renderAll();
+/** Opens the match/day/event documents the Fill Out view needs and lets go of the others. */
+async function syncFillRooms() {
+    const lists = currentTemplate().lists;
+    const wanted = {
+        match: state.eventKey && state.matchKey ? state.matchKey : null,
+        day: state.eventKey && lists.some((l) => scopeOf(l) === "day") ? todayKey() : null,
+        event: state.eventKey && lists.some((l) => scopeOf(l) === "event") ? EVENT_SCOPE_KEY : null
+    };
+    const eventKey = state.eventKey;
+    for (const scope of Object.keys(wanted)) {
+        const current = state.fillRooms[scope];
+        const wantedId = wanted[scope] ? roomIdFor(eventKey, wanted[scope]) : null;
+        if (current?.id === wantedId) continue;
+        state.fillRooms[scope] = null;
+        releaseRoom(current);
+        if (!wantedId) continue;
+        const room = await acquireRoom(eventKey, wanted[scope]);
+        // The selection may have changed while this opened.
+        if (state.eventKey !== eventKey || state.fillRooms[scope]) {
+            releaseRoom(room);
+            continue;
         }
-    });
-    try {
-        state.tpl.load(parseJson((await restGet())?.dataJson, {}));
-    } catch (err) {
-        Obsidianscout.showToast(err.message || t("checklist.toast.load_templates_error", "Failed to load checklists"), "error");
-    }
-    state.tpl.connect();
-}
-
-async function openMatchSession(eventKey, matchKey) {
-    if (state.match) state.match.close();
-    state.match = null;
-    el.matchBarHost.classList.toggle("hidden", !matchKey);
-    updateOfflineButton(null, el.matchOffline);
-    if (!eventKey || !matchKey) return;
-
-    const q = `eventKey=${encodeURIComponent(eventKey)}&matchKey=${encodeURIComponent(matchKey)}`;
-    const restGet = () => Obsidianscout.request(`/api/match-checklist?${q}`);
-    const session = openSession({
-        url: `/api/match-checklist/collab?${q}`,
-        restGet,
-        restPut: (dataJson) => Obsidianscout.request("/api/match-checklist", { method: "PUT", json: { eventKey, matchKey, dataJson } }),
-        bar: state.matchBar,
-        offlineButton: el.matchOffline,
-        onChange: () => {
-            if (state.match !== session) return;
-            state.eventCompletions[matchKey] = completionOf(session.lastView);
-            refreshMatchOptionMarks();
-            renderAll();
+        state.fillRooms[scope] = room;
+        if (scope === "match") {
+            state.matchBar.update(room.session.status);
+            state.matchBar.setEditors(room.session.editors, room.session.sid);
         }
-    });
-    state.match = session;
-    try {
-        const doc = parseJson((await restGet())?.dataJson, {});
-        if (state.match !== session) return;
-        session.load(doc);
-    } catch (err) {
-        Obsidianscout.showToast(err.message || t("checklist.toast.load_match_error", "Failed to load checklist"), "error");
     }
-    if (state.match === session) session.connect();
+    el.matchBarHost.classList.toggle("hidden", !state.fillRooms.match);
+    renderAll();
 }
 
 // ------------------------------------------------------------------ bootstrapping
@@ -307,8 +531,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.me = me;
 
     ["event", "match", "our-matches", "match-controls", "disabled", "fill", "edit", "fill-sections", "edit-sections",
-        "match-title", "status", "reset", "notes", "starter", "tab-fill", "tab-edit", "tpl-bar-host", "match-bar-host",
-        "tpl-offline", "match-offline"].forEach((id) => {
+        "match-title", "status", "notes", "starter", "add-list", "tab-fill", "tab-edit", "tpl-bar-host", "match-bar-host",
+        "offline-banner", "offline-banner-text"].forEach((id) => {
         el[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = document.getElementById(`checklist-${id}`);
     });
 
@@ -332,12 +556,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     wireFill();
     wireEdit();
 
-    await openTemplateSession();
+    state.tpl = await acquireRoom("", TEMPLATE_KEY);
+    state.tplBar.update(state.tpl.session.status);
     await initEventSelect();
-    setMode(currentTemplate().sections.some((s) => fillableItems(s).length) ? "fill" : "edit");
+    setMode(currentTemplate().lists.some((l) => fillableItems(l).length) ? "fill" : "edit");
+    resumeDrafts();
+    setInterval(tick, TICK_MS);
+    window.addEventListener("online", tick);
 
     window.addEventListener("obsidianscout:languagechange", () => {
-        refreshMatchOptionMarks();
         renderMatchOptions();
         renderAll();
         if (window.Obsidianscout && typeof Obsidianscout.applyTranslations === "function") {
@@ -345,13 +572,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-    window.addEventListener("beforeunload", (e) => {
-        if (state.tpl?.hasUnsavedChanges || state.match?.hasUnsavedChanges) {
-            e.preventDefault();
-            e.returnValue = "";
-        }
+    // Drafts survive a reload, so leaving only needs a warning while the newest edits are still being written.
+    window.addEventListener("beforeunload", () => {
+        for (const room of rooms.values()) persistDraft(room);
     });
 });
+
+function makeStatusBar(host) {
+    const bar = collab().createStatusBar(host);
+    const update = bar.update;
+    bar.update = (status) => {
+        update(status);
+        const textEl = bar.element.querySelector(".collab-status-text");
+        if (textEl) textEl.textContent = statusLabel(status);
+    };
+    return bar;
+}
 
 function setMode(mode) {
     state.mode = mode;
@@ -362,7 +598,10 @@ function setMode(mode) {
     el.fill.classList.toggle("hidden", mode !== "fill");
     el.edit.classList.toggle("hidden", mode !== "edit");
     el.matchControls.classList.toggle("hidden", mode !== "fill");
-    if (mode === "fill") refreshMatchOptionMarks();
+    if (mode === "fill") {
+        refreshMatchOptionMarks();
+        syncFillRooms();
+    }
     renderAll();
 }
 
@@ -439,7 +678,7 @@ function teamNumberOf(teamKey) {
 
 function isOurMatch(match) {
     const ours = Number(state.me.teamNumber);
-    return [...(match.redTeams || []), ...(match.blueTeams || [])].some((k) => teamNumberOf(k) === ours);
+    return [...(match?.redTeams || []), ...(match?.blueTeams || [])].some((k) => teamNumberOf(k) === ours);
 }
 
 function matchLabel(match) {
@@ -448,6 +687,7 @@ function matchLabel(match) {
 }
 
 function allianceOf(match) {
+    if (!match) return "";
     const ours = Number(state.me.teamNumber);
     if ((match.redTeams || []).some((k) => teamNumberOf(k) === ours)) return "Red";
     if ((match.blueTeams || []).some((k) => teamNumberOf(k) === ours)) return "Blue";
@@ -458,12 +698,6 @@ function allianceName(color) {
     if (color === "Red") return t("checklist.alliance.red", "Red");
     if (color === "Blue") return t("checklist.alliance.blue", "Blue");
     return color;
-}
-
-function sectionDisplayTitle(section) {
-    if (section.id === "pre" && section.title === "Pre-Match") return t("checklist.section.pre", "Pre-Match");
-    if (section.id === "field" && section.title === "On the Field") return t("checklist.section.field", "On the Field");
-    return section.title;
 }
 
 async function loadEvent(eventKey) {
@@ -487,7 +721,7 @@ async function loadEvent(eventKey) {
 function refreshMatchOptionMarks() {
     if (!el.match) return;
     [...el.match.options].forEach((opt) => {
-        if (opt.value && opt.value !== "__custom__") markOptionDone(opt, isComplete(state.eventCompletions[opt.value]));
+        if (opt.value && opt.value !== "__custom__") markOptionDone(opt, isMatchComplete(opt.value, state.eventCompletions[opt.value]));
     });
 }
 
@@ -534,10 +768,10 @@ function renderMatchOptions() {
     const target = [previous, linked].find((k) => k && [...el.match.options].some((o) => o.value === k));
     if (target) {
         el.match.value = target;
-        if (target !== state.matchKey || !state.match) onMatchSelected(target);
+        onMatchSelected(target);
     } else {
         // Default to our next match without a finished checklist.
-        const next = visible.find((m) => !isComplete(state.eventCompletions[m.matchKey]));
+        const next = visible.find((m) => !isMatchComplete(m.matchKey, state.eventCompletions[m.matchKey]));
         if (next && onlyOurs) {
             el.match.value = next.matchKey;
             onMatchSelected(next.matchKey);
@@ -566,134 +800,202 @@ async function onMatchSelected(matchKey) {
     }
 
     state.matchKey = matchKey || "";
-    await openMatchSession(state.eventKey, state.matchKey);
-    renderAll();
+    await syncFillRooms();
 }
 
 // ------------------------------------------------------------------ fill out
 
 function renderFill() {
-    const hasMatch = Boolean(state.matchKey && state.match);
     const match = state.matches.find((m) => m.matchKey === state.matchKey);
     const alliance = allianceOf(match);
     const allianceStr = alliance ? ` · ${t("checklist.alliance_label", "{alliance} alliance").replace("{alliance}", allianceName(alliance))}` : "";
     el.matchTitle.textContent = !state.matchKey ? t("checklist.select_match", "Select a match")
         : match ? `${matchLabel(match)}${allianceStr}`
         : state.matchKey.replace(/^custom_/, "").replace(/_/g, " ");
-    el.reset.disabled = !hasMatch;
-    el.notes.disabled = !hasMatch;
-    const completion = currentCompletion();
+
+    const matchRoom = state.fillRooms.match;
+    el.notes.disabled = !matchRoom;
+    const notes = completionOf(matchRoom?.session.lastView).notes;
     // Don't replace what someone is typing; their next keystroke carries the whole note anyway.
-    if (document.activeElement !== el.notes) el.notes.value = completion.notes;
-    renderStatus(completion);
+    if (document.activeElement !== el.notes) el.notes.value = notes;
 
     const template = currentTemplate();
-    if (!template.sections.some((s) => fillableItems(s).length)) {
-        el.fillSections.innerHTML = `<div class="card"><p class="checklist-empty" style="margin:0;">${t("checklist.fill.empty_template", "No checklist items yet. Use <strong>Edit Checklists</strong> to create your pre-match and on-the-field lists.")}</p></div>`;
+    const lists = template.lists.filter((l) => fillableItems(l).length);
+    renderStatus(lists);
+    if (!lists.length) {
+        el.fillSections.innerHTML = `<div class="card"><p class="checklist-empty" style="margin:0;">${t("checklist.fill.empty_template", "No checklist items yet. Use <strong>Edit Checklists</strong> to create your lists.")}</p></div>`;
         return;
     }
-
-    el.fillSections.innerHTML = template.sections.map((section) => {
-        // Sort by priority; within a priority keep the order set in Edit Checklists.
-        const items = fillableItems(section)
-            .slice()
-            .sort((a, b) => (priorityRank(a.priority) - priorityRank(b.priority)) || (a.index - b.index));
-        const done = items.filter((it) => completion.checked[it.id]).length;
-        const total = items.length;
-        const pct = total ? Math.round((done / total) * 100) : 0;
-        const rows = items.map((it) => {
-            const check = completion.checked[it.id];
-            const meta = check ? `<span class="checklist-item-meta" title="${esc(new Date(check.at).toLocaleString())}">${esc(check.by)}</span>` : "";
-            return `<li class="checklist-item${check ? " checked" : ""}" data-collab-key="${esc(it.key)}">
-                <label>
-                    <input type="checkbox" data-item="${esc(it.id)}" ${check ? "checked" : ""} ${hasMatch ? "" : "disabled"} />
-                    <span class="checklist-item-text">${esc(it.text.trim())}</span>
-                    <span class="checklist-priority priority-${esc(it.priority)}">${esc(priorityLabel(it.priority))}</span>
-                    ${meta}
-                </label>
-            </li>`;
-        }).join("");
-        const secTitle = sectionDisplayTitle(section);
-        return `<div class="card checklist-section">
-            <h2><span>${esc(secTitle)}</span><span class="checklist-status">${done}/${total}</span></h2>
-            <div class="checklist-progress${total && done === total ? " done" : ""}"><span style="width:${pct}%"></span></div>
-            ${total ? `<ul class="checklist-items">${rows}</ul>` : `<p class="checklist-empty">${t("checklist.fill.empty_section", "No items in this list.")}</p>`}
-        </div>`;
-    }).join("");
+    el.fillSections.innerHTML = lists.map(renderFillList).join("");
 }
 
-function renderStatus(completion) {
-    if (!state.matchKey) {
+function renderFillList(list) {
+    const scope = scopeOf(list);
+    const room = state.fillRooms[scope];
+    const header = (extra) => `<h2><span>${esc(listTitle(list))}</span>${extra || ""}</h2>
+        <div class="checklist-frequency">${esc(frequencyLabel(list))}${scopeNote(list)}</div>`;
+
+    if (!state.eventKey) {
+        return `<div class="card checklist-section">${header()}<p class="checklist-empty">${esc(t("checklist.fill.needs_event", "Pick an event to fill this list."))}</p></div>`;
+    }
+    if (scope === "match" && !state.matchKey) {
+        return `<div class="card checklist-section">${header()}<p class="checklist-empty">${esc(t("checklist.fill.needs_match", "Pick a match to fill this list."))}</p></div>`;
+    }
+    if (scope === "match" && !isDueForMatch(list, state.matchKey)) {
+        const next = nextDueMatch(list, state.matchKey);
+        const text = next
+            ? fmt(t("checklist.fill.not_due", "Not due this match. Next due: {match}"), { match: matchLabel(next) })
+            : t("checklist.fill.not_due_again", "Not due again at this event.");
+        return `<div class="card checklist-section checklist-not-due">${header()}<p class="checklist-empty">${esc(text)}</p></div>`;
+    }
+
+    const completion = completionOf(room?.session.lastView);
+    // Sort by priority; within a priority keep the order set in Edit Checklists.
+    const items = fillableItems(list).slice()
+        .sort((a, b) => (priorityRank(a.priority) - priorityRank(b.priority)) || (a.index - b.index));
+    const done = items.filter((it) => completion.checked[it.id]).length;
+    const total = items.length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    const rows = items.map((it) => {
+        const check = completion.checked[it.id];
+        const meta = check ? `<span class="checklist-item-meta" title="${esc(new Date(check.at).toLocaleString())}">${esc(check.by)}</span>` : "";
+        return `<li class="checklist-item${check ? " checked" : ""}" data-collab-key="${esc(it.key)}">
+            <label>
+                <input type="checkbox" data-item="${esc(it.id)}" data-scope="${scope}" ${check ? "checked" : ""} ${room ? "" : "disabled"} />
+                <span class="checklist-item-text">${esc(it.text.trim())}</span>
+                <span class="checklist-priority priority-${esc(it.priority)}">${esc(priorityLabel(it.priority))}</span>
+                ${meta}
+            </label>
+        </li>`;
+    }).join("");
+    const resetBtn = `<button type="button" class="btn ghost btn-sm" data-reset-list="${esc(list.id)}" data-scope="${scope}" ${room && done ? "" : "disabled"}>${esc(t("checklist.reset_list", "Reset"))}</button>`;
+    return `<div class="card checklist-section">
+        ${header(`<span class="checklist-section-actions"><span class="checklist-status">${done}/${total}</span>${resetBtn}</span>`)}
+        <div class="checklist-progress${total && done === total ? " done" : ""}"><span style="width:${pct}%"></span></div>
+        <ul class="checklist-items">${rows}</ul>
+    </div>`;
+}
+
+/** Explains which copy of a daily / per-event list is shown. */
+function scopeNote(list) {
+    if (list.frequency === "daily") {
+        return ` · ${esc(fmt(t("checklist.fill.today", "Today ({date})"), { date: new Date().toLocaleDateString() }))}`;
+    }
+    if (list.frequency === "event") return ` · ${esc(t("checklist.fill.whole_event", "Shared for the whole event"))}`;
+    return "";
+}
+
+function renderStatus(lists) {
+    if (!state.eventKey) {
+        el.status.textContent = t("checklist.match.select_event_first", "Select an event first");
+        return;
+    }
+    const shown = lists.filter((l) => {
+        const scope = scopeOf(l);
+        if (scope !== "match") return true;
+        return state.matchKey && isDueForMatch(l, state.matchKey);
+    });
+    if (!state.matchKey && !shown.length) {
         el.status.textContent = t("checklist.status.pick_match", "Pick a match to start checking items off.");
         return;
     }
-    const items = currentTemplate().sections.flatMap(fillableItems);
-    const done = items.filter((it) => completion.checked[it.id]).length;
-    const doneText = items.length && done === items.length
+    let done = 0, total = 0, criticalLeft = 0;
+    shown.forEach((l) => {
+        const checked = completionOf(state.fillRooms[scopeOf(l)]?.session.lastView).checked;
+        fillableItems(l).forEach((it) => {
+            total++;
+            if (checked[it.id]) done++;
+            else if (it.priority === "critical") criticalLeft++;
+        });
+    });
+    const parts = [total && done === total
         ? t("checklist.status.all_complete", "All checks complete ✓")
-        : t("checklist.status.done_count", "{done} of {total} done").replace("{done}", done).replace("{total}", items.length);
-    const parts = [doneText];
-    const criticalLeft = items.filter((it) => it.priority === "critical" && !completion.checked[it.id]).length;
-    if (criticalLeft) {
-        parts.push(t("checklist.status.critical_left", "{count} critical left").replace("{count}", criticalLeft));
-    }
+        : t("checklist.status.done_count", "{done} of {total} done").replace("{done}", done).replace("{total}", total)];
+    if (criticalLeft) parts.push(t("checklist.status.critical_left", "{count} critical left").replace("{count}", criticalLeft));
+    if (!state.matchKey) parts.push(t("checklist.status.pick_match", "Pick a match to start checking items off."));
     el.status.textContent = parts.join(" · ");
 }
 
 function wireFill() {
     el.fillSections.addEventListener("change", (e) => {
         const box = e.target.closest("input[type=checkbox][data-item]");
-        if (!box || !state.match) return;
+        const room = box && state.fillRooms[box.dataset.scope];
+        if (!room) return;
         const id = box.dataset.item;
         const checked = box.checked;
         const mark = { by: state.me.username, at: Date.now() };
         Obsidianscout.triggerHaptic?.("light");
-        edit(state.match, (doc) => {
-            doc.checked = doc.checked && typeof doc.checked === "object" && !Array.isArray(doc.checked) ? doc.checked : {};
+        edit(room, (doc) => {
+            doc.checked = isPlainObject(doc.checked) ? doc.checked : {};
             if (checked) doc.checked[id] = doc.checked[id] || mark;
             else delete doc.checked[id];
         });
-        state.eventCompletions[state.matchKey] = currentCompletion();
-        refreshMatchOptionMarks();
+    });
+
+    el.fillSections.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-reset-list]");
+        const room = btn && state.fillRooms[btn.dataset.scope];
+        if (!room) return;
+        const list = currentTemplate().lists.find((l) => l.id === btn.dataset.resetList);
+        if (!list) return;
+        if (!confirm(fmt(t("checklist.reset_list_confirm", "Uncheck every item in \"{name}\"?"), { name: listTitle(list) }))) return;
+        const ids = new Set(list.items.map((it) => it.id));
+        edit(room, (doc) => {
+            doc.checked = isPlainObject(doc.checked) ? doc.checked : {};
+            ids.forEach((id) => delete doc.checked[id]);
+        });
     });
 
     el.notes.addEventListener("input", () => {
-        if (!state.match) return;
+        const room = state.fillRooms.match;
+        if (!room) return;
         const notes = el.notes.value;
-        edit(state.match, (doc) => { doc.notes = notes; }, false);
+        edit(room, (doc) => { doc.notes = notes; }, false);
     });
-
-    el.reset.addEventListener("click", () => {
-        if (!state.match) return;
-        if (!confirm(t("checklist.reset_confirm", "Uncheck every item for this match?"))) return;
-        edit(state.match, (doc) => { doc.checked = {}; });
-        state.eventCompletions[state.matchKey] = currentCompletion();
-        refreshMatchOptionMarks();
-    });
-
-    el.matchOffline.addEventListener("click", () => saveOffline(state.match, el.matchOffline));
 }
 
 // ------------------------------------------------------------------ edit template
 
 function renderEdit() {
     const template = currentTemplate();
-    el.editSections.innerHTML = template.sections.map((section) => {
-        const rows = section.items.map((it, idx) => `
+    const lists = template.lists;
+    if (!lists.length) {
+        el.editSections.innerHTML = `<div class="card"><p class="checklist-empty" style="margin:0;">${esc(t("checklist.edit.no_lists", "No lists yet. Use \"Add list\" to create one."))}</p></div>`;
+        decorateEditors();
+        return;
+    }
+    el.editSections.innerHTML = lists.map((list, listIdx) => {
+        const rows = list.items.map((it, idx) => `
             <li class="checklist-edit-row" data-collab-key="${esc(it.key)}" data-index="${it.index}">
                 <input type="text" value="${esc(it.text)}" maxlength="200" aria-label="${esc(t("checklist.edit.item_aria", "Checklist item"))}" data-field="text" />
                 <select data-field="priority" aria-label="${esc(t("checklist.edit.priority_aria", "Priority"))}" class="checklist-priority-select">${priorityOptions(it.priority)}</select>
-                <button type="button" class="btn ghost" data-action="up" data-section="${esc(section.id)}" title="${esc(t("checklist.edit.move_up", "Move up"))}" aria-label="${esc(t("checklist.edit.move_up", "Move up"))}" ${idx === 0 ? "disabled" : ""}>&uarr;</button>
-                <button type="button" class="btn ghost" data-action="down" data-section="${esc(section.id)}" title="${esc(t("checklist.edit.move_down", "Move down"))}" aria-label="${esc(t("checklist.edit.move_down", "Move down"))}" ${idx === section.items.length - 1 ? "disabled" : ""}>&darr;</button>
+                <button type="button" class="btn ghost" data-action="up" data-list="${esc(list.id)}" title="${esc(t("checklist.edit.move_up", "Move up"))}" aria-label="${esc(t("checklist.edit.move_up", "Move up"))}" ${idx === 0 ? "disabled" : ""}>&uarr;</button>
+                <button type="button" class="btn ghost" data-action="down" data-list="${esc(list.id)}" title="${esc(t("checklist.edit.move_down", "Move down"))}" aria-label="${esc(t("checklist.edit.move_down", "Move down"))}" ${idx === list.items.length - 1 ? "disabled" : ""}>&darr;</button>
                 <button type="button" class="btn ghost" data-action="remove" title="${esc(t("checklist.edit.remove", "Remove"))}" aria-label="${esc(t("checklist.edit.remove", "Remove"))}">&times;</button>
             </li>`).join("");
-        return `<div class="card checklist-section" data-section="${esc(section.id)}">
-            <div class="field" style="margin-top:0;" data-collab-key="title-${esc(section.id)}">
-                <label>${esc(t("checklist.edit.list_name", "List name"))}</label>
-                <input type="text" value="${esc(sectionDisplayTitle(section))}" maxlength="60" data-field="title" data-section="${esc(section.id)}" />
+        const titleValue = list.title.trim() ? list.title : (LEGACY_LISTS.includes(list.id) ? listTitle(list) : "");
+        return `<div class="card checklist-section" data-list="${esc(list.id)}">
+            <div class="checklist-list-settings" data-collab-key="list-${esc(list.id)}">
+                <div class="field">
+                    <label>${esc(t("checklist.edit.list_name", "List name"))}</label>
+                    <input type="text" value="${esc(titleValue)}" maxlength="60" data-field="list-title" data-list="${esc(list.id)}" placeholder="${esc(t("checklist.list.untitled", "Untitled list"))}" />
+                </div>
+                <div class="field">
+                    <label>${esc(t("checklist.edit.frequency", "How often"))}</label>
+                    <select data-field="frequency" data-list="${esc(list.id)}">${frequencyOptions(list.frequency)}</select>
+                </div>
+                <div class="field ${list.frequency === "every_n" ? "" : "hidden"}">
+                    <label>${esc(t("checklist.edit.every_label", "Every how many of our matches"))}</label>
+                    <input type="number" min="2" max="99" step="1" value="${list.every}" data-field="every" data-list="${esc(list.id)}" />
+                </div>
+                <div class="checklist-list-actions">
+                    <button type="button" class="btn ghost btn-sm" data-list-action="up" data-list="${esc(list.id)}" title="${esc(t("checklist.edit.move_list_up", "Move list up"))}" aria-label="${esc(t("checklist.edit.move_list_up", "Move list up"))}" ${listIdx === 0 ? "disabled" : ""}>&uarr;</button>
+                    <button type="button" class="btn ghost btn-sm" data-list-action="down" data-list="${esc(list.id)}" title="${esc(t("checklist.edit.move_list_down", "Move list down"))}" aria-label="${esc(t("checklist.edit.move_list_down", "Move list down"))}" ${listIdx === lists.length - 1 ? "disabled" : ""}>&darr;</button>
+                    <button type="button" class="btn ghost btn-sm checklist-danger" data-list-action="delete" data-list="${esc(list.id)}">${esc(t("checklist.edit.delete_list", "Delete list"))}</button>
+                </div>
             </div>
             <ul class="checklist-items">${rows || `<li class="checklist-empty">${esc(t("checklist.edit.no_items", "No items yet."))}</li>`}</ul>
-            <form class="checklist-edit-row mt-12" data-add="${esc(section.id)}" data-collab-key="add-${esc(section.id)}" data-no-loading="true" autocomplete="off">
+            <form class="checklist-edit-row mt-12" data-add="${esc(list.id)}" data-collab-key="add-${esc(list.id)}" data-no-loading="true" autocomplete="off">
                 <input type="text" placeholder="${esc(t("checklist.edit.add_placeholder", "Add an item..."))}" maxlength="200" aria-label="${esc(t("checklist.edit.new_item_aria", "New checklist item"))}" />
                 <select aria-label="${esc(t("checklist.edit.priority_aria", "Priority"))}" class="checklist-priority-select">${priorityOptions(DEFAULT_PRIORITY)}</select>
                 <button type="submit" class="btn">${esc(t("checklist.edit.add_btn", "Add"))}</button>
@@ -705,20 +1007,25 @@ function renderEdit() {
 
 /** Shows which list item each teammate is working in. */
 function decorateEditors() {
-    if (state.tpl && state.mode === "edit") collab().decorateCards(el.editSections, state.tpl.editors, state.tpl.sid);
+    if (state.tpl && state.mode === "edit") collab().decorateCards(el.editSections, state.tpl.session.editors, state.tpl.session.sid);
+}
+
+/** Renumbers list order 0..n-1 (in current display order) so lists can be swapped. */
+function normalizedLists(doc) {
+    const lists = ensureLists(doc);
+    listsOf(doc).forEach((l, i) => { lists[l.id].order = i; });
+    return lists;
 }
 
 function wireEdit() {
     el.editSections.addEventListener("input", (e) => {
         const input = e.target;
-        if (input.dataset.field === "title") {
-            const section = input.dataset.section;
+        const field = input.dataset.field;
+        if (field === "list-title") {
+            const id = input.dataset.list;
             const value = input.value;
-            edit(state.tpl, (doc) => {
-                doc.sections = doc.sections && typeof doc.sections === "object" ? doc.sections : {};
-                doc.sections[section] = { ...(doc.sections[section] || {}), title: value };
-            }, false);
-        } else if (input.dataset.field === "text") {
+            edit(state.tpl, (doc) => { ensureLists(doc)[id].title = value; }, false);
+        } else if (field === "text") {
             const index = Number(input.closest("[data-index]").dataset.index);
             const value = input.value;
             edit(state.tpl, (doc) => { doc.fields[index].text = value; }, false);
@@ -726,20 +1033,38 @@ function wireEdit() {
     });
 
     el.editSections.addEventListener("change", (e) => {
-        const select = e.target;
-        if (select.dataset.field !== "priority") return;
-        const index = Number(select.closest("[data-index]").dataset.index);
-        edit(state.tpl, (doc) => { doc.fields[index].priority = select.value; });
+        const input = e.target;
+        const field = input.dataset.field;
+        if (field === "priority") {
+            const index = Number(input.closest("[data-index]").dataset.index);
+            edit(state.tpl, (doc) => { doc.fields[index].priority = input.value; });
+        } else if (field === "frequency") {
+            const id = input.dataset.list;
+            edit(state.tpl, (doc) => {
+                const list = ensureLists(doc)[id];
+                list.frequency = input.value;
+                if (input.value === "every_n" && !(parseInt(list.every, 10) >= 2)) list.every = 2;
+            });
+        } else if (field === "every") {
+            const id = input.dataset.list;
+            const every = Math.max(2, Math.min(99, parseInt(input.value, 10) || 2));
+            edit(state.tpl, (doc) => { ensureLists(doc)[id].every = every; });
+        }
     });
 
     // Tell teammates which item this editor is in.
     el.editSections.addEventListener("focusin", (e) => {
         const key = e.target.closest("[data-collab-key]")?.getAttribute("data-collab-key");
-        state.tpl?.setFocus(key && !key.startsWith("add-") && !key.startsWith("title-") ? key : null);
+        state.tpl?.session.setFocus(key && !key.startsWith("add-") && !key.startsWith("list-") ? key : null);
     });
-    el.editSections.addEventListener("focusout", () => state.tpl?.setFocus(null));
+    el.editSections.addEventListener("focusout", () => state.tpl?.session.setFocus(null));
 
     el.editSections.addEventListener("click", (e) => {
+        const listBtn = e.target.closest("button[data-list-action]");
+        if (listBtn) {
+            onListAction(listBtn.dataset.listAction, listBtn.dataset.list);
+            return;
+        }
         const btn = e.target.closest("button[data-action]");
         if (!btn) return;
         const index = Number(btn.closest("[data-index]").dataset.index);
@@ -749,9 +1074,9 @@ function wireEdit() {
                 doc.fields.splice(index, 1);
                 return;
             }
-            // Swap with the neighbouring item of the same list (both lists share one ordered array).
-            const section = btn.dataset.section;
-            const sameList = doc.fields.map((f, i) => ((f.section || "pre") === section ? i : -1)).filter((i) => i >= 0);
+            // Swap with the neighbouring item of the same list (all lists share one ordered array).
+            const listId = btn.dataset.list;
+            const sameList = doc.fields.map((f, i) => ((f.section || "pre") === listId ? i : -1)).filter((i) => i >= 0);
             const pos = sameList.indexOf(index);
             const other = sameList[action === "up" ? pos - 1 : pos + 1];
             if (other === undefined) return;
@@ -767,29 +1092,80 @@ function wireEdit() {
         const text = input.value.trim();
         if (!text) return;
         const priority = form.querySelector("select")?.value || DEFAULT_PRIORITY;
-        const section = form.dataset.add;
+        const listId = form.dataset.add;
         input.value = "";
         edit(state.tpl, (doc) => {
             doc.fields = Array.isArray(doc.fields) ? doc.fields : [];
-            doc.fields.push({ id: newId(), section, text, priority });
+            doc.fields.push({ id: newId(), section: listId, text, priority });
         });
-        el.editSections.querySelector(`form[data-add="${CSS.escape(section)}"] input`)?.focus();
+        el.editSections.querySelector(`form[data-add="${CSS.escape(listId)}"] input`)?.focus();
+    });
+
+    el.addList.addEventListener("click", () => {
+        const id = newId();
+        edit(state.tpl, (doc) => {
+            const lists = normalizedLists(doc);
+            lists[id] = { title: "", order: Object.keys(lists).length, frequency: "match", every: 2 };
+        });
+        el.editSections.querySelector(`input[data-field="list-title"][data-list="${CSS.escape(id)}"]`)?.focus();
     });
 
     el.starter.addEventListener("click", () => {
         const template = currentTemplate();
-        const hasItems = template.sections.some((s) => s.items.length);
+        const hasItems = template.lists.some((l) => l.items.length);
         if (hasItems && !confirm(t("checklist.edit.starter_confirm", "Add the starter items to your lists? Existing items are kept."))) return;
         edit(state.tpl, (doc) => {
+            const lists = normalizedLists(doc);
             doc.fields = Array.isArray(doc.fields) ? doc.fields : [];
-            template.sections.forEach((s) => {
-                const existing = new Set(s.items.map((it) => it.text.trim().toLowerCase()));
-                (STARTER_ITEMS[s.id] || []).forEach(({ text, priority }) => {
-                    if (!existing.has(text.toLowerCase())) doc.fields.push({ id: newId(), section: s.id, text, priority });
+            Object.entries(STARTER_ITEMS).forEach(([listId, items]) => {
+                if (!lists[listId]) lists[listId] = { title: "", order: Object.keys(lists).length, frequency: "match", every: 2 };
+                const existing = new Set(doc.fields.filter((f) => f.section === listId).map((f) => String(f.text || "").trim().toLowerCase()));
+                items.forEach(({ text, priority }) => {
+                    const translated = t(`checklist.starter.${starterKey(text)}`, text);
+                    if (!existing.has(translated.toLowerCase())) doc.fields.push({ id: newId(), section: listId, text: translated, priority });
                 });
             });
         });
     });
+}
 
-    el.tplOffline.addEventListener("click", () => saveOffline(state.tpl, el.tplOffline));
+/** Stable translation key for a starter item. */
+function starterKey(text) {
+    return {
+        "Fresh battery installed and strapped down": "battery",
+        "Battery voltage checked (12.5V+)": "voltage",
+        "Bumpers on and showing the correct alliance color": "bumpers",
+        "Radio powered and secured": "radio",
+        "All bolts, chains and belts checked": "mechanical",
+        "Controllers and driver station laptop charged": "controllers_charged",
+        "Robot placed in the correct starting position": "start_position",
+        "Correct autonomous routine selected": "auto_selected",
+        "Driver station connected to the field (all green)": "ds_connected",
+        "Game piece preloaded": "preload",
+        "Controllers plugged in and mapped to the right ports": "controllers_mapped"
+    }[text] || "item";
+}
+
+function onListAction(action, id) {
+    if (action === "delete") {
+        const list = currentTemplate().lists.find((l) => l.id === id);
+        if (!list) return;
+        const message = fmt(t("checklist.edit.delete_list_confirm", "Delete \"{name}\" and all of its items?"), { name: listTitle(list) });
+        if (!confirm(message)) return;
+        edit(state.tpl, (doc) => {
+            delete ensureLists(doc)[id];
+            doc.fields = (Array.isArray(doc.fields) ? doc.fields : []).filter((f) => (f.section || "pre") !== id);
+        });
+        return;
+    }
+    edit(state.tpl, (doc) => {
+        const lists = normalizedLists(doc);
+        const ordered = listsOf(doc);
+        const pos = ordered.findIndex((l) => l.id === id);
+        const other = ordered[action === "up" ? pos - 1 : pos + 1];
+        if (pos < 0 || !other) return;
+        const tmp = lists[id].order;
+        lists[id].order = lists[other.id].order;
+        lists[other.id].order = tmp;
+    });
 }

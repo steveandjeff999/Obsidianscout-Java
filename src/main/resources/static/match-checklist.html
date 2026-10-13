@@ -111,6 +111,38 @@
         .checklist-edit-row .checklist-priority-select { flex: 0 0 auto; width: auto; min-width: 96px; }
         .checklist-empty { opacity: 0.7; font-style: italic; padding: 8px 0; }
         .checklist-status { font-size: 13px; opacity: 0.75; }
+        .checklist-frequency { font-size: 12px; opacity: 0.7; margin: -2px 0 4px; }
+        .checklist-section-actions { display: inline-flex; align-items: center; gap: 8px; }
+        .checklist-not-due { opacity: 0.6; }
+        .checklist-list-settings {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 8px 12px;
+            align-items: end;
+            margin-bottom: 12px;
+        }
+        .checklist-list-settings .field { margin: 0; }
+        /* Editing needs room for the item text next to its controls: one list per row. */
+        #checklist-edit-sections { grid-template-columns: 1fr; }
+        .checklist-list-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+        .checklist-danger { color: var(--danger, #ef4444); }
+        .checklist-offline-banner {
+            position: sticky;
+            top: 8px;
+            z-index: 20;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(245, 158, 11, 0.55);
+            background: rgba(245, 158, 11, 0.16);
+            color: inherit;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .checklist-offline-banner::before { content: "\26A0"; font-size: 16px; line-height: 1.3; }
     </style>
 </head>
 
@@ -138,11 +170,16 @@
 
         <main class="main-content">
 
+            <!-- Shown while edits can't reach the server; they're kept on this device and save on reconnect. -->
+            <div id="checklist-offline-banner" class="checklist-offline-banner hidden" role="status" aria-live="polite">
+                <span id="checklist-offline-banner-text"></span>
+            </div>
+
             <div class="card">
                 <div class="checklist-toolbar">
                     <div>
                         <h1 style="margin: 0;" data-i18n="checklist.title">Match Checklist</h1>
-                        <p class="notice" style="margin: 4px 0 0;" data-i18n="checklist.subtitle">Pre-match and on-the-field checks for the drive team. Every match gets its own copy, shared with your team.</p>
+                        <p class="notice" style="margin: 4px 0 0;" data-i18n="checklist.subtitle">Drive-team checklists, each on its own schedule: every match, every few matches, once a day or once per event. Shared live with your team.</p>
                     </div>
                     <div class="checklist-tabs" role="tablist">
                         <button type="button" class="btn" id="checklist-tab-fill" role="tab" aria-selected="true" data-i18n="checklist.tab.fill">Fill Out</button>
@@ -182,10 +219,6 @@
                             <strong id="checklist-match-title" data-i18n="checklist.select_match">Select a match</strong>
                             <div class="checklist-status" id="checklist-status"></div>
                         </div>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button type="button" class="btn btn-sm hidden" id="checklist-match-offline" data-i18n="checklist.save_offline">Save offline changes</button>
-                            <button type="button" class="btn ghost btn-sm" id="checklist-reset" data-i18n="checklist.reset_match">Reset this match</button>
-                        </div>
                     </div>
                     <!-- Live editing status (filled by config-collab.js) -->
                     <div id="checklist-match-bar-host"></div>
@@ -205,8 +238,8 @@
                     <div class="checklist-toolbar">
                         <span class="checklist-status" data-i18n="checklist.edit.notice">Your whole team edits these lists together, live. Changes apply to every match, and checks already made on renamed items are kept.</span>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button type="button" class="btn hidden" id="checklist-tpl-offline" data-i18n="checklist.save_offline">Save offline changes</button>
                             <button type="button" class="btn ghost" id="checklist-starter" data-i18n="checklist.load_starter">Load starter items</button>
+                            <button type="button" class="btn" id="checklist-add-list" data-i18n="checklist.edit.add_list">+ Add list</button>
                         </div>
                     </div>
                     <!-- Live editing status (filled by config-collab.js) -->
