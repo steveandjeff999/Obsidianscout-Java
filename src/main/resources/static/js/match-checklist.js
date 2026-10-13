@@ -50,7 +50,6 @@ const STARTER_ITEMS = {
     ]
 };
 
-const REST_RETRY_MS = 20000;
 const TICK_MS = 1000;
 
 function t(key, fallback) {
@@ -84,6 +83,7 @@ const state = {
     fillRooms: {},          // scope ("match" | "day" | "event") -> room shown in Fill Out
     tplBar: null,
     matchBar: null,
+    battery: { inv: null, invReady: null, plan: null }, // battery tracker rooms: inventory + this event's rotation plan
     hadPendingOffline: false
 };
 
@@ -270,128 +270,72 @@ function isMatchComplete(matchKey, completion) {
     return ids.length > 0 && ids.every((id) => completion.checked?.[id]);
 }
 
-// <option> elements can't be styled with ::after in most browsers, so finished matches get a text prefix.
-function markOptionDone(opt, done) {
-    const label = opt.textContent.replace(/^✓ /, "");
+// <option> elements can't be styled with ::after in most browsers, so finished matches get a text prefix
+// and the battery the match needs (Battery Tracker) is added to the end.
+function labelOption(opt, done, batteryLabel) {
+    if (opt.dataset.label === undefined) opt.dataset.label = opt.textContent.replace(/^✓ /, "");
+    const label = batteryLabel ? `${opt.dataset.label} · ${batteryLabel}` : opt.dataset.label;
     opt.textContent = done ? `✓ ${label}` : label;
-}
-
-// ------------------------------------------------------------------ offline drafts
-
-function draftStorageKey() {
-    return `obsidianscout:checklist-drafts:${state.me.teamNumber}:${state.me.program || "FRC"}:${state.me.userId || state.me.id || state.me.username}`;
-}
-
-function readDrafts() {
-    return parseJson(Obsidianscout.safeGetItem(draftStorageKey()), {});
-}
-
-function writeDrafts(drafts) {
-    if (Object.keys(drafts).length) Obsidianscout.safeSetItem(draftStorageKey(), JSON.stringify(drafts));
-    else Obsidianscout.safeRemoveItem(draftStorageKey());
-}
-
-/** Keeps a room's unsaved edits on this device until the server has them. */
-function persistDraft(room) {
-    const drafts = readDrafts();
-    const session = room.session;
-    if (session.hasUnsavedChanges) {
-        drafts[room.id] = {
-            eventKey: room.eventKey,
-            matchKey: room.matchKey,
-            base: clone(session.confirmed?.doc || {}),
-            local: clone(session.lastView.doc),
-            at: Date.now()
-        };
-    } else if (drafts[room.id]) {
-        delete drafts[room.id];
-    } else {
-        return;
-    }
-    writeDrafts(drafts);
 }
 
 // ------------------------------------------------------------------ live rooms
 
-const rooms = new Map(); // room id -> { id, eventKey, matchKey, session, uses, ready, lastRestTry }
+// Checklist documents (template, per match/day/event) and the battery tracker's documents, each kept live
+// by js/services/collab-rooms.js with offline drafts on this device.
+let checklistRooms = null;
+let batteryRooms = null;
 
 function roomIdFor(eventKey, matchKey) {
     return matchKey === TEMPLATE_KEY ? "template" : `${eventKey}|${matchKey}`;
 }
 
-function roomEndpoints(eventKey, matchKey) {
-    if (matchKey === TEMPLATE_KEY) {
-        return {
-            url: "/api/match-checklist/collab?template=1",
-            get: () => Obsidianscout.request("/api/match-checklist/template"),
-            put: (dataJson) => Obsidianscout.request("/api/match-checklist/template", { method: "PUT", json: { dataJson } })
-        };
-    }
-    const q = `eventKey=${encodeURIComponent(eventKey)}&matchKey=${encodeURIComponent(matchKey)}`;
-    return {
-        url: `/api/match-checklist/collab?${q}`,
-        get: () => Obsidianscout.request(`/api/match-checklist?${q}`),
-        put: (dataJson) => Obsidianscout.request("/api/match-checklist", { method: "PUT", json: { eventKey, matchKey, dataJson } })
-    };
-}
-
-/** Opens (or reuses) the live document for a template/match/day/event. Resumes any draft left on this device. */
-async function acquireRoom(eventKey, matchKey) {
-    const id = roomIdFor(eventKey, matchKey);
-    let room = rooms.get(id);
-    if (room) {
-        room.uses++;
-        await room.ready;
-        return room;
-    }
-    const endpoints = roomEndpoints(eventKey, matchKey);
-    room = { id, eventKey, matchKey, uses: 1, lastRestTry: 0, endpoints };
-    rooms.set(id, room);
-    room.session = new (collab().ConfigCollabSession)({
-        url: endpoints.url,
-        onView: () => onRoomChange(room),
-        onStatus: (status) => onRoomStatus(room, status),
-        onPresence: (editors) => onRoomPresence(room, editors),
-        onNotice: (level, message) => {
-            if (message) Obsidianscout.showToast(message, level === "error" ? "error" : level === "success" ? "success" : "info");
-        }
+function setupRooms() {
+    const userKey = `${state.me.teamNumber}:${state.me.program || "FRC"}:${state.me.userId || state.me.id || state.me.username}`;
+    checklistRooms = window.ObsidianscoutCollabRooms.create({
+        draftKey: () => `obsidianscout:checklist-drafts:${userKey}`,
+        roomId: roomIdFor,
+        endpoints: (eventKey, matchKey) => {
+            if (matchKey === TEMPLATE_KEY) {
+                return {
+                    url: "/api/match-checklist/collab?template=1",
+                    get: () => Obsidianscout.request("/api/match-checklist/template"),
+                    put: (dataJson) => Obsidianscout.request("/api/match-checklist/template", { method: "PUT", json: { dataJson } })
+                };
+            }
+            const q = `eventKey=${encodeURIComponent(eventKey)}&matchKey=${encodeURIComponent(matchKey)}`;
+            return {
+                url: `/api/match-checklist/collab?${q}`,
+                get: () => Obsidianscout.request(`/api/match-checklist?${q}`),
+                put: (dataJson) => Obsidianscout.request("/api/match-checklist", { method: "PUT", json: { eventKey, matchKey, dataJson } })
+            };
+        },
+        keepOpen: (room) => room === state.tpl,
+        onChange: onRoomChange,
+        onStatus: onRoomStatus,
+        onPresence: onRoomPresence
     });
-    room.ready = (async () => {
-        const draft = readDrafts()[id];
-        if (draft) {
-            // Unsaved edits from an earlier visit: replay them; they merge into the server's copy on connect.
-            room.session.load(draft.base || {});
-            room.session.commit(draft.local || {});
-        } else {
-            let doc = {};
-            try {
-                doc = parseJson((await endpoints.get())?.dataJson, {});
-            } catch (_) { /* offline: start empty, the server copy arrives on connect */ }
-            room.session.load(doc);
-        }
-        room.session.connect();
-    })();
-    await room.ready;
-    return room;
+    batteryRooms = window.ObsidianscoutCollabRooms.create(Object.assign(battery().roomConfig(state.me), {
+        keepOpen: (room) => room === state.battery.inv || room === state.battery.plan,
+        onChange: () => {
+            refreshMatchOptionMarks();
+            renderAll();
+            updateOfflineBanner();
+        },
+        onStatus: () => updateOfflineBanner()
+    }));
 }
 
-/** Stops showing a room. It stays open in the background until any unsaved edits reach the server. */
+function acquireRoom(eventKey, matchKey) {
+    return checklistRooms.acquire(eventKey, matchKey);
+}
+
 function releaseRoom(room) {
-    if (!room) return;
-    room.uses = Math.max(0, room.uses - 1);
-    closeIdleRoom(room);
-}
-
-function closeIdleRoom(room) {
-    if (room.uses > 0 || room.session.hasUnsavedChanges || room === state.tpl) return;
-    room.session.close();
-    rooms.delete(room.id);
+    checklistRooms.release(room);
 }
 
 function onRoomChange(room) {
-    persistDraft(room);
-    if (room.matchKey !== TEMPLATE_KEY && room.eventKey === state.eventKey) {
-        state.eventCompletions[room.matchKey] = completionOf(room.session.lastView);
+    if (room.docKey !== TEMPLATE_KEY && room.eventKey === state.eventKey) {
+        state.eventCompletions[room.docKey] = completionOf(room.session.lastView);
     }
     refreshMatchOptionMarks();
     // A list's frequency may have changed, which can need a day/event document opened.
@@ -419,70 +363,152 @@ function onRoomPresence(room, editors) {
  * made but the network is up, and closes background rooms once everything in them is saved.
  */
 function tick() {
-    const now = Date.now();
-    for (const room of [...rooms.values()]) {
-        const s = room.session;
-        persistDraft(room);
-        if (s.hasUnsavedChanges && !s.isLive && navigator.onLine && now - room.lastRestTry > REST_RETRY_MS) {
-            room.lastRestTry = now;
-            saveViaRest(room);
-        }
-        closeIdleRoom(room);
-    }
+    checklistRooms.tick();
+    batteryRooms.tick();
     updateOfflineBanner();
 }
 
-async function saveViaRest(room) {
-    try {
-        await room.session.saveViaRest(
-            async () => parseJson((await room.endpoints.get())?.dataJson, {}),
-            (doc) => room.endpoints.put(JSON.stringify(doc))
-        );
-        persistDraft(room);
-        updateOfflineBanner();
-    } catch (_) { /* still unreachable; retried later */ }
-}
-
 function updateOfflineBanner() {
-    if (!el.offlineBanner) return;
-    const pending = [...rooms.values()].filter((r) => r.session.hasUnsavedChanges && !r.session.isLive);
-    const show = pending.length > 0;
+    if (!el.offlineBanner || !checklistRooms || !batteryRooms) return;
+    const pending = checklistRooms.pendingOffline().length + batteryRooms.pendingOffline().length;
+    const show = pending > 0;
     if (show) {
         el.offlineBannerText.textContent = fmt(t("checklist.offline.banner",
             "You're offline. Changes to {count} checklist(s) can't be saved until you're back online. They're kept on this device and will save automatically when you reconnect."),
-            { count: pending.length });
+            { count: pending });
         state.hadPendingOffline = true;
-    } else if (state.hadPendingOffline && ![...rooms.values()].some((r) => r.session.hasUnsavedChanges)) {
+    } else if (state.hadPendingOffline && !checklistRooms.hasUnsaved() && !batteryRooms.hasUnsaved()) {
         state.hadPendingOffline = false;
         Obsidianscout.showToast(t("checklist.offline.saved", "All offline changes saved"), "success");
     }
     el.offlineBanner.classList.toggle("hidden", !show);
 }
 
-/** Opens any drafts left from an earlier visit so they save as soon as the server is reachable. */
-async function resumeDrafts() {
-    const drafts = readDrafts();
-    for (const [id, draft] of Object.entries(drafts)) {
-        if (rooms.has(id)) continue;
-        const room = await acquireRoom(draft.eventKey || "", draft.matchKey || TEMPLATE_KEY);
-        releaseRoom(room);
-    }
-}
-
 /** Edits a live document and shares it; re-renders unless the change came from the input being typed in. */
 function edit(room, mutate, rerender = true) {
     if (!room) return;
-    const session = room.session;
-    const next = clone(session.lastView.doc);
-    mutate(next);
-    session.commit(next);
-    persistDraft(room);
-    if (room.matchKey !== TEMPLATE_KEY && room.eventKey === state.eventKey) {
-        state.eventCompletions[room.matchKey] = completionOf(session.lastView);
+    checklistRooms.edit(room, mutate);
+    if (room.docKey !== TEMPLATE_KEY && room.eventKey === state.eventKey) {
+        state.eventCompletions[room.docKey] = completionOf(room.session.lastView);
+        maybeAutoMarkUsed(room.docKey);
         refreshMatchOptionMarks();
     }
     updateOfflineBanner();
     if (rerender) renderAll();
+}
+
+// ------------------------------------------------------------------ batteries (see js/battery-tracker.js)
+
+function battery() {
+    return window.ObsidianBattery;
+}
+
+/** Opens the battery inventory and this event's rotation plan (the banner stays hidden without batteries). */
+async function syncBatteryRooms() {
+    const eventKey = state.eventKey;
+    // Event switches can overlap; open the inventory only once.
+    if (!state.battery.invReady) state.battery.invReady = batteryRooms.acquire("", "").then((room) => { state.battery.inv = room; });
+    await state.battery.invReady;
+    const current = state.battery.plan;
+    if (current?.eventKey === eventKey) return;
+    state.battery.plan = null;
+    batteryRooms.release(current);
+    if (!eventKey) return;
+    const room = await batteryRooms.acquire(eventKey, "");
+    if (state.eventKey !== eventKey || state.battery.plan) {
+        batteryRooms.release(room);
+        return;
+    }
+    state.battery.plan = room;
+    refreshMatchOptionMarks();
+    renderAll();
+}
+
+function batteryInventory() {
+    return state.battery.inv?.session.lastView.doc || {};
+}
+
+function batteryPlan() {
+    return state.battery.plan?.session.lastView.doc || {};
+}
+
+/** matchKey -> { batteryId, source, skipped } for our matches at the selected event. */
+function batterySchedule() {
+    if (!state.battery.plan || state.battery.plan.eventKey !== state.eventKey) return {};
+    return battery().computeSchedule(batteryInventory(), batteryPlan(), ourMatches().map((m) => m.matchKey));
+}
+
+function batteryName(id) {
+    return battery().displayName(battery().batteriesOf(batteryInventory()).find((b) => b.id === id)) || id;
+}
+
+function editBatteryPlan(mutate) {
+    const room = state.battery.plan;
+    if (!room) return;
+    batteryRooms.edit(room, mutate);
+    refreshMatchOptionMarks();
+    updateOfflineBanner();
+    renderAll();
+}
+
+/** Records the scheduled battery as used once a match's checklist is finished (a Battery Tracker setting). */
+function maybeAutoMarkUsed(matchKey) {
+    if (!state.battery.plan || !battery().autoMarkUsed(batteryPlan())) return;
+    if (battery().usedOf(batteryPlan(), matchKey)) return;
+    if (!isMatchComplete(matchKey, state.eventCompletions[matchKey])) return;
+    const slot = batterySchedule()[matchKey];
+    if (!slot?.batteryId) return;
+    editBatteryPlan((doc) => battery().markUsed(doc, matchKey, slot.batteryId));
+}
+
+function renderBattery() {
+    const host = el.battery;
+    if (!host) return;
+    const hasBatteries = battery().batteriesOf(batteryInventory()).length > 0;
+    const slot = batterySchedule()[state.matchKey];
+    if (!hasBatteries || !state.matchKey || !slot) {
+        host.classList.add("hidden");
+        host.innerHTML = "";
+        return;
+    }
+    host.classList.remove("hidden");
+    const label = slot.batteryId
+        ? fmt(esc(t("battery.checklist.needs", "Battery: {name}")), { name: `<strong>${esc(batteryName(slot.batteryId))}</strong>` })
+        : esc(t("battery.checklist.none", "No battery available: every battery is skipped for this match"));
+    const sourceNote = slot.source === "used" ? t("battery.source.used", "Used")
+        : slot.source === "pinned" ? t("battery.source.pinned", "Pinned") : "";
+    const skippedNote = slot.skipped.length
+        ? fmt(t("battery.checklist.skipped", "Skipped: {names}"), { names: slot.skipped.map(batteryName).join(", ") })
+        : "";
+    const button = (action, text, primary) =>
+        `<button type="button" class="btn ${primary ? "" : "ghost "}btn-sm" data-battery-action="${action}">${esc(text)}</button>`;
+    host.innerHTML = `<span class="checklist-battery-icon">${battery().BATTERY_ICON}</span>
+        <span class="checklist-battery-text"><span>${label}${sourceNote ? ` <span class="checklist-battery-tag">${esc(sourceNote)}</span>` : ""}</span>${skippedNote ? `<span class="checklist-battery-meta">${esc(skippedNote)}</span>` : ""}</span>
+        <span class="checklist-section-actions">
+            ${slot.batteryId && slot.source !== "used" ? button("skip", t("battery.action.skip", "Skip")) : ""}
+            ${slot.skipped.length ? button("unskip", t("battery.action.unskip", "Undo skips")) : ""}
+            ${slot.source === "used" ? button("unuse", t("battery.action.unmark_used", "Not used"))
+                : slot.batteryId ? button("use", t("battery.action.mark_used", "Mark used"), true) : ""}
+        </span>`;
+}
+
+function wireBattery() {
+    el.battery.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-battery-action]");
+        if (!btn || !state.matchKey) return;
+        const matchKey = state.matchKey;
+        const slot = batterySchedule()[matchKey];
+        if (!slot) return;
+        Obsidianscout.triggerHaptic?.("light");
+        editBatteryPlan((doc) => {
+            switch (btn.dataset.batteryAction) {
+                case "skip": if (slot.batteryId) battery().skip(doc, matchKey, slot.batteryId, state.me.username); break;
+                case "unskip": battery().clearSkips(doc, matchKey); break;
+                case "use": if (slot.batteryId) battery().markUsed(doc, matchKey, slot.batteryId); break;
+                case "unuse": battery().markUsed(doc, matchKey, ""); break;
+            }
+        });
+    });
 }
 
 /** Opens the match/day/event documents the Fill Out view needs and lets go of the others. */
@@ -532,7 +558,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     ["event", "match", "our-matches", "match-controls", "disabled", "fill", "edit", "fill-sections", "edit-sections",
         "match-title", "status", "notes", "starter", "add-list", "tab-fill", "tab-edit", "tpl-bar-host", "match-bar-host",
-        "offline-banner", "offline-banner-text"].forEach((id) => {
+        "offline-banner", "offline-banner-text", "battery"].forEach((id) => {
         el[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = document.getElementById(`checklist-${id}`);
     });
 
@@ -543,10 +569,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         el.tabEdit.disabled = true;
         return;
     }
-    if (!collab()) {
+    if (!collab() || !window.ObsidianscoutCollabRooms || !battery() || !window.ObsidianMatchUtils) {
         Obsidianscout.showToast(t("checklist.toast.live_failed", "Live editing failed to load; refresh the page"), "error");
         return;
     }
+    setupRooms();
 
     state.tplBar = makeStatusBar(el.tplBarHost);
     state.matchBar = makeStatusBar(el.matchBarHost);
@@ -555,12 +582,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     wireTabs();
     wireFill();
     wireEdit();
+    wireBattery();
 
     state.tpl = await acquireRoom("", TEMPLATE_KEY);
     state.tplBar.update(state.tpl.session.status);
     await initEventSelect();
     setMode(currentTemplate().lists.some((l) => fillableItems(l).length) ? "fill" : "edit");
-    resumeDrafts();
+    checklistRooms.resumeDrafts();
+    batteryRooms.resumeDrafts();
     setInterval(tick, TICK_MS);
     window.addEventListener("online", tick);
 
@@ -574,7 +603,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Drafts survive a reload, so leaving only needs a warning while the newest edits are still being written.
     window.addEventListener("beforeunload", () => {
-        for (const room of rooms.values()) persistDraft(room);
+        checklistRooms.persistAll();
+        batteryRooms.persistAll();
     });
 });
 
@@ -658,40 +688,21 @@ async function initEventSelect() {
     await loadEvent(state.eventKey);
 }
 
-function compLevelRank(compLevel) {
-    const level = String(compLevel || "").trim().toLowerCase();
-    if (["p", "pr", "pm", "practice"].includes(level)) return 0;
-    if (["q", "qm", "qual", "qualification"].includes(level)) return 1;
-    return 2;
-}
-
+// Ordering and alliance helpers are shared with the Battery Tracker (js/services/match-utils.js).
 function compareMatches(a, b) {
-    return (compLevelRank(a.compLevel) - compLevelRank(b.compLevel)) ||
-        ((a.setNumber || 1) - (b.setNumber || 1)) ||
-        ((a.matchNumber || 0) - (b.matchNumber || 0));
-}
-
-function teamNumberOf(teamKey) {
-    const m = String(teamKey || "").match(/\d+/);
-    return m ? Number(m[0]) : NaN;
+    return window.ObsidianMatchUtils.compareMatches(a, b);
 }
 
 function isOurMatch(match) {
-    const ours = Number(state.me.teamNumber);
-    return [...(match?.redTeams || []), ...(match?.blueTeams || [])].some((k) => teamNumberOf(k) === ours);
+    return window.ObsidianMatchUtils.isTeamInMatch(match, state.me.teamNumber);
 }
 
 function matchLabel(match) {
-    return Obsidianscout.localize(match.label) ||
-        (match.compLevel ? `${String(match.compLevel).toUpperCase()} ${match.matchNumber || ""}`.trim() : match.matchKey);
+    return window.ObsidianMatchUtils.matchLabel(match);
 }
 
 function allianceOf(match) {
-    if (!match) return "";
-    const ours = Number(state.me.teamNumber);
-    if ((match.redTeams || []).some((k) => teamNumberOf(k) === ours)) return "Red";
-    if ((match.blueTeams || []).some((k) => teamNumberOf(k) === ours)) return "Blue";
-    return "";
+    return window.ObsidianMatchUtils.allianceOf(match, state.me.teamNumber);
 }
 
 function allianceName(color) {
@@ -716,12 +727,16 @@ async function loadEvent(eventKey) {
     }
     state.matchKey = "";
     renderMatchOptions();
+    syncBatteryRooms();
 }
 
 function refreshMatchOptionMarks() {
     if (!el.match) return;
+    const schedule = batterySchedule();
     [...el.match.options].forEach((opt) => {
-        if (opt.value && opt.value !== "__custom__") markOptionDone(opt, isMatchComplete(opt.value, state.eventCompletions[opt.value]));
+        if (!opt.value || opt.value === "__custom__") return;
+        const batteryId = schedule[opt.value]?.batteryId;
+        labelOption(opt, isMatchComplete(opt.value, state.eventCompletions[opt.value]), batteryId ? fmt(t("battery.checklist.needs", "Battery: {name}"), { name: batteryName(batteryId) }) : "");
     });
 }
 
@@ -812,6 +827,8 @@ function renderFill() {
     el.matchTitle.textContent = !state.matchKey ? t("checklist.select_match", "Select a match")
         : match ? `${matchLabel(match)}${allianceStr}`
         : state.matchKey.replace(/^custom_/, "").replace(/_/g, " ");
+
+    renderBattery();
 
     const matchRoom = state.fillRooms.match;
     el.notes.disabled = !matchRoom;

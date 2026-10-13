@@ -1,0 +1,250 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ObsidianScout | Battery Tracker</title>
+
+    <meta name="description" content="Keep track of the drive team's batteries and which one to run in each match." />
+
+    <link rel="stylesheet" href="/css/app.css" />
+
+    <link rel="manifest" href="/manifest.json" />
+
+    <style>
+        .battery-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .battery-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            align-items: end;
+            margin-top: 16px;
+        }
+        .battery-controls .field { margin: 0; }
+        .battery-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+            gap: 20px;
+            margin-top: 20px;
+            align-items: start;
+        }
+        @media (max-width: 960px) { .battery-layout { grid-template-columns: 1fr; } }
+        .battery-layout > .card { margin: 0; min-width: 0; }
+        .battery-card h2 { margin: 0 0 4px; font-size: 18px; }
+        .battery-group-title {
+            margin: 16px 0 6px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            opacity: 0.7;
+        }
+        .battery-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+        .battery-row {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            gap: 6px 10px;
+            align-items: center;
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color, rgba(127,127,127,0.25));
+        }
+        .battery-row.retired { opacity: 0.6; }
+        .battery-row-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; min-width: 0; }
+        .battery-row-main input, .battery-row-main select { min-width: 0; }
+        .battery-row-main .battery-notes { grid-column: 1 / -1; font-size: 13px; }
+        .battery-row-actions { display: flex; flex-direction: column; gap: 4px; }
+        .battery-row-actions .btn, .battery-move .btn { padding: 4px 8px; }
+        .battery-move { display: flex; flex-direction: column; gap: 2px; }
+        .battery-stats { grid-column: 2 / -1; font-size: 12px; opacity: 0.7; }
+        .battery-add { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+        .battery-add input { flex: 1; min-width: 120px; }
+        .battery-add select { width: auto; }
+        .battery-empty { opacity: 0.7; font-style: italic; padding: 8px 0; }
+        .battery-settings {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px 12px;
+            align-items: end;
+            margin: 8px 0 12px;
+        }
+        .battery-settings .field { margin: 0; }
+        .battery-settings label.battery-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            text-transform: none;
+            letter-spacing: normal;
+            font-weight: normal;
+        }
+        .battery-matches { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+        .battery-match {
+            display: grid;
+            grid-template-columns: minmax(90px, auto) minmax(0, 1fr) auto;
+            gap: 6px 12px;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color, rgba(127,127,127,0.25));
+        }
+        .battery-match.next { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+        .battery-match.played { opacity: 0.65; }
+        .battery-match-label { font-weight: 600; display: flex; flex-direction: column; gap: 2px; }
+        .battery-alliance { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+        .battery-alliance.red { color: #e74c3c; }
+        .battery-alliance.blue { color: #3498db; }
+        .battery-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+            border: 1px solid var(--accent);
+        }
+        .battery-chip.none { border-color: var(--danger, #ef4444); color: var(--danger, #ef4444); }
+        .battery-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; }
+        .battery-skipped { font-size: 12px; opacity: 0.7; margin-top: 4px; }
+        .battery-match-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+        .battery-match-actions .btn { padding: 4px 10px; }
+        .battery-match-actions select { width: auto; padding: 4px 8px; }
+        @media (max-width: 600px) {
+            .battery-match { grid-template-columns: 1fr auto; }
+            .battery-match-actions { grid-column: 1 / -1; justify-content: flex-start; }
+        }
+        .battery-offline-banner {
+            position: sticky;
+            top: 8px;
+            z-index: 20;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(245, 158, 11, 0.55);
+            background: rgba(245, 158, 11, 0.16);
+            color: inherit;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .battery-danger { color: var(--danger, #ef4444); }
+    </style>
+</head>
+
+<body data-page="battery-tracker">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="orb orb-1"></div>
+
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+
+            <!-- Shown while edits can't reach the server; they're kept on this device and save on reconnect. -->
+            <div id="battery-offline-banner" class="battery-offline-banner hidden" role="status" aria-live="polite">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="16" height="16" fill="currentColor" aria-hidden="true" focusable="false" style="flex: 0 0 auto; margin-top: 2px; color: #f59e0b;"><path d="M256 32c14.2 0 27.3 7.5 34.5 19.8l216 368c7.3 12.4 7.3 27.7 .2 40.1S486.3 480 472 480H40c-14.3 0-27.6-7.7-34.7-20.1s-7-27.8 .2-40.1l216-368C228.7 39.5 241.8 32 256 32zm0 128c-13.3 0-24 10.7-24 24V296c0 13.3 10.7 24 24 24s24-10.7 24-24V184c0-13.3-10.7-24-24-24zm32 224a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z"/></svg>
+                <span id="battery-offline-banner-text"></span>
+            </div>
+
+            <div class="card">
+                <div class="battery-toolbar">
+                    <div>
+                        <h1 style="margin: 0;" data-i18n="battery.title">Battery Tracker</h1>
+                        <p class="notice" style="margin: 4px 0 0;" data-i18n="battery.subtitle">Add your batteries and get the battery to run in each of our matches. Pit batteries stay out of the rotation. Shared live with your team.</p>
+                    </div>
+                    <a class="btn ghost" href="/match-checklist" data-i18n="battery.open_checklist">Open Match Checklist</a>
+                </div>
+
+                <div class="battery-controls" id="battery-event-controls">
+                    <div class="field">
+                        <label for="battery-event" data-i18n="checklist.event">Event</label>
+                        <select id="battery-event"></select>
+                    </div>
+                </div>
+            </div>
+
+            <div id="battery-disabled" class="card mt-20 hidden">
+                <h2 data-i18n="checklist.disabled.title">Non-scouting tools are turned off</h2>
+                <p class="notice" data-i18n="battery.disabled.notice">Turn on "Non-Scouting Tools" in Personal Settings to use the Battery Tracker.</p>
+                <a class="btn mt-12" href="/config" data-i18n="checklist.disabled.open_settings">Open settings</a>
+            </div>
+
+            <div class="battery-layout" id="battery-layout">
+                <!-- The team's batteries -->
+                <section class="card battery-card">
+                    <h2 data-i18n="battery.inventory.title">Batteries</h2>
+                    <p class="notice" style="margin: 0;" data-i18n="battery.inventory.notice">Match batteries take turns in the order shown. Pit batteries are for the pit and never go in a match.</p>
+                    <!-- Live editing status (filled by config-collab.js) -->
+                    <div id="battery-inv-bar-host"></div>
+                    <div id="battery-inventory"></div>
+                    <form class="battery-add" id="battery-add" autocomplete="off" data-no-loading="true">
+                        <input type="text" id="battery-add-name" maxlength="40" placeholder="Battery name, e.g. B7" data-i18n-placeholder="battery.add.placeholder" />
+                        <select id="battery-add-type">
+                            <option value="match" data-i18n="battery.type.match">Match</option>
+                            <option value="pit" data-i18n="battery.type.pit">Pit</option>
+                        </select>
+                        <button type="submit" class="btn" data-i18n="battery.add.button">+ Add</button>
+                    </form>
+                </section>
+
+                <!-- Which battery runs in each of our matches -->
+                <section class="card battery-card">
+                    <h2 data-i18n="battery.rotation.title">Match rotation</h2>
+                    <p class="notice" style="margin: 0;" data-i18n="battery.rotation.notice">Skip a battery to give the match the next one; later matches keep rotating from there.</p>
+                    <!-- Live editing status (filled by config-collab.js) -->
+                    <div id="battery-plan-bar-host"></div>
+                    <div class="battery-settings" id="battery-settings"></div>
+                    <div id="battery-rotation"></div>
+                </section>
+            </div>
+
+        </main>
+
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+
+    <script defer src="/js/services/config-collab.js"></script>
+
+    <script defer src="/js/services/collab-rooms.js"></script>
+
+    <script defer src="/js/services/battery-rotation.js"></script>
+
+    <script defer src="/js/services/match-utils.js"></script>
+
+    <script type="module" src="/js/battery-tracker.js"></script>
+
+</body>
+
+</html>

@@ -143,6 +143,27 @@
             line-height: 1.4;
         }
         .checklist-offline-banner::before { content: "\26A0"; font-size: 16px; line-height: 1.3; }
+        /* The battery this match needs (Battery Tracker). */
+        .checklist-battery {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 12px;
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color, rgba(127,127,127,0.25));
+        }
+        .checklist-battery-icon { display: inline-flex; font-size: 20px; line-height: 1; color: var(--success, #22c55e); }
+        .checklist-battery-text { flex: 1; min-width: 160px; display: flex; flex-direction: column; gap: 2px; }
+        .checklist-battery-tag {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            opacity: 0.7;
+        }
+        .checklist-battery-meta { font-size: 12px; opacity: 0.7; }
     </style>
 </head>
 
@@ -220,6 +241,8 @@
                             <div class="checklist-status" id="checklist-status"></div>
                         </div>
                     </div>
+                    <!-- The battery this match needs, from the Battery Tracker (hidden when the team has no batteries) -->
+                    <div id="checklist-battery" class="checklist-battery hidden" aria-live="polite"></div>
                     <!-- Live editing status (filled by config-collab.js) -->
                     <div id="checklist-match-bar-host"></div>
                 </div>
@@ -255,6 +278,12 @@
     <script type="module" src="/js/common.js"></script>
 
     <script defer src="/js/services/config-collab.js"></script>
+
+    <script defer src="/js/services/collab-rooms.js"></script>
+
+    <script defer src="/js/services/battery-rotation.js"></script>
+
+    <script defer src="/js/services/match-utils.js"></script>
 
     <script type="module" src="/js/match-checklist.js"></script>
 

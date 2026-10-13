@@ -174,6 +174,7 @@ export const PAGE_SEARCH_KEYWORDS = {
     "alliance-selection": ["draft board", "pick list", "captain board", "seleccion de alianzas"],
     "match-planning": ["strategy", "whiteboard", "game plan", "match plan", "planificacion"],
     "match-checklist": ["pre-match", "checklist", "drive team", "on the field", "pit crew", "lista de verificacion"],
+    "battery-tracker": ["battery", "batteries", "rotation", "charging", "pit battery", "drive team", "bateria", "baterias"],
     "events": ["event list", "competitions", "regional", "district", "eventos"],
     "assignments": ["scout assignments", "matrix", "scheduler", "assign scouts", "asignar scouts"],
     "users": ["accounts", "roster", "roles", "permissions", "team members", "usuarios"],
@@ -261,7 +262,7 @@ export function adjustNavForRole(user) {
                 if (allowedPages && Array.isArray(allowedPages)) {
                     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                         const page = link.dataset.page;
-                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant", "match-checklist"];
+                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant", "match-checklist", "battery-tracker"];
                         if (isAdmin(role) || isSuperAdmin(role)) {
                             bypassPages.push("assignments");
                         }
@@ -316,7 +317,7 @@ export function adjustNavForRole(user) {
 
 export function isPageAccessible(page, role) {
     if (isSuperAdmin(role)) return true;
-    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials", "my-assignments", "assistant", "match-checklist"];
+    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials", "my-assignments", "assistant", "match-checklist", "battery-tracker"];
     if (isAdmin(role)) {
         bypassPages.push("assignments");
     }

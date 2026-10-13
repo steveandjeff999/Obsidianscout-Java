@@ -7,6 +7,7 @@ import com.obsidianscout.config.ScoutingConfig
 import com.obsidianscout.db.DefaultConfigs
 import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.readTransaction
+import com.obsidianscout.scouting.BatteryTrackerService
 import com.obsidianscout.scouting.MatchChecklistService
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -158,6 +159,27 @@ sealed class ConfigCollabScope {
         }
     }
 
+    /**
+     * The drive team's battery tracker: the battery inventory ([eventKey] = "") or one event's rotation plan.
+     * Like checklists, it has no revisions or migration checks.
+     */
+    data class Batteries(val teamNumber: Int, val program: String, val eventKey: String) : ConfigCollabScope() {
+        override val roomKey get() = "battery:$teamNumber:$program:${eventKey.ifEmpty { "-" }}"
+        override val kind: String get() = "battery"
+        private val owner get() = BatteryTrackerService.ownerKey(teamNumber, program)
+
+        override fun loadRaw(): String? = runCatching {
+            BatteryTrackerService.load(owner, eventKey)?.dataJson ?: "{}"
+        }.getOrNull()
+
+        override fun persist(json: String): String = persistAs(json, "")
+
+        override fun persistAs(json: String, editor: String): String {
+            BatteryTrackerService.store(owner, eventKey, json, editor)
+            return json
+        }
+    }
+
     companion object {
         val KINDS = setOf("game", "pit", "qual")
 
@@ -177,6 +199,9 @@ sealed class ConfigCollabScope {
                     "preset" -> if (parts.size == 2) Preset(UUID.fromString(parts[1])) else null
                     "checklist" -> if (parts.size == 5) {
                         Checklist(parts[1].toInt(), parts[2], parts[3].takeUnless { it == "-" } ?: "", parts[4])
+                    } else null
+                    "battery" -> if (parts.size == 4) {
+                        Batteries(parts[1].toInt(), parts[2], parts[3].takeUnless { it == "-" } ?: "")
                     } else null
                     else -> null
                 }

@@ -326,6 +326,19 @@ object MatchChecklists : UUIDTable("match_checklists") {
     }
 }
 
+/** Drive-team battery tracker: one inventory row per team (eventKey = "") plus one rotation-plan row per event. */
+object BatteryTrackers : UUIDTable("battery_trackers") {
+    val ownerKey = varchar("owner_key", 64)
+    val eventKey = varchar("event_key", 64)
+    val dataJson = text("data_json")
+    val updatedBy = varchar("updated_by", 64).default("")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_battery_trackers_owner_event", ownerKey, eventKey)
+    }
+}
+
 object Banners : UUIDTable("banners") {
     val teamNumber = integer("team_number").default(0)
     val program = varchar("program", 8).default("FRC")

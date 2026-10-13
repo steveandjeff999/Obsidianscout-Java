@@ -9,6 +9,7 @@ import com.obsidianscout.collab.ConfigCollabRelay
 import com.obsidianscout.collab.ConfigCollabScope
 import com.obsidianscout.db.AllianceMemberships
 import com.obsidianscout.scouting.AllianceService
+import com.obsidianscout.scouting.BatteryTrackerService
 import com.obsidianscout.scouting.MatchChecklistService
 import io.ktor.server.routing.Route
 import io.ktor.server.websocket.DefaultWebSocketServerSession
@@ -82,6 +83,34 @@ fun Route.matchChecklistCollabRoute() {
                 return@webSocket reject("Invalid match")
             }
             ConfigCollabScope.Checklist(session.teamNumber, session.program, eventKey, matchKey)
+        }
+        val participant = CollabParticipant(
+            sid = CollabParticipant.sanitizeSid(q["sid"]),
+            userId = session.userId,
+            username = session.username,
+            teamNumber = session.teamNumber,
+            role = session.role.name,
+            canEdit = true
+        )
+        ConfigCollabHub.connect(this, scope, participant)
+    }
+}
+
+/**
+ * Live battery tracker, mounted under /api. Any member of the team can edit.
+ *  - /api/battery-tracker/collab?inventory=1        the team's batteries
+ *  - /api/battery-tracker/collab?eventKey=E         one event's rotation plan (skips, pins, used)
+ */
+fun Route.batteryTrackerCollabRoute() {
+    webSocket("/battery-tracker/collab") {
+        val session = runCatching { call.requireSession() }.getOrNull() ?: return@webSocket reject("No session")
+        val q = call.request.queryParameters
+        val scope = if (q["inventory"] == "1") {
+            ConfigCollabScope.Batteries(session.teamNumber, session.program, "")
+        } else {
+            val eventKey = q["eventKey"].orEmpty()
+            if (!BatteryTrackerService.isValidEventKey(eventKey)) return@webSocket reject("Invalid event")
+            ConfigCollabScope.Batteries(session.teamNumber, session.program, eventKey)
         }
         val participant = CollabParticipant(
             sid = CollabParticipant.sanitizeSid(q["sid"]),

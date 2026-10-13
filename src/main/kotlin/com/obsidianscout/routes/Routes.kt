@@ -1974,6 +1974,30 @@ fun Application.configureRoutes() {
                 }
             }
 
+            // Drive-team battery rotation (Personal Settings > Non-Scouting Tools).
+            route("/battery-tracker") {
+                get("/inventory") {
+                    val session = call.requireSession()
+                    call.respond(com.obsidianscout.scouting.BatteryTrackerService.getInventory(session))
+                }
+                put("/inventory") {
+                    val session = call.requireSession()
+                    val request = call.receive<com.obsidianscout.scouting.BatteryInventoryRequest>()
+                    call.respond(com.obsidianscout.scouting.BatteryTrackerService.saveInventory(session, request))
+                }
+                get("/event") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing eventKey parameter"))
+                    call.respond(com.obsidianscout.scouting.BatteryTrackerService.getEventPlan(session, eventKey))
+                }
+                put("/event") {
+                    val session = call.requireSession()
+                    val request = call.receive<com.obsidianscout.scouting.BatteryEventPlanRequest>()
+                    call.respond(com.obsidianscout.scouting.BatteryTrackerService.saveEventPlan(session, request))
+                }
+            }
+
             route("/stats") {
                 get("/history") {
                     val session = call.requireSession()
@@ -3246,6 +3270,7 @@ fun Application.configureRoutes() {
 
             configCollabRoutes()
             matchChecklistCollabRoute()
+            batteryTrackerCollabRoute()
 
             route("/banners") {
                 get("/login") {
@@ -4169,6 +4194,7 @@ fun Application.configureRoutes() {
             "alliance-selection" to "alliance-selection.html",
             "match-planning" to "match-planning.html",
             "match-checklist" to "match-checklist.html",
+            "battery-tracker" to "battery-tracker.html",
             "assignments" to "assignments.html",
             "my-assignments" to "my-assignments.html",
             "users" to "users.html",

@@ -244,6 +244,7 @@ object EventTeamCanonical {
         // real clashes surface when the match keys are remapped below (handled there).
         moveOwnerScoped(MatchPlans, MatchPlans.ownerKey, MatchPlans.eventKey, MatchPlans.matchKey, MatchPlans.updatedAt, oldKey, newKey)
         moveOwnerScoped(MatchChecklists, MatchChecklists.ownerKey, MatchChecklists.eventKey, MatchChecklists.matchKey, MatchChecklists.updatedAt, oldKey, newKey)
+        com.obsidianscout.scouting.BatteryTrackerService.moveEvent(oldKey, newKey)
 
         // Matches: move, then let match dedup re-key to `{newKey}_…` and merge with any API copy.
         ApiMatches.update({ ApiMatches.eventKey eq oldKey }) { it[ApiMatches.eventKey] = newKey }
@@ -321,6 +322,7 @@ object EventTeamCanonical {
                 .forEach { row -> add(row[MatchPlans.matchKey]) }
             MatchChecklists.select(MatchChecklists.matchKey).where { MatchChecklists.matchKey like "$prefix%" }
                 .forEach { row -> add(row[MatchChecklists.matchKey]) }
+            addAll(com.obsidianscout.scouting.BatteryTrackerService.referencedMatchKeys(prefix))
         }
         keys.filter { it.startsWith(prefix) }.forEach { old ->
             val moved = newKey + old.removePrefix(oldKey)

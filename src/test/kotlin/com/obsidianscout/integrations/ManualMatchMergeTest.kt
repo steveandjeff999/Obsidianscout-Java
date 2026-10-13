@@ -4,6 +4,7 @@ import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.db.ApiMatches
+import com.obsidianscout.db.BatteryTrackers
 import com.obsidianscout.db.MatchChecklists
 import com.obsidianscout.db.MatchPlans
 import com.obsidianscout.db.QualitativeScoutingEntries
@@ -39,7 +40,7 @@ class ManualMatchMergeTest {
         if (testDbFile.exists()) testDbFile.delete()
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
         transaction {
-            SchemaUtils.create(Users, ApiMatches, ScoutingEntries, QualitativeScoutingEntries, ScoutingAssignments, MatchPlans, MatchChecklists)
+            SchemaUtils.create(Users, ApiMatches, ScoutingEntries, QualitativeScoutingEntries, ScoutingAssignments, MatchPlans, MatchChecklists, BatteryTrackers)
             userId = Users.insertAndGetId {
                 it[username] = "admin"
                 it[passwordHash] = "hash"
@@ -132,6 +133,29 @@ class ManualMatchMergeTest {
             assertTrue(rows.single()[ApiMatches.dataJson].contains("scoreRedFinal"))
         }
         assertEquals(List(4) { canonicalKey }, childKeys())
+    }
+
+    @Test
+    fun batteryPlanEntriesFollowCanonicalMatchKey() {
+        insertMatchRow(legacyKey, "{}")
+        insertMatchRow(canonicalKey, """{"scoreRedFinal":50}""")
+        transaction {
+            BatteryTrackers.insert {
+                it[ownerKey] = "team_254_FRC"
+                it[eventKey] = event
+                it[dataJson] = """{"matches":{"$legacyKey":{"skipped":{"b1":{"by":"alex","at":1}},"used":"b2"},"${event}_qm6":{"pinned":"b3"}}}"""
+                it[updatedAt] = Instant.now()
+            }
+        }
+
+        MatchCanonical.deduplicateDatabaseForEvent(event)
+
+        transaction {
+            val doc = kotlinx.serialization.json.Json.parseToJsonElement(BatteryTrackers.selectAll().single()[BatteryTrackers.dataJson])
+            val matches = (doc as kotlinx.serialization.json.JsonObject)["matches"] as kotlinx.serialization.json.JsonObject
+            assertEquals(setOf(canonicalKey, "${event}_qm6"), matches.keys)
+            assertTrue(matches[canonicalKey].toString().contains("\"used\":\"b2\""))
+        }
     }
 
     @Test

@@ -1,0 +1,113 @@
+{
+  "_comment": "Shared cases for js/services/battery-rotation.js and the app's lib/services/battery_rotation.dart. expected maps matchKey -> [batteryId or null, source].",
+  "cases": [
+    {
+      "name": "round robin over match batteries by order",
+      "inventory": { "batteries": {
+        "b2": { "name": "B2", "type": "match", "order": 1 },
+        "b1": { "name": "B1", "type": "match", "order": 0 },
+        "b3": { "name": "B3", "type": "match", "order": 2 }
+      } },
+      "plan": {},
+      "matches": ["q1", "q2", "q3", "q4"],
+      "expected": { "q1": ["b1", "auto"], "q2": ["b2", "auto"], "q3": ["b3", "auto"], "q4": ["b1", "auto"] }
+    },
+    {
+      "name": "pit and retired batteries never rotate",
+      "inventory": { "batteries": {
+        "b1": { "name": "B1", "type": "match", "order": 0 },
+        "p1": { "name": "Pit", "type": "pit", "order": 1 },
+        "b2": { "name": "B2", "type": "match", "order": 2, "retired": true },
+        "b3": { "name": "B3", "type": "match", "order": 3 }
+      } },
+      "plan": {},
+      "matches": ["q1", "q2", "q3"],
+      "expected": { "q1": ["b1", "auto"], "q2": ["b3", "auto"], "q3": ["b1", "auto"] }
+    },
+    {
+      "name": "skip pulls the next battery and the rotation continues from it",
+      "inventory": { "batteries": {
+        "b1": { "name": "B1", "order": 0 }, "b2": { "name": "B2", "order": 1 },
+        "b3": { "name": "B3", "order": 2 }, "b4": { "name": "B4", "order": 3 }
+      } },
+      "plan": { "matches": { "q2": { "skipped": { "b2": { "by": "a", "at": 1 } } } } },
+      "matches": ["q1", "q2", "q3", "q4"],
+      "expected": { "q1": ["b1", "auto"], "q2": ["b3", "auto"], "q3": ["b4", "auto"], "q4": ["b1", "auto"] }
+    },
+    {
+      "name": "skipping several batteries for one match",
+      "inventory": { "batteries": {
+        "b1": { "name": "B1", "order": 0 }, "b2": { "name": "B2", "order": 1 }, "b3": { "name": "B3", "order": 2 }
+      } },
+      "plan": { "matches": { "q1": { "skipped": { "b1": {}, "b2": {} } } } },
+      "matches": ["q1", "q2"],
+      "expected": { "q1": ["b3", "auto"], "q2": ["b1", "auto"] }
+    },
+    {
+      "name": "every battery skipped leaves the match without one",
+      "inventory": { "batteries": { "b1": { "name": "B1", "order": 0 }, "b2": { "name": "B2", "order": 1 } } },
+      "plan": { "matches": { "q1": { "skipped": { "b1": {}, "b2": {} } } } },
+      "matches": ["q1", "q2"],
+      "expected": { "q1": [null, "none"], "q2": ["b1", "auto"] }
+    },
+    {
+      "name": "pinned battery wins unless it is skipped",
+      "inventory": { "batteries": {
+        "b1": { "name": "B1", "order": 0 }, "b2": { "name": "B2", "order": 1 }, "b3": { "name": "B3", "order": 2 }
+      } },
+      "plan": { "matches": { "q1": { "pinned": "b3" }, "q2": { "pinned": "b3", "skipped": { "b3": {} } } } },
+      "matches": ["q1", "q2", "q3"],
+      "expected": { "q1": ["b3", "pinned"], "q2": ["b1", "auto"], "q3": ["b2", "auto"] }
+    },
+    {
+      "name": "used battery is frozen even after it is retired or made a pit battery",
+      "inventory": { "batteries": {
+        "b1": { "name": "B1", "order": 0, "type": "pit" }, "b2": { "name": "B2", "order": 1 }, "b3": { "name": "B3", "order": 2 }
+      } },
+      "plan": { "matches": { "q1": { "used": "b1" } } },
+      "matches": ["q1", "q2", "q3"],
+      "expected": { "q1": ["b1", "used"], "q2": ["b2", "auto"], "q3": ["b3", "auto"] }
+    },
+    {
+      "name": "used battery that was deleted falls back to the rotation",
+      "inventory": { "batteries": { "b1": { "name": "B1", "order": 0 }, "b2": { "name": "B2", "order": 1 } } },
+      "plan": { "matches": { "q1": { "used": "gone" } } },
+      "matches": ["q1", "q2"],
+      "expected": { "q1": ["b1", "auto"], "q2": ["b2", "auto"] }
+    },
+    {
+      "name": "startAt picks where the rotation begins",
+      "inventory": { "batteries": {
+        "b1": { "name": "B1", "order": 0 }, "b2": { "name": "B2", "order": 1 }, "b3": { "name": "B3", "order": 2 }
+      } },
+      "plan": { "startAt": "b2" },
+      "matches": ["q1", "q2", "q3"],
+      "expected": { "q1": ["b2", "auto"], "q2": ["b3", "auto"], "q3": ["b1", "auto"] }
+    },
+    {
+      "name": "a match added after played matches only shifts later unplayed matches",
+      "inventory": { "batteries": {
+        "b1": { "name": "B1", "order": 0 }, "b2": { "name": "B2", "order": 1 }, "b3": { "name": "B3", "order": 2 }
+      } },
+      "plan": { "matches": { "q1": { "used": "b1" }, "q3": { "used": "b2" } } },
+      "matches": ["q1", "q2", "q3", "q4"],
+      "expected": { "q1": ["b1", "used"], "q2": ["b2", "auto"], "q3": ["b2", "used"], "q4": ["b3", "auto"] }
+    },
+    {
+      "name": "pit only inventory has nothing to rotate",
+      "inventory": { "batteries": { "p1": { "name": "P1", "type": "pit", "order": 0 } } },
+      "plan": {},
+      "matches": ["q1"],
+      "expected": { "q1": [null, "none"] }
+    },
+    {
+      "name": "same order sorts by name naturally",
+      "inventory": { "batteries": {
+        "x": { "name": "B10" }, "y": { "name": "B2" }, "z": { "name": "B1" }
+      } },
+      "plan": {},
+      "matches": ["q1", "q2", "q3"],
+      "expected": { "q1": ["z", "auto"], "q2": ["y", "auto"], "q3": ["x", "auto"] }
+    }
+  ]
+}

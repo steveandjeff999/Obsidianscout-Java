@@ -245,6 +245,7 @@ object DatabaseFactory {
                 AllianceSelections,
                 MatchPlans,
                 MatchChecklists,
+                BatteryTrackers,
                 Banners,
                 ChatMessages,
                 UserChatLastRead,

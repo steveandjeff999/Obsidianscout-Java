@@ -396,6 +396,8 @@ object MatchCanonical {
 
         remapOwnerScoped(MatchPlans, MatchPlans.ownerKey, MatchPlans.eventKey, MatchPlans.matchKey, MatchPlans.updatedAt, oldKey, newKey, "Match plan")
         remapOwnerScoped(MatchChecklists, MatchChecklists.ownerKey, MatchChecklists.eventKey, MatchChecklists.matchKey, MatchChecklists.updatedAt, oldKey, newKey, "Match checklist")
+        // Battery plans keep match keys inside their JSON.
+        com.obsidianscout.scouting.BatteryTrackerService.remapMatchKey(oldKey, newKey)
     }
 
     /** Rows unique per (owner, event, match): re-key to [newKey], keeping the newer row on a clash. */
@@ -456,6 +458,7 @@ object MatchCanonical {
                     .forEach { row -> add(row[MatchPlans.matchKey]) }
                 MatchChecklists.select(MatchChecklists.matchKey).withDistinct()
                     .forEach { row -> add(row[MatchChecklists.matchKey]) }
+                addAll(com.obsidianscout.scouting.BatteryTrackerService.referencedMatchKeys())
             }
 
             var repaired = 0
