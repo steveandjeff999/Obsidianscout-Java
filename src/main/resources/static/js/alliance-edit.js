@@ -1984,9 +1984,7 @@
             if (target instanceof HTMLElement) {
                 target.id = `shared-field-${field.id}`;
                 target.name = field.id;
-                // A select always has one of its configured options chosen ("None" may have an empty value),
-                // so the browser's required check would wrongly reject it.
-                if (field.required && field.type !== "select") {
+                if (field.required) {
                     target.required = true;
                 }
             }
@@ -2141,12 +2139,12 @@
                 const value = readSharedFieldValue(field, input);
                 const label = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
 
-                if (field.required && (value === null || (value === "" && field.type !== "select"))) {
+                if (field.required && (value === null || value === "")) {
                     showToast(`Missing ${label}`, "error");
                     return null;
                 }
 
-                if (value !== null && (value !== "" || field.type === "select")) {
+                if (value !== null && value !== "") {
                     if (field.type === "number" || field.type === "counter" || field.type === "rating") {
                         const numVal = Number(value);
                         if (field.min !== null && field.min !== undefined && numVal < field.min) {
