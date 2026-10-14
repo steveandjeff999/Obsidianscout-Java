@@ -77,6 +77,23 @@ class ClusterCryptoUtilsTest {
     }
 
     @Test
+    fun testOldFormatSignatureWithoutBodyHashIsRejected() {
+        val secret = "cluster-hmac-secret-999"
+        val timestamp = System.currentTimeMillis().toString()
+        val method = "PUT"
+        val path = "/api/admin/cluster/nodes/local/quorum-fallback/config"
+        val payload = """{"enabled": true}""".toByteArray(Charsets.UTF_8)
+
+        // A node signing the old way (no body hash) must not pass the current check.
+        val oldFormatSignature = ClusterCryptoUtils.hmacSha256("$timestamp:$method:$path", secret)
+        val expected = ClusterCryptoUtils.buildSigningData(timestamp, method, path, ClusterCryptoUtils.sha256Hex(payload))
+        assertFalse(
+            ClusterCryptoUtils.verifyHmac(expected, oldFormatSignature, secret),
+            "Signatures without a body hash are no longer accepted"
+        )
+    }
+
+    @Test
     fun testEmptyPayloadHmac() {
         val emptyBytes = ByteArray(0)
         val emptySha256 = ClusterCryptoUtils.sha256Hex(emptyBytes)

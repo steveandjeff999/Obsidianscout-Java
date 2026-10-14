@@ -263,21 +263,8 @@ suspend fun ApplicationCall.hasValidClusterSignature(): Boolean {
         pathAndQuery = request.uri,
         bodySha256 = bodySha256
     )
-    var isValid = ClusterCryptoUtils.verifyHmac(dataToSign, signature, secret)
-
-    // Backward compatibility fallback for rolling upgrades between node versions
-    if (!isValid) {
-        val legacyData = ClusterCryptoUtils.buildLegacySigningData(
-            timestamp = timestampStr,
-            method = request.httpMethod.value,
-            pathAndQuery = request.uri
-        )
-        if (ClusterCryptoUtils.verifyHmac(legacyData, signature, secret)) {
-            isValid = true
-        }
-    }
-
-    if (!isValid) return false
+    // Only the body-hash format is accepted, so a captured signature can't be reused with a changed body.
+    if (!ClusterCryptoUtils.verifyHmac(dataToSign, signature, secret)) return false
 
     if (seenClusterSignatures.size > 10_000) {
         seenClusterSignatures.entries.removeIf { now - it.value > CLUSTER_SIGNATURE_WINDOW_MS * 2 }

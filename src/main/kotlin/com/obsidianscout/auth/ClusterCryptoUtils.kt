@@ -35,15 +35,6 @@ object ClusterCryptoUtils {
         bodySha256: String = EMPTY_BODY_SHA256
     ): String = "$timestamp:$method:$pathAndQuery:$bodySha256"
 
-    /**
-     * Builds legacy data string for backward compatibility during rolling cluster upgrades.
-     */
-    fun buildLegacySigningData(
-        timestamp: String,
-        method: String,
-        pathAndQuery: String
-    ): String = "$timestamp:$method:$pathAndQuery"
-
     private fun deriveKey(secret: String): SecretKeySpec {
         val digest = MessageDigest.getInstance("SHA-256")
         val keyBytes = digest.digest(secret.toByteArray(StandardCharsets.UTF_8))
