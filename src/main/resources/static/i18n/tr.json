@@ -1,4 +1,5 @@
 {
+  "app.update_available": "Yeni sürüm yüklendi. En son değişiklikleri uygulamak için yenileyin.",
   "admin.cluster_keys.btn": "Küme Anahtarlarını Yeniden Oluştur",
   "admin.cluster_keys.desc": "CockroachDB kümeleri için veritabanı destekli gizli anahtar senkronizasyonu. Anahtarları yeniden oluşturmak tüm düğümleri günceller ve çevrimdışı örnekleri senkronize eder.",
   "admin.cluster_keys.title": "Küme Anahtarı Yönetimi (Oturum ve VAPID Anahtarları)",

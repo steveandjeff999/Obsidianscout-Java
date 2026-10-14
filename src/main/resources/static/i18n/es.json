@@ -1,4 +1,5 @@
 {
+  "app.update_available": "Nueva versión instalada. Actualiza para aplicar los cambios más recientes.",
   "admin.cluster_keys.btn": "Regenerar Claves del Clúster",
   "admin.cluster_keys.desc": "Sincronización de secretos respaldada por base de datos para clústeres CockroachDB. Regenerar claves actualiza todos los nodos y sincroniza instancias.",
   "admin.cluster_keys.title": "Gestión de Claves del Clúster (Claves de Sesión y VAPID)",

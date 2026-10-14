@@ -649,6 +649,9 @@ async function onDOMContentLoaded() {
                         newWorker.addEventListener('statechange', () => {
                             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                                 console.log('[ServiceWorker] New version installed and ready.');
+                                if (typeof showToast === 'function') {
+                                    showToast(t("app.update_available", "New version installed. Refresh to apply latest changes."), "info");
+                                }
                             }
                         });
                     }

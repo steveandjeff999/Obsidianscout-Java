@@ -307,6 +307,9 @@ fun Application.module(appConfig: AppConfig) {
                 call.response.headers.append("Pragma", "no-cache")
                 call.response.headers.append("Expires", "0")
             }
+        } else if (path.endsWith(".js") || path.endsWith(".css")) {
+            call.response.headers.append("CDN-Cache-Control", "no-cache")
+            call.response.headers.append("Cloudflare-CDN-Cache-Control", "no-cache")
         }
 
         if (call.request.cookies["XSRF-TOKEN"] == null) {

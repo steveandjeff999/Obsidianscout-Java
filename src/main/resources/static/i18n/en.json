@@ -1,4 +1,5 @@
 {
+  "app.update_available": "New version installed. Refresh to apply latest changes.",
   "admin.cluster_keys.btn": "Regenerate Cluster Keys",
   "admin.cluster_keys.desc": "Database-backed secret synchronization for CockroachDB clusters. Regenerating keys updates all nodes, syncs offline instances upon reconnection, and persists keys.",
   "admin.cluster_keys.title": "Cluster Key Management (Session & VAPID Keys)",

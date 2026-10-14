@@ -4252,7 +4252,15 @@ fun Application.configureRoutes() {
                 else Thread.currentThread().contextClassLoader.getResourceAsStream("static/sw.js")?.readBytes()
             }
             if (swBytes != null) {
-                call.respondBytes(swBytes, ContentType.parse("application/javascript; charset=UTF-8"))
+                val swText = swBytes.toString(Charsets.UTF_8)
+                val appConfig = AppConfigLoader.load()
+                val sanitizedVer = appConfig.current_version.replace(".", "-")
+                val dynamicCacheConst = "const CACHE_NAME = 'obsidianscout-shell-v$sanitizedVer';"
+                val patchedSw = swText.replace(
+                    Regex("""const CACHE_NAME = ['\"][^'\"]+['\"];"""),
+                    dynamicCacheConst
+                )
+                call.respondText(patchedSw, ContentType.parse("application/javascript; charset=UTF-8"))
             } else {
                 call.respond(HttpStatusCode.NotFound)
             }
@@ -4318,10 +4326,42 @@ internal suspend fun ApplicationCall.respondStaticHtml(fileName: String, status:
             )
         }
     }
+    val currentVersion = AppConfigLoader.load().current_version
+    val versionedHtml = measure("inject-asset-version", "Inject Asset Versioning") {
+        injectAssetVersioning(rendered, currentVersion)
+    }
     response.headers.append(HttpHeaders.CacheControl, "no-cache, must-revalidate")
     response.headers.append("CDN-Cache-Control", "no-cache")
     response.headers.append("Cloudflare-CDN-Cache-Control", "no-cache")
-    respondText(rendered, ContentType.Text.Html, status)
+    respondText(versionedHtml, ContentType.Text.Html, status)
+}
+
+private val ASSET_URL_REGEX = Regex(
+    """<(script|link)\b([^>]*?)\b(src|href)=["'](/[^"'\s>]+?\.(?:js|css))(\?[^"'\s>]*)?["']""",
+    RegexOption.IGNORE_CASE
+)
+
+internal fun injectAssetVersioning(html: String, version: String): String {
+    if (version.isBlank()) return html
+    return ASSET_URL_REGEX.replace(html) { match ->
+        val tag = match.groupValues[1]
+        val beforeAttr = match.groupValues[2]
+        val attrName = match.groupValues[3]
+        val path = match.groupValues[4]
+        val existingQuery = match.groupValues[5]
+
+        if (path.startsWith("//")) {
+            return@replace match.value
+        }
+
+        if (existingQuery.contains("v=") || existingQuery.contains("_sw_ver=")) {
+            return@replace match.value
+        }
+
+        val separator = if (existingQuery.isEmpty()) "?" else "&"
+        val newQuery = "$existingQuery${separator}v=$version"
+        "<$tag$beforeAttr$attrName=\"$path$newQuery\""
+    }
 }
 
 /** True when a settings save changes anything that affects what an event data sync would fetch. */
