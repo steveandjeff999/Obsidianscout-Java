@@ -157,20 +157,27 @@ export function injectConnectionWidget(sidebar) {
     checkServerConnection();
 }
 
+let _lastPendingCount = null;
+
 export function updateConnectionStatus(forcedStatus = null) {
-    const widget = document.getElementById("connection-status-widget");
-    if (!widget) return;
-
-    const dot = widget.querySelector(".status-dot");
-    const text = widget.querySelector(".status-text");
-    const syncBtn = widget.querySelector("#btn-sync-offline");
-
     let count = 0;
     for (const type in CACHE_CONFIGS) {
         const config = CACHE_CONFIGS[type];
         const pending = JSON.parse(safeGetItem(config.key) || "[]");
         count += pending.length;
     }
+    // Pages call this after saving offline; let the scouting-page sync banner know the queue changed.
+    if (_lastPendingCount !== count && typeof window !== 'undefined') {
+        _lastPendingCount = count;
+        window.dispatchEvent(new CustomEvent("obsidianscout:pending-entries-changed"));
+    }
+
+    const widget = document.getElementById("connection-status-widget");
+    if (!widget) return;
+
+    const dot = widget.querySelector(".status-dot");
+    const text = widget.querySelector(".status-text");
+    const syncBtn = widget.querySelector("#btn-sync-offline");
 
     const isOnline = (forcedStatus !== null) ? !!forcedStatus : isServerOnline();
 

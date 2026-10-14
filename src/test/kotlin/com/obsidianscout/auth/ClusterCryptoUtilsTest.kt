@@ -46,4 +46,49 @@ class ClusterCryptoUtilsTest {
 
         assertFalse(ClusterCryptoUtils.verifyHmac(dataToSign, signature, "wrong-secret"), "Signature check should fail with invalid secret key")
     }
+
+    @Test
+    fun testPayloadHmacVerificationAndTampering() {
+        val secret = "cluster-hmac-secret-999"
+        val timestamp = System.currentTimeMillis().toString()
+        val method = "PUT"
+        val path = "/api/admin/cluster/nodes/local/quorum-fallback/config"
+        val payload = """{"enabled": true, "retentionDays": 7}""".toByteArray(Charsets.UTF_8)
+
+        val payloadSha256 = ClusterCryptoUtils.sha256Hex(payload)
+        val dataToSign = ClusterCryptoUtils.buildSigningData(timestamp, method, path, payloadSha256)
+        val signature = ClusterCryptoUtils.hmacSha256(dataToSign, secret)
+
+        // Valid signature with unchanged payload
+        assertTrue(
+            ClusterCryptoUtils.verifyHmac(dataToSign, signature, secret),
+            "Valid payload HMAC signature should be verified successfully"
+        )
+
+        // Tampered payload in flight
+        val tamperedPayload = """{"enabled": false, "retentionDays": 7}""".toByteArray(Charsets.UTF_8)
+        val tamperedPayloadSha256 = ClusterCryptoUtils.sha256Hex(tamperedPayload)
+        val tamperedData = ClusterCryptoUtils.buildSigningData(timestamp, method, path, tamperedPayloadSha256)
+
+        assertFalse(
+            ClusterCryptoUtils.verifyHmac(tamperedData, signature, secret),
+            "Tampered payload must cause HMAC verification to fail"
+        )
+    }
+
+    @Test
+    fun testEmptyPayloadHmac() {
+        val emptyBytes = ByteArray(0)
+        val emptySha256 = ClusterCryptoUtils.sha256Hex(emptyBytes)
+        assertEquals(
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            emptySha256,
+            "Empty byte array must match standard SHA-256 digest"
+        )
+        assertEquals(
+            emptySha256,
+            ClusterCryptoUtils.EMPTY_BODY_SHA256,
+            "EMPTY_BODY_SHA256 constant must match empty byte array SHA-256"
+        )
+    }
 }

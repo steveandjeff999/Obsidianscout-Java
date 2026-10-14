@@ -107,16 +107,37 @@ object BannerService {
         null
     }
 
+    private val dangerousTagRegex = Regex("(?i)<\\s*(script|iframe|object|embed|style|meta|link|svg|math|form)[^>]*>.*?</\\s*\\1\\s*>", RegexOption.DOT_MATCHES_ALL)
+    private val standaloneTagRegex = Regex("(?i)<\\s*(script|iframe|object|embed|style|meta|link|svg|math|form)[^>]*?/?>")
+    private val eventHandlerRegex = Regex("(?i)\\bon\\w+\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)")
+    private val javascriptUriRegex = Regex("(?i)(href|src)\\s*=\\s*(\"|')?\\s*javascript:[^\"'>]*(\"|')?")
+    private val validBannerTypes = setOf("info", "warning", "success", "danger")
+
+    fun sanitizeContent(input: String?): String {
+        if (input == null) return ""
+        var cleaned = input
+        cleaned = dangerousTagRegex.replace(cleaned, "")
+        cleaned = standaloneTagRegex.replace(cleaned, "")
+        cleaned = eventHandlerRegex.replace(cleaned, "")
+        cleaned = javascriptUriRegex.replace(cleaned, "")
+        return cleaned.trim()
+    }
+
+    fun sanitizeBannerType(type: String?): String {
+        val t = type?.trim()?.lowercase()
+        return if (t != null && t in validBannerTypes) t else "info"
+    }
+
     fun create(dto: BannerCreateRequest, defaultProgram: String = "FRC"): BannerDto = transaction {
         val bannerProgram = dto.program?.trim()?.takeIf { it.isNotBlank() } ?: defaultProgram
         val id = Banners.insertAndGetId {
             it[teamNumber] = dto.teamNumber ?: 0
             it[program] = bannerProgram
-            it[message] = dto.message
-            it[bannerType] = dto.bannerType ?: "info"
+            it[message] = sanitizeContent(dto.message)
+            it[bannerType] = sanitizeBannerType(dto.bannerType)
             it[isDismissible] = dto.isDismissible ?: true
             it[isExpandable] = dto.isExpandable ?: false
-            it[expandableMessage] = dto.expandableMessage ?: ""
+            it[expandableMessage] = sanitizeContent(dto.expandableMessage ?: "")
             it[showOnLogin] = dto.showOnLogin ?: false
             it[isActive] = dto.isActive ?: true
             it[createdAt] = Instant.now()
@@ -130,11 +151,11 @@ object BannerService {
         val count = Banners.update({ Banners.id eq uuid }) {
             dto.teamNumber?.let { v -> it[teamNumber] = v }
             dto.program?.let { v -> it[program] = v }
-            dto.message?.let { v -> it[message] = v }
-            dto.bannerType?.let { v -> it[bannerType] = v }
+            dto.message?.let { v -> it[message] = sanitizeContent(v) }
+            dto.bannerType?.let { v -> it[bannerType] = sanitizeBannerType(v) }
             dto.isDismissible?.let { v -> it[isDismissible] = v }
             dto.isExpandable?.let { v -> it[isExpandable] = v }
-            dto.expandableMessage?.let { v -> it[expandableMessage] = v }
+            dto.expandableMessage?.let { v -> it[expandableMessage] = sanitizeContent(v) }
             dto.showOnLogin?.let { v -> it[showOnLogin] = v }
             dto.isActive?.let { v -> it[isActive] = v }
             it[updatedAt] = Instant.now()

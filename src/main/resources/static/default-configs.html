@@ -857,7 +857,7 @@
                                     return `
                                         <div class="option-item-row">
                                             <input type="text" class="input" value="${escapeHtml(optLabel)}" placeholder="Label (e.g. High)" oninput="updateSelectOption(${idx}, ${optIdx}, 'label', this.value)" />
-                                            <input type="text" class="input" value="${escapeHtml(optVal)}" placeholder="Value" oninput="updateSelectOption(${idx}, ${optIdx}, 'value', this.value)" />
+                                            <input type="text" class="input" value="${escapeHtml(optVal)}" placeholder="Value" oninput="updateSelectOption(${idx}, ${optIdx}, 'value', this.value)" onblur="refillBlankOptionValue(${idx}, ${optIdx}, this)" />
                                             ${supportsPts ? `
                                             <input type="number" step="any" class="input" value="${optPts}" placeholder="Pts" oninput="updateSelectOption(${idx}, ${optIdx}, 'points', Number(this.value))" title="Point Value" />
                                             ` : ''}
@@ -944,6 +944,16 @@
             if (prop === 'label' && (!option.value || option.value.startsWith('option_'))) {
                 option.value = uniqueOptionValue(field, option, val.toLowerCase().replace(/[^a-z0-9]/g, '_'));
             }
+            refreshDuplicateWarning();
+            syncPresetLive();
+        }
+
+        // A blank value would save answers as nothing; refill it from the label when left empty.
+        function refillBlankOptionValue(fieldIdx, optIdx, input) {
+            const field = currentPresetConfig.fields[fieldIdx];
+            const option = field && field.options ? field.options[optIdx] : null;
+            if (!option || String(option.value ?? '').trim() || !window.ObsidianscoutConfigDuplicates) return;
+            input.value = window.ObsidianscoutConfigDuplicates.fillBlankOptionValue(option, field.options);
             refreshDuplicateWarning();
             syncPresetLive();
         }
@@ -1200,6 +1210,17 @@
                 errDiv.style.display = 'block';
                 if (window.Obsidianscout) {
                     Obsidianscout.setButtonLoading(submitBtn, false);
+                }
+                return;
+            }
+
+            const blankOptionError = window.ObsidianscoutConfigDuplicates && window.ObsidianscoutConfigDuplicates.blankOptionError(JSON.parse(finalJson));
+            if (blankOptionError) {
+                if (window.Obsidianscout) {
+                    Obsidianscout.showToast(blankOptionError, 'error');
+                    Obsidianscout.setButtonLoading(submitBtn, false);
+                } else {
+                    alert(blankOptionError);
                 }
                 return;
             }

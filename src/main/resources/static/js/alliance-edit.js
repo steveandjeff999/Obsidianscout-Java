@@ -522,6 +522,11 @@
                 showToast("Config JSON is invalid", "error");
                 return;
             }
+            const blankOptionError = window.ObsidianscoutConfigDuplicates && window.ObsidianscoutConfigDuplicates.blankOptionError(JSON.parse(text));
+            if (blankOptionError) {
+                showToast(blankOptionError, "error");
+                return;
+            }
             if (!collab) return;
             if (!containerRaw.classList.contains("hidden")) commitRawEditor();
             const configUrl = `/api/alliances/${allianceId}/config/${activeConfigKind}`;
@@ -1268,6 +1273,13 @@
                             opt._autoValue = null;
                             updateRawFromVisual();
                         });
+                        // A blank value would save answers as nothing; refill it from the label when left empty.
+                        inputs[1].addEventListener("blur", () => {
+                            if (String(opt.value ?? "").trim() || !window.ObsidianscoutConfigDuplicates) return;
+                            inputs[1].value = window.ObsidianscoutConfigDuplicates.fillBlankOptionValue(opt, field.options);
+                            opt._autoValue = inputs[1].value;
+                            updateRawFromVisual();
+                        });
                         if (supportsPointsConfig() && inputs[2]) {
                             inputs[2].addEventListener("input", (ev) => {
                                 opt.points = Number(ev.target.value);
@@ -1972,7 +1984,9 @@
             if (target instanceof HTMLElement) {
                 target.id = `shared-field-${field.id}`;
                 target.name = field.id;
-                if (field.required) {
+                // A select always has one of its configured options chosen ("None" may have an empty value),
+                // so the browser's required check would wrongly reject it.
+                if (field.required && field.type !== "select") {
                     target.required = true;
                 }
             }
@@ -2127,12 +2141,12 @@
                 const value = readSharedFieldValue(field, input);
                 const label = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
 
-                if (field.required && (value === null || value === "")) {
+                if (field.required && (value === null || (value === "" && field.type !== "select"))) {
                     showToast(`Missing ${label}`, "error");
                     return null;
                 }
 
-                if (value !== null && value !== "") {
+                if (value !== null && (value !== "" || field.type === "select")) {
                     if (field.type === "number" || field.type === "counter" || field.type === "rating") {
                         const numVal = Number(value);
                         if (field.min !== null && field.min !== undefined && numVal < field.min) {

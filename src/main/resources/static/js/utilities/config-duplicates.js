@@ -93,6 +93,31 @@
     }
 
     /**
+     * Message for a toast when any dropdown option has no value (saving must stop), else null.
+     * A blank value saves as "nothing", so answers picked with it are lost.
+     */
+    function blankOptionError(config) {
+        const blanks = findConfigDuplicates(config).blankOptionValues;
+        if (!blanks.length) return null;
+        const list = blanks.map((b) => `${b.fieldLabel}: ${b.optionLabel || "(no label)"}`).join("; ");
+        return `Every dropdown option needs a value, otherwise picking it saves nothing. Add a value for ${list}.`;
+    }
+
+    /**
+     * Gives `option` a value made from its label (unique among `options`) when its value is blank.
+     * Returns the option's value.
+     */
+    function fillBlankOptionValue(option, options) {
+        if (!option) return "";
+        const current = String(option.value ?? "").trim();
+        if (current) return current;
+        const base = labelText(option.label).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "option";
+        const others = (options || []).filter((o) => o !== option).map((o) => String((o && o.value) ?? "").trim()).filter(Boolean);
+        option.value = uniqueValue(base, others);
+        return option.value;
+    }
+
+    /**
      * Shows (or hides) a warning banner. `anchor` is the element the banner is inserted before;
      * the banner is created once and reused on later calls.
      */
@@ -122,7 +147,7 @@
             items.push(`<strong>${escapeHtml(d.fieldLabel)}</strong>: options ${d.labels.map((l) => `"${escapeHtml(l)}"`).join(", ")} ${d.labels.length === 2 ? "both" : "all"} save as <code>${escapeHtml(d.value)}</code>, so they can't be told apart in the data.`);
         });
         result.blankOptionValues.forEach((d) => {
-            items.push(`<strong>${escapeHtml(d.fieldLabel)}</strong>: option "${escapeHtml(d.optionLabel || "(no label)")}" has no value — picking it saves nothing.`);
+            items.push(`<strong>${escapeHtml(d.fieldLabel)}</strong>: option "${escapeHtml(d.optionLabel || "(no label)")}" has no value, so picking it saves nothing. Saving is blocked until it has one.`);
         });
 
         banner.innerHTML =
@@ -138,6 +163,8 @@
         uniqueValue,
         uniqueFieldId,
         findConfigDuplicates,
-        renderDuplicateWarning
+        renderDuplicateWarning,
+        blankOptionError,
+        fillBlankOptionValue
     };
 })();

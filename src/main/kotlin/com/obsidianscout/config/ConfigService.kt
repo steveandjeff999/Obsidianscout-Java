@@ -15,6 +15,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -1168,6 +1169,42 @@ object ConfigService {
             ),
             analytics = emptyList()
         )
+    }
+
+    /**
+     * Dropdown options with no value, as "Field: Option". Picking one would store an empty answer
+     * that reads the same as "never answered", so the data is effectively lost.
+     */
+    fun blankOptionValues(json: String): List<String> {
+        val fields = runCatching { (JsonSupport.json.parseToJsonElement(json) as? JsonObject)?.get("fields") as? JsonArray }
+            .getOrNull() ?: return emptyList()
+        val problems = mutableListOf<String>()
+        for (fieldElement in fields) {
+            val field = fieldElement as? JsonObject ?: continue
+            val options = field["options"] as? JsonArray ?: continue
+            val fieldLabel = extractStringLabel(field["label"]).ifBlank { (field["id"] as? JsonPrimitive)?.content ?: "?" }
+            for (option in options) {
+                val (value, label) = when (option) {
+                    is JsonPrimitive -> option.content to option.content
+                    is JsonObject -> ((option["value"] as? JsonPrimitive)?.takeUnless { it is JsonNull }?.content ?: "") to
+                        extractStringLabel(option["label"])
+                    else -> "" to ""
+                }
+                if (value.isBlank()) problems.add("$fieldLabel: ${label.ifBlank { "(no label)" }}")
+            }
+        }
+        return problems
+    }
+
+    /** Rejects a config save that has a dropdown option without a value. */
+    fun requireNoBlankOptionValues(json: String) {
+        val problems = blankOptionValues(json)
+        if (problems.isNotEmpty()) {
+            throw com.obsidianscout.auth.ApiException(
+                io.ktor.http.HttpStatusCode.BadRequest,
+                "Every dropdown option needs a value, otherwise picking it saves nothing. Missing: ${problems.joinToString("; ")}"
+            )
+        }
     }
 
     private fun extractStringLabel(labelElement: JsonElement?): String {

@@ -327,6 +327,12 @@ object ConfigCollabHub {
                 fail("The config is not valid")
                 return
             }
+            // Live edits may pass through a blank value while typing; a saved version may not.
+            val blank = com.obsidianscout.config.ConfigService.blankOptionValues(encode(room.state.doc))
+            if (blank.isNotEmpty()) {
+                fail("Every dropdown option needs a value, otherwise picking it saves nothing. Missing: ${blank.joinToString("; ")}")
+                return
+            }
             val result = try {
                 withContext(Dispatchers.IO) { room.scope.commit(room.revisionBase, current, p.username) }
             } catch (e: Throwable) {

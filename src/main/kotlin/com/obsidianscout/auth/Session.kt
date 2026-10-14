@@ -2,9 +2,11 @@ package com.obsidianscout.auth
 
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.httpMethod
+import io.ktor.server.request.receive
 import io.ktor.server.request.uri
 import io.ktor.server.sessions.get
 import io.ktor.server.sessions.set
@@ -232,8 +234,9 @@ private val seenClusterSignatures = java.util.concurrent.ConcurrentHashMap<Strin
 /**
  * Verifies the X-Cluster-Timestamp / X-Cluster-Signature HMAC headers. Each signature is
  * accepted at most once within the timestamp window so captured requests cannot be replayed.
+ * Request payload SHA-256 is verified to prevent in-flight tampering across cluster nodes.
  */
-fun ApplicationCall.hasValidClusterSignature(): Boolean {
+suspend fun ApplicationCall.hasValidClusterSignature(): Boolean {
     val timestampStr = request.headers["X-Cluster-Timestamp"]
     val signature = request.headers["X-Cluster-Signature"]
     if (timestampStr.isNullOrBlank() || signature.isNullOrBlank()) return false
@@ -242,8 +245,39 @@ fun ApplicationCall.hasValidClusterSignature(): Boolean {
     val now = System.currentTimeMillis()
     if (Math.abs(now - timestamp) > CLUSTER_SIGNATURE_WINDOW_MS) return false
 
-    val dataToSign = "$timestamp:${request.httpMethod.value}:${request.uri}"
-    if (!ClusterCryptoUtils.verifyHmac(dataToSign, signature, ClusterSecretService.getSessionSecret())) return false
+    val isBodyless = request.httpMethod in listOf(HttpMethod.Get, HttpMethod.Head) ||
+            request.headers["Upgrade"]?.equals("websocket", ignoreCase = true) == true
+
+    val bodyBytes = if (isBodyless) {
+        ByteArray(0)
+    } else {
+        runCatching { receive<ByteArray>() }.getOrDefault(ByteArray(0))
+    }
+
+    val bodySha256 = ClusterCryptoUtils.sha256Hex(bodyBytes)
+    val secret = ClusterSecretService.getSessionSecret()
+
+    val dataToSign = ClusterCryptoUtils.buildSigningData(
+        timestamp = timestampStr,
+        method = request.httpMethod.value,
+        pathAndQuery = request.uri,
+        bodySha256 = bodySha256
+    )
+    var isValid = ClusterCryptoUtils.verifyHmac(dataToSign, signature, secret)
+
+    // Backward compatibility fallback for rolling upgrades between node versions
+    if (!isValid) {
+        val legacyData = ClusterCryptoUtils.buildLegacySigningData(
+            timestamp = timestampStr,
+            method = request.httpMethod.value,
+            pathAndQuery = request.uri
+        )
+        if (ClusterCryptoUtils.verifyHmac(legacyData, signature, secret)) {
+            isValid = true
+        }
+    }
+
+    if (!isValid) return false
 
     if (seenClusterSignatures.size > 10_000) {
         seenClusterSignatures.entries.removeIf { now - it.value > CLUSTER_SIGNATURE_WINDOW_MS * 2 }

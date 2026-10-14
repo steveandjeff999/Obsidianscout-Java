@@ -28,6 +28,7 @@ import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.lang.management.ManagementFactory
+import java.nio.charset.StandardCharsets
 import java.time.Duration
 import kotlin.system.exitProcess
 
@@ -365,12 +366,13 @@ object ClusterManagementService {
         }
     }
 
-    private fun buildSignedClusterRequest(urlStr: String, method: String): HttpRequest.Builder {
+    private fun buildSignedClusterRequest(urlStr: String, method: String, bodyBytes: ByteArray = ByteArray(0)): HttpRequest.Builder {
         val secret = com.obsidianscout.auth.ClusterSecretService.getSessionSecret()
         val timestamp = System.currentTimeMillis().toString()
         val uri = URI.create(urlStr)
         val path = uri.rawPath + (if (uri.rawQuery != null) "?${uri.rawQuery}" else "")
-        val dataToSign = "$timestamp:$method:$path"
+        val bodySha256 = com.obsidianscout.auth.ClusterCryptoUtils.sha256Hex(bodyBytes)
+        val dataToSign = com.obsidianscout.auth.ClusterCryptoUtils.buildSigningData(timestamp, method, path, bodySha256)
         val signature = com.obsidianscout.auth.ClusterCryptoUtils.hmacSha256(dataToSign, secret)
 
         return HttpRequest.newBuilder()
@@ -580,10 +582,11 @@ object ClusterManagementService {
             try {
                 val formattedJson = prettyJson.encodeToString(parsedConfig)
                 val encryptedBody = com.obsidianscout.auth.ClusterCryptoUtils.encrypt(formattedJson, secret)
-                val req = buildSignedClusterRequest(url, "PUT")
+                val bodyBytes = encryptedBody.toByteArray(StandardCharsets.UTF_8)
+                val req = buildSignedClusterRequest(url, "PUT", bodyBytes)
                     .timeout(Duration.ofSeconds(5))
                     .header("Content-Type", "text/plain")
-                    .PUT(HttpRequest.BodyPublishers.ofString(encryptedBody))
+                    .PUT(HttpRequest.BodyPublishers.ofByteArray(bodyBytes))
                     .build()
                 val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
                 if (resp.statusCode() == 200) {
@@ -1028,10 +1031,11 @@ object ClusterManagementService {
             val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/quorum-fallback/config"
             try {
                 val reqBody = JsonSupport.json.encodeToString(req)
-                val httpRequest = buildSignedClusterRequest(url, "PUT")
+                val bodyBytes = reqBody.toByteArray(StandardCharsets.UTF_8)
+                val httpRequest = buildSignedClusterRequest(url, "PUT", bodyBytes)
                     .timeout(Duration.ofSeconds(6))
                     .header("Content-Type", "application/json")
-                    .PUT(HttpRequest.BodyPublishers.ofString(reqBody))
+                    .PUT(HttpRequest.BodyPublishers.ofByteArray(bodyBytes))
                     .build()
                 val resp = getHttpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString())
                 if (resp.statusCode() == 200) {
@@ -1146,10 +1150,12 @@ object ClusterManagementService {
             val qStr = if (queryParams.isNotEmpty()) "?" + queryParams.joinToString("&") else ""
             val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/auto-backup/config$qStr"
             try {
-                val reqHttp = buildSignedClusterRequest(url, "PUT")
+                val bodyStr = JsonSupport.json.encodeToString(com.obsidianscout.routes.UpdateAutoBackupConfigRequest.serializer(), req)
+                val bodyBytes = bodyStr.toByteArray(StandardCharsets.UTF_8)
+                val reqHttp = buildSignedClusterRequest(url, "PUT", bodyBytes)
                     .timeout(Duration.ofSeconds(6))
                     .header("Content-Type", "application/json")
-                    .PUT(HttpRequest.BodyPublishers.ofString(JsonSupport.json.encodeToString(com.obsidianscout.routes.UpdateAutoBackupConfigRequest.serializer(), req)))
+                    .PUT(HttpRequest.BodyPublishers.ofByteArray(bodyBytes))
                     .build()
                 val resp = getHttpClient().send(reqHttp, HttpResponse.BodyHandlers.ofString())
                 if (resp.statusCode() == 200) {

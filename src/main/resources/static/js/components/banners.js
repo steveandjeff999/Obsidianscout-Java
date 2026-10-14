@@ -4,6 +4,7 @@
  */
 
 import { request, getCachedData } from '../base/http.js';
+import { ensureDOMPurify, sanitizeBannerHtml } from '../utilities/sanitizer.js';
 
 let isDelegationInitialized = false;
 
@@ -48,7 +49,7 @@ function initBannerEventDelegation() {
                         }
                     }
                 }
-                const container = document.querySelector(".banner-container");
+                const container = document.querySelector(".banner-container:not(.sync-status-host)");
                 if (container && container.children.length === 0) {
                     container.remove();
                 }
@@ -59,7 +60,7 @@ function initBannerEventDelegation() {
 }
 
 function renderBanners(banners, mainContent) {
-    let container = document.querySelector(".banner-container");
+    let container = document.querySelector(".banner-container:not(.sync-status-host)");
     if (!banners || banners.length === 0) {
         if (container) container.remove();
         return;
@@ -95,17 +96,21 @@ function renderBanners(banners, mainContent) {
     visibleBanners.forEach(banner => {
 
         const item = document.createElement("div");
-        item.className = `banner-item banner-${banner.bannerType}`;
+        const safeType = ['info', 'warning', 'danger', 'error', 'success'].includes(banner.bannerType) ? banner.bannerType : 'info';
+        item.className = `banner-item banner-${safeType}`;
         item.dataset.id = banner.id;
+
+        const cleanMessage = sanitizeBannerHtml(banner.message);
 
         let html = `
             <div class="banner-body">
-                <div class="banner-message">${banner.message}</div>
+                <div class="banner-message">${cleanMessage}</div>
         `;
 
         if (banner.isExpandable && banner.expandableMessage) {
+            const cleanDetails = sanitizeBannerHtml(banner.expandableMessage);
             html += `
-                <div class="banner-details hidden">${banner.expandableMessage}</div>
+                <div class="banner-details hidden">${cleanDetails}</div>
                 <button class="btn-banner-toggle" type="button">Read More</button>
             `;
         }
@@ -133,6 +138,7 @@ export async function loadAndRenderBanners() {
     }
 
     try {
+        await ensureDOMPurify();
         const page = document.body.dataset.page;
         if (page === "reset-password") return;
 

@@ -116,8 +116,50 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    function renderRejectedEntries() {
+        const host = document.getElementById("rejected-entries");
+        if (!host || typeof Obsidianscout.getFailedEntries !== "function") return;
+        const failed = Obsidianscout.getFailedEntries();
+        if (!failed.length) {
+            host.classList.add("hidden");
+            host.innerHTML = "";
+            return;
+        }
+        host.classList.remove("hidden");
+        const esc = Obsidianscout.escapeHtml;
+        const rows = failed.map((f, i) => {
+            const d = (f.item && f.item.data) || f.item || {};
+            const label = (cacheConfigs[f.type] && cacheConfigs[f.type].label) || f.type;
+            const what = [d.targetTeamNumber ? `Team ${d.targetTeamNumber}` : "", d.matchKey || (d.matchNumber ? `Match ${d.matchNumber}` : "")].filter(Boolean).join(" · ");
+            return `<li class="rejected-entry">
+                <div><strong>${esc(label)}</strong> ${esc(what)}</div>
+                <div class="muted">HTTP ${esc(f.status)}: ${esc(f.message || "")}</div>
+                <div class="row gap-12">
+                    <button type="button" class="btn ghost" data-rejected-action="retry" data-index="${i}">Retry</button>
+                    <button type="button" class="btn danger" data-rejected-action="discard" data-index="${i}">Discard</button>
+                </div>
+            </li>`;
+        }).join("");
+        host.innerHTML = `<div class="banner-item banner-danger"><div class="banner-body">
+            <div class="banner-message">${Obsidianscout.faIcon("circle-xmark", 15)} ${failed.length} saved ${failed.length === 1 ? "entry was" : "entries were"} rejected by the server</div>
+            <ul class="sync-status-list">${rows}</ul></div></div>`;
+    }
+
+    document.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-rejected-action]");
+        if (!btn) return;
+        const index = Number(btn.dataset.index);
+        if (btn.dataset.rejectedAction === "retry") {
+            Obsidianscout.retryFailedEntry(index);
+        } else if (confirm("Discard this entry? It will not be uploaded.")) {
+            Obsidianscout.discardFailedEntry(index);
+        }
+        loadAndRenderPendingEntries();
+    });
+
     function loadAndRenderPendingEntries() {
         updatePendingStats();
+        renderRejectedEntries();
 
         let allEntries = [];
 

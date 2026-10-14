@@ -1,0 +1,326 @@
+# 🌐 ObsidianScout Translation Audit Report
+
+- **Source Language:** `en` (2494 keys)
+- **Target Locales:** `es`, `he`, `tr`
+
+## Overview Summary
+
+| Locale | Total Keys | Missing | Empty | TODOs | Identical to EN | Placeholder Mismatch | Extra / Obsolete |
+|---|---|---|---|---|---|---|---|
+| **es** | 2494 | 0 | 0 | 0 | 56 | 0 | 0 |
+| **he** | 2494 | 0 | 0 | 0 | 26 | 0 | 0 |
+| **tr** | 2494 | 0 | 0 | 0 | 45 | 0 | 0 |
+
+## Codebase Usage Audit
+
+- Total unique i18n keys identified in HTML/JS: `2282`
+
+### ⚠️ Keys Used in Code but Missing from `en.json`
+
+- `ai.tier.` (used in: `src/main/resources/static/js/ai/ai-ui.js`, `src/main/resources/static/js/assistant.js`)
+- `btn.close` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_btn_now` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_btn_refresh` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_btn_restore_file` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_btn_save` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_desc_1` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_desc_2` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_desc_time` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_dropzone` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_enable_daily` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_enable_hint` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_loading_cluster` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_loading_snapshots` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_nodes_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_restore_desc_1` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_restore_desc_2` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_restore_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_retention_hint` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_retention_label` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_settings_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_snapshots_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_actions` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_count` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_created` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_daily` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_file` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_last` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_node_action` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_node_ip` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_retention` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_size` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_total_storage` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_th_trigger` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.backup_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.checking` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.error_alerts_desc` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.error_alerts_recipients_loading` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.error_alerts_test_btn` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.error_alerts_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.error_alerts_toggle` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.error_alerts_view_btn` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_activity_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_btn_configure` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_btn_refresh` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_btn_stress_start` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_btn_stress_stop` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_desc` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_no_activity` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_rolling_window` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_stress_desc` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_stress_idle` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_stress_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.lb_toggle` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.loading` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_inspector_loading` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_inspector_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_desc` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_excluded` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_excluded_hint` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_latency` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_latency_hint` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_local_pref` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_local_pref_hint` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_probe` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_save` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_timeout` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_lb_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_cat_alliances` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_cat_always` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_cat_chat` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_cat_configs` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_cat_reports` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_cat_schedule` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_cat_scouting` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_cat_secrets` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_cat_users` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_categories` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_desc` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_full` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_full_desc` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_interval` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_mode` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_path` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_save` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_selective` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_selective_desc` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_win_14` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_win_30` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_win_365` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_win_7` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_win_90` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_window` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_mirror_window_hint` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_node_backup_daily` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_node_backup_daily_hint` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_node_backup_retention` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_node_backup_retention_hint` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_node_backup_save` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_node_backup_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_restore_btn_confirm` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_restore_confirm_phrase` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_restore_instruction` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_restore_instruction_after` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_restore_placeholder` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_restore_target` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_restore_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.modal_restore_warning` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.node_alerts_desc` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.node_alerts_enroll` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.node_alerts_test_btn` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.node_alerts_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_active` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_btn_refresh` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_desc` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_loading` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_th_actions` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_th_disk` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_th_node` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_th_size` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_th_status` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_th_synced` (used in: `src/main/resources/static/cluster-management.html`)
+- `cluster.qf_title` (used in: `src/main/resources/static/cluster-management.html`)
+- `common.frc_long` (used in: `src/main/resources/static/login.html`)
+- `common.ftc_long` (used in: `src/main/resources/static/login.html`)
+- `login.back_to_overview` (used in: `src/main/resources/static/login.html`)
+- `login.features_desc` (used in: `src/main/resources/static/login.html`)
+- `login.forgot_email_notice` (used in: `src/main/resources/static/login.html`)
+- `login.or` (used in: `src/main/resources/static/login.html`)
+- `migration.danger_zone_btn` (used in: `src/main/resources/static/migration.html`)
+- `migration.danger_zone_confirm_label` (used in: `src/main/resources/static/migration.html`)
+- `migration.danger_zone_desc` (used in: `src/main/resources/static/migration.html`)
+- `migration.danger_zone_irreversible` (used in: `src/main/resources/static/migration.html`)
+- `migration.danger_zone_placeholder` (used in: `src/main/resources/static/migration.html`)
+- `migration.danger_zone_title` (used in: `src/main/resources/static/migration.html`)
+- `ort.webgpu.bundle.min.mjs` (used in: `data/models/runtime/tjs4.3.0-webllm0.2.85/transformers.min.js`)
+- `shared_viewer.loading` (used in: `src/main/resources/static/shared.html`)
+- `shared_viewer.never_expires` (used in: `src/main/resources/static/shared.html`)
+- `shared_viewer.shared_by` (used in: `src/main/resources/static/shared.html`)
+- `shared_viewer.shared_report` (used in: `src/main/resources/static/shared.html`)
+- `tutorials.btn_reset_progress` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.btn_start_next` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.filter_all` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.filter_completed` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.filter_todo` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.guide_mode` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.loading` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.mode_disabled` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.mode_standard` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.mode_zachary` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.progress_label` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.search_placeholder` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.zachary_badge` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.zachary_name` (used in: `src/main/resources/static/tutorials.html`)
+- `tutorials.zachary_speech` (used in: `src/main/resources/static/tutorials.html`)
+
+## Detailed Locale Breakdown
+
+### Locale: `es`
+
+<details><summary><b>🔍 Identical to English Strings (56 items)</b></summary>
+
+- `cache-manager.pre_qual`: *"Pre Qual"*
+- `team.teleop`: *"Teleop"*
+- `graphs.select_top`: *"Top 8"*
+- `theme_editor.color2`: *"Color 2"*
+- `cache-manager.pre_pit`: *"Pre Pit"*
+- `qual_scout.role.defending`: *"Defending"*
+- `ai.col.total`: *"Total"*
+- `config.placeholder_smtpgmailcom`: *"smtp.gmail.com"*
+- `phase.auto`: *"Auto"*
+- `qual_scout.role.stealing`: *"Stealing"*
+- `home.nav.roles`: *"Roles"*
+- `team.endgame`: *"Endgame"*
+- `team.auto`: *"Auto"*
+- `matches.comp.playoff`: *"Playoff"*
+- `ai.tier.gemma4e2b`: *"Gemma 4 E2B"*
+- `qual_scout.role.cycling`: *"Cycling"*
+- `phase.endgame`: *"Endgame"*
+- `ai.tier.gemma4e4b`: *"Gemma 4 E4B"*
+- `ai.backend.gpu`: *"GPU (WebGPU)"*
+- `qual_scout.role.scoring`: *"Scoring"*
+- `prescout-scout.total`: *"Total"*
+- `alliance-selection.teleop_exp`: *"Teleop EPA/EXP"*
+- `cache-manager.prescout_pit`: *"Prescout Pit"*
+- `ai.tier.lite`: *"Lite"*
+- `cache-manager.match_scout`: *"Match Scout"*
+- `events.placeholder_eventseventkeyplaceholder`: *"events.event_key_placeholder"*
+- `visible`: *"visible"*
+- `all-data.pit_scouting`: *"Pit Scouting"*
+- `storage.msgs`: *"msgs"*
+- `banners.scope_global`: *"Global"*
+- `all-data.match_scouting`: *"Match Scouting"*
+- `theme_editor.color1`: *"Color 1"*
+- `config.first_api`: *"FIRST API"*
+- `nav.scout`: *"Scout"*
+- `cache-manager.pre_match`: *"Pre Match"*
+- `qual_scout.role.feeding`: *"Feeding"*
+- `users.x2715`: *"&#x2715;"*
+- `prescout-scout.post_match`: *"Post Match"*
+- `alliance-selection.auto_exp`: *"Auto EPA/EXP"*
+- `projected.col.top`: *"Top {n}"*
+- `checklist.priority.normal`: *"Normal"*
+- `dashboard.scout_match_action`: *"Scout"*
+- `phase.teleop`: *"Teleop"*
+- `config.placeholder_americanewyork`: *"America/New_York"*
+- `assignments.total`: *"Total"*
+- `nav.chat`: *"Chat"*
+- `predictor.00_pts`: *"0.0 pts"*
+- `graphs.showing_all_events`: *"Showing all events"*
+- `events.placeholder_eventseventnameplaceholder`: *"events.event_name_placeholder"*
+- `config.match13_api`: *"Match 13"*
+- `storage.revs`: *"revs"*
+- `events.placeholder_eventsyearplaceholder`: *"events.year_placeholder"*
+- `chat.title`: *"Chat"*
+- `alliance-selection.endgame_exp`: *"Endgame EPA/EXP"*
+- `ai.card.percentiles`: *"Percentiles"*
+- `cache-manager.prescout_match`: *"Prescout Match"*
+
+</details>
+
+### Locale: `he`
+
+<details><summary><b>🔍 Identical to English Strings (26 items)</b></summary>
+
+- `config.placeholder_testexamplecom`: *"test@example.com"*
+- `qual_scout.role.defending`: *"Defending"*
+- `config.placeholder_noreplyyourdomaincom`: *"noreply@yourdomain.com"*
+- `predictor.ftcscout_opr`: *"FTC Scout OPR"*
+- `config.placeholder_smtpgmailcom`: *"smtp.gmail.com"*
+- `qual_scout.role.stealing`: *"Stealing"*
+- `ai.tier.gemma4e2b`: *"Gemma 4 E2B"*
+- `qual_scout.role.cycling`: *"Cycling"*
+- `config.placeholder_scoutexamplecom`: *"scout@example.com"*
+- `ai.tier.gemma4e4b`: *"Gemma 4 E4B"*
+- `pitdata.csv.team_name`: *"Team Name"*
+- `pitdata.csv.updated`: *"Updated"*
+- `pitdata.csv.team_number`: *"Team Number"*
+- `qual_scout.role.scoring`: *"Scoring"*
+- `ai.tier.lite`: *"Lite"*
+- `events.placeholder_eventseventkeyplaceholder`: *"events.event_key_placeholder"*
+- `config.first_api`: *"FIRST API"*
+- `qual_scout.role.feeding`: *"Feeding"*
+- `users.x2715`: *"&#x2715;"*
+- `qual-data.score`: *"Score"*
+- `projected.col.top`: *"Top {n}"*
+- `config.placeholder_usergmailcom`: *"user@gmail.com"*
+- `config.placeholder_americanewyork`: *"America/New_York"*
+- `events.placeholder_eventseventnameplaceholder`: *"events.event_name_placeholder"*
+- `config.match13_api`: *"Match 13"*
+- `events.placeholder_eventsyearplaceholder`: *"events.year_placeholder"*
+
+</details>
+
+### Locale: `tr`
+
+<details><summary><b>🔍 Identical to English Strings (45 items)</b></summary>
+
+- `team.teleop`: *"Teleop"*
+- `ai.assistant.model`: *"Model"*
+- `default_configs.filter_program`: *"Program:"*
+- `config.placeholder_testexamplecom`: *"test@example.com"*
+- `qual_scout.role.defending`: *"Defending"*
+- `config.placeholder_noreplyyourdomaincom`: *"noreply@yourdomain.com"*
+- `predictor.ftcscout_opr`: *"FTC Scout OPR"*
+- `config.placeholder_smtpgmailcom`: *"smtp.gmail.com"*
+- `phase.auto`: *"Auto"*
+- `qual_scout.role.stealing`: *"Stealing"*
+- `migration.pg_db_statbotics`: *"Statboticsepa DB"*
+- `team.endgame`: *"Endgame"*
+- `matches.comp.playoff`: *"Playoff"*
+- `ai.tier.gemma4e2b`: *"Gemma 4 E2B"*
+- `qual_scout.role.cycling`: *"Cycling"*
+- `config.placeholder_scoutexamplecom`: *"scout@example.com"*
+- `phase.endgame`: *"Endgame"*
+- `ai.tier.gemma4e4b`: *"Gemma 4 E4B"*
+- `pitdata.csv.team_name`: *"Team Name"*
+- `ai.backend.gpu`: *"GPU (WebGPU)"*
+- `pitdata.csv.updated`: *"Updated"*
+- `pitdata.csv.team_number`: *"Team Number"*
+- `migration.pg_port`: *"Postgres Port"*
+- `qual_scout.role.scoring`: *"Scoring"*
+- `alliance-selection.teleop_exp`: *"Teleop EPA/EXP"*
+- `ai.tier.lite`: *"Lite"*
+- `events.placeholder_eventseventkeyplaceholder`: *"events.event_key_placeholder"*
+- `storage.th_program`: *"Program"*
+- `all-data.pit_scouting`: *"Pit Scouting"*
+- `migration.pg_host`: *"Postgres Host"*
+- `config.first_api`: *"FIRST API"*
+- `qual-data.trend`: *"Trend"*
+- `qual_scout.role.feeding`: *"Feeding"*
+- `users.x2715`: *"&#x2715;"*
+- `checklist.priority.normal`: *"Normal"*
+- `users.all_roles`: *"All Roles"*
+- `config.placeholder_usergmailcom`: *"user@gmail.com"*
+- `phase.teleop`: *"Teleop"*
+- `scouted`: *"Scouted"*
+- `default_configs.program`: *"Program"*
+- `config.placeholder_americanewyork`: *"America/New_York"*
+- `events.placeholder_eventseventnameplaceholder`: *"events.event_name_placeholder"*
+- `config.match13_api`: *"Match 13"*
+- `events.placeholder_eventsyearplaceholder`: *"events.year_placeholder"*
+- `missing`: *"Missing"*
+
+</details>

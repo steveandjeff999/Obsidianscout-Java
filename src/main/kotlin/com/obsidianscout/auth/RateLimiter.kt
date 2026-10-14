@@ -136,3 +136,108 @@ object LoginRateLimiter {
         }
     }
 }
+
+object BugReportRateLimiter {
+
+    private data class RateWindow(
+        val count: AtomicInteger = AtomicInteger(0),
+        val windowStart: AtomicLong = AtomicLong(System.currentTimeMillis())
+    )
+
+    private val ipRequests = ConcurrentHashMap<String, RateWindow>()
+
+    internal const val DEFAULT_MAX_REPORTS = 10
+    internal const val DEFAULT_WINDOW_MS = 60_000L
+
+    var maxReports: Int = DEFAULT_MAX_REPORTS
+    var windowMs: Long = DEFAULT_WINDOW_MS
+
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private var cleanupJob: Job? = null
+
+    /**
+     * Atomically checks whether the given IP is allowed to submit a bug report,
+     * and records the request if allowed.
+     * Returns true if allowed and recorded; false if rate-limited.
+     */
+    fun tryAcquire(ip: String): Boolean {
+        val key = ip.trim().ifBlank { "unknown" }
+        val now = System.currentTimeMillis()
+        val window = ipRequests.computeIfAbsent(key) { RateWindow(AtomicInteger(0), AtomicLong(now)) }
+
+        synchronized(window) {
+            if (now - window.windowStart.get() > windowMs) {
+                window.windowStart.set(now)
+                window.count.set(0)
+            }
+            if (window.count.get() >= maxReports) {
+                return false
+            }
+            window.count.incrementAndGet()
+            return true
+        }
+    }
+
+    /**
+     * Checks whether the given IP is currently allowed to submit a bug report,
+     * without incrementing the counter.
+     */
+    fun checkAllowed(ip: String): Boolean {
+        val key = ip.trim().ifBlank { "unknown" }
+        val now = System.currentTimeMillis()
+        val window = ipRequests[key] ?: return true
+        synchronized(window) {
+            if (now - window.windowStart.get() > windowMs) {
+                return true
+            }
+            return window.count.get() < maxReports
+        }
+    }
+
+    /**
+     * Records a request for the given IP.
+     */
+    fun recordRequest(ip: String) {
+        val key = ip.trim().ifBlank { "unknown" }
+        val now = System.currentTimeMillis()
+        val window = ipRequests.computeIfAbsent(key) { RateWindow(AtomicInteger(0), AtomicLong(now)) }
+        synchronized(window) {
+            if (now - window.windowStart.get() > windowMs) {
+                window.windowStart.set(now)
+                window.count.set(0)
+            }
+            window.count.incrementAndGet()
+        }
+    }
+
+    /**
+     * Clears recorded requests for a specific IP.
+     */
+    fun clear(ip: String) {
+        val key = ip.trim().ifBlank { "unknown" }
+        ipRequests.remove(key)
+    }
+
+    /**
+     * Clears all recorded requests and resets limits to defaults (useful for testing).
+     */
+    fun reset() {
+        ipRequests.clear()
+        maxReports = DEFAULT_MAX_REPORTS
+        windowMs = DEFAULT_WINDOW_MS
+    }
+
+    @Synchronized
+    fun startCleanupJob() {
+        if (cleanupJob?.isActive == true) return
+        cleanupJob = scope.launch {
+            while (isActive) {
+                delay(5 * 60_000L) // Cleanup every 5 minutes
+                try {
+                    val now = System.currentTimeMillis()
+                    ipRequests.entries.removeIf { now - it.value.windowStart.get() > windowMs * 2 }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+}

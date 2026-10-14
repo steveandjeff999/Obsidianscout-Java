@@ -4,7 +4,7 @@
  */
 
 import { showToast } from './toast.js';
-import { processImageUpload } from '../utilities/media.js';
+import { processImageUpload, isWebpSupported } from '../utilities/media.js';
 
 /**
  * Displays a full-screen image lightbox dialog for inspecting robot mechanism photos.
@@ -178,6 +178,7 @@ export function openInlineCameraModal(options = {}) {
             const ctx = canvas.getContext("2d");
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+            const captureFormat = isWebpSupported() ? "image/webp" : "image/jpeg";
             canvas.toBlob(async (blob) => {
                 if (!blob) {
                     showToast("Failed to capture image frame", "error");
@@ -185,14 +186,14 @@ export function openInlineCameraModal(options = {}) {
                     return;
                 }
                 try {
-                    const result = await processImageUpload(blob, options.maxDimension || 540, options.quality || 0.65);
+                    const result = await processImageUpload(blob, options.maxDimension || 1280, options.quality || 0.78);
                     closeModal();
                     onCapture(result);
                 } catch (err) {
                     showToast(err.message || "Failed to process captured image", "error");
                     btnCapture.disabled = false;
                 }
-            }, "image/jpeg", 0.95);
+            }, captureFormat, 0.92);
         } catch (err) {
             showToast(err.message || "Failed to snap photo", "error");
             btnCapture.disabled = false;

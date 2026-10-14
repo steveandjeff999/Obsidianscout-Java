@@ -50,7 +50,8 @@ object ConfigCollabRelay {
         ).joinToString("&") { (k, v) -> "$k=${encode(v)}" }
         val pathAndQuery = "$PATH?$query"
         val timestamp = System.currentTimeMillis().toString()
-        val signature = ClusterCryptoUtils.hmacSha256("$timestamp:GET:$pathAndQuery", ClusterSecretService.getSessionSecret())
+        val dataToSign = ClusterCryptoUtils.buildSigningData(timestamp, "GET", pathAndQuery, ClusterCryptoUtils.EMPTY_BODY_SHA256)
+        val signature = ClusterCryptoUtils.hmacSha256(dataToSign, ClusterSecretService.getSessionSecret())
 
         try {
             client.webSocket(

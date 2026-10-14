@@ -15,6 +15,35 @@ object ClusterCryptoUtils {
     private const val TAG_LENGTH_BIT = 128
     private const val IV_LENGTH_BYTE = 12
 
+    val EMPTY_BODY_SHA256: String by lazy { sha256Hex(ByteArray(0)) }
+
+    /**
+     * Calculates the SHA-256 hex digest of the given byte array.
+     */
+    fun sha256Hex(bytes: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(bytes).joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Builds canonical data string for HMAC signing including payload SHA-256 digest.
+     */
+    fun buildSigningData(
+        timestamp: String,
+        method: String,
+        pathAndQuery: String,
+        bodySha256: String = EMPTY_BODY_SHA256
+    ): String = "$timestamp:$method:$pathAndQuery:$bodySha256"
+
+    /**
+     * Builds legacy data string for backward compatibility during rolling cluster upgrades.
+     */
+    fun buildLegacySigningData(
+        timestamp: String,
+        method: String,
+        pathAndQuery: String
+    ): String = "$timestamp:$method:$pathAndQuery"
+
     private fun deriveKey(secret: String): SecretKeySpec {
         val digest = MessageDigest.getInstance("SHA-256")
         val keyBytes = digest.digest(secret.toByteArray(StandardCharsets.UTF_8))

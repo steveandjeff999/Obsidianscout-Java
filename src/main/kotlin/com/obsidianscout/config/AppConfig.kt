@@ -91,7 +91,16 @@ data class ServerConfig(
     val sessionSecret: String = "change-me",
     val cookieSecure: Boolean = false,
     val https: HttpsConfig = HttpsConfig(),
-    val logging: Boolean = false
+    val logging: Boolean = false,
+    /** Advertise the server on the LAN as <hostname>.local over multicast DNS. */
+    val mdns: MdnsConfig = MdnsConfig()
+)
+
+@Serializable
+data class MdnsConfig(
+    val enabled: Boolean = true,
+    /** Bare name without ".local"; clients reach the server at http://<hostname>.local:<port>. */
+    val hostname: String = "obsidianscout"
 )
 
 @Serializable

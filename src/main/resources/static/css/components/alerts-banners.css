@@ -336,3 +336,183 @@ body.theme-dark .alert-danger, body.theme-dark .alert-error {
     font-weight: 700;
 }
 
+
+/* ── Offline sync status banner (scouting pages) ── */
+.sync-status-host .banner-item {
+    align-items: center;
+}
+
+.sync-status-host .banner-message {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.sync-status-host .banner-message a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.sync-status-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.sync-status-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    min-height: 0;
+}
+
+.sync-status-list {
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.sync-status-list li {
+    display: grid;
+    grid-template-columns: minmax(110px, auto) 1fr auto;
+    gap: 10px;
+    padding: 4px 0;
+    border-top: 1px dashed rgba(0, 0, 0, 0.1);
+}
+
+body.theme-dark .sync-status-list li {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.sync-status-type {
+    font-weight: 700;
+}
+
+.sync-status-time {
+    opacity: 0.8;
+    font-variant-numeric: tabular-nums;
+}
+
+.sync-status-chevron-open {
+    transform: rotate(180deg);
+}
+
+.sync-status-spin {
+    animation: syncStatusSpin 1s linear infinite;
+}
+
+@keyframes syncStatusSpin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sync-status-spin { animation: none; }
+}
+
+/* ── "Local only" and "Next assignment" chips beside scouting selectors ── */
+.local-only-chip,
+.next-assignment-chip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.local-only-chip {
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #b45309;
+    font-weight: 600;
+}
+
+body.theme-dark .local-only-chip {
+    color: #fde68a;
+}
+
+.next-assignment-chip {
+    justify-content: space-between;
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+body.theme-dark .next-assignment-chip {
+    background: rgba(59, 130, 246, 0.14);
+    border-color: rgba(96, 165, 250, 0.3);
+}
+
+.next-assignment-text {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.next-assignment-note {
+    color: var(--muted);
+}
+
+.next-assignment-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.next-assignment-actions .btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    min-height: 0;
+}
+
+.next-assignment-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .sync-status-list li {
+        grid-template-columns: 1fr auto;
+    }
+    .sync-status-list li .sync-status-type {
+        grid-column: 1 / -1;
+    }
+}
+
+.sync-status-list li.rejected-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 0;
+}
+
+/* "Change" on the next-assignment chip highlights the selector it opens */
+.select-attention {
+    animation: selectAttention 1.5s ease-out;
+}
+
+@keyframes selectAttention {
+    0%, 40% { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.45); }
+    100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .select-attention { animation: none; outline: 2px solid rgba(37, 99, 235, 0.6); }
+}

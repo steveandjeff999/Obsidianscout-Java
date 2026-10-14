@@ -475,19 +475,26 @@ private fun sanitizeAndDownscaleBase64Image(dataUriOrBase64: String, maxDim: Int
         if (bytes.size < 4) return dataUriOrBase64
         val isJpeg = bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()
         val isPng = bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
-        val isWebp = bytes.size > 12 && bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() && bytes[2] == 'F'.code.toByte() && bytes[3] == 'F'.code.toByte()
+        // RIFF container whose form type is WEBP (plain RIFF would also match WAV/AVI).
+        val isWebp = bytes.size > 12 && String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP"
 
         if (!isJpeg && !isPng && !isWebp) {
             return dataUriOrBase64
         }
 
         val originalImage: BufferedImage? = ImageIO.read(ByteArrayInputStream(bytes))
-        if (originalImage == null) return dataUriOrBase64
+        if (originalImage == null) {
+            return if (dataUriOrBase64.startsWith("data:image/")) dataUriOrBase64 else "data:image/${if (isWebp) "webp" else if (isPng) "png" else "jpeg"};base64,$base64Data"
+        }
 
         var width = originalImage.width
         var height = originalImage.height
 
         val needsResize = width > maxDim || height > maxDim
+        if (isWebp && !needsResize) {
+            // Client-side WebP compression already stripped EXIF/GPS and compressed to ~300–500 KB.
+            return if (dataUriOrBase64.startsWith("data:image/")) dataUriOrBase64 else "data:image/webp;base64,$base64Data"
+        }
         if (needsResize) {
             if (width > height) {
                 height = ((height.toDouble() * maxDim) / width).toInt().coerceAtLeast(1)

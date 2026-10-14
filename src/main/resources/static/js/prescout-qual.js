@@ -246,7 +246,11 @@ async function initPrescoutQual(me) {
                     data: payload,
                     createdAt
                 });
-                Obsidianscout.safeSetItem("pending_prescout_qualitative_entries", JSON.stringify(pending));
+                // Large photos can fill the browser's storage; never report a save that did not happen.
+                if (!Obsidianscout.safeSetItem("pending_prescout_qualitative_entries", JSON.stringify(pending))) {
+                    Obsidianscout.showToast("This device is out of storage, so the entry was NOT saved. Sync or clear cached data, then save again.", "error");
+                    return;
+                }
 
                 Obsidianscout.recordDeviceHistory({
                     action: "offline_save",
@@ -260,7 +264,7 @@ async function initPrescoutQual(me) {
                     serverSynced: false
                 });
 
-                Obsidianscout.showToast(`Saved locally (Offline mode) - Match #${payload.matchNumber}`, "success");
+                Obsidianscout.showSaveResult("local", `Match #${payload.matchNumber}`);
                 Obsidianscout.updateConnectionStatus();
 
                 if (matchInput) {
@@ -284,7 +288,7 @@ async function initPrescoutQual(me) {
                         data: payload
                     }
                 });
-                Obsidianscout.showToast(`Qualitative prescout entry saved for Team ${payload.targetTeamNumber} (Match #${payload.matchNumber})`, "success");
+                Obsidianscout.showSaveResult("server", `Team ${payload.targetTeamNumber} (Match #${payload.matchNumber})`);
                 
                 Obsidianscout.recordDeviceHistory({
                     action: "upload",
@@ -328,7 +332,11 @@ async function initPrescoutQual(me) {
                         data: payload,
                         createdAt
                     });
-                    Obsidianscout.safeSetItem("pending_prescout_qualitative_entries", JSON.stringify(pending));
+                    // Large photos can fill the browser's storage; never report a save that did not happen.
+                    if (!Obsidianscout.safeSetItem("pending_prescout_qualitative_entries", JSON.stringify(pending))) {
+                        Obsidianscout.showToast("This device is out of storage, so the entry was NOT saved. Sync or clear cached data, then save again.", "error");
+                        return;
+                    }
 
                     Obsidianscout.recordDeviceHistory({
                         action: "offline_save",
@@ -343,7 +351,7 @@ async function initPrescoutQual(me) {
                         serverSynced: false
                     });
 
-                    Obsidianscout.showToast(`Saved locally (Offline mode) - Match #${payload.matchNumber}`, "success");
+                    Obsidianscout.showSaveResult("local", `Match #${payload.matchNumber}`);
                     Obsidianscout.updateConnectionStatus();
 
                     if (matchInput) {
@@ -495,7 +503,9 @@ function buildField(field) {
     if (target instanceof HTMLElement) {
         target.id = `field-${field.id}`;
         target.name = field.id;
-        if (field.required) {
+        // A select always has one of its configured options chosen ("None" may have an empty value),
+        // so the browser's required check would wrongly reject it.
+        if (field.required && field.type !== "select") {
             target.required = true;
         }
     }
@@ -820,7 +830,7 @@ function buildPayload(fields, form) {
         const value = readFieldValue(field, input);
         const label = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
 
-        if (field.required && (value === null || value === "")) {
+        if (field.required && (value === null || (value === "" && field.type !== "select"))) {
             Obsidianscout.showToast(`Missing ${label}`, "error");
             if (typeof switchTab === "function" && typeof getFieldPhase === "function") {
                 const phase = getFieldPhase(field);
@@ -829,7 +839,7 @@ function buildPayload(fields, form) {
             return null;
         }
 
-        if (value !== null && value !== "") {
+        if (value !== null && (value !== "" || field.type === "select")) {
             if (field.type === "number" || field.type === "counter" || field.type === "rating") {
                 const numVal = Number(value);
                 if (field.min !== null && field.min !== undefined && numVal < field.min) {

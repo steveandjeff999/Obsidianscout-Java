@@ -917,6 +917,7 @@ fun Application.configureRoutes() {
                     val session = call.requireAdmin()
                     val request = call.receive<ConfigUpdateRequest>()
                     val oldConfig = runCatching { ConfigService.getConfig(session.teamNumber, session.program, local = true) }.getOrNull()
+                    ConfigService.requireNoBlankOptionValues(request.configJson)
                     val updated = ConfigService.updateConfig(session.teamNumber, session.program, request.configJson)
                     val (hasChanges, changedFields) = ConfigMigrationService.detectFieldChanges(oldConfig, updated, session.teamNumber, session.program, "game")
                     val entryCount = ConfigMigrationService.countExistingEntries(session.teamNumber, session.program, "game")
@@ -987,6 +988,7 @@ fun Application.configureRoutes() {
                     val session = call.requireAdmin()
                     val request = call.receive<ConfigUpdateRequest>()
                     val oldConfig = runCatching { ConfigService.getPitConfig(session.teamNumber, session.program, local = true) }.getOrNull()
+                    ConfigService.requireNoBlankOptionValues(request.configJson)
                     val updated = ConfigService.updatePitConfig(session.teamNumber, session.program, request.configJson)
                     val (hasChanges, changedFields) = ConfigMigrationService.detectFieldChanges(oldConfig, updated, session.teamNumber, session.program, "pit")
                     val entryCount = ConfigMigrationService.countExistingEntries(session.teamNumber, session.program, "pit")
@@ -1057,6 +1059,7 @@ fun Application.configureRoutes() {
                     val session = call.requireAdmin()
                     val request = call.receive<ConfigUpdateRequest>()
                     val oldConfig = runCatching { ConfigService.getQualitativeConfig(session.teamNumber, session.program, local = true) }.getOrNull()
+                    ConfigService.requireNoBlankOptionValues(request.configJson)
                     val updated = ConfigService.updateQualitativeConfig(session.teamNumber, session.program, request.configJson)
                     val (hasChanges, changedFields) = ConfigMigrationService.detectFieldChanges(oldConfig, updated, session.teamNumber, session.program, "qual")
                     val entryCount = ConfigMigrationService.countExistingEntries(session.teamNumber, session.program, "qual")
@@ -3237,6 +3240,7 @@ fun Application.configureRoutes() {
                     if (runCatching { JsonSupport.json.parseToJsonElement(body) as? JsonObject }.getOrNull() == null) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Config must be a JSON object")
                     }
+                    ConfigService.requireNoBlankOptionValues(body)
                     com.obsidianscout.collab.ConfigCollabScope.Alliance(idUuid, kind).persist(body)
                     call.respond(HttpStatusCode.NoContent)
                 }
@@ -3584,6 +3588,7 @@ fun Application.configureRoutes() {
                     post {
                         call.requireSuperAdmin()
                         val dto = call.receive<com.obsidianscout.config.DefaultConfigDTO>()
+                        ConfigService.requireNoBlankOptionValues(dto.configJson)
                         val created = ConfigService.createDefaultConfig(dto)
                         call.respond(HttpStatusCode.Created, created)
                     }
@@ -3591,6 +3596,7 @@ fun Application.configureRoutes() {
                         call.requireSuperAdmin()
                         val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing id parameter")
                         val dto = call.receive<com.obsidianscout.config.DefaultConfigDTO>()
+                        ConfigService.requireNoBlankOptionValues(dto.configJson)
                         val updated = ConfigService.updateDefaultConfig(id, dto)
                         call.respond(updated)
                     }
@@ -4090,6 +4096,13 @@ fun Application.configureRoutes() {
 
 
             post("/bug-reports") {
+                val ip = call.clientIp()
+                if (!com.obsidianscout.auth.BugReportRateLimiter.tryAcquire(ip)) {
+                    throw com.obsidianscout.auth.ApiException(
+                        HttpStatusCode.TooManyRequests,
+                        "Too many bug reports submitted from this IP. Please wait before submitting more."
+                    )
+                }
                 val session = call.sessions.get<UserSession>()
                 val request = call.receive<ClientBugReportRequest>()
                 com.obsidianscout.admin.ServerErrorAlertService.recordClientBugReport(request, session)

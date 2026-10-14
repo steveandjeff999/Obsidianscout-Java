@@ -2552,6 +2552,9 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
                 
                 val session = call.requireMobileSession(secret)
+                ConfigService.blankOptionValues(reqBody).takeIf { it.isNotEmpty() }?.let { problems ->
+                    throw MobileApiException(HttpStatusCode.BadRequest, "Every dropdown option needs a value, otherwise picking it saves nothing. Missing: ${problems.joinToString("; ")}", "BLANK_OPTION_VALUE")
+                }
                 extractAndUpdateSettingsFromConfigJson(session.teamNumber, session.program, reqBody)
                 ConfigService.updateConfig(session.teamNumber, session.program, reqBody)
                 call.respond(MobileSaveConfigResponse())
@@ -2574,6 +2577,9 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
 
                 val session = call.requireMobileSession(secret)
+                ConfigService.blankOptionValues(reqBody).takeIf { it.isNotEmpty() }?.let { problems ->
+                    throw MobileApiException(HttpStatusCode.BadRequest, "Every dropdown option needs a value, otherwise picking it saves nothing. Missing: ${problems.joinToString("; ")}", "BLANK_OPTION_VALUE")
+                }
                 extractAndUpdateSettingsFromConfigJson(session.teamNumber, session.program, reqBody)
                 ConfigService.updatePitConfig(session.teamNumber, session.program, reqBody)
                 call.respond(MobileSaveConfigResponse())
@@ -2596,6 +2602,9 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
 
                 val session = call.requireMobileSession(secret)
+                ConfigService.blankOptionValues(reqBody).takeIf { it.isNotEmpty() }?.let { problems ->
+                    throw MobileApiException(HttpStatusCode.BadRequest, "Every dropdown option needs a value, otherwise picking it saves nothing. Missing: ${problems.joinToString("; ")}", "BLANK_OPTION_VALUE")
+                }
                 extractAndUpdateSettingsFromConfigJson(session.teamNumber, session.program, reqBody)
                 ConfigService.updateQualitativeConfig(session.teamNumber, session.program, reqBody)
                 call.respond(MobileSaveConfigResponse())

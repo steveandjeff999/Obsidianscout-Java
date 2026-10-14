@@ -558,6 +558,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                     Obsidianscout.showToast("Config JSON is invalid", "error");
                     return;
                 }
+                const blankOptionError = window.ObsidianscoutConfigDuplicates && window.ObsidianscoutConfigDuplicates.blankOptionError(JSON.parse(text));
+                if (blankOptionError) {
+                    Obsidianscout.showToast(blankOptionError, "error");
+                    return;
+                }
 
                 if (collab) {
                     const kind = activeConfigKind;
@@ -2297,6 +2302,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 inVal.addEventListener("input", (e) => {
                     option.value = e.target.value;
                     option._autoValue = null;
+                    updateRawFromVisual();
+                });
+                // A blank value would save answers as nothing; refill it from the label when left empty.
+                inVal.addEventListener("blur", () => {
+                    if (String(option.value ?? "").trim() || !window.ObsidianscoutConfigDuplicates) return;
+                    inVal.value = window.ObsidianscoutConfigDuplicates.fillBlankOptionValue(option, options);
+                    option._autoValue = inVal.value;
                     updateRawFromVisual();
                 });
                 

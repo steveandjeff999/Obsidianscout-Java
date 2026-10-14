@@ -1,7 +1,7 @@
 
 
 
-const CACHE_NAME = 'obsidianscout-shell-v0-6-4-9';
+const CACHE_NAME = 'obsidianscout-shell-v0-6-4-12';
 
 
 const NAVIGATION_TIMEOUT_MS = 4000;
@@ -112,6 +112,10 @@ const ASSETS = [
     '/js/components/conflict-modal.js',
     '/js/components/tour-wizard.js',
     '/js/services/offline-sync.js',
+    '/js/services/assignment-advance.js',
+    '/js/components/sync-status-banner.js',
+    '/js/utilities/fa-icons.js',
+    '/js/utilities/sanitizer.js',
     '/js/services/data-compression.js',
     '/js/services/chat-poller.js',
     '/js/services/theme-sync.js',

@@ -49,20 +49,153 @@ export const CACHE_CONFIGS = {
     }
 };
 
+export const FAILED_ENTRIES_KEY = "failed_offline_entries";
+export const PENDING_CHANGED_EVENT = "obsidianscout:pending-entries-changed";
+export const SYNC_PROGRESS_EVENT = "obsidianscout:offline-sync-progress";
+
+let _syncInProgress = false;
+let _syncProgress = null;
+
+function readQueue(key) {
+    try {
+        const parsed = JSON.parse(safeGetItem(key) || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function newClientId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function notifyPendingChanged() {
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(PENDING_CHANGED_EVENT));
+    }
+}
+
+function setSyncProgress(progress) {
+    _syncProgress = progress;
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(SYNC_PROGRESS_EVENT, { detail: progress }));
+    }
+}
+
+export function isOfflineSyncInProgress() {
+    return _syncInProgress;
+}
+
+export function getOfflineSyncProgress() {
+    return _syncProgress;
+}
+
+/** Returns the payload stored in a queued item, regardless of which page wrote it. */
+export function getQueuedPayload(item) {
+    return (item && item.data) ? item.data : (item || {});
+}
+
+/**
+ * Every entry saved on this device that hasn't reached the server yet, tagged with its form type.
+ * Optionally limited to one event.
+ */
+export function getPendingEntries(eventKey = null) {
+    const out = [];
+    for (const type in CACHE_CONFIGS) {
+        for (const item of readQueue(CACHE_CONFIGS[type].key)) {
+            const data = getQueuedPayload(item);
+            if (eventKey && data.eventKey && String(data.eventKey).toLowerCase() !== String(eventKey).toLowerCase()) continue;
+            out.push({ type, label: CACHE_CONFIGS[type].label, item, data });
+        }
+    }
+    return out;
+}
+
+/** Entries the server refused (4xx). They are kept for review instead of being retried forever. */
+export function getFailedEntries() {
+    return readQueue(FAILED_ENTRIES_KEY);
+}
+
+export function getPendingSummary(eventKey = null) {
+    const byType = {};
+    let total = 0;
+    let oldestCreatedAt = null;
+    for (const entry of getPendingEntries(eventKey)) {
+        byType[entry.type] = (byType[entry.type] || 0) + 1;
+        total++;
+        const created = entry.item && entry.item.createdAt;
+        if (created && (!oldestCreatedAt || created < oldestCreatedAt)) oldestCreatedAt = created;
+    }
+    return { total, byType, oldestCreatedAt, failed: getFailedEntries().length };
+}
+
+/** Gives every queued item a stable clientId so a sync can remove exactly what it uploaded. */
+function ensureClientIds(key) {
+    const queue = readQueue(key);
+    let changed = false;
+    for (const item of queue) {
+        if (item && typeof item === 'object' && !item.clientId) {
+            item.clientId = newClientId();
+            changed = true;
+        }
+    }
+    if (changed) safeSetItem(key, JSON.stringify(queue));
+    return queue;
+}
+
+/** Removes one item by clientId, re-reading the queue so entries added mid-sync survive. */
+function removeFromQueue(key, clientId) {
+    const queue = readQueue(key);
+    const next = queue.filter(item => !item || item.clientId !== clientId);
+    if (next.length !== queue.length) safeSetItem(key, JSON.stringify(next));
+}
+
+function withSyncLock(fn) {
+    if (typeof navigator !== 'undefined' && navigator.locks && typeof navigator.locks.request === 'function') {
+        // ifAvailable: another tab already uploading the same queues means this one has nothing to do.
+        return navigator.locks.request('obsidianscout-offline-sync', { ifAvailable: true }, async (lock) => {
+            if (!lock) return;
+            return fn();
+        });
+    }
+    return fn();
+}
+
 export async function syncOfflineEntries() {
     if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.isServerOnline === 'function') {
         if (!window.Obsidianscout.isServerOnline()) return;
     } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
         return;
     }
+    if (_syncInProgress) return;
 
-    let totalPending = 0;
+    if (getPendingSummary().total === 0) return;
+
+    _syncInProgress = true;
+    try {
+        await withSyncLock(runSync);
+    } finally {
+        _syncInProgress = false;
+        setSyncProgress(null);
+        notifyPendingChanged();
+        if (window.Obsidianscout && typeof window.Obsidianscout.updateConnectionStatus === 'function') {
+            window.Obsidianscout.updateConnectionStatus();
+        }
+    }
+}
+
+async function runSync() {
+    const work = [];
     for (const type in CACHE_CONFIGS) {
         const config = CACHE_CONFIGS[type];
-        const pending = JSON.parse(safeGetItem(config.key) || "[]");
-        totalPending += pending.length;
+        for (const item of ensureClientIds(config.key)) {
+            if (item && item.clientId) work.push({ type, config, item });
+        }
     }
-    if (totalPending === 0) return;
+    if (!work.length) return;
 
     const syncBtn = document.querySelector("#btn-sync-offline");
     if (syncBtn) {
@@ -71,43 +204,81 @@ export async function syncOfflineEntries() {
     }
 
     let successCount = 0;
+    let rejectedCount = 0;
+    setSyncProgress({ done: 0, total: work.length });
 
-    for (const type in CACHE_CONFIGS) {
-        const config = CACHE_CONFIGS[type];
-        const pending = JSON.parse(safeGetItem(config.key) || "[]");
-        if (!pending.length) continue;
-
-        const remaining = [];
-        for (const item of pending) {
+    for (let i = 0; i < work.length; i++) {
+        const { type, config, item } = work[i];
+        try {
+            await request(config.endpoint, {
+                method: "POST",
+                json: item
+            });
+            successCount++;
+            removeFromQueue(config.key, item.clientId);
             try {
-                await request(config.endpoint, {
-                    method: "POST",
-                    json: item
+                const itemData = getQueuedPayload(item);
+                markMatchingEntryAsSynced(type, itemData.eventKey, itemData.targetTeamNumber || itemData.teamNumber, itemData.matchKey || itemData.matchNumber);
+            } catch (histErr) {
+                console.warn("[Offline Sync] Failed to update history sync status:", histErr);
+            }
+        } catch (error) {
+            console.error(`[Offline Sync] Failed to sync ${config.label}:`, error);
+            const status = error && error.status;
+            // 4xx (other than auth / timeout / rate limit) means the server will never accept this as-is.
+            if (status && status >= 400 && status < 500 && ![401, 403, 408, 429].includes(status)) {
+                const failed = getFailedEntries();
+                failed.push({
+                    type,
+                    item,
+                    status,
+                    message: (error && error.message) || `HTTP ${status}`,
+                    failedAt: new Date().toISOString()
                 });
-                successCount++;
-                try {
-                    const itemData = item.data || item;
-                    markMatchingEntryAsSynced(type, itemData.eventKey, itemData.targetTeamNumber || itemData.teamNumber, itemData.matchKey || itemData.matchNumber);
-                } catch (histErr) {
-                    console.warn("[Offline Sync] Failed to update history sync status:", histErr);
-                }
-            } catch (error) {
-                console.error(`[Offline Sync] Failed to sync ${config.label}:`, error);
-                remaining.push(item);
+                safeSetItem(FAILED_ENTRIES_KEY, JSON.stringify(failed));
+                removeFromQueue(config.key, item.clientId);
+                rejectedCount++;
+            } else if (status === 401 || !status) {
+                // Logged out or the connection dropped: stop and keep everything for the next attempt.
+                setSyncProgress({ done: i + 1, total: work.length });
+                break;
             }
         }
-        safeSetItem(config.key, JSON.stringify(remaining));
+        setSyncProgress({ done: i + 1, total: work.length });
+        notifyPendingChanged();
     }
 
     if (successCount > 0) {
-        showToast(`Successfully synced ${successCount} offline entries!`, "success");
+        showToast(`Uploaded ${successCount} saved ${successCount === 1 ? "entry" : "entries"} to the server`, "success");
         window.dispatchEvent(new CustomEvent("obsidianscout:offline-entries-synced"));
         window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
     }
-
-    if (window.Obsidianscout && typeof window.Obsidianscout.updateConnectionStatus === 'function') {
-        window.Obsidianscout.updateConnectionStatus();
+    if (rejectedCount > 0) {
+        showToast(`${rejectedCount} saved ${rejectedCount === 1 ? "entry was" : "entries were"} rejected by the server. Review them in Cache Manager.`, "error");
     }
+}
+
+/** Puts a rejected entry back in its queue so the next sync retries it. */
+export function retryFailedEntry(index) {
+    const failed = getFailedEntries();
+    const entry = failed[index];
+    if (!entry) return;
+    const config = CACHE_CONFIGS[entry.type];
+    if (config) {
+        const queue = readQueue(config.key);
+        queue.push(entry.item);
+        safeSetItem(config.key, JSON.stringify(queue));
+    }
+    failed.splice(index, 1);
+    safeSetItem(FAILED_ENTRIES_KEY, JSON.stringify(failed));
+    notifyPendingChanged();
+}
+
+export function discardFailedEntry(index) {
+    const failed = getFailedEntries();
+    failed.splice(index, 1);
+    safeSetItem(FAILED_ENTRIES_KEY, JSON.stringify(failed));
+    notifyPendingChanged();
 }
 
 const LAST_SYNC_KEY = "obsidianscout:last_offline_sync_ts";

@@ -160,8 +160,34 @@ import {
 import {
     CACHE_CONFIGS,
     syncOfflineEntries,
-    syncOfflineCache
+    syncOfflineCache,
+    getPendingEntries,
+    getPendingSummary,
+    getFailedEntries,
+    retryFailedEntry,
+    discardFailedEntry,
+    notifyPendingChanged
 } from './services/offline-sync.js';
+
+import {
+    initSyncStatusBanner,
+    renderSyncStatusBanner,
+    isPendingLocally,
+    updateLocalOnlyChip,
+    showSaveResult
+} from './components/sync-status-banner.js';
+
+import {
+    initAssignmentAdvance,
+    getNextAssignment,
+    markAssignmentLocallyDone,
+    isAutoAdvanceEnabled,
+    setAutoAdvanceEnabled,
+    renderNextAssignmentChip,
+    openSelectPicker
+} from './services/assignment-advance.js';
+
+import { faIcon } from './utilities/fa-icons.js';
 
 import {
     saveDraft,
@@ -225,7 +251,8 @@ import {
 } from './utilities/haptics.js';
 
 import {
-    processImageUpload
+    processImageUpload,
+    isWebpSupported
 } from './utilities/media.js';
 
 import {
@@ -293,6 +320,25 @@ window.Obsidianscout = {
     setServerOnline,
     startConnectionMonitoring,
     syncOfflineEntries,
+    getPendingEntries,
+    getPendingSummary,
+    getFailedEntries,
+    retryFailedEntry,
+    discardFailedEntry,
+    notifyPendingChanged,
+    initSyncStatusBanner,
+    renderSyncStatusBanner,
+    isPendingLocally,
+    updateLocalOnlyChip,
+    showSaveResult,
+    initAssignmentAdvance,
+    getNextAssignment,
+    markAssignmentLocallyDone,
+    isAutoAdvanceEnabled,
+    setAutoAdvanceEnabled,
+    renderNextAssignmentChip,
+    openSelectPicker,
+    faIcon,
     showLoadingSpinner,
     showRetryButton,
     openConflictResolutionModal,
@@ -338,6 +384,7 @@ window.Obsidianscout = {
     setButtonLoading,
     withButtonLoading,
     processImageUpload,
+    isWebpSupported,
     openInlineCameraModal,
     showImageModal,
     purgeScoutingCache,
@@ -437,6 +484,7 @@ export {
     setButtonLoading,
     withButtonLoading,
     processImageUpload,
+    isWebpSupported,
     openInlineCameraModal,
     showImageModal,
     purgeScoutingCache,
@@ -635,6 +683,7 @@ async function onDOMContentLoaded() {
     wireSidebarToggle();
     injectMobileTopBar();
     startConnectionMonitoring();
+    initSyncStatusBanner();
 
     window.addEventListener("online", async () => {
         if ('serviceWorker' in navigator) {
