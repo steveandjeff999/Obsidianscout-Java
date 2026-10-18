@@ -121,8 +121,8 @@ class WidgetLogicTest {
         val s = WidgetSnapshotService.schedule(matches, 254)
         assertEquals(420, s.offsetSeconds)
         val keys = s.matches.map { it.key }
-        // Last two played, the next 20, and our match 38 even though it's far ahead.
-        assertEquals(((3..24) + 38).map { "2026test_qm$it" }, keys)
+        // The entire schedule, in play order.
+        assertEquals((1..40).map { "2026test_qm$it" }, keys)
         val ours = s.matches.first { it.key == "2026test_qm38" }
         assertEquals("red", ours.alliance)
         assertEquals(38_420L, ours.predicted)

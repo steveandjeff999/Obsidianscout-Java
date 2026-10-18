@@ -42,7 +42,13 @@ data class WidgetSnapshot(
     /** Widget kind -> whether this user may have it. Widgets not allowed are hidden from the widget picker. */
     val widgets: Map<String, Boolean>,
     val schedule: WidgetSchedule? = null,
+    /** Prediction for our upcoming match (the first of [predictions]; kept for older widgets). */
     val prediction: WidgetPrediction? = null,
+    /**
+     * Predictions for our next few matches. The widget shows the one for the match that's up *now* by the same rule
+     * as the Next Match widget, so it moves on when a match starts without waiting for a new snapshot.
+     */
+    val predictions: List<WidgetPrediction> = emptyList(),
     val assignments: WidgetAssignments? = null,
     val battery: WidgetBattery? = null,
     val checklist: WidgetChecklist? = null,
@@ -77,7 +83,7 @@ data class WidgetMatch(
 data class WidgetSchedule(
     /** Positive = running behind, negative = ahead (seconds), as of the next unplayed match. */
     val offsetSeconds: Long,
-    /** Our remaining matches, the next event matches, and the last couple played, in play order. */
+    /** The event's entire schedule, in play order. */
     val matches: List<WidgetMatch>,
 )
 
@@ -148,9 +154,17 @@ data class WidgetChecklist(
     val eventKey: String = "",
     /** Our upcoming match: the checklist always shows this one, due lists or not. */
     val match: WidgetMatchRef? = null,
-    /** Every list with its items for that match (and today's / this event's lists), to check off from the widget. */
+    /** Every list with its items for that match (and today's / this event's lists). */
     val lists: List<WidgetChecklistList> = emptyList(),
+    /**
+     * The same for our next few matches. The widget shows the match that's up now (same rule as Next Match), so
+     * it moves on as soon as a match is played or starts, not when its checklist is finished.
+     */
+    val upcoming: List<WidgetChecklistForMatch> = emptyList(),
 )
+
+@Serializable
+data class WidgetChecklistForMatch(val match: WidgetMatchRef, val lists: List<WidgetChecklistList>)
 
 @Serializable
 data class WidgetRankRow(
@@ -190,8 +204,8 @@ object WidgetSnapshotService {
     private val json = Json { ignoreUnknownKeys = true }
 
     /** How many upcoming (not ours) event matches the schedule carries; our own are always all included. */
-    private const val EVENT_MATCHES_AHEAD = 20
-    private const val PLAYED_MATCHES_KEPT = 2
+    /** How many of our upcoming matches get a prediction and checklist, so widgets can move on by themselves. */
+    private const val LOOKAHEAD = 3
     private const val MAX_RANKED_TEAMS = 100
     private const val UPCOMING_LIMIT = 10
     /** An assignment whose match started longer ago than this counts as played (same as the app). */
@@ -235,10 +249,12 @@ object WidgetSnapshotService {
         val oursUnplayed = ours.filter { !isPlayed(it) }
 
         val event = eventInfo(eventKey)
+        val predictions = if (can("predictor")) section("prediction") { predictions(session, eventKey, oursUnplayed) }.orEmpty() else emptyList()
         return base.copy(
             event = event,
             schedule = if (can("matches")) section("schedule") { schedule(ordered, session.teamNumber) } else null,
-            prediction = if (can("predictor")) section("prediction") { prediction(session, eventKey, oursUnplayed.firstOrNull()) } else null,
+            predictions = predictions,
+            prediction = predictions.firstOrNull(),
             assignments = if (can("my-assignments")) section("assignments") { assignments(session, eventKey, now) } else null,
             battery = if (can("battery-tracker")) section("battery") { battery(session, eventKey, ours, oursUnplayed) } else null,
             checklist = if (can("match-checklist")) section("checklist") { checklist(session, eventKey, event.timezone, ours, oursUnplayed) } else null,
@@ -294,17 +310,10 @@ object WidgetSnapshotService {
         alliance = allianceOf(m, team),
     )
 
-    fun schedule(ordered: List<MatchRecord>, team: Int): WidgetSchedule {
-        val unplayed = ordered.filter { !isPlayed(it) }
-        val keep = LinkedHashSet<String>()
-        ordered.filter { isPlayed(it) }.takeLast(PLAYED_MATCHES_KEPT).forEach { keep += it.matchKey }
-        unplayed.take(EVENT_MATCHES_AHEAD).forEach { keep += it.matchKey }
-        unplayed.filter { allianceOf(it, team) != null }.forEach { keep += it.matchKey }
-        return WidgetSchedule(
-            offsetSeconds = unplayed.firstOrNull()?.scheduleOffsetSeconds ?: 0L,
-            matches = ordered.filter { it.matchKey in keep }.map { toWidget(it, team) },
-        )
-    }
+    fun schedule(ordered: List<MatchRecord>, team: Int): WidgetSchedule = WidgetSchedule(
+        offsetSeconds = ordered.firstOrNull { !isPlayed(it) }?.scheduleOffsetSeconds ?: 0L,
+        matches = ordered.map { toWidget(it, team) },
+    )
 
     private fun eventInfo(eventKey: String): WidgetEvent = readTransaction {
         val row = ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.limit(1).firstOrNull()
@@ -316,6 +325,16 @@ object WidgetSnapshotService {
     }
 
     // ── Prediction ─────────────────────────────────────────────────────────────────────────────────────────
+
+    private suspend fun predictions(session: UserSession, eventKey: String, upcoming: List<MatchRecord>): List<WidgetPrediction> =
+        upcoming.take(LOOKAHEAD).mapNotNull { m ->
+            try {
+                prediction(session, eventKey, m)
+            } catch (e: Exception) {
+                log.warn("[widgets] prediction for ${m.matchKey} failed: ${e.message}")
+                null
+            }
+        }
 
     private suspend fun prediction(session: UserSession, eventKey: String, next: MatchRecord?): WidgetPrediction? {
         next ?: return null
@@ -502,17 +521,18 @@ object WidgetSnapshotService {
         val completions = keys.associateWith { parseObject(MatchChecklistService.load(owner, eventKey, it)?.dataJson) }
         val refs = oursUnplayed.associate { it.matchKey to refOf(it) }
         val next = oursUnplayed.firstOrNull()
-        val lists = WidgetChecklistService.lists(
-            template,
-            ours.map { it.matchKey },
-            next?.matchKey,
-            WidgetChecklistService.dayKey(timezone),
-        ) { record -> completions[record] ?: parseObject(MatchChecklistService.load(owner, eventKey, record)?.dataJson) }
+        val dayKey = WidgetChecklistService.dayKey(timezone)
+        val loaded = HashMap<String, JsonObject?>()
+        val load = { record: String ->
+            loaded.getOrPut(record) { completions[record] ?: parseObject(MatchChecklistService.load(owner, eventKey, record)?.dataJson) }
+        }
+        fun listsFor(matchKey: String?) = WidgetChecklistService.lists(template, ours.map { it.matchKey }, matchKey, dayKey, load)
         return WidgetChecklist(
             matches = checklistProgress(template, completions, ours.map { it.matchKey }, keys).map { it.copy(match = refs[it.matchKey]) },
             eventKey = eventKey,
             match = next?.let(::refOf),
-            lists = lists,
+            lists = listsFor(next?.matchKey),
+            upcoming = oursUnplayed.take(LOOKAHEAD).map { WidgetChecklistForMatch(refOf(it), listsFor(it.matchKey)) },
         )
     }
 
