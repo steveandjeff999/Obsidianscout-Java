@@ -753,23 +753,29 @@ function renderMatchOptions() {
         : onlyOurs && state.matches.length ? t("checklist.match.no_matches_for_team", "No matches for our team yet") : t("checklist.match.no_matches_found", "No matches found");
     el.match.appendChild(placeholder);
 
-    visible.forEach((m) => {
+    const customEntries = Object.keys(state.eventCompletions)
+        .filter((k) => k.startsWith("custom_") && !visible.some((m) => m.matchKey === k))
+        .map((k) => ({
+            matchKey: k,
+            label: k.slice("custom_".length).replace(/_/g, " ")
+        }));
+
+    const allOptions = [
+        ...visible.map((m) => ({ match: m, isCustom: false })),
+        ...customEntries.map((c) => ({ match: c, isCustom: true }))
+    ].sort((a, b) => compareMatches(a.match, b.match));
+
+    allOptions.forEach(({ match: m, isCustom }) => {
         const opt = document.createElement("option");
         opt.value = m.matchKey;
-        const alliance = allianceOf(m);
-        opt.textContent = alliance ? `${matchLabel(m)} (${allianceName(alliance)})` : matchLabel(m);
+        if (isCustom) {
+            opt.textContent = m.label;
+        } else {
+            const alliance = allianceOf(m);
+            opt.textContent = alliance ? `${matchLabel(m)} (${allianceName(alliance)})` : matchLabel(m);
+        }
         el.match.appendChild(opt);
     });
-
-    // Practice matches and anything not on the schedule.
-    Object.keys(state.eventCompletions)
-        .filter((k) => k.startsWith("custom_") && !visible.some((m) => m.matchKey === k))
-        .forEach((k) => {
-            const opt = document.createElement("option");
-            opt.value = k;
-            opt.textContent = k.slice("custom_".length).replace(/_/g, " ");
-            el.match.appendChild(opt);
-        });
 
     if (state.eventKey) {
         const custom = document.createElement("option");
@@ -805,13 +811,12 @@ async function onMatchSelected(matchKey) {
             return;
         }
         matchKey = `custom_${slug}`;
-        if (![...el.match.options].some((o) => o.value === matchKey)) {
-            const opt = document.createElement("option");
-            opt.value = matchKey;
-            opt.textContent = name;
-            el.match.insertBefore(opt, el.match.lastElementChild);
+        if (!state.eventCompletions[matchKey]) {
+            state.eventCompletions[matchKey] = { checked: {}, notes: "" };
         }
-        el.match.value = matchKey;
+        state.matchKey = matchKey;
+        renderMatchOptions();
+        return;
     }
 
     state.matchKey = matchKey || "";

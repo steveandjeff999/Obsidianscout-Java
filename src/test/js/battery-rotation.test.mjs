@@ -64,3 +64,24 @@ test("autoMarkUsed defaults on", () => {
     assert.equal(battery.autoMarkUsed({}), true);
     assert.equal(battery.autoMarkUsed({ autoMarkUsed: false }), false);
 });
+
+test("ObsidianMatchUtils.compareMatches orders practice > qualification > playoff (qf, sf, f) by set and match number", () => {
+    const matchUtils = require(path.resolve(here, "../../main/resources/static/js/services/match-utils.js"));
+    const matches = [
+        { matchKey: "e_f1m2", compLevel: "f", setNumber: 1, matchNumber: 2 },
+        { matchKey: "e_sf2m1", compLevel: "sf", setNumber: 2, matchNumber: 1 },
+        { matchKey: "e_qm10", compLevel: "qm", matchNumber: 10 },
+        { matchKey: "e_f1m1", compLevel: "f", setNumber: 1, matchNumber: 1 },
+        { matchKey: "e_qf1m2", compLevel: "qf", setNumber: 1, matchNumber: 2 },
+        { matchKey: "e_sf1m1", compLevel: "sf", setNumber: 1, matchNumber: 1 },
+        { matchKey: "custom_Practice_2", label: "Practice 2" },
+        { matchKey: "e_qm2", compLevel: "qm", matchNumber: 2 },
+        { matchKey: "e_qf1m1", compLevel: "qf", setNumber: 1, matchNumber: 1 },
+        { matchKey: "e_pr1", compLevel: "pr", matchNumber: 1 }
+    ];
+    matches.sort(matchUtils.compareMatches);
+    assert.deepEqual(
+        matches.map((m) => m.matchKey),
+        ["e_pr1", "custom_Practice_2", "e_qm2", "e_qm10", "e_qf1m1", "e_qf1m2", "e_sf1m1", "e_sf2m1", "e_f1m1", "e_f1m2"]
+    );
+});
