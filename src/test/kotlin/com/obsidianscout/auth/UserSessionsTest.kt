@@ -56,6 +56,7 @@ class UserSessionsTest {
                 Users,
                 AppSettings,
                 UserSessions,
+                com.obsidianscout.db.WidgetTokens,
                 ScoutingEntries,
                 PitScoutingEntries,
                 QualitativeScoutingEntries,

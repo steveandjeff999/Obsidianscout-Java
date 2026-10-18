@@ -301,6 +301,8 @@ object SettingsService {
             }
         }
         com.obsidianscout.scouting.AllianceService.clearEffectiveSettingsCache()
+        // Page permissions or the chat switch may have changed what widgets the team may have.
+        com.obsidianscout.widgets.WidgetPushService.notifyTeam(teamNumber, program, "access")
         return normalized
     }
 

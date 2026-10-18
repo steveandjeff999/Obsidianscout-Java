@@ -246,6 +246,7 @@ object DatabaseFactory {
                 MatchPlans,
                 MatchChecklists,
                 BatteryTrackers,
+                WidgetTokens,
                 Banners,
                 ChatMessages,
                 UserChatLastRead,

@@ -331,14 +331,14 @@ object ScoutingAssignmentService {
     private fun compLevelRank(compLevel: String?): Int {
         if (compLevel.isNullOrBlank()) return 1
         return when (compLevel.trim().lowercase()) {
-            "pr", "practice", "pm" -> 0
-            "qm", "qual", "quals", "qualification" -> 1
-            "ef", "einstein" -> 2
-            "qf", "quarterfinal", "quarterfinals" -> 3
-            "sf", "semifinal", "semifinals" -> 4
-            "f", "final", "finals" -> 5
+            "pr", "practice", "prac", "prc", "pm", "p" -> 0
+            "qm", "qual", "quals", "qualification", "q" -> 1
+            "qf", "quarterfinal", "quarterfinals" -> 2
+            "sf", "semifinal", "semifinals" -> 3
+            "f", "final", "finals" -> 4
+            "ef", "einstein" -> 5
             "playoff", "playoffs" -> 6
-            else -> 1
+            else -> 7
         }
     }
 
@@ -905,6 +905,10 @@ object ScoutingAssignmentService {
                     it[completedAt] = null
                 }
             }
+            existing[ScoutingAssignments.assignedUserId].value.toString()
+        }.let { assignedTo ->
+            // The assigned scout's My Assignments widget moves on (or back) right away.
+            com.obsidianscout.widgets.WidgetPushService.notifyUsers(listOf(assignedTo), "assignments")
         }
 
         return getAssignmentById(session, id)
@@ -1516,6 +1520,9 @@ object ScoutingAssignmentService {
                         it[updatedAt] = now
                     }
                     consoleLog.info("[ScoutingAssignmentService] Auto-synced and marked completed ${idsToComplete.size} assignment(s) for event $eventClean")
+                    val completedFor = pendingAsgns.filter { it[ScoutingAssignments.id].value in idsToComplete }
+                        .map { it[ScoutingAssignments.assignedUserId].value.toString() }.distinct()
+                    com.obsidianscout.widgets.WidgetPushService.notifyUsers(completedFor, "assignments")
                 }
             }
         } catch (e: Exception) {
@@ -1542,7 +1549,7 @@ object ScoutingAssignmentService {
         val typeClean = assignmentType.trim().uppercase()
         val now = Instant.now()
 
-        transaction {
+        val completedFor = transaction {
             val query = ScoutingAssignments.selectAll().where {
                 (ScoutingAssignments.program eq program) and
                 (ScoutingAssignments.eventKey eq eventKey.trim()) and
@@ -1593,7 +1600,8 @@ object ScoutingAssignmentService {
                 }
             }
 
-            val matchingIds = query.map { it[ScoutingAssignments.id].value }
+            val matching = query.toList()
+            val matchingIds = matching.map { it[ScoutingAssignments.id].value }
             if (matchingIds.isNotEmpty()) {
                 ScoutingAssignments.update({ ScoutingAssignments.id inList matchingIds }) {
                     it[status] = "COMPLETED"
@@ -1602,7 +1610,10 @@ object ScoutingAssignmentService {
                 }
                 consoleLog.info("[ScoutingAssignmentService] Auto-completed ${matchingIds.size} assignment(s) for event $eventKey ($typeClean)")
             }
+            matching.map { it[ScoutingAssignments.assignedUserId].value.toString() }.distinct()
         }
+        // Their My Assignments widgets move on to the next one.
+        com.obsidianscout.widgets.WidgetPushService.notifyUsers(completedFor, "assignments")
     }
 
     private fun mapRowToRecord(row: org.jetbrains.exposed.v1.core.ResultRow): ScoutingAssignmentRecord {
@@ -1666,7 +1677,78 @@ object ScoutingAssignmentService {
         )
     }
 
-    private data class MatchTiming(val scheduledTime: Long?, val predictedTime: Long?, val offsetSeconds: Long)
+    private data class MatchTiming(
+        val scheduledTime: Long?,
+        val predictedTime: Long?,
+        val offsetSeconds: Long,
+        val compLevel: String? = null,
+        val setNumber: Int? = null,
+        val matchNumber: Int? = null
+    )
+
+    private val legacyKeyRegex = Regex("""^.+_([a-z]+)_s(\d+)_m(\d+)$""", RegexOption.IGNORE_CASE)
+    private val tbaSuffixRegex = Regex("""^([a-z]+?)(\d+)(?:m(\d+))?$""", RegexOption.IGNORE_CASE)
+
+    private fun extractOrderTuple(record: ScoutingAssignmentRecord, matchInfo: MatchTiming?): Triple<Int, Int, Int> {
+        if (record.assignmentType.equals("PIT", ignoreCase = true)) {
+            return Triple(10, 0, record.targetTeamNumber ?: Int.MAX_VALUE)
+        }
+
+        val rawKey = record.matchKey?.trim()?.lowercase() ?: ""
+        var keyLevel: String? = null
+        var keySet: Int? = null
+        var keyMatch: Int? = null
+
+        if (rawKey.isNotEmpty()) {
+            val legacy = legacyKeyRegex.matchEntire(rawKey)
+            if (legacy != null) {
+                keyLevel = legacy.groupValues[1].lowercase()
+                keySet = legacy.groupValues[2].toIntOrNull()
+                keyMatch = legacy.groupValues[3].toIntOrNull()
+            } else {
+                val suffix = rawKey.substringAfterLast('_')
+                val tba = tbaSuffixRegex.matchEntire(suffix)
+                if (tba != null) {
+                    keyLevel = tba.groupValues[1].lowercase()
+                    val g2 = tba.groupValues[2].toIntOrNull()
+                    val g3 = tba.groupValues[3].takeIf { it.isNotEmpty() }?.toIntOrNull()
+                    if (g3 != null) {
+                        keySet = g2 ?: 1
+                        keyMatch = g3
+                    } else {
+                        keySet = 1
+                        keyMatch = g2
+                    }
+                }
+            }
+        }
+
+        val explicitLevel = record.compLevel?.takeIf { it.isNotBlank() } ?: matchInfo?.compLevel
+        var resolvedLevel = explicitLevel?.trim()?.lowercase() ?: ""
+        val parsedKeyLevel = keyLevel?.takeIf { it != "m" } ?: ""
+
+        if (parsedKeyLevel.isNotEmpty() &&
+            (resolvedLevel.isEmpty() ||
+                ((resolvedLevel in setOf("qm", "qual", "quals", "qualification", "playoff", "playoffs")) &&
+                    parsedKeyLevel !in setOf("qm", "qual", "quals", "qualification")))
+        ) {
+            resolvedLevel = parsedKeyLevel
+        }
+
+        val setNum = matchInfo?.setNumber?.takeIf { it > 0 } ?: keySet ?: 1
+        if (resolvedLevel == "playoff" || resolvedLevel == "playoffs") {
+            resolvedLevel = when (setNum) {
+                1 -> "qf"
+                2 -> "sf"
+                3 -> "f"
+                else -> "playoff"
+            }
+        }
+
+        val stageRank = compLevelRank(resolvedLevel.ifEmpty { "qm" })
+        val matchNum = record.matchNumber?.takeIf { it > 0 } ?: keyMatch ?: matchInfo?.matchNumber ?: 0
+        return Triple(stageRank, setNum, matchNum)
+    }
 
     private fun mapRowsToRecords(rows: List<org.jetbrains.exposed.v1.core.ResultRow>): List<ScoutingAssignmentRecord> {
         if (rows.isEmpty()) return emptyList()
@@ -1692,7 +1774,14 @@ object ScoutingAssignmentService {
                 val act = row[ApiMatches.actualTime]
                 val offset = if (act != null && sched != null && act > 0 && act != sched) (act - sched) else 0L
                 val pred = if (sched != null && offset != 0L) (sched + offset) else sched
-                mKey to MatchTiming(sched, pred, offset)
+                mKey to MatchTiming(
+                    scheduledTime = sched,
+                    predictedTime = pred,
+                    offsetSeconds = offset,
+                    compLevel = row[ApiMatches.compLevel],
+                    setNumber = row[ApiMatches.setNumber],
+                    matchNumber = row[ApiMatches.matchNumber]
+                )
             }
         } else emptyMap()
 
@@ -1721,6 +1810,8 @@ object ScoutingAssignmentService {
             val pTime = timing?.predictedTime ?: sTime
             val offset = timing?.offsetSeconds ?: 0L
             val targetTeamNickname = if (tNum != null && eKey.isNotBlank()) teamNicknames[Pair(eKey.lowercase(), tNum)] else null
+            val rowCompLevel = runCatching { row[ScoutingAssignments.compLevel] }.getOrNull()?.takeIf { it.isNotBlank() }
+                ?: timing?.compLevel
 
             ScoutingAssignmentRecord(
                 id = runCatching { row[ScoutingAssignments.id].value.toString() }.getOrNull() ?: "",
@@ -1731,8 +1822,8 @@ object ScoutingAssignmentService {
                 assignedUsername = assignedUId?.let { userMap[it] } ?: "Unknown",
                 assignmentType = runCatching { row[ScoutingAssignments.assignmentType] }.getOrNull() ?: "MATCH",
                 matchKey = mKey,
-                matchNumber = runCatching { row[ScoutingAssignments.matchNumber] }.getOrNull(),
-                compLevel = runCatching { row[ScoutingAssignments.compLevel] }.getOrNull(),
+                matchNumber = runCatching { row[ScoutingAssignments.matchNumber] }.getOrNull() ?: timing?.matchNumber,
+                compLevel = rowCompLevel,
                 targetTeamNumber = tNum,
                 targetTeamName = targetTeamNickname,
                 allianceColor = runCatching { row[ScoutingAssignments.allianceColor] }.getOrNull(),
@@ -1750,6 +1841,16 @@ object ScoutingAssignmentService {
                 pushReminderSentAt = runCatching { row.getOrNull(ScoutingAssignments.pushReminderSentAt) }.getOrNull()?.toString(),
                 emailReminderSentAt = runCatching { row.getOrNull(ScoutingAssignments.emailReminderSentAt) }.getOrNull()?.toString()
             )
-        }
+        }.sortedWith(
+            compareBy<ScoutingAssignmentRecord>(
+                { extractOrderTuple(it, it.matchKey?.lowercase()?.let { k -> matchTimingMap[k] }).first },
+                { extractOrderTuple(it, it.matchKey?.lowercase()?.let { k -> matchTimingMap[k] }).second },
+                { extractOrderTuple(it, it.matchKey?.lowercase()?.let { k -> matchTimingMap[k] }).third },
+                { it.assignmentType },
+                { it.targetTeamNumber ?: Int.MAX_VALUE },
+                { it.allianceColor ?: "" },
+                { it.id }
+            )
+        )
     }
 }

@@ -150,6 +150,7 @@ fun Route.chatRoutes() {
                         } catch (e: Exception) {
                             call.application.environment.log.error("Failed to trigger push notifications", e)
                         }
+                        com.obsidianscout.widgets.WidgetPushService.notifyTeam(session.teamNumber, session.program, "chat")
                         call.respond(message)
                     } catch (e: IllegalArgumentException) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, e.message ?: "Access denied")

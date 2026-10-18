@@ -381,21 +381,25 @@ fun Route.scoutingRoutes() {
                     val session = call.requireAdmin()
                     val request = call.receive<com.obsidianscout.scouting.CreateAssignmentRequest>()
                     call.respond(ScoutingAssignmentService.createAssignment(session, request))
+                    com.obsidianscout.widgets.WidgetPushService.notifyTeam(session.teamNumber, session.program, "assignments")
                 }
                 post("/bulk") {
                     val session = call.requireAdmin()
                     val request = call.receive<com.obsidianscout.scouting.BulkCreateAssignmentsRequest>()
                     call.respond(ScoutingAssignmentService.bulkCreateAssignments(session, request))
+                    com.obsidianscout.widgets.WidgetPushService.notifyTeam(session.teamNumber, session.program, "assignments")
                 }
                 post("/auto-generate") {
                     val session = call.requireAdmin()
                     val request = call.receive<com.obsidianscout.scouting.AutoGenerateAssignmentsRequest>()
                     call.respond(ScoutingAssignmentService.autoGenerateAssignments(session, request))
+                    com.obsidianscout.widgets.WidgetPushService.notifyTeam(session.teamNumber, session.program, "assignments")
                 }
                 post("/auto-resolve-conflicts") {
                     val session = call.requireAdmin()
                     val request = call.receive<com.obsidianscout.scouting.AutoResolveConflictsRequest>()
                     call.respond(ScoutingAssignmentService.autoResolveConflicts(session, request.eventKey))
+                    com.obsidianscout.widgets.WidgetPushService.notifyTeam(session.teamNumber, session.program, "assignments")
                 }
                 get("/{id}") {
                     val session = call.requireSession()
@@ -409,6 +413,7 @@ fun Route.scoutingRoutes() {
                     val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
                     val request = call.receive<com.obsidianscout.scouting.UpdateAssignmentRequest>()
                     call.respond(ScoutingAssignmentService.updateAssignment(session, id, request))
+                    com.obsidianscout.widgets.WidgetPushService.notifyTeam(session.teamNumber, session.program, "assignments")
                 }
                 post("/{id}/status") {
                     val session = call.requireSession()
@@ -430,12 +435,14 @@ fun Route.scoutingRoutes() {
                     val idsParam = call.request.queryParameters["ids"]?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }
                     val deletedCount = ScoutingAssignmentService.deleteAllAssignments(session, eventKey, type, idsParam)
                     call.respond(com.obsidianscout.scouting.DeleteAssignmentsResponse(success = true, deletedCount = deletedCount, message = "Deleted $deletedCount assignments"))
+                    com.obsidianscout.widgets.WidgetPushService.notifyTeam(session.teamNumber, session.program, "assignments")
                 }
                 delete("/{id}") {
                     val session = call.requireAdmin()
                     val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
                     val deleted = ScoutingAssignmentService.deleteAssignment(session, id)
                     if (deleted) {
+                        com.obsidianscout.widgets.WidgetPushService.notifyTeam(session.teamNumber, session.program, "assignments")
                         call.respond(mapOf("success" to true))
                     } else {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Assignment not found")

@@ -33,6 +33,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     const countAll = document.getElementById("count-all");
     const assignmentsGrid = document.getElementById("assignments-grid");
 
+    const COMP_LEVEL_RANK = {
+        practice: 0, prac: 0, pr: 0, prc: 0, pm: 0, p: 0,
+        qm: 1, q: 1, qual: 1, quals: 1, qualification: 1,
+        qf: 2, quarterfinal: 2, quarterfinals: 2,
+        sf: 3, semifinal: 3, semifinals: 3,
+        f: 4, final: 4, finals: 4,
+        ef: 5, einstein: 5,
+        playoff: 6, playoffs: 6
+    };
+
     await init();
 
     async function init() {
@@ -116,20 +126,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             teams = Array.from(teamMap.values());
 
-            // Sort: Pending/In Progress first (sorted by scheduled time or match number), then completed
-            assignments.sort((a, b) => {
-                if (a.status === "COMPLETED" && b.status !== "COMPLETED") return 1;
-                if (a.status !== "COMPLETED" && b.status === "COMPLETED") return -1;
-                
-                const timeA = parseTimestampMs(a.predictedTime || a.scheduledTime);
-                const timeB = parseTimestampMs(b.predictedTime || b.scheduledTime);
-                if (timeA && timeB) {
-                    return timeA - timeB;
-                }
-                if (timeA && !timeB) return -1;
-                if (!timeA && timeB) return 1;
-                return (Number(a.matchNumber) || 0) - (Number(b.matchNumber) || 0);
-            });
+            // Sort in event stage order: Practice > Qualification > Playoff (QF > SF > F), then Pit by team number
+            assignments.sort((a, b) => compareAssignments(a, b, matchMap));
 
             updateTabCounts();
             renderHeroBanner();
@@ -138,6 +136,114 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.error("Failed to load assignments data:", err);
             Obsidianscout.showToast(Obsidianscout.t ? Obsidianscout.t("my_assignments.error_load", "Failed to fetch assignment list") : "Failed to fetch assignment list", "error");
         }
+    }
+
+    function normalizeStageLevel(raw) {
+        if (!raw) return "";
+        const s = String(raw).trim().toLowerCase().replace(/[\s_]+/g, "");
+        if (!s) return "";
+        if (Object.prototype.hasOwnProperty.call(COMP_LEVEL_RANK, s)) {
+            const r = COMP_LEVEL_RANK[s];
+            if (r === 0) return "pr";
+            if (r === 1) return "qm";
+            if (r === 2) return "qf";
+            if (r === 3) return "sf";
+            if (r === 4) return "f";
+            if (r === 5) return "ef";
+            if (r === 6) return "playoff";
+        }
+        return s;
+    }
+
+    function getAssignmentOrderTuple(a, matchMap) {
+        if (String(a.assignmentType || "").toUpperCase() === "PIT") {
+            return [10, 0, Number(a.targetTeamNumber) || 999999];
+        }
+
+        const kLower = String(a.matchKey || "").trim().toLowerCase();
+        const matchObj = (matchMap && kLower) ? matchMap.get(kLower) : null;
+        const rawKey = kLower || (matchObj && matchObj.matchKey ? String(matchObj.matchKey).trim().toLowerCase() : "");
+
+        let keyLevel = "";
+        let keySet = null;
+        let keyMatch = null;
+
+        if (rawKey) {
+            const legacy = /^.+_([a-z]+)_s(\d+)_m(\d+)$/i.exec(rawKey);
+            if (legacy) {
+                keyLevel = legacy[1].toLowerCase();
+                keySet = Number(legacy[2]) || 1;
+                keyMatch = Number(legacy[3]) || 0;
+            } else {
+                const suffix = rawKey.includes("_") ? rawKey.split("_").pop() : rawKey;
+                const tba = /^([a-z]+?)(\d+)(?:m(\d+))?$/i.exec(suffix || "");
+                if (tba) {
+                    keyLevel = tba[1].toLowerCase();
+                    if (tba[3] !== undefined) {
+                        keySet = Number(tba[2]) || 1;
+                        keyMatch = Number(tba[3]) || 0;
+                    } else {
+                        keySet = 1;
+                        keyMatch = Number(tba[2]) || 0;
+                    }
+                }
+            }
+        }
+
+        const explicitRaw = (a.compLevel && String(a.compLevel).trim())
+            ? a.compLevel
+            : (matchObj ? matchObj.compLevel : "");
+        let resolvedLevel = normalizeStageLevel(explicitRaw);
+        const parsedKeyLevel = (keyLevel && keyLevel !== "m") ? normalizeStageLevel(keyLevel) : "";
+
+        if (parsedKeyLevel && (!resolvedLevel || ((resolvedLevel === "qm" || resolvedLevel === "playoff") && parsedKeyLevel !== "qm"))) {
+            resolvedLevel = parsedKeyLevel;
+        }
+
+        const setNum = (a.setNumber != null && Number(a.setNumber) > 0)
+            ? Number(a.setNumber)
+            : ((matchObj && matchObj.setNumber != null && Number(matchObj.setNumber) > 0)
+                ? Number(matchObj.setNumber)
+                : (keySet || 1));
+
+        if (resolvedLevel === "playoff") {
+            if (setNum === 1) resolvedLevel = "qf";
+            else if (setNum === 2) resolvedLevel = "sf";
+            else if (setNum === 3) resolvedLevel = "f";
+        }
+
+        const stageRank = Object.prototype.hasOwnProperty.call(COMP_LEVEL_RANK, resolvedLevel || "qm")
+            ? COMP_LEVEL_RANK[resolvedLevel || "qm"]
+            : 7;
+
+        const matchNum = (a.matchNumber != null && Number(a.matchNumber) > 0)
+            ? Number(a.matchNumber)
+            : (keyMatch || (matchObj && Number(matchObj.matchNumber)) || 0);
+
+        return [stageRank, setNum, matchNum];
+    }
+
+    function compareAssignments(a, b, matchMap) {
+        const ka = getAssignmentOrderTuple(a, matchMap);
+        const kb = getAssignmentOrderTuple(b, matchMap);
+
+        for (let i = 0; i < 3; i++) {
+            if (ka[i] !== kb[i]) return ka[i] - kb[i];
+        }
+
+        const typeA = String(a.assignmentType || "");
+        const typeB = String(b.assignmentType || "");
+        if (typeA !== typeB) return typeA.localeCompare(typeB);
+
+        const teamA = Number(a.targetTeamNumber) || 999999;
+        const teamB = Number(b.targetTeamNumber) || 999999;
+        if (teamA !== teamB) return teamA - teamB;
+
+        const allianceA = String(a.allianceColor || a.targetAlliance || "").toUpperCase();
+        const allianceB = String(b.allianceColor || b.targetAlliance || "").toUpperCase();
+        if (allianceA !== allianceB) return allianceA.localeCompare(allianceB);
+
+        return String(a.id || "").localeCompare(String(b.id || ""));
     }
 
     function parseTimestampMs(timeVal) {
@@ -204,17 +310,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    function getMatchDisplayLabel(mKey, mNum) {
-        const matchObj = matches.find(m => m.matchKey === mKey);
+    function getMatchDisplayLabel(mKey, mNum, compLvl) {
+        const kLower = (mKey || "").trim().toLowerCase();
+        const matchObj = matches.find(m => (m.matchKey || "").trim().toLowerCase() === kLower);
         if (matchObj && matchObj.label && !matchObj.label.startsWith("undefined") && !matchObj.label.startsWith("null")) {
             return matchObj.label;
         }
-        const key = (mKey || "").toLowerCase();
-        const comp = (matchObj && matchObj.compLevel ? matchObj.compLevel : "").toLowerCase();
+        const key = kLower;
+        const comp = (compLvl || (matchObj && matchObj.compLevel ? matchObj.compLevel : "")).toLowerCase();
         const num = mNum || (matchObj ? matchObj.matchNumber : null);
         const set = matchObj ? matchObj.setNumber : null;
 
-        if (comp === "qm" || comp === "qual" || key.includes("_qm")) {
+        if (comp === "pr" || comp === "practice" || comp === "pm" || key.includes("_pr") || key.includes("_pm")) {
+            return `Practice Match ${num || 1}`;
+        } else if (comp === "qm" || comp === "qual" || key.includes("_qm")) {
             const qmNum = num || key.replace(/.*_qm/i, "");
             return `Qualification ${qmNum}`;
         } else if (comp === "sf" || key.includes("_sf")) {
@@ -223,8 +332,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             return `Quarterfinal ${set ? `${set} - ` : ""}Match ${num || 1}`;
         } else if (comp === "f" || key.includes("_f")) {
             return `Finals ${set ? `${set} - ` : ""}Match ${num || 1}`;
-        } else if (comp === "pr" || comp === "practice" || key.includes("_pr")) {
-            return `Practice Match ${num || 1}`;
         } else if (num) {
             return `Match ${num}`;
         }
@@ -264,7 +371,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             heroBanner.classList.remove("hidden");
             heroTypeBadge.textContent = next.assignmentType === "MATCH" ? "Match Scouting" : "Qualitative Scouting";
             
-            const mLabel = getMatchDisplayLabel(next.matchKey, next.matchNumber);
+            const mLabel = getMatchDisplayLabel(next.matchKey, next.matchNumber, next.compLevel);
             const tNum = next.targetTeamNumber ? ` &bull; Team ${next.targetTeamNumber}` : "";
             heroTarget.innerHTML = `<strong>${mLabel}</strong>${tNum}`;
             
@@ -393,7 +500,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (isMatch) {
                 cardTypeClass = "type-match";
                 typeBadge = `<span class="asgn-type-badge match"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>Match</span>`;
-                const mLabel = getMatchDisplayLabel(a.matchKey, a.matchNumber);
+                const mLabel = getMatchDisplayLabel(a.matchKey, a.matchNumber, a.compLevel);
                 title = `${mLabel} &bull; Team ${a.targetTeamNumber}`;
                 const teamObj = teams.find(t => t.teamNumber === a.targetTeamNumber);
                 subtitle = teamObj && teamObj.nickname ? teamObj.nickname : "Match Scouting";
@@ -416,7 +523,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else if (isQual) {
                 cardTypeClass = "type-qual";
                 typeBadge = `<span class="asgn-type-badge qual"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>Qualitative</span>`;
-                const mLabel = getMatchDisplayLabel(a.matchKey, a.matchNumber);
+                const mLabel = getMatchDisplayLabel(a.matchKey, a.matchNumber, a.compLevel);
                 const targetText = a.targetAlliance ? `${a.targetAlliance.toUpperCase()} Alliance` : (a.targetTeamNumber ? `Team ${a.targetTeamNumber}` : "All");
                 title = `Qual &bull; ${mLabel}`;
                 subtitle = `Target: ${targetText}`;

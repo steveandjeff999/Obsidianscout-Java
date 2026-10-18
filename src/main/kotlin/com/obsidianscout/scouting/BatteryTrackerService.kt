@@ -80,6 +80,7 @@ object BatteryTrackerService {
                 it[updatedAt] = now
             }
         }
+        com.obsidianscout.widgets.WidgetPushService.notifyOwner(owner, "battery")
         return BatteryTrackerDoc(json, editor, now.toEpochMilli())
     }
 

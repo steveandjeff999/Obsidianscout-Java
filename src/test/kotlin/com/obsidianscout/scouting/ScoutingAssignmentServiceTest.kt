@@ -220,4 +220,61 @@ class ScoutingAssignmentServiceTest {
         val remaining = ScoutingAssignmentService.listAssignments(adminSession, eventKey = "2026caln")
         assertEquals(0, remaining.size)
     }
+
+    @Test
+    fun testAssignmentStageOrdering() {
+        val (adminSession, scoutSession) = transaction {
+            val adminId = Users.insertAndGetId {
+                it[username] = "lead_admin"
+                it[passwordHash] = "hash"
+                it[teamNumber] = 254
+                it[program] = "FRC"
+                it[role] = UserRole.ADMIN.name
+                it[createdAt] = Instant.now()
+            }
+            val scoutId = Users.insertAndGetId {
+                it[username] = "scout_alex"
+                it[passwordHash] = "hash"
+                it[teamNumber] = 254
+                it[program] = "FRC"
+                it[role] = UserRole.SCOUT.name
+                it[createdAt] = Instant.now()
+            }
+            Pair(
+                UserSession(adminId.value.toString(), "lead_admin", 254, "FRC", UserRole.ADMIN, "lead_admin"),
+                UserSession(scoutId.value.toString(), "scout_alex", 254, "FRC", UserRole.SCOUT, "Alex")
+            )
+        }
+
+        ScoutingAssignmentService.bulkCreateAssignments(
+            adminSession,
+            BulkCreateAssignmentsRequest(
+                eventKey = "2026caln",
+                assignments = listOf(
+                    BulkAssignmentItem(assignedUserId = scoutSession.userId, assignmentType = "MATCH", matchKey = "2026caln_f1m1", matchNumber = 1, compLevel = "f", targetTeamNumber = 254),
+                    BulkAssignmentItem(assignedUserId = scoutSession.userId, assignmentType = "MATCH", matchKey = "2026caln_sf2m1", matchNumber = 1, compLevel = "sf", targetTeamNumber = 254),
+                    BulkAssignmentItem(assignedUserId = scoutSession.userId, assignmentType = "MATCH", matchKey = "2026caln_sf1m1", matchNumber = 1, compLevel = "sf", targetTeamNumber = 254),
+                    BulkAssignmentItem(assignedUserId = scoutSession.userId, assignmentType = "MATCH", matchKey = "2026caln_qf1m1", matchNumber = 1, compLevel = "qf", targetTeamNumber = 254),
+                    BulkAssignmentItem(assignedUserId = scoutSession.userId, assignmentType = "MATCH", matchKey = "2026caln_qm10", matchNumber = 10, compLevel = "qm", targetTeamNumber = 254),
+                    BulkAssignmentItem(assignedUserId = scoutSession.userId, assignmentType = "MATCH", matchKey = "2026caln_qm1", matchNumber = 1, compLevel = "qm", targetTeamNumber = 254),
+                    BulkAssignmentItem(assignedUserId = scoutSession.userId, assignmentType = "MATCH", matchKey = "2026caln_pr2", matchNumber = 2, compLevel = "pr", targetTeamNumber = 254),
+                    BulkAssignmentItem(assignedUserId = scoutSession.userId, assignmentType = "MATCH", matchKey = "2026caln_pr1", matchNumber = 1, compLevel = "practice", targetTeamNumber = 254)
+                )
+            )
+        )
+        val ordered = ScoutingAssignmentService.getMyAssignments(scoutSession, "2026caln")
+        assertEquals(
+            listOf(
+                "2026caln_pr1",
+                "2026caln_pr2",
+                "2026caln_qm1",
+                "2026caln_qm10",
+                "2026caln_qf1m1",
+                "2026caln_sf1m1",
+                "2026caln_sf2m1",
+                "2026caln_f1m1"
+            ),
+            ordered.map { it.matchKey }
+        )
+    }
 }

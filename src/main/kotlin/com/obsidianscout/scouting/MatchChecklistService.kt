@@ -93,6 +93,7 @@ object MatchChecklistService {
                 it[updatedAt] = now
             }
         }
+        com.obsidianscout.widgets.WidgetPushService.notifyOwner(owner, "checklist")
         return MatchChecklistDoc(json, editor, now.toEpochMilli())
     }
 

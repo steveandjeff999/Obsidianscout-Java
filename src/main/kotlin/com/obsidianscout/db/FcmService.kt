@@ -295,6 +295,49 @@ object FcmService {
 }"""
     }
 
+    /**
+     * Silent "your home-screen widgets are out of date" message to the users' Android phones. Data only (no
+     * `notification` block, so nothing is shown), high priority so it wakes the app's background handler.
+     * Other platforms have no home-screen widgets and are skipped.
+     */
+    fun sendWidgetRefresh(targetUserUuids: Collection<UUID>, sections: Collection<String>) {
+        checkClusterSync()
+        if (!isInitialized || targetUserUuids.isEmpty()) return
+
+        val deviceTokens = readTransaction {
+            FcmDeviceTokens.selectAll()
+                .where { FcmDeviceTokens.userId inList targetUserUuids.toList() }
+                .filter { it[FcmDeviceTokens.platform].equals("android", ignoreCase = true) }
+                .map { it[FcmDeviceTokens.deviceToken] }
+        }.distinct()
+        if (deviceTokens.isEmpty()) return
+
+        val sectionList = sections.sorted().joinToString(",").replace("\"", "")
+        val tokensToDelete = mutableListOf<String>()
+        for (token in deviceTokens) {
+            val escapedToken = token.replace("\"", "\\\"")
+            val json = """{
+  "message": {
+    "token": "$escapedToken",
+    "data": { "type": "widget_refresh", "sections": "$sectionList" },
+    "android": { "priority": "high", "collapse_key": "widget_refresh", "ttl": "600s" }
+  }
+}"""
+            try {
+                val (code, responseBody) = sendFcmHttpV1(token, json)
+                if (code !in 200..299) {
+                    if (responseBody.contains("UNREGISTERED")) tokensToDelete.add(token)
+                    consoleLog.warn("[FCM] Widget refresh send failed ($code): $responseBody")
+                }
+            } catch (e: Throwable) {
+                consoleLog.warn("[FCM] Widget refresh send error: ${e.message}")
+            }
+        }
+        if (tokensToDelete.isNotEmpty()) {
+            runCatching { transaction { FcmDeviceTokens.deleteWhere { FcmDeviceTokens.deviceToken inList tokensToDelete } } }
+        }
+    }
+
     fun sendNotificationToUsers(
         targetUserUuids: List<UUID>,
         title: String,

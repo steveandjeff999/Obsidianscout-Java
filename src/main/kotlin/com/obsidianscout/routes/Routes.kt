@@ -34,6 +34,7 @@ fun Application.configureRoutes() {
             allianceRoutes()
             bannerRoutes()
             contactRoutes()
+            widgetRoutes()
         }
 
         localAiModelFileRoutes()

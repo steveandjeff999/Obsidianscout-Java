@@ -487,6 +487,31 @@ object UserSessions : UUIDTable("user_sessions") {
     }
 }
 
+/**
+ * Read-only tokens home-screen widgets use to fetch their snapshot while the app is closed.
+ * Each token belongs to one device login ([sessionId]); signing out or revoking that session kills it.
+ * Only a SHA-256 hash of the token is stored.
+ */
+object WidgetTokens : UUIDTable("widget_tokens") {
+    val userId = reference("user_id", Users)
+    val sessionId = javaUUID("session_id")
+    val tokenHash = varchar("token_hash", 64)
+    val platform = varchar("platform", 16).default("")
+    /** Comma-separated widget kinds the device currently has on its home screen; pushes go only where they matter. */
+    val placedWidgets = varchar("placed_widgets", 512).default("")
+    /** Event the last snapshot was built for; used to find who to tell when that event's schedule changes. */
+    val eventKey = varchar("event_key", 64).default("")
+    val createdAt = timestamp("created_at")
+    val lastUsedAt = timestamp("last_used_at").nullable()
+    val expiresAt = timestamp("expires_at")
+
+    init {
+        uniqueIndex("ux_widget_tokens_hash", tokenHash)
+        index("idx_widget_tokens_user", false, userId)
+        index("idx_widget_tokens_session", false, sessionId)
+    }
+}
+
 object ReportedErrors : UUIDTable("reported_errors") {
     /** SERVER | CLIENT_JS */
     val errorType = varchar("error_type", 32)

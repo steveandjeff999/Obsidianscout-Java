@@ -548,6 +548,10 @@ object AuthService {
             }
 
             val updated = Users.selectAll().where { Users.id eq targetUuid }.first()
+            if (newRole != null || newNonScoutingToolsEnabled != null || newTeamNumber != null) {
+                // Role or Non-Scouting Tools changed: the user's widgets may need to appear or go away.
+                com.obsidianscout.widgets.WidgetPushService.notifyUsers(listOf(targetUuid.toString()), "access")
+            }
             rowToUser(updated)
         }
     }
@@ -640,6 +644,7 @@ object AuthService {
 
             // Delete password reset tokens, sessions, push tokens, and passkeys for the target user
             PasswordResetTokens.deleteWhere { userId eq targetUuid }
+            com.obsidianscout.db.WidgetTokens.deleteWhere { com.obsidianscout.db.WidgetTokens.userId eq targetUuid }
             UserSessions.deleteWhere { userId eq targetUuid }
             PushSubscriptions.deleteWhere { userId eq targetUuid }
             FcmDeviceTokens.deleteWhere { userId eq targetUuid }
@@ -781,6 +786,8 @@ object AuthService {
 
     fun revokeSession(userId: UUID, sessionId: UUID): Boolean {
         return transaction {
+            // The device's home-screen widget token dies with its login.
+            com.obsidianscout.db.WidgetTokens.deleteWhere { com.obsidianscout.db.WidgetTokens.sessionId eq sessionId }
             UserSessions.deleteWhere {
                 (UserSessions.id eq sessionId) and (UserSessions.userId eq userId)
             } > 0
