@@ -1044,10 +1044,11 @@
     function updateDriverStations(match) {
         const formatTeamNum = (rawKey) => {
             if (!rawKey) return null;
-            const clean = String(rawKey).replace(/^(frc|ftc)/i, "").trim();
+            const clean = extractNumericTeamStr(rawKey);
+            const display = (window.Obsidianscout && typeof Obsidianscout.formatTeam === "function") ? Obsidianscout.formatTeam(rawKey) : clean;
             const teamObj = allTeams.find(t => String(t.teamNumber) === clean);
             return {
-                number: clean,
+                number: display,
                 nickname: teamObj ? (teamObj.nickname || teamObj.name || "") : ""
             };
         };
@@ -1187,7 +1188,7 @@
 
         stations.forEach(st => {
             if (!st.teamKey) return;
-            const teamNum = String(st.teamKey).replace(/^(frc|ftc)/i, "").trim();
+            const teamNum = (window.Obsidianscout && typeof Obsidianscout.formatTeam === "function") ? Obsidianscout.formatTeam(st.teamKey) : extractNumericTeamStr(st.teamKey);
             const pos = teamMarkerPositions[st.id] || { xRatio: 0.5, yRatio: 0.5 };
 
             const el = document.createElement("div");
@@ -1312,7 +1313,7 @@
 
         stations.forEach(st => {
             if (!st.teamKey) return;
-            const teamNum = String(st.teamKey).replace(/^(frc|ftc)/i, "").trim();
+            const teamNum = (window.Obsidianscout && typeof Obsidianscout.formatTeam === "function") ? Obsidianscout.formatTeam(st.teamKey) : extractNumericTeamStr(st.teamKey);
             const pos = teamMarkerPositions[st.id] || { xRatio: 0.5, yRatio: 0.5 };
             const cx = pos.xRatio * W;
             const cy = pos.yRatio * H;
@@ -1995,15 +1996,24 @@
             const blue = match.blueTeams || [];
             const red = match.redTeams || [];
 
+            const cleanTeamNum = (rawKey) => {
+                if (!rawKey) return 0;
+                const str = String(rawKey).trim();
+                if (str.includes("/")) {
+                    return parseInt(str.split("/")[1], 10) || 0;
+                }
+                return parseInt(str.replace(/^(frc|ftc)/i, ""), 10) || 0;
+            };
+
             blue.forEach((teamKey, idx) => {
-                const teamNum = parseInt(String(teamKey).replace(/^(frc|ftc)/i, "")) || 0;
-                const card = createTeamProfileCard(teamNum, "blue", idx + 1);
+                const teamNum = cleanTeamNum(teamKey);
+                const card = createTeamProfileCard(teamNum, "blue", idx + 1, teamKey);
                 blueContainer.appendChild(card);
             });
 
             red.forEach((teamKey, idx) => {
-                const teamNum = parseInt(String(teamKey).replace(/^(frc|ftc)/i, "")) || 0;
-                const card = createTeamProfileCard(teamNum, "red", idx + 1);
+                const teamNum = cleanTeamNum(teamKey);
+                const card = createTeamProfileCard(teamNum, "red", idx + 1, teamKey);
                 redContainer.appendChild(card);
             });
 
@@ -2037,12 +2047,25 @@
         };
     }
 
-    function createTeamProfileCard(teamNumber, alliance, stationNum) {
+    function extractNumericTeamStr(rawKey) {
+        if (!rawKey) return "";
+        const str = String(rawKey).trim();
+        if (str.includes("/")) {
+            return str.split("/")[1].trim();
+        }
+        return str.replace(/^(frc|ftc)/i, "").trim();
+    }
+
+    function createTeamProfileCard(teamNumber, alliance, stationNum, rawTeamKey = null) {
         const team = allTeams.find(t => t.teamNumber === teamNumber) || { teamNumber };
         const scoped = getScoutingEntriesForTeam(teamNumber);
+        const displayTeamLabel = (rawTeamKey && window.Obsidianscout && typeof Obsidianscout.formatTeam === "function")
+            ? Obsidianscout.formatTeam(rawTeamKey, teamNumber)
+            : String(teamNumber);
 
         const card = document.createElement("div");
         card.className = `team-profile-card ${alliance}-card`;
+        card.dataset.teamNumber = String(teamNumber);
 
         // Calculate dynamic average points
         let calculatedAvg = "-";
@@ -2066,21 +2089,31 @@
 
         const teamMatches = state.matches.filter(m => {
             const allTeamsInMatch = (m.redTeams || []).concat(m.blueTeams || []);
-            return allTeamsInMatch.some(k => k.replace(/^(frc|ftc)/i, "") === String(teamNumber));
+            return allTeamsInMatch.some(k => extractNumericTeamStr(k) === String(teamNumber));
         });
 
         const stationLabel = `${alliance.toUpperCase()[0]}${stationNum}`;
-        const uniqueTabId = `team-${teamNumber}`;
+        const uniqueTabId = `team-${alliance}-${stationNum}-${teamNumber}`;
 
         if (!teamGraphDatasource[teamNumber]) {
-            teamGraphDatasource[teamNumber] = "scouted";
+            if (scoped.match.length === 0) {
+                if (effectiveUseEpa && state.statsHistory?.epaHistory?.some(item => Number(item.team || item.team_number || String(item.teamKey || "").replace(/\D/g, "")) === Number(teamNumber))) {
+                    teamGraphDatasource[teamNumber] = "statbotics";
+                } else if (effectiveUseExp && state.statsHistory?.match13History?.some(m => extractTeamExpData(m, teamNumber) !== null)) {
+                    teamGraphDatasource[teamNumber] = "match13";
+                } else {
+                    teamGraphDatasource[teamNumber] = "scouted";
+                }
+            } else {
+                teamGraphDatasource[teamNumber] = "scouted";
+            }
         }
         const currentDatasource = teamGraphDatasource[teamNumber];
 
         card.innerHTML = `
             <div class="card-team-header">
                 <div class="card-team-number">
-                    <span>#${teamNumber}</span>
+                    <span>#${displayTeamLabel}</span>
                     <span class="card-team-nickname" title="${team.nickname || team.name || ""}">${team.nickname || team.name || ""}</span>
                 </div>
                 <span class="card-station-pill ${alliance}">${stationLabel}</span>
@@ -2134,6 +2167,7 @@
                             <th>Match</th>
                             <th>Red</th>
                             <th>Blue</th>
+                            <th style="text-align: right;">Score</th>
                         </tr>
                     </thead>
                     <tbody id="history-tbody-${uniqueTabId}"></tbody>
@@ -2157,6 +2191,8 @@
             </div>
         `;
 
+        const graphContainerEl = card.querySelector(`#graph-container-${uniqueTabId}`);
+
         // Wire Tab Switching
         card.querySelectorAll(".card-tab-btn").forEach(btn => {
             btn.addEventListener("click", () => {
@@ -2169,10 +2205,10 @@
                         c.classList.add("active");
                     }
                 });
-                if (targetTab.startsWith("graph-")) {
-                    if (window.Plotly) {
-                        Plotly.Plots.resize(`graph-container-${uniqueTabId}`);
-                    }
+                if (targetTab.startsWith("graph-") && graphContainerEl) {
+                    requestAnimationFrame(() => {
+                        renderPerformanceGraphInline(graphContainerEl, teamNumber, scoped.match, teamGraphDatasource[teamNumber] || "scouted", team);
+                    });
                 }
             });
         });
@@ -2185,9 +2221,16 @@
                     e.stopPropagation();
                     const source = dsBtn.getAttribute("data-source");
                     teamGraphDatasource[teamNumber] = source;
-                    pillsContainer.querySelectorAll(".graph-datasource-btn").forEach(b => b.classList.remove("active"));
-                    dsBtn.classList.add("active");
-                    renderPerformanceGraphInline(`graph-container-${uniqueTabId}`, teamNumber, scoped.match, source, team);
+                    // Sync all cards for this teamNumber (in case duplicate team in match)
+                    document.querySelectorAll(`.team-profile-card[data-team-number="${teamNumber}"]`).forEach(teamCard => {
+                        teamCard.querySelectorAll(".graph-datasource-btn").forEach(b => {
+                            b.classList.toggle("active", b.getAttribute("data-source") === source);
+                        });
+                        const tcGraphEl = teamCard.querySelector(".team-graph-container");
+                        if (tcGraphEl) {
+                            renderPerformanceGraphInline(tcGraphEl, teamNumber, scoped.match, source, team);
+                        }
+                    });
                 });
             });
         }
@@ -2212,7 +2255,7 @@
 
         // Fill in Plotly Graph
         setTimeout(() => {
-            renderPerformanceGraphInline(`graph-container-${uniqueTabId}`, teamNumber, scoped.match, teamGraphDatasource[teamNumber] || "scouted", team);
+            renderPerformanceGraphInline(graphContainerEl, teamNumber, scoped.match, teamGraphDatasource[teamNumber] || "scouted", team);
         }, 50);
 
         return card;
@@ -2308,7 +2351,7 @@
     function renderMatchHistoryInline(tbody, teamNumber, teamMatches) {
         tbody.innerHTML = "";
         if (teamMatches.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--muted); padding: 8px;">No matches.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--muted); padding: 8px;">No matches.</td></tr>';
             return;
         }
 
@@ -2318,30 +2361,65 @@
             const tr = document.createElement("tr");
 
             const labelCell = document.createElement("td");
+            labelCell.style.whiteSpace = "nowrap";
+            labelCell.style.fontWeight = "700";
             labelCell.textContent = m.label || `Q${m.matchNumber || ""}`;
             tr.appendChild(labelCell);
 
             const redCell = document.createElement("td");
             (m.redTeams || []).forEach(key => {
-                const num = key.replace(/^(frc|ftc)/i, "");
+                const num = extractNumericTeamStr(key);
+                const display = (window.Obsidianscout && typeof Obsidianscout.formatTeam === "function") ? Obsidianscout.formatTeam(key) : num;
                 const isSelf = num === String(teamNumber);
                 const badge = document.createElement("span");
                 badge.className = `alliance-member-badge red-team ${isSelf ? 'highlight-self' : ''}`;
-                badge.textContent = num;
+                badge.textContent = display;
                 redCell.appendChild(badge);
             });
             tr.appendChild(redCell);
 
             const blueCell = document.createElement("td");
             (m.blueTeams || []).forEach(key => {
-                const num = key.replace(/^(frc|ftc)/i, "");
+                const num = extractNumericTeamStr(key);
+                const display = (window.Obsidianscout && typeof Obsidianscout.formatTeam === "function") ? Obsidianscout.formatTeam(key) : num;
                 const isSelf = num === String(teamNumber);
                 const badge = document.createElement("span");
                 badge.className = `alliance-member-badge blue-team ${isSelf ? 'highlight-self' : ''}`;
-                badge.textContent = num;
+                badge.textContent = display;
                 blueCell.appendChild(badge);
             });
             tr.appendChild(blueCell);
+
+            const scoreCell = document.createElement("td");
+            scoreCell.style.textAlign = "right";
+            scoreCell.style.whiteSpace = "nowrap";
+            scoreCell.style.fontWeight = "700";
+
+            const hasCompletedScore = m.redScore !== null && m.redScore !== undefined && m.redScore >= 0 &&
+                                      m.blueScore !== null && m.blueScore !== undefined && m.blueScore >= 0;
+
+            if (hasCompletedScore) {
+                const rScore = Number(m.redScore);
+                const bScore = Number(m.blueScore);
+                const redWon = rScore > bScore;
+                const blueWon = bScore > rScore;
+
+                const isTeamRed = (m.redTeams || []).some(k => extractNumericTeamStr(k) === String(teamNumber));
+                const isTeamBlue = (m.blueTeams || []).some(k => extractNumericTeamStr(k) === String(teamNumber));
+                let outcomeBadge = "";
+                if ((isTeamRed && redWon) || (isTeamBlue && blueWon)) {
+                    outcomeBadge = `<span style="display:inline-block; font-size:0.65rem; font-weight:900; padding:1px 4px; border-radius:3px; margin-right:4px; background:rgba(16,185,129,0.2); color:#10b981;">W</span>`;
+                } else if ((isTeamRed && blueWon) || (isTeamBlue && redWon)) {
+                    outcomeBadge = `<span style="display:inline-block; font-size:0.65rem; font-weight:900; padding:1px 4px; border-radius:3px; margin-right:4px; background:rgba(239,68,68,0.2); color:#f87171;">L</span>`;
+                } else if (rScore === bScore) {
+                    outcomeBadge = `<span style="display:inline-block; font-size:0.65rem; font-weight:900; padding:1px 4px; border-radius:3px; margin-right:4px; background:rgba(148,163,184,0.2); color:#94a3b8;">T</span>`;
+                }
+
+                scoreCell.innerHTML = `${outcomeBadge}<span style="color: #f87171; ${redWon ? 'font-weight: 900; text-decoration: underline;' : 'opacity: 0.85;'}">${rScore}</span><span style="color: var(--muted); margin: 0 3px;">-</span><span style="color: #60a5fa; ${blueWon ? 'font-weight: 900; text-decoration: underline;' : 'opacity: 0.85;'}">${bScore}</span>`;
+            } else {
+                scoreCell.innerHTML = `<span style="color: var(--muted); font-weight: 500;">—</span>`;
+            }
+            tr.appendChild(scoreCell);
 
             tbody.appendChild(tr);
         });
@@ -2494,8 +2572,8 @@
         };
     }
 
-    function renderPerformanceGraphInline(containerId, teamNumber, scopedMatch, datasource = "scouted", team = null) {
-        const container = document.getElementById(containerId);
+    function renderPerformanceGraphInline(containerOrId, teamNumber, scopedMatch, datasource = "scouted", team = null) {
+        const container = typeof containerOrId === "string" ? document.getElementById(containerOrId) : containerOrId;
         if (!container || !window.Plotly) return;
 
         // Cleanly clear container and purge any existing Plotly graph
@@ -2536,7 +2614,10 @@
             hovertemplate: `%{x}: <b>%{y:.1f}</b> ${dataSeries.unit}<extra></extra>`
         };
 
+        const rect = container.getBoundingClientRect();
         const layout = {
+            autosize: true,
+            height: 180,
             margin: { t: 10, r: 15, l: 30, b: 30 },
             paper_bgcolor: 'transparent',
             plot_bgcolor: 'transparent',
@@ -2550,13 +2631,20 @@
                 gridcolor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'
             }
         };
+        if (rect.width > 20) {
+            layout.width = Math.floor(rect.width);
+        }
 
         const config = {
             responsive: true,
             displayModeBar: false
         };
 
-        Plotly.newPlot(containerId, [trace], layout, config);
+        Plotly.newPlot(container, [trace], layout, config).then(() => {
+            if (container.offsetWidth > 0) {
+                Plotly.Plots.resize(container);
+            }
+        });
 
         // Wire click on container to open fullscreen modal
         container.onclick = () => {
@@ -2626,14 +2714,16 @@
                     btn.addEventListener("click", () => {
                         const s = btn.getAttribute("data-source");
                         renderModalPlot(s);
-                        // Also sync card graph if present
-                        renderPerformanceGraphInline(`graph-container-team-${teamNumber}`, teamNumber, teamScoped, s, resolvedTeam);
-                        const cardPills = document.getElementById(`datasource-pills-team-${teamNumber}`);
-                        if (cardPills) {
-                            cardPills.querySelectorAll(".graph-datasource-btn").forEach(cb => {
+                        // Also sync all card graphs for this team if present
+                        document.querySelectorAll(`.team-profile-card[data-team-number="${teamNumber}"]`).forEach(teamCard => {
+                            teamCard.querySelectorAll(".graph-datasource-btn").forEach(cb => {
                                 cb.classList.toggle("active", cb.getAttribute("data-source") === s);
                             });
-                        }
+                            const tcGraphEl = teamCard.querySelector(".team-graph-container");
+                            if (tcGraphEl) {
+                                renderPerformanceGraphInline(tcGraphEl, teamNumber, teamScoped, s, resolvedTeam);
+                            }
+                        });
                     });
                 });
             }
