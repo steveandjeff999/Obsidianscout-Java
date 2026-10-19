@@ -359,6 +359,13 @@ self.addEventListener('fetch', (event) => {
     );
 });
 
+// Version query: lets pages tell whether this worker is newer than the HTML they were rendered with
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'GET_VERSION' && event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ cacheName: CACHE_NAME });
+    }
+});
+
 // Push event listener: Handle incoming push messages
 self.addEventListener('push', (event) => {
     let data = {};

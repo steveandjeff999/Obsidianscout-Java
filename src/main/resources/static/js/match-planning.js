@@ -1,11 +1,13 @@
 (function () {
+    const PHASE_ORDER = ["auto", "teleop", "endgame"];
+    let currentPhase = "auto";
     let currentYear = null;
     let currentEventKey = "";
     let currentMatch = null;
     let allTeams = [];
     let fieldImageObj = null;
 
-    // Drawing state
+    // Drawing state (active phase references)
     let annotations = []; // Array of strokes: { tool, color, width, points: [{x, y}] }
     let redoStack = []; // Stack for redo actions
     let isDrawing = false;
@@ -115,6 +117,12 @@
         r1: { xRatio: 0.88, yRatio: 0.20 },
         r2: { xRatio: 0.88, yRatio: 0.50 },
         r3: { xRatio: 0.88, yRatio: 0.80 }
+    };
+
+    let phases = {
+        auto: { annotations: [], teamMarkerPositions: defaultMarkerPositions(), touchedMarkers: [], redoStack: [] },
+        teleop: { annotations: [], teamMarkerPositions: defaultMarkerPositions(), touchedMarkers: [], redoStack: [] },
+        endgame: { annotations: [], teamMarkerPositions: defaultMarkerPositions(), touchedMarkers: [], redoStack: [] }
     };
 
     // Rich data cache
@@ -236,20 +244,14 @@
             window.addEventListener("beforeunload", () => {
                 cancelPolling();
                 if (currentMatch && currentEventKey && hasUnsavedChanges) {
-                    savePlanLocally(currentEventKey, currentMatch.matchKey, {
-                        annotations: annotations,
-                        teamMarkerPositions: teamMarkerPositions
-                    }, false);
+                    savePlanLocally(currentEventKey, currentMatch.matchKey, buildCurrentPlanData(Date.now()), false);
                 }
             });
 
             document.addEventListener("visibilitychange", () => {
                 if (document.hidden) {
                     if (currentMatch && currentEventKey && hasUnsavedChanges) {
-                        savePlanLocally(currentEventKey, currentMatch.matchKey, {
-                            annotations: annotations,
-                            teamMarkerPositions: teamMarkerPositions
-                        }, false);
+                        savePlanLocally(currentEventKey, currentMatch.matchKey, buildCurrentPlanData(Date.now()), false);
                     }
                 } else {
                     if (hasUnsavedChanges || getPendingPlansQueue().length > 0) {
@@ -331,7 +333,7 @@
     function clearLoadedMatch() {
         cancelPolling();
         currentMatch = null;
-        annotations = [];
+        resetPhasesState();
         const emptyState = document.getElementById("canvas-empty-state");
         if (emptyState) emptyState.style.display = "flex";
         if (ctx && canvas) {
@@ -367,8 +369,180 @@
         };
     }
 
+    function clonePositions(posMap) {
+        const defaults = defaultMarkerPositions();
+        const res = {};
+        Object.keys(defaults).forEach(st => {
+            const src = (posMap && posMap[st]) ? posMap[st] : defaults[st];
+            res[st] = {
+                xRatio: typeof src.xRatio === "number" ? src.xRatio : defaults[st].xRatio,
+                yRatio: typeof src.yRatio === "number" ? src.yRatio : defaults[st].yRatio
+            };
+        });
+        return res;
+    }
+
+    function positionsDiffer(a, b) {
+        if (!a || !b) return true;
+        return Math.abs((a.xRatio ?? 0.5) - (b.xRatio ?? 0.5)) > 0.0001 ||
+               Math.abs((a.yRatio ?? 0.5) - (b.yRatio ?? 0.5)) > 0.0001;
+    }
+
+    function createDefaultPhases() {
+        return {
+            auto: { annotations: [], teamMarkerPositions: defaultMarkerPositions(), touchedMarkers: [], redoStack: [] },
+            teleop: { annotations: [], teamMarkerPositions: defaultMarkerPositions(), touchedMarkers: [], redoStack: [] },
+            endgame: { annotations: [], teamMarkerPositions: defaultMarkerPositions(), touchedMarkers: [], redoStack: [] }
+        };
+    }
+
+    function propagateUntouchedPositions(phasesObj = phases) {
+        if (!phasesObj) return;
+        const defaults = defaultMarkerPositions();
+        const autoPhase = phasesObj.auto || { teamMarkerPositions: defaults, touchedMarkers: [] };
+        const teleopPhase = phasesObj.teleop || { teamMarkerPositions: defaultMarkerPositions(), touchedMarkers: [] };
+        const endgamePhase = phasesObj.endgame || { teamMarkerPositions: defaultMarkerPositions(), touchedMarkers: [] };
+
+        const teleopTouched = new Set(teleopPhase.touchedMarkers || []);
+        const endgameTouched = new Set(endgamePhase.touchedMarkers || []);
+
+        Object.keys(defaults).forEach(stId => {
+            const autoPos = (autoPhase.teamMarkerPositions && autoPhase.teamMarkerPositions[stId]) || defaults[stId];
+            if (!teleopTouched.has(stId)) {
+                teleopPhase.teamMarkerPositions[stId] = { xRatio: autoPos.xRatio, yRatio: autoPos.yRatio };
+            }
+            const teleopPos = (teleopPhase.teamMarkerPositions && teleopPhase.teamMarkerPositions[stId]) || autoPos;
+            if (!endgameTouched.has(stId)) {
+                endgamePhase.teamMarkerPositions[stId] = { xRatio: teleopPos.xRatio, yRatio: teleopPos.yRatio };
+            }
+        });
+    }
+
+    function syncActivePhaseRefs() {
+        if (!phases[currentPhase]) {
+            phases[currentPhase] = { annotations: [], teamMarkerPositions: defaultMarkerPositions(), touchedMarkers: [], redoStack: [] };
+        }
+        propagateUntouchedPositions(phases);
+        annotations = phases[currentPhase].annotations;
+        teamMarkerPositions = phases[currentPhase].teamMarkerPositions;
+        redoStack = phases[currentPhase].redoStack;
+    }
+
+    function resetPhasesState() {
+        phases = createDefaultPhases();
+        syncActivePhaseRefs();
+    }
+
+    function parseSinglePhase(rawPhase, fallbackPositions) {
+        const basePos = clonePositions(fallbackPositions);
+        if (!rawPhase || typeof rawPhase !== "object") {
+            return {
+                annotations: [],
+                teamMarkerPositions: basePos,
+                touchedMarkers: [],
+                redoStack: []
+            };
+        }
+        const anns = Array.isArray(rawPhase.annotations) ? rawPhase.annotations : [];
+        const markers = clonePositions(basePos);
+        if (rawPhase.teamMarkerPositions && typeof rawPhase.teamMarkerPositions === "object") {
+            Object.keys(markers).forEach(st => {
+                if (rawPhase.teamMarkerPositions[st] && typeof rawPhase.teamMarkerPositions[st] === "object") {
+                    const p = rawPhase.teamMarkerPositions[st];
+                    markers[st] = {
+                        xRatio: typeof p.xRatio === "number" ? p.xRatio : (typeof p.x === "number" ? p.x : markers[st].xRatio),
+                        yRatio: typeof p.yRatio === "number" ? p.yRatio : (typeof p.y === "number" ? p.y : markers[st].yRatio)
+                    };
+                }
+            });
+        }
+        let touched = [];
+        if (Array.isArray(rawPhase.touchedMarkers)) {
+            touched = rawPhase.touchedMarkers.map(String);
+        } else if (rawPhase.teamMarkerPositions && typeof rawPhase.teamMarkerPositions === "object") {
+            Object.keys(markers).forEach(st => {
+                if (positionsDiffer(markers[st], basePos[st])) {
+                    touched.push(st);
+                }
+            });
+        }
+        return {
+            annotations: anns,
+            teamMarkerPositions: markers,
+            touchedMarkers: Array.from(new Set(touched)),
+            redoStack: []
+        };
+    }
+
+    function hydratePhasesFromData(data) {
+        if (!data || typeof data !== "object") {
+            resetPhasesState();
+            return;
+        }
+        const defaults = defaultMarkerPositions();
+        if (data.phases && typeof data.phases === "object") {
+            const autoPlan = parseSinglePhase(data.phases.auto || data, defaults);
+            const teleopPlan = parseSinglePhase(data.phases.teleop, autoPlan.teamMarkerPositions);
+            const endgamePlan = parseSinglePhase(data.phases.endgame, teleopPlan.teamMarkerPositions);
+            phases = {
+                auto: autoPlan,
+                teleop: teleopPlan,
+                endgame: endgamePlan
+            };
+        } else {
+            const autoPlan = parseSinglePhase(data, defaults);
+            phases = {
+                auto: autoPlan,
+                teleop: {
+                    annotations: [],
+                    teamMarkerPositions: clonePositions(autoPlan.teamMarkerPositions),
+                    touchedMarkers: [],
+                    redoStack: []
+                },
+                endgame: {
+                    annotations: [],
+                    teamMarkerPositions: clonePositions(autoPlan.teamMarkerPositions),
+                    touchedMarkers: [],
+                    redoStack: []
+                }
+            };
+        }
+        syncActivePhaseRefs();
+    }
+
+    function buildCurrentPlanData(updatedAt) {
+        propagateUntouchedPositions(phases);
+        const serializedPhases = {};
+        PHASE_ORDER.forEach(p => {
+            const ph = phases[p] || { annotations: [], teamMarkerPositions: defaultMarkerPositions(), touchedMarkers: [] };
+            serializedPhases[p] = {
+                annotations: ph.annotations || [],
+                teamMarkerPositions: clonePositions(ph.teamMarkerPositions),
+                touchedMarkers: Array.from(new Set(ph.touchedMarkers || []))
+            };
+        });
+        const autoPhase = serializedPhases.auto;
+        return {
+            phases: serializedPhases,
+            annotations: autoPhase.annotations,
+            teamMarkerPositions: autoPhase.teamMarkerPositions,
+            updatedAt: updatedAt || Date.now()
+        };
+    }
+
+    function setPhase(phaseName) {
+        if (!PHASE_ORDER.includes(phaseName)) return;
+        currentPhase = phaseName;
+        document.querySelectorAll(".phase-btn").forEach(btn => {
+            btn.classList.toggle("active", btn.getAttribute("data-phase") === phaseName);
+        });
+        syncActivePhaseRefs();
+        renderCanvas();
+        updateFieldMarkerPositions();
+    }
+
     function resetMarkerPositions() {
-        teamMarkerPositions = defaultMarkerPositions();
+        resetPhasesState();
     }
 
     function isOnlineConnection() {
@@ -425,6 +599,7 @@
             const record = {
                 eventKey,
                 matchKey,
+                phases: data.phases || null,
                 annotations: data.annotations || [],
                 teamMarkerPositions: data.teamMarkerPositions || defaultMarkerPositions(),
                 updatedAt: data.updatedAt || Date.now(),
@@ -492,11 +667,7 @@
         const now = Date.now();
 
         // 1. Immediately persist locally (zero data loss guarantee on crashes/drops)
-        savePlanLocally(currentEventKey, currentMatch.matchKey, {
-            annotations: annotations,
-            teamMarkerPositions: teamMarkerPositions,
-            updatedAt: now
-        }, false);
+        savePlanLocally(currentEventKey, currentMatch.matchKey, buildCurrentPlanData(now), false);
 
         // 2. Clear any pending debounce timer
         if (saveDebounceTimer) {
@@ -541,12 +712,14 @@
 
         const matchKey = currentMatch.matchKey;
         const eventKey = currentEventKey;
+        const planData = buildCurrentPlanData(Date.now());
         const currentPayload = {
             eventKey: eventKey,
             matchKey: matchKey,
             planJson: JSON.stringify({
-                annotations: annotations,
-                teamMarkerPositions: teamMarkerPositions
+                phases: planData.phases,
+                annotations: planData.annotations,
+                teamMarkerPositions: planData.teamMarkerPositions
             })
         };
 
@@ -565,11 +738,7 @@
                 hasUnsavedChanges = queuedSavePending;
             }
 
-            savePlanLocally(eventKey, matchKey, {
-                annotations: annotations,
-                teamMarkerPositions: teamMarkerPositions,
-                updatedAt: serverUpdatedAt
-            }, true);
+            savePlanLocally(eventKey, matchKey, buildCurrentPlanData(serverUpdatedAt), true);
 
             if (!queuedSavePending && (!currentMatch || currentMatch.matchKey === matchKey)) {
                 updateSaveBadge("saved");
@@ -624,6 +793,7 @@
                             eventKey: item.eventKey,
                             matchKey: item.matchKey,
                             planJson: JSON.stringify({
+                                phases: local.phases || undefined,
                                 annotations: local.annotations || [],
                                 teamMarkerPositions: local.teamMarkerPositions || defaultMarkerPositions()
                             })
@@ -633,6 +803,7 @@
 
                     if (res && res.updatedAt) {
                         savePlanLocally(item.eventKey, item.matchKey, {
+                            phases: local.phases,
                             annotations: local.annotations,
                             teamMarkerPositions: local.teamMarkerPositions,
                             updatedAt: res.updatedAt
@@ -653,12 +824,7 @@
         const local = loadPlanLocally(eventKey, matchKey);
         let loadedFromLocal = false;
         if (local) {
-            if (Array.isArray(local.annotations)) {
-                annotations = local.annotations;
-            }
-            if (local.teamMarkerPositions && typeof local.teamMarkerPositions === "object") {
-                teamMarkerPositions = Object.assign({}, defaultMarkerPositions(), local.teamMarkerPositions);
-            }
+            hydratePhasesFromData(local);
             lastSyncedTime = local.updatedAt || 0;
             loadedFromLocal = true;
 
@@ -673,8 +839,7 @@
                 updateSaveBadge("saved");
             }
         } else {
-            annotations = [];
-            teamMarkerPositions = defaultMarkerPositions();
+            resetPhasesState();
             hasUnsavedChanges = false;
             updateSaveBadge("saved");
         }
@@ -698,19 +863,10 @@
                     if (serverTime > lastSyncedTime || (!loadedFromLocal && res.planJson && res.planJson !== "{}")) {
                         if (res.planJson && res.planJson !== "{}" && res.planJson !== "") {
                             const data = JSON.parse(res.planJson);
-                            if (Array.isArray(data.annotations)) {
-                                annotations = data.annotations;
-                            }
-                            if (data.teamMarkerPositions && typeof data.teamMarkerPositions === "object") {
-                                teamMarkerPositions = Object.assign({}, defaultMarkerPositions(), data.teamMarkerPositions);
-                            }
+                            hydratePhasesFromData(data);
                         }
                         lastSyncedTime = serverTime;
-                        savePlanLocally(eventKey, matchKey, {
-                            annotations: annotations,
-                            teamMarkerPositions: teamMarkerPositions,
-                            updatedAt: serverTime
-                        }, true);
+                        savePlanLocally(eventKey, matchKey, buildCurrentPlanData(serverTime), true);
                         renderCanvas();
                         updateFieldMarkerPositions();
                     }
@@ -765,19 +921,10 @@
             if (res && res.updatedAt > lastSyncedTime && !hasUnsavedChanges && !isDrawing && !isDraggingMarker) {
                 if (res.planJson && res.planJson !== "{}" && res.planJson !== "") {
                     const data = JSON.parse(res.planJson);
-                    if (Array.isArray(data.annotations)) {
-                        annotations = data.annotations;
-                    }
-                    if (data.teamMarkerPositions && typeof data.teamMarkerPositions === "object") {
-                        teamMarkerPositions = Object.assign({}, defaultMarkerPositions(), data.teamMarkerPositions);
-                    }
+                    hydratePhasesFromData(data);
                     renderCanvas();
                     updateFieldMarkerPositions();
-                    savePlanLocally(currentEventKey, currentMatch.matchKey, {
-                        annotations: annotations,
-                        teamMarkerPositions: teamMarkerPositions,
-                        updatedAt: res.updatedAt
-                    }, true);
+                    savePlanLocally(currentEventKey, currentMatch.matchKey, buildCurrentPlanData(res.updatedAt), true);
                 }
                 lastSyncedTime = res.updatedAt;
                 updateSaveBadge("saved");
@@ -830,7 +977,11 @@
         cancelPolling();
         lastSyncedTime = 0;
         currentMatch = match;
-        redoStack = [];
+        currentPhase = "auto";
+        document.querySelectorAll(".phase-btn").forEach(btn => {
+            btn.classList.toggle("active", btn.getAttribute("data-phase") === "auto");
+        });
+        resetPhasesState();
 
         const emptyState = document.getElementById("canvas-empty-state");
         if (emptyState) emptyState.style.display = "none";
@@ -1096,10 +1247,16 @@
             el.style.left = `${newX}px`;
             el.style.top = `${newY}px`;
 
+            const activePh = phases[currentPhase];
+            if (activePh && Array.isArray(activePh.touchedMarkers) && !activePh.touchedMarkers.includes(stationId)) {
+                activePh.touchedMarkers.push(stationId);
+            }
+
             teamMarkerPositions[stationId] = {
                 xRatio: Math.round(Math.max(0, Math.min(1, newX / W)) * 10000) / 10000,
                 yRatio: Math.round(Math.max(0, Math.min(1, newY / H)) * 10000) / 10000
             };
+            propagateUntouchedPositions(phases);
         });
 
         const endDrag = (e) => {
@@ -1326,6 +1483,14 @@
     function wireDrawingTools() {
         const quickPopup = document.getElementById("stylus-quick-popup");
 
+        // Wire Phase Selector Buttons (Auto / Teleop / Endgame)
+        document.querySelectorAll(".phase-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const ph = btn.getAttribute("data-phase");
+                if (ph) setPhase(ph);
+            });
+        });
+
         // Wire popup controls
         const popupPen = document.getElementById("popup-tool-pen");
         if (popupPen) popupPen.addEventListener("click", () => setTool("pen"));
@@ -1386,8 +1551,9 @@
         if (clearBtn) {
             clearBtn.addEventListener("click", () => {
                 if (annotations.length === 0) return;
-                redoStack = [...annotations];
-                annotations = [];
+                redoStack.length = 0;
+                redoStack.push(...annotations);
+                annotations.length = 0;
                 renderCanvas();
                 scheduleAutoSave();
                 Obsidianscout.showToast("Canvas cleared (Undo available)", "info");
@@ -1437,14 +1603,14 @@
                 drawSquareMarkersOnCanvas(ctx, canvas.width, canvas.height);
                 const link = document.createElement("a");
                 const matchLabel = currentMatch ? (currentMatch.label || `match-${currentMatch.matchNumber}`) : "match-plan";
-                link.download = `obsidianscout-plan-${matchLabel}.png`;
+                link.download = `obsidianscout-plan-${matchLabel}-${currentPhase}.png`;
                 link.href = canvas.toDataURL("image/png");
                 link.click();
                 renderCanvas();
             });
         }
 
-        // Keyboard Shortcuts (Undo, Redo, P, E, X, [, ])
+        // Keyboard Shortcuts (Undo, Redo, 1/2/3 phases, P, E, X, [, ])
         window.addEventListener("keydown", (e) => {
             const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
             if (tag === "input" || tag === "textarea" || tag === "select") return;
@@ -1456,7 +1622,13 @@
                 e.preventDefault();
                 redoAction();
             } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-                if (e.key === "p" || e.key === "P") {
+                if (e.key === "1") {
+                    setPhase("auto");
+                } else if (e.key === "2") {
+                    setPhase("teleop");
+                } else if (e.key === "3") {
+                    setPhase("endgame");
+                } else if (e.key === "p" || e.key === "P") {
                     setTool("pen");
                 } else if (e.key === "e" || e.key === "E") {
                     setTool("eraser");
@@ -1700,7 +1872,7 @@
             try {
                 canvas.releasePointerCapture(e.pointerId);
             } catch (err) {}
-            redoStack = []; // Reset redo stack when a new stroke is completed
+            redoStack.length = 0; // Reset redo stack when a new stroke is completed
             scheduleAutoSave();
         }
     }

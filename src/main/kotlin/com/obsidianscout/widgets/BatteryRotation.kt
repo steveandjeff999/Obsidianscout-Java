@@ -51,27 +51,93 @@ object BatteryRotation {
         return ca.size - cb.size
     }
 
-    private fun levelRank(level: String): Int = when (level.trim().lowercase()) {
-        "p", "pr", "pm", "practice" -> 0
-        "q", "qm", "qual", "qualification" -> 1
-        else -> 2
+    /** Same aliases as the app (battery_rotation.dart) and website (services/match-utils.js). */
+    fun normalizeCompLevel(level: String): String = when (val compact = level.trim().lowercase().replace(Regex("[\\s_-]+"), "")) {
+        "p", "pr", "pm", "prac", "prc", "practice", "practicematch" -> "practice"
+        "q", "qm", "qual", "quals", "qualification", "qualificationmatch", "m", "match", "matches" -> "qm"
+        "qf", "quarterfinal", "quarterfinals" -> "qf"
+        "sf", "semifinal", "semifinals" -> "sf"
+        "f", "final", "finals" -> "f"
+        "ef", "einstein", "eighthfinal", "eighthfinals" -> "ef"
+        "po", "playoff", "playoffs", "playoffmatch" -> "playoff"
+        else -> compact
     }
 
-    private val tbaSet = Regex("_[a-z]+(\\d+)m\\d+$")
-    private val legacySet = Regex("_s(\\d+)_m\\d+$")
+    private data class KeyParts(val compLevel: String, val setNumber: Int, val matchNumber: Int)
 
-    fun setNumberOf(matchKey: String): Int {
-        val m = tbaSet.find(matchKey) ?: legacySet.find(matchKey)
-        return m?.groupValues?.get(1)?.toIntOrNull() ?: 1
+    private val legacyKey = Regex("_([a-z]+)_s(\\d+)_m(\\d+)$", RegexOption.IGNORE_CASE)
+    private val tbaSuffix = Regex("^([a-z]+)(\\d+)(?:m(\\d+))?$", RegexOption.IGNORE_CASE)
+    private val customMatch = Regex(
+        "^(practice|prac|pr|pm|p|qualification|quals|qual|qm|q|quarterfinals|quarterfinal|qf|semifinals|semifinal|sf|finals|final|f|einstein|ef|playoffs|playoff|po)(?:\\s+match)?(?:[\\s#:-]+(\\d+)(?:[\\s/-]+(\\d+))?)?$",
+        RegexOption.IGNORE_CASE,
+    )
+
+    private fun parseMatchKey(matchKey: String): KeyParts {
+        val key = matchKey.trim()
+        if (key.isEmpty()) return KeyParts("", 1, 0)
+        legacyKey.find(key)?.let { m ->
+            return KeyParts(normalizeCompLevel(m.groupValues[1]), m.groupValues[2].toIntOrNull() ?: 1, m.groupValues[3].toIntOrNull() ?: 0)
+        }
+        if (key.lowercase().startsWith("custom_")) {
+            val text = key.substring(7).replace('_', ' ').trim()
+            val m = customMatch.find(text) ?: return KeyParts("", 1, 0)
+            val hasSetAndMatch = m.groupValues[3].isNotEmpty()
+            return KeyParts(
+                normalizeCompLevel(m.groupValues[1]),
+                if (hasSetAndMatch) m.groupValues[2].toIntOrNull() ?: 1 else 1,
+                if (hasSetAndMatch) m.groupValues[3].toIntOrNull() ?: 0 else m.groupValues[2].toIntOrNull() ?: 0,
+            )
+        }
+        val suffix = if ('_' in key) key.substring(key.lastIndexOf('_') + 1) else key
+        val m = tbaSuffix.find(suffix) ?: return KeyParts("", 1, 0)
+        val hasSetAndMatch = m.groupValues[3].isNotEmpty()
+        return KeyParts(
+            normalizeCompLevel(m.groupValues[1]),
+            if (hasSetAndMatch) m.groupValues[2].toIntOrNull() ?: 1 else 1,
+            if (hasSetAndMatch) m.groupValues[3].toIntOrNull() ?: 0 else m.groupValues[2].toIntOrNull() ?: 0,
+        )
     }
 
-    /** Practice, then qualifications, then playoffs; by set and match number within each, then key. */
+    private fun levelRank(level: String, matchKey: String): Int {
+        val parsed = parseMatchKey(matchKey)
+        var norm = normalizeCompLevel(level)
+        if (norm.isEmpty() ||
+            (norm == "playoff" && parsed.compLevel.isNotEmpty() && parsed.compLevel != "playoff") ||
+            (norm == "qm" && parsed.compLevel.isNotEmpty() && parsed.compLevel != "qm")
+        ) {
+            norm = parsed.compLevel.ifEmpty { norm }
+        }
+        return when (norm) {
+            "practice" -> 0
+            "qm" -> 1
+            "qf" -> 2
+            "sf" -> 3
+            "f" -> 4
+            "ef" -> 5
+            "playoff" -> 6
+            else -> 7
+        }
+    }
+
+    /** Playoff set number from a match key (`..._sf2m1`, `..._sf_s2_m1`); 1 otherwise. */
+    fun setNumberOf(matchKey: String): Int = parseMatchKey(matchKey).setNumber
+
+    /** Match number from a match key (`..._sf2m1` -> 1, `..._qm10` -> 10); 0 otherwise. */
+    fun matchNumberOf(matchKey: String): Int = parseMatchKey(matchKey).matchNumber
+
+    /**
+     * Practice, then qualifications, then playoffs (QF, SF, F); by set and match number within each, then key.
+     * Same order as the app (battery_rotation.dart) and the website (ObsidianMatchUtils.compareMatches), so every
+     * surface hands out the same battery per match.
+     */
     fun compareMatchOrder(levelA: String, numberA: Int?, keyA: String, levelB: String, numberB: Int?, keyB: String): Int {
-        val byLevel = levelRank(levelA) - levelRank(levelB)
+        val byLevel = levelRank(levelA, keyA) - levelRank(levelB, keyB)
         if (byLevel != 0) return byLevel
         val bySet = setNumberOf(keyA) - setNumberOf(keyB)
         if (bySet != 0) return bySet
-        val byNumber = (numberA ?: 0) - (numberB ?: 0)
+        val numA = numberA?.takeIf { it > 0 } ?: matchNumberOf(keyA)
+        val numB = numberB?.takeIf { it > 0 } ?: matchNumberOf(keyB)
+        val byNumber = numA - numB
         if (byNumber != 0) return byNumber
         return keyA.compareTo(keyB)
     }

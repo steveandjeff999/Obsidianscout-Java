@@ -102,6 +102,16 @@ class WidgetLogicTest {
         }
     }
 
+    @Test
+    fun batteryMatchOrderMatchesTheAppAndWebsite() {
+        // Same keys and expected order as the app's battery_tracker_test.dart.
+        val keys = mutableListOf("e_sf2m1", "e_f1m1", "e_qm10", "e_qf1m1", "e_sf1m1", "e_qm2", "custom_Practice_2", "e_pr1")
+        val level = mapOf("e_sf2m1" to "sf", "e_f1m1" to "f", "e_qm10" to "qm", "e_qf1m1" to "qf", "e_sf1m1" to "sf", "e_qm2" to "qm", "custom_Practice_2" to "", "e_pr1" to "pr")
+        val number = mapOf("e_sf2m1" to 1, "e_f1m1" to 1, "e_qm10" to 10, "e_qf1m1" to 1, "e_sf1m1" to 1, "e_qm2" to 2, "custom_Practice_2" to null, "e_pr1" to 1)
+        keys.sortWith { a, b -> BatteryRotation.compareMatchOrder(level.getValue(a), number[a], a, level.getValue(b), number[b], b) }
+        assertEquals(listOf("e_pr1", "custom_Practice_2", "e_qm2", "e_qm10", "e_qf1m1", "e_sf1m1", "e_sf2m1", "e_f1m1"), keys)
+    }
+
     // ── Schedule ─────────────────────────────────────────────────────────────────────────────────────────
 
     private fun match(n: Int, red: List<String>, blue: List<String> = listOf("frc1", "frc2", "frc3"), played: Boolean = false, offset: Long = 0) =
@@ -128,6 +138,20 @@ class WidgetLogicTest {
         assertEquals(38_420L, ours.predicted)
         assertEquals(listOf("254", "4", "5"), ours.red)
         assertTrue(s.matches.first { it.key == "2026test_qm4" }.played)
+    }
+
+    @Test
+    fun scheduleIsInPlayOrderPracticeQualsThenPlayoffRounds() {
+        fun m(key: String, level: String, n: Int) = MatchRecord(
+            matchKey = "2026test_$key", eventKey = "2026test", compLevel = level, matchNumber = n, label = key,
+            redTeams = listOf("frc1"), blueTeams = listOf("frc2"),
+        )
+        val shuffled = listOf(
+            m("f1m2", "f", 2), m("sf1m1", "sf", 1), m("qm10", "qm", 10), m("qf2m1", "qf", 1), m("f1m1", "f", 1),
+            m("qm2", "qm", 2), m("pr1", "pr", 1), m("qf1m1", "qf", 1), m("sf2m1", "sf", 1), m("qf1m2", "qf", 2),
+        )
+        val keys = WidgetSnapshotService.schedule(shuffled.sortedWith(WidgetSnapshotService.playOrder), 254).matches.map { it.key.removePrefix("2026test_") }
+        assertEquals(listOf("pr1", "qm2", "qm10", "qf1m1", "qf1m2", "qf2m1", "sf1m1", "sf2m1", "f1m1", "f1m2"), keys)
     }
 
     @Test

@@ -610,6 +610,38 @@ function initGlobalSidebarAndUser(sidebarEl) {
     });
 }
 
+// Asset version the server stamped on this page's script tags (e.g. /js/common.js?v=0.6.5.9)
+function getPageAssetVersion() {
+    const script = document.querySelector('script[src*="/js/common.js"]');
+    if (!script) return null;
+    try {
+        return new URL(script.src, location.href).searchParams.get('v');
+    } catch (e) {
+        return null;
+    }
+}
+
+// Resolves true only when the given worker's CACHE_NAME differs from this page's asset version
+function isPageOlderThanWorker(worker) {
+    const pageVersion = getPageAssetVersion();
+    if (!pageVersion) return Promise.resolve(false);
+    return new Promise((resolve) => {
+        const channel = new MessageChannel();
+        const timeout = setTimeout(() => resolve(false), 3000);
+        channel.port1.onmessage = (event) => {
+            clearTimeout(timeout);
+            const cacheName = event.data && event.data.cacheName;
+            resolve(!!cacheName && cacheName !== `obsidianscout-shell-v${pageVersion.replace(/\./g, '-')}`);
+        };
+        try {
+            worker.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
+        } catch (e) {
+            clearTimeout(timeout);
+            resolve(false);
+        }
+    });
+}
+
 async function onDOMContentLoaded() {
     // Migrate legacy HTTP caches from localStorage to IndexedDB to free 5MB quota
     try {
@@ -649,9 +681,13 @@ async function onDOMContentLoaded() {
                         newWorker.addEventListener('statechange', () => {
                             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                                 console.log('[ServiceWorker] New version installed and ready.');
-                                if (typeof showToast === 'function') {
-                                    showToast(t("app.update_available", "New version installed. Refresh to apply latest changes."), "info");
-                                }
+                                // Pages are fetched network-first, so the page on screen is usually already the
+                                // version the new worker ships. Only prompt when this page is actually older.
+                                isPageOlderThanWorker(newWorker).then((older) => {
+                                    if (older && typeof showToast === 'function') {
+                                        showToast(t("app.update_available", "New version installed. Refresh to apply latest changes."), "info");
+                                    }
+                                });
                             }
                         });
                     }

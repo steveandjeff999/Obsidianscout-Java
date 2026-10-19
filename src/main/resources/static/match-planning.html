@@ -344,6 +344,21 @@
             gap: 6px;
         }
 
+        .phase-selector-group {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            padding: 2px;
+            gap: 2px;
+        }
+
+        .phase-btn {
+            font-size: 0.80rem;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 7px;
+        }
+
         .toolbar-label {
             font-size: 0.75rem;
             font-weight: 800;
@@ -1273,6 +1288,14 @@
                     <!-- Selector Pill / Drawing Toolbar Above Field -->
                     <div class="field-toolbar-wrapper">
                         <div class="canvas-toolbar" id="draw-toolbar">
+                            <div class="toolbar-group phase-selector-group" role="group" aria-label="Match Phase">
+                                <button class="tool-btn phase-btn active" data-phase="auto" id="phase-auto" type="button" title="Autonomous Phase (1)">Auto</button>
+                                <button class="tool-btn phase-btn" data-phase="teleop" id="phase-teleop" type="button" title="Teleop Phase (2)">Teleop</button>
+                                <button class="tool-btn phase-btn" data-phase="endgame" id="phase-endgame" type="button" title="Endgame Phase (3)">Endgame</button>
+                            </div>
+
+                            <div class="toolbar-divider"></div>
+
                             <div class="toolbar-group">
                                 <button class="tool-btn active" id="tool-pen" type="button" title="Pen (Draw)"><i class="fa-solid fa-pen"></i> Pen</button>
                                 <button class="tool-btn" id="tool-eraser" type="button" title="Eraser"><i class="fa-solid fa-eraser"></i> Eraser</button>

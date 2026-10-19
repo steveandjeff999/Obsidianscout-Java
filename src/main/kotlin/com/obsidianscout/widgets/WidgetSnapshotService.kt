@@ -242,9 +242,9 @@ object WidgetSnapshotService {
             log.warn("[widgets] listMatches failed for $eventKey: ${it.message}")
             emptyList()
         } else emptyList()
-        val ordered = allMatches.sortedWith { a, b ->
-            BatteryRotation.compareMatchOrder(a.compLevel, a.matchNumber, a.matchKey, b.compLevel, b.matchNumber, b.matchKey)
-        }
+        // Play order (practice, quals, then QF, SF, F by set and match): the same order the app and website use,
+        // so the schedule, next match and battery rotation all agree everywhere.
+        val ordered = allMatches.sortedWith(playOrder)
         val ours = ordered.filter { allianceOf(it, session.teamNumber) != null }
         val oursUnplayed = ours.filter { !isPlayed(it) }
 
@@ -416,6 +416,11 @@ object WidgetSnapshotService {
             }
         }
         return listOf(levelRank[(level ?: "qm").lowercase()] ?: 7, set, match)
+    }
+
+    /** The order matches are played in: [BatteryRotation.compareMatchOrder], shared with the app and website. */
+    val playOrder: Comparator<MatchRecord> = Comparator { a, b ->
+        BatteryRotation.compareMatchOrder(a.compLevel, a.matchNumber, a.matchKey, b.compLevel, b.matchNumber, b.matchKey)
     }
 
     private val orderComparator = Comparator<List<Int>> { x, y ->
