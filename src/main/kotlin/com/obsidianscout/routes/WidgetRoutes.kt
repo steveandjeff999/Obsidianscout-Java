@@ -31,6 +31,14 @@ data class WidgetTokenRequest(val platform: String = "")
 @Serializable
 data class WidgetTokenResponse(val token: String, val expiresAt: Long)
 
+@Serializable
+data class WidgetChecklistToggleRequest(
+    val eventKey: String,
+    val record: String,
+    val itemId: String,
+    val checked: Boolean,
+)
+
 private val compactJson = Json(JsonSupport.json) { prettyPrint = false }
 
 /** Last snapshot served per widget token, so a burst of widget refreshes costs one build. */
@@ -106,6 +114,32 @@ fun Route.widgetRoutes() {
             recentlyServed[resolved.tokenId] = ServedSnapshot(now, body, etag)
             if (recentlyServed.size > 5_000) recentlyServed.entries.removeIf { now - it.value.at > TOKEN_REUSE_MS }
             call.respondSnapshot(body, etag)
+        }
+
+        post("/checklist/toggle") {
+            val token = call.widgetToken()
+            val session = if (token != null) {
+                val resolved = WidgetTokenService.resolve(token)
+                    ?: throw ApiException(HttpStatusCode.Unauthorized, "Widget sign-in expired")
+                recentlyServed.remove(resolved.tokenId)
+                resolved.session
+            } else {
+                call.requireSession()
+            }
+            val settings = com.obsidianscout.integrations.SettingsService.getSettings(session.teamNumber, session.program)
+            val pages = com.obsidianscout.widgets.WidgetAccess.pageAccess(session.role, settings, session.nonScoutingToolsEnabled)
+            if (com.obsidianscout.widgets.WidgetAccess.widgetAccess(pages)["checklist"] != true) {
+                throw ApiException(HttpStatusCode.Forbidden, "Checklist widget is not available for your account")
+            }
+            val request = call.receive<WidgetChecklistToggleRequest>()
+            com.obsidianscout.scouting.MatchChecklistService.toggleItem(
+                session = session,
+                eventKey = request.eventKey,
+                record = request.record,
+                itemId = request.itemId,
+                checked = request.checked,
+            )
+            call.respond(HttpStatusCode.NoContent)
         }
     }
 }

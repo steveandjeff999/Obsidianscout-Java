@@ -115,6 +115,44 @@ object MatchChecklistService {
         return store(ownerKey(session), request.eventKey, request.matchKey, request.dataJson, session.username)
     }
 
+    /** Toggles one checklist item in a completion record ([record] is a matchKey, "day_YYYY-MM-DD", or "event"). */
+    fun toggleItem(
+        session: UserSession,
+        eventKey: String,
+        record: String,
+        itemId: String,
+        checked: Boolean,
+        now: Instant = Instant.now(),
+    ): MatchChecklistDoc {
+        validateKey("eventKey", eventKey)
+        validateKey("matchKey", record)
+        val trimmedId = itemId.trim()
+        if (trimmedId.isEmpty() || trimmedId.length > 128) {
+            throw ApiException(HttpStatusCode.BadRequest, "Invalid itemId")
+        }
+        val owner = ownerKey(session)
+        val existingRaw = load(owner, eventKey, record)?.dataJson ?: "{}"
+        val root = runCatching {
+            kotlinx.serialization.json.Json.parseToJsonElement(existingRaw) as? kotlinx.serialization.json.JsonObject
+        }.getOrNull() ?: kotlinx.serialization.json.JsonObject(emptyMap())
+        val existingChecked = (root["checked"] as? kotlinx.serialization.json.JsonObject)?.toMutableMap() ?: LinkedHashMap()
+        if (checked) {
+            val mark = kotlinx.serialization.json.buildJsonObject {
+                put("by", kotlinx.serialization.json.JsonPrimitive(session.username))
+                put("at", kotlinx.serialization.json.JsonPrimitive(now.toEpochMilli()))
+            }
+            existingChecked[trimmedId] = mark
+        } else {
+            existingChecked.remove(trimmedId)
+        }
+        val updatedRoot = kotlinx.serialization.json.JsonObject(
+            root.toMutableMap().apply {
+                put("checked", kotlinx.serialization.json.JsonObject(existingChecked))
+            }
+        )
+        return store(owner, eventKey, record, updatedRoot.toString(), session.username)
+    }
+
     /** All filled-out checklists for an event, used to show per-match progress. */
     fun listForEvent(session: UserSession, eventKey: String): List<MatchChecklistSummary> {
         validateKey("eventKey", eventKey)

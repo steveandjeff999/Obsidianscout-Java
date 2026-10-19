@@ -141,4 +141,22 @@ class MatchChecklistTest {
             MatchChecklistService.getMatch(s, "2026casj", "qm:1")
         }
     }
+
+    @Test
+    fun testToggleItemPreservesOtherFieldsAndChecks() {
+        val s = session(254, "alex")
+        MatchChecklistService.saveMatch(
+            s,
+            MatchChecklistUpdateRequest("2026casj", "2026casj_qm1", """{"checked":{"existing":{"by":"sam","at":10}},"notes":"keep me"}"""),
+        )
+        val afterCheck = MatchChecklistService.toggleItem(s, "2026casj", "2026casj_qm1", "bumpers", checked = true)
+        val obj1 = Json.parseToJsonElement(afterCheck.dataJson).jsonObject
+        assertEquals("keep me", obj1["notes"]?.toString()?.trim('"'))
+        assertEquals(setOf("existing", "bumpers"), obj1["checked"]!!.jsonObject.keys)
+
+        val afterUncheck = MatchChecklistService.toggleItem(s, "2026casj", "2026casj_qm1", "existing", checked = false)
+        val obj2 = Json.parseToJsonElement(afterUncheck.dataJson).jsonObject
+        assertEquals("keep me", obj2["notes"]?.toString()?.trim('"'))
+        assertEquals(setOf("bumpers"), obj2["checked"]!!.jsonObject.keys)
+    }
 }
