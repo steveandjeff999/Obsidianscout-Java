@@ -125,7 +125,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const shiftMatchSeats = document.getElementById("shift-match-seats");
     const shiftQualMode = document.getElementById("shift-qual-mode");
     const shiftQualSeats = document.getElementById("shift-qual-seats");
-    const shiftScoutOptions = document.getElementById("shift-scout-options");
+    // Seat picker that is open, and its list (on phones the list lives on <body>)
+    let openSeat = null;
+    let openPanel = null;
+    const phoneQuery = window.matchMedia("(max-width: 600px)");
     const shiftCancelEdit = document.getElementById("shift-cancel-edit");
     let shifts = [];
 
@@ -2942,61 +2945,173 @@ document.addEventListener("DOMContentLoaded", async () => {
         return new Date(2000, 0, 1, Math.floor(mins / 60), mins % 60).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     }
 
-    // Seat boxes are type-to-search inputs over one shared list. Each scout gets a unique label so it maps
-    // back to one id: the name, plus the @username when the name is shared or differs from it.
+    // Each seat is a button that opens a searchable list of the team's scouts. A custom picker rather than
+    // <datalist>, which many phone browsers never open.
     function getShiftScoutChoices() {
-        const scouters = users.filter(u => u.role !== "NONE");
-        const nameCounts = new Map();
-        scouters.forEach(u => {
-            const name = u.displayName || u.username;
-            nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
-        });
-        return scouters.map(u => {
-            const name = u.displayName || u.username;
-            const label = (nameCounts.get(name) > 1 || (u.username && u.username !== name)) ? `${name} (@${u.username})` : name;
-            return { id: String(u.id || u.userId), label };
-        });
+        return users.filter(u => u.role !== "NONE").map(u => ({
+            id: String(u.id || u.userId),
+            name: u.displayName || u.username,
+            username: u.username || ""
+        }));
     }
 
-    function renderShiftScoutOptions() {
-        shiftScoutOptions.innerHTML = getShiftScoutChoices().map(c => `<option value="${escapeHtml(c.label)}"></option>`).join("");
+    const SEAT_CHEVRON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+
+    function setSeatValue(seat, id) {
+        const choice = getShiftScoutChoices().find(c => c.id === id);
+        seat.dataset.value = choice ? choice.id : "";
+        const text = seat.querySelector(".seat-picker-text");
+        text.textContent = choice ? choice.name : shiftText("assignments.shift_nobody", "Nobody");
+        text.classList.toggle("empty", !choice);
     }
 
     function renderSeatSelects(container, labels, selectedIds) {
-        const labelById = new Map(getShiftScoutChoices().map(c => [c.id, c.label]));
-        const nobody = shiftText("assignments.shift_nobody", "Nobody");
-        container.innerHTML = labels.map((label, i) => {
-            const picked = labelById.get(String((selectedIds && selectedIds[i]) || "")) || "";
-            return `
-                <label class="shift-seat">
-                    <span class="shift-seat-label ${label.alliance}">${escapeHtml(label.text)}</span>
-                    <input type="search" data-seat="${i}" list="shift-scout-options" autocomplete="off"
-                           placeholder="${escapeHtml(nobody)}" value="${escapeHtml(picked)}" />
-                </label>
-            `;
-        }).join("");
-        container.querySelectorAll("input[data-seat]").forEach(input => {
-            input.addEventListener("change", () => input.classList.toggle("shift-seat-invalid", seatValue(input) === undefined));
-            // Enter picks from the list, it shouldn't submit the shift
-            input.addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); });
+        closeSeatPicker();
+        container.innerHTML = labels.map((label, i) => `
+            <div class="shift-seat" data-seat="${i}" data-label="${escapeHtml(label.text)}">
+                <span class="shift-seat-label ${label.alliance}">${escapeHtml(label.text)}</span>
+                <div class="seat-picker">
+                    <button type="button" class="seat-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="seat-picker-text"></span>${SEAT_CHEVRON}
+                    </button>
+                </div>
+            </div>
+        `).join("");
+        container.querySelectorAll(".shift-seat").forEach((seat, i) => {
+            setSeatValue(seat, String((selectedIds && selectedIds[i]) || ""));
+            seat.querySelector(".seat-picker-trigger").addEventListener("click", () => toggleSeatPicker(seat));
         });
-    }
-
-    // A seat's scout id: "" for an empty seat, undefined when the text matches no scout
-    function seatValue(input) {
-        const text = input.value.trim();
-        if (!text) return "";
-        const lower = text.toLowerCase();
-        const match = getShiftScoutChoices().find(c => c.label.toLowerCase() === lower);
-        return match ? match.id : undefined;
     }
 
     // Seat picks in order; blank means the seat stays open
     function readSeatSelects(container) {
-        return Array.from(container.querySelectorAll("input[data-seat]")).map(input => {
-            const id = seatValue(input);
-            return id === undefined ? { invalid: input.value.trim() } : id;
+        return Array.from(container.querySelectorAll(".shift-seat")).map(seat => seat.dataset.value || "");
+    }
+
+    // Desktop: a dropdown under the seat, or above it when there's no room below. Phones: a bottom sheet (CSS).
+    function positionSeatPicker() {
+        if (!openSeat || !openPanel) return;
+        if (phoneQuery.matches) {
+            openPanel.style.top = openPanel.style.left = openPanel.style.width = "";
+            return;
+        }
+        const rect = openSeat.querySelector(".seat-picker-trigger").getBoundingClientRect();
+        const width = Math.max(rect.width, 240);
+        const left = Math.min(rect.left, window.innerWidth - width - 8);
+        const height = openPanel.offsetHeight;
+        const below = window.innerHeight - rect.bottom - 8;
+        const top = below >= height || rect.top < height ? rect.bottom + 4 : rect.top - height - 4;
+        openPanel.style.width = `${width}px`;
+        openPanel.style.left = `${Math.max(8, left)}px`;
+        openPanel.style.top = `${Math.max(8, top)}px`;
+    }
+
+    function closeSeatPicker() {
+        if (!openSeat) return;
+        if (openPanel) openPanel.remove();
+        openPanel = null;
+        const trigger = openSeat.querySelector(".seat-picker-trigger");
+        trigger.setAttribute("aria-expanded", "false");
+        document.body.classList.remove("seat-picker-sheet-open");
+        openSeat = null;
+    }
+
+    function toggleSeatPicker(seat) {
+        if (openSeat === seat) {
+            closeSeatPicker();
+            return;
+        }
+        closeSeatPicker();
+        openSeat = seat;
+
+        // Who already sits where, so the list can show it
+        const seatedAt = new Map();
+        shiftForm.querySelectorAll(".shift-seat").forEach(other => {
+            if (other !== seat && other.dataset.value) seatedAt.set(other.dataset.value, other.dataset.label);
         });
+
+        const panel = document.createElement("div");
+        panel.className = "seat-picker-panel";
+        panel.setAttribute("role", "dialog");
+        panel.innerHTML = `
+            <div class="seat-picker-sheet-head">
+                <strong>${escapeHtml(seat.dataset.label)}</strong>
+                <button type="button" class="seat-picker-close" aria-label="${escapeHtml(shiftText("assignments.close", "Close"))}">&times;</button>
+            </div>
+            <input type="search" class="seat-picker-search" autocomplete="off"
+                   placeholder="${escapeHtml(shiftText("assignments.person_search_hint", "Search by name or username..."))}" />
+            <div class="seat-picker-list" role="listbox"></div>
+        `;
+        // The list lives on the page itself, not in the modal: the modal's transform would pin a fixed-position
+        // list to the modal, and its scroll area would clip a dropdown near the bottom of the form
+        document.body.appendChild(panel);
+        openPanel = panel;
+        positionSeatPicker();
+        seat.querySelector(".seat-picker-trigger").setAttribute("aria-expanded", "true");
+        document.body.classList.add("seat-picker-sheet-open");
+
+        const search = panel.querySelector(".seat-picker-search");
+        const list = panel.querySelector(".seat-picker-list");
+        let active = 0;
+
+        const renderList = () => {
+            const q = search.value.trim().toLowerCase();
+            const matches = getShiftScoutChoices().filter(c =>
+                !q || c.name.toLowerCase().includes(q) || c.username.toLowerCase().includes(q));
+            const options = [{ id: "", name: shiftText("assignments.shift_nobody", "Nobody"), username: "" }, ...matches];
+            active = Math.min(active, options.length - 1);
+            list.innerHTML = options.map((c, i) => {
+                const where = seatedAt.get(c.id);
+                const handle = c.username && c.username !== c.name ? `@${c.username}` : "";
+                return `
+                    <button type="button" role="option" class="seat-picker-option${c.id === (seat.dataset.value || "") ? " selected" : ""}${i === active ? " active" : ""}${c.id ? "" : " nobody"}"
+                            data-id="${escapeHtml(c.id)}" aria-selected="${c.id === (seat.dataset.value || "")}">
+                        <span class="seat-picker-name">${escapeHtml(c.name)}</span>
+                        ${handle ? `<span class="seat-picker-handle">${escapeHtml(handle)}</span>` : ""}
+                        ${where ? `<span class="seat-picker-taken">${escapeHtml(where)}</span>` : ""}
+                    </button>
+                `;
+            }).join("") + (matches.length === 0 && q
+                ? `<div class="seat-picker-none">${escapeHtml(shiftText("assignments.person_search_none", "No one matches that search."))}</div>`
+                : "");
+        };
+
+        const pick = id => {
+            setSeatValue(seat, id);
+            closeSeatPicker();
+            seat.querySelector(".seat-picker-trigger").focus();
+        };
+
+        list.addEventListener("click", e => {
+            const option = e.target.closest(".seat-picker-option");
+            if (option) pick(option.dataset.id);
+        });
+        search.addEventListener("input", () => { active = 0; renderList(); });
+        search.addEventListener("keydown", e => {
+            const options = list.querySelectorAll(".seat-picker-option");
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                active = (active + (e.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+                renderList();
+                const current = list.querySelector(".seat-picker-option.active");
+                if (current) current.scrollIntoView({ block: "nearest" });
+            } else if (e.key === "Enter") {
+                // Enter picks the highlighted scout, it shouldn't submit the shift
+                e.preventDefault();
+                if (options[active]) pick(options[active].dataset.id);
+            } else if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                closeSeatPicker();
+                seat.querySelector(".seat-picker-trigger").focus();
+            }
+        });
+        panel.querySelector(".seat-picker-close").addEventListener("click", closeSeatPicker);
+
+        renderList();
+        positionSeatPicker();
+        // Phones get the list as a bottom sheet; opening the keyboard right away would hide most of it
+        if (!phoneQuery.matches) search.focus();
     }
 
     function renderQualSeats(selectedIds) {
@@ -3016,7 +3131,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         shiftQualMode.value = "TEAMS";
         shiftFormTitle.textContent = shiftText("assignments.shift_add_title", "Add a Shift");
         shiftCancelEdit.classList.add("hidden");
-        renderShiftScoutOptions();
         renderSeatSelects(shiftMatchSeats, getShiftStationLabels(), []);
         renderQualSeats([]);
     }
@@ -3101,7 +3215,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         shiftQualMode.value = s.qualMode === "ALLIANCE" ? "ALLIANCE" : "TEAMS";
         shiftFormTitle.textContent = shiftText("assignments.shift_edit_title", "Edit Shift");
         shiftCancelEdit.classList.remove("hidden");
-        renderShiftScoutOptions();
         renderSeatSelects(shiftMatchSeats, getShiftStationLabels(), s.matchScouterIds || []);
         renderQualSeats(s.qualScouterIds || []);
         shiftForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -3120,11 +3233,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function submitShift() {
         const matchSeats = readSeatSelects(shiftMatchSeats);
         const qualSeats = readSeatSelects(shiftQualSeats);
-        const unknown = [...matchSeats, ...qualSeats].find(v => typeof v === "object");
-        if (unknown) {
-            Obsidianscout.showToast(shiftText("assignments.shift_unknown_scout", "\"{name}\" isn't a scout on your team", { name: unknown.invalid }), "error");
-            return;
-        }
         const picked = [...matchSeats, ...qualSeats].filter(Boolean);
         if (picked.length === 0) {
             Obsidianscout.showToast(shiftText("assignments.shift_need_seat", "Pick a scout for at least one seat"), "error");
@@ -3374,8 +3482,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (shiftCancelEdit) shiftCancelEdit.addEventListener("click", resetShiftForm);
         ["shifts-close", "shifts-done"].forEach(btnId => {
             const btn = document.getElementById(btnId);
-            if (btn) btn.addEventListener("click", () => hideModal("shifts-modal"));
+            if (btn) btn.addEventListener("click", () => {
+                closeSeatPicker();
+                hideModal("shifts-modal");
+            });
         });
+        // Tapping anywhere outside the open seat picker closes it
+        document.addEventListener("pointerdown", e => {
+            if (!openSeat) return;
+            if (openPanel && openPanel.contains(e.target)) return;
+            if (openSeat.querySelector(".seat-picker-trigger").contains(e.target)) return;
+            closeSeatPicker();
+        });
+        // Keep an open dropdown attached to its seat while the modal scrolls or the window resizes
+        window.addEventListener("scroll", positionSeatPicker, true);
+        window.addEventListener("resize", positionSeatPicker);
         // Switching per-robot / per-alliance keeps the picks that still have a seat
         if (shiftQualMode) shiftQualMode.addEventListener("change", () => renderQualSeats(readSeatSelects(shiftQualSeats)));
 
