@@ -420,6 +420,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             loadedSettings = settingsResponse.settings;
             setVal("settings-year", loadedSettings.year);
             setVal("settings-event-code", loadedSettings.eventCode || "");
+            setVal("settings-alternate-event-code", loadedSettings.alternateEventCode || "");
             setVal("settings-timezone", loadedSettings.timezone || "UTC");
             setVal("settings-source", loadedSettings.preferredSource || "tba");
             setVal("settings-statbotics-url", loadedSettings.statboticsBaseUrl || "https://api.statbotics.io");
@@ -713,6 +714,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 settingsSaveBtn.addEventListener("click", async () => {
                     loadedSettings.year = Number(getVal("settings-year") || new Date().getFullYear());
                     loadedSettings.eventCode = getVal("settings-event-code").trim();
+                    loadedSettings.alternateEventCode = getVal("settings-alternate-event-code").trim();
                     loadedSettings.timezone = getVal("settings-timezone").trim();
                     loadedSettings.preferredSource = getVal("settings-source");
                     loadedSettings.useStatboticsEpa = getChecked("settings-epa");

@@ -339,7 +339,9 @@ object FtcIntegrationService {
 
         // Matches Sync
         val matchesArray = eventObj["matches"]?.jsonArray?.toList() ?: emptyList()
-        val firstMatchesArray = fetchFirstFtcMatches(settings, code)
+        // FIRST may list this event under a different code than FTC Scout does.
+        val firstCode = if (settings.usesAlternateEventCode(eventKey)) settings.alternateEventCode.trim().uppercase() else code
+        val firstMatchesArray = fetchFirstFtcMatches(settings, firstCode)
         val combinedMatches = matchesArray + firstMatchesArray
 
         // Find max series number for DoubleElim matches to identify finals transition
@@ -476,7 +478,7 @@ object FtcIntegrationService {
         // If credentials for FIRST FTC API are provided, fetch/overwrite with team list to fetch rookie year, website etc.
         if (hasFirstCredentials(settings)) {
             try {
-                fetchAndMergeFirstFtcData(settings, eventKey, code, now)
+                fetchAndMergeFirstFtcData(settings, eventKey, firstCode, now)
             } catch (e: Exception) {
                 log.warn("Failed to merge FIRST FTC API event data: ${e.message}")
             }
@@ -495,48 +497,55 @@ object FtcIntegrationService {
 
         if (teams.isEmpty()) return
 
+        val oprs = fetchQuickStatsOprs(teams, year)
+        if (oprs.isEmpty()) return
         val now = Instant.now()
+        // Can be reached from a request thread (predictor on-demand sync); keep JDBC off it.
         withContext(Dispatchers.IO) {
-            teams.forEach { teamNum ->
-                val query = """
-                    query {
-                      teamByNumber(number: $teamNum) {
-                        quickStats(season: $year) {
-                          tot { value }
-                          auto { value }
-                          dc { value }
-                          eg { value }
-                        }
-                      }
-                    }
-                """.trimIndent()
-
-                val response = try {
-                    client.post("https://api.ftcscout.org/graphql") {
-                        contentType(ContentType.Application.Json)
-                        setBody(GraphQLRequest(query))
-                    }
-                } catch (_: Exception) {
-                    null
-                }
-
-                if (response != null && response.status.isSuccess()) {
-                    val bodyText = response.bodyAsText()
-                    val json = JsonSupport.json.parseToJsonElement(bodyText).safeJsonObject
-                    val teamObj = json?.get("data")?.safeJsonObject?.get("teamByNumber")?.safeJsonObject
-                    val quickStats = teamObj?.get("quickStats")?.safeJsonObject
-                    val opr = quickStats?.get("tot")?.safeJsonObject?.get("value")?.jsonPrimitive?.doubleOrNull ?: 0.0
-
-                    transaction {
-                        ApiTeams.update({ (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamKey eq "ftc$teamNum") }) {
-                            it[ApiTeams.opr] = opr
-                            it[ApiTeams.epa] = opr
-                            it[ApiTeams.updatedAt] = now
-                        }
+            transaction {
+                oprs.forEach { (teamNum, opr) ->
+                    ApiTeams.update({ (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamKey eq "ftc$teamNum") }) {
+                        it[ApiTeams.opr] = opr
+                        it[ApiTeams.epa] = opr
+                        it[ApiTeams.updatedAt] = now
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Season OPR (quickStats tot) per team. Teams are batched into aliased GraphQL queries, so a
+     * 40-team event is 2 requests instead of 40 sequential round trips.
+     */
+    private suspend fun fetchQuickStatsOprs(teams: List<Int>, year: Int): Map<Int, Double> {
+        val oprs = mutableMapOf<Int, Double>()
+        teams.distinct().chunked(25).forEach { chunk ->
+            val fields = chunk.joinToString("\n") { teamNum ->
+                "t$teamNum: teamByNumber(number: $teamNum) { quickStats(season: $year) { tot { value } } }"
+            }
+            val response = try {
+                client.post("https://api.ftcscout.org/graphql") {
+                    contentType(ContentType.Application.Json)
+                    setBody(GraphQLRequest("query {\n$fields\n}"))
+                }
+            } catch (e: Exception) {
+                log.warn("FTC Scout quickStats query failed: ${e.message}")
+                return@forEach
+            }
+            if (!response.status.isSuccess()) {
+                log.warn("FTC Scout quickStats query failed with status: ${response.status}")
+                return@forEach
+            }
+            val data = JsonSupport.json.parseToJsonElement(response.bodyAsText()).safeJsonObject
+                ?.get("data")?.safeJsonObject ?: return@forEach
+            chunk.forEach { teamNum ->
+                if (!data.containsKey("t$teamNum")) return@forEach
+                val quickStats = data["t$teamNum"]?.safeJsonObject?.get("quickStats")?.safeJsonObject
+                oprs[teamNum] = quickStats?.get("tot")?.safeJsonObject?.get("value")?.jsonPrimitive?.doubleOrNull ?: 0.0
+            }
+        }
+        return oprs
     }
 
     fun getEpaOprHistory(settings: ApiSettings, eventKey: String): Pair<Map<String, Double>, List<JsonElement>> {
@@ -560,7 +569,7 @@ object FtcIntegrationService {
             }
 
             val updatedAt = cached[EpaOprHistoryCache.updatedAt]
-            if (updatedAt.isBefore(Instant.now().minusSeconds(900))) {
+            if (historyRefreshDue(normalizedKey, updatedAt, 900)) {
                 SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
             }
 
@@ -597,7 +606,7 @@ object FtcIntegrationService {
             }
 
             val updatedAt = cached[EpaOprHistoryCache.updatedAt]
-            if (updatedAt.isBefore(Instant.now().minusSeconds(900))) {
+            if (historyRefreshDue(normalizedKey, updatedAt, 900)) {
                 SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
             }
 
@@ -620,38 +629,7 @@ object FtcIntegrationService {
             ApiTeams.selectAll().where { ApiTeams.eventKey eq normalizedKey }.map { it[ApiTeams.teamNumber] }
         }
 
-        val oprs = mutableMapOf<String, Double>()
-        withContext(Dispatchers.IO) {
-            teams.forEach { teamNum ->
-                val query = """
-                    query {
-                      teamByNumber(number: $teamNum) {
-                        quickStats(season: $year) {
-                          tot { value }
-                        }
-                      }
-                    }
-                """.trimIndent()
-
-                val response = try {
-                    client.post("https://api.ftcscout.org/graphql") {
-                        contentType(ContentType.Application.Json)
-                        setBody(GraphQLRequest(query))
-                    }
-                } catch (_: Exception) {
-                    null
-                }
-
-                if (response != null && response.status.isSuccess()) {
-                    val bodyText = response.bodyAsText()
-                    val json = JsonSupport.json.parseToJsonElement(bodyText).safeJsonObject
-                    val teamObj = json?.get("data")?.safeJsonObject?.get("teamByNumber")?.safeJsonObject
-                    val quickStats = teamObj?.get("quickStats")?.safeJsonObject
-                    val opr = quickStats?.get("tot")?.safeJsonObject?.get("value")?.jsonPrimitive?.doubleOrNull ?: 0.0
-                    oprs["ftc$teamNum"] = opr
-                }
-            }
-        }
+        val oprs = fetchQuickStatsOprs(teams, year).mapKeys { (teamNum, _) -> "ftc$teamNum" }
 
         val oprsJson = JsonSupport.json.encodeToString(oprs)
         val epaHistoryJson = "[]"

@@ -77,6 +77,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 
 private val firstWorldDivisionToTba = mapOf(
@@ -205,95 +207,7 @@ object IntegrationService {
             return SyncCounts(0, 0)
         }
 
-        val now = Instant.now()
-        withContext(Dispatchers.IO) {
-            transaction {
-                upsertEvent(event, now)
-                val removed = MatchCanonical.deduplicateDatabaseForEvent(eventKey)
-                if (removed > 0) {
-                    log.info("Cleaned $removed duplicate match row(s) before sync for $eventKey")
-                }
-                val existingTeamsMap = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }
-                    .associateBy { it[ApiTeams.teamKey] }
-                teams.forEach { team ->
-                    val existing = existingTeamsMap[team.teamKey]
-                    if (existing == null) {
-                        ApiTeams.insert {
-                            it[ApiTeams.eventKey] = team.eventKey
-                            it[ApiTeams.teamKey] = team.teamKey
-                            it[ApiTeams.teamNumber] = team.teamNumber
-                            it[ApiTeams.name] = team.name.clipTeamText()
-                            it[ApiTeams.nickname] = team.nickname.clipTeamText()
-                            it[ApiTeams.city] = team.city.clipTeamLocation()
-                            it[ApiTeams.state] = team.state.clipTeamLocation()
-                            it[ApiTeams.country] = team.country.clipTeamLocation()
-                            it[ApiTeams.opr] = team.opr
-                            it[ApiTeams.epa] = team.epa
-                            it[ApiTeams.match13Exp] = team.exp
-                            it[ApiTeams.dataJson] = team.dataJson
-                            it[ApiTeams.updatedAt] = now
-                        }
-                    } else {
-                        ApiTeams.update({ ApiTeams.id eq existing[ApiTeams.id] }) {
-                            it[ApiTeams.teamNumber] = team.teamNumber
-                            it[ApiTeams.name] = team.name.clipTeamText()
-                            it[ApiTeams.nickname] = team.nickname.clipTeamText()
-                            it[ApiTeams.city] = team.city.clipTeamLocation()
-                            it[ApiTeams.state] = team.state.clipTeamLocation()
-                            it[ApiTeams.country] = team.country.clipTeamLocation()
-                            if (team.opr != null) {
-                                it[ApiTeams.opr] = team.opr
-                            }
-                            if (team.epa != null) {
-                                it[ApiTeams.epa] = team.epa
-                            }
-                            if (team.exp != null) {
-                                it[ApiTeams.match13Exp] = team.exp
-                            }
-                            it[ApiTeams.dataJson] = team.dataJson
-                            it[ApiTeams.updatedAt] = now
-                        }
-                    }
-                }
-                EventTeamCanonical.deduplicateTeamsForEvent(eventKey)
-
-                val existingMatchesMap = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }
-                    .associateBy { it[ApiMatches.matchKey] }
-                matches.forEach { match ->
-                    val canonical = MatchCanonical.canonicalize(match)
-                    val existing = existingMatchesMap[canonical.matchKey]
-                    if (existing == null) {
-                        ApiMatches.insert {
-                            it[ApiMatches.matchKey] = canonical.matchKey
-                            it[ApiMatches.eventKey] = canonical.eventKey
-                            it[ApiMatches.compLevel] = canonical.compLevel
-                            it[ApiMatches.setNumber] = canonical.setNumber
-                            it[ApiMatches.matchNumber] = canonical.matchNumber
-                            it[ApiMatches.scheduledTime] = canonical.scheduledTime
-                            it[ApiMatches.actualTime] = canonical.actualTime
-                            it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
-                            it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
-                            it[ApiMatches.dataJson] = canonical.dataJson
-                            it[ApiMatches.updatedAt] = now
-                        }
-                    } else {
-                        ApiMatches.update({ ApiMatches.id eq existing[ApiMatches.id] }) {
-                            it[ApiMatches.eventKey] = canonical.eventKey
-                            it[ApiMatches.compLevel] = canonical.compLevel
-                            it[ApiMatches.setNumber] = canonical.setNumber
-                            it[ApiMatches.matchNumber] = canonical.matchNumber
-                            it[ApiMatches.scheduledTime] = canonical.scheduledTime
-                            it[ApiMatches.actualTime] = canonical.actualTime
-                            it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
-                            it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
-                            it[ApiMatches.dataJson] = canonical.dataJson
-                            it[ApiMatches.updatedAt] = now
-                        }
-                    }
-                }
-                MatchCanonical.deduplicateDatabaseForEvent(eventKey)
-            }
-        }
+        writeEventData(event, eventKey, teams, matches)
         try {
             syncStats(settings)
         } catch (e: Exception) {
@@ -342,15 +256,35 @@ object IntegrationService {
             return SyncCounts(0, 0)
         }
 
+        writeEventData(event, key, teams, matches)
+        try {
+            syncStats(settings, key)
+        } catch (e: Exception) {
+            log.warn("Failed to automatically sync stats after custom event data sync: ${e.message}")
+        }
+        return SyncCounts(teams.size, matches.size)
+    }
+
+    /**
+     * Upserts one event's synced teams and matches. Rows whose stored values already match are left
+     * alone: most scheduled syncs change nothing, and rewriting every row each run was the bulk of the
+     * database load. Written values are the same as before, only no-op UPDATEs are skipped.
+     */
+    private suspend fun writeEventData(
+        event: EventSyncRecord,
+        eventKey: String,
+        teams: List<TeamSyncRecord>,
+        matches: List<MatchSyncRecord>
+    ) {
         val now = Instant.now()
         withContext(Dispatchers.IO) {
             transaction {
                 upsertEvent(event, now)
-                val removed = MatchCanonical.deduplicateDatabaseForEvent(key)
+                val removed = MatchCanonical.deduplicateDatabaseForEvent(eventKey)
                 if (removed > 0) {
-                    log.info("Cleaned $removed duplicate match row(s) before sync for $key")
+                    log.info("Cleaned $removed duplicate match row(s) before sync for $eventKey")
                 }
-                val existingTeamsMap = ApiTeams.selectAll().where { ApiTeams.eventKey eq key }
+                val existingTeamsMap = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }
                     .associateBy { it[ApiTeams.teamKey] }
                 teams.forEach { team ->
                     val existing = existingTeamsMap[team.teamKey]
@@ -370,7 +304,7 @@ object IntegrationService {
                             it[ApiTeams.dataJson] = team.dataJson
                             it[ApiTeams.updatedAt] = now
                         }
-                    } else {
+                    } else if (teamRowDiffers(existing, team)) {
                         ApiTeams.update({ ApiTeams.id eq existing[ApiTeams.id] }) {
                             it[ApiTeams.teamNumber] = team.teamNumber
                             it[ApiTeams.name] = team.name.clipTeamText()
@@ -392,14 +326,15 @@ object IntegrationService {
                         }
                     }
                 }
+                EventTeamCanonical.deduplicateTeamsForEvent(eventKey)
 
-                EventTeamCanonical.deduplicateTeamsForEvent(key)
-
-                val existingMatchesMap = ApiMatches.selectAll().where { ApiMatches.eventKey eq key }
+                val existingMatchesMap = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }
                     .associateBy { it[ApiMatches.matchKey] }
                 matches.forEach { match ->
                     val canonical = MatchCanonical.canonicalize(match)
                     val existing = existingMatchesMap[canonical.matchKey]
+                    val redJson = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
+                    val blueJson = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
                     if (existing == null) {
                         ApiMatches.insert {
                             it[ApiMatches.matchKey] = canonical.matchKey
@@ -409,12 +344,22 @@ object IntegrationService {
                             it[ApiMatches.matchNumber] = canonical.matchNumber
                             it[ApiMatches.scheduledTime] = canonical.scheduledTime
                             it[ApiMatches.actualTime] = canonical.actualTime
-                            it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
-                            it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
+                            it[ApiMatches.redTeams] = redJson
+                            it[ApiMatches.blueTeams] = blueJson
                             it[ApiMatches.dataJson] = canonical.dataJson
                             it[ApiMatches.updatedAt] = now
                         }
-                    } else {
+                    } else if (
+                        existing[ApiMatches.eventKey] != canonical.eventKey ||
+                        existing[ApiMatches.compLevel] != canonical.compLevel ||
+                        existing[ApiMatches.setNumber] != canonical.setNumber ||
+                        existing[ApiMatches.matchNumber] != canonical.matchNumber ||
+                        existing[ApiMatches.scheduledTime] != canonical.scheduledTime ||
+                        existing[ApiMatches.actualTime] != canonical.actualTime ||
+                        existing[ApiMatches.redTeams] != redJson ||
+                        existing[ApiMatches.blueTeams] != blueJson ||
+                        existing[ApiMatches.dataJson] != canonical.dataJson
+                    ) {
                         ApiMatches.update({ ApiMatches.id eq existing[ApiMatches.id] }) {
                             it[ApiMatches.eventKey] = canonical.eventKey
                             it[ApiMatches.compLevel] = canonical.compLevel
@@ -422,23 +367,29 @@ object IntegrationService {
                             it[ApiMatches.matchNumber] = canonical.matchNumber
                             it[ApiMatches.scheduledTime] = canonical.scheduledTime
                             it[ApiMatches.actualTime] = canonical.actualTime
-                            it[ApiMatches.redTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
-                            it[ApiMatches.blueTeams] = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
+                            it[ApiMatches.redTeams] = redJson
+                            it[ApiMatches.blueTeams] = blueJson
                             it[ApiMatches.dataJson] = canonical.dataJson
                             it[ApiMatches.updatedAt] = now
                         }
                     }
                 }
-                MatchCanonical.deduplicateDatabaseForEvent(key)
+                MatchCanonical.deduplicateDatabaseForEvent(eventKey)
             }
         }
-        try {
-            syncStats(settings, key)
-        } catch (e: Exception) {
-            log.warn("Failed to automatically sync stats after custom event data sync: ${e.message}")
-        }
-        return SyncCounts(teams.size, matches.size)
     }
+
+    private fun teamRowDiffers(existing: ResultRow, team: TeamSyncRecord): Boolean =
+        existing[ApiTeams.teamNumber] != team.teamNumber ||
+            existing[ApiTeams.name] != team.name.clipTeamText() ||
+            existing[ApiTeams.nickname] != team.nickname.clipTeamText() ||
+            existing[ApiTeams.city] != team.city.clipTeamLocation() ||
+            existing[ApiTeams.state] != team.state.clipTeamLocation() ||
+            existing[ApiTeams.country] != team.country.clipTeamLocation() ||
+            (team.opr != null && existing[ApiTeams.opr] != team.opr) ||
+            (team.epa != null && existing[ApiTeams.epa] != team.epa) ||
+            (team.exp != null && existing[ApiTeams.match13Exp] != team.exp) ||
+            existing[ApiTeams.dataJson] != team.dataJson
 
     suspend fun syncStats(settings: ApiSettings, customEventKey: String? = null): Int {
         if (settings.program == "FTC") {
@@ -452,7 +403,7 @@ object IntegrationService {
         }
         val tbaEnabled = settings.apiKeys.tbaKey.isNotBlank()
         val statboticsEnabled = true
-        val match13Enabled = true
+        val match13Enabled = settings.apiKeys.match13Key.isNotBlank()
         
         val (oprs, epas, exps) = coroutineScope {
             val oprsDeferred = if (tbaEnabled) async { fetchTbaOprs(settings, eventKey) } else null
@@ -473,9 +424,10 @@ object IntegrationService {
                     val opr = oprs?.get(teamKey)
                     val epa = epas?.get(teamKey)
                     val exp = exps?.get(teamKey)
-                    val hasOpr = oprs != null && oprs.containsKey(teamKey)
-                    val hasEpa = epas != null && epas.containsKey(teamKey)
-                    val hasExp = exps != null && exps.containsKey(teamKey)
+                    // Only stats that actually moved count; unchanged rows skip the write.
+                    val hasOpr = oprs != null && oprs.containsKey(teamKey) && row[ApiTeams.opr] != opr
+                    val hasEpa = epas != null && epas.containsKey(teamKey) && row[ApiTeams.epa] != epa
+                    val hasExp = exps != null && exps.containsKey(teamKey) && row[ApiTeams.match13Exp] != exp
                     if (hasOpr || hasEpa || hasExp) {
                         ApiTeams.update({ ApiTeams.id eq row[ApiTeams.id] }) {
                             if (hasOpr) {
@@ -494,6 +446,24 @@ object IntegrationService {
             }
         }
         return maxOf(oprs?.size ?: 0, epas?.size ?: 0, exps?.size ?: 0)
+    }
+
+    private val lastOnDemandStatsSync = java.util.concurrent.ConcurrentHashMap<String, Instant>()
+
+    /**
+     * Stats sync for request paths (e.g. the predictor). Before an event starts TBA has no OPRs, so
+     * "stats look empty" is true on every view; this caps it at one upstream fetch per event per 5 minutes.
+     */
+    suspend fun syncStatsOnDemand(settings: ApiSettings, eventKey: String): Boolean {
+        val now = Instant.now()
+        val cutoff = now.minusSeconds(300)
+        var claimed = false
+        lastOnDemandStatsSync.compute("${settings.program}-${eventKey.lowercase()}") { _, last ->
+            if (last != null && last.isAfter(cutoff)) last else now.also { claimed = true }
+        }
+        if (!claimed) return false
+        syncStats(settings, eventKey)
+        return true
     }
 
     fun listEvents(
@@ -1716,7 +1686,12 @@ object IntegrationService {
             val array = root.findArray(listOf("Events", "events"))
             val single = array.firstOrNull()?.jsonObject
             if (single != null) {
-                val code = single.readString("code") ?: single.readString("eventCode") ?: eventCode
+                // Under an alternate code the event still lives at its TBA key, not FIRST's.
+                val code = if (settings.usesAlternateEventCode(eventKey)) {
+                    eventKey.lowercase().trim().removePrefix(year.toString())
+                } else {
+                    single.readString("code") ?: single.readString("eventCode") ?: eventCode
+                }
                 return EventSyncRecord(
                     eventKey = canonicalTbaEventKey(year, code),
                     year = year,
@@ -1892,10 +1867,13 @@ object IntegrationService {
         val normalizedKey = canonicalStoredEventKey(settings.year, eventKey)
         if (normalizedKey.isBlank()) return
         
-        val oprs = fetchTbaOprs(settings, normalizedKey)
-        val epaHistory = fetchStatboticsMatchEpaHistory(settings, normalizedKey)
-        val match13History = fetchMatch13MatchHistory(settings, normalizedKey)
-        
+        val (oprs, epaHistory, match13History) = coroutineScope {
+            val oprsDeferred = async { fetchTbaOprs(settings, normalizedKey) }
+            val epaDeferred = async { fetchStatboticsMatchEpaHistory(settings, normalizedKey) }
+            val match13Deferred = async { fetchMatch13MatchHistory(settings, normalizedKey) }
+            Triple(oprsDeferred.await(), epaDeferred.await(), match13Deferred.await())
+        }
+
         val oprsJson = JsonSupport.json.encodeToString(oprs)
         val epaHistoryJson = JsonSupport.json.encodeToString(epaHistory)
         val match13HistoryJson = JsonSupport.json.encodeToString(match13History)
@@ -1943,9 +1921,9 @@ object IntegrationService {
                 emptyList()
             }
             
-            // If the cache is older than 15 minutes, trigger background refresh
+            // If the cache is older than 15 minutes (a day once the event has ended), refresh in the background
             val updatedAt = cached[EpaOprHistoryCache.updatedAt]
-            if (updatedAt.isBefore(java.time.Instant.now().minusSeconds(900))) {
+            if (historyRefreshDue(normalizedKey, updatedAt, 900)) {
                 SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
             }
             
@@ -1971,7 +1949,9 @@ object IntegrationService {
         val needsMatch13 = settings.useMatch13Exp
         val isCachedMatch13Missing = cached != null && (cached[EpaOprHistoryCache.match13HistoryJson].isNullOrBlank() || cached[EpaOprHistoryCache.match13HistoryJson] == "[]")
 
-        if (cached == null || (needsMatch13 && isCachedMatch13Missing)) {
+        // Only block the request when there is nothing cached at all. An event Match 13 does not
+        // carry yet always has empty Match 13 history, and refetching inline would stall every page view.
+        if (cached == null) {
             try {
                 syncEpaOprHistory(settings, normalizedKey)
                 cached = transaction {
@@ -2000,7 +1980,8 @@ object IntegrationService {
             }
 
             val updatedAt = cached[EpaOprHistoryCache.updatedAt]
-            if (updatedAt.isBefore(java.time.Instant.now().minusSeconds(900))) {
+            val refreshAfterSeconds = if (needsMatch13 && isCachedMatch13Missing) 120L else 900L
+            if (historyRefreshDue(normalizedKey, updatedAt, refreshAfterSeconds)) {
                 SyncScheduler.triggerBackgroundHistorySync(settings, normalizedKey)
             }
 
@@ -2017,24 +1998,148 @@ object IntegrationService {
 
     private suspend fun fetchMatch13Exps(settings: ApiSettings, eventKey: String): Map<String, Double> {
         val cleanEventKey = canonicalStoredEventKey(settings.year, eventKey)
-        val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
         val rawKey = settings.apiKeys.match13Key.trim()
         val key = if (rawKey == "********") "" else rawKey
+        // Every Match 13 route needs a key; without one each call is a guaranteed 401.
+        if (key.isBlank()) return emptyMap()
+        val eventExps = fetchMatch13EventExps(settings, cleanEventKey, key)
+
+        // Match 13 picks up new events after FIRST/TBA do, so a freshly created event can be
+        // missing there (404) or only partly filled. Cover the gap from each team's season rating.
+        val roster = readTransaction {
+            ApiTeams.selectAll().where { ApiTeams.eventKey eq cleanEventKey }.map { it[ApiTeams.teamKey] }
+        }
+        val missing = roster.filter { it.startsWith("frc") && !eventExps.containsKey(it) }
+        if (missing.isEmpty()) return eventExps
+        val year = cleanEventKey.take(4).toIntOrNull() ?: settings.year
+        val fallback = try {
+            fetchMatch13FallbackExps(settings, key, year, missing)
+        } catch (e: Exception) {
+            log.warn("Match 13 season fallback failed for $cleanEventKey: ${e.message}")
+            emptyMap()
+        }
+        if (fallback.isNotEmpty()) {
+            log.info("Match 13: filled xP for ${fallback.size}/${missing.size} team(s) at $cleanEventKey from season ratings")
+        }
+        return eventExps + fallback
+    }
+
+    private data class Match13SeasonRating(val xp: Double, val normXp: Double?)
+    private data class Match13SeasonCache(val ratings: Map<Int, Match13SeasonRating>, val fetchedAt: Instant)
+
+    // Season ratings are the same for every account, so one cached copy serves every team on the server
+    // and keeps us well inside Match 13's shared 60/min, 1000/hr allowance.
+    private val match13SeasonCache = java.util.concurrent.ConcurrentHashMap<Int, Match13SeasonCache>()
+    private val match13SeasonLock = Mutex()
+
+    /**
+     * xP for teams the event endpoint did not cover: this season's rating first (it tracks the team's
+     * most recent event), then last season's normalized xP mapped onto this season's points scale.
+     */
+    private suspend fun fetchMatch13FallbackExps(
+        settings: ApiSettings,
+        key: String,
+        year: Int,
+        teamKeys: List<String>
+    ): Map<String, Double> {
+        val current = fetchMatch13SeasonRatings(settings, key, year)
+        val result = mutableMapOf<String, Double>()
+        val withoutSeason = mutableListOf<Int>()
+        teamKeys.forEach { teamKey ->
+            val teamNumber = teamKey.removePrefix("frc").toIntOrNull() ?: return@forEach
+            val rating = current[teamNumber]
+            if (rating != null) result[teamKey] = rating.xp else withoutSeason.add(teamNumber)
+        }
+        if (withoutSeason.isEmpty()) return result
+
+        // xP is in this game's points, so last season's raw number means nothing now. normXp is
+        // comparable across seasons; fit this season's xp ~ normXp line and project through it.
+        val scale = fitNormXpScale(current.values) ?: return result
+        val previous = fetchMatch13SeasonRatings(settings, key, year - 1)
+        withoutSeason.forEach { teamNumber ->
+            val normXp = previous[teamNumber]?.normXp ?: return@forEach
+            result["frc$teamNumber"] = scale.first * normXp + scale.second
+        }
+        return result
+    }
+
+    private fun fitNormXpScale(ratings: Collection<Match13SeasonRating>): Pair<Double, Double>? {
+        val points = ratings.mapNotNull { rating -> rating.normXp?.let { it to rating.xp } }
+        if (points.size < 20) return null
+        val meanX = points.sumOf { it.first } / points.size
+        val meanY = points.sumOf { it.second } / points.size
+        val varX = points.sumOf { (x, _) -> (x - meanX) * (x - meanX) }
+        if (varX < 1e-9) return null
+        val slope = points.sumOf { (x, y) -> (x - meanX) * (y - meanY) } / varX
+        return slope to (meanY - slope * meanX)
+    }
+
+    private suspend fun fetchMatch13SeasonRatings(settings: ApiSettings, key: String, year: Int): Map<Int, Match13SeasonRating> {
+        // Match 13 itself marks the live season max-age=60 and finished seasons max-age=86400.
+        val ttlSeconds = if (year >= java.time.Year.now().value) 600L else 86_400L
+        // An empty result (404, error or timeout) is remembered briefly too, so a Match 13 outage costs
+        // one timeout per couple of minutes instead of one per team the scheduler walks through.
+        fun fresh() = match13SeasonCache[year]
+            ?.takeIf { it.fetchedAt.isAfter(Instant.now().minusSeconds(if (it.ratings.isEmpty()) 120L else ttlSeconds)) }
+            ?.ratings
+        fresh()?.let { return it }
+        return match13SeasonLock.withLock {
+            fresh()?.let { return@withLock it }
+            val baseUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
+            val ratings = mutableMapOf<Int, Match13SeasonRating>()
+            var page: Int? = 1
+            var pagesFetched = 0
+            while (page != null && pagesFetched < 10) {
+                val response = try {
+                    client.get("$baseUrl/v1/years/$year/teams?page=$page&limit=1000") {
+                        header(HttpHeaders.Accept, "application/json")
+                        header(HttpHeaders.Authorization, "Bearer $key")
+                    }
+                } catch (error: Exception) {
+                    log.warn("Match 13 season ratings fetch failed for $year: ${error.message}")
+                    break
+                }
+                pagesFetched++
+                if (!response.status.isSuccess()) {
+                    // 404 just means Match 13 has no ratings for that season yet.
+                    if (response.status != HttpStatusCode.NotFound) {
+                        log.warn("Match 13 season ratings fetch for $year returned ${response.status}")
+                    }
+                    break
+                }
+                val body = JsonSupport.json.parseToJsonElement(response.bodyAsText()) as? JsonObject ?: break
+                (body["teams"] as? JsonArray)?.forEach { item ->
+                    val obj = item as? JsonObject ?: return@forEach
+                    val teamNumber = obj.readInt("teamNumber") ?: return@forEach
+                    val xp = obj.readDouble("xp") ?: return@forEach
+                    ratings[teamNumber] = Match13SeasonRating(xp, obj.readDouble("normXp"))
+                }
+                page = body.readInt("nextPage")
+            }
+            match13SeasonCache[year] = Match13SeasonCache(ratings, Instant.now())
+            ratings
+        }
+    }
+
+    private suspend fun fetchMatch13EventExps(settings: ApiSettings, cleanEventKey: String, key: String): Map<String, Double> {
+        val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
         val url = "$rawUrl/v1/events/${cleanEventKey}/teams"
         val response = try {
             client.get(url) {
                 header(HttpHeaders.Accept, "application/json")
-                if (key.isNotBlank()) {
-                    header("X-Match13-Key", key)
-                    header(HttpHeaders.Authorization, "Bearer $key")
-                }
+                header("X-Match13-Key", key)
+                header(HttpHeaders.Authorization, "Bearer $key")
             }
         } catch (error: Exception) {
             log.warn("Match 13 fetch failed: ${error.message}")
             return emptyMap()
         }
         if (!response.status.isSuccess()) {
-            log.warn("Match 13 fetch failed with status ${response.status}")
+            if (response.status == HttpStatusCode.NotFound) {
+                log.info("Match 13 does not carry $cleanEventKey yet; using season ratings")
+            } else {
+                log.warn("Match 13 fetch failed with status ${response.status}")
+            }
             return emptyMap()
         }
         val responseText = response.bodyAsText()
@@ -2099,6 +2204,8 @@ object IntegrationService {
         val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
         val rawKey = settings.apiKeys.match13Key.trim()
         val key = if (rawKey == "********") "" else rawKey
+        // Keyless calls are always 401s; skipping them matters because history refreshes every 2 min while empty.
+        if (key.isBlank()) return emptyList()
         val url = "$rawUrl/v1/events/${cleanEventKey}/matches"
         return try {
             val response = client.get(url) {
@@ -2627,9 +2734,17 @@ private fun ApiSettings.firstEventCode(eventKey: String): String {
     val resolvedConfiguredKey = this.resolvedEventKey().lowercase().trim()
     val targetKey = eventKey.lowercase().trim()
     val isCustomSync = targetKey.isNotBlank() && targetKey != resolvedConfiguredKey
-    
+
+    if (usesAlternateEventCode(eventKey)) return alternateEventCode.trim().uppercase()
     val codeToUse = if (isCustomSync) "" else this.eventCode
     return firstEventCodeFor(this.year, codeToUse, eventKey)
+}
+
+/** True when FIRST knows [eventKey] (the configured event) under the admin-set alternate code. */
+internal fun ApiSettings.usesAlternateEventCode(eventKey: String): Boolean {
+    if (alternateEventCode.isBlank()) return false
+    val targetKey = eventKey.lowercase().trim()
+    return targetKey.isBlank() || targetKey == resolvedEventKey().lowercase().trim()
 }
 
 private fun parseFirstMatchItems(
@@ -2711,6 +2826,36 @@ private fun JsonObject.readFirstAlliances(): Pair<List<String>, List<String>> {
         ?: blueAlliance?.readTeamList("teams")
         ?: emptyList()
     return redTeams to blueTeams
+}
+
+/**
+ * True once the event's local date is past the day after [endDate], so late score and ranking fixes
+ * still sync. Accepts TBA dates ("2026-03-15") and FIRST's ("2026-03-15T00:00:00") and FIRST zone names
+ * ("Eastern Standard Time"). A missing or unreadable date counts as not ended, keeping the old behavior.
+ */
+internal fun isPastEventSyncWindow(endDate: String?, timezone: String?, now: Instant = Instant.now()): Boolean {
+    val datePart = endDate?.trim()?.take(10)
+    if (datePart.isNullOrBlank()) return false
+    val end = try {
+        java.time.LocalDate.parse(datePart)
+    } catch (_: java.time.DateTimeException) {
+        return false
+    }
+    val today = now.atZone(resolveZoneId(timezone)).toLocalDate()
+    return today.isAfter(end.plusDays(1))
+}
+
+/**
+ * Whether a page view should refresh an event's cached stats history. Live events refresh after
+ * [refreshAfterSeconds]; ended events at most once a day, so browsing an old event doesn't keep
+ * calling the stats APIs. The event lookup only happens once the cache is already stale.
+ */
+internal fun historyRefreshDue(eventKey: String, updatedAt: Instant, refreshAfterSeconds: Long): Boolean {
+    val now = Instant.now()
+    if (!updatedAt.isBefore(now.minusSeconds(refreshAfterSeconds))) return false
+    val event = IntegrationService.getEvent(eventKey) ?: return true
+    if (!isPastEventSyncWindow(event.endDate, event.timezone, now)) return true
+    return updatedAt.isBefore(now.minusSeconds(86_400))
 }
 
 internal fun resolveZoneId(tzString: String?): java.time.ZoneId {

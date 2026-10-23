@@ -104,6 +104,7 @@ import com.obsidianscout.db.ChatMessages
 
 private fun syncInputsChanged(before: ApiSettings, after: ApiSettings): Boolean =
     before.resolvedEventKey() != after.resolvedEventKey() ||
+        before.alternateEventCode != after.alternateEventCode ||
         before.timezone != after.timezone ||
         before.preferredSource != after.preferredSource ||
         before.apiKeys != after.apiKeys ||
@@ -118,6 +119,7 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
     return ApiSettingsPayload(
         year = year,
         eventCode = eventCode,
+        alternateEventCode = alternateEventCode,
         eventKey = eventKey,
         timezone = timezone,
         preferredSource = preferredSource,
@@ -151,6 +153,7 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
     return ApiSettings(
         year = year,
         eventCode = eventCode,
+        alternateEventCode = alternateEventCode.orEmpty(),
         timezone = timezone,
         preferredSource = preferredSource,
         useStatboticsEpa = useStatboticsEpa,
@@ -527,12 +530,14 @@ fun Route.configRoutes() {
                     val previous = SettingsService.getSettings(session.teamNumber, targetProgram)
                     val selfRegisterRoles = payload.selfRegisterRoles ?: previous.selfRegisterRoles
                     val recencyBias = payload.recencyBias ?: previous.recencyBias
+                    val alternateEventCode = payload.alternateEventCode ?: previous.alternateEventCode
                     val updated = SettingsService.updateSettings(
                         session.teamNumber,
                         payload.toSettings().copy(
                             program = targetProgram,
                             selfRegisterRoles = selfRegisterRoles,
-                            recencyBias = recencyBias
+                            recencyBias = recencyBias,
+                            alternateEventCode = alternateEventCode
                         )
                     )
                     val activeAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, targetProgram)

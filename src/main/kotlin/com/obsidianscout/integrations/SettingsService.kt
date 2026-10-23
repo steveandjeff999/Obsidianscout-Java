@@ -171,6 +171,11 @@ data class RecencyBiasSettings(
 data class ApiSettings(
     val year: Int = Year.now().value,
     val eventCode: String = "",
+    /**
+     * The FIRST API's code for the configured event when it differs from the TBA / Match 13 code
+     * (some offseason events: TBA "cttd", FIRST "MOLEE"). Blank means FIRST uses [eventCode].
+     */
+    val alternateEventCode: String = "",
     /** Computed from year + eventCode; kept for API responses and legacy stored JSON. */
     val eventKey: String = "",
     val timezone: String = "UTC",
@@ -259,7 +264,7 @@ object SettingsService {
         }
         val normalized = normalize(parsed)
         return if (teamNumber != 0 && !isTeamSpecific) {
-            normalized.copy(eventCode = "", eventKey = "")
+            normalized.copy(eventCode = "", alternateEventCode = "", eventKey = "")
         } else {
             normalized
         }
@@ -275,7 +280,12 @@ object SettingsService {
         )
         // Saving page lists counts as having seen every page added so far, so a page an admin
         // unchecks isn't granted again on the next load.
+        // The alternate code belongs to one event. If the event changes and the alternate was not
+        // edited alongside it, drop it so FIRST isn't queried with the old event's code.
+        val eventChanged = !settings.resolvedEventKey().equals(existing.resolvedEventKey(), ignoreCase = true)
+        val alternateCarriedOver = settings.alternateEventCode.trim().equals(existing.alternateEventCode.trim(), ignoreCase = true)
         val settingsWithMergedKeys = settings.copy(
+            alternateEventCode = if (eventChanged && alternateCarriedOver) "" else settings.alternateEventCode,
             apiKeys = mergedKeys,
             pageDefaultsVersion = maxOf(settings.pageDefaultsVersion, existing.pageDefaultsVersion)
         )
@@ -323,6 +333,13 @@ object SettingsService {
         return updateSettings(teamNumber, updated)
     }
 
+    /** Admins may paste a full key ("2026molee"); FIRST only wants the code part. */
+    internal fun normalizeAlternateEventCode(raw: String): String {
+        val trimmed = raw.trim()
+        val code = if (trimmed.length > 4 && trimmed.take(4).all { it.isDigit() }) trimmed.drop(4) else trimmed
+        return code.take(32)
+    }
+
     private fun normalize(settings: ApiSettings): ApiSettings {
         val eventCode = resolveEventCode(settings)
         val resolvedKey = if (eventCode.isNotBlank()) {
@@ -366,6 +383,7 @@ object SettingsService {
         val match13Url = (if (rawMatch13Url.isBlank()) "https://actions.match13.com" else rawMatch13Url).removeSuffix("/")
         return settings.copy(
             eventCode = canonicalTbaEventCode(eventCode),
+            alternateEventCode = normalizeAlternateEventCode(settings.alternateEventCode),
             eventKey = resolvedKey,
             timezone = settings.timezone.ifBlank { "UTC" },
             preferredSource = settings.preferredSource.lowercase(),

@@ -314,6 +314,8 @@ data class ApiKeysPayload(
 data class ApiSettingsPayload(
     val year: Int = java.time.Year.now().value,
     val eventCode: String = "",
+    /** Omitted (null) on save keeps the team's current value, so clients that don't know the field can't clear it. */
+    val alternateEventCode: String? = null,
     val eventKey: String = "",
     val timezone: String = "UTC",
     val preferredSource: String = "tba",

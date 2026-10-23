@@ -10,6 +10,37 @@ import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.time.Instant
 
+/** Every [ApiSettings] field that event-data and history sync read. Equal inputs give equal sync results. */
+private data class SyncInputs(
+    val program: String,
+    val year: Int,
+    val eventKey: String,
+    val eventCode: String,
+    val alternateEventCode: String,
+    val timezone: String,
+    val preferredSource: String,
+    val useMatch13Exp: Boolean,
+    val apiKeys: ApiKeys,
+    val statboticsBaseUrl: String,
+    val match13BaseUrl: String
+) {
+    companion object {
+        fun of(settings: ApiSettings) = SyncInputs(
+            program = settings.program,
+            year = settings.year,
+            eventKey = settings.resolvedEventKey(),
+            eventCode = settings.eventCode,
+            alternateEventCode = settings.alternateEventCode,
+            timezone = settings.timezone,
+            preferredSource = settings.preferredSource,
+            useMatch13Exp = settings.useMatch13Exp,
+            apiKeys = settings.apiKeys,
+            statboticsBaseUrl = settings.statboticsBaseUrl,
+            match13BaseUrl = settings.match13BaseUrl
+        )
+    }
+}
+
 object SyncScheduler {
     private val log = LoggerFactory.getLogger("SyncScheduler")
 
@@ -271,6 +302,10 @@ object SyncScheduler {
         var totalTeams = 0
         var totalMatches = 0
         var failures = 0
+        // Alliance members often resolve to the exact same event, codes and keys. A second sync with
+        // identical inputs in the same pass would refetch and rewrite the same shared rows, so reuse
+        // the first result. Inputs that differ at all (any key, code or source) still sync on their own.
+        val completedThisPass = mutableMapOf<SyncInputs, SyncCounts>()
 
         teams.forEach { (teamNumber, program) ->
             if (!beginSync(teamNumber, program, "Auto-sync")) {
@@ -278,17 +313,33 @@ object SyncScheduler {
             }
             try {
                 val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber, program)
-                val counts = IntegrationService.syncEventData(settings)
-                totalTeams += counts.teams
-                totalMatches += counts.matches
-                val eventKey = settings.resolvedEventKey()
-                if (eventKey.isNotBlank()) {
-                    try {
-                        IntegrationService.syncEpaOprHistory(settings, eventKey)
-                    } catch (e: Exception) {
-                        log.warn("Auto-sync EPA/OPR history sync failed for team $teamNumber ($program): ${e.message}")
+                // Teams often leave a finished event configured; polling it forever only loads TBA, FIRST
+                // and Match 13. Manual sync still works for ended events. (Reported by Match 13, issue #2.)
+                if (program == "FRC") {
+                    val event = IntegrationService.getEvent(settings.resolvedEventKey())
+                    if (isPastEventSyncWindow(event?.endDate, event?.timezone)) {
+                        val status = getStatusForTeam(teamNumber, program)
+                        status.lastSyncSummary = "Event ended; use manual sync to refresh"
+                        status.lastSyncError = null
+                        return@forEach
                     }
                 }
+                val inputs = SyncInputs.of(settings)
+                val counts = completedThisPass[inputs] ?: run {
+                    val fresh = IntegrationService.syncEventData(settings)
+                    val eventKey = settings.resolvedEventKey()
+                    if (eventKey.isNotBlank()) {
+                        try {
+                            IntegrationService.syncEpaOprHistory(settings, eventKey)
+                        } catch (e: Exception) {
+                            log.warn("Auto-sync EPA/OPR history sync failed for team $teamNumber ($program): ${e.message}")
+                        }
+                    }
+                    completedThisPass[inputs] = fresh
+                    fresh
+                }
+                totalTeams += counts.teams
+                totalMatches += counts.matches
                 val status = getStatusForTeam(teamNumber, program)
                 status.lastSyncAt = Instant.now()
                 status.lastSyncError = null
@@ -421,13 +472,20 @@ object SyncScheduler {
         return true
     }
 
+    // Every page view of a stale event calls triggerBackgroundHistorySync; only one fetch per event runs at a time.
+    private val historySyncInFlight: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     fun triggerBackgroundHistorySync(settings: ApiSettings, eventKey: String) {
         val activeScope = scope ?: return
+        val flightKey = "${settings.program}-$eventKey"
+        if (!historySyncInFlight.add(flightKey)) return
         activeScope.launch {
             try {
                 IntegrationService.syncEpaOprHistory(settings, eventKey)
             } catch (e: Exception) {
                 log.warn("Background OPR/EPA history sync failed for $eventKey: ${e.message}")
+            } finally {
+                historySyncInFlight.remove(flightKey)
             }
         }
     }

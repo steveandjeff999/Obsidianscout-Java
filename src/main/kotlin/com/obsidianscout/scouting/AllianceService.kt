@@ -1209,9 +1209,12 @@ object AllianceService {
                 }
             }
 
+            // The alternate code describes the team's own event; it must not leak onto a different alliance event.
+            val sameEvent = effKey.equals(localSettings.resolvedEventKey(), ignoreCase = true)
             localSettings.copy(
                 year = effYear,
                 eventCode = effCode,
+                alternateEventCode = if (sameEvent) localSettings.alternateEventCode else "",
                 eventKey = effKey,
                 apiKeys = localSettings.apiKeys.copy(
                     tbaKey = tbaKey,

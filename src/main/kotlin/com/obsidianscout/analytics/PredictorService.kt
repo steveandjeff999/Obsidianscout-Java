@@ -66,7 +66,7 @@ object PredictorService {
         if (needsStatsSync) {
             try {
                 val settings = readTransaction { com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program) }
-                com.obsidianscout.integrations.IntegrationService.syncStats(settings, eventKey)
+                com.obsidianscout.integrations.IntegrationService.syncStatsOnDemand(settings, eventKey)
             } catch (e: Exception) {
                 throw ApiException(HttpStatusCode.BadGateway, "Failed to fetch EPA/OPR/EXP stats from API: ${e.message}")
             }
