@@ -220,6 +220,36 @@ data class AssignmentActionResponse(
     val message: String
 )
 
+@Serializable
+data class SaveAssignmentShiftRequest(
+    val id: String? = null,
+    val eventKey: String = "",
+    val name: String = "",
+    val day: String = "",
+    val startTime: String = "",
+    val endTime: String = "",
+    val stageFilter: String = "all",
+    val matchScouterIds: List<String> = emptyList(),
+    val qualMode: String = "TEAMS",
+    val qualScouterIds: List<String> = emptyList()
+)
+
+@Serializable
+data class AssignmentShiftView(
+    val shift: com.obsidianscout.integrations.AssignmentShift,
+    /** Synced matches currently scheduled inside the shift's window. */
+    val matchCount: Int = 0,
+    /** Username for each scouter id on the shift. */
+    val scouterNames: Map<String, String> = emptyMap()
+)
+
+@Serializable
+data class AssignmentShiftsResponse(
+    val shifts: List<AssignmentShiftView> = emptyList(),
+    /** Assignments created by this request (saving a shift). */
+    val createdCount: Int = 0
+)
+
 object ScoutingAssignmentService {
 
     fun createAssignment(session: UserSession, request: CreateAssignmentRequest): ScoutingAssignmentRecord {
@@ -384,6 +414,305 @@ object ScoutingAssignmentService {
 
         val current = com.obsidianscout.integrations.SettingsService.getSettings(session.teamNumber, session.program)
         return com.obsidianscout.integrations.SettingsService.updateSettings(session.teamNumber, current.copy(pitScoutGroups = cleaned)).pitScoutGroups
+    }
+
+    // ==========================================
+    // TIME SHIFTS (planned before the schedule exists)
+    // ==========================================
+
+    /** Robot stations per match (red 1-3, blue 1-3); FTC fields use the first four. */
+    private const val SHIFT_MAX_SEATS = 6
+    private val SHIFT_TIME = Regex("""^(\d{1,2}):(\d{2})$""")
+
+    private fun shiftMinutes(time: String): Int? {
+        val m = SHIFT_TIME.matchEntire(time.trim()) ?: return null
+        val h = m.groupValues[1].toInt()
+        val min = m.groupValues[2].toInt()
+        return if (h in 0..23 && min in 0..59) h * 60 + min else null
+    }
+
+    private fun matchesStage(compLevel: String?, stage: String?): Boolean {
+        val lvl = (compLevel ?: "").lowercase()
+        return when (stage?.trim()?.lowercase() ?: "all") {
+            "qm", "qual", "quals" -> lvl in listOf("qm", "qual", "quals", "qualification")
+            "pr", "practice", "pm" -> lvl in listOf("pr", "practice", "pm")
+            "qf" -> lvl == "qf"
+            "sf" -> lvl == "sf"
+            "f", "final", "finals" -> lvl in listOf("f", "final", "finals")
+            "playoffs", "playoff" -> lvl in listOf("qf", "sf", "f", "ef", "playoff", "playoffs")
+            else -> true
+        }
+    }
+
+    private fun eventZone(eventKey: String, fallback: String?): java.time.ZoneId {
+        val tz = IntegrationService.getEvent(eventKey)?.timezone?.takeIf { it.isNotBlank() && it != "UTC" } ?: fallback
+        return runCatching { java.time.ZoneId.of(tz?.trim().orEmpty().ifBlank { "UTC" }) }.getOrDefault(java.time.ZoneOffset.UTC)
+    }
+
+    /** Keys of synced matches whose scheduled start falls in [shift]'s window, in the event's timezone. */
+    private fun matchKeysInShift(shift: com.obsidianscout.integrations.AssignmentShift, zone: java.time.ZoneId): List<String> {
+        val day = runCatching { java.time.LocalDate.parse(shift.day) }.getOrNull() ?: return emptyList()
+        val startMin = shiftMinutes(shift.startTime) ?: return emptyList()
+        val endMin = shiftMinutes(shift.endTime) ?: return emptyList()
+        return readTransaction {
+            ApiMatches.selectAll().where { ApiMatches.eventKey eq shift.eventKey.trim().lowercase() }.mapNotNull { row ->
+                if (!matchesStage(row[ApiMatches.compLevel], shift.stageFilter)) return@mapNotNull null
+                val raw = row[ApiMatches.scheduledTime]?.takeIf { it > 0 } ?: return@mapNotNull null
+                val local = Instant.ofEpochMilli(if (raw < 100_000_000_000L) raw * 1000 else raw).atZone(zone)
+                val minutes = local.hour * 60 + local.minute
+                if (local.toLocalDate() == day && minutes >= startMin && minutes < endMin) row[ApiMatches.matchKey] else null
+            }
+        }
+    }
+
+    private fun shiftScouterIds(shift: com.obsidianscout.integrations.AssignmentShift): List<String> =
+        (shift.matchScouterIds + shift.qualScouterIds).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+    /**
+     * Gives each of [shift]'s seats its open slot in every match of the window. Never overwrites: a slot that
+     * already has a scout, or a scout who already has something in that match, is left alone.
+     * Returns the number of assignments created.
+     */
+    private fun applyShift(teamNumber: Int, program: String, shift: com.obsidianscout.integrations.AssignmentShift, zone: java.time.ZoneId): Int {
+        val matchKeys = matchKeysInShift(shift, zone)
+        if (matchKeys.isEmpty() || shiftScouterIds(shift).isEmpty()) return 0
+        val prog = program.uppercase().trim()
+        val eventKey = shift.eventKey.trim().lowercase()
+        val creator = shift.createdByUserId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        val now = Instant.now()
+
+        return transaction {
+            // Seats whose scout has left the team stay open
+            val requested = shiftScouterIds(shift).mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+            val onTeam = Users.selectAll().where {
+                (Users.id inList requested) and (Users.program eq prog) and (Users.teamNumber eq teamNumber)
+            }.map { it[Users.id].value }.toSet()
+            fun seat(ids: List<String>, i: Int): UUID? =
+                ids.getOrNull(i)?.trim()?.let { runCatching { UUID.fromString(it) }.getOrNull() }?.takeIf { it in onTeam }
+
+            val existing = ScoutingAssignments.selectAll().where {
+                (ScoutingAssignments.program eq prog) and (ScoutingAssignments.eventKey eq eventKey) and
+                (ScoutingAssignments.ownerTeamNumber eq teamNumber)
+            }.toList()
+
+            data class NewRow(
+                val scout: UUID, val matchKey: String, val matchNumber: Int?, val compLevel: String?,
+                val type: String, val team: Int?, val alliance: String, val notes: String
+            )
+            val rows = mutableListOf<NewRow>()
+
+            ApiMatches.selectAll().where { ApiMatches.matchKey inList matchKeys }.forEach { m ->
+                val mKey = m[ApiMatches.matchKey]
+                val inMatch = existing.filter { it[ScoutingAssignments.matchKey]?.equals(mKey, ignoreCase = true) == true }
+                val busy = inMatch.map { it[ScoutingAssignments.assignedUserId].value }.toMutableSet()
+                val red = m[ApiMatches.redTeams].split(",").mapNotNull { parseTeamNum(it) }
+                val blue = m[ApiMatches.blueTeams].split(",").mapNotNull { parseTeamNum(it) }
+                val stations = red.map { it to "RED" } + blue.map { it to "BLUE" }
+
+                fun claim(scout: UUID?, type: String, team: Int?, alliance: String, notes: String) {
+                    if (scout == null || scout in busy) return
+                    val taken = inMatch.any { a ->
+                        a[ScoutingAssignments.assignmentType] == type &&
+                            a[ScoutingAssignments.targetTeamNumber] == team &&
+                            (team != null || a[ScoutingAssignments.allianceColor]?.uppercase() == alliance)
+                    }
+                    if (taken) return
+                    busy.add(scout)
+                    rows.add(NewRow(scout, mKey, m[ApiMatches.matchNumber], m[ApiMatches.compLevel], type, team, alliance, notes))
+                }
+
+                stations.forEachIndexed { i, (team, alliance) ->
+                    claim(seat(shift.matchScouterIds, i), "MATCH", team, alliance, "Match Scouting - Team $team ($alliance)")
+                }
+                if (shift.qualMode == "ALLIANCE") {
+                    listOf("RED", "BLUE").forEachIndexed { i, alliance ->
+                        claim(seat(shift.qualScouterIds, i), "QUALITATIVE", null, alliance, "Qualitative scouting for $alliance alliance")
+                    }
+                } else {
+                    stations.forEachIndexed { i, (team, alliance) ->
+                        claim(seat(shift.qualScouterIds, i), "QUALITATIVE", team, alliance, "Qualitative scouting for Team #$team ($alliance)")
+                    }
+                }
+            }
+
+            if (rows.isNotEmpty()) {
+                ScoutingAssignments.batchInsert(rows, shouldReturnGeneratedValues = false) { r ->
+                    this[ScoutingAssignments.ownerTeamNumber] = teamNumber
+                    this[ScoutingAssignments.program] = prog
+                    this[ScoutingAssignments.eventKey] = eventKey
+                    this[ScoutingAssignments.assignedUserId] = r.scout
+                    this[ScoutingAssignments.assignmentType] = r.type
+                    this[ScoutingAssignments.matchKey] = r.matchKey
+                    this[ScoutingAssignments.matchNumber] = r.matchNumber
+                    this[ScoutingAssignments.compLevel] = r.compLevel
+                    this[ScoutingAssignments.targetTeamNumber] = r.team
+                    this[ScoutingAssignments.allianceColor] = r.alliance
+                    this[ScoutingAssignments.status] = "PENDING"
+                    this[ScoutingAssignments.notes] = r.notes
+                    this[ScoutingAssignments.createdByUserId] = creator
+                    this[ScoutingAssignments.createdAt] = now
+                    this[ScoutingAssignments.updatedAt] = now
+                }
+            }
+            rows.size
+        }
+    }
+
+    /** Applies the given shifts of one team and records what each created. Returns the total created. */
+    private fun applyTeamShifts(teamNumber: Int, program: String, shiftIds: Set<String>): Int {
+        val settings = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber, program)
+        val created = mutableMapOf<String, Int>()
+        settings.assignmentShifts.filter { it.id in shiftIds }.groupBy { it.eventKey.lowercase() }.forEach { (eventKey, shifts) ->
+            val zone = eventZone(eventKey, settings.timezone)
+            shifts.forEach { shift ->
+                val count = applyShift(teamNumber, program, shift, zone)
+                if (count > 0) created[shift.id] = count
+            }
+        }
+        if (created.isEmpty()) return 0
+
+        // Re-read so a shift edited while this ran isn't reverted
+        val latest = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber, program)
+        val nowText = Instant.now().toString()
+        com.obsidianscout.integrations.SettingsService.updateSettings(
+            teamNumber,
+            latest.copy(assignmentShifts = latest.assignmentShifts.map { s ->
+                created[s.id]?.let { s.copy(appliedCount = s.appliedCount + it, lastAppliedAt = nowText) } ?: s
+            })
+        )
+        com.obsidianscout.widgets.WidgetPushService.notifyTeam(teamNumber, program, "assignments")
+        return created.values.sum()
+    }
+
+    /**
+     * Called after a schedule sync: fills the planned shifts for [eventKeys] on every team that has some.
+     * Shifts whose day has passed are skipped, since no new matches will land in them.
+     */
+    fun applyShiftsAfterSync(program: String, eventKeys: Collection<String>) {
+        val keys = eventKeys.map { it.trim().lowercase() }.filter { it.isNotBlank() }.toSet()
+        if (keys.isEmpty()) return
+        try {
+            val prog = program.uppercase().trim()
+            val cutoff = java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(1)
+            val teams = readTransaction {
+                com.obsidianscout.db.AppSettings.selectAll().where {
+                    (com.obsidianscout.db.AppSettings.program eq prog) and
+                    (com.obsidianscout.db.AppSettings.settingsJson like "%\"qualScouterIds\"%")
+                }.map { it[com.obsidianscout.db.AppSettings.teamNumber] }
+            }
+            teams.forEach { teamNumber ->
+                val shiftIds = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber, prog).assignmentShifts
+                    .filter { it.eventKey.lowercase() in keys }
+                    .filter { runCatching { !java.time.LocalDate.parse(it.day).isBefore(cutoff) }.getOrDefault(false) }
+                    .map { it.id }.toSet()
+                if (shiftIds.isNotEmpty()) {
+                    val created = applyTeamShifts(teamNumber, prog, shiftIds)
+                    if (created > 0) consoleLog.info("[ScoutingAssignmentService] Shifts created $created assignment(s) for team $teamNumber ($prog)")
+                }
+            }
+        } catch (e: Exception) {
+            consoleLog.warn("[ScoutingAssignmentService] applyShiftsAfterSync warning: ${e.message}")
+        }
+    }
+
+    fun listShifts(session: UserSession, eventKey: String, createdCount: Int = 0): AssignmentShiftsResponse {
+        val key = eventKey.trim().lowercase()
+        val settings = com.obsidianscout.integrations.SettingsService.getSettings(session.teamNumber, session.program)
+        val shifts = settings.assignmentShifts.filter { it.eventKey.lowercase() == key }
+            .sortedWith(compareBy({ it.day }, { shiftMinutes(it.startTime) ?: 0 }))
+        if (shifts.isEmpty()) return AssignmentShiftsResponse(createdCount = createdCount)
+
+        val zone = eventZone(key, settings.timezone)
+        val userIds = shifts.flatMap { shiftScouterIds(it) }.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }.distinct()
+        val names = if (userIds.isEmpty()) emptyMap() else readTransaction {
+            Users.selectAll().where { Users.id inList userIds }.associate { it[Users.id].value.toString() to it[Users.username] }
+        }
+        return AssignmentShiftsResponse(
+            shifts = shifts.map { s ->
+                AssignmentShiftView(
+                    shift = s,
+                    matchCount = matchKeysInShift(s, zone).size,
+                    scouterNames = shiftScouterIds(s).mapNotNull { id -> names[id]?.let { id to it } }.toMap()
+                )
+            },
+            createdCount = createdCount
+        )
+    }
+
+    /** Creates or updates a shift, then applies it right away if its matches are already synced. */
+    fun saveShift(session: UserSession, request: SaveAssignmentShiftRequest): AssignmentShiftsResponse {
+        val eventKey = request.eventKey.trim().lowercase()
+        if (eventKey.isBlank()) throw ApiException(HttpStatusCode.BadRequest, "Event key is required.")
+        val day = runCatching { java.time.LocalDate.parse(request.day.trim()) }.getOrNull()
+            ?: throw ApiException(HttpStatusCode.BadRequest, "Pick the day of the shift.")
+        val startMin = shiftMinutes(request.startTime) ?: throw ApiException(HttpStatusCode.BadRequest, "Shift start time is invalid.")
+        val endMin = shiftMinutes(request.endTime) ?: throw ApiException(HttpStatusCode.BadRequest, "Shift end time is invalid.")
+        if (endMin <= startMin) throw ApiException(HttpStatusCode.BadRequest, "Shift end must be after shift start.")
+        val qualMode = if (request.qualMode.trim().uppercase() == "ALLIANCE") "ALLIANCE" else "TEAMS"
+        val qualSeats = if (qualMode == "ALLIANCE") 2 else SHIFT_MAX_SEATS
+
+        // Seats are positional; trailing open seats are dropped
+        fun seats(ids: List<String>, max: Int, label: String): List<String> {
+            val cleaned = ids.map { it.trim() }.dropLastWhile { it.isEmpty() }
+            if (cleaned.size > max) throw ApiException(HttpStatusCode.BadRequest, "$label takes at most $max scouts.")
+            return cleaned
+        }
+        val matchSeats = seats(request.matchScouterIds, SHIFT_MAX_SEATS, "Match scouting")
+        val qualSeatIds = seats(request.qualScouterIds, qualSeats, "Qualitative scouting")
+
+        val picked = (matchSeats + qualSeatIds).filter { it.isNotEmpty() }
+        if (picked.isEmpty()) throw ApiException(HttpStatusCode.BadRequest, "Pick at least one scout for the shift.")
+        if (picked.size != picked.distinct().size) {
+            throw ApiException(HttpStatusCode.BadRequest, "Each scout can only have one seat in a shift.")
+        }
+
+        val prog = session.program.uppercase().trim()
+        val requestedIds = picked.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+        val validIds = if (requestedIds.isEmpty()) emptySet() else readTransaction {
+            Users.selectAll().where {
+                (Users.id inList requestedIds) and (Users.program eq prog) and
+                (if (session.role != UserRole.SUPERADMIN) Users.teamNumber eq session.teamNumber else Users.teamNumber eq Users.teamNumber)
+            }.map { it[Users.id].value.toString() }.toSet()
+        }
+        if (picked.any { it.lowercase() !in validIds }) {
+            throw ApiException(HttpStatusCode.BadRequest, "Every scout on the shift must be on your team.")
+        }
+
+        val current = com.obsidianscout.integrations.SettingsService.getSettings(session.teamNumber, session.program)
+        val existing = request.id?.trim()?.ifBlank { null }?.let { id -> current.assignmentShifts.firstOrNull { it.id == id } }
+        val fmt = { m: Int -> "%02d:%02d".format(m / 60, m % 60) }
+        val shift = com.obsidianscout.integrations.AssignmentShift(
+            id = existing?.id ?: UUID.randomUUID().toString(),
+            eventKey = eventKey,
+            name = request.name.trim().take(64),
+            day = day.toString(),
+            startTime = fmt(startMin),
+            endTime = fmt(endMin),
+            stageFilter = request.stageFilter.trim().lowercase().ifBlank { "all" },
+            matchScouterIds = matchSeats.map { it.lowercase() },
+            qualMode = qualMode,
+            qualScouterIds = qualSeatIds.map { it.lowercase() },
+            createdByUserId = existing?.createdByUserId ?: session.userId,
+            lastAppliedAt = existing?.lastAppliedAt,
+            appliedCount = existing?.appliedCount ?: 0
+        )
+        val updatedShifts = if (existing != null) current.assignmentShifts.map { if (it.id == shift.id) shift else it }
+            else current.assignmentShifts + shift
+        com.obsidianscout.integrations.SettingsService.updateSettings(session.teamNumber, current.copy(assignmentShifts = updatedShifts))
+
+        val created = applyTeamShifts(session.teamNumber, session.program, setOf(shift.id))
+        return listShifts(session, eventKey, created)
+    }
+
+    /** Removes a shift. Assignments it already created stay; delete those from the list if unwanted. */
+    fun deleteShift(session: UserSession, id: String): Boolean {
+        val current = com.obsidianscout.integrations.SettingsService.getSettings(session.teamNumber, session.program)
+        if (current.assignmentShifts.none { it.id == id }) return false
+        com.obsidianscout.integrations.SettingsService.updateSettings(
+            session.teamNumber,
+            current.copy(assignmentShifts = current.assignmentShifts.filter { it.id != id })
+        )
+        return true
     }
 
     /**
@@ -559,18 +888,7 @@ object ScoutingAssignmentService {
 
                 // Stage filter
                 val stage = request.stageFilter?.trim()?.lowercase() ?: "all"
-                val filteredMatches = rawMatches.filter { mRow ->
-                    val lvl = (mRow[ApiMatches.compLevel] ?: "").lowercase()
-                    when (stage) {
-                        "qm", "qual", "quals" -> lvl in listOf("qm", "qual", "quals", "qualification")
-                        "pr", "practice", "pm" -> lvl in listOf("pr", "practice", "pm")
-                        "qf" -> lvl == "qf"
-                        "sf" -> lvl == "sf"
-                        "f", "final", "finals" -> lvl in listOf("f", "final", "finals")
-                        "playoffs", "playoff" -> lvl in listOf("qf", "sf", "f", "ef", "playoff", "playoffs")
-                        else -> true
-                    }
-                }.sortedWith(
+                val filteredMatches = rawMatches.filter { mRow -> matchesStage(mRow[ApiMatches.compLevel], stage) }.sortedWith(
                     compareBy(
                         { compLevelRank(it[ApiMatches.compLevel]) },
                         { it[ApiMatches.setNumber] ?: 1 },

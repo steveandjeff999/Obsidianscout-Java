@@ -112,6 +112,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     const bulkDeselectAll = document.getElementById("bulk-deselect-all");
     const bulkOverwrite = document.getElementById("bulk-overwrite");
 
+    // Planned Shifts Modal Elements
+    const shiftsList = document.getElementById("shifts-list");
+    const shiftForm = document.getElementById("shift-form");
+    const shiftFormTitle = document.getElementById("shift-form-title");
+    const shiftIdInput = document.getElementById("shift-id");
+    const shiftNameInput = document.getElementById("shift-name");
+    const shiftDayInput = document.getElementById("shift-day");
+    const shiftStartInput = document.getElementById("shift-start");
+    const shiftEndInput = document.getElementById("shift-end");
+    const shiftStageSelect = document.getElementById("shift-stage");
+    const shiftMatchSeats = document.getElementById("shift-match-seats");
+    const shiftQualMode = document.getElementById("shift-qual-mode");
+    const shiftQualSeats = document.getElementById("shift-qual-seats");
+    const shiftScoutOptions = document.getElementById("shift-scout-options");
+    const shiftCancelEdit = document.getElementById("shift-cancel-edit");
+    let shifts = [];
+
     // Pit Auto-Assign Modal Elements
     const autoPitBtn = document.getElementById("auto-pit-btn");
     const autoPitHeaderBtn = document.getElementById("auto-pit-header-btn");
@@ -1079,7 +1096,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         const inBlock = getMatchesInTimeBlock();
         bulkTimeSummary.textContent = inBlock.length === 0
-            ? "No matches scheduled in this time block."
+            ? (Obsidianscout.t ? Obsidianscout.t("assignments.bulk_time_none_shifts", "No matches scheduled in this time block. To assign before the schedule is out, use Planned Shifts.") : "No matches scheduled in this time block. To assign before the schedule is out, use Planned Shifts.")
             : `${inBlock.length} match(es): ${getMatchDisplayLabel(inBlock[0])} – ${getMatchDisplayLabel(inBlock[inBlock.length - 1])}`;
     }
 
@@ -2871,6 +2888,305 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ==========================================
     // REMINDER SETTINGS
     // ==========================================
+    // ==========================================
+    // PLANNED SHIFTS (assign by time before the schedule is out)
+    // ==========================================
+    // Translated text with {placeholders} filled in
+    function shiftText(key, fallback, vars) {
+        let text = (Obsidianscout.t ? Obsidianscout.t(key, fallback) : fallback) || fallback;
+        Object.entries(vars || {}).forEach(([name, value]) => { text = text.split(`{${name}}`).join(String(value)); });
+        return text;
+    }
+
+    function shiftStageLabel(stage) {
+        const fallbacks = { all: "All stages", qm: "Quals", pr: "Practice", playoffs: "Playoffs" };
+        return fallbacks[stage] ? shiftText(`assignments.shift_stage_short_${stage}`, fallbacks[stage]) : stage;
+    }
+
+    // Robot stations in the order the server fills them: red 1..n, then blue 1..n
+    function getShiftStationLabels() {
+        const isFtc = (currentEventKey && currentEventKey.toLowerCase().startsWith("ftc")) ||
+                      ((me && me.program === "FTC") || (settings && settings.program === "FTC"));
+        const perAlliance = isFtc ? 2 : 3;
+        const labels = [];
+        for (let i = 1; i <= perAlliance; i++) labels.push({ text: shiftText("assignments.shift_seat_red", "Red {n}", { n: i }), alliance: "red" });
+        for (let i = 1; i <= perAlliance; i++) labels.push({ text: shiftText("assignments.shift_seat_blue", "Blue {n}", { n: i }), alliance: "blue" });
+        return labels;
+    }
+
+    function getQualSeatLabels(mode) {
+        return mode === "ALLIANCE"
+            ? [
+                { text: shiftText("assignments.shift_seat_red_alliance", "Red Alliance"), alliance: "red" },
+                { text: shiftText("assignments.shift_seat_blue_alliance", "Blue Alliance"), alliance: "blue" }
+            ]
+            : getShiftStationLabels();
+    }
+
+    // The event's first and last day (YYYY-MM-DD), when the event list knows them
+    function getEventDayRange() {
+        const ev = events.find(e => e.eventKey === currentEventKey);
+        const day = val => (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val)) ? val.slice(0, 10) : "";
+        return { start: ev ? day(ev.startDate) : "", end: ev ? day(ev.endDate) : "" };
+    }
+
+    function formatShiftDay(day) {
+        const [y, mo, d] = String(day || "").split("-").map(Number);
+        if (!y || !mo || !d) return day || "";
+        return new Date(Date.UTC(y, mo - 1, d)).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+    }
+
+    function formatShiftTime(hhmm) {
+        const mins = parseTimeInputMinutes(hhmm);
+        if (mins === null) return hhmm || "";
+        return new Date(2000, 0, 1, Math.floor(mins / 60), mins % 60).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+
+    // Seat boxes are type-to-search inputs over one shared list. Each scout gets a unique label so it maps
+    // back to one id: the name, plus the @username when the name is shared or differs from it.
+    function getShiftScoutChoices() {
+        const scouters = users.filter(u => u.role !== "NONE");
+        const nameCounts = new Map();
+        scouters.forEach(u => {
+            const name = u.displayName || u.username;
+            nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
+        });
+        return scouters.map(u => {
+            const name = u.displayName || u.username;
+            const label = (nameCounts.get(name) > 1 || (u.username && u.username !== name)) ? `${name} (@${u.username})` : name;
+            return { id: String(u.id || u.userId), label };
+        });
+    }
+
+    function renderShiftScoutOptions() {
+        shiftScoutOptions.innerHTML = getShiftScoutChoices().map(c => `<option value="${escapeHtml(c.label)}"></option>`).join("");
+    }
+
+    function renderSeatSelects(container, labels, selectedIds) {
+        const labelById = new Map(getShiftScoutChoices().map(c => [c.id, c.label]));
+        const nobody = shiftText("assignments.shift_nobody", "Nobody");
+        container.innerHTML = labels.map((label, i) => {
+            const picked = labelById.get(String((selectedIds && selectedIds[i]) || "")) || "";
+            return `
+                <label class="shift-seat">
+                    <span class="shift-seat-label ${label.alliance}">${escapeHtml(label.text)}</span>
+                    <input type="search" data-seat="${i}" list="shift-scout-options" autocomplete="off"
+                           placeholder="${escapeHtml(nobody)}" value="${escapeHtml(picked)}" />
+                </label>
+            `;
+        }).join("");
+        container.querySelectorAll("input[data-seat]").forEach(input => {
+            input.addEventListener("change", () => input.classList.toggle("shift-seat-invalid", seatValue(input) === undefined));
+            // Enter picks from the list, it shouldn't submit the shift
+            input.addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); });
+        });
+    }
+
+    // A seat's scout id: "" for an empty seat, undefined when the text matches no scout
+    function seatValue(input) {
+        const text = input.value.trim();
+        if (!text) return "";
+        const lower = text.toLowerCase();
+        const match = getShiftScoutChoices().find(c => c.label.toLowerCase() === lower);
+        return match ? match.id : undefined;
+    }
+
+    // Seat picks in order; blank means the seat stays open
+    function readSeatSelects(container) {
+        return Array.from(container.querySelectorAll("input[data-seat]")).map(input => {
+            const id = seatValue(input);
+            return id === undefined ? { invalid: input.value.trim() } : id;
+        });
+    }
+
+    function renderQualSeats(selectedIds) {
+        renderSeatSelects(shiftQualSeats, getQualSeatLabels(shiftQualMode.value), selectedIds);
+    }
+
+    function resetShiftForm() {
+        const range = getEventDayRange();
+        shiftIdInput.value = "";
+        shiftNameInput.value = "";
+        shiftDayInput.min = range.start;
+        shiftDayInput.max = range.end;
+        shiftDayInput.value = range.start;
+        shiftStartInput.value = "08:00";
+        shiftEndInput.value = "12:00";
+        shiftStageSelect.value = "all";
+        shiftQualMode.value = "TEAMS";
+        shiftFormTitle.textContent = shiftText("assignments.shift_add_title", "Add a Shift");
+        shiftCancelEdit.classList.add("hidden");
+        renderShiftScoutOptions();
+        renderSeatSelects(shiftMatchSeats, getShiftStationLabels(), []);
+        renderQualSeats([]);
+    }
+
+    function describeSeats(labels, ids, names) {
+        return labels.map((label, i) => ids[i] ? `${label.text}: ${names[ids[i]] || "?"}` : null).filter(Boolean).join(", ");
+    }
+
+    function renderShiftsList() {
+        if (shifts.length === 0) {
+            shiftsList.innerHTML = `<p style="margin:0; font-size:13px; color:var(--muted);">${escapeHtml(shiftText("assignments.shifts_empty", "No shifts planned for this event yet."))}</p>`;
+            return;
+        }
+        shiftsList.innerHTML = shifts.map(view => {
+            const s = view.shift || {};
+            const names = view.scouterNames || {};
+            const matchSeats = describeSeats(getShiftStationLabels(), s.matchScouterIds || [], names);
+            const qualSeats = describeSeats(getQualSeatLabels(s.qualMode), s.qualScouterIds || [], names);
+            const status = view.matchCount > 0
+                ? `<span style="color:var(--primary); font-weight:600;">${escapeHtml(shiftText("assignments.shift_in_window", "{count} match(es) in window", { count: view.matchCount }))}</span>`
+                : `<span style="color:var(--muted);">${escapeHtml(shiftText("assignments.shift_waiting", "Waiting for the match schedule"))}</span>`;
+            const applied = s.appliedCount > 0 ? ` · ${shiftText("assignments.shift_applied", "{count} assignment(s) created", { count: s.appliedCount })}` : "";
+            const when = `${formatShiftDay(s.day)} · ${formatShiftTime(s.startTime)} – ${formatShiftTime(s.endTime)} · ${shiftStageLabel(s.stageFilter)}`;
+            return `
+                <div class="row justify-between items-center gap-12" style="padding:10px 12px; border:1px solid var(--border-subtle); border-radius:var(--radius-sm, 6px);">
+                    <div style="min-width:0; flex:1;">
+                        <div style="font-weight:700; font-size:13px;">${escapeHtml(s.name || when)}</div>
+                        ${s.name ? `<div style="font-size:12px; margin-top:2px;">${escapeHtml(when)}</div>` : ""}
+                        ${matchSeats ? `<div style="font-size:12px; color:var(--muted); margin-top:2px; overflow-wrap:anywhere;"><strong>${escapeHtml(shiftText("assignments.shift_list_match", "Match"))}</strong> · ${escapeHtml(matchSeats)}</div>` : ""}
+                        ${qualSeats ? `<div style="font-size:12px; color:var(--muted); margin-top:2px; overflow-wrap:anywhere;"><strong>${escapeHtml(shiftText("assignments.shift_list_qual", "Qualitative"))}</strong> · ${escapeHtml(qualSeats)}</div>` : ""}
+                        <div style="font-size:12px; margin-top:2px;">${status}${escapeHtml(applied)}</div>
+                    </div>
+                    <div class="row gap-8">
+                        <button type="button" class="btn ghost btn-sm" data-shift-edit="${escapeHtml(s.id)}" style="font-size:12px; padding:4px 10px;">${escapeHtml(shiftText("assignments.shift_edit", "Edit"))}</button>
+                        <button type="button" class="btn ghost btn-sm" data-shift-delete="${escapeHtml(s.id)}" style="font-size:12px; padding:4px 10px; color:var(--danger, #ef4444);">${escapeHtml(shiftText("assignments.shift_delete", "Delete"))}</button>
+                    </div>
+                </div>
+            `;
+        }).join("");
+        shiftsList.querySelectorAll("[data-shift-edit]").forEach(btn => btn.addEventListener("click", () => editShift(btn.dataset.shiftEdit)));
+        shiftsList.querySelectorAll("[data-shift-delete]").forEach(btn => btn.addEventListener("click", () => deleteShift(btn.dataset.shiftDelete)));
+    }
+
+    async function loadShifts() {
+        if (!currentEventKey) {
+            shifts = [];
+            renderShiftsList();
+            return;
+        }
+        try {
+            const res = await Obsidianscout.request(`/api/assignments/shifts?eventKey=${encodeURIComponent(currentEventKey)}`);
+            shifts = (res && res.shifts) || [];
+        } catch (err) {
+            console.error("Load shifts failed:", err);
+            shifts = [];
+        }
+        renderShiftsList();
+    }
+
+    async function openShiftsModal() {
+        if (!currentEventKey) {
+            Obsidianscout.showToast(shiftText("assignments.shift_select_event", "Select an event first"), "error");
+            return;
+        }
+        resetShiftForm();
+        showModal("shifts-modal");
+        await loadShifts();
+    }
+
+    function editShift(id) {
+        const view = shifts.find(v => v.shift && v.shift.id === id);
+        if (!view) return;
+        const s = view.shift;
+        shiftIdInput.value = s.id;
+        shiftNameInput.value = s.name || "";
+        shiftDayInput.min = "";
+        shiftDayInput.max = "";
+        shiftDayInput.value = s.day || "";
+        shiftStartInput.value = s.startTime || "";
+        shiftEndInput.value = s.endTime || "";
+        shiftStageSelect.value = s.stageFilter || "all";
+        shiftQualMode.value = s.qualMode === "ALLIANCE" ? "ALLIANCE" : "TEAMS";
+        shiftFormTitle.textContent = shiftText("assignments.shift_edit_title", "Edit Shift");
+        shiftCancelEdit.classList.remove("hidden");
+        renderShiftScoutOptions();
+        renderSeatSelects(shiftMatchSeats, getShiftStationLabels(), s.matchScouterIds || []);
+        renderQualSeats(s.qualScouterIds || []);
+        shiftForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    async function saveShift(e) {
+        e.preventDefault();
+        const saveBtn = document.getElementById("shift-save");
+        try {
+            await submitShift();
+        } finally {
+            if (saveBtn && Obsidianscout.setButtonLoading) Obsidianscout.setButtonLoading(saveBtn, false);
+        }
+    }
+
+    async function submitShift() {
+        const matchSeats = readSeatSelects(shiftMatchSeats);
+        const qualSeats = readSeatSelects(shiftQualSeats);
+        const unknown = [...matchSeats, ...qualSeats].find(v => typeof v === "object");
+        if (unknown) {
+            Obsidianscout.showToast(shiftText("assignments.shift_unknown_scout", "\"{name}\" isn't a scout on your team", { name: unknown.invalid }), "error");
+            return;
+        }
+        const picked = [...matchSeats, ...qualSeats].filter(Boolean);
+        if (picked.length === 0) {
+            Obsidianscout.showToast(shiftText("assignments.shift_need_seat", "Pick a scout for at least one seat"), "error");
+            return;
+        }
+        if (new Set(picked).size !== picked.length) {
+            Obsidianscout.showToast(shiftText("assignments.shift_duplicate", "Each scout can only have one seat in a shift"), "error");
+            return;
+        }
+        const startMin = parseTimeInputMinutes(shiftStartInput.value);
+        const endMin = parseTimeInputMinutes(shiftEndInput.value);
+        if (startMin === null || endMin === null || endMin <= startMin) {
+            Obsidianscout.showToast(shiftText("assignments.shift_bad_range", "Shift end must be after shift start"), "error");
+            return;
+        }
+        try {
+            const res = await Obsidianscout.request("/api/assignments/shifts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: shiftIdInput.value || null,
+                    eventKey: currentEventKey,
+                    name: shiftNameInput.value,
+                    day: shiftDayInput.value,
+                    startTime: shiftStartInput.value,
+                    endTime: shiftEndInput.value,
+                    stageFilter: shiftStageSelect.value,
+                    matchScouterIds: matchSeats,
+                    qualMode: shiftQualMode.value,
+                    qualScouterIds: qualSeats
+                })
+            });
+            shifts = res.shifts || [];
+            renderShiftsList();
+            resetShiftForm();
+
+            const created = res.createdCount || 0;
+            if (created > 0) {
+                Obsidianscout.showToast(shiftText("assignments.shift_saved_created", "Shift saved. Created {count} assignment(s) from matches already synced.", { count: created }), "success");
+                await loadEventData();
+            } else {
+                Obsidianscout.showToast(shiftText("assignments.shift_saved_waiting", "Shift saved. Scouts will be assigned to its matches when the schedule syncs."), "success");
+            }
+        } catch (err) {
+            console.error("Save shift failed:", err);
+            Obsidianscout.showToast(err.message || shiftText("assignments.shift_save_failed", "Failed to save shift"), "error");
+        }
+    }
+
+    async function deleteShift(id) {
+        if (!confirm(shiftText("assignments.shift_delete_confirm", "Delete this shift? Assignments it already created will stay."))) return;
+        try {
+            await Obsidianscout.request(`/api/assignments/shifts/${encodeURIComponent(id)}`, { method: "DELETE" });
+            if (shiftIdInput.value === id) resetShiftForm();
+            Obsidianscout.showToast(shiftText("assignments.shift_deleted", "Shift deleted"), "success");
+            await loadShifts();
+        } catch (err) {
+            console.error("Delete shift failed:", err);
+            Obsidianscout.showToast(err.message || shiftText("assignments.shift_delete_failed", "Failed to delete shift"), "error");
+        }
+    }
+
     function openReminderSettingsModal() {
         settingReminderMinutes.value = String(settings.assignmentReminderMinutes || 10);
         settingEnablePush.checked = settings.enableAssignmentPushReminders !== false;
@@ -3050,6 +3366,18 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (el) el.addEventListener("input", updateBulkTimeSummary);
             if (el) el.addEventListener("change", updateBulkTimeSummary);
         });
+
+        // Planned shifts
+        const shiftsBtn = document.getElementById("shifts-btn");
+        if (shiftsBtn) shiftsBtn.addEventListener("click", openShiftsModal);
+        if (shiftForm) shiftForm.addEventListener("submit", saveShift);
+        if (shiftCancelEdit) shiftCancelEdit.addEventListener("click", resetShiftForm);
+        ["shifts-close", "shifts-done"].forEach(btnId => {
+            const btn = document.getElementById(btnId);
+            if (btn) btn.addEventListener("click", () => hideModal("shifts-modal"));
+        });
+        // Switching per-robot / per-alliance keeps the picks that still have a seat
+        if (shiftQualMode) shiftQualMode.addEventListener("change", () => renderQualSeats(readSeatSelects(shiftQualSeats)));
 
         // Modals Open
         newAssignmentBtn.addEventListener("click", () => openNewAssignmentModal());

@@ -534,7 +534,10 @@ fun Route.configRoutes() {
                             program = targetProgram,
                             selfRegisterRoles = selfRegisterRoles,
                             recencyBias = recencyBias,
-                            alternateEventCode = alternateEventCode
+                            alternateEventCode = alternateEventCode,
+                            // Edited on the assignments page, never sent by the settings form
+                            pitScoutGroups = previous.pitScoutGroups,
+                            assignmentShifts = previous.assignmentShifts
                         )
                     )
                     val activeAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, targetProgram)

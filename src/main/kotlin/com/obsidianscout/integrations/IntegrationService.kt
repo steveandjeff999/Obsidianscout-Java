@@ -179,24 +179,37 @@ object IntegrationService {
      */
     suspend fun syncEventData(settings: ApiSettings, tbaAndFirstOnly: Boolean = false): SyncCounts {
         if (settings.program == "FTC") {
-            return FtcIntegrationService.syncEventData(settings)
+            return FtcIntegrationService.syncEventData(settings).also {
+                applyAssignmentShifts(settings, settings.resolvedEventKey(), "${settings.year}${settings.eventCode.lowercase()}")
+            }
         }
         val eventKey = canonicalTbaEventKey(settings.year, settings.resolvedEventKey())
         if (eventKey.isBlank()) {
             return SyncCounts(0, 0)
         }
-        return syncFrcEventData(settings, eventKey, tbaAndFirstOnly)
+        return syncFrcEventData(settings, eventKey, tbaAndFirstOnly).also {
+            applyAssignmentShifts(settings, eventKey, settings.resolvedEventKey())
+        }
     }
 
     suspend fun syncCustomEventData(settings: ApiSettings, eventKey: String): SyncCounts {
         if (settings.program == "FTC") {
-            return FtcIntegrationService.syncCustomEventData(settings, eventKey)
+            return FtcIntegrationService.syncCustomEventData(settings, eventKey).also {
+                applyAssignmentShifts(settings, eventKey)
+            }
         }
         val key = canonicalStoredEventKey(settings.year, eventKey)
         if (key.isBlank()) {
             return SyncCounts(0, 0)
         }
-        return syncFrcEventData(settings, key, tbaAndFirstOnly = false)
+        return syncFrcEventData(settings, key, tbaAndFirstOnly = false).also {
+            applyAssignmentShifts(settings, key, eventKey)
+        }
+    }
+
+    /** Shifts planned before the schedule existed get their scouts once the matches arrive. */
+    private fun applyAssignmentShifts(settings: ApiSettings, vararg eventKeys: String) {
+        com.obsidianscout.scouting.ScoutingAssignmentService.applyShiftsAfterSync(settings.program, eventKeys.toList())
     }
 
     /**

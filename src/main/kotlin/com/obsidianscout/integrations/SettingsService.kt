@@ -174,6 +174,35 @@ data class PitScoutGroup(
     val memberIds: List<String> = emptyList()
 )
 
+/**
+ * A scouting shift planned ahead of the event: who sits at which seat for the matches between [startTime]
+ * and [endTime] on [day]. It can be saved before the match schedule exists; every schedule sync gives each
+ * seat's scout the open slots of the matches that land in the window. Scouts keep their seat for the whole
+ * shift, there is no rotation.
+ */
+@Serializable
+data class AssignmentShift(
+    val id: String = "",
+    val eventKey: String = "",
+    val name: String = "",
+    /** YYYY-MM-DD in the event's timezone. */
+    val day: String = "",
+    /** HH:MM, event local time; matches scheduled at or after this are in the shift. */
+    val startTime: String = "",
+    /** HH:MM, event local time; matches scheduled before this are in the shift. */
+    val endTime: String = "",
+    val stageFilter: String = "all",
+    /** Match scouting, one scout per robot station in order red 1-3 then blue 1-3. Blank leaves a station open. */
+    val matchScouterIds: List<String> = emptyList(),
+    /** TEAMS: one qualitative scout per robot station, ordered like [matchScouterIds]. ALLIANCE: red, then blue. */
+    val qualMode: String = "TEAMS",
+    val qualScouterIds: List<String> = emptyList(),
+    val createdByUserId: String? = null,
+    val lastAppliedAt: String? = null,
+    /** Assignments this shift has created so far, across every sync. */
+    val appliedCount: Int = 0
+)
+
 @Serializable
 data class ApiSettings(
     val year: Int = Year.now().value,
@@ -209,6 +238,8 @@ data class ApiSettings(
     val enableAssignmentEmailReminders: Boolean = true,
     /** Saved pit scouting groups: kids who walk the pits together and share each team assignment. */
     val pitScoutGroups: List<PitScoutGroup> = emptyList(),
+    /** Scouting shifts planned by time, applied to matches as the schedule syncs. */
+    val assignmentShifts: List<AssignmentShift> = emptyList(),
     /** Which [PAGES_ADDED_BY_VERSION] entries have been applied to this team's page lists. */
     val pageDefaultsVersion: Int = 0
 ) {

@@ -410,6 +410,24 @@ fun Route.scoutingRoutes() {
                     val request = call.receive<com.obsidianscout.scouting.SavePitGroupsRequest>()
                     call.respond(ScoutingAssignmentService.savePitGroups(session, request.groups))
                 }
+                get("/shifts") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey")
+                    call.respond(ScoutingAssignmentService.listShifts(session, eventKey))
+                }
+                post("/shifts") {
+                    val session = call.requireAdmin()
+                    val request = call.receive<com.obsidianscout.scouting.SaveAssignmentShiftRequest>()
+                    call.respond(ScoutingAssignmentService.saveShift(session, request))
+                }
+                delete("/shifts/{shiftId}") {
+                    val session = call.requireAdmin()
+                    val id = call.parameters["shiftId"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing shift ID")
+                    if (!ScoutingAssignmentService.deleteShift(session, id)) {
+                        throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Shift not found")
+                    }
+                    call.respond(com.obsidianscout.scouting.AssignmentActionResponse(success = true, message = "Shift deleted"))
+                }
                 get("/{id}") {
                     val session = call.requireSession()
                     val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
