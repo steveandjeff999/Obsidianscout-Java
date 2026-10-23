@@ -91,8 +91,13 @@ fun Route.widgetRoutes() {
                 return@get
             }
 
-            val resolved = WidgetTokenService.resolve(token)
-                ?: throw ApiException(HttpStatusCode.Unauthorized, "Widget sign-in expired")
+            val resolved = try {
+                WidgetTokenService.resolve(token)
+            } catch (_: WidgetTokenService.Unavailable) {
+                // The widget keeps showing its last snapshot and retries; not worth a server error report.
+                call.response.header(HttpHeaders.RetryAfter, "60")
+                throw ApiException(HttpStatusCode.ServiceUnavailable, "Widgets are temporarily unavailable")
+            } ?: throw ApiException(HttpStatusCode.Unauthorized, "Widget sign-in expired")
             val now = System.currentTimeMillis()
             val recent = recentlyServed[resolved.tokenId]?.takeIf { now - it.at < TOKEN_REUSE_MS }
             if (recent != null && placed == null) {

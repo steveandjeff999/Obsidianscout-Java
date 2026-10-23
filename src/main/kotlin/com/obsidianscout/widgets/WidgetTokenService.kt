@@ -2,6 +2,7 @@ package com.obsidianscout.widgets
 
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.UserSession
+import com.obsidianscout.db.DatabaseFactory
 import com.obsidianscout.db.UserSessions
 import com.obsidianscout.db.Users
 import com.obsidianscout.db.WidgetTokens
@@ -13,6 +14,7 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -24,6 +26,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Tokens that let a device's home-screen widgets fetch [WidgetSnapshotService] snapshots while the app is closed.
@@ -34,6 +37,11 @@ object WidgetTokenService {
     val LIFETIME: Duration = Duration.ofDays(30)
     private val TOUCH_INTERVAL: Duration = Duration.ofMinutes(1)
     private val random = SecureRandom()
+
+    /** Each token's last good lookup, answered from for up to [FALLBACK_MAX_AGE] when the database is too slow to check. */
+    private val FALLBACK_MAX_AGE: Duration = Duration.ofMinutes(10)
+    private data class Cached(val at: Instant, val resolved: Resolved)
+    private val lastResolved = ConcurrentHashMap<String, Cached>()
 
     data class Issued(val token: String, val expiresAt: Instant)
 
@@ -66,17 +74,41 @@ object WidgetTokenService {
 
     fun revokeForSession(sessionId: String?) {
         val sessionUuid = sessionId?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: return
+        lastResolved.values.removeIf { it.resolved.session.sessionId == sessionUuid.toString() }
         transaction { WidgetTokens.deleteWhere { WidgetTokens.sessionId eq sessionUuid } }
     }
 
     /**
      * The user a token acts for, with their current role and settings, or null when the token is unknown, expired,
-     * or its login session no longer exists.
+     * or its login session no longer exists. Throws [Unavailable] when the database can't answer in time and there is
+     * no recent result to fall back on.
      */
     fun resolve(token: String, now: Instant = Instant.now()): Resolved? {
         if (!token.startsWith("wt_") || token.length > 128) return null
         val tokenHash = hash(token)
-        return readTransaction {
+        val resolved = try {
+            lookup(tokenHash, now)
+        } catch (e: Exception) {
+            val cached = lastResolved[tokenHash]
+            if (cached != null && Duration.between(cached.at, now) < FALLBACK_MAX_AGE) return cached.resolved
+            throw Unavailable(e)
+        }
+        if (resolved == null) lastResolved.remove(tokenHash)
+        else {
+            lastResolved[tokenHash] = Cached(now, resolved)
+            if (lastResolved.size > 5_000) lastResolved.values.removeIf { Duration.between(it.at, now) >= FALLBACK_MAX_AGE }
+        }
+        return resolved
+    }
+
+    class Unavailable(cause: Throwable) : RuntimeException("Widget token lookup timed out", cause)
+
+    private fun lookup(tokenHash: String, now: Instant): Resolved? =
+        readTransaction {
+            // Widget refreshes can wait; don't let one hold a pooled connection for the full default timeout.
+            if (DatabaseFactory.isPostgresCompatible && !com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
+                (this as? JdbcTransaction)?.exec("SET LOCAL statement_timeout = '3000ms';")
+            }
             val row = WidgetTokens.selectAll().where {
                 (WidgetTokens.tokenHash eq tokenHash) and (WidgetTokens.expiresAt greater now)
             }.firstOrNull() ?: return@readTransaction null
@@ -104,7 +136,6 @@ object WidgetTokenService {
                 lastUsedAt = row[WidgetTokens.lastUsedAt],
             )
         }
-    }
 
     /** Records which widgets the device has placed and which event it is showing (written at most once a minute unless they change). */
     fun touch(resolved: Resolved, placed: Set<String>?, eventKey: String, now: Instant = Instant.now()) {
