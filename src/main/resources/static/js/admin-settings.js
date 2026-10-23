@@ -422,7 +422,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             setVal("settings-event-code", loadedSettings.eventCode || "");
             setVal("settings-alternate-event-code", loadedSettings.alternateEventCode || "");
             setVal("settings-timezone", loadedSettings.timezone || "UTC");
-            setVal("settings-source", loadedSettings.preferredSource || "tba");
             setVal("settings-statbotics-url", loadedSettings.statboticsBaseUrl || "https://api.statbotics.io");
             setVal("settings-match13-url", loadedSettings.match13BaseUrl || "https://actions.match13.com");
             setChecked("settings-epa", loadedSettings.useStatboticsEpa);
@@ -445,26 +444,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             const tbaCard = document.getElementById("settings-tba-card");
             const tbaHeading = document.getElementById("settings-tba-heading") || document.querySelector('h3[data-i18n="config.the_blue_alliance"]');
             const tbaLabel = document.getElementById("settings-tba-label");
-            const tbaOption = document.querySelector('#settings-source option[value="tba"]');
             const tbaField = document.getElementById("settings-tba-field");
             const tbaNotice = document.getElementById("settings-tba-notice");
             const tbaTestBtnEl = document.getElementById("settings-tba-test");
 
             const firstHeading = document.getElementById("settings-first-heading") || document.querySelector('h3[data-i18n="config.first_api"]');
-            const firstOption = document.querySelector('#settings-source option[value="first"]');
-            const bothOption = document.querySelector('#settings-source option[value="both"]');
 
             if (isFtc) {
                 if (tbaCard) tbaCard.style.display = "";
                 if (tbaHeading) tbaHeading.textContent = "FTC Scout";
-                if (tbaOption) tbaOption.textContent = "FTC Scout";
                 if (tbaField) tbaField.style.display = "none";
                 if (tbaNotice) tbaNotice.style.display = "block";
                 if (tbaTestBtnEl) tbaTestBtnEl.textContent = "Test FTC Scout API";
 
                 if (firstHeading) firstHeading.textContent = "FIRST FTC API";
-                if (firstOption) firstOption.textContent = "FIRST FTC API";
-                if (bothOption) bothOption.textContent = "Both (FTC Scout + FIRST)";
 
                 const epaCheckbox = document.getElementById("settings-epa");
                 if (epaCheckbox && epaCheckbox.parentElement) {
@@ -493,13 +486,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (tbaCard) tbaCard.style.display = "";
                 if (tbaHeading) tbaHeading.textContent = "The Blue Alliance";
                 if (tbaLabel) tbaLabel.textContent = "TBA key";
-                if (tbaOption) tbaOption.textContent = "The Blue Alliance";
                 if (tbaField) tbaField.style.display = "";
                 if (tbaNotice) tbaNotice.style.display = "none";
                 if (tbaTestBtnEl) tbaTestBtnEl.textContent = "Test Connection";
 
                 if (firstHeading) firstHeading.textContent = "FIRST API";
-                if (firstOption) firstOption.textContent = "FIRST API";
 
                 const epaCheckbox = document.getElementById("settings-epa");
                 if (epaCheckbox && epaCheckbox.parentElement) {
@@ -716,7 +707,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.eventCode = getVal("settings-event-code").trim();
                     loadedSettings.alternateEventCode = getVal("settings-alternate-event-code").trim();
                     loadedSettings.timezone = getVal("settings-timezone").trim();
-                    loadedSettings.preferredSource = getVal("settings-source");
                     loadedSettings.useStatboticsEpa = getChecked("settings-epa");
                     loadedSettings.useMatch13Exp = getChecked("settings-exp");
                     loadedSettings.useTbaOpr = getChecked("settings-opr");

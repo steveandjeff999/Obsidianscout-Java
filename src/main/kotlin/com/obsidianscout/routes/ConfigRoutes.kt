@@ -106,7 +106,6 @@ private fun syncInputsChanged(before: ApiSettings, after: ApiSettings): Boolean 
     before.resolvedEventKey() != after.resolvedEventKey() ||
         before.alternateEventCode != after.alternateEventCode ||
         before.timezone != after.timezone ||
-        before.preferredSource != after.preferredSource ||
         before.apiKeys != after.apiKeys ||
         before.useStatboticsEpa != after.useStatboticsEpa ||
         before.useTbaOpr != after.useTbaOpr ||
@@ -122,7 +121,6 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         alternateEventCode = alternateEventCode,
         eventKey = eventKey,
         timezone = timezone,
-        preferredSource = preferredSource,
         useStatboticsEpa = useStatboticsEpa,
         useTbaOpr = useTbaOpr,
         useMatch13Exp = useMatch13Exp,
@@ -155,7 +153,6 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         eventCode = eventCode,
         alternateEventCode = alternateEventCode.orEmpty(),
         timezone = timezone,
-        preferredSource = preferredSource,
         useStatboticsEpa = useStatboticsEpa,
         useTbaOpr = useTbaOpr,
         useMatch13Exp = useMatch13Exp,

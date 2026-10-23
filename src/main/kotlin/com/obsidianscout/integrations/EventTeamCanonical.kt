@@ -178,6 +178,25 @@ object EventTeamCanonical {
             }
     }
 
+    /**
+     * [adoptManualEvents] for a whole season's event list at once. It reads the manual events a single time
+     * instead of scanning the events table once per synced event (about 1,500 times for an FTC season).
+     * Each target is (synced key, year, code). Must run inside a transaction.
+     */
+    fun adoptManualEventsInto(targets: List<Triple<String, Int, String?>>) {
+        if (targets.isEmpty()) return
+        val manuals = ApiEvents.selectAll().where { ApiEvents.dataJson like "%\"manual\":true%" }.toList()
+            .filter { isManualEvent(it) }
+        if (manuals.isEmpty()) return
+        manuals.forEach { manual ->
+            val target = targets.firstOrNull { (key, year, code) -> sameEvent(manual, key.lowercase().trim(), year, code) }
+                ?: return@forEach
+            val key = target.first.lowercase().trim()
+            log.info("Merging manual event ${manual[ApiEvents.eventKey]} into synced event $key")
+            moveEventData(manual[ApiEvents.eventKey], key)
+        }
+    }
+
     /** An existing event row that is the same event as a manually entered key, if any. */
     fun findEquivalentEvent(typedKey: String, year: Int, code: String?): ResultRow? {
         val canonicalKey = canonicalTbaEventKey(year, typedKey)

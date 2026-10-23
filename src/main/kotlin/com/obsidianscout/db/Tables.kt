@@ -451,6 +451,18 @@ object ClusterNotificationLocks : UUIDTable("cluster_notification_locks") {
     }
 }
 
+/** Each team's latest API sync status, shared so every cluster node shows the same thing. */
+object SyncStatuses : UUIDTable("sync_statuses") {
+    val teamNumber = integer("team_number")
+    val program = varchar("program", 8)
+    val statusJson = text("status_json")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_sync_statuses_team_program", teamNumber, program)
+    }
+}
+
 object AnalyticsReports : UUIDTable("analytics_reports") {
     val ownerTeamNumber = integer("owner_team_number")
     val program = varchar("program", 8).default("FRC")

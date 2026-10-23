@@ -103,26 +103,20 @@ class MatchScheduleSyncTest {
         )
         assertEquals("The Blue Alliance API", SyncScheduler.getSourcesLabel(settingsTbaOnly))
 
-        // FRC no keys, preferredSource = "both"
-        val settingsPrefBoth = ApiSettings(
-            preferredSource = "both",
-            apiKeys = ApiKeys()
-        )
-        assertEquals("TBA & FIRST Robotics API", SyncScheduler.getSourcesLabel(settingsPrefBoth))
+        // The label names the sources a sync really uses: without keys no FRC source can be fetched.
+        val settingsNoKeys = ApiSettings(apiKeys = ApiKeys())
+        assertEquals("no API credentials", SyncScheduler.getSourcesLabel(settingsNoKeys))
 
-        // FRC no keys, preferredSource = "first"
-        val settingsPrefFirst = ApiSettings(
-            preferredSource = "first",
-            apiKeys = ApiKeys()
-        )
-        assertEquals("FIRST Robotics API", SyncScheduler.getSourcesLabel(settingsPrefFirst))
-
-        // FTC preferredSource = "both"
-        val settingsFtcBoth = ApiSettings(
+        // FTC always uses FTC Scout (no key needed); the FIRST FTC API only joins with credentials.
+        val settingsFtcNoKeys = ApiSettings(
             program = "FTC",
-            preferredSource = "both",
             apiKeys = ApiKeys()
         )
-        assertEquals("FTC Scout & FIRST FTC API", SyncScheduler.getSourcesLabel(settingsFtcBoth))
+        assertEquals("FTC Scout API", SyncScheduler.getSourcesLabel(settingsFtcNoKeys))
+        val settingsFtcFirst = ApiSettings(
+            program = "FTC",
+            apiKeys = ApiKeys(firstUsername = "user", firstKey = "secret_first")
+        )
+        assertEquals("FTC Scout & FIRST FTC API", SyncScheduler.getSourcesLabel(settingsFtcFirst))
     }
 }

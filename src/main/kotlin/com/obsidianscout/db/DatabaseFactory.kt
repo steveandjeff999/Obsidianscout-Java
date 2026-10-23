@@ -256,6 +256,7 @@ object DatabaseFactory {
                 FcmDeviceTokens,
                 ClusterSecrets,
                 ClusterNotificationLocks,
+                SyncStatuses,
                 AnalyticsReports,
                 UserSessions,
                 PasskeyCredentials,

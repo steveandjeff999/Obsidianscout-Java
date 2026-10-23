@@ -119,10 +119,6 @@ export function showSetupWizardModal(me, settings, forceOpen = false) {
                 const tzVal = tzInput.value.trim();
                 if (tzVal) localSettings.timezone = tzVal;
             }
-            const sourceInput = container.querySelector("#wizard-source");
-            if (sourceInput && sourceInput.value) {
-                localSettings.preferredSource = sourceInput.value;
-            }
         } else if (currentStep === 3) {
             const tbaInput = container.querySelector("#wizard-tba-key");
             if (tbaInput) {
@@ -196,9 +192,6 @@ export function showSetupWizardModal(me, settings, forceOpen = false) {
     const seasonTitle = isFtc ? "FTC Event & Season Details" : "FRC Event & Season Details";
     const seasonDesc = isFtc ? "Specify your current season year and the event code to sync teams and matches from the FTC Scout APIs." : "Specify your current season year and the event code to sync teams and matches from the FRC APIs.";
     const yearDesc = isFtc ? "The 4-digit FTC season year." : "The 4-digit FRC season year.";
-    const sourceTbaLabel = isFtc ? "FTC Scout" : "The Blue Alliance";
-    const sourceFirstLabel = isFtc ? "FIRST FTC API" : "FIRST API";
-    const sourceBothLabel = isFtc ? "Both (FTC Scout + FIRST)" : "Both (TBA + FIRST)";
     const credentialsDesc = isFtc ? "Enter your API credentials. FTC Scout does not require a key, but you can optionally configure official FIRST FTC API credentials below." : "Enter your API keys to enable automatic schedule syncing. Leave blank if syncing offline via QR codes.";
     const tbaKeyStyle = isFtc ? "display: none;" : "margin-bottom: 16px;";
     const firstUsernameLabel = isFtc ? "FIRST FTC API Username" : "FIRST API Username";
@@ -255,15 +248,6 @@ export function showSetupWizardModal(me, settings, forceOpen = false) {
                         <label for="wizard-timezone">Timezone</label>
                         <input id="wizard-timezone" type="text" placeholder="UTC" value="${localSettings.timezone || 'UTC'}" />
                         <span class="wizard-field-desc">Database logs and schedule offsets use this timezone.</span>
-                    </div>
-                    <div class="field">
-                        <label for="wizard-source">Preferred API Source</label>
-                        <select id="wizard-source">
-                            <option value="tba" ${localSettings.preferredSource === 'tba' ? 'selected' : ''}>${sourceTbaLabel}</option>
-                            <option value="first" ${localSettings.preferredSource === 'first' ? 'selected' : ''}>${sourceFirstLabel}</option>
-                            <option value="both" ${localSettings.preferredSource === 'both' ? 'selected' : ''}>${sourceBothLabel}</option>
-                        </select>
-                        <span class="wizard-field-desc">The primary API to fetch event schedule.</span>
                     </div>
                 </div>
             </div>

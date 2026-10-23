@@ -161,13 +161,23 @@ object IntegrationService {
         }
         val events = fetchMergedEvents(settings)
         val now = Instant.now()
-        transaction {
-            events.forEach { event -> upsertEvent(event, now) }
+        withContext(Dispatchers.IO) {
+            transaction {
+                EventTeamCanonical.adoptManualEventsInto(events.map { event ->
+                    val code = resolveEventCode(event).clipEventCode()
+                    Triple(resolveEventKey(event, code), event.year, code)
+                })
+                events.forEach { event -> upsertEvent(event, now, fromEventList = true) }
+            }
         }
         return events.size
     }
 
-    suspend fun syncEventData(settings: ApiSettings): SyncCounts {
+    /**
+     * @param tbaAndFirstOnly skip the Statbotics and Match 13 stat lookups. Used for the daily refresh of
+     *   ended events: TBA and FIRST can still add late data, while the rating sites have nothing new to give.
+     */
+    suspend fun syncEventData(settings: ApiSettings, tbaAndFirstOnly: Boolean = false): SyncCounts {
         if (settings.program == "FTC") {
             return FtcIntegrationService.syncEventData(settings)
         }
@@ -175,45 +185,7 @@ object IntegrationService {
         if (eventKey.isBlank()) {
             return SyncCounts(0, 0)
         }
-        
-        val (event, teams, matches) = coroutineScope {
-            val eventDeferred = async {
-                fetchTbaEventDetail(settings, eventKey)
-                    ?: fetchFirstEventDetail(settings, eventKey)
-                    ?: EventSyncRecord(
-                        eventKey = eventKey,
-                        year = settings.year,
-                        eventCode = settings.eventCode.ifBlank { eventKey.removePrefix(settings.year.toString()) },
-                        name = eventKey,
-                        startDate = null,
-                        endDate = null,
-                        timezone = settings.timezone.takeIf { it.isNotBlank() } ?: "UTC",
-                        dataJson = "{}"
-                    )
-            }
-            val teamsDeferred = async { fetchMergedTeams(settings, eventKey) }
-            val eventRecord = eventDeferred.await()
-            val matchesDeferred = async { fetchMergedMatches(settings, eventKey, eventRecord.timezone?.takeIf { it.isNotBlank() } ?: settings.timezone.takeIf { it.isNotBlank() } ?: "UTC") }
-            Triple(eventRecord, teamsDeferred.await(), matchesDeferred.await())
-        }
-
-        // Guard: if every team returned by the FRC APIs has an "ftc"-prefixed key, we
-        // accidentally matched an FTC event. Abort rather than polluting the database.
-        if (teams.isNotEmpty() && teams.all { it.teamKey.lowercase().startsWith("ftc") }) {
-            log.warn(
-                "FRC syncEventData for $eventKey received only FTC-prefixed team keys — " +
-                "the event code likely belongs to the FTC program. Aborting write."
-            )
-            return SyncCounts(0, 0)
-        }
-
-        writeEventData(event, eventKey, teams, matches)
-        try {
-            syncStats(settings)
-        } catch (e: Exception) {
-            log.warn("Failed to automatically sync stats after event data sync: ${e.message}")
-        }
-        return SyncCounts(teams.size, matches.size)
+        return syncFrcEventData(settings, eventKey, tbaAndFirstOnly)
     }
 
     suspend fun syncCustomEventData(settings: ApiSettings, eventKey: String): SyncCounts {
@@ -224,51 +196,98 @@ object IntegrationService {
         if (key.isBlank()) {
             return SyncCounts(0, 0)
         }
-        
+        return syncFrcEventData(settings, key, tbaAndFirstOnly = false)
+    }
+
+    /**
+     * One FRC event's teams, matches and stats from every configured source. A source that fails (TBA down,
+     * FIRST credentials wrong, event missing from one site) no longer sinks the others: its data is skipped,
+     * the rows it would have refreshed keep their stored values, and the failure comes back as a warning.
+     * Only when every configured source fails does the sync itself fail.
+     */
+    private suspend fun syncFrcEventData(settings: ApiSettings, eventKey: String, tbaAndFirstOnly: Boolean): SyncCounts {
+        val warnings = java.util.Collections.synchronizedList(mutableListOf<String>())
         val (event, teams, matches) = coroutineScope {
-            val eventDeferred = async {
-                fetchTbaEventDetail(settings, key)
-                    ?: fetchFirstEventDetail(settings, key)
-                    ?: EventSyncRecord(
-                        eventKey = key,
-                        year = settings.year,
-                        eventCode = settings.eventCode.ifBlank { key.removePrefix(settings.year.toString()) },
-                        name = key,
-                        startDate = null,
-                        endDate = null,
-                        timezone = settings.timezone,
-                        dataJson = "{}"
-                    )
-            }
-            val teamsDeferred = async { fetchMergedTeams(settings, key) }
+            val eventDeferred = async { fetchEventDetail(settings, eventKey) }
+            val teamsDeferred = async { fetchMergedTeams(settings, eventKey, warnings) }
             val eventRecord = eventDeferred.await()
-            val matchesDeferred = async { fetchMergedMatches(settings, key, eventRecord.timezone ?: settings.timezone) }
+            val timezone = eventRecord.timezone?.takeIf { it.isNotBlank() } ?: settings.timezone.takeIf { it.isNotBlank() } ?: "UTC"
+            val matchesDeferred = async { fetchMergedMatches(settings, eventKey, timezone, warnings) }
             Triple(eventRecord, teamsDeferred.await(), matchesDeferred.await())
         }
 
-        // Guard: if every team returned by the FRC APIs has an "ftc"-prefixed key, the
-        // configured event code matches an FTC event. Abort rather than polluting the database.
+        // Guard: if every team returned by the FRC APIs has an "ftc"-prefixed key, we
+        // accidentally matched an FTC event. Abort rather than polluting the database.
         if (teams.isNotEmpty() && teams.all { it.teamKey.lowercase().startsWith("ftc") }) {
             log.warn(
-                "FRC syncCustomEventData for $key received only FTC-prefixed team keys — " +
+                "FRC sync for $eventKey received only FTC-prefixed team keys — " +
                 "the event code likely belongs to the FTC program. Aborting write."
             )
             return SyncCounts(0, 0)
         }
 
-        writeEventData(event, key, teams, matches)
+        writeEventData(event, eventKey, teams, matches)
         try {
-            syncStats(settings, key)
+            syncStats(settings, eventKey, tbaOnly = tbaAndFirstOnly)
         } catch (e: Exception) {
-            log.warn("Failed to automatically sync stats after custom event data sync: ${e.message}")
+            log.warn("Failed to automatically sync stats after event data sync: ${e.message}")
+            warnings.add("Stats: ${e.message}")
         }
-        return SyncCounts(teams.size, matches.size)
+        return SyncCounts(teams.size, matches.size, warnings.toList())
+    }
+
+    private suspend fun fetchEventDetail(settings: ApiSettings, eventKey: String): EventSyncRecord {
+        val fromFirst = suspend {
+            try {
+                fetchFirstEventDetail(settings, eventKey)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.warn("FIRST event detail failed for $eventKey: ${e.message}")
+                null
+            }
+        }
+        // When neither API answers, keep what is stored: a placeholder would wipe the event's name and dates
+        // (the ended-event refresh reads the end date).
+        val stored = suspend {
+            readTransaction {
+                ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey.lowercase().trim() }.limit(1).firstOrNull()
+            }?.let { row ->
+                EventSyncRecord(
+                    eventKey = row[ApiEvents.eventKey],
+                    year = row[ApiEvents.year],
+                    eventCode = row[ApiEvents.eventCode],
+                    name = row[ApiEvents.name],
+                    startDate = row[ApiEvents.startDate],
+                    endDate = row[ApiEvents.endDate],
+                    timezone = row[ApiEvents.timezone],
+                    dataJson = row[ApiEvents.dataJson]
+                )
+            }
+        }
+        return fetchTbaEventDetail(settings, eventKey)
+            ?: fromFirst()
+            ?: stored()
+            ?: EventSyncRecord(
+                eventKey = eventKey,
+                year = settings.year,
+                eventCode = settings.eventCode.ifBlank { eventKey.removePrefix(settings.year.toString()) },
+                name = eventKey,
+                startDate = null,
+                endDate = null,
+                timezone = settings.timezone.takeIf { it.isNotBlank() } ?: "UTC",
+                dataJson = "{}"
+            )
     }
 
     /**
-     * Upserts one event's synced teams and matches. Rows whose stored values already match are left
-     * alone: most scheduled syncs change nothing, and rewriting every row each run was the bulk of the
-     * database load. Written values are the same as before, only no-op UPDATEs are skipped.
+     * Upserts one event's synced teams and matches.
+     *
+     * Rows are shared by every team at the event, and teams sync with different keys: one may have TBA and
+     * FIRST, another only FIRST. Writing whatever each sync fetched would flip a row between the two
+     * sources' versions every pass. Instead each row keeps the better of what is stored and what came in
+     * ([MatchCanonical.preferIncoming] for matches, [mergeTeamWithStored] for teams), which settles on one
+     * version whatever order teams sync in. Rows that end up unchanged are not written at all.
      */
     private suspend fun writeEventData(
         event: EventSyncRecord,
@@ -286,25 +305,28 @@ object IntegrationService {
                 }
                 val existingTeamsMap = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }
                     .associateBy { it[ApiTeams.teamKey] }
-                teams.forEach { team ->
-                    val existing = existingTeamsMap[team.teamKey]
+                teams.forEach { incoming ->
+                    val existing = existingTeamsMap[incoming.teamKey]
                     if (existing == null) {
                         ApiTeams.insert {
-                            it[ApiTeams.eventKey] = team.eventKey
-                            it[ApiTeams.teamKey] = team.teamKey
-                            it[ApiTeams.teamNumber] = team.teamNumber
-                            it[ApiTeams.name] = team.name.clipTeamText()
-                            it[ApiTeams.nickname] = team.nickname.clipTeamText()
-                            it[ApiTeams.city] = team.city.clipTeamLocation()
-                            it[ApiTeams.state] = team.state.clipTeamLocation()
-                            it[ApiTeams.country] = team.country.clipTeamLocation()
-                            it[ApiTeams.opr] = team.opr
-                            it[ApiTeams.epa] = team.epa
-                            it[ApiTeams.match13Exp] = team.exp
-                            it[ApiTeams.dataJson] = team.dataJson
+                            it[ApiTeams.eventKey] = incoming.eventKey
+                            it[ApiTeams.teamKey] = incoming.teamKey
+                            it[ApiTeams.teamNumber] = incoming.teamNumber
+                            it[ApiTeams.name] = incoming.name.clipTeamText()
+                            it[ApiTeams.nickname] = incoming.nickname.clipTeamText()
+                            it[ApiTeams.city] = incoming.city.clipTeamLocation()
+                            it[ApiTeams.state] = incoming.state.clipTeamLocation()
+                            it[ApiTeams.country] = incoming.country.clipTeamLocation()
+                            it[ApiTeams.opr] = incoming.opr
+                            it[ApiTeams.epa] = incoming.epa
+                            it[ApiTeams.match13Exp] = incoming.exp
+                            it[ApiTeams.dataJson] = incoming.dataJson
                             it[ApiTeams.updatedAt] = now
                         }
-                    } else if (teamRowDiffers(existing, team)) {
+                        return@forEach
+                    }
+                    val team = mergeTeamWithStored(storedTeamRecord(existing, incoming), incoming)
+                    if (teamRowDiffers(existing, team)) {
                         ApiTeams.update({ ApiTeams.id eq existing[ApiTeams.id] }) {
                             it[ApiTeams.teamNumber] = team.teamNumber
                             it[ApiTeams.name] = team.name.clipTeamText()
@@ -331,8 +353,13 @@ object IntegrationService {
                 val existingMatchesMap = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }
                     .associateBy { it[ApiMatches.matchKey] }
                 matches.forEach { match ->
-                    val canonical = MatchCanonical.canonicalize(match)
-                    val existing = existingMatchesMap[canonical.matchKey]
+                    val incoming = MatchCanonical.canonicalize(match)
+                    val existing = existingMatchesMap[incoming.matchKey]
+                    val canonical = if (existing == null) {
+                        incoming
+                    } else {
+                        MatchCanonical.resolveAgainstStored(MatchCanonical.storedRecord(existing), incoming)
+                    }
                     val redJson = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.redTeams)
                     val blueJson = JsonSupport.json.encodeToString(ListSerializer(String.serializer()), canonical.blueTeams)
                     if (existing == null) {
@@ -379,6 +406,22 @@ object IntegrationService {
         }
     }
 
+    private fun storedTeamRecord(row: ResultRow, incoming: TeamSyncRecord) = TeamSyncRecord(
+        eventKey = row[ApiTeams.eventKey],
+        teamKey = row[ApiTeams.teamKey],
+        teamNumber = row[ApiTeams.teamNumber],
+        name = row[ApiTeams.name],
+        nickname = row[ApiTeams.nickname],
+        city = row[ApiTeams.city],
+        state = row[ApiTeams.state],
+        country = row[ApiTeams.country],
+        opr = incoming.opr,
+        epa = incoming.epa,
+        exp = incoming.exp,
+        dataJson = row[ApiTeams.dataJson],
+        source = teamSourceOf(row[ApiTeams.dataJson])
+    )
+
     private fun teamRowDiffers(existing: ResultRow, team: TeamSyncRecord): Boolean =
         existing[ApiTeams.teamNumber] != team.teamNumber ||
             existing[ApiTeams.name] != team.name.clipTeamText() ||
@@ -391,7 +434,13 @@ object IntegrationService {
             (team.exp != null && existing[ApiTeams.match13Exp] != team.exp) ||
             existing[ApiTeams.dataJson] != team.dataJson
 
-    suspend fun syncStats(settings: ApiSettings, customEventKey: String? = null): Int {
+    /**
+     * @param tbaOnly fetch only TBA OPRs, leaving Statbotics EPA and Match 13 xP as stored.
+     *
+     * Statbotics and Match 13 are only asked when the team uses them (the EPA / xP switches in settings):
+     * every page that shows those numbers checks the same switch, and turning one on triggers a sync.
+     */
+    suspend fun syncStats(settings: ApiSettings, customEventKey: String? = null, tbaOnly: Boolean = false): Int {
         if (settings.program == "FTC") {
             val key = customEventKey ?: settings.resolvedEventKey()
             FtcIntegrationService.syncStats(settings, key)
@@ -402,9 +451,9 @@ object IntegrationService {
             return 0
         }
         val tbaEnabled = settings.apiKeys.tbaKey.isNotBlank()
-        val statboticsEnabled = true
-        val match13Enabled = settings.apiKeys.match13Key.isNotBlank()
-        
+        val statboticsEnabled = !tbaOnly && settings.useStatboticsEpa
+        val match13Enabled = !tbaOnly && settings.useMatch13Exp && settings.apiKeys.match13Key.isNotBlank()
+
         val (oprs, epas, exps) = coroutineScope {
             val oprsDeferred = if (tbaEnabled) async { fetchTbaOprs(settings, eventKey) } else null
             val epasDeferred = if (statboticsEnabled) async { fetchStatboticsEpas(settings, eventKey) } else null
@@ -452,16 +501,19 @@ object IntegrationService {
 
     /**
      * Stats sync for request paths (e.g. the predictor). Before an event starts TBA has no OPRs, so
-     * "stats look empty" is true on every view; this caps it at one upstream fetch per event per 5 minutes.
+     * "stats look empty" is true on every view; this caps it at one upstream fetch per event per 5 minutes,
+     * on this node (the map) and across the cluster (a lease that is left to expire rather than released).
      */
     suspend fun syncStatsOnDemand(settings: ApiSettings, eventKey: String): Boolean {
         val now = Instant.now()
         val cutoff = now.minusSeconds(300)
+        val throttleKey = "${settings.program}-${eventKey.lowercase()}"
         var claimed = false
-        lastOnDemandStatsSync.compute("${settings.program}-${eventKey.lowercase()}") { _, last ->
+        lastOnDemandStatsSync.compute(throttleKey) { _, last ->
             if (last != null && last.isAfter(cutoff)) last else now.also { claimed = true }
         }
         if (!claimed) return false
+        if (ClusterLease.tryAcquire("stats-on-demand:$throttleKey", 300) == ClusterLease.Result.HELD_ELSEWHERE) return false
         syncStats(settings, eventKey)
         return true
     }
@@ -830,21 +882,15 @@ object IntegrationService {
                 val sched = row[ApiMatches.scheduledTime]
                 val act = row[ApiMatches.actualTime]
                 var videos = emptyList<com.obsidianscout.routes.MatchVideo>()
+                var reportedPlayed = false
                 val (rScore, bScore) = try {
                     val rawDataJson = row[ApiMatches.dataJson]
                     if (rawDataJson.isNotBlank()) {
                         val json = JsonSupport.json.parseToJsonElement(rawDataJson).jsonObject
                         videos = MatchCanonical.extractVideos(json)
-                        val alliances = json["alliances"]?.jsonObject
-                        val red = alliances?.get("red")?.jsonObject
-                        val blue = alliances?.get("blue")?.jsonObject
-                        val r = red?.get("score")?.jsonPrimitive?.intOrNull
-                            ?: json["redScore"]?.jsonPrimitive?.intOrNull
-                            ?: json["scoreRedFinal"]?.jsonPrimitive?.intOrNull
-                        val b = blue?.get("score")?.jsonPrimitive?.intOrNull
-                            ?: json["blueScore"]?.jsonPrimitive?.intOrNull
-                            ?: json["scoreBlueFinal"]?.jsonPrimitive?.intOrNull
-                        Pair(r, b)
+                        val scores = matchScoresFromJson(json)
+                        reportedPlayed = (json["hasBeenPlayed"] as? JsonPrimitive)?.content == "true"
+                        scores
                     } else {
                         Pair(null, null)
                     }
@@ -852,7 +898,8 @@ object IntegrationService {
                     Pair(null, null)
                 }
                 val hasScore = rScore != null || bScore != null
-                val isPlayed = hasScore || (act != null && act > 0 && sched != null && act != sched)
+                // FTC has no match times, so FTC Scout's own played flag stands in for them.
+                val isPlayed = hasScore || reportedPlayed || (act != null && act > 0 && sched != null && act != sched)
                 MatchParsed(row, compLevel, setNumber, matchNumber, sched, act, rScore, bScore, isPlayed, videos)
             }
 
@@ -1209,6 +1256,15 @@ object IntegrationService {
         }
     }
 
+    /** When [eventKey] last came in from a sync: every sync rewrites the event row, from any node. */
+    fun eventSyncedAt(eventKey: String): Instant? = readTransaction {
+        ApiEvents.select(ApiEvents.updatedAt)
+            .where { ApiEvents.eventKey eq eventKey.lowercase().trim() }
+            .limit(1)
+            .firstOrNull()
+            ?.get(ApiEvents.updatedAt)
+    }
+
     fun saveEvent(event: EventRecord): EventRecord {
         return transaction {
             // Store exactly what the user typed — no year prefixing (custom/off-season keys are allowed).
@@ -1498,25 +1554,36 @@ object IntegrationService {
         return settings.apiKeys.tbaKey.isNotBlank()
     }
 
-    private suspend fun fetchMergedEvents(settings: ApiSettings): List<EventSyncRecord> {
-        val events = mutableListOf<EventSyncRecord>()
-        if (hasTbaCredentials(settings)) {
-            events.addAll(fetchTbaEvents(settings))
+    /** One source's answer: its records, or why it failed. */
+    internal class SourceResult<T>(val name: String, val records: List<T>?, val error: String?)
+
+    internal suspend fun <T> trySource(name: String, block: suspend () -> List<T>): SourceResult<T> = try {
+        SourceResult(name, block(), null)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn("$name failed: ${e.message}")
+        SourceResult(name, null, e.message ?: e::class.simpleName)
+    }
+
+    /**
+     * Combines the configured sources. Some failing is a warning and the rest still count; all failing
+     * throws, so the sync is reported as failed instead of as a quiet success with nothing in it.
+     */
+    internal fun <T> combineSources(what: String, results: List<SourceResult<T>>, warnings: MutableList<String>): List<T> {
+        val failed = results.filter { it.records == null }
+        if (results.isNotEmpty() && failed.size == results.size) {
+            throw IllegalStateException("$what sync failed: " + failed.joinToString("; ") { "${it.name}: ${it.error}" })
         }
-        if (hasFirstCredentials(settings)) {
-            events.addAll(fetchFirstEvents(settings))
-        }
-        if (events.isEmpty()) {
-            when (settings.preferredSource) {
-                "first" -> events.addAll(fetchFirstEvents(settings))
-                "both" -> {
-                    events.addAll(fetchTbaEvents(settings))
-                    events.addAll(fetchFirstEvents(settings))
-                }
-                else -> events.addAll(fetchTbaEvents(settings))
-            }
-        }
-        return events
+        failed.forEach { warnings.add("${it.name}: ${it.error}") }
+        return results.flatMap { it.records.orEmpty() }
+    }
+
+    private suspend fun fetchMergedEvents(settings: ApiSettings): List<EventSyncRecord> = coroutineScope {
+        val tba = if (hasTbaCredentials(settings)) async { trySource("TBA events") { fetchTbaEvents(settings) } } else null
+        val first = if (hasFirstCredentials(settings)) async { trySource("FIRST events") { fetchFirstEvents(settings) } } else null
+        // Event lists have nowhere to show a partial warning; one source answering is enough.
+        combineSources("Event list", listOfNotNull(tba?.await(), first?.await()), mutableListOf())
             .map {
                 it.copy(
                     eventKey = canonicalTbaEventKey(it.year, it.eventKey),
@@ -1526,62 +1593,44 @@ object IntegrationService {
             .distinctBy { it.eventKey }
     }
 
-    private suspend fun fetchMergedTeams(settings: ApiSettings, eventKey: String): List<TeamSyncRecord> = coroutineScope {
-        val hasTba = hasTbaCredentials(settings)
-        val hasFirst = hasFirstCredentials(settings)
-        if (hasTba) log.info("FRC Team Sync: Fetching team roster for event $eventKey from The Blue Alliance API (thebluealliance.com)...")
-        if (hasFirst) log.info("FRC Team Sync: Fetching team roster for event $eventKey from FIRST Robotics API (firstinspires.org)...")
-
-        val tbaDeferred = if (hasTba) async { fetchTbaTeams(settings, eventKey) } else null
-        val firstDeferred = if (hasFirst) async { fetchFirstTeams(settings, eventKey) } else null
-
-        val tbaTeams = tbaDeferred?.await() ?: emptyList()
-        val firstTeams = firstDeferred?.await() ?: emptyList()
-
-        val teams = (tbaTeams + firstTeams).toMutableList()
-        if (teams.isEmpty()) {
-            val source = settings.preferredSource ?: "tba"
-            log.info("FRC Team Sync: No custom credentials. Fetching team roster for event $eventKey from preferred source '$source' fallback...")
-            val fallbackTeams = when (source) {
-                "first" -> fetchFirstTeams(settings, eventKey)
-                "both" -> (fetchTbaTeams(settings, eventKey) + fetchFirstTeams(settings, eventKey))
-                else -> fetchTbaTeams(settings, eventKey)
-            }
-            teams.addAll(fallbackTeams)
-        } else {
-            log.info("FRC Team Sync: Successfully fetched and merged FRC teams from active credentials (TBA count: ${tbaTeams.size}, FIRST count: ${firstTeams.size})")
+    private suspend fun fetchMergedTeams(
+        settings: ApiSettings,
+        eventKey: String,
+        warnings: MutableList<String>
+    ): List<TeamSyncRecord> = coroutineScope {
+        val tba = if (hasTbaCredentials(settings)) async { trySource("TBA teams") { fetchTbaTeams(settings, eventKey) } } else null
+        val first = if (hasFirstCredentials(settings)) async { trySource("FIRST teams") { fetchFirstTeams(settings, eventKey) } } else null
+        val tbaResult = tba?.await()
+        val firstResult = first?.await()
+        val teams = combineSources("Team", listOfNotNull(tbaResult, firstResult), warnings)
+        // FIRST answering with an empty roster while TBA has one almost always means FIRST knows the
+        // event under another code (offseason events especially).
+        if (firstResult?.records?.isEmpty() == true && tbaResult?.records?.isNotEmpty() == true) {
+            warnings.add(
+                "FIRST has no teams for event code ${settings.firstEventCode(eventKey)}; " +
+                    "if FIRST lists this event under another code, set it as the alternate event code"
+            )
         }
-        teams
-            .groupBy { "${it.eventKey.lowercase()}_${it.teamKey.lowercase()}" }
-            .map { (_, group) -> group.maxByOrNull { it.dataJson.length } ?: group.first() }
+        log.info("FRC team sync for $eventKey: TBA ${tbaResult?.records?.size ?: "-"}, FIRST ${firstResult?.records?.size ?: "-"}")
+        mergeTeamRecords(teams)
     }
 
-    private suspend fun fetchMergedMatches(settings: ApiSettings, eventKey: String, eventTimezone: String? = null): List<MatchSyncRecord> = coroutineScope {
-        val hasTba = hasTbaCredentials(settings)
-        val hasFirst = hasFirstCredentials(settings)
-        if (hasTba) log.info("FRC Match Sync: Fetching match schedule for event $eventKey from The Blue Alliance API (thebluealliance.com)...")
-        if (hasFirst) log.info("FRC Match Sync: Fetching match schedule for event $eventKey from FIRST Robotics API (firstinspires.org)...")
-
-        val tbaDeferred = if (hasTba) async { fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") } } else null
-        val firstDeferred = if (hasFirst) async { fetchFirstMatches(settings, eventKey, eventTimezone).map { it.copy(source = "first") } } else null
-
-        val tbaMatches = tbaDeferred?.await() ?: emptyList()
-        val firstMatches = firstDeferred?.await() ?: emptyList()
-
-        val matches = (tbaMatches + firstMatches).toMutableList()
-        if (matches.isEmpty()) {
-            val source = settings.preferredSource ?: "tba"
-            log.info("FRC Match Sync: No custom credentials. Fetching match schedule for event $eventKey from preferred source '$source' fallback...")
-            val fallbackMatches = when (source) {
-                "first" -> fetchFirstMatches(settings, eventKey, eventTimezone).map { it.copy(source = "first") }
-                "both" -> (fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") } +
-                           fetchFirstMatches(settings, eventKey, eventTimezone).map { it.copy(source = "first") })
-                else -> fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") }
-            }
-            matches.addAll(fallbackMatches)
-        } else {
-            log.info("FRC Match Sync: Successfully fetched and merged FRC matches from active credentials (TBA count: ${tbaMatches.size}, FIRST count: ${firstMatches.size})")
-        }
+    private suspend fun fetchMergedMatches(
+        settings: ApiSettings,
+        eventKey: String,
+        eventTimezone: String?,
+        warnings: MutableList<String>
+    ): List<MatchSyncRecord> = coroutineScope {
+        val tba = if (hasTbaCredentials(settings)) {
+            async { trySource("TBA matches") { fetchTbaMatches(settings, eventKey).map { it.copy(source = "tba") } } }
+        } else null
+        val first = if (hasFirstCredentials(settings)) {
+            async { trySource("FIRST matches") { fetchFirstMatches(settings, eventKey, eventTimezone).map { it.copy(source = "first") } } }
+        } else null
+        val tbaResult = tba?.await()
+        val firstResult = first?.await()
+        val matches = combineSources("Match", listOfNotNull(tbaResult, firstResult), warnings)
+        log.info("FRC match sync for $eventKey: TBA ${tbaResult?.records?.size ?: "-"}, FIRST ${firstResult?.records?.size ?: "-"}")
         MatchCanonical.mergeAll(matches)
     }
 
@@ -1609,7 +1658,11 @@ object IntegrationService {
         fetchAndUpsertEvent(settings, eventKey)
     }
 
-    private fun upsertEvent(event: EventSyncRecord, now: Instant) {
+    /**
+     * @param fromEventList the season list sync: it adopts manual events in one batch beforehand and leaves
+     *   unchanged rows alone, so it doesn't rewrite hundreds of events or reset their last-synced time.
+     */
+    private fun upsertEvent(event: EventSyncRecord, now: Instant, fromEventList: Boolean = false) {
         val resolvedCode = resolveEventCode(event).clipEventCode()
         val resolvedKey = resolveEventKey(event, resolvedCode)
         val clippedName = event.name.clipEventName()
@@ -1617,8 +1670,21 @@ object IntegrationService {
         val clippedEnd = event.endDate.clipEventDate()
         val clippedTimezone = event.timezone.clipTimezone()
         // A manually created copy of this event (e.g. typed as "okok") moves onto the synced key first.
-        EventTeamCanonical.adoptManualEvents(resolvedKey, event.year, resolvedCode)
+        if (!fromEventList) {
+            EventTeamCanonical.adoptManualEvents(resolvedKey, event.year, resolvedCode)
+        }
         val existing = ApiEvents.selectAll().where { ApiEvents.eventKey eq resolvedKey }.limit(1).firstOrNull()
+        if (fromEventList && existing != null &&
+            existing[ApiEvents.year] == event.year &&
+            existing[ApiEvents.eventCode] == resolvedCode &&
+            existing[ApiEvents.name] == clippedName &&
+            existing[ApiEvents.startDate] == clippedStart &&
+            existing[ApiEvents.endDate] == clippedEnd &&
+            existing[ApiEvents.timezone] == clippedTimezone &&
+            existing[ApiEvents.dataJson] == event.dataJson
+        ) {
+            return
+        }
         if (existing == null) {
             ApiEvents.insert {
                 it[ApiEvents.eventKey] = resolvedKey
@@ -1646,19 +1712,66 @@ object IntegrationService {
         }
     }
 
-    private suspend fun fetchTbaEventDetail(settings: ApiSettings, eventKey: String): EventSyncRecord? {
+    private class ApiResponse(val status: HttpStatusCode, val body: String)
+
+    /** A source answered, but not usefully (bad credentials, outage, unknown event). */
+    private class ApiSourceException(message: String) : Exception(message)
+
+    internal val httpCache = ConditionalHttpCache()
+
+    /**
+     * GET that revalidates against [httpCache]: when the API says 304 (unchanged) the cached body is used.
+     * [credential] keeps cached answers apart per key.
+     */
+    private suspend fun cachedGet(url: String, credential: String, configure: io.ktor.client.request.HttpRequestBuilder.() -> Unit): ApiResponse {
+        val cacheKey = "${ConditionalHttpCache.credentialTag(credential)}|$url"
+        val cached = httpCache.get(cacheKey)
+        val response = client.get(url) {
+            configure()
+            cached?.etag?.let { header(HttpHeaders.IfNoneMatch, it) }
+            cached?.lastModified?.let { header(HttpHeaders.IfModifiedSince, it) }
+        }
+        if (response.status == HttpStatusCode.NotModified && cached != null) {
+            httpCache.revalidatedCount.incrementAndGet()
+            log.debug("Unchanged (304): $url")
+            return ApiResponse(HttpStatusCode.OK, cached.body)
+        }
+        val body = response.bodyAsText()
+        if (response.status.isSuccess()) {
+            httpCache.put(
+                cacheKey,
+                ConditionalHttpCache.Entry(response.headers[HttpHeaders.ETag], response.headers[HttpHeaders.LastModified], body)
+            )
+        } else {
+            httpCache.remove(cacheKey)
+        }
+        return ApiResponse(response.status, body)
+    }
+
+    private fun errorDetail(body: String): String =
+        body.trim().replace(Regex("\\s+"), " ").take(160).let { if (it.isBlank()) "" else ": $it" }
+
+    /** TBA v3 GET. Throws [ApiSourceException] on any non-success answer, including 404 for an unknown event. */
+    private suspend fun tbaGet(settings: ApiSettings, path: String): JsonElement {
         val key = settings.apiKeys.tbaKey
-        if (key.isBlank()) {
+        val response = cachedGet("https://www.thebluealliance.com/api/v3/$path", "tba:$key") {
+            header("X-TBA-Auth-Key", key)
+            header(HttpHeaders.Accept, "application/json")
+        }
+        if (!response.status.isSuccess()) {
+            throw ApiSourceException("TBA HTTP ${response.status.value} for /$path${errorDetail(response.body)}")
+        }
+        return JsonSupport.json.parseToJsonElement(response.body.ifBlank { "null" })
+    }
+
+    private suspend fun fetchTbaEventDetail(settings: ApiSettings, eventKey: String): EventSyncRecord? {
+        if (settings.apiKeys.tbaKey.isBlank()) {
             return null
         }
         val normalizedKey = canonicalTbaEventKey(settings.year, eventKey)
-        val url = "https://www.thebluealliance.com/api/v3/event/$normalizedKey"
         return try {
-            val element = client.get(url) {
-                header("X-TBA-Auth-Key", key)
-                header(HttpHeaders.Accept, "application/json")
-            }.body<JsonElement>()
-            val obj = element.jsonObject
+            val element = tbaGet(settings, "event/$normalizedKey")
+            val obj = element as? JsonObject ?: return null
             EventSyncRecord(
                 eventKey = normalizedKey,
                 year = obj.readInt("year") ?: settings.year,
@@ -1669,6 +1782,8 @@ object IntegrationService {
                 timezone = obj.readString("timezone"),
                 dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), element)
             )
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
         } catch (error: Exception) {
             log.warn("TBA event fetch failed for $normalizedKey: ${error.message}")
             null
@@ -1681,44 +1796,35 @@ object IntegrationService {
         } else null
         val year = detectedYear ?: settings.year
         val eventCode = settings.firstEventCode(eventKey)
-        if (eventCode.isNotBlank()) {
-            val root = fetchFirstJson(settings, year, "events?eventCode=$eventCode")
-            val array = root.findArray(listOf("Events", "events"))
-            val single = array.firstOrNull()?.jsonObject
-            if (single != null) {
-                // Under an alternate code the event still lives at its TBA key, not FIRST's.
-                val code = if (settings.usesAlternateEventCode(eventKey)) {
-                    eventKey.lowercase().trim().removePrefix(year.toString())
-                } else {
-                    single.readString("code") ?: single.readString("eventCode") ?: eventCode
-                }
-                return EventSyncRecord(
-                    eventKey = canonicalTbaEventKey(year, code),
-                    year = year,
-                    eventCode = code,
-                    name = single.readString("name") ?: eventKey,
-                    startDate = single.readString("dateStart") ?: single.readString("startDate"),
-                    endDate = single.readString("dateEnd") ?: single.readString("endDate"),
-                    timezone = single.readString("timezone") ?: single.readString("timeZone") ?: single.readString("venueTimeZone"),
-                    dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), single)
-                )
-            }
+        if (eventCode.isBlank()) return null
+        val root = fetchFirstJson(settings, year, "events?eventCode=$eventCode")
+        val single = root.findArray(listOf("Events", "events")).firstOrNull() as? JsonObject ?: return null
+        // Under an alternate code the event still lives at its TBA key, not FIRST's.
+        val code = if (settings.usesAlternateEventCode(eventKey)) {
+            eventKey.lowercase().trim().removePrefix(year.toString())
+        } else {
+            single.readString("code") ?: single.readString("eventCode") ?: eventCode
         }
-        return fetchFirstEvents(settings).firstOrNull { it.eventKey.equals(eventKey, ignoreCase = true) }
+        return EventSyncRecord(
+            eventKey = canonicalTbaEventKey(year, code),
+            year = year,
+            eventCode = code,
+            name = single.readString("name") ?: eventKey,
+            startDate = single.readString("dateStart") ?: single.readString("startDate"),
+            endDate = single.readString("dateEnd") ?: single.readString("endDate"),
+            timezone = single.readString("timezone") ?: single.readString("timeZone") ?: single.readString("venueTimeZone"),
+            dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), single)
+        )
     }
 
     private suspend fun fetchTbaEvents(settings: ApiSettings): List<EventSyncRecord> {
-        val key = settings.apiKeys.tbaKey
-        if (key.isBlank()) {
+        if (settings.apiKeys.tbaKey.isBlank()) {
             return emptyList()
         }
-        val url = "https://www.thebluealliance.com/api/v3/events/${settings.year}"
-        val element = client.get(url) {
-            header("X-TBA-Auth-Key", key)
-        }.body<JsonElement>()
-        val events = element.jsonArray
+        val events = tbaGet(settings, "events/${settings.year}") as? JsonArray
+            ?: throw ApiSourceException("TBA returned no event list for ${settings.year}")
         return events.mapNotNull { item ->
-            val obj = item.jsonObject
+            val obj = item as? JsonObject ?: return@mapNotNull null
             val eventKey = obj.readString("key") ?: return@mapNotNull null
             EventSyncRecord(
                 eventKey = eventKey,
@@ -1734,18 +1840,14 @@ object IntegrationService {
     }
 
     private suspend fun fetchTbaTeams(settings: ApiSettings, eventKey: String): List<TeamSyncRecord> {
-        val key = settings.apiKeys.tbaKey
-        if (key.isBlank()) {
+        if (settings.apiKeys.tbaKey.isBlank()) {
             return emptyList()
         }
         val normalizedKey = canonicalTbaEventKey(settings.year, eventKey)
-        val url = "https://www.thebluealliance.com/api/v3/event/${normalizedKey}/teams/simple"
-        val element = client.get(url) {
-            header("X-TBA-Auth-Key", key)
-            header(HttpHeaders.Accept, "application/json")
-        }.body<JsonElement>()
-        return element.jsonArray.mapNotNull { item ->
-            val obj = item.jsonObject
+        val teams = tbaGet(settings, "event/$normalizedKey/teams/simple") as? JsonArray
+            ?: throw ApiSourceException("TBA returned no team list for $normalizedKey")
+        return teams.mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
             val teamKey = obj.readString("key") ?: return@mapNotNull null
             TeamSyncRecord(
                 eventKey = normalizedKey,
@@ -1758,26 +1860,46 @@ object IntegrationService {
                 country = obj.readString("country"),
                 opr = null,
                 epa = null,
-                dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), item)
+                dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), item),
+                source = "tba"
             )
         }
     }
 
     private suspend fun fetchTbaMatches(settings: ApiSettings, eventKey: String): List<MatchSyncRecord> {
-        val key = settings.apiKeys.tbaKey
-        if (key.isBlank()) {
+        if (settings.apiKeys.tbaKey.isBlank()) {
             return emptyList()
         }
         val normalizedKey = canonicalTbaEventKey(settings.year, eventKey)
-        val url = "https://www.thebluealliance.com/api/v3/event/${normalizedKey}/matches"
-        val element = client.get(url) {
-            header("X-TBA-Auth-Key", key)
-            header(HttpHeaders.Accept, "application/json")
-        }.body<JsonElement>()
-        return element.jsonArray.mapNotNull { item ->
-            val obj = item.jsonObject
+        // TBA serves practice matches only from their own endpoint; /matches leaves them out.
+        val (element, practice) = coroutineScope {
+            val practiceDeferred = async { fetchTbaPracticeMatches(settings, normalizedKey) }
+            tbaGet(settings, "event/$normalizedKey/matches") to practiceDeferred.await()
+        }
+        val array = element as? JsonArray ?: throw ApiSourceException("TBA returned no match list for $normalizedKey")
+        return practice + parseTbaMatches(array, normalizedKey)
+    }
+
+    /** Practice matches are extra: a failure here is logged and never fails the rest of the match sync. */
+    private suspend fun fetchTbaPracticeMatches(settings: ApiSettings, normalizedKey: String): List<MatchSyncRecord> {
+        return try {
+            val array = tbaGet(settings, "event/$normalizedKey/matches/practice") as? JsonArray ?: return emptyList()
+            parseTbaMatches(array, normalizedKey)
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (error.message?.contains("HTTP 404") != true) {
+                log.warn("TBA practice match fetch failed for $normalizedKey: ${error.message}")
+            }
+            emptyList()
+        }
+    }
+
+    private fun parseTbaMatches(array: JsonArray, normalizedKey: String): List<MatchSyncRecord> {
+        return array.mapNotNull { item ->
+            val obj = item as? JsonObject ?: return@mapNotNull null
             val matchKey = obj.readString("key") ?: return@mapNotNull null
-            val alliances = obj["alliances"]?.jsonObject
+            val alliances = obj["alliances"] as? JsonObject
             val redTeams = alliances?.get("red").teamKeys()
             val blueTeams = alliances?.get("blue").teamKeys()
             val scheduledTime = obj.readLong("time")
@@ -1799,26 +1921,34 @@ object IntegrationService {
         }
     }
 
-    private suspend fun fetchTbaOprs(settings: ApiSettings, eventKey: String): Map<String, Double> {
+    // Stats sync and history sync both ask TBA for OPRs back to back; TBA caches them for 60s anyway.
+    private val recentTbaOprs = java.util.concurrent.ConcurrentHashMap<String, Pair<Instant, Map<String, Double>>>()
+
+    /**
+     * TBA OPRs, or null when they're unknown (no key, or TBA failed). An empty map is a real answer:
+     * TBA has no OPRs until matches are played.
+     */
+    private suspend fun fetchTbaOprs(settings: ApiSettings, eventKey: String): Map<String, Double>? {
         val key = settings.apiKeys.tbaKey
         if (key.isBlank()) {
-            return emptyMap()
+            return null
         }
         val normalizedKey = canonicalTbaEventKey(settings.year, eventKey)
-        val url = "https://www.thebluealliance.com/api/v3/event/${normalizedKey}/oprs"
+        val memoKey = "${ConditionalHttpCache.credentialTag(key)}|$normalizedKey"
+        recentTbaOprs[memoKey]?.takeIf { it.first.isAfter(Instant.now().minusSeconds(60)) }?.let { return it.second }
         return try {
-            val element = client.get(url) {
-                header("X-TBA-Auth-Key", key)
-            }.body<JsonElement>()
+            val element = tbaGet(settings, "event/$normalizedKey/oprs")
             // TBA returns a bare `null` until the event has played matches.
-            val oprs = (element as? JsonObject)?.get("oprs") as? JsonObject ?: return emptyMap()
-            oprs.entries.associate { entry ->
-                val primitive = entry.value as? JsonPrimitive
-                entry.key to primitive?.content?.toDoubleOrNull().orZero()
-            }
+            val oprs = ((element as? JsonObject)?.get("oprs") as? JsonObject)?.entries?.associate { entry ->
+                entry.key to (entry.value as? JsonPrimitive)?.content?.toDoubleOrNull().orZero()
+            } ?: emptyMap()
+            recentTbaOprs[memoKey] = Instant.now() to oprs
+            oprs
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
         } catch (error: Exception) {
             log.warn("TBA OPR fetch failed for $normalizedKey: ${error.message}")
-            emptyMap()
+            null
         }
     }
 
@@ -1867,33 +1997,48 @@ object IntegrationService {
         val normalizedKey = canonicalStoredEventKey(settings.year, eventKey)
         if (normalizedKey.isBlank()) return
         
+        // Each part is null when this team couldn't learn it: no key, the switch is off, or the source failed.
+        // The cache is shared by every team at the event, so a null part keeps what another team stored.
         val (oprs, epaHistory, match13History) = coroutineScope {
             val oprsDeferred = async { fetchTbaOprs(settings, normalizedKey) }
-            val epaDeferred = async { fetchStatboticsMatchEpaHistory(settings, normalizedKey) }
-            val match13Deferred = async { fetchMatch13MatchHistory(settings, normalizedKey) }
+            val epaDeferred = async { if (settings.useStatboticsEpa) fetchStatboticsMatchEpaHistory(settings, normalizedKey) else null }
+            val match13Deferred = async { if (settings.useMatch13Exp) fetchMatch13MatchHistory(settings, normalizedKey) else null }
             Triple(oprsDeferred.await(), epaDeferred.await(), match13Deferred.await())
         }
+        writeStatsHistory(normalizedKey, oprs, epaHistory, match13History)
+    }
 
-        val oprsJson = JsonSupport.json.encodeToString(oprs)
-        val epaHistoryJson = JsonSupport.json.encodeToString(epaHistory)
-        val match13HistoryJson = JsonSupport.json.encodeToString(match13History)
+    /**
+     * Stores whichever history parts are known. With none known nothing is written, so the cache keeps its
+     * age and page views keep retrying. Shared with FTC.
+     */
+    internal fun writeStatsHistory(
+        eventKey: String,
+        oprs: Map<String, Double>?,
+        epaHistory: List<JsonElement>?,
+        match13History: List<JsonElement>?
+    ) {
+        if (oprs == null && epaHistory == null && match13History == null) return
+        val oprsJson = oprs?.let { JsonSupport.json.encodeToString(it) }
+        val epaHistoryJson = epaHistory?.let { JsonSupport.json.encodeToString(it) }
+        val match13HistoryJson = match13History?.let { JsonSupport.json.encodeToString(it) }
         val now = java.time.Instant.now()
-        
+
         transaction {
-            val existing = EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq normalizedKey }.firstOrNull()
+            val existing = EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq eventKey }.firstOrNull()
             if (existing == null) {
                 EpaOprHistoryCache.insert {
-                    it[EpaOprHistoryCache.eventKey] = normalizedKey
-                    it[EpaOprHistoryCache.oprsJson] = oprsJson
-                    it[EpaOprHistoryCache.epaHistoryJson] = epaHistoryJson
-                    it[EpaOprHistoryCache.match13HistoryJson] = match13HistoryJson
+                    it[EpaOprHistoryCache.eventKey] = eventKey
+                    it[EpaOprHistoryCache.oprsJson] = oprsJson ?: "{}"
+                    it[EpaOprHistoryCache.epaHistoryJson] = epaHistoryJson ?: "[]"
+                    it[EpaOprHistoryCache.match13HistoryJson] = match13HistoryJson ?: "[]"
                     it[EpaOprHistoryCache.updatedAt] = now
                 }
             } else {
-                EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq normalizedKey }) {
-                    it[EpaOprHistoryCache.oprsJson] = oprsJson
-                    it[EpaOprHistoryCache.epaHistoryJson] = epaHistoryJson
-                    it[EpaOprHistoryCache.match13HistoryJson] = match13HistoryJson
+                EpaOprHistoryCache.update({ EpaOprHistoryCache.eventKey eq eventKey }) {
+                    if (oprsJson != null) it[EpaOprHistoryCache.oprsJson] = oprsJson
+                    if (epaHistoryJson != null) it[EpaOprHistoryCache.epaHistoryJson] = epaHistoryJson
+                    if (match13HistoryJson != null) it[EpaOprHistoryCache.match13HistoryJson] = match13HistoryJson
                     it[EpaOprHistoryCache.updatedAt] = now
                 }
             }
@@ -2199,13 +2344,14 @@ object IntegrationService {
         }
     }
 
-    private suspend fun fetchMatch13MatchHistory(settings: ApiSettings, eventKey: String): List<JsonElement> {
+    /** Null when unknown (no key, or Match 13 failed); empty when Match 13 doesn't carry the event (404). */
+    private suspend fun fetchMatch13MatchHistory(settings: ApiSettings, eventKey: String): List<JsonElement>? {
         val cleanEventKey = canonicalStoredEventKey(settings.year, eventKey)
         val rawUrl = settings.match13BaseUrl.ifBlank { "https://actions.match13.com" }.trimEnd('/')
         val rawKey = settings.apiKeys.match13Key.trim()
         val key = if (rawKey == "********") "" else rawKey
         // Keyless calls are always 401s; skipping them matters because history refreshes every 2 min while empty.
-        if (key.isBlank()) return emptyList()
+        if (key.isBlank()) return null
         val url = "$rawUrl/v1/events/${cleanEventKey}/matches"
         return try {
             val response = client.get(url) {
@@ -2215,9 +2361,10 @@ object IntegrationService {
                     header(HttpHeaders.Authorization, "Bearer $key")
                 }
             }
+            if (response.status == HttpStatusCode.NotFound) return emptyList()
             if (!response.status.isSuccess()) {
                 log.warn("Match 13 match history fetch failed for $cleanEventKey with status ${response.status}")
-                return emptyList()
+                return null
             }
             val text = response.bodyAsText()
             val parsed = JsonSupport.json.parseToJsonElement(text)
@@ -2248,11 +2395,12 @@ object IntegrationService {
             }
         } catch (error: Exception) {
             log.warn("Match 13 match history fetch failed for $cleanEventKey: ${error.message}")
-            emptyList()
+            null
         }
     }
 
-    private suspend fun fetchStatboticsMatchEpaHistory(settings: ApiSettings, eventKey: String): List<JsonElement> {
+    /** Null when Statbotics failed, so the stored history is kept. */
+    private suspend fun fetchStatboticsMatchEpaHistory(settings: ApiSettings, eventKey: String): List<JsonElement>? {
         val baseUrl = settings.statboticsBaseUrl.ifBlank { "https://api.statbotics.io" }.trimEnd('/')
         val cleanBaseUrl = baseUrl.removeSuffix("/v3")
         val url = "$cleanBaseUrl/v3/matches?event=${eventKey}&limit=1000"
@@ -2260,10 +2408,10 @@ object IntegrationService {
             val response = client.get(url)
             if (!response.status.isSuccess()) {
                 log.warn("Statbotics match EPA history fetch failed for $eventKey with status ${response.status}")
-                return emptyList()
+                return null
             }
             val text = response.bodyAsText()
-            val array = (JsonSupport.json.parseToJsonElement(text) as? JsonArray) ?: return emptyList()
+            val array = (JsonSupport.json.parseToJsonElement(text) as? JsonArray) ?: return null
             val teamMatches = mutableListOf<JsonElement>()
             array.forEach { matchElem ->
                 val matchObj = matchElem as? JsonObject ?: return@forEach
@@ -2334,7 +2482,7 @@ object IntegrationService {
             teamMatches
         } catch (error: Exception) {
             log.warn("Statbotics match EPA history fetch failed for $eventKey: ${error.message}")
-            emptyList()
+            null
         }
     }
 
@@ -2384,7 +2532,8 @@ object IntegrationService {
                 country = obj.readString("country"),
                 opr = null,
                 epa = null,
-                dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), item)
+                dataJson = JsonSupport.json.encodeToString(JsonElement.serializer(), item),
+                source = "first"
             )
         }
     }
@@ -2441,22 +2590,25 @@ object IntegrationService {
                     parseFirstMatchItems(scheduleRoot, normalizedEventKey, defaultLevel, zoneId)
                 }
             }
-            val fallbackJob = async {
-                val fallbackMatchesRoot = fetchFirstJson(settings, year, "matches/$eventCode")
-                parseFirstMatchItems(fallbackMatchesRoot, normalizedEventKey, "", zoneId)
-            }
-
             // Wait for all fetches to complete concurrently
-            val fetchedMatchesList = matchesJobs.awaitAll() + scheduleJobs.awaitAll()
-            fetchedMatchesList.flatten().forEach { upsert(it) }
+            val matchResults = matchesJobs.awaitAll()
+            val scheduleResults = scheduleJobs.awaitAll()
+            (matchResults + scheduleResults).flatten().forEach { upsert(it) }
 
-            val fallbackMatches = fallbackJob.await()
-            if (results.isEmpty()) {
-                fallbackMatches.forEach { upsert(it) }
-            } else {
-                fallbackMatches
-                    .filter { MatchCanonical.normalizeCompLevel(it.compLevel) == "practice" }
-                    .forEach { upsert(it) }
+            // The per-level results calls above cover qualifications and playoffs; the unfiltered call only
+            // adds practice results, or stands in when the per-level calls found nothing. Skip it otherwise.
+            val hasPracticeSchedule = scheduleResults.first().isNotEmpty()
+            if (results.isEmpty() || hasPracticeSchedule) {
+                val fallbackMatches = parseFirstMatchItems(
+                    fetchFirstJson(settings, year, "matches/$eventCode"), normalizedEventKey, "", zoneId
+                )
+                if (results.isEmpty()) {
+                    fallbackMatches.forEach { upsert(it) }
+                } else {
+                    fallbackMatches
+                        .filter { MatchCanonical.normalizeCompLevel(it.compLevel) == "practice" }
+                        .forEach { upsert(it) }
+                }
             }
         }
 
@@ -2469,8 +2621,9 @@ object IntegrationService {
     }
 
     /**
-     * Fetches JSON from the FIRST API. Handles non-JSON error responses gracefully
-     * by returning an empty JsonArray instead of crashing.
+     * FIRST FRC API GET, revalidated with If-Modified-Since. Missing credentials and 404 (nothing at that
+     * path) give an empty array; any other failure throws [ApiSourceException] so bad credentials or a
+     * wrong event code show up in the sync status instead of looking like an empty event.
      */
     private suspend fun fetchFirstJson(settings: ApiSettings, year: Int, path: String): JsonElement {
         val user = settings.apiKeys.firstUsername
@@ -2480,28 +2633,29 @@ object IntegrationService {
         }
         val token = Base64.getEncoder().encodeToString("$user:$key".toByteArray())
         val url = "https://frc-api.firstinspires.org/v3.0/$year/$path"
-        try {
-            val response = client.get(url) {
+        val response = try {
+            cachedGet(url, "first:$user:$key") {
                 header(HttpHeaders.Authorization, "Basic $token")
                 header(HttpHeaders.Accept, "application/json")
             }
-
-            // Check HTTP status before attempting to parse
-            if (!response.status.isSuccess()) {
-                val errorBody = response.bodyAsText()
-                log.warn("FIRST API returned ${response.status} for $path: $errorBody")
-                return JsonArray(emptyList())
-            }
-
-            val responseText = response.bodyAsText()
-            if (responseText.isBlank()) {
-                return JsonArray(emptyList())
-            }
-
-            return JsonSupport.json.parseToJsonElement(responseText)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
-            log.warn("FIRST API request failed for $path: ${e.message}")
+            throw ApiSourceException("FIRST API unreachable for $path: ${e.message}")
+        }
+        if (response.status == HttpStatusCode.NotFound) {
             return JsonArray(emptyList())
+        }
+        if (!response.status.isSuccess()) {
+            throw ApiSourceException("FIRST HTTP ${response.status.value} for $path${errorDetail(response.body)}")
+        }
+        if (response.body.isBlank()) {
+            return JsonArray(emptyList())
+        }
+        return try {
+            JsonSupport.json.parseToJsonElement(response.body)
+        } catch (e: Exception) {
+            throw ApiSourceException("FIRST API sent unreadable data for $path")
         }
     }
 
@@ -2632,7 +2786,9 @@ object IntegrationService {
 @kotlinx.serialization.Serializable
 data class SyncCounts(
     val teams: Int,
-    val matches: Int
+    val matches: Int,
+    /** Sources that failed while others succeeded, e.g. "TBA matches: HTTP 503". Empty on a clean sync. */
+    val warnings: List<String> = emptyList()
 )
 
 private data class EventSyncRecord(
@@ -2646,7 +2802,7 @@ private data class EventSyncRecord(
     val dataJson: String
 )
 
-private data class TeamSyncRecord(
+internal data class TeamSyncRecord(
     val eventKey: String,
     val teamKey: String,
     val teamNumber: Int,
@@ -2658,8 +2814,80 @@ private data class TeamSyncRecord(
     val opr: Double?,
     val epa: Double?,
     val exp: Double? = null,
-    val dataJson: String
+    val dataJson: String,
+    /** "tba", "first", or "unknown" (manual rows and anything older). */
+    val source: String = "unknown"
 )
+
+/**
+ * Red and blue scores from a stored match's JSON, whichever API wrote it: TBA (`alliances.red.score`, -1
+ * until played), FIRST FRC/FTC (`scoreRedFinal`), FTC Scout (`scores.red.totalPoints`), or a manual entry
+ * (`redScore`). Null for an alliance without a result.
+ */
+internal fun matchScoresFromJson(json: JsonObject): Pair<Int?, Int?> {
+    fun number(element: JsonElement?): Int? =
+        (element as? JsonPrimitive)?.content?.toDoubleOrNull()?.let { kotlin.math.round(it).toInt() }
+    fun child(parent: JsonElement?, key: String): JsonElement? = (parent as? JsonObject)?.get(key)
+    fun side(color: String): Int? =
+        number(child(child(json["alliances"], color), "score"))?.takeIf { it >= 0 }
+            ?: number(json["${color}Score"])
+            ?: number(json["score${color.replaceFirstChar { it.uppercase() }}Final"])
+            ?: number(child(child(json["scores"], color), "totalPoints"))
+    return side("red") to side("blue")
+}
+
+/** TBA's team record is preferred over FIRST's; anything else (manual rows) ranks last. */
+internal fun teamSourceRank(source: String): Int = when (source) {
+    "tba" -> 2
+    "first" -> 1
+    else -> 0
+}
+
+/** Which API a stored team row's JSON came from, judged by the fields each API sends. */
+internal fun teamSourceOf(dataJson: String): String {
+    val obj = runCatching { JsonSupport.json.parseToJsonElement(dataJson) as? JsonObject }.getOrNull() ?: return "unknown"
+    return when {
+        obj.containsKey("team_number") && obj.containsKey("key") -> "tba"
+        obj.containsKey("teamNumber") -> "first"
+        else -> "unknown"
+    }
+}
+
+private fun String?.orIfBlank(other: String?): String? = if (this.isNullOrBlank()) other else this
+
+/** Fills [primary]'s blank fields from [other]; [primary]'s values, JSON and source win. */
+private fun TeamSyncRecord.fillBlanksFrom(other: TeamSyncRecord): TeamSyncRecord = copy(
+    name = name.orIfBlank(other.name),
+    nickname = nickname.orIfBlank(other.nickname),
+    city = city.orIfBlank(other.city),
+    state = state.orIfBlank(other.state),
+    country = country.orIfBlank(other.country),
+    opr = opr ?: other.opr,
+    epa = epa ?: other.epa,
+    exp = exp ?: other.exp
+)
+
+/** One record per team from TBA's and FIRST's rosters: TBA's record, with gaps filled from FIRST's. */
+internal fun mergeTeamRecords(records: List<TeamSyncRecord>): List<TeamSyncRecord> =
+    records.groupBy { "${it.eventKey.lowercase()}_${it.teamKey.lowercase()}" }.map { (_, group) ->
+        val ordered = group.sortedByDescending { teamSourceRank(it.source) }
+        ordered.drop(1).fold(ordered.first()) { merged, other -> merged.fillBlanksFrom(other) }
+    }
+
+/**
+ * What a team row should hold after [incoming] meets what is [stored]. The better-ranked source wins,
+ * the newer copy on a tie, and blanks are filled from the other, so teams syncing with different keys
+ * settle on the same row instead of overwriting each other. Stats always come from [incoming]
+ * (null there means "leave the stored value").
+ */
+internal fun mergeTeamWithStored(stored: TeamSyncRecord, incoming: TeamSyncRecord): TeamSyncRecord {
+    val merged = if (teamSourceRank(incoming.source) >= teamSourceRank(stored.source)) {
+        incoming.fillBlanksFrom(stored)
+    } else {
+        stored.fillBlanksFrom(incoming)
+    }
+    return merged.copy(teamNumber = incoming.teamNumber, opr = incoming.opr, epa = incoming.epa, exp = incoming.exp)
+}
 
 private fun JsonObject.readString(key: String): String? {
     val element = this[key] ?: return null

@@ -1,5 +1,8 @@
 package com.obsidianscout.integrations
 
+import com.obsidianscout.config.JsonSupport
+import com.obsidianscout.db.SyncStatuses
+import com.obsidianscout.db.readTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -7,6 +10,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.slf4j.LoggerFactory
 import java.time.Instant
 
@@ -18,7 +28,7 @@ private data class SyncInputs(
     val eventCode: String,
     val alternateEventCode: String,
     val timezone: String,
-    val preferredSource: String,
+    val useStatboticsEpa: Boolean,
     val useMatch13Exp: Boolean,
     val apiKeys: ApiKeys,
     val statboticsBaseUrl: String,
@@ -32,7 +42,7 @@ private data class SyncInputs(
             eventCode = settings.eventCode,
             alternateEventCode = settings.alternateEventCode,
             timezone = settings.timezone,
-            preferredSource = settings.preferredSource,
+            useStatboticsEpa = settings.useStatboticsEpa,
             useMatch13Exp = settings.useMatch13Exp,
             apiKeys = settings.apiKeys,
             statboticsBaseUrl = settings.statboticsBaseUrl,
@@ -41,10 +51,54 @@ private data class SyncInputs(
     }
 }
 
+/**
+ * Which cluster node runs the automatic sync. Every node competes for one [ClusterLease]; the holder
+ * renews it every [RENEW_MS]. A node only treats itself as leader until [LOCAL_VALIDITY_SECONDS] after
+ * its last successful renewal, which is well inside the lease's [TTL_SECONDS]: a node that loses the
+ * database stops syncing at least 30 seconds before anyone else may take over, so two leaders never
+ * overlap even with a few seconds of clock drift between nodes.
+ */
+internal object SyncLeadership {
+    const val LEASE_KEY = "sync-scheduler-leader"
+    const val TTL_SECONDS = 90L
+    const val LOCAL_VALIDITY_SECONDS = 60L
+    const val RENEW_MS = 15_000L
+
+    private val log = LoggerFactory.getLogger("SyncLeadership")
+
+    @Volatile
+    private var validUntil: Instant = Instant.EPOCH
+
+    fun isLeader(now: Instant = Instant.now()): Boolean = now.isBefore(validUntil)
+
+    /** Takes or renews the lease. Returns whether this node is leader afterwards. */
+    fun refresh(now: Instant = Instant.now()): Boolean {
+        val wasLeader = isLeader(now)
+        val result = ClusterLease.tryAcquire(LEASE_KEY, TTL_SECONDS, now = now)
+        validUntil = if (result == ClusterLease.Result.ACQUIRED) now.plusSeconds(LOCAL_VALIDITY_SECONDS) else Instant.EPOCH
+        val leader = isLeader(now)
+        if (leader && !wasLeader) log.info("This node (${ClusterLease.nodeId}) is now the auto-sync leader")
+        if (!leader && wasLeader) log.warn("This node (${ClusterLease.nodeId}) is no longer the auto-sync leader ($result)")
+        return leader
+    }
+
+    /** Hands leadership off right away, e.g. on shutdown, instead of making the others wait out the lease. */
+    fun resign() {
+        validUntil = Instant.EPOCH
+        ClusterLease.release(LEASE_KEY)
+    }
+}
+
 object SyncScheduler {
     private val log = LoggerFactory.getLogger("SyncScheduler")
 
     const val INTERVAL_MS: Long = 450_000L // 7.5 minutes
+
+    /** How often an ended event still refreshes from its schedule sources (TBA/FIRST, or FTC Scout/FIRST). */
+    private const val ENDED_EVENT_INTERVAL_SECONDS = 86_400L
+
+    /** Upper bound on one team's sync; the cluster-wide "already running" lock expires after this if a node dies mid-sync. */
+    private const val TEAM_SYNC_LEASE_SECONDS = 1_800L
 
     class TeamSyncStatus {
         @Volatile
@@ -73,13 +127,103 @@ object SyncScheduler {
 
         @Volatile
         var currentSyncLabel: String? = null
+
+        /** When this status last changed; decides between this node's copy and the shared one. */
+        @Volatile
+        var updatedAt: Instant = Instant.EPOCH
     }
+
+    /** The stored form of [TeamSyncStatus]. An in-progress flag only counts until [inProgressUntil]. */
+    @Serializable
+    private data class StoredStatus(
+        val lastSyncAt: Long? = null,
+        val lastSyncSummary: String? = null,
+        val lastSyncError: String? = null,
+        val lastSyncTeams: Int? = null,
+        val lastSyncMatches: Int? = null,
+        val lastSyncTeamCount: Int? = null,
+        val lastSyncFailedTeams: Int? = null,
+        val syncInProgress: Boolean = false,
+        val currentSyncLabel: String? = null,
+        val inProgressUntil: Long? = null,
+        val updatedAt: Long = 0
+    )
 
     private val teamStatuses = java.util.concurrent.ConcurrentHashMap<String, TeamSyncStatus>()
 
+    /** This node's working copy of a team's status. Use [statusForDisplay] to show it to users. */
     fun getStatusForTeam(teamNumber: Int, program: String = "FRC"): TeamSyncStatus {
         val key = "$program-$teamNumber"
         return teamStatuses.computeIfAbsent(key) { TeamSyncStatus() }
+    }
+
+    /**
+     * The team's status as the whole cluster sees it: whichever node changed it last. A sync running on
+     * another node shows as running; one that node abandoned (it died) stops showing after its lock expires.
+     */
+    fun statusForDisplay(teamNumber: Int, program: String = "FRC"): TeamSyncStatus {
+        val local = getStatusForTeam(teamNumber, program)
+        if (local.syncInProgress) return local
+        val stored = runCatching { readStoredStatus(teamNumber, program) }.getOrNull() ?: return local
+        if (!Instant.ofEpochMilli(stored.updatedAt).isAfter(local.updatedAt)) return local
+        val now = Instant.now().toEpochMilli()
+        return TeamSyncStatus().apply {
+            lastSyncAt = stored.lastSyncAt?.let(Instant::ofEpochMilli)
+            lastSyncSummary = stored.lastSyncSummary
+            lastSyncError = stored.lastSyncError
+            lastSyncTeams = stored.lastSyncTeams
+            lastSyncMatches = stored.lastSyncMatches
+            lastSyncTeamCount = stored.lastSyncTeamCount
+            lastSyncFailedTeams = stored.lastSyncFailedTeams
+            syncInProgress = stored.syncInProgress && (stored.inProgressUntil ?: 0) > now
+            currentSyncLabel = if (syncInProgress) stored.currentSyncLabel else null
+            updatedAt = Instant.ofEpochMilli(stored.updatedAt)
+        }
+    }
+
+    private fun readStoredStatus(teamNumber: Int, program: String): StoredStatus? = readTransaction {
+        SyncStatuses.selectAll()
+            .where { (SyncStatuses.teamNumber eq teamNumber) and (SyncStatuses.program eq program) }
+            .limit(1)
+            .firstOrNull()
+            ?.let { JsonSupport.json.decodeFromString(StoredStatus.serializer(), it[SyncStatuses.statusJson]) }
+    }
+
+    /** Publishes this node's copy of the status to the shared table. Never fails the sync it reports on. */
+    internal fun persistStatus(teamNumber: Int, program: String) {
+        val status = getStatusForTeam(teamNumber, program)
+        val now = Instant.now()
+        status.updatedAt = now
+        val stored = StoredStatus(
+            lastSyncAt = status.lastSyncAt?.toEpochMilli(),
+            lastSyncSummary = status.lastSyncSummary,
+            lastSyncError = status.lastSyncError,
+            lastSyncTeams = status.lastSyncTeams,
+            lastSyncMatches = status.lastSyncMatches,
+            lastSyncTeamCount = status.lastSyncTeamCount,
+            lastSyncFailedTeams = status.lastSyncFailedTeams,
+            syncInProgress = status.syncInProgress,
+            currentSyncLabel = status.currentSyncLabel,
+            inProgressUntil = if (status.syncInProgress) now.plusSeconds(TEAM_SYNC_LEASE_SECONDS).toEpochMilli() else null,
+            updatedAt = now.toEpochMilli()
+        )
+        val json = JsonSupport.json.encodeToString(StoredStatus.serializer(), stored)
+        runCatching {
+            transaction {
+                val updated = SyncStatuses.update({ (SyncStatuses.teamNumber eq teamNumber) and (SyncStatuses.program eq program) }) {
+                    it[statusJson] = json
+                    it[updatedAt] = now
+                }
+                if (updated == 0) {
+                    SyncStatuses.insert {
+                        it[SyncStatuses.teamNumber] = teamNumber
+                        it[SyncStatuses.program] = program
+                        it[statusJson] = json
+                        it[updatedAt] = now
+                    }
+                }
+            }
+        }.onFailure { log.debug("Could not share sync status for team $teamNumber ($program): ${it.message}") }
     }
 
     @Deprecated("Use getStatusForTeam(teamNumber)")
@@ -128,7 +272,6 @@ object SyncScheduler {
         set(value) { getStatusForTeam(0).currentSyncLabel = value }
 
     private var scope: CoroutineScope? = null
-    private val syncLock = Any()
 
     fun start() {
         if (scope != null) {
@@ -144,13 +287,28 @@ object SyncScheduler {
         }
         val job = SupervisorJob()
         scope = CoroutineScope(job + Dispatchers.IO + handler)
+        // Leadership heartbeat. Every node runs it; only the lease holder runs the scheduled sync below.
         scope?.launch {
-            log.info("Auto-sync scheduler initialized (will start first sync in 2 minutes, repeating every ${INTERVAL_MS / 60_000.0} minutes)")
+            while (isActive) {
+                try {
+                    SyncLeadership.refresh()
+                } catch (e: Exception) {
+                    log.warn("[SyncScheduler] Leadership check failed: ${e.message}")
+                }
+                delay(SyncLeadership.RENEW_MS)
+            }
+        }
+        scope?.launch {
+            log.info("Auto-sync scheduler initialized on node ${ClusterLease.nodeId} (first sync in 2 minutes, repeating every ${INTERVAL_MS / 60_000.0} minutes, leader only)")
             delay(120_000)
             while (isActive) {
                 try {
-                    runScheduledSync()
-                    System.gc()
+                    if (SyncLeadership.isLeader()) {
+                        runScheduledSync()
+                        System.gc()
+                    } else {
+                        log.debug("Skipping scheduled sync: another node is the auto-sync leader")
+                    }
                 } catch (e: Throwable) {
                     if (e is OutOfMemoryError || e.cause is OutOfMemoryError) {
                         log.error("[SyncScheduler] OutOfMemoryError during scheduled sync. Triggering System.gc() and pausing...", e)
@@ -166,12 +324,16 @@ object SyncScheduler {
     }
 
     fun stop() {
+        runCatching { SyncLeadership.resign() }
         scope?.cancel()
         scope = null
     }
 
     @Deprecated("Use enqueueEventSync(teamNumber, settings)")
     fun enqueueEventSync(settings: ApiSettings): Boolean = enqueueEventSync(0, settings)
+
+    // Manual syncs below always run on the node that received the request, leader or not. The per-team
+    // cluster lock in beginSync only stops two syncs for the same team from overlapping across nodes.
 
     fun enqueueEventSync(teamNumber: Int, settings: ApiSettings): Boolean {
         val activeScope = scope ?: return false
@@ -220,14 +382,7 @@ object SyncScheduler {
                         log.warn("EPA/OPR history sync failed for team $teamNumber ($program): ${e.message}")
                     }
                 }
-                val status = getStatusForTeam(teamNumber, program)
-                status.lastSyncAt = Instant.now()
-                status.lastSyncSummary = "Manual sync: ${counts.teams} teams, ${counts.matches} matches"
-                status.lastSyncTeams = counts.teams
-                status.lastSyncMatches = counts.matches
-                status.lastSyncTeamCount = 1
-                status.lastSyncFailedTeams = null
-                status.lastSyncError = null
+                recordSuccess(teamNumber, program, "Manual sync: ${counts.teams} teams, ${counts.matches} matches", counts)
                 log.info("Manual sync complete for team $teamNumber ($program): ${counts.teams} teams, ${counts.matches} matches")
             } catch (error: Exception) {
                 recordFailure(teamNumber, program, "Manual teams and matches sync failed", error)
@@ -299,36 +454,44 @@ object SyncScheduler {
             return
         }
 
-        var totalTeams = 0
-        var totalMatches = 0
-        var failures = 0
         // Alliance members often resolve to the exact same event, codes and keys. A second sync with
         // identical inputs in the same pass would refetch and rewrite the same shared rows, so reuse
         // the first result. Inputs that differ at all (any key, code or source) still sync on their own.
         val completedThisPass = mutableMapOf<SyncInputs, SyncCounts>()
 
-        teams.forEach { (teamNumber, program) ->
+        for ((teamNumber, program) in teams) {
+            // Stop mid-pass if another node took over, rather than running alongside the new leader.
+            if (!SyncLeadership.isLeader()) {
+                log.warn("Auto-sync leadership lost mid-pass; leaving the remaining teams to the new leader")
+                return
+            }
             if (!beginSync(teamNumber, program, "Auto-sync")) {
-                return@forEach
+                continue
             }
             try {
                 val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(teamNumber, program)
-                // Teams often leave a finished event configured; polling it forever only loads TBA, FIRST
-                // and Match 13. Manual sync still works for ended events. (Reported by Match 13, issue #2.)
-                if (program == "FRC") {
-                    val event = IntegrationService.getEvent(settings.resolvedEventKey())
-                    if (isPastEventSyncWindow(event?.endDate, event?.timezone)) {
+                val inputs = SyncInputs.of(settings)
+                val eventKey = settings.resolvedEventKey()
+                // Teams often leave a finished event configured; polling it every cycle forever only loads the
+                // APIs (reported by Match 13, issue #2). The schedule sources still get late additions (awards,
+                // corrected scores), so an ended event refreshes from those once a day; Statbotics and Match 13
+                // are left alone. "Once a day" is read from the event row, so it holds across nodes and restarts.
+                // Manual sync still does a full refresh at any time.
+                val eventEnded = IntegrationService.getEvent(eventKey)
+                    .let { isPastEventSyncWindow(it?.endDate, it?.timezone) }
+                if (eventEnded && completedThisPass[inputs] == null) {
+                    val lastSynced = IntegrationService.eventSyncedAt(eventKey)
+                    if (lastSynced != null && lastSynced.isAfter(Instant.now().minusSeconds(ENDED_EVENT_INTERVAL_SECONDS))) {
                         val status = getStatusForTeam(teamNumber, program)
-                        status.lastSyncSummary = "Event ended; use manual sync to refresh"
+                        status.lastSyncSummary = "Event ended; refreshing from ${getSourcesLabel(settings)} once a day (manual sync available)"
                         status.lastSyncError = null
-                        return@forEach
+                        continue
                     }
                 }
-                val inputs = SyncInputs.of(settings)
                 val counts = completedThisPass[inputs] ?: run {
-                    val fresh = IntegrationService.syncEventData(settings)
-                    val eventKey = settings.resolvedEventKey()
-                    if (eventKey.isNotBlank()) {
+                    val fresh = IntegrationService.syncEventData(settings, tbaAndFirstOnly = eventEnded)
+                    // History pulls Statbotics and Match 13 too; page views already refresh it daily for ended events.
+                    if (eventKey.isNotBlank() && !eventEnded) {
                         try {
                             IntegrationService.syncEpaOprHistory(settings, eventKey)
                         } catch (e: Exception) {
@@ -338,19 +501,14 @@ object SyncScheduler {
                     completedThisPass[inputs] = fresh
                     fresh
                 }
-                totalTeams += counts.teams
-                totalMatches += counts.matches
-                val status = getStatusForTeam(teamNumber, program)
-                status.lastSyncAt = Instant.now()
-                status.lastSyncError = null
-                status.lastSyncTeams = counts.teams
-                status.lastSyncMatches = counts.matches
-                status.lastSyncTeamCount = 1
-                status.lastSyncFailedTeams = null
                 val sources = getSourcesLabel(settings)
-                status.lastSyncSummary = "Auto-sync complete from $sources: ${counts.teams} teams, ${counts.matches} matches"
+                val summary = if (eventEnded) {
+                    "Daily post-event sync complete from $sources: ${counts.teams} teams, ${counts.matches} matches"
+                } else {
+                    "Auto-sync complete from $sources: ${counts.teams} teams, ${counts.matches} matches"
+                }
+                recordSuccess(teamNumber, program, summary, counts)
             } catch (error: Exception) {
-                failures++
                 log.warn("Auto-sync failed for team $teamNumber ($program): ${error.message}")
                 recordFailure(teamNumber, program, "Auto-sync failed", error)
             } finally {
@@ -359,6 +517,8 @@ object SyncScheduler {
         }
     }
 
+    private fun teamLeaseKey(teamNumber: Int, program: String) = "sync-team:$program-$teamNumber"
+
     private fun beginSync(teamNumber: Int, program: String = "FRC", label: String): Boolean {
         val status = getStatusForTeam(teamNumber, program)
         synchronized(status) {
@@ -366,12 +526,26 @@ object SyncScheduler {
                 status.lastSyncError = "Sync already running"
                 return false
             }
+        }
+        // Cluster-wide: refuse while another node is syncing this team. If the database can't be reached
+        // the local check above is all we have, which is how a single server always behaved.
+        if (ClusterLease.tryAcquire(teamLeaseKey(teamNumber, program), TEAM_SYNC_LEASE_SECONDS) == ClusterLease.Result.HELD_ELSEWHERE) {
+            status.lastSyncError = "Sync already running on another server"
+            return false
+        }
+        synchronized(status) {
+            if (status.syncInProgress) {
+                // Another request on this node got here first; it owns the (shared, same-node) lease.
+                status.lastSyncError = "Sync already running"
+                return false
+            }
             status.syncInProgress = true
             status.currentSyncLabel = label
             status.lastSyncError = null
             status.lastSyncSummary = "$label started"
-            return true
         }
+        persistStatus(teamNumber, program)
+        return true
     }
 
     private fun finishSync(teamNumber: Int, program: String = "FRC") {
@@ -379,6 +553,26 @@ object SyncScheduler {
         synchronized(status) {
             status.syncInProgress = false
             status.currentSyncLabel = null
+        }
+        ClusterLease.release(teamLeaseKey(teamNumber, program))
+        persistStatus(teamNumber, program)
+    }
+
+    /** A source that failed while others succeeded is reported as the error, so a broken key gets noticed. */
+    private fun recordSuccess(teamNumber: Int, program: String, summary: String, counts: SyncCounts) {
+        val status = getStatusForTeam(teamNumber, program)
+        synchronized(status) {
+            status.lastSyncAt = Instant.now()
+            status.lastSyncSummary = summary
+            status.lastSyncError = counts.warnings.takeIf { it.isNotEmpty() }
+                ?.joinToString("; ", prefix = "Partial sync: ")
+            status.lastSyncTeams = counts.teams
+            status.lastSyncMatches = counts.matches
+            status.lastSyncTeamCount = 1
+            status.lastSyncFailedTeams = null
+        }
+        if (counts.warnings.isNotEmpty()) {
+            log.warn("Partial sync for team $teamNumber ($program): ${counts.warnings.joinToString("; ")}")
         }
     }
 
@@ -414,14 +608,8 @@ object SyncScheduler {
                 } catch (e: Exception) {
                     log.warn("Custom event EPA/OPR history sync failed for team $teamNumber ($program): ${e.message}")
                 }
-                val status = getStatusForTeam(teamNumber, program)
                 val sources = getSourcesLabel(settings)
-                status.lastSyncSummary = "Custom event sync complete from $sources: $eventKey - ${counts.teams} teams, ${counts.matches} matches"
-                status.lastSyncTeams = counts.teams
-                status.lastSyncMatches = counts.matches
-                status.lastSyncTeamCount = 1
-                status.lastSyncFailedTeams = null
-                status.lastSyncError = null
+                recordSuccess(teamNumber, program, "Custom event sync complete from $sources: $eventKey - ${counts.teams} teams, ${counts.matches} matches", counts)
                 log.info("Custom event sync complete from $sources for team $teamNumber ($program): $eventKey - ${counts.teams} teams, ${counts.matches} matches")
             } catch (error: Exception) {
                 recordFailure(teamNumber, program, "Custom event sync failed for $eventKey", error)
@@ -454,14 +642,12 @@ object SyncScheduler {
                         log.warn("Full sync EPA/OPR history sync failed for team $teamNumber ($program): ${e.message}")
                     }
                 }
-                val status = getStatusForTeam(teamNumber, program)
                 val sources = getSourcesLabel(settings)
-                status.lastSyncSummary = "Manual full sync complete from $sources: $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats"
-                status.lastSyncTeams = counts.teams
-                status.lastSyncMatches = counts.matches
-                status.lastSyncTeamCount = 1
-                status.lastSyncFailedTeams = null
-                status.lastSyncError = null
+                recordSuccess(
+                    teamNumber, program,
+                    "Manual full sync complete from $sources: $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats",
+                    counts
+                )
                 log.info("Manual full sync complete from $sources for team $teamNumber ($program): $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats")
             } catch (error: Exception) {
                 recordFailure(teamNumber, program, "Manual full sync failed", error)
@@ -472,7 +658,8 @@ object SyncScheduler {
         return true
     }
 
-    // Every page view of a stale event calls triggerBackgroundHistorySync; only one fetch per event runs at a time.
+    // Every page view of a stale event calls triggerBackgroundHistorySync. One fetch per event at a time on
+    // this node (the set), and across the cluster (the lease), however many people are looking.
     private val historySyncInFlight: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     fun triggerBackgroundHistorySync(settings: ApiSettings, eventKey: String) {
@@ -480,11 +667,16 @@ object SyncScheduler {
         val flightKey = "${settings.program}-$eventKey"
         if (!historySyncInFlight.add(flightKey)) return
         activeScope.launch {
+            val leaseKey = "history-sync:$flightKey"
+            val lease = ClusterLease.tryAcquire(leaseKey, 120)
             try {
-                IntegrationService.syncEpaOprHistory(settings, eventKey)
+                if (lease != ClusterLease.Result.HELD_ELSEWHERE) {
+                    IntegrationService.syncEpaOprHistory(settings, eventKey)
+                }
             } catch (e: Exception) {
                 log.warn("Background OPR/EPA history sync failed for $eventKey: ${e.message}")
             } finally {
+                if (lease == ClusterLease.Result.ACQUIRED) ClusterLease.release(leaseKey)
                 historySyncInFlight.remove(flightKey)
             }
         }
@@ -492,20 +684,16 @@ object SyncScheduler {
 
     fun getSourcesLabel(settings: ApiSettings): String {
         val hasFirst = settings.apiKeys.firstUsername.isNotBlank() && settings.apiKeys.firstKey.isNotBlank()
-        val pref = settings.preferredSource?.lowercase()
         return if (settings.program == "FTC") {
-            when {
-                (hasFirst && settings.apiKeys.tbaKey.isNotBlank()) || pref == "both" -> "FTC Scout & FIRST FTC API"
-                hasFirst || pref == "first" -> "FIRST FTC API"
-                else -> "FTC Scout API"
-            }
+            // FTC Scout needs no key and is always used; the FIRST FTC API is added when credentials exist.
+            if (hasFirst) "FTC Scout & FIRST FTC API" else "FTC Scout API"
         } else {
             val hasTba = settings.apiKeys.tbaKey.isNotBlank()
             when {
-                (hasTba && hasFirst) || pref == "both" -> "TBA & FIRST Robotics API"
-                (hasFirst && !hasTba) || pref == "first" -> "FIRST Robotics API"
-                (hasTba && !hasFirst) || pref == "tba" -> "The Blue Alliance API"
-                else -> "preferred source fallback (${settings.preferredSource ?: "tba"})"
+                hasTba && hasFirst -> "TBA & FIRST Robotics API"
+                hasFirst -> "FIRST Robotics API"
+                hasTba -> "The Blue Alliance API"
+                else -> "no API credentials"
             }
         }
     }

@@ -116,16 +116,39 @@ class ApiKeyTestEndpointTest {
         IntegrationService.syncEpaOprHistory(settings, "2024ncwak")
         var (_, epaHistory) = IntegrationService.getEpaOprHistory(settings, "2024ncwak")
         if (epaHistory.isEmpty()) {
-            // External Statbotics server was unreachable or returned empty; populate sample cache to verify cache round-trip
-            transaction {
-                com.obsidianscout.db.EpaOprHistoryCache.update({ com.obsidianscout.db.EpaOprHistoryCache.eventKey eq "2024ncwak" }) {
-                    it[com.obsidianscout.db.EpaOprHistoryCache.epaHistoryJson] = "[{\"team\": 5454, \"match\": \"2024ncwak_qm1\", \"alliance\": \"red\", \"epa\": {\"epa\": 25.0}}]"
-                }
-            }
+            // External Statbotics server was unreachable or failed, so nothing was written (a failure must not
+            // replace cached history). Store a sample the way a successful sync would, to verify the round-trip.
+            val sample = com.obsidianscout.config.JsonSupport.json.parseToJsonElement(
+                "{\"team\": 5454, \"match\": \"2024ncwak_qm1\", \"alliance\": \"red\", \"epa\": {\"epa\": 25.0}}"
+            )
+            IntegrationService.writeStatsHistory("2024ncwak", oprs = null, epaHistory = listOf(sample), match13History = null)
             val res = IntegrationService.getEpaOprHistory(settings, "2024ncwak")
             epaHistory = res.second
         }
         assertTrue(epaHistory.isNotEmpty(), "Statbotics EPA history should be synced and non-empty")
+    }
+
+    @Test
+    fun testFailedSourcesNeverWipeSharedHistory() {
+        transaction {
+            SchemaUtils.create(com.obsidianscout.db.EpaOprHistoryCache)
+        }
+        val epa = com.obsidianscout.config.JsonSupport.json.parseToJsonElement("{\"team\": 1, \"match\": \"2024wipe_qm1\"}")
+        val m13 = com.obsidianscout.config.JsonSupport.json.parseToJsonElement("{\"key\": \"2024wipe_qm1\"}")
+        IntegrationService.writeStatsHistory("2024wipe", mapOf("frc1" to 12.5), listOf(epa), listOf(m13))
+
+        // A team without a Match 13 key, whose Statbotics call failed, only learned TBA OPRs.
+        IntegrationService.writeStatsHistory("2024wipe", mapOf("frc1" to 13.0), epaHistory = null, match13History = null)
+        // A sync that learned nothing writes nothing.
+        IntegrationService.writeStatsHistory("2024wipe", null, null, null)
+
+        val row = transaction {
+            com.obsidianscout.db.EpaOprHistoryCache.selectAll()
+                .where { com.obsidianscout.db.EpaOprHistoryCache.eventKey eq "2024wipe" }.single()
+        }
+        assertTrue(row[com.obsidianscout.db.EpaOprHistoryCache.oprsJson].contains("13.0"))
+        assertTrue(row[com.obsidianscout.db.EpaOprHistoryCache.epaHistoryJson].contains("2024wipe_qm1"))
+        assertTrue(row[com.obsidianscout.db.EpaOprHistoryCache.match13HistoryJson].contains("2024wipe_qm1"))
     }
 
     @Test

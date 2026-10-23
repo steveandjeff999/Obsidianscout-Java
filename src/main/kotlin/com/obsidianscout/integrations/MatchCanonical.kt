@@ -65,7 +65,8 @@ object MatchCanonical {
             compact in setOf("sf", "semifinal", "semifinals") -> "sf"
             compact == "f" || compact == "final" || compact == "finals" -> "f"
             compact == "ef" || compact == "einstein" -> "ef"
-            compact in setOf("practice", "prac", "pr", "prc") -> "practice"
+            // "pm" is TBA's practice level (API 3.27.0+), e.g. 2026cttd_pm3.
+            compact in setOf("practice", "prac", "pr", "prc", "pm") -> "practice"
             compact == "playoff" || compact == "playoffs" -> "playoff"
             else -> compact.take(16)
         }
@@ -201,19 +202,16 @@ object MatchCanonical {
         return fpA == fpB
     }
 
+    /**
+     * Combines two copies of the same match. The copy [preferIncoming] picks supplies the JSON and teams,
+     * the other fills gaps (times, teams, TBA videos). The choice depends only on the two copies' content and
+     * sources, never on which arrived first, so merging the same data in any order gives the same row.
+     */
     fun mergeRecords(existing: MatchSyncRecord, incoming: MatchSyncRecord): MatchSyncRecord {
-        val preferred = if (recordScore(incoming) >= recordScore(existing)) incoming else existing
+        val preferred = if (preferIncoming(existing, incoming)) incoming else existing
         val other = if (preferred === incoming) existing else incoming
-        val chosenJson = when {
-            hasScores(preferred) -> preferred.dataJson
-            hasScores(other) -> other.dataJson
-            preferred.dataJson.length >= other.dataJson.length -> preferred.dataJson
-            else -> other.dataJson
-        }.let { chosen ->
-            // Only TBA publishes match videos. Keep them when the FIRST record's JSON wins the merge.
-            val otherJson = if (chosen == preferred.dataJson) other.dataJson else preferred.dataJson
-            carryVideos(chosen, otherJson)
-        }
+        // Only TBA publishes match videos. Keep them when the other source's JSON wins the merge.
+        val chosenJson = carryVideos(preferred.dataJson, other.dataJson)
         return preferred.copy(
             scheduledTime = preferred.scheduledTime ?: other.scheduledTime,
             actualTime = preferred.actualTime ?: other.actualTime,
@@ -221,6 +219,53 @@ object MatchCanonical {
             blueTeams = preferred.blueTeams.ifEmpty { other.blueTeams },
             dataJson = chosenJson
         ).let { canonicalize(it) }
+    }
+
+    /**
+     * Whether [incoming] should win over [stored]: a copy with scores beats one without, then TBA (or FTC
+     * Scout) beats FIRST beats anything else, and on a full tie the newer copy wins so corrections from
+     * the same source still land.
+     */
+    fun preferIncoming(stored: MatchSyncRecord, incoming: MatchSyncRecord): Boolean {
+        val storedScored = hasScores(stored.dataJson)
+        val incomingScored = hasScores(incoming.dataJson)
+        if (storedScored != incomingScored) return incomingScored
+        val storedRank = matchSourceRank(effectiveSource(stored))
+        val incomingRank = matchSourceRank(effectiveSource(incoming))
+        if (storedRank != incomingRank) return incomingRank > storedRank
+        return true
+    }
+
+    /**
+     * What a stored match row should hold once a sync brings [incoming]. Rows are shared by every team at
+     * the event and teams sync with different keys, so an API row is merged rather than overwritten (see
+     * [mergeRecords]). A row no API wrote (a manual entry) is replaced, as before.
+     */
+    fun resolveAgainstStored(stored: MatchSyncRecord, incoming: MatchSyncRecord): MatchSyncRecord =
+        if (matchSourceRank(effectiveSource(stored)) == 0) incoming else mergeRecords(stored, incoming)
+
+    /** A stored match row as a record, for [resolveAgainstStored]. */
+    fun storedRecord(row: ResultRow): MatchSyncRecord = row.toSyncRecord()
+
+    /** Which API a match's JSON came from, judged by the fields each one sends. */
+    fun sourceOf(dataJson: String): String {
+        val obj = runCatching { JsonSupport.json.parseToJsonElement(dataJson) as? kotlinx.serialization.json.JsonObject }
+            .getOrNull() ?: return "unknown"
+        return when {
+            obj.containsKey("comp_level") && obj.containsKey("alliances") -> "tba"
+            obj.containsKey("hasBeenPlayed") || obj.containsKey("matchNum") -> "ftcscout"
+            obj.containsKey("scoreRedFinal") || obj.containsKey("tournamentLevel") || obj.containsKey("matchNumber") -> "first"
+            else -> "unknown"
+        }
+    }
+
+    private fun effectiveSource(record: MatchSyncRecord): String =
+        if (record.source in setOf("tba", "first", "ftcscout")) record.source else sourceOf(record.dataJson)
+
+    private fun matchSourceRank(source: String): Int = when (source) {
+        "tba", "ftcscout" -> 2
+        "first" -> 1
+        else -> 0
     }
 
     fun mergeAll(records: List<MatchSyncRecord>): List<MatchSyncRecord> {
@@ -522,18 +567,31 @@ object MatchCanonical {
         }
     }
 
-    private fun hasScores(record: MatchSyncRecord): Boolean {
-        val json = record.dataJson
-        return json.contains("\"scoreRedFinal\"") ||
-               json.contains("\"scoreBlueFinal\"") ||
-               json.contains("\"redScore\"") ||
-               json.contains("\"blueScore\"") ||
-               json.contains("\"score\":")
+    /**
+     * Whether a match's JSON carries a real result. TBA sends -1 for an unplayed alliance score, so the
+     * value is checked, not just the field's presence. Covers TBA, FIRST (FRC and FTC) and FTC Scout.
+     */
+    fun hasScores(dataJson: String): Boolean {
+        val obj = runCatching { JsonSupport.json.parseToJsonElement(dataJson) as? kotlinx.serialization.json.JsonObject }
+            .getOrNull() ?: return false
+        fun number(element: kotlinx.serialization.json.JsonElement?): Double? =
+            (element as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
+        fun child(parent: kotlinx.serialization.json.JsonElement?, key: String) =
+            (parent as? kotlinx.serialization.json.JsonObject)?.get(key)
+        if (number(obj["scoreRedFinal"]) != null || number(obj["scoreBlueFinal"]) != null) return true
+        if (number(obj["redScore"]) != null || number(obj["blueScore"]) != null) return true
+        val alliances = obj["alliances"]
+        val tbaRed = number(child(child(alliances, "red"), "score"))
+        val tbaBlue = number(child(child(alliances, "blue"), "score"))
+        if ((tbaRed != null && tbaRed >= 0) || (tbaBlue != null && tbaBlue >= 0)) return true
+        val scores = obj["scores"]
+        return number(child(child(scores, "red"), "totalPoints")) != null ||
+            number(child(child(scores, "blue"), "totalPoints")) != null
     }
 
     private fun recordScore(record: MatchSyncRecord): Int {
         var score = 0
-        if (hasScores(record)) score += 10
+        if (hasScores(record.dataJson)) score += 10
         if (record.source == "tba") score += 4
         if (record.redTeams.isNotEmpty() && record.blueTeams.isNotEmpty()) score += 3
         if (record.scheduledTime != null) score += 2

@@ -190,24 +190,15 @@ function getEffectiveSourceLabel(settings, user) {
     const apiKeys = (settings && settings.apiKeys) || {};
     const hasTba = Boolean(apiKeys.tbaKey && apiKeys.tbaKey.trim());
     const hasFirst = Boolean(apiKeys.firstUsername && apiKeys.firstUsername.trim() && apiKeys.firstKey && apiKeys.firstKey.trim());
-    const pref = (settings && settings.preferredSource ? settings.preferredSource.toLowerCase() : "").trim();
 
+    // Matches the sources sync actually uses: FTC Scout always (no key), FIRST/TBA when keys are set.
     if (isFtc) {
-        if ((hasFirst && hasTba) || pref === "both") return "Both (FTC Scout + FIRST)";
-        if (hasFirst || pref === "first") return "FIRST FTC";
-        return "FTC Scout";
+        return hasFirst ? "Both (FTC Scout + FIRST)" : "FTC Scout";
     }
-
-    if ((hasTba && hasFirst) || pref === "both") {
-        return "Both (TBA + FIRST)";
-    }
-    if ((hasFirst && !hasTba) || pref === "first") {
-        return "FIRST";
-    }
-    if ((hasTba && !hasFirst) || pref === "tba") {
-        return "TBA";
-    }
-    return "TBA";
+    if (hasTba && hasFirst) return "Both (TBA + FIRST)";
+    if (hasFirst) return "FIRST";
+    if (hasTba) return "TBA";
+    return "No API keys";
 }
 
 function populateEventContext(settings, eventKey) {

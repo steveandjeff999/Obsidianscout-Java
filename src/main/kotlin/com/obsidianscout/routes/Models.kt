@@ -318,7 +318,6 @@ data class ApiSettingsPayload(
     val alternateEventCode: String? = null,
     val eventKey: String = "",
     val timezone: String = "UTC",
-    val preferredSource: String = "tba",
     val useStatboticsEpa: Boolean = false,
     val useTbaOpr: Boolean = false,
     val useMatch13Exp: Boolean = false,

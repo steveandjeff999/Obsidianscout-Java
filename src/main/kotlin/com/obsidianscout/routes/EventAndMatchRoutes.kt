@@ -256,7 +256,7 @@ fun Route.eventAndMatchRoutes() {
             route("/integrations") {
                 get("/sync/status") {
                     val session = call.requireSession()
-                    val status = SyncScheduler.getStatusForTeam(session.teamNumber, session.program)
+                    val status = SyncScheduler.statusForDisplay(session.teamNumber, session.program)
                     call.respond(
                         SyncStatusResponse(
                             intervalMinutes = SyncScheduler.INTERVAL_MS / 60_000.0,
