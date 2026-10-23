@@ -502,7 +502,8 @@ object DatabaseFactory {
                             "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_user_event ON scouting_assignments (assigned_user_id, program, owner_team_number, event_key)",
                             "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_status ON scouting_assignments (status)",
                             "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_type ON scouting_assignments (assignment_type)",
-                            "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_match_team ON scouting_assignments (event_key, match_number, target_team_number)"
+                            "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_match_team ON scouting_assignments (event_key, match_number, target_team_number)",
+                            "ALTER TABLE scouting_assignments ADD COLUMN IF NOT EXISTS scout_group VARCHAR(64)"
                         )
 
                         for (sql in migrations) {
@@ -583,7 +584,8 @@ object DatabaseFactory {
                                 "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_user_event ON scouting_assignments (assigned_user_id, program, owner_team_number, event_key)",
                                 "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_status ON scouting_assignments (status)",
                                 "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_type ON scouting_assignments (assignment_type)",
-                                "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_match_team ON scouting_assignments (event_key, match_number, target_team_number)"
+                                "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_match_team ON scouting_assignments (event_key, match_number, target_team_number)",
+                            "ALTER TABLE scouting_assignments ADD COLUMN IF NOT EXISTS scout_group VARCHAR(64)"
                             )
                             for (sql in pgMigrations) {
                                 try {

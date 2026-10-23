@@ -277,4 +277,111 @@ class ScoutingAssignmentServiceTest {
             ordered.map { it.matchKey }
         )
     }
+
+    private fun insertScouts(vararg names: String): List<String> = transaction {
+        names.map { n ->
+            Users.insertAndGetId {
+                it[username] = n
+                it[passwordHash] = "hash"
+                it[teamNumber] = 254
+                it[program] = "FRC"
+                it[role] = UserRole.SCOUT.name
+                it[createdAt] = Instant.now()
+            }.value.toString()
+        }
+    }
+
+    private val adminSession = UserSession(java.util.UUID.randomUUID().toString(), "lead_admin", 254, "FRC", UserRole.ADMIN, "lead_admin")
+
+    @Test
+    fun testPitAutoAssignWithScoutGroups() {
+        val (jack, bob, alice, dana) = insertScouts("jack", "bob", "alice", "dana")
+        transaction {
+            listOf(100, 200, 300, 400).forEach { num ->
+                ApiTeams.insert {
+                    it[eventKey] = "2026caln"
+                    it[teamKey] = "frc$num"
+                    it[teamNumber] = num
+                    it[dataJson] = "{}"
+                    it[updatedAt] = Instant.now()
+                }
+            }
+        }
+
+        // One group of three plus one solo scout -> two units alternate across four teams
+        val res = ScoutingAssignmentService.autoGenerateAssignments(
+            adminSession,
+            AutoGenerateAssignmentsRequest(
+                eventKey = "2026caln",
+                assignmentType = "PIT_AUTO",
+                scouterUserIds = listOf(jack, bob, alice, dana),
+                pitGroups = listOf(PitGroupAssignment(name = "Pit Crew A", memberIds = listOf(jack, bob, alice)))
+            )
+        )
+        assertEquals(8, res.createdCount) // 2 teams x 3 group members + 2 teams x 1 solo
+
+        val pit = ScoutingAssignmentService.listAssignments(adminSession, eventKey = "2026caln").filter { it.assignmentType == "PIT" }
+        val byTeam = pit.groupBy { it.targetTeamNumber }
+        assertEquals(setOf(jack, bob, alice), byTeam[100]!!.map { it.assignedUserId }.toSet())
+        assertTrue(byTeam[100]!!.all { it.scoutGroup == "Pit Crew A" })
+        assertEquals(listOf(dana), byTeam[200]!!.map { it.assignedUserId })
+        assertEquals(3, byTeam[300]!!.size)
+
+        // Each member's own list carries the whole roster
+        val jackSession = UserSession(jack, "jack", 254, "FRC", UserRole.SCOUT, "jack")
+        val jackPit = ScoutingAssignmentService.getMyAssignments(jackSession, "2026caln").first { it.targetTeamNumber == 100 }
+        assertEquals(listOf("alice", "bob", "jack"), jackPit.scoutGroupMembers)
+
+        // A group on one team is not a conflict, and auto-resolve leaves it alone
+        assertTrue(!ScoutingAssignmentService.getConflicts(adminSession, "2026caln").hasConflict)
+        assertEquals(0, ScoutingAssignmentService.autoResolveConflicts(adminSession, "2026caln").resolvedCount)
+
+        // An extra solo scout on a group's team is a conflict; resolving keeps the whole group
+        ScoutingAssignmentService.createAssignment(
+            adminSession,
+            CreateAssignmentRequest(assignedUserId = dana, assignmentType = "PIT", eventKey = "2026caln", targetTeamNumber = 100)
+        )
+        assertTrue(ScoutingAssignmentService.getConflicts(adminSession, "2026caln").hasConflict)
+        assertEquals(1, ScoutingAssignmentService.autoResolveConflicts(adminSession, "2026caln").resolvedCount)
+        val team100 = ScoutingAssignmentService.listAssignments(adminSession, eventKey = "2026caln")
+            .filter { it.assignmentType == "PIT" && it.targetTeamNumber == 100 }
+        assertEquals(setOf(jack, bob, alice), team100.map { it.assignedUserId }.toSet())
+
+        // One member submitting pit data completes the assignment for the whole group
+        ScoutingAssignmentService.handleScoutingSubmission(254, "FRC", "2026caln", "PIT", null, null, 300, jack)
+        val team300 = ScoutingAssignmentService.listAssignments(adminSession, eventKey = "2026caln")
+            .filter { it.assignmentType == "PIT" && it.targetTeamNumber == 300 }
+        assertTrue(team300.all { it.status == "COMPLETED" })
+    }
+
+    @Test
+    fun testAutoGenerateLimitedToTimeBlockMatches() {
+        val (jack, bob) = insertScouts("jack", "bob")
+        transaction {
+            (1..4).forEach { n ->
+                ApiMatches.insert {
+                    it[matchKey] = "2026caln_qm$n"
+                    it[eventKey] = "2026caln"
+                    it[compLevel] = "qm"
+                    it[matchNumber] = n
+                    it[redTeams] = "frc1,frc2,frc3"
+                    it[blueTeams] = "frc4,frc5,frc6"
+                    it[dataJson] = "{}"
+                    it[updatedAt] = Instant.now()
+                }
+            }
+        }
+
+        ScoutingAssignmentService.autoGenerateAssignments(
+            adminSession,
+            AutoGenerateAssignmentsRequest(
+                eventKey = "2026caln",
+                assignmentType = "QUALITATIVE_RED",
+                scouterUserIds = listOf(jack, bob),
+                matchKeys = listOf("2026caln_qm2", "2026caln_qm3")
+            )
+        )
+        val keys = ScoutingAssignmentService.listAssignments(adminSession, eventKey = "2026caln").map { it.matchKey }.toSet()
+        assertEquals(setOf("2026caln_qm2", "2026caln_qm3"), keys)
+    }
 }

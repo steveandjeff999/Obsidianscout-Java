@@ -168,6 +168,13 @@ data class RecencyBiasSettings(
 }
 
 @Serializable
+data class PitScoutGroup(
+    val id: String = "",
+    val name: String = "",
+    val memberIds: List<String> = emptyList()
+)
+
+@Serializable
 data class ApiSettings(
     val year: Int = Year.now().value,
     val eventCode: String = "",
@@ -200,6 +207,8 @@ data class ApiSettings(
     val assignmentReminderMinutes: Int = 15,
     val enableAssignmentPushReminders: Boolean = true,
     val enableAssignmentEmailReminders: Boolean = true,
+    /** Saved pit scouting groups: kids who walk the pits together and share each team assignment. */
+    val pitScoutGroups: List<PitScoutGroup> = emptyList(),
     /** Which [PAGES_ADDED_BY_VERSION] entries have been applied to this team's page lists. */
     val pageDefaultsVersion: Int = 0
 ) {

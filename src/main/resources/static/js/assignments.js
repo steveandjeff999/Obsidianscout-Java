@@ -22,6 +22,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let matches = [];
     let teams = [];
     let assignments = [];
+    let pitGroups = [];
     let conflicts = [];
     let pollIntervalId = null;
 
@@ -99,6 +100,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const bulkCompLevel = document.getElementById("bulk-comp-level");
     const bulkMatchStart = document.getElementById("bulk-match-start");
     const bulkMatchEnd = document.getElementById("bulk-match-end");
+    const bulkRangeMode = document.getElementById("bulk-range-mode");
+    const bulkMatchRangeField = document.getElementById("bulk-match-range-field");
+    const bulkTimeBlockField = document.getElementById("bulk-time-block-field");
+    const bulkTimeDay = document.getElementById("bulk-time-day");
+    const bulkTimeStart = document.getElementById("bulk-time-start");
+    const bulkTimeEnd = document.getElementById("bulk-time-end");
+    const bulkTimeSummary = document.getElementById("bulk-time-summary");
     const bulkScoutersContainer = document.getElementById("bulk-scouters-container");
     const bulkSelectAll = document.getElementById("bulk-select-all");
     const bulkDeselectAll = document.getElementById("bulk-deselect-all");
@@ -117,6 +125,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     const pitAutoDeselectAll = document.getElementById("pit-auto-deselect-all");
     const pitAutoOverwrite = document.getElementById("pit-auto-overwrite");
     const pitAutoSummary = document.getElementById("pit-auto-summary");
+    const pitAutoGroupsContainer = document.getElementById("pit-auto-groups-container");
+    const bulkPitGroupsContainer = document.getElementById("bulk-pit-groups-container");
+
+    // Pit Scout Groups Elements
+    const pitGroupsBtn = document.getElementById("pit-groups-btn");
+    const pitGroupsModal = document.getElementById("pit-groups-modal");
+    const pitGroupsForm = document.getElementById("pit-groups-form");
+    const pitGroupsList = document.getElementById("pit-groups-list");
+    const pitGroupsAdd = document.getElementById("pit-groups-add");
+    const assignmentPitGroupSelect = document.getElementById("assignment-pit-group");
+    const fieldPitGroup = document.getElementById("field-pit-group");
+    const fieldScouterContainer = document.getElementById("field-scouter-container");
 
     // Conflict Resolver Modal Elements
     const statConflictsChip = document.getElementById("stat-conflicts-chip");
@@ -314,6 +334,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             settings = settingsRes.settings || {};
             currentEventKey = Obsidianscout.resolveEventKey(settings);
 
+            const pitGroupsRes = await Obsidianscout.request("/api/assignments/pit-groups").catch(() => []);
+            pitGroups = Array.isArray(pitGroupsRes) ? pitGroupsRes : [];
+
             // Load events list and deduplicate
             const eventsRes = await Obsidianscout.request(
                 settings.year ? `/api/events?year=${settings.year}&cached=1` : "/api/events"
@@ -431,6 +454,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         filterScouter.innerHTML = `<option value="">All Scouters (${scouterUsers.length})</option>` + optionsHtml;
         assignmentScouterSelect.innerHTML = `<option value="">Select team member...</option>` + optionsHtml;
+        refreshSelectSearch(filterScouter);
+        refreshSelectSearch(assignmentScouterSelect);
 
         // Populate bulk wizard scouter checklist
         bulkScoutersContainer.innerHTML = scouterUsers.map(u => {
@@ -443,6 +468,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 </label>
             `;
         }).join("");
+        applyListSearch(bulkScoutersContainer);
 
         // Populate pit auto scouter checklist
         if (pitAutoScoutersContainer) {
@@ -460,8 +486,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             pitAutoScoutersContainer.querySelectorAll("input[name='pit_auto_scouter']").forEach(cb => {
                 cb.addEventListener("change", updatePitAutoSummary);
             });
+            applyListSearch(pitAutoScoutersContainer);
             updatePitAutoSummary();
         }
+
+        renderAllPitGroupPickers();
     }
 
     function updatePitAutoSummary() {
@@ -476,14 +505,280 @@ document.addEventListener("DOMContentLoaded", async () => {
             : teams;
 
         const teamCount = targetTeams.length;
-        if (scouterCount === 0) {
-            pitAutoSummary.textContent = `Please select at least 1 scouter (0 of ${teamCount} teams will be assigned).`;
+        const groups = getCheckedPitGroups(pitAutoGroupsContainer);
+        const groupedIds = new Set(groups.flatMap(g => g.memberIds));
+        const soloCount = selectedCheckboxes.filter(cb => !groupedIds.has(cb.value)).length;
+        const unitCount = groups.length + soloCount;
+
+        if (unitCount === 0) {
+            pitAutoSummary.textContent = `Please select at least 1 scouter or group (0 of ${teamCount} teams will be assigned).`;
             pitAutoSummary.style.color = "var(--danger, #ef4444)";
         } else {
-            const perScout = teamCount === 0 ? "0" : (teamCount / scouterCount).toFixed(1);
-            pitAutoSummary.textContent = `Assigning ${teamCount} team${teamCount === 1 ? '' : 's'} across ${scouterCount} scout${scouterCount === 1 ? '' : 's'} (~${perScout} teams/scout).`;
+            const perUnit = teamCount === 0 ? "0" : (teamCount / unitCount).toFixed(1);
+            const parts = [];
+            if (groups.length) parts.push(`${groups.length} group${groups.length === 1 ? '' : 's'}`);
+            if (soloCount) parts.push(`${soloCount} solo scout${soloCount === 1 ? '' : 's'}`);
+            pitAutoSummary.textContent = `Assigning ${teamCount} team${teamCount === 1 ? '' : 's'} across ${parts.join(" + ")} (~${perUnit} teams each).`;
             pitAutoSummary.style.color = "var(--primary)";
         }
+    }
+
+    // ==========================================
+    // PEOPLE PICKER SEARCH
+    // ==========================================
+    // Puts a search box above a checklist container; items are its direct <label> children.
+    function addListSearch(container, placeholder) {
+        if (!container || container._searchInput) return;
+        const input = document.createElement("input");
+        input.type = "search";
+        input.className = "list-search";
+        input.placeholder = placeholder || "Search people...";
+        input.autocomplete = "off";
+        container.parentNode.insertBefore(input, container);
+        container._searchInput = input;
+        input.addEventListener("input", () => applyListSearch(container));
+        // Enter in the box should filter, not submit the modal form
+        input.addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); });
+    }
+
+    function applyListSearch(container) {
+        if (!container || !container._searchInput) return;
+        const q = container._searchInput.value.trim().toLowerCase();
+        container.querySelectorAll(":scope > label").forEach(el => {
+            el.classList.toggle("list-search-hidden", q !== "" && !el.textContent.toLowerCase().includes(q));
+        });
+    }
+
+    function clearListSearch(container) {
+        if (!container || !container._searchInput) return;
+        container._searchInput.value = "";
+        applyListSearch(container);
+    }
+
+    // Checkboxes the search currently shows, so Select All / Deselect All only touch the matches
+    function visibleCheckboxes(container) {
+        return Array.from(container.querySelectorAll("input[type='checkbox']"))
+            .filter(cb => !cb.closest(".list-search-hidden"));
+    }
+
+    // Puts a search box above a <select> that narrows its options (the blank placeholder always stays)
+    function addSelectSearch(select, placeholder) {
+        if (!select || select._searchInput) return;
+        const input = document.createElement("input");
+        input.type = "search";
+        input.className = "list-search";
+        input.placeholder = placeholder || "Search people...";
+        input.autocomplete = "off";
+        select.parentNode.insertBefore(input, select);
+        select._searchInput = input;
+        input.addEventListener("input", () => applySelectSearch(select));
+        input.addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); });
+    }
+
+    // Call after replacing a searchable select's options
+    function refreshSelectSearch(select) {
+        if (!select || !select._searchInput) return;
+        select._allOptions = Array.from(select.options).map(o => o.cloneNode(true));
+        applySelectSearch(select);
+    }
+
+    function applySelectSearch(select) {
+        if (!select || !select._allOptions) return;
+        const q = select._searchInput.value.trim().toLowerCase();
+        const current = select.value;
+        const keep = select._allOptions.filter(o =>
+            o.value === "" || q === "" || o.textContent.toLowerCase().includes(q)
+        );
+        select.replaceChildren(...keep.map(o => o.cloneNode(true)));
+
+        // A single match gets picked so the scouter can be chosen by typing alone; a pick the search
+        // filtered out is dropped back to the placeholder rather than left showing a non-match
+        const matches = keep.filter(o => o.value !== "");
+        let next = matches.some(o => o.value === current) ? current : "";
+        if (q !== "" && matches.length === 1) next = matches[0].value;
+        select.value = next;
+        if (next !== current) select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function clearSelectSearch(select) {
+        if (!select || !select._searchInput) return;
+        select._searchInput.value = "";
+        applySelectSearch(select);
+    }
+
+    function setupPeopleSearch() {
+        addListSearch(bulkScoutersContainer, "Search scouters...");
+        addListSearch(pitAutoScoutersContainer, "Search pit scouters...");
+        addListSearch(bulkPitGroupsContainer, "Search groups or members...");
+        addListSearch(pitAutoGroupsContainer, "Search groups or members...");
+        addSelectSearch(assignmentScouterSelect, "Type a name to find a scouter...");
+        addSelectSearch(filterScouter, "Search scouters...");
+    }
+
+    // ==========================================
+    // PIT SCOUT GROUPS
+    // ==========================================
+    function getPitGroups() {
+        return pitGroups;
+    }
+
+    function getUserDisplayName(uid) {
+        const u = users.find(usr => (usr.id || usr.userId) === uid);
+        return u ? (u.displayName || u.username) : "Unknown";
+    }
+
+    // Rows that share a scout group on the same pit team are one unit, not duplicates
+    function pitUnitKey(a) {
+        return a.scoutGroup ? `group:${String(a.scoutGroup).toLowerCase()}` : `row:${a.id}`;
+    }
+
+    function groupPitAssignmentsByUnit(list) {
+        const units = new Map();
+        list.forEach(a => {
+            const key = pitUnitKey(a);
+            if (!units.has(key)) units.set(key, []);
+            units.get(key).push(a);
+        });
+        return Array.from(units.values());
+    }
+
+    function renderPitGroupChecklist(container, onChange) {
+        if (!container) return;
+        const groups = getPitGroups();
+        if (groups.length === 0) {
+            container.innerHTML = `<span style="color:var(--muted); font-size:12px;">No pit groups yet. Use Manage Groups to create some.</span>`;
+            return;
+        }
+        container.innerHTML = groups.map(g => {
+            const names = (g.memberIds || []).map(getUserDisplayName).join(", ");
+            return `
+                <label style="display:flex; align-items:flex-start; gap:6px; font-size:12px; cursor:pointer; padding:4px 6px; border-radius:4px; background:var(--surface-2, rgba(255,255,255,0.03));">
+                    <input type="checkbox" name="pit_group" value="${escapeHtml(g.id)}" style="margin-top:2px;" />
+                    <span><strong>${escapeHtml(g.name)}</strong><br><span style="color:var(--muted);">${escapeHtml(names || "No members")}</span></span>
+                </label>
+            `;
+        }).join("");
+        if (onChange) {
+            container.querySelectorAll("input[name='pit_group']").forEach(cb => cb.addEventListener("change", onChange));
+        }
+        applyListSearch(container);
+    }
+
+    function getCheckedPitGroups(container) {
+        if (!container) return [];
+        const checkedIds = Array.from(container.querySelectorAll("input[name='pit_group']:checked")).map(cb => cb.value);
+        return getPitGroups().filter(g => checkedIds.includes(g.id) && (g.memberIds || []).length > 0);
+    }
+
+    function renderAllPitGroupPickers() {
+        renderPitGroupChecklist(pitAutoGroupsContainer, updatePitAutoSummary);
+        renderPitGroupChecklist(bulkPitGroupsContainer);
+        if (assignmentPitGroupSelect) {
+            const current = assignmentPitGroupSelect.value;
+            assignmentPitGroupSelect.innerHTML = `<option value="">Individual scouter</option>` + getPitGroups().map(g =>
+                `<option value="${escapeHtml(g.id)}">Group: ${escapeHtml(g.name)} (${(g.memberIds || []).length})</option>`
+            ).join("");
+            assignmentPitGroupSelect.value = getPitGroups().some(g => g.id === current) ? current : "";
+        }
+        updatePitAutoSummary();
+    }
+
+    function newPitGroupId() {
+        return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `grp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function renderPitGroupEditorRow(group) {
+        const scouterUsers = users.filter(u => u.role !== "NONE");
+        const row = document.createElement("div");
+        row.className = "pit-group-editor";
+        row.dataset.groupId = group.id;
+        row.style.cssText = "border:1px solid var(--border-subtle); border-radius:var(--radius-sm, 6px); padding:10px; background:var(--surface-2);";
+        row.innerHTML = `
+            <div class="row gap-8 items-center mb-6">
+                <input type="text" class="pit-group-name" maxlength="64" placeholder="Group name (e.g. Pit Crew A)" value="${escapeHtml(group.name || "")}" style="flex:1;" />
+                <button type="button" class="btn ghost btn-sm pit-group-remove" title="Remove group" style="color: var(--danger, #ef4444); padding:6px 8px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="pit-group-members" style="max-height:130px; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:6px;">
+                ${scouterUsers.map(u => {
+                    const uid = u.id || u.userId;
+                    const checked = (group.memberIds || []).includes(uid) ? "checked" : "";
+                    return `
+                        <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                            <input type="checkbox" class="pit-group-member" value="${uid}" ${checked} />
+                            <span>${escapeHtml(u.displayName || u.username)}</span>
+                        </label>
+                    `;
+                }).join("")}
+            </div>
+        `;
+        row.querySelector(".pit-group-remove").addEventListener("click", () => row.remove());
+        pitGroupsList.appendChild(row);
+        addListSearch(row.querySelector(".pit-group-members"), "Search team members...");
+    }
+
+    function openPitGroupsModal() {
+        pitGroupsList.innerHTML = "";
+        const groups = getPitGroups();
+        if (groups.length === 0) {
+            renderPitGroupEditorRow({ id: newPitGroupId(), name: "", memberIds: [] });
+        } else {
+            groups.forEach(renderPitGroupEditorRow);
+        }
+        showModal("pit-groups-modal");
+    }
+
+    async function savePitGroups(e) {
+        e.preventDefault();
+        const groups = [];
+        const seenNames = new Set();
+        for (const row of pitGroupsList.querySelectorAll(".pit-group-editor")) {
+            const name = row.querySelector(".pit-group-name").value.trim();
+            const memberIds = Array.from(row.querySelectorAll(".pit-group-member:checked")).map(cb => cb.value);
+            if (!name && memberIds.length === 0) continue;
+            if (!name) {
+                Obsidianscout.showToast("Every group needs a name", "error");
+                return;
+            }
+            if (seenNames.has(name.toLowerCase())) {
+                Obsidianscout.showToast(`Group name "${name}" is used twice`, "error");
+                return;
+            }
+            if (memberIds.length === 0) {
+                Obsidianscout.showToast(`Group "${name}" has no members`, "error");
+                return;
+            }
+            seenNames.add(name.toLowerCase());
+            groups.push({ id: row.dataset.groupId, name, memberIds });
+        }
+
+        try {
+            const saved = await Obsidianscout.request("/api/assignments/pit-groups", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ groups })
+            });
+            pitGroups = Array.isArray(saved) ? saved : groups;
+            renderAllPitGroupPickers();
+            Obsidianscout.showToast(`Saved ${pitGroups.length} pit group${pitGroups.length === 1 ? '' : 's'}`, "success");
+            hideModal("pit-groups-modal");
+        } catch (err) {
+            console.error("Save pit groups failed:", err);
+            Obsidianscout.showToast(err.message || "Failed to save pit groups", "error");
+        }
+    }
+
+    // Toggle the manual modal between a single scouter and a whole pit group
+    function updatePitGroupModeView() {
+        const isPit = assignmentTypeSelect.value === "PIT";
+        const usingGroup = isPit && assignmentPitGroupSelect && assignmentPitGroupSelect.value !== "";
+        if (fieldPitGroup) fieldPitGroup.classList.toggle("hidden", !isPit || getPitGroups().length === 0);
+        if (fieldScouterContainer) fieldScouterContainer.classList.toggle("hidden", usingGroup);
+        assignmentScouterSelect.required = !usingGroup;
     }
 
     async function loadEventData() {
@@ -703,6 +998,96 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Default to max range (first match to last match)
         bulkMatchStart.value = availableMatches[0].matchKey || "";
         bulkMatchEnd.value = availableMatches[availableMatches.length - 1].matchKey || "";
+
+        populateBulkTimeDays();
+    }
+
+    // ==========================================
+    // BULK WIZARD: TIME BLOCK (SHIFT) HELPERS
+    // ==========================================
+    // Returns { day: "YYYY-MM-DD", minutes } for a match in the event's timezone, or null if unscheduled
+    function getMatchLocalDayAndMinutes(m) {
+        const ms = parseTimestampMs(m.predictedTime || m.scheduledTime);
+        if (!ms) return null;
+        const timezone = m.eventTimezone || (settings && settings.timezone);
+        const options = { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+        let parts;
+        try {
+            parts = new Intl.DateTimeFormat("en-US", timezone ? { ...options, timeZone: timezone } : options).formatToParts(new Date(ms));
+        } catch (_) {
+            parts = new Intl.DateTimeFormat("en-US", options).formatToParts(new Date(ms));
+        }
+        const get = type => (parts.find(p => p.type === type) || {}).value || "0";
+        return {
+            day: `${get("year")}-${get("month")}-${get("day")}`,
+            minutes: (Number(get("hour")) % 24) * 60 + Number(get("minute"))
+        };
+    }
+
+    function populateBulkTimeDays() {
+        if (!bulkTimeDay) return;
+        const stage = bulkCompLevel ? bulkCompLevel.value : "all";
+        const dayCounts = new Map();
+        getFilteredMatches(stage).forEach(m => {
+            const local = getMatchLocalDayAndMinutes(m);
+            if (local) dayCounts.set(local.day, (dayCounts.get(local.day) || 0) + 1);
+        });
+
+        const days = Array.from(dayCounts.keys()).sort();
+        if (days.length === 0) {
+            bulkTimeDay.innerHTML = `<option value="">No scheduled match times</option>`;
+            updateBulkTimeSummary();
+            return;
+        }
+
+        const previous = bulkTimeDay.value;
+        bulkTimeDay.innerHTML = days.map(day => {
+            const [y, mo, d] = day.split("-").map(Number);
+            const label = new Date(Date.UTC(y, mo - 1, d)).toLocaleDateString([], { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
+            return `<option value="${day}">${escapeHtml(label)} (${dayCounts.get(day)} matches)</option>`;
+        }).join("");
+        bulkTimeDay.value = days.includes(previous) ? previous : days[0];
+        updateBulkTimeSummary();
+    }
+
+    function parseTimeInputMinutes(val) {
+        const match = /^(\d{1,2}):(\d{2})/.exec(val || "");
+        return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+    }
+
+    // Matches (within the selected stage) whose start time falls inside [shift start, shift end)
+    function getMatchesInTimeBlock() {
+        const day = bulkTimeDay ? bulkTimeDay.value : "";
+        const startMin = parseTimeInputMinutes(bulkTimeStart ? bulkTimeStart.value : "");
+        const endMin = parseTimeInputMinutes(bulkTimeEnd ? bulkTimeEnd.value : "");
+        if (!day || startMin === null || endMin === null || endMin <= startMin) return [];
+
+        const stage = bulkCompLevel ? bulkCompLevel.value : "all";
+        return getFilteredMatches(stage).filter(m => {
+            const local = getMatchLocalDayAndMinutes(m);
+            return local && local.day === day && local.minutes >= startMin && local.minutes < endMin;
+        });
+    }
+
+    function updateBulkTimeSummary() {
+        if (!bulkTimeSummary) return;
+        const startMin = parseTimeInputMinutes(bulkTimeStart ? bulkTimeStart.value : "");
+        const endMin = parseTimeInputMinutes(bulkTimeEnd ? bulkTimeEnd.value : "");
+        if (startMin !== null && endMin !== null && endMin <= startMin) {
+            bulkTimeSummary.textContent = "Shift end must be after shift start.";
+            return;
+        }
+        const inBlock = getMatchesInTimeBlock();
+        bulkTimeSummary.textContent = inBlock.length === 0
+            ? "No matches scheduled in this time block."
+            : `${inBlock.length} match(es): ${getMatchDisplayLabel(inBlock[0])} – ${getMatchDisplayLabel(inBlock[inBlock.length - 1])}`;
+    }
+
+    function updateBulkRangeModeView() {
+        const isTime = bulkRangeMode && bulkRangeMode.value === "time";
+        if (bulkMatchRangeField) bulkMatchRangeField.classList.toggle("hidden", isTime);
+        if (bulkTimeBlockField) bulkTimeBlockField.classList.toggle("hidden", !isTime);
+        if (isTime) updateBulkTimeSummary();
     }
 
     function getScoutUsageInMatch(match) {
@@ -1362,25 +1747,33 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         pitCoverageGrid.innerHTML = filteredTeams.map(t => {
             const matching = pitAssignments.filter(a => Number(a.targetTeamNumber) === Number(t.teamNumber));
+            const units = groupPitAssignmentsByUnit(matching);
             let cardClass = "pit-team-card";
             let statusHtml = "";
+            let membersHtml = "";
             let asgnId = "";
-            const isConflict = matching.length > 1;
+            const isConflict = units.length > 1;
 
             if (isConflict) {
                 cardClass += " conflict";
                 asgnId = matching[0].id;
-                statusHtml = `<span class="badge" style="background:#ef4444; color:#fff; cursor:pointer;" title="Click to resolve conflict">${matching.length} Scouts (Fix)</span>`;
-            } else if (matching.length === 1) {
-                const asgn = matching[0];
+                statusHtml = `<span class="badge" style="background:#ef4444; color:#fff; cursor:pointer;" title="Click to resolve conflict">${units.length} Assignees (Fix)</span>`;
+            } else if (units.length === 1) {
+                const unit = units[0];
+                const asgn = unit[0];
                 asgnId = asgn.id;
-                if (asgn.status === "COMPLETED") {
+                if (unit.some(a => a.status === "COMPLETED")) {
                     cardClass += " scouted";
                     statusHtml = `<span class="status-badge complete"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:-1px; margin-right:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Scouted</span>`;
+                } else if (asgn.scoutGroup) {
+                    statusHtml = `<span class="badge" style="background:var(--primary); color:#fff;">${escapeHtml(asgn.scoutGroup)}</span>`;
                 } else {
-                    const u = users.find(usr => (usr.id || usr.userId) === asgn.assignedUserId);
-                    const name = asgn.assignedUserDisplayName || asgn.assignedUserName || (u ? (u.displayName || u.username) : "Assigned");
+                    const name = asgn.assignedUserDisplayName || asgn.assignedUserName || getUserDisplayName(asgn.assignedUserId);
                     statusHtml = `<span class="badge" style="background:var(--primary); color:#fff;">${escapeHtml(name)}</span>`;
+                }
+                if (asgn.scoutGroup) {
+                    const names = unit.map(a => a.assignedUserDisplayName || a.assignedUsername || getUserDisplayName(a.assignedUserId));
+                    membersHtml = `<div style="color:var(--muted); font-size:11px; margin-top:2px;">${escapeHtml(names.join(", "))}</div>`;
                 }
             } else {
                 statusHtml = `<span style="color:var(--warning); font-size:12px; font-weight:600;">Unassigned</span>`;
@@ -1395,9 +1788,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                         ${statusHtml}
                     </div>
                     ${displayName ? `<div style="color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(displayName)}</div>` : ''}
+                    ${membersHtml}
                     <div class="mt-4">
                         <button class="btn ghost btn-sm btn-pit-assign" data-team="${t.teamNumber}" data-assignment-id="${asgnId}" data-is-conflict="${isConflict ? 'true' : 'false'}" type="button" style="width:100%; font-size:12px; padding:6px 10px; justify-content:center;">
-                            ${isConflict ? `Fix Conflict (${matching.length} Scouts)` : (asgnId ? 'Edit Assignment' : '+ Assign Scouter')}
+                            ${isConflict ? `Fix Conflict (${units.length} Assignees)` : (asgnId ? (units[0][0].scoutGroup ? 'Edit Group Assignment' : 'Edit Assignment') : '+ Assign Scouter / Group')}
                         </button>
                     </div>
                 </div>
@@ -1433,6 +1827,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ==========================================
     function openNewAssignmentModal(defaults = {}) {
         assignmentForm.reset();
+        clearSelectSearch(assignmentScouterSelect);
         assignmentIdInput.value = "";
         assignmentModalTitle.textContent = Obsidianscout.t ? Obsidianscout.t("assignments.create_title", "Create Assignment") : "Create Assignment";
         document.getElementById("field-status-container").classList.add("hidden");
@@ -1486,6 +1881,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!asgn) return;
 
         assignmentForm.reset();
+        clearSelectSearch(assignmentScouterSelect);
         assignmentIdInput.value = asgn.id;
         assignmentModalTitle.textContent = Obsidianscout.t ? Obsidianscout.t("assignments.edit_title", "Edit Assignment") : "Edit Assignment";
         document.getElementById("field-status-container").classList.remove("hidden");
@@ -1503,6 +1899,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (asgn.targetTeamNumber) assignmentTeamSelect.value = String(asgn.targetTeamNumber);
         } else if (asgn.assignmentType === "PIT") {
             if (asgn.targetTeamNumber) assignmentPitTeamSelect.value = String(asgn.targetTeamNumber);
+            const group = asgn.scoutGroup ? getPitGroups().find(g => g.name.toLowerCase() === String(asgn.scoutGroup).toLowerCase()) : null;
+            if (assignmentPitGroupSelect) assignmentPitGroupSelect.value = group ? group.id : "";
+            updatePitGroupModeView();
         } else if (asgn.assignmentType === "QUALITATIVE") {
             if (asgn.matchKey) assignmentQualMatchSelect.value = asgn.matchKey;
             updateQualTargetScopeOptions();
@@ -1530,6 +1929,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         formGroupMatch.classList.toggle("hidden", type !== "MATCH");
         formGroupPit.classList.toggle("hidden", type !== "PIT");
         formGroupQual.classList.toggle("hidden", type !== "QUALITATIVE");
+        updatePitGroupModeView();
     }
 
     function populateModalMatchDropdowns() {
@@ -1745,10 +2145,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         } else if (type === "PIT") {
             const tNum = Number(assignmentPitTeamSelect.value);
             if (tNum) {
+                const editing = currentId ? assignments.find(a => a.id === currentId) : null;
+                const editingUnit = editing ? pitUnitKey(editing) : null;
+                const chosenGroup = assignmentPitGroupSelect ? getPitGroups().find(g => g.id === assignmentPitGroupSelect.value) : null;
+                const chosenUnit = chosenGroup ? `group:${chosenGroup.name.toLowerCase()}` : null;
                 const duplicate = assignments.find(a =>
                     a.assignmentType === "PIT" &&
                     Number(a.targetTeamNumber) === tNum &&
-                    a.id !== currentId
+                    a.id !== currentId &&
+                    pitUnitKey(a) !== editingUnit &&
+                    pitUnitKey(a) !== chosenUnit
                 );
                 if (duplicate) {
                     const u = users.find(usr => (usr.id || usr.userId) === duplicate.assignedUserId);
@@ -1826,6 +2232,59 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // Assigning a group (or editing a grouped row) replaces the whole unit on that pit team
+    async function savePitGroupAssignment(pitGroup, editingRow, scouterId, notes) {
+        const targetTeamNumber = Number(assignmentPitTeamSelect.value) || null;
+        if (!targetTeamNumber) {
+            Obsidianscout.showToast("Please select a team to pit scout", "error");
+            return;
+        }
+        if (!pitGroup && !scouterId) {
+            Obsidianscout.showToast("Please select a scouter or a pit group", "error");
+            return;
+        }
+
+        const replaceUnits = new Set();
+        if (editingRow) replaceUnits.add(pitUnitKey(editingRow));
+        if (pitGroup) replaceUnits.add(`group:${pitGroup.name.toLowerCase()}`);
+        const toReplace = assignments.filter(a =>
+            a.assignmentType === "PIT" &&
+            (Number(a.targetTeamNumber) === targetTeamNumber || (editingRow && Number(a.targetTeamNumber) === Number(editingRow.targetTeamNumber))) &&
+            replaceUnits.has(pitUnitKey(a))
+        );
+
+        const team = teams.find(t => Number(t.teamNumber) === targetTeamNumber);
+        const nickname = team ? (team.nickname || team.name) : "";
+        const baseNote = notes || (nickname ? `Pit Scouting - ${nickname}` : "Pit Scouting");
+        const items = (pitGroup ? pitGroup.memberIds : [scouterId]).map(uid => ({
+            assignedUserId: uid,
+            assignmentType: "PIT",
+            targetTeamNumber,
+            scoutGroup: pitGroup ? pitGroup.name : null,
+            notes: pitGroup ? `${baseNote} (Group: ${pitGroup.name})` : baseNote
+        }));
+
+        try {
+            await Promise.all(toReplace.map(a =>
+                Obsidianscout.request(`/api/assignments/${encodeURIComponent(a.id)}`, { method: "DELETE" })
+            ));
+            await Obsidianscout.request("/api/assignments/bulk", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ eventKey: currentEventKey, assignments: items })
+            });
+            Obsidianscout.showToast(pitGroup
+                ? `Assigned group "${pitGroup.name}" (${items.length} scouts) to Team ${targetTeamNumber}`
+                : "Pit assignment saved", "success");
+            hideModal("assignment-modal");
+            await loadEventData();
+        } catch (err) {
+            console.error("Save pit group assignment failed:", err);
+            Obsidianscout.showToast(err.message || "Failed to save pit group assignment", "error");
+            await loadEventData();
+        }
+    }
+
     // Save single assignment
     async function saveAssignment(e) {
         e.preventDefault();
@@ -1835,6 +2294,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         const scouterId = assignmentScouterSelect.value;
         const notes = assignmentNotesInput.value.trim() || null;
         const status = id ? assignmentStatusSelect.value : "PENDING";
+
+        const pitGroup = type === "PIT" && assignmentPitGroupSelect
+            ? getPitGroups().find(g => g.id === assignmentPitGroupSelect.value)
+            : null;
+        const editingRow = id ? assignments.find(a => a.id === id) : null;
+        if (type === "PIT" && (pitGroup || (editingRow && editingRow.scoutGroup))) {
+            await savePitGroupAssignment(pitGroup, editingRow, scouterId, notes);
+            return;
+        }
 
         if (!scouterId) {
             Obsidianscout.showToast("Please select a scouter", "error");
@@ -2134,7 +2602,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return 0;
                 });
                 const keep = sorted[0];
-                const duplicates = sorted.slice(1);
+                const duplicates = keep.assignmentType === "PIT"
+                    ? sorted.filter(d => pitUnitKey(d) !== pitUnitKey(keep))
+                    : sorted.slice(1);
                 duplicates.forEach(d => {
                     toDeleteIds.add(d.id);
                     conflictDetails.slotDuplicates.push({ kept: keep, deleted: d, slotKey });
@@ -2255,10 +2725,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         const overwrite = pitAutoOverwrite ? pitAutoOverwrite.checked : false;
 
         const selectedScouterCheckboxes = pitAutoScoutersContainer ? Array.from(pitAutoScoutersContainer.querySelectorAll("input[name='pit_auto_scouter']:checked")) : [];
-        const scouterIds = selectedScouterCheckboxes.map(cb => cb.value);
+        const pitGroups = getCheckedPitGroups(pitAutoGroupsContainer);
+        // Group members are always part of the pool, even if their own checkbox is unchecked
+        const scouterIds = Array.from(new Set([
+            ...selectedScouterCheckboxes.map(cb => cb.value),
+            ...pitGroups.flatMap(g => g.memberIds)
+        ]));
 
         if (scouterIds.length === 0) {
-            Obsidianscout.showToast("Please select at least one pit scouter", "error");
+            Obsidianscout.showToast("Please select at least one pit scouter or group", "error");
             return;
         }
 
@@ -2270,12 +2745,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                     eventKey: currentEventKey,
                     assignmentType: "PIT_AUTO",
                     scouterUserIds: scouterIds,
+                    pitGroups: pitGroups.map(g => ({ name: g.name, memberIds: g.memberIds })),
                     overwrite: overwrite,
                     pitScope: scope
                 })
             });
 
-            Obsidianscout.showToast(`Successfully assigned ${res.createdCount || 0} teams across ${scouterIds.length} pit scouters!`, "success");
+            Obsidianscout.showToast(pitGroups.length
+                ? `Created ${res.createdCount || 0} pit assignments using ${pitGroups.length} group${pitGroups.length === 1 ? '' : 's'}!`
+                : `Successfully assigned ${res.createdCount || 0} teams across ${scouterIds.length} pit scouters!`, "success");
             hideModal("pit-auto-modal");
             await loadEventData();
         } catch (err) {
@@ -2314,7 +2792,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const bulkType = bulkAssignmentType ? bulkAssignmentType.value : "MATCH";
 
         const selectedScouterCheckboxes = Array.from(bulkScoutersContainer.querySelectorAll("input[name='bulk_scouter']:checked"));
-        const scouterIds = selectedScouterCheckboxes.map(cb => cb.value);
+        const pitGroups = bulkType === "PIT_AUTO" ? getCheckedPitGroups(bulkPitGroupsContainer) : [];
+        const scouterIds = Array.from(new Set([
+            ...selectedScouterCheckboxes.map(cb => cb.value),
+            ...pitGroups.flatMap(g => g.memberIds)
+        ]));
 
         if (scouterIds.length === 0) {
             Obsidianscout.showToast("Please select at least one scouter to assign", "error");
@@ -2327,6 +2809,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         const stageFilter = bulkCompLevel ? bulkCompLevel.value : "all";
         const pitScope = bulkPitScope ? bulkPitScope.value : "unassigned";
 
+        let matchKeys = null;
+        if (bulkType !== "PIT_AUTO" && bulkRangeMode && bulkRangeMode.value === "time") {
+            matchKeys = getMatchesInTimeBlock().map(m => m.matchKey).filter(Boolean);
+            if (matchKeys.length === 0) {
+                Obsidianscout.showToast("No matches are scheduled in the selected time block", "error");
+                return;
+            }
+        }
+
         try {
             const res = await Obsidianscout.request("/api/assignments/auto-generate", {
                 method: "POST",
@@ -2338,9 +2829,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                     stageFilter: stageFilter,
                     startMatchKey: startMatchKey,
                     endMatchKey: endMatchKey,
+                    matchKeys: matchKeys,
                     consecutiveMatches: consecutiveMatches,
                     overwrite: overwrite,
-                    pitScope: pitScope
+                    pitScope: pitScope,
+                    pitGroups: pitGroups.map(g => ({ name: g.name, memberIds: g.memberIds }))
                 })
             });
 
@@ -2435,6 +2928,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // EVENT LISTENERS WIRE-UP
     // ==========================================
     function wireEventListeners() {
+        setupPeopleSearch();
         // Event filter dropdown change
         eventSelect.addEventListener("change", async () => {
             currentEventKey = eventSelect.value;
@@ -2534,10 +3028,36 @@ document.addEventListener("DOMContentLoaded", async () => {
             bulkCompLevel.addEventListener("change", populateBulkMatchDropdowns);
         }
 
+        // Pit scout groups
+        if (pitGroupsBtn) pitGroupsBtn.addEventListener("click", openPitGroupsModal);
+        document.querySelectorAll(".btn-manage-pit-groups").forEach(btn => btn.addEventListener("click", openPitGroupsModal));
+        if (pitGroupsAdd) pitGroupsAdd.addEventListener("click", () => renderPitGroupEditorRow({ id: newPitGroupId(), name: "", memberIds: [] }));
+        if (pitGroupsForm) pitGroupsForm.addEventListener("submit", savePitGroups);
+        ["pit-groups-close", "pit-groups-cancel"].forEach(btnId => {
+            const btn = document.getElementById(btnId);
+            if (btn) btn.addEventListener("click", () => hideModal("pit-groups-modal"));
+        });
+        if (assignmentPitGroupSelect) {
+            assignmentPitGroupSelect.addEventListener("change", () => {
+                updatePitGroupModeView();
+                checkLiveModalConflict();
+            });
+        }
+
+        // Bulk range mode (match range vs time block)
+        if (bulkRangeMode) bulkRangeMode.addEventListener("change", updateBulkRangeModeView);
+        [bulkTimeDay, bulkTimeStart, bulkTimeEnd].forEach(el => {
+            if (el) el.addEventListener("input", updateBulkTimeSummary);
+            if (el) el.addEventListener("change", updateBulkTimeSummary);
+        });
+
         // Modals Open
         newAssignmentBtn.addEventListener("click", () => openNewAssignmentModal());
         bulkWizardBtn.addEventListener("click", () => {
             populateBulkMatchDropdowns();
+            updateBulkRangeModeView();
+            clearListSearch(bulkScoutersContainer);
+            clearListSearch(bulkPitGroupsContainer);
             showModal("bulk-wizard-modal");
         });
         if (autoPitBtn) {
@@ -2571,17 +3091,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Bulk Wizard Quick Buttons
         bulkSelectAll.addEventListener("click", () => {
-            bulkScoutersContainer.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = true);
+            visibleCheckboxes(bulkScoutersContainer).forEach(cb => cb.checked = true);
         });
         bulkDeselectAll.addEventListener("click", () => {
-            bulkScoutersContainer.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+            visibleCheckboxes(bulkScoutersContainer).forEach(cb => cb.checked = false);
         });
 
         // Pit Auto Quick Buttons & Scope Change
         if (pitAutoSelectAll) {
             pitAutoSelectAll.addEventListener("click", () => {
                 if (pitAutoScoutersContainer) {
-                    pitAutoScoutersContainer.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = true);
+                    visibleCheckboxes(pitAutoScoutersContainer).forEach(cb => cb.checked = true);
                     updatePitAutoSummary();
                 }
             });
@@ -2589,7 +3109,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (pitAutoDeselectAll) {
             pitAutoDeselectAll.addEventListener("click", () => {
                 if (pitAutoScoutersContainer) {
-                    pitAutoScoutersContainer.querySelectorAll("input[type='checkbox']").forEach(cb => cb.checked = false);
+                    visibleCheckboxes(pitAutoScoutersContainer).forEach(cb => cb.checked = false);
                     updatePitAutoSummary();
                 }
             });
@@ -2613,7 +3133,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         reminderSettingsCancel.addEventListener("click", () => hideModal("reminder-settings-modal"));
 
         // Close on backdrop click
-        [assignmentModal, bulkWizardModal, pitAutoModal, conflictResolverModal, reminderSettingsModal].forEach(m => {
+        [assignmentModal, bulkWizardModal, pitAutoModal, pitGroupsModal, conflictResolverModal, reminderSettingsModal].forEach(m => {
             if (m) {
                 m.addEventListener("click", (e) => {
                     if (e.target === m) hideModal(m);

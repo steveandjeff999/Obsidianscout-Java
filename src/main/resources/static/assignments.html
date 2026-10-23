@@ -10,6 +10,17 @@
     <link rel="stylesheet" href="/css/app.css" />
     <link rel="manifest" href="/manifest.json" />
     <style>
+        /* Search boxes above people pickers */
+        .list-search {
+            width: 100%;
+            margin-bottom: 6px;
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+        .list-search-hidden {
+            display: none !important;
+        }
+
         /* Page Header & Stats */
         .assignments-header-card {
             background: var(--surface);
@@ -712,6 +723,15 @@
                                 </svg>
                                 <span data-i18n="assignments.auto_assign_pit">Auto-Assign Pit Scouters</span>
                             </button>
+                            <button class="btn secondary" id="pit-groups-btn" type="button" style="padding: 7px 12px; font-size: 12px; display:inline-flex; align-items:center; gap:6px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                                <span data-i18n="assignments.pit_groups">Pit Groups</span>
+                            </button>
                             <div class="field" style="margin: 0; min-width: 200px;">
                                 <input type="text" id="pit-search" placeholder="Filter teams by number or name..." data-i18n-placeholder="assignments.search_pit_placeholder" />
                             </div>
@@ -764,6 +784,11 @@
                         <label for="assignment-pit-team" data-i18n="assignments.select_pit_team">Select Team to Pit Scout *</label>
                         <select id="assignment-pit-team"></select>
                     </div>
+                    <div class="field" id="field-pit-group">
+                        <label for="assignment-pit-group" data-i18n="assignments.pit_assign_to">Assign To</label>
+                        <select id="assignment-pit-group"></select>
+                        <small style="color: var(--muted); margin-top: 4px;" data-i18n="assignments.pit_group_hint">Pick a pit group to send all of its members to this team together.</small>
+                    </div>
                 </div>
 
                 <!-- QUALITATIVE SCOUTING FIELDS -->
@@ -788,7 +813,7 @@
                 </div>
 
                 <!-- SCOUTER ASSIGNMENT -->
-                <div class="field">
+                <div class="field" id="field-scouter-container">
                     <label for="assignment-scouter" data-i18n="assignments.assign_scouter">Assign to Scouter *</label>
                     <select id="assignment-scouter" required>
                         <option value="" data-i18n="assignments.select_scouter_placeholder">Select team member...</option>
@@ -879,6 +904,16 @@
                             </select>
                         </div>
                         <div class="field">
+                            <label for="bulk-range-mode" data-i18n="assignments.range_mode_label">Assign By</label>
+                            <select id="bulk-range-mode">
+                                <option value="matches" selected data-i18n="assignments.range_mode_matches">Match Range</option>
+                                <option value="time" data-i18n="assignments.range_mode_time">Time Block (Shift)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-grid form-grid-wide">
+                        <div class="field" id="bulk-match-range-field">
                             <div class="row gap-8">
                                 <div style="flex:1;">
                                     <label for="bulk-match-start" data-i18n="assignments.from_match">From Match</label>
@@ -889,6 +924,21 @@
                                     <select id="bulk-match-end" style="width:100%;"></select>
                                 </div>
                             </div>
+                        </div>
+                        <div class="field hidden" id="bulk-time-block-field">
+                            <label for="bulk-time-day" data-i18n="assignments.time_block_day">Day</label>
+                            <select id="bulk-time-day" style="width:100%;"></select>
+                            <div class="row gap-8 mt-8">
+                                <div style="flex:1;">
+                                    <label for="bulk-time-start" data-i18n="assignments.time_block_start">Shift Start</label>
+                                    <input type="time" id="bulk-time-start" value="06:00" style="width:100%;" />
+                                </div>
+                                <div style="flex:1;">
+                                    <label for="bulk-time-end" data-i18n="assignments.time_block_end">Shift End</label>
+                                    <input type="time" id="bulk-time-end" value="12:00" style="width:100%;" />
+                                </div>
+                            </div>
+                            <div id="bulk-time-summary" style="margin-top: 6px; font-size: 12px; color: var(--primary); font-weight: 600;"></div>
                         </div>
                     </div>
                 </div>
@@ -901,6 +951,17 @@
                             <option value="unassigned" selected>Only Unassigned Teams</option>
                             <option value="all">All Attending Teams</option>
                         </select>
+                    </div>
+
+                    <div class="field">
+                        <div class="row justify-between items-center mb-6">
+                            <label style="margin:0;" data-i18n="assignments.pit_groups_select">Pit Groups (scout together)</label>
+                            <button type="button" class="btn ghost btn-sm btn-manage-pit-groups" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.manage_groups">Manage Groups</button>
+                        </div>
+                        <div id="bulk-pit-groups-container" class="pit-group-checklist" style="max-height: 150px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm, 6px); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <small style="color: var(--muted); margin-top: 4px;" data-i18n="assignments.pit_groups_hint">Each checked group takes a team as one unit. Selected scouters who are not in a checked group still get their own teams.</small>
                     </div>
                 </div>
 
@@ -963,6 +1024,17 @@
 
                 <div class="field">
                     <div class="row justify-between items-center mb-6">
+                        <label style="margin:0;" data-i18n="assignments.pit_groups_select">Pit Groups (scout together)</label>
+                        <button type="button" class="btn ghost btn-sm btn-manage-pit-groups" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.manage_groups">Manage Groups</button>
+                    </div>
+                    <div id="pit-auto-groups-container" class="pit-group-checklist" style="max-height: 150px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm, 6px); padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                        <!-- Populated dynamically -->
+                    </div>
+                    <small style="color: var(--muted); margin-top: 4px;" data-i18n="assignments.pit_groups_hint">Each checked group takes a team as one unit. Selected scouters who are not in a checked group still get their own teams.</small>
+                </div>
+
+                <div class="field">
+                    <div class="row justify-between items-center mb-6">
                         <label style="margin:0;" data-i18n="assignments.select_pit_scouters">Select Pit Scouters</label>
                         <div class="row gap-8">
                             <button type="button" id="pit-auto-select-all" class="btn ghost btn-sm" style="font-size:11px; padding:2px 8px;" data-i18n="assignments.select_all">Select All</button>
@@ -985,6 +1057,41 @@
                 <div class="modal-footer mt-16">
                     <button class="btn ghost" id="pit-auto-cancel" type="button" data-i18n="assignments.cancel">Cancel</button>
                     <button class="btn" type="submit" data-i18n="assignments.generate_pit_btn">Assign Pit Teams</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Pit Scout Groups -->
+    <div class="modal-backdrop" id="pit-groups-modal">
+        <div class="modal-container" style="max-width: 620px;">
+            <div class="modal-header">
+                <h2 class="modal-title" style="display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span data-i18n="assignments.pit_groups_title">Pit Scout Groups</span>
+                </h2>
+                <button class="modal-close" id="pit-groups-close" type="button">&times;</button>
+            </div>
+            <form id="pit-groups-form" class="form-grid">
+                <p class="notice" style="margin-bottom: 12px;" data-i18n="assignments.pit_groups_notice">
+                    Pit scouting is usually done by 2-3 people walking the pits together. Build groups here, then assign a whole group to a team manually or with Auto-Assign.
+                </p>
+                <div id="pit-groups-list" class="form-grid" style="gap: 12px;"></div>
+                <button type="button" class="btn ghost btn-sm" id="pit-groups-add" style="justify-self:start; display:inline-flex; align-items:center; gap:6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span data-i18n="assignments.pit_groups_add">Add Group</span>
+                </button>
+                <div class="modal-footer mt-16">
+                    <button class="btn ghost" id="pit-groups-cancel" type="button" data-i18n="assignments.cancel">Cancel</button>
+                    <button class="btn" type="submit" data-i18n="assignments.pit_groups_save">Save Groups</button>
                 </div>
             </form>
         </div>

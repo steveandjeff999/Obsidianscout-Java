@@ -594,6 +594,7 @@ object ScoutingAssignments : UUIDTable("scouting_assignments") {
     val reminderMinutesBefore = integer("reminder_minutes_before").nullable()
     val pushReminderSentAt = timestamp("push_reminder_sent_at").nullable()
     val emailReminderSentAt = timestamp("email_reminder_sent_at").nullable()
+    val scoutGroup = varchar("scout_group", 64).nullable() // pit scout group name; members of one group share a target
 
     init {
         index("idx_scouting_assignments_team_event", false, ownerTeamNumber, eventKey, program)

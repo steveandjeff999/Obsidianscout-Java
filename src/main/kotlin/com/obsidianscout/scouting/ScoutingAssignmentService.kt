@@ -61,7 +61,10 @@ data class ScoutingAssignmentRecord(
     val scheduleOffsetSeconds: Long? = null,
     val reminderMinutesBefore: Int? = null,
     val pushReminderSentAt: String? = null,
-    val emailReminderSentAt: String? = null
+    val emailReminderSentAt: String? = null,
+    val scoutGroup: String? = null,
+    /** Usernames of everyone in this pit row's scout group on the same team (including the assignee). */
+    val scoutGroupMembers: List<String> = emptyList()
 )
 
 @Serializable
@@ -75,7 +78,8 @@ data class CreateAssignmentRequest(
     val targetTeamNumber: Int? = null,
     val allianceColor: String? = null,
     val notes: String? = null,
-    val reminderMinutesBefore: Int? = null
+    val reminderMinutesBefore: Int? = null,
+    val scoutGroup: String? = null
 )
 
 @Serializable
@@ -87,7 +91,8 @@ data class BulkAssignmentItem(
     val compLevel: String? = null,
     val targetTeamNumber: Int? = null,
     val allianceColor: String? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val scoutGroup: String? = null
 )
 
 @Serializable
@@ -105,10 +110,23 @@ data class AutoGenerateAssignmentsRequest(
     val stageFilter: String? = "all", // all | qm | qf | sf | f | pr
     val startMatchKey: String? = null,
     val endMatchKey: String? = null,
+    val matchKeys: List<String>? = null, // explicit match set (e.g. a time block); overrides start/end when non-empty
     val consecutiveMatches: Int = 5,
     val overwrite: Boolean = false,
     val pitScope: String = "unassigned", // unassigned | all
+    val pitGroups: List<PitGroupAssignment> = emptyList(), // PIT_AUTO: groups that each take a team together
     val reminderMinutesBefore: Int? = null
+)
+
+@Serializable
+data class SavePitGroupsRequest(
+    val groups: List<com.obsidianscout.integrations.PitScoutGroup> = emptyList()
+)
+
+@Serializable
+data class PitGroupAssignment(
+    val name: String,
+    val memberIds: List<String> = emptyList()
 )
 
 @Serializable
@@ -249,6 +267,7 @@ object ScoutingAssignmentService {
                 it[createdAt] = now
                 it[updatedAt] = now
                 it[reminderMinutesBefore] = request.reminderMinutesBefore
+                it[scoutGroup] = cleanScoutGroup(request.scoutGroup)
             }.value
         }
 
@@ -316,6 +335,7 @@ object ScoutingAssignmentService {
                 this[ScoutingAssignments.createdAt] = now
                 this[ScoutingAssignments.updatedAt] = now
                 this[ScoutingAssignments.reminderMinutesBefore] = request.reminderMinutesBefore
+                this[ScoutingAssignments.scoutGroup] = cleanScoutGroup(item.raw.scoutGroup)
             }
             inserted.map { it[ScoutingAssignments.id].value }
         }
@@ -327,6 +347,56 @@ object ScoutingAssignmentService {
             mapRowsToRecords(fullRows)
         }
     }
+
+    private fun cleanScoutGroup(name: String?): String? = name?.trim()?.take(64)?.ifBlank { null }
+
+    fun getPitGroups(session: UserSession): List<com.obsidianscout.integrations.PitScoutGroup> =
+        com.obsidianscout.integrations.SettingsService.getSettings(session.teamNumber, session.program).pitScoutGroups
+
+    /** Replaces the team's saved pit scout groups. Members must be accounts on the team. */
+    fun savePitGroups(
+        session: UserSession,
+        groups: List<com.obsidianscout.integrations.PitScoutGroup>
+    ): List<com.obsidianscout.integrations.PitScoutGroup> {
+        val prog = session.program.uppercase().trim()
+        val requestedIds = groups.flatMap { it.memberIds }.mapNotNull { runCatching { UUID.fromString(it.trim()) }.getOrNull() }.distinct()
+        val teamUserIds = if (requestedIds.isEmpty()) emptySet() else readTransaction {
+            Users.selectAll().where {
+                (Users.id inList requestedIds) and (Users.program eq prog) and
+                (if (session.role != UserRole.SUPERADMIN) Users.teamNumber eq session.teamNumber else Users.teamNumber eq Users.teamNumber)
+            }.map { it[Users.id].value.toString() }.toSet()
+        }
+
+        val seenNames = mutableSetOf<String>()
+        val cleaned = groups.mapNotNull { g ->
+            val name = cleanScoutGroup(g.name) ?: return@mapNotNull null
+            if (!seenNames.add(name.lowercase())) {
+                throw ApiException(HttpStatusCode.BadRequest, "Group name \"$name\" is used more than once.")
+            }
+            val members = g.memberIds.map { it.trim().lowercase() }.distinct().filter { it in teamUserIds }
+            if (members.isEmpty()) null
+            else com.obsidianscout.integrations.PitScoutGroup(
+                id = g.id.trim().ifBlank { UUID.randomUUID().toString() }.take(64),
+                name = name,
+                memberIds = members
+            )
+        }
+
+        val current = com.obsidianscout.integrations.SettingsService.getSettings(session.teamNumber, session.program)
+        return com.obsidianscout.integrations.SettingsService.updateSettings(session.teamNumber, current.copy(pitScoutGroups = cleaned)).pitScoutGroups
+    }
+
+    /**
+     * Pit rows tagged with the same scout group are one unit (the group visits the team together),
+     * so they never count as duplicates of each other. Ungrouped rows are each their own unit.
+     */
+    private fun pitUnitKey(row: org.jetbrains.exposed.v1.core.ResultRow): String =
+        row.getOrNull(ScoutingAssignments.scoutGroup)?.lowercase()?.let { "group:$it" }
+            ?: "row:${row[ScoutingAssignments.id].value}"
+
+    private fun pitGroupRosterKey(row: org.jetbrains.exposed.v1.core.ResultRow): String =
+        "${row[ScoutingAssignments.ownerTeamNumber]}|${row[ScoutingAssignments.eventKey].lowercase()}|" +
+            "${row[ScoutingAssignments.targetTeamNumber]}|${row.getOrNull(ScoutingAssignments.scoutGroup)?.lowercase()}"
 
     private fun compLevelRank(compLevel: String?): Int {
         if (compLevel.isNullOrBlank()) return 1
@@ -410,7 +480,8 @@ object ScoutingAssignmentService {
                 val compLevel: String? = null,
                 val targetTeamNumber: Int? = null,
                 val allianceColor: String? = null,
-                val notes: String? = null
+                val notes: String? = null,
+                val scoutGroup: String? = null
             )
             val itemsToInsert = mutableListOf<BulkItem>()
 
@@ -448,19 +519,35 @@ object ScoutingAssignmentService {
                     toDeleteIds.addAll(overwriteIds)
                 }
 
+                // Each unit (a scout group, or a lone scouter not in any selected group) takes the next team in turn
+                data class PitUnit(val groupName: String?, val members: List<UUID>)
+                val poolSet = scouterPool.toSet()
+                val groupUnits = request.pitGroups.mapNotNull { g ->
+                    val name = cleanScoutGroup(g.name) ?: return@mapNotNull null
+                    val members = g.memberIds.mapNotNull { runCatching { UUID.fromString(it.trim()) }.getOrNull() }
+                        .distinct().filter { it in poolSet }
+                    if (members.isEmpty()) null else PitUnit(name, members)
+                }
+                val groupedIds = groupUnits.flatMap { it.members }.toSet()
+                val pitUnits = groupUnits + scouterPool.filter { it !in groupedIds }.map { PitUnit(null, listOf(it)) }
+
                 targetTeams.forEachIndexed { idx, tRow ->
                     val tNum = tRow[ApiTeams.teamNumber]
-                    val scouterId = scouterPool[idx % scouterPool.size]
+                    val unit = pitUnits[idx % pitUnits.size]
                     val nickname = tRow[ApiTeams.nickname] ?: tRow[ApiTeams.name]
-                    itemsToInsert.add(
-                        BulkItem(
-                            targetUuid = scouterId,
-                            effectiveOwnerTeam = userOwnerMap[scouterId] ?: session.teamNumber,
-                            typeClean = "PIT",
-                            targetTeamNumber = tNum,
-                            notes = if (!nickname.isNullOrBlank()) "Pit Scouting - $nickname" else "Pit Scouting"
+                    val baseNote = if (!nickname.isNullOrBlank()) "Pit Scouting - $nickname" else "Pit Scouting"
+                    unit.members.forEach { scouterId ->
+                        itemsToInsert.add(
+                            BulkItem(
+                                targetUuid = scouterId,
+                                effectiveOwnerTeam = userOwnerMap[scouterId] ?: session.teamNumber,
+                                typeClean = "PIT",
+                                targetTeamNumber = tNum,
+                                notes = if (unit.groupName != null) "$baseNote (Group: ${unit.groupName})" else baseNote,
+                                scoutGroup = unit.groupName
+                            )
                         )
-                    )
+                    }
                 }
             } else {
                 // Match or Qualitative Assignment
@@ -495,19 +582,28 @@ object ScoutingAssignmentService {
                     throw ApiException(HttpStatusCode.BadRequest, "No matches found matching tournament stage ($stage).")
                 }
 
-                val startIdx = if (!request.startMatchKey.isNullOrBlank()) {
-                    filteredMatches.indexOfFirst { it[ApiMatches.matchKey].equals(request.startMatchKey.trim(), ignoreCase = true) }.takeIf { it >= 0 } ?: 0
-                } else 0
+                val explicitKeys = request.matchKeys.orEmpty().map { it.trim().lowercase() }.filter { it.isNotBlank() }.toSet()
 
-                val endIdx = if (!request.endMatchKey.isNullOrBlank()) {
-                    filteredMatches.indexOfFirst { it[ApiMatches.matchKey].equals(request.endMatchKey.trim(), ignoreCase = true) }.takeIf { it >= 0 } ?: (filteredMatches.size - 1)
-                } else (filteredMatches.size - 1)
+                val targetMatches = if (explicitKeys.isNotEmpty()) {
+                    // Time-block mode: the client resolved which matches fall inside the block
+                    filteredMatches.filter { it[ApiMatches.matchKey].lowercase() in explicitKeys }.ifEmpty {
+                        throw ApiException(HttpStatusCode.BadRequest, "No matches found in the selected time block.")
+                    }
+                } else {
+                    val startIdx = if (!request.startMatchKey.isNullOrBlank()) {
+                        filteredMatches.indexOfFirst { it[ApiMatches.matchKey].equals(request.startMatchKey.trim(), ignoreCase = true) }.takeIf { it >= 0 } ?: 0
+                    } else 0
 
-                if (startIdx > endIdx) {
-                    throw ApiException(HttpStatusCode.BadRequest, "Start match must come before or equal to End match.")
+                    val endIdx = if (!request.endMatchKey.isNullOrBlank()) {
+                        filteredMatches.indexOfFirst { it[ApiMatches.matchKey].equals(request.endMatchKey.trim(), ignoreCase = true) }.takeIf { it >= 0 } ?: (filteredMatches.size - 1)
+                    } else (filteredMatches.size - 1)
+
+                    if (startIdx > endIdx) {
+                        throw ApiException(HttpStatusCode.BadRequest, "Start match must come before or equal to End match.")
+                    }
+
+                    filteredMatches.subList(startIdx, endIdx + 1)
                 }
-
-                val targetMatches = filteredMatches.subList(startIdx, endIdx + 1)
                 val consecutive = request.consecutiveMatches.coerceAtLeast(1)
 
                 fun pickScouterForMatch(preferredIdx: Int, busyInMatch: MutableSet<UUID>): UUID {
@@ -807,6 +903,7 @@ object ScoutingAssignmentService {
                     this[ScoutingAssignments.createdAt] = now
                     this[ScoutingAssignments.updatedAt] = now
                     this[ScoutingAssignments.reminderMinutesBefore] = request.reminderMinutesBefore
+                    this[ScoutingAssignments.scoutGroup] = item.scoutGroup
                 }
             }
 
@@ -1062,7 +1159,9 @@ object ScoutingAssignmentService {
             val conflictingScouters = mutableListOf<ConflictScouterDto>()
 
             for ((_, slotRows) in grouped) {
-                if (slotRows.size > 1) {
+                val isSingleUnitPit = slotRows.first()[ScoutingAssignments.assignmentType] == "PIT" &&
+                    slotRows.map { pitUnitKey(it) }.distinct().size == 1
+                if (slotRows.size > 1 && !isSingleUnitPit) {
                     val first = slotRows.first()
                     val scouters = slotRows.map { row ->
                         val uId = row[ScoutingAssignments.assignedUserId].value
@@ -1330,7 +1429,11 @@ object ScoutingAssignmentService {
                     }.thenByDescending { !it[ScoutingAssignments.notes].isNullOrBlank() }
                      .thenBy { it[ScoutingAssignments.createdAt] })
 
-                    val duplicates = sorted.drop(1)
+                    // For pit slots the whole group of the kept row stays; only other units are duplicates
+                    val keptUnit = pitUnitKey(sorted.first())
+                    val duplicates = if (sorted.first()[ScoutingAssignments.assignmentType].uppercase() == "PIT") {
+                        sorted.filter { pitUnitKey(it) != keptUnit }
+                    } else sorted.drop(1)
                     duplicates.forEach { toDeleteIds.add(it[ScoutingAssignments.id].value) }
                 }
             }
@@ -1673,7 +1776,8 @@ object ScoutingAssignmentService {
             scheduleOffsetSeconds = matchOffset,
             reminderMinutesBefore = runCatching { row.getOrNull(ScoutingAssignments.reminderMinutesBefore) }.getOrNull(),
             pushReminderSentAt = runCatching { row.getOrNull(ScoutingAssignments.pushReminderSentAt) }.getOrNull()?.toString(),
-            emailReminderSentAt = runCatching { row.getOrNull(ScoutingAssignments.emailReminderSentAt) }.getOrNull()?.toString()
+            emailReminderSentAt = runCatching { row.getOrNull(ScoutingAssignments.emailReminderSentAt) }.getOrNull()?.toString(),
+            scoutGroup = runCatching { row.getOrNull(ScoutingAssignments.scoutGroup) }.getOrNull()
         )
     }
 
@@ -1798,6 +1902,19 @@ object ScoutingAssignmentService {
                 .associate { Pair(it[ApiTeams.eventKey].trim().lowercase(), it[ApiTeams.teamNumber]) to (it[ApiTeams.nickname] ?: it[ApiTeams.name]) }
         } else emptyMap()
 
+        // Pit group rosters, so a scout's own list can show who they walk the pits with
+        val groupNames = rows.mapNotNull { runCatching { it.getOrNull(ScoutingAssignments.scoutGroup) }.getOrNull() }.distinct()
+        val groupRosters: Map<String, List<String>> = if (groupNames.isNotEmpty()) {
+            val groupRows = ScoutingAssignments.selectAll().where {
+                (ScoutingAssignments.assignmentType eq "PIT") and (ScoutingAssignments.scoutGroup inList groupNames)
+            }.toList()
+            val memberIds = groupRows.map { it[ScoutingAssignments.assignedUserId].value }.distinct()
+            val memberNames = Users.selectAll().where { Users.id inList memberIds }.associate { it[Users.id].value to it[Users.username] }
+            groupRows.groupBy { pitGroupRosterKey(it) }.mapValues { (_, members) ->
+                members.mapNotNull { memberNames[it[ScoutingAssignments.assignedUserId].value] }.distinct().sorted()
+            }
+        } else emptyMap()
+
         return rows.map { row ->
             val assignedUId = runCatching { row[ScoutingAssignments.assignedUserId].value }.getOrNull()
             val creatorUId = runCatching { row[ScoutingAssignments.createdByUserId]?.value }.getOrNull()
@@ -1839,7 +1956,9 @@ object ScoutingAssignmentService {
                 scheduleOffsetSeconds = offset,
                 reminderMinutesBefore = runCatching { row.getOrNull(ScoutingAssignments.reminderMinutesBefore) }.getOrNull(),
                 pushReminderSentAt = runCatching { row.getOrNull(ScoutingAssignments.pushReminderSentAt) }.getOrNull()?.toString(),
-                emailReminderSentAt = runCatching { row.getOrNull(ScoutingAssignments.emailReminderSentAt) }.getOrNull()?.toString()
+                emailReminderSentAt = runCatching { row.getOrNull(ScoutingAssignments.emailReminderSentAt) }.getOrNull()?.toString(),
+                scoutGroup = runCatching { row.getOrNull(ScoutingAssignments.scoutGroup) }.getOrNull(),
+                scoutGroupMembers = runCatching { groupRosters[pitGroupRosterKey(row)] }.getOrNull().orEmpty()
             )
         }.sortedWith(
             compareBy<ScoutingAssignmentRecord>(

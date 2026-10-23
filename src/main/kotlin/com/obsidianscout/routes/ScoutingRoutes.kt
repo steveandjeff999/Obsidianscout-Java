@@ -401,6 +401,15 @@ fun Route.scoutingRoutes() {
                     call.respond(ScoutingAssignmentService.autoResolveConflicts(session, request.eventKey))
                     com.obsidianscout.widgets.WidgetPushService.notifyTeam(session.teamNumber, session.program, "assignments")
                 }
+                get("/pit-groups") {
+                    val session = call.requireSession()
+                    call.respond(ScoutingAssignmentService.getPitGroups(session))
+                }
+                put("/pit-groups") {
+                    val session = call.requireAdmin()
+                    val request = call.receive<com.obsidianscout.scouting.SavePitGroupsRequest>()
+                    call.respond(ScoutingAssignmentService.savePitGroups(session, request.groups))
+                }
                 get("/{id}") {
                     val session = call.requireSession()
                     val id = call.parameters["id"] ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing assignment ID")
