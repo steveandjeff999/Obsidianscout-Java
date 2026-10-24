@@ -1,7 +1,7 @@
 
 
 
-const CACHE_NAME = 'obsidianscout-shell-v0-6-7-2';
+const CACHE_NAME = 'obsidianscout-shell-v0-6-7-3';
 
 
 const NAVIGATION_TIMEOUT_MS = 4000;
@@ -57,6 +57,7 @@ const ASSETS = [
     '/cache-manager',
     '/qual-data',
     '/users',
+    '/scouter-report',
     '/config',
     '/admin-settings',
     '/cluster-management',
@@ -187,6 +188,7 @@ const ASSETS = [
     '/js/cache-manager.js',
     '/js/qual-data.js',
     '/js/users.js',
+    '/js/scouter-report.js',
     '/js/assignments.js',
     '/js/my-assignments.js',
     '/js/settings.js',
@@ -236,13 +238,41 @@ const ASSETS = [
     '/i18n/he.json'
 ];
 
-function fetchWithTimeout(request, timeoutMs) {
-    return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Network timeout')), timeoutMs);
-        fetch(request)
-            .then((response) => resolve(response))
-            .catch((error) => reject(error))
-            .finally(() => clearTimeout(timeout));
+function cachedPage(request, url) {
+    return caches.match(request, { ignoreSearch: true })
+        .then((hit) => hit || caches.match(url.pathname, { ignoreSearch: true }));
+}
+
+function offlineFallbackPage() {
+    return caches.match('/', { ignoreSearch: true })
+        .then((root) => root || caches.match('/index.html', { ignoreSearch: true }))
+        .then((page) => page || new Response('Offline', { status: 503, statusText: 'Offline' }));
+}
+
+/**
+ * Network first, but a slow link doesn't hold the page hostage: after NAVIGATION_TIMEOUT_MS the cached copy is shown
+ * while the download carries on and refreshes the cache for next time. A page that isn't cached keeps waiting for the
+ * network instead of being swapped for the home page, and only an actual network failure falls back further.
+ */
+function navigationResponse(request, url) {
+    const network = fetch(request).then((response) => {
+        if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        }
+        return response;
+    });
+    const timedOut = new Promise((resolve) => setTimeout(() => resolve(null), NAVIGATION_TIMEOUT_MS));
+
+    return Promise.race([network.catch(() => null), timedOut]).then((first) => {
+        if (first) return first;
+        return cachedPage(request, url).then((cached) => {
+            if (cached) {
+                network.catch(() => {});
+                return cached;
+            }
+            return network.catch(() => offlineFallbackPage());
+        });
     });
 }
 
@@ -318,36 +348,7 @@ self.addEventListener('fetch', (event) => {
         url.pathname === '/' ||
         !url.pathname.includes('.')) {
 
-        event.respondWith(
-            fetchWithTimeout(event.request, NAVIGATION_TIMEOUT_MS)
-                .then((networkResponse) => {
-                    if (networkResponse && networkResponse.status === 200) {
-                        const responseClone = networkResponse.clone();
-                        caches.open(CACHE_NAME).then((cache) => {
-                            cache.put(event.request, responseClone);
-                        });
-                    }
-                    return networkResponse;
-                })
-                .catch(() => {
-                    // Fallback to exact cached request if offline or timed out
-                    return caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
-                        if (cachedResponse) {
-                            return cachedResponse;
-                        }
-                        // Fallback to pathname match
-                        return caches.match(url.pathname, { ignoreSearch: true }).then((pathResponse) => {
-                            if (pathResponse) {
-                                return pathResponse;
-                            }
-                            // Fallback to root / index page if specific page not cached
-                            return caches.match('/', { ignoreSearch: true }).then((rootResponse) => {
-                                return rootResponse || caches.match('/index.html', { ignoreSearch: true });
-                            });
-                        });
-                    });
-                })
-        );
+        event.respondWith(navigationResponse(event.request, url));
         return;
     }
 

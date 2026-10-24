@@ -107,6 +107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         { id: "contact", label: "Contact" },
         { id: "admin-settings", label: "Admin Settings" },
         { id: "users", label: "Users" },
+        { id: "scouter-report", label: "Scouter Report" },
         { id: "banners", label: "Banners" }
     ];
 
@@ -122,7 +123,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         configurablePages.forEach((page) => {
             // Determine checkbox states for Scout
-            const isScoutDisabled = page.id === "dashboard" || page.id === "my-assignments" || ["admin-settings", "users", "banners", "assignments"].includes(page.id);
+            const isScoutDisabled = page.id === "dashboard" || page.id === "my-assignments" || ["admin-settings", "users", "scouter-report", "banners", "assignments"].includes(page.id);
             const isScoutChecked = (page.id === "dashboard" || page.id === "my-assignments") ? true : scoutPages.includes(page.id) && !isScoutDisabled;
 
             // Scout Checkbox
@@ -143,7 +144,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             scoutList.appendChild(scoutLabel);
 
             // Determine checkbox states for Analytics
-            const isAnalyticsDisabled = page.id === "dashboard" || page.id === "my-assignments" || ["admin-settings", "users", "banners", "assignments"].includes(page.id);
+            const isAnalyticsDisabled = page.id === "dashboard" || page.id === "my-assignments" || ["admin-settings", "users", "scouter-report", "banners", "assignments"].includes(page.id);
             const isAnalyticsChecked = (page.id === "dashboard" || page.id === "my-assignments") ? true : analyticsPages.includes(page.id) && !isAnalyticsDisabled;
 
             // Analytics Checkbox

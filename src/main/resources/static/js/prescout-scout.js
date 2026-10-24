@@ -337,6 +337,7 @@ async function initPrescoutScout(me) {
             try {
                 const response = await Obsidianscout.request("/api/prescout/scouting", {
                     method: "POST",
+                    queueable: true,
                     json: {
                         data: payload
                     }
@@ -380,7 +381,7 @@ async function initPrescoutScout(me) {
                 clearFormFields(fields, form);
                 updatePointsPreview(fields, form, pointsPreview);
             } catch (error) {
-                if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                if (Obsidianscout.isNetworkError(error)) {
                     const createdAt = new Date().toISOString();
                     const pending = [];
                     pending.push({

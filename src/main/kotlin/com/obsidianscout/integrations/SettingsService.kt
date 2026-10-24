@@ -85,7 +85,7 @@ val DEFAULT_ANALYTICS_PAGES = listOf(
 )
 
 val DEFAULT_ADMIN_PAGES = listOf(
-    "dashboard", "my-assignments", "assignments", "admin-settings", "users", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
+    "dashboard", "my-assignments", "assignments", "admin-settings", "users", "scouter-report", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "events", "teams", "rankings", "projected-rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "pick-list", "match-planning", "chat", "backup", "docs", "contact", "scout-history"
@@ -98,7 +98,8 @@ val DEFAULT_ADMIN_PAGES = listOf(
  */
 private val PAGES_ADDED_BY_VERSION: List<Pair<Int, List<Pair<String, Set<String>>>>> = listOf(
     1 to listOf("projected-rankings" to setOf("ANALYTICS", "ADMIN")),
-    2 to listOf("pick-list" to setOf("ANALYTICS", "ADMIN"))
+    2 to listOf("pick-list" to setOf("ANALYTICS", "ADMIN")),
+    3 to listOf("scouter-report" to setOf("ADMIN"))
 )
 
 val CURRENT_PAGE_DEFAULTS_VERSION: Int = PAGES_ADDED_BY_VERSION.maxOf { it.first }

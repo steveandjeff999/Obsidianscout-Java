@@ -901,6 +901,7 @@ async function loadQualScoutPageData(me) {
                 try {
                     const response = await Obsidianscout.request("/api/qual-scouting", {
                         method: "POST",
+                        queueable: true,
                         json: {
                             data: payload
                         }
@@ -944,7 +945,7 @@ async function loadQualScoutPageData(me) {
                     window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
                     await advanceAfterSave(teamSelection(payload));
                 } catch (error) {
-                    if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                    if (Obsidianscout.isNetworkError(error)) {
                         const pending = [];
                         pending.push({
                             data: payload,
@@ -1005,6 +1006,7 @@ async function loadQualScoutPageData(me) {
                 try {
                     const response = await Obsidianscout.request("/api/qual-scouting/batch", {
                         method: "POST",
+                        queueable: true,
                         json: { entries: entriesToSave }
                     });
                     Obsidianscout.showSaveResult("server", `${entriesToSave.length} teams`);
@@ -1044,7 +1046,7 @@ async function loadQualScoutPageData(me) {
                     window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
                     await advanceAfterSave(allianceSelection());
                 } catch (error) {
-                    if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                    if (Obsidianscout.isNetworkError(error)) {
                         const pending = [];
                         entriesToSave.forEach(payload => {
                             pending.push({

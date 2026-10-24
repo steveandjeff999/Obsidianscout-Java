@@ -533,7 +533,7 @@ function renderEntryDetail(state, ui, entry) {
         ["Team", String(entry.targetTeamNumber ?? "--")],
         ["Match", entry.matchKey || "--"],
         ["Match number", String(entry.matchNumber ?? "--")],
-        ["Owner team", String(entry.ownerTeamNumber ?? "--")],
+        ["Scouted by", Obsidianscout.formatScouter(entry)],
         ["Updated", formatTimestamp(entry.createdAt)],
         ["State", entry.pending ? "Pending" : "Synced"]
     ];

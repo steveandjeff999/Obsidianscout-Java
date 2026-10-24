@@ -427,7 +427,7 @@ function renderTableAndDetail(state) {
         const formattedNum = teamObj ? Obsidianscout.formatTeam(teamObj.teamKey, teamObj.teamNumber) : row.targetTeamNumber;
         const teamLabel = name ? `${formattedNum} ${name}` : `${formattedNum}`;
         const matchLabel = getMatchLabel(row.matchKey, row.matchNumber);
-        const scouterName = (row.data && (row.data.username || row.data.scouter || row.data.scout_name)) || (row.ownerTeamNumber ? `Team ${row.ownerTeamNumber}` : "Scout");
+        const scouterName = Obsidianscout.formatScouter(row);
 
         // Team cell
         const tdTeam = document.createElement("td");
@@ -488,7 +488,7 @@ function renderDetail(state, entry) {
     const matchLabel = getMatchLabel(entry.matchKey, entry.matchNumber);
 
     title.textContent = `${matchLabel}: ${teamLabel}`;
-    status.textContent = `Scouter Team: ${entry.ownerTeamNumber}`;
+    status.textContent = `Scouted by ${Obsidianscout.formatScouter(entry)}`;
 
     if (entry.hasDiscrepancy) {
         const warnBanner = document.createElement("div");
@@ -543,7 +543,7 @@ function renderDetail(state, entry) {
     metaGroup.appendChild(metaTitle);
 
     metaGroup.appendChild(buildDetailItem("Event", entry.eventKey || "N/A"));
-    metaGroup.appendChild(buildDetailItem("Scouter Team", String(entry.ownerTeamNumber)));
+    metaGroup.appendChild(buildDetailItem("Scouted by", Obsidianscout.formatScouter(entry)));
     metaGroup.appendChild(buildDetailItem("Match", matchLabel));
     metaGroup.appendChild(buildDetailItem("Total Score", `${entry.totalScore} pts`));
     if (entry.completenessPct != null) {
@@ -729,14 +729,14 @@ function summarizeFilterStatus(state, count) {
 
 function exportCsv(state) {
     const rows = getFilteredAndSortedRows(state);
-    const header = ["Team Number", "Team Name", "Match Number", "Total Score", "Scouter Team", "Updated At", "Details"];
+    const header = ["Team Number", "Team Name", "Match Number", "Total Score", "Scouted By", "Updated At", "Details"];
     const csvRows = [header];
 
     rows.forEach(row => {
         const teamObj = state.teamsByNumber.get(row.targetTeamNumber) || null;
         const teamName = teamObj ? (teamObj.nickname || teamObj.name || "") : "";
         const matchNum = row.matchNumber !== null ? String(row.matchNumber) : "N/A";
-        const scouter = row.ownerTeamNumber;
+        const scouter = Obsidianscout.formatScouter(row);
         const score = row.totalScore;
         const updatedAt = formatDateTime(row.createdAt);
 

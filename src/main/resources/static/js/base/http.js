@@ -135,6 +135,36 @@ export function getCsrfToken() {
     return null;
 }
 
+/**
+ * True when a request failed because the server couldn't be reached in time (no connection, stalled transfer, or a
+ * proxy saying the server is down), as opposed to the server refusing it. Saves that fail this way belong in the
+ * offline queue; the server ignores an identical entry sent twice.
+ */
+export function isNetworkError(error) {
+    if (!error) return false;
+    if (error.network) return true;
+    if (error.status) return false;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+    const message = String(error.message || "");
+    return error.name === "TypeError" || /failed to fetch|networkerror|load failed|network request failed/i.test(message);
+}
+
+function networkError(message, cause) {
+    const err = new Error(message);
+    err.network = true;
+    if (cause) err.cause = cause;
+    return err;
+}
+
+function serverKnownOffline() {
+    try {
+        return typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.isServerOnline === 'function' &&
+            !window.Obsidianscout.isServerOnline();
+    } catch (e) {
+        return false;
+    }
+}
+
 export function safeParse(text) {
     try {
         return JSON.parse(text);
@@ -322,6 +352,13 @@ export async function request(path, options = {}) {
         }
     }
 
+    // Saves that can wait in the offline queue skip the network when the server is known to be unreachable, or the
+    // link is too slow to wait on, instead of holding the scout on a spinner. The queue uploads them in the background.
+    if (method !== "GET" && options.queueable && (serverKnownOffline() || isLowBandwidth())) {
+        if (options.button) setButtonLoading(options.button, false);
+        throw networkError(serverKnownOffline() ? "Server unreachable" : "Slow connection");
+    }
+
     if (method === "GET" && !navigator.onLine) {
         const cached = await getHttpCache(path);
         if (cached && cached.text !== null) {
@@ -464,6 +501,8 @@ export async function request(path, options = {}) {
             const message = data && data.error ? data.error : "Request failed";
             const err = new Error(message);
             err.status = response.status;
+            // Bad gateway / unavailable / gateway timeout: the request most likely never reached the app.
+            if (response.status >= 502 && response.status <= 504) err.network = true;
             throw err;
         }
 
@@ -568,7 +607,9 @@ export async function request(path, options = {}) {
 
         return data;
     } catch (error) {
-        if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.setServerOnline === 'function') {
+        // Only a failure to reach the server says anything about the connection; a 400 or 403 doesn't.
+        const unreachable = !(options.signal && options.signal.aborted) && (isNetworkError(error) || (error && error.name === "AbortError"));
+        if (unreachable && typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.setServerOnline === 'function') {
             window.Obsidianscout.setServerOnline(false);
         }
 
@@ -585,8 +626,9 @@ export async function request(path, options = {}) {
             if (options.signal && options.signal.aborted) {
                 throw error;
             }
-            throw new Error("Request timed out. Try refreshing this page.");
+            throw networkError("Request timed out. Try refreshing this page.", error);
         }
+        if (isNetworkError(error)) error.network = true;
         throw error;
     } finally {
         if (options.button) {

@@ -34,6 +34,16 @@ import {
     isScoutingDataPath,
     canRoleCacheScouting
 } from './base/http.js';
+// Namespace imports for the newest exports: right after a deploy the previous service worker can still hand out the
+// previous copy of these unversioned modules, and a missing named export would stop every page from loading.
+import * as httpModule from './base/http.js';
+import * as offlineSyncModule from './services/offline-sync.js';
+
+const isNetworkError = httpModule.isNetworkError || ((error) => {
+    if (!error || error.status) return false;
+    return !navigator.onLine || /failed to fetch|networkerror|timed out/i.test(String(error.message || ""));
+});
+const startAutoUpload = offlineSyncModule.startAutoUpload || (() => {});
 
 import {
     ROLE_HIERARCHY,
@@ -244,6 +254,7 @@ import {
     resolveEventKey,
     getEventTimezone,
     formatTeam,
+    formatScouter,
     showLoadingSpinner,
     showRetryButton,
     getProgram,
@@ -294,6 +305,7 @@ window.Obsidianscout = {
     getProgram,
     getProgramPrefix,
     request,
+    isNetworkError,
     getCachedData,
     getMe,
     checkLoginStatus,
@@ -364,6 +376,7 @@ window.Obsidianscout = {
     setLanguage,
     localize,
     formatTeam,
+    formatScouter,
     safeGetItem,
     safeSetItem,
     safeRemoveItem,
@@ -431,6 +444,7 @@ export {
     getProgram,
     getProgramPrefix,
     request,
+    isNetworkError,
     getCachedData,
     getMe,
     checkLoginStatus,
@@ -469,6 +483,7 @@ export {
     setLanguage,
     localize,
     formatTeam,
+    formatScouter,
     safeGetItem,
     safeSetItem,
     safeRemoveItem,
@@ -741,6 +756,7 @@ async function onDOMContentLoaded() {
     injectMobileTopBar();
     startConnectionMonitoring();
     initSyncStatusBanner();
+    startAutoUpload();
 
     window.addEventListener("online", async () => {
         if ('serviceWorker' in navigator) {

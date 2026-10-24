@@ -284,6 +284,7 @@ async function initPrescoutQual(me) {
             try {
                 const response = await Obsidianscout.request("/api/prescout/qual-scouting", {
                     method: "POST",
+                    queueable: true,
                     json: {
                         data: payload
                     }
@@ -325,7 +326,7 @@ async function initPrescoutQual(me) {
                 }
                 clearFormFields(fields, form);
             } catch (error) {
-                if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                if (Obsidianscout.isNetworkError(error)) {
                     const createdAt = new Date().toISOString();
                     const pending = [];
                     pending.push({

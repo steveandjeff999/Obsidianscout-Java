@@ -368,6 +368,7 @@ async function loadPitScoutPageData(me) {
             try {
                 const response = await Obsidianscout.request("/api/pit-scouting", {
                     method: "POST",
+                    queueable: true,
                     json: {
                         data: payload
                     }
@@ -406,7 +407,7 @@ async function loadPitScoutPageData(me) {
                 }
                 await advanceAfterSave(payload);
             } catch (error) {
-                if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                if (Obsidianscout.isNetworkError(error)) {
                     const createdAt = new Date().toISOString();
                     const pending = [];
                     pending.push({

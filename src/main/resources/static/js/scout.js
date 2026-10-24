@@ -680,6 +680,7 @@ async function loadScoutPageData(me) {
             try {
                 const response = await Obsidianscout.request("/api/scouting", {
                     method: "POST",
+                    queueable: true,
                     json: {
                         data: payload
                     }
@@ -720,7 +721,7 @@ async function loadScoutPageData(me) {
                 }
                 await advanceAfterSave(payload);
             } catch (error) {
-                if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+                if (Obsidianscout.isNetworkError(error)) {
                     const createdAt = new Date().toISOString();
                     const pending = [];
                     pending.push({

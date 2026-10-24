@@ -212,6 +212,7 @@ fun Route.staticWebRoutes() {
             "assignments" to "assignments.html",
             "my-assignments" to "my-assignments.html",
             "users" to "users.html",
+            "scouter-report" to "scouter-report.html",
             "config" to "config.html",
             "admin-settings" to "admin-settings.html",
             "cluster-management" to "cluster-management.html",

@@ -224,3 +224,50 @@ test("rejected entries are retried and discarded by id", () => {
     assert.equal(offline.getFailedEntries().length, 0);
     assert.deepEqual(offline.readPendingQueue("pending_scouting_entries").map((i) => i.clientId), ["f2"]);
 });
+
+// ── Saves that time out or can't reach the server go to the offline queue ────
+
+const http = await import(js("base/http.js"));
+
+test("network failures are told apart from server refusals", () => {
+    assert.equal(http.isNetworkError(new TypeError("Failed to fetch")), true);
+    assert.equal(http.isNetworkError(Object.assign(new Error("Request timed out. Try refreshing this page."), { network: true })), true);
+    assert.equal(http.isNetworkError(Object.assign(new Error("Bad gateway"), { status: 502, network: true })), true);
+    assert.equal(http.isNetworkError(Object.assign(new Error("Missing required fields: auto"), { status: 400 })), false);
+    assert.equal(http.isNetworkError(Object.assign(new Error("Forbidden"), { status: 403 })), false);
+    assert.equal(http.isNetworkError(null), false);
+});
+
+test("a queueable save on a slow link is handed to the queue without touching the network", async () => {
+    localStorage.clear();
+    const realFetch = globalThis.fetch;
+    let fetched = 0;
+    globalThis.fetch = async () => { fetched++; throw new Error("should not be called"); };
+    netQuality.setLowBandwidthMode("on");
+    try {
+        await assert.rejects(
+            http.request("/api/scouting", { method: "POST", queueable: true, json: { data: { a: 1 } } }),
+            (err) => http.isNetworkError(err)
+        );
+        assert.equal(fetched, 0);
+    } finally {
+        netQuality.setLowBandwidthMode("auto");
+        globalThis.fetch = realFetch;
+    }
+});
+
+test("a stalled save is reported as a network error, not a plain failure", async () => {
+    localStorage.clear();
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (url, init) => new Promise((_, reject) => {
+        init.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+    });
+    try {
+        await assert.rejects(
+            http.request("/api/scouting", { method: "POST", json: { data: { a: 1 } }, timeoutMs: 30 }),
+            (err) => http.isNetworkError(err) && !err.status
+        );
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+});

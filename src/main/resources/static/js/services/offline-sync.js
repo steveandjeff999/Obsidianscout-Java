@@ -388,7 +388,7 @@ async function runSync() {
                 });
                 removePendingItem(config.key, item.clientId);
                 rejectedCount++;
-            } else if (status === 401 || !status) {
+            } else if (status === 401 || !status || error.network) {
                 // Logged out or the connection dropped: stop and keep everything for the next attempt.
                 setSyncProgress({ done: i + 1, total: work.length });
                 break;
@@ -405,6 +405,64 @@ async function runSync() {
     }
     if (rejectedCount > 0) {
         showToast(`${rejectedCount} saved ${rejectedCount === 1 ? "entry was" : "entries were"} rejected by the server. Review them in Cache Manager.`, "error");
+    }
+}
+
+/*
+ * Automatic upload. Saved entries go up as soon as the server is reachable again (the browser's own "online" event
+ * rarely fires at events, where the Wi-Fi stays connected but the server drops out), shortly after each save, and on
+ * a backing-off timer while anything is still waiting, so a scout who stays on one page never has to press Sync.
+ */
+const AUTO_RETRY_SECONDS = [15, 30, 60, 120, 300];
+let _autoTimer = null;
+let _autoStep = 0;
+let _autoStarted = false;
+
+function autoUploadAllowed() {
+    // Cache Manager lets the user review entries before they go up.
+    return !(typeof document !== 'undefined' && document.body && document.body.dataset.page === "cache-manager");
+}
+
+function scheduleAutoUpload(delayMs) {
+    if (_autoTimer) clearTimeout(_autoTimer);
+    _autoTimer = setTimeout(async () => {
+        _autoTimer = null;
+        if (!autoUploadAllowed()) return;
+        const before = getPendingSummary().total;
+        if (before === 0) {
+            _autoStep = 0;
+            return;
+        }
+        try {
+            await syncOfflineEntries();
+        } catch (e) {
+            console.warn("[Offline Sync] Automatic upload failed:", e);
+        }
+        const after = getPendingSummary().total;
+        if (after === 0) {
+            _autoStep = 0;
+            return;
+        }
+        _autoStep = after < before ? 0 : _autoStep + 1;
+        scheduleAutoUpload(AUTO_RETRY_SECONDS[Math.min(_autoStep, AUTO_RETRY_SECONDS.length - 1)] * 1000);
+    }, delayMs);
+}
+
+export function startAutoUpload() {
+    if (_autoStarted || typeof window === 'undefined') return;
+    _autoStarted = true;
+    window.addEventListener("obsidianscout:connection-changed", (e) => {
+        if (e.detail && e.detail.online) {
+            _autoStep = 0;
+            scheduleAutoUpload(1000);
+        }
+    });
+    window.addEventListener(ENTRY_QUEUED_EVENT, () => {
+        _autoStep = 0;
+        scheduleAutoUpload(2000);
+    });
+    if (getPendingSummary().total > 0) {
+        scheduleAutoUpload(AUTO_RETRY_SECONDS[0] * 1000);
     }
 }
 

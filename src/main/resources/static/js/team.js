@@ -543,7 +543,7 @@ function renderQualFeedback(qualEntries) {
     container.innerHTML = qualEntries.map(e => {
         const d = e.data || {};
         const matchLabel = e.matchNumber ? `Match ${e.matchNumber}` : "General Observation";
-        const scouterName = e.username || (d && (d.username || d.scouter || d.scout_name)) || (e.ownerTeamNumber ? `Team ${e.ownerTeamNumber}` : "Scout");
+        const scouterName = Obsidianscout.formatScouter(e);
         const dateStr = formatDateTime(e.createdAt);
         
         let notes = d.notes || d.comments || d.driver_skill || d.defense || "";
@@ -756,7 +756,7 @@ function renderScoutingRecords() {
         const matchLabel = entry.matchNumber !== null ? getMatchLabel(entry.matchKey, entry.matchNumber) : "";
         const metaText = entry.type === "Pit" ? "Pit Scouting" : `${matchLabel} (${entry.type})`;
         const recordTypeClass = entry.type.toLowerCase().substring(0, 4);
-        const scouterName = entry.username || (entry.data && (entry.data.username || entry.data.scouter || entry.data.scout_name)) || (entry.ownerTeamNumber ? `Team ${entry.ownerTeamNumber}` : "Scout");
+        const scouterName = Obsidianscout.formatScouter(entry);
 
         card.innerHTML = `
             <div class="record-card-header">

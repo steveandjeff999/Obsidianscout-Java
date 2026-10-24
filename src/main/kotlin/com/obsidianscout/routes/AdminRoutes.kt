@@ -551,6 +551,41 @@ fun Route.adminRoutes() {
                     }
                 }
 
+                get("/scouter-report/options") {
+                    val session = call.requireAdmin()
+                    val teamNumber = scouterReportTeam(session, call.request.queryParameters["teamNumber"])
+                    call.respond(com.obsidianscout.scouting.ScouterReportService.listOptions(teamNumber, session.program))
+                }
+
+                get("/scouter-report") {
+                    val session = call.requireAdmin()
+                    val params = call.request.queryParameters
+                    val teamNumber = scouterReportTeam(session, params["teamNumber"])
+                    val eventKey = params["eventKey"]?.trim()?.takeIf { it.isNotEmpty() }
+                    val year = params["year"]?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                        it.toIntOrNull() ?: throw ApiException(HttpStatusCode.BadRequest, "Invalid year")
+                    }
+                    val includePrescout = params["includePrescout"] == "true"
+                    val report = com.obsidianscout.scouting.ScouterReportService.buildReport(
+                        teamNumber, session.program, eventKey, year, includePrescout
+                    )
+                    when (params["format"] ?: "json") {
+                        "json" -> call.respond(report)
+                        "csv" -> {
+                            val byEvent = params["detail"] == "events"
+                            val csv = if (byEvent) com.obsidianscout.scouting.ScouterReportService.toByEventCsv(report)
+                                else com.obsidianscout.scouting.ScouterReportService.toSummaryCsv(report)
+                            val scopeLabel = report.eventKey ?: report.year?.toString() ?: "all-time"
+                            val safeScope = scopeLabel.replace(Regex("[^A-Za-z0-9_-]"), "")
+                            val filename = "team_${teamNumber}_scouters_${safeScope}${if (byEvent) "_by_event" else ""}.csv"
+                            call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"$filename\"")
+                            // BOM so Excel opens the file as UTF-8 (usernames can contain non-ASCII characters).
+                            call.respondText("﻿" + csv, ContentType.Text.CSV.withParameter("charset", "utf-8"))
+                        }
+                        else -> throw ApiException(HttpStatusCode.BadRequest, "Unsupported format")
+                    }
+                }
+
                 post("/import") {
                     val session = call.requireAdmin()
                     val requestedScope = call.request.queryParameters["scope"] ?: "team"
@@ -1220,4 +1255,9 @@ fun Route.adminRoutes() {
                     put("message", "Bug report received. Thank you!")
                 })
             }
+}
+/** Admins report on their own team; superadmins may pick any team with `?teamNumber=`. */
+private fun scouterReportTeam(session: UserSession, requested: String?): Int {
+    val team = requested?.trim()?.takeIf { it.isNotEmpty() }?.toIntOrNull()
+    return if (team != null && session.role == UserRole.SUPERADMIN) team else session.teamNumber
 }

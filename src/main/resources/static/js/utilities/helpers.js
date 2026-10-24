@@ -142,6 +142,21 @@ export function formatTimestampWithVenueTooltip(epochSeconds, eventTimezone, pre
     return wrapper;
 }
 
+/**
+ * Label for who scouted an entry: "username (Team 1234)", falling back to
+ * whichever half is known.
+ */
+export function formatScouter(entry) {
+    if (!entry) return "--";
+    const d = entry.data || {};
+    const name = entry.username || d.username || d.scouter || d.scout_name || entry.scoutName || null;
+    const team = entry.ownerTeamNumber ?? null;
+    if (name && team !== null) return `${name} (Team ${team})`;
+    if (name) return String(name);
+    if (team !== null) return `Team ${team}`;
+    return "--";
+}
+
 export function formatTeam(teamKey, teamNumber) {
     if (!teamKey) {
         return teamNumber !== undefined && teamNumber !== null ? String(teamNumber) : "";

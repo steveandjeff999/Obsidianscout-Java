@@ -244,7 +244,7 @@ export function adjustNavForRole(user) {
 
     // Hide Admin-only links for SCOUT and ANALYTICS
     if (!isAdmin(role)) {
-        ["users", "assignments", "banners", "admin-settings", "default-configs"].forEach((page) => {
+        ["users", "scouter-report", "assignments", "banners", "admin-settings", "default-configs"].forEach((page) => {
             document.querySelectorAll(`.sidebar-link[data-page="${page}"]`).forEach((link) => {
                 link.dataset.roleHidden = "true";
                 link.style.display = "none";

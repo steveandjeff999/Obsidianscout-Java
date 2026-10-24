@@ -7,6 +7,18 @@
 import { safeGetItem, safeSetItem } from '../base/storage.js';
 import { t } from '../base/i18n.js';
 import { CACHE_CONFIGS, readPendingQueue } from '../services/offline-sync.js';
+import { isLowBandwidth } from '../base/net-quality.js';
+
+/** A slow event link can take longer than this for one round trip; give the probe room before calling it down. */
+const PROBE_TIMEOUT_MS = 3500;
+const LOW_BW_PROBE_TIMEOUT_MS = 12000;
+/** Probe less often on a slow link: each one competes with real uploads. */
+const PROBE_INTERVAL_MS = 6000;
+const LOW_BW_PROBE_INTERVAL_MS = 20000;
+const HIDDEN_PROBE_INTERVAL_MS = 20000;
+/** An online page goes offline only after this many probes in a row fail (one lost packet isn't an outage). */
+const PROBE_FAILURES_TO_OFFLINE = 2;
+let _probeFailures = 0;
 
 let _serverOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 let _isProbing = false;
@@ -41,7 +53,17 @@ export async function checkServerConnection({ force = false } = {}) {
 
     _isProbing = true;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), isLowBandwidth() ? LOW_BW_PROBE_TIMEOUT_MS : PROBE_TIMEOUT_MS);
+    const probeFailed = () => {
+        _probeFailures++;
+        if (!_serverOnline || _probeFailures >= PROBE_FAILURES_TO_OFFLINE) {
+            setServerOnline(false);
+            return false;
+        }
+        // Still shown online; check again shortly instead of waiting a full interval.
+        setTimeout(() => checkServerConnection(), 2000);
+        return false;
+    };
 
     try {
         const res = await fetch("/api/version", {
@@ -72,17 +94,16 @@ export async function checkServerConnection({ force = false } = {}) {
             } catch (jsonErr) {
                 // Response was OK even if JSON parsing failed
             }
+            _probeFailures = 0;
             setServerOnline(true);
             return true;
         } else {
             // 502/503/504 or server error response
-            setServerOnline(false);
-            return false;
+            return probeFailed();
         }
     } catch (e) {
         clearTimeout(timeoutId);
-        setServerOnline(false);
-        return false;
+        return probeFailed();
     } finally {
         _isProbing = false;
     }
@@ -94,7 +115,7 @@ export function startConnectionMonitoring() {
 
     const scheduleNextProbe = () => {
         if (_probeTimer) clearTimeout(_probeTimer);
-        const interval = document.hidden ? 20000 : 6000;
+        const interval = document.hidden ? HIDDEN_PROBE_INTERVAL_MS : (isLowBandwidth() ? LOW_BW_PROBE_INTERVAL_MS : PROBE_INTERVAL_MS);
         _probeTimer = setTimeout(async () => {
             await checkServerConnection();
             scheduleNextProbe();

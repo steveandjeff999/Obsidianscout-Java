@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Scouter Report</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <style>
+        .report-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: flex-end;
+            margin-top: 16px;
+        }
+
+        .report-filters .field {
+            margin-top: 0;
+            min-width: 170px;
+        }
+
+        .report-checks {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            margin-top: 14px;
+        }
+
+        .report-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            font-size: 0.9rem;
+        }
+
+        .report-kpis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+            gap: 14px;
+            margin-top: 18px;
+        }
+
+        .report-kpi {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--card-radius, var(--radius));
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .report-kpi-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .report-kpi-value {
+            font-size: 1.6rem;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+
+        .report-kpi-sub {
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        #scouter-table th.sortable {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        #scouter-table th.sortable::after {
+            content: "";
+            display: inline-block;
+            width: 0;
+            height: 0;
+            margin-left: 6px;
+            vertical-align: middle;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            opacity: 0.25;
+            border-top: 5px solid currentColor;
+        }
+
+        #scouter-table th.sorted-asc::after {
+            opacity: 1;
+            border-top: 0;
+            border-bottom: 5px solid currentColor;
+        }
+
+        #scouter-table th.sorted-desc::after {
+            opacity: 1;
+        }
+
+        #scouter-table td.num,
+        #scouter-table th.num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #scouter-table tr.scouter-row.expandable {
+            cursor: pointer;
+        }
+
+        #scouter-table tr.scouter-row.inactive td {
+            color: var(--muted);
+        }
+
+        #scouter-table tr.event-breakdown td {
+            background: var(--surface-2, transparent);
+            padding-top: 4px;
+            padding-bottom: 12px;
+        }
+
+        .breakdown-table {
+            width: auto;
+            min-width: min(460px, 100%);
+            font-size: 0.85rem;
+            position: sticky;
+            left: 0;
+        }
+
+        .breakdown-table th,
+        .breakdown-table td {
+            padding: 4px 8px;
+        }
+
+        .rate-bar {
+            display: inline-block;
+            width: 48px;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--border);
+            margin-right: 6px;
+            vertical-align: middle;
+            overflow: hidden;
+        }
+
+        .rate-bar > span {
+            display: block;
+            height: 100%;
+            background: var(--accent);
+        }
+
+        .report-meta {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-top: 10px;
+        }
+
+        .print-only {
+            display: none;
+        }
+
+        @media print {
+            .sidebar,
+            .orb,
+            .no-print {
+                display: none !important;
+            }
+
+            .print-only {
+                display: block;
+            }
+
+            .main-content {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .card {
+                box-shadow: none !important;
+                border: 0 !important;
+            }
+
+            .table-scroll {
+                overflow: visible !important;
+            }
+        }
+    </style>
+</head>
+<body data-page="scouter-report">
+    <script>
+        document.addEventListener("submit", function(e) { e.preventDefault(); }, true);
+    </script>
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div id="admin-locked" class="card hidden">
+                <h2 data-i18n="scouter-report.admin_only">Admin only</h2>
+                <p class="notice" data-i18n="scouter-report.admin_only_notice">You need admin access to view scouter reports.</p>
+            </div>
+
+            <div id="report-panel" class="card">
+                <h1 data-i18n="scouter-report.title">Scouter Report</h1>
+                <p class="notice" data-i18n="scouter-report.notice">See how much each scout contributed for an event or a whole season, then export it.</p>
+                <h2 class="print-only" id="print-heading"></h2>
+
+                <div class="report-filters no-print">
+                    <div class="field">
+                        <label for="scope-select" data-i18n="scouter-report.scope">Report For</label>
+                        <select id="scope-select" class="select-wide">
+                            <option value="event" data-i18n="scouter-report.scope_event">One event</option>
+                            <option value="year" data-i18n="scouter-report.scope_year">Whole season</option>
+                            <option value="all" data-i18n="scouter-report.scope_all">All time</option>
+                        </select>
+                    </div>
+                    <div class="field" id="event-field" style="min-width: 260px; flex: 1;">
+                        <label for="event-select" data-i18n="scouter-report.event">Event</label>
+                        <select id="event-select" class="select-wide"></select>
+                    </div>
+                    <div class="field hidden" id="year-field">
+                        <label for="year-select" data-i18n="scouter-report.season">Season</label>
+                        <select id="year-select" class="select-wide"></select>
+                    </div>
+                    <div class="field" style="min-width: 200px; flex: 1;">
+                        <label for="search-input" data-i18n="scouter-report.search">Search Scouts</label>
+                        <input type="text" id="search-input" placeholder="Name or role" data-i18n-placeholder="scouter-report.search_placeholder" />
+                    </div>
+                </div>
+
+                <div class="report-checks no-print">
+                    <label class="report-check">
+                        <input type="checkbox" id="include-prescout" />
+                        <span data-i18n="scouter-report.include_prescout">Include prescout entries</span>
+                    </label>
+                    <label class="report-check">
+                        <input type="checkbox" id="hide-inactive" checked />
+                        <span data-i18n="scouter-report.hide_inactive">Hide users with no activity</span>
+                    </label>
+                </div>
+
+                <div class="row gap-12 wrap mt-20 no-print">
+                    <button class="btn" id="export-summary" type="button" data-i18n="scouter-report.export_summary">Export CSV</button>
+                    <button class="btn secondary" id="export-by-event" type="button" data-i18n="scouter-report.export_by_event">Export CSV by Event</button>
+                    <button class="btn ghost" id="print-report" type="button" data-i18n="scouter-report.print">Print / Save PDF</button>
+                </div>
+
+                <div class="report-kpis" id="report-kpis"></div>
+                <div class="report-meta" id="report-meta"></div>
+            </div>
+
+            <div class="card mt-20" id="table-card">
+                <div class="table-scroll">
+                    <table class="table" id="scouter-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="username" data-i18n="scouter-report.col_scout">Scout</th>
+                                <th class="sortable" data-sort="role" data-i18n="scouter-report.col_role">Role</th>
+                                <th class="sortable num" data-sort="matchesScouted" title="Distinct matches with at least one match entry" data-i18n="scouter-report.col_matches">Matches</th>
+                                <th class="sortable num" data-sort="pitEntries" data-i18n="scouter-report.col_pit">Pit</th>
+                                <th class="sortable num" data-sort="qualEntries" data-i18n="scouter-report.col_qual">Qual</th>
+                                <th class="sortable num" data-sort="totalEntries" data-i18n="scouter-report.col_total">Total</th>
+                                <th class="sortable num" data-sort="eventsScouted" data-i18n="scouter-report.col_events">Events</th>
+                                <th class="sortable num" data-sort="teamsScouted" data-i18n="scouter-report.col_teams">Teams</th>
+                                <th class="sortable num" data-sort="avgCompletenessPct" data-i18n="scouter-report.col_completeness">Avg Complete</th>
+                                <th class="sortable num" data-sort="discrepancyEntries" title="Entries flagged as disagreeing with another scout" data-i18n="scouter-report.col_discrepancies">Discrepancies</th>
+                                <th class="sortable num" data-sort="assignmentCompletionPct" data-i18n="scouter-report.col_assignments">Assignments Done</th>
+                                <th class="sortable" data-sort="lastSubmission" data-i18n="scouter-report.col_last">Last Entry</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <p class="notice hidden" id="empty-state" data-i18n="scouter-report.empty">No scouting activity for this selection.</p>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/scouter-report.js"></script>
+</body>
+</html>

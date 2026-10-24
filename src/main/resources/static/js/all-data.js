@@ -542,7 +542,7 @@ function renderDetail(state, entry) {
     const teamLabel = name ? `${formattedNum} ${name}` : `${formattedNum}`;
 
     title.textContent = `${entry.type} Entry: ${teamLabel}`;
-    status.textContent = `Scouter Team: ${entry.ownerTeamNumber}`;
+    status.textContent = `Scouted by ${Obsidianscout.formatScouter(entry)}`;
 
     if (entry.hasDiscrepancy) {
         const warnBanner = document.createElement("div");
@@ -599,7 +599,7 @@ function renderDetail(state, entry) {
     metaGroup.appendChild(metaTitle);
 
     metaGroup.appendChild(buildDetailItem("Event", entry.eventKey || "N/A"));
-    metaGroup.appendChild(buildDetailItem("Scouter Team", String(entry.ownerTeamNumber)));
+    metaGroup.appendChild(buildDetailItem("Scouted by", Obsidianscout.formatScouter(entry)));
     metaGroup.appendChild(buildDetailItem("Match", entry.matchNumber !== null ? getMatchLabel(entry.matchKey, entry.matchNumber) : "N/A"));
     metaGroup.appendChild(buildDetailItem("Created At", formatDateTime(entry.createdAt)));
     container.appendChild(metaGroup);
@@ -798,7 +798,7 @@ function summarizeFilterStatus(state, count) {
 
 function exportCsv(state) {
     const rows = getFilteredAndSortedRows(state);
-    const header = ["Team Number", "Team Name", "Match Number", "Type", "Scouter Team", "Updated At", "Details"];
+    const header = ["Team Number", "Team Name", "Match Number", "Type", "Scouted By", "Updated At", "Details"];
     const csvRows = [header];
 
     rows.forEach(row => {
@@ -806,7 +806,7 @@ function exportCsv(state) {
         const teamName = teamObj ? (teamObj.nickname || teamObj.name || "") : "";
         const matchNum = row.matchNumber !== null ? String(row.matchNumber) : "N/A";
         const typeLabel = row.type;
-        const scouter = row.ownerTeamNumber;
+        const scouter = Obsidianscout.formatScouter(row);
         const updatedAt = formatDateTime(row.createdAt);
 
         // Gather all configuration-driven key-values for details
