@@ -3,8 +3,28 @@ package com.obsidianscout.scouting
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class PickListsTest {
+
+    @Test
+    fun `native image config registers every pick list serializer`() {
+        // The release build is a GraalVM native image, which can only find serializers listed here.
+        val config = javaClass.classLoader
+            .getResource("META-INF/native-image/com.obsidianscout/obsidianscout-server/reflect-config.json")!!
+            .readText()
+        val classes = listOf(
+            PickLists::class, PickListsResponse::class, PickListsUpdateRequest::class,
+            RankedPickList::class, RankedPickListResponse::class, RankedPickListUpdateRequest::class,
+            DoNotPickUpdateRequest::class
+        )
+        for (cls in classes) {
+            for (suffix in listOf("", "\$\$serializer", "\$Companion")) {
+                val name = cls.java.name + suffix
+                assertTrue("\"$name\"" in config, "$name is missing from reflect-config.json")
+            }
+        }
+    }
 
     @Test
     fun `sanitize keeps each team in its first list only and drops bad numbers`() {

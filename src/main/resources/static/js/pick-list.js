@@ -19,6 +19,12 @@
 
     const METRIC_PREF_KEY = "obsidian-pick-list-metric";
 
+    /** Translated text for `key`, with `{name}` placeholders filled from `vars`. */
+    function tr(key, fallback, vars) {
+        const text = (window.Obsidianscout && typeof Obsidianscout.t === "function") ? Obsidianscout.t(key, fallback) : fallback;
+        return vars ? text.replace(/\{(\w+)\}/g, (m, name) => (name in vars ? String(vars[name]) : m)) : text;
+    }
+
     // Font Awesome Free 6 icons.
     const ICONS = {
         grip: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" width="0.7em" height="1em" fill="currentColor" aria-hidden="true" focusable="false"><path d="M40 352h48c22.1 0 40 17.9 40 40v48c0 22.1-17.9 40-40 40H40c-22.1 0-40-17.9-40-40v-48c0-22.1 17.9-40 40-40zm192 0h48c22.1 0 40 17.9 40 40v48c0 22.1-17.9 40-40 40h-48c-22.1 0-40-17.9-40-40v-48c0-22.1 17.9-40 40-40zM40 192h48c22.1 0 40 17.9 40 40v48c0 22.1-17.9 40-40 40H40c-22.1 0-40-17.9-40-40v-48c0-22.1 17.9-40 40-40zm192 0h48c22.1 0 40 17.9 40 40v48c0 22.1-17.9 40-40 40h-48c-22.1 0-40-17.9-40-40v-48c0-22.1 17.9-40 40-40zM40 32h48c22.1 0 40 17.9 40 40v48c0 22.1-17.9 40-40 40H40c-22.1 0-40-17.9-40-40V72c0-22.1 17.9-40 40-40zm192 0h48c22.1 0 40 17.9 40 40v48c0 22.1-17.9 40-40 40h-48c-22.1 0-40-17.9-40-40V72c0-22.1 17.9-40 40-40z"/></svg>',
@@ -46,6 +52,10 @@
         await initPickListPage();
     });
 
+    window.addEventListener("obsidianscout:languagechange", () => {
+        if (currentEventKey && allTeams.length) renderAll();
+    });
+
     window.addEventListener("beforeunload", () => {
         if (pollIntervalId) clearInterval(pollIntervalId);
     });
@@ -67,7 +77,7 @@
             document.getElementById("fill-btn").addEventListener("click", addAllByScore);
             document.getElementById("clear-btn").addEventListener("click", () => {
                 if (ranking.length === 0) return;
-                if (confirm("Clear the whole ranking? Your Do Not Pick list is not changed.")) {
+                if (confirm(tr("pick_list.confirm_clear", "Clear the whole ranking? Your Do Not Pick list is not changed."))) {
                     ranking = [];
                     renderAll();
                     saveRanking();
@@ -77,7 +87,7 @@
             await loadEvent(currentEventKey);
         } catch (error) {
             console.error("Failed to initialize Pick List page:", error);
-            Obsidianscout.showRetryButton(rankingList, "Failed to load page: " + error.message, initPickListPage);
+            Obsidianscout.showRetryButton(rankingList, tr("pick_list.load_failed", "Failed to load page: {error}", { error: error.message }), initPickListPage);
         }
     }
 
@@ -95,7 +105,11 @@
         if (!useEpa) select.querySelector('option[value="epa"]')?.remove();
         if (!useExp) select.querySelector('option[value="exp"]')?.remove();
         if (!useOpr) select.querySelector('option[value="opr"]')?.remove();
-        else if (isFtc()) select.querySelector('option[value="opr"]').textContent = "FTC Scout OPR";
+        else if (isFtc()) {
+            const opr = select.querySelector('option[value="opr"]');
+            opr.dataset.i18n = "predictor.ftcscout_opr";
+            opr.textContent = tr("predictor.ftcscout_opr", "FTC Scout OPR");
+        }
 
         try {
             const saved = localStorage.getItem(METRIC_PREF_KEY);
@@ -127,7 +141,7 @@
         if (!found && currentEventKey) {
             const opt = document.createElement("option");
             opt.value = currentEventKey;
-            opt.textContent = `Configured Event (${currentEventKey.toUpperCase()})`;
+            opt.textContent = tr("pick_list.configured_event", "Configured Event ({key})", { key: currentEventKey.toUpperCase() });
             opt.selected = true;
             eventFilter.prepend(opt);
         }
@@ -143,11 +157,11 @@
             pollIntervalId = null;
         }
         if (!eventKey) {
-            document.getElementById("ranking-list").innerHTML = '<div class="empty-indicator pl-empty">Select an event in settings to build a pick list.</div>';
+            document.getElementById("ranking-list").innerHTML = `<div class="empty-indicator pl-empty">${Obsidianscout.escapeHtml(tr("pick_list.no_event", "Select an event in settings to build a pick list."))}</div>`;
             return;
         }
 
-        Obsidianscout.showLoadingSpinner(document.getElementById("ranking-list"), "Loading pick list...");
+        Obsidianscout.showLoadingSpinner(document.getElementById("ranking-list"), tr("pick_list.loading", "Loading pick list..."));
         allTeams = await Obsidianscout.request(`/api/teams?eventKey=${encodeURIComponent(eventKey)}`).catch(() => []);
         syncedAt = 0;
         boardSyncedAt = null;
@@ -202,7 +216,12 @@
         const labels = new Map();
         let board = {};
         try { board = JSON.parse(selectionJson || "{}"); } catch (_) { }
-        const slotNames = { captain: "Captain", firstPick: "First Pick", secondPick: "Second Pick", backup: "Backup" };
+        const slotNames = {
+            captain: tr("pick_list.slot_captain", "Captain"),
+            firstPick: tr("pick_list.slot_first_pick", "First Pick"),
+            secondPick: tr("pick_list.slot_second_pick", "Second Pick"),
+            backup: tr("pick_list.slot_backup", "Backup")
+        };
         Object.entries(board).forEach(([allianceKey, alliance]) => {
             if (!alliance || typeof alliance !== "object") return;
             const num = allianceKey.replace("alliance", "");
@@ -225,7 +244,7 @@
                 syncedAt = Math.max(syncedAt, res.updatedAt || 0);
             } catch (err) {
                 console.error("Failed to save pick list:", err);
-                Obsidianscout.showToast("Failed to save pick list: " + err.message, "error");
+                Obsidianscout.showToast(tr("pick_list.save_failed", "Failed to save pick list: {error}", { error: err.message }), "error");
             } finally {
                 pendingSaves--;
             }
@@ -251,10 +270,12 @@
                     applyResponse(res);
                     renderAll();
                 }
-                Obsidianscout.showToast(isDnp ? `${teamNumber} added to Do Not Pick` : `${teamNumber} removed from Do Not Pick`, "success");
+                Obsidianscout.showToast(isDnp
+                    ? tr("pick_list.dnp_added", "{team} added to Do Not Pick", { team: teamNumber })
+                    : tr("pick_list.dnp_removed", "{team} removed from Do Not Pick", { team: teamNumber }), "success");
             } catch (err) {
                 console.error("Failed to update Do Not Pick:", err);
-                Obsidianscout.showToast("Failed to update Do Not Pick: " + err.message, "error");
+                Obsidianscout.showToast(tr("pick_list.dnp_failed", "Failed to update Do Not Pick: {error}", { error: err.message }), "error");
             } finally {
                 pendingSaves--;
             }
@@ -289,13 +310,13 @@
     function addAllByScore() {
         const toAdd = getUnrankedTeams().map(t => t.teamNumber);
         if (toAdd.length === 0) {
-            Obsidianscout.showToast("Every team is already ranked or on Do Not Pick", "info");
+            Obsidianscout.showToast(tr("pick_list.all_ranked_already", "Every team is already ranked or on Do Not Pick."), "info");
             return;
         }
         ranking = ranking.concat(toAdd);
         renderAll();
         saveRanking();
-        Obsidianscout.showToast(`Added ${toAdd.length} teams by ${getMetricLabel()}`, "success");
+        Obsidianscout.showToast(tr("pick_list.added_by_metric", "Added {count} teams by {metric}", { count: toAdd.length, metric: getMetricLabel() }), "success");
     }
 
     // ── Data ────────────────────────────────────────────────
@@ -340,7 +361,7 @@
 
     function teamName(teamNumber) {
         const team = findTeam(teamNumber);
-        return team ? (team.nickname || team.name || "") : "Not at this event";
+        return team ? (team.nickname || team.name || "") : tr("pick_list.not_at_event", "Not at this event");
     }
 
     /** Event teams that are neither ranked nor on Do Not Pick, best score first. */
@@ -366,7 +387,9 @@
     }
 
     function teamCount(n) {
-        return `${n} ${n === 1 ? "team" : "teams"}`;
+        return n === 1
+            ? tr("pick_list.team_count_one", "{count} team", { count: n })
+            : tr("pick_list.team_count_other", "{count} teams", { count: n });
     }
 
     function scoreBadge(teamNumber) {
@@ -387,7 +410,8 @@
     }
 
     function iconButton(act, icon, title, extra = "") {
-        return `<button type="button" class="pl-icon-btn${act === "dnp" || act === "remove" ? " danger" : ""}" data-act="${act}" title="${title}" aria-label="${title}" ${extra}>${icon}</button>`;
+        const label = Obsidianscout.escapeHtml(title);
+        return `<button type="button" class="pl-icon-btn${act === "dnp" || act === "remove" ? " danger" : ""}" data-act="${act}" title="${label}" aria-label="${label}" ${extra}>${icon}</button>`;
     }
 
     function renderRanking() {
@@ -398,31 +422,33 @@
         const available = ranking.filter(n => !pickedLabels.has(n));
         summary.textContent = ranking.length === 0
             ? ""
-            : `${ranking.length} ranked · ${available.length} still available · ${dnp.length} on Do Not Pick`;
+            : tr("pick_list.summary", "{ranked} ranked · {available} still available · {dnp} on Do Not Pick",
+                { ranked: ranking.length, available: available.length, dnp: dnp.length });
 
         if (ranking.length === 0) {
-            container.innerHTML = '<div class="empty-indicator pl-empty">No teams ranked yet. Add teams from the Unranked list, or use "Add all by score".</div>';
+            container.innerHTML = `<div class="empty-indicator pl-empty">${Obsidianscout.escapeHtml(tr("pick_list.empty_ranking", 'No teams ranked yet. Add teams from the Unranked list, or use "Add all by score".'))}</div>`;
             return;
         }
 
         const nextTeam = available[0];
+        const esc = Obsidianscout.escapeHtml;
         ranking.forEach((teamNumber, idx) => {
             const pickedLabel = pickedLabels.get(teamNumber);
             const row = document.createElement("div");
             row.className = "pl-row" + (pickedLabel ? " is-picked" : "") + (teamNumber === nextTeam ? " is-next" : "");
             row.draggable = true;
             row.innerHTML = `
-                <span class="pl-handle" title="Drag to reorder">${ICONS.grip}</span>
+                <span class="pl-handle" title="${esc(tr("pick_list.drag", "Drag to reorder"))}">${ICONS.grip}</span>
                 <span class="pl-rank">${idx + 1}</span>
                 ${teamInfo(teamNumber)}
-                ${pickedLabel ? `<span class="pl-status picked" title="Already on the alliance board">${Obsidianscout.escapeHtml(pickedLabel)}</span>` : ""}
-                ${teamNumber === nextTeam ? '<span class="pl-status next" title="Highest-ranked team that is still available">Next</span>' : ""}
+                ${pickedLabel ? `<span class="pl-status picked" title="${esc(tr("pick_list.on_board", "Already on the alliance board"))}">${esc(pickedLabel)}</span>` : ""}
+                ${teamNumber === nextTeam ? `<span class="pl-status next" title="${esc(tr("pick_list.next_title", "Highest-ranked team that is still available"))}">${esc(tr("pick_list.next", "Next"))}</span>` : ""}
                 ${scoreBadge(teamNumber)}
                 <span class="pl-actions">
-                    ${iconButton("up", ICONS.up, "Move up", idx === 0 ? "disabled" : "")}
-                    ${iconButton("down", ICONS.down, "Move down", idx === ranking.length - 1 ? "disabled" : "")}
-                    ${iconButton("remove", ICONS.remove, "Remove from ranking")}
-                    ${iconButton("dnp", ICONS.ban, "Add to Do Not Pick")}
+                    ${iconButton("up", ICONS.up, tr("pick_list.move_up", "Move up"), idx === 0 ? "disabled" : "")}
+                    ${iconButton("down", ICONS.down, tr("pick_list.move_down", "Move down"), idx === ranking.length - 1 ? "disabled" : "")}
+                    ${iconButton("remove", ICONS.remove, tr("pick_list.remove", "Remove from ranking"))}
+                    ${iconButton("dnp", ICONS.ban, tr("pick_list.add_dnp", "Add to Do Not Pick"))}
                 </span>`;
 
             row.querySelector('[data-act="up"]').addEventListener("click", () => moveTeam(teamNumber, idx - 1));
@@ -471,7 +497,12 @@
 
         container.innerHTML = "";
         if (shown.length === 0) {
-            container.innerHTML = `<div class="empty-indicator pl-empty">${allTeams.length === 0 ? "No teams found for this event." : searchQuery ? "No matching teams." : "Every team is ranked or on Do Not Pick."}</div>`;
+            const message = allTeams.length === 0
+                ? tr("pick_list.no_teams", "No teams found for this event.")
+                : searchQuery
+                    ? tr("pick_list.no_match", "No matching teams.")
+                    : tr("pick_list.all_placed", "Every team is ranked or on Do Not Pick.");
+            container.innerHTML = `<div class="empty-indicator pl-empty">${Obsidianscout.escapeHtml(message)}</div>`;
             return;
         }
 
@@ -485,8 +516,8 @@
                 ${pickedLabel ? `<span class="pl-status picked">${Obsidianscout.escapeHtml(pickedLabel)}</span>` : ""}
                 ${scoreBadge(teamNumber)}
                 <span class="pl-actions">
-                    ${iconButton("add", ICONS.add, "Add to end of ranking")}
-                    ${iconButton("dnp", ICONS.ban, "Add to Do Not Pick")}
+                    ${iconButton("add", ICONS.add, tr("pick_list.add_end", "Add to end of ranking"))}
+                    ${iconButton("dnp", ICONS.ban, tr("pick_list.add_dnp", "Add to Do Not Pick"))}
                 </span>`;
             row.querySelector('[data-act="add"]').addEventListener("click", () => addToRanking(teamNumber));
             row.querySelector('[data-act="dnp"]').addEventListener("click", () => setDoNotPick(teamNumber, true));
@@ -499,7 +530,7 @@
         document.getElementById("dnp-count").textContent = teamCount(dnp.length);
         container.innerHTML = "";
         if (dnp.length === 0) {
-            container.innerHTML = '<div class="empty-indicator pl-empty">No teams on Do Not Pick.</div>';
+            container.innerHTML = `<div class="empty-indicator pl-empty">${Obsidianscout.escapeHtml(tr("pick_list.dnp_empty", "No teams on Do Not Pick."))}</div>`;
             return;
         }
         dnp.forEach(teamNumber => {
@@ -509,7 +540,7 @@
                 ${teamInfo(teamNumber)}
                 <span class="pl-dnp-tag">DNP</span>
                 <span class="pl-actions">
-                    ${iconButton("restore", ICONS.restore, "Remove from Do Not Pick")}
+                    ${iconButton("restore", ICONS.restore, tr("pick_list.remove_dnp", "Remove from Do Not Pick"))}
                 </span>`;
             row.querySelector('[data-act="restore"]').addEventListener("click", () => setDoNotPick(teamNumber, false));
             container.appendChild(row);

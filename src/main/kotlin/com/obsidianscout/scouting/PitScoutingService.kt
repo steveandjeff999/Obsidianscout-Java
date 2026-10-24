@@ -245,7 +245,24 @@ object PitScoutingService {
             }
         }
 
+        // Runs for duplicates too: a re-sent entry (offline sync, cache, QR scan) must still clear the assignment.
+        val completeAssignments = {
+            try {
+                ScoutingAssignmentService.handleScoutingSubmission(
+                    ownerTeam = session.teamNumber,
+                    program = session.program,
+                    eventKey = meta.eventKey,
+                    assignmentType = "PIT",
+                    matchNumber = null,
+                    matchKey = null,
+                    targetTeamNumber = meta.targetTeamNumber,
+                    userId = session.userId
+                )
+            } catch (_: Exception) {}
+        }
+
         if (duplicate != null) {
+            completeAssignments()
             val conflictStr = duplicate[PitScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
             return PitScoutingEntryRecord(
@@ -284,18 +301,7 @@ object PitScoutingService {
             }
         }
 
-        try {
-            ScoutingAssignmentService.handleScoutingSubmission(
-                ownerTeam = session.teamNumber,
-                program = session.program,
-                eventKey = meta.eventKey,
-                assignmentType = "PIT",
-                matchNumber = null,
-                matchKey = null,
-                targetTeamNumber = meta.targetTeamNumber,
-                userId = session.userId
-            )
-        } catch (_: Exception) {}
+        completeAssignments()
 
         recalculateDiscrepancies(meta.eventKey, meta.targetTeamNumber, isPrescout)
 

@@ -51,6 +51,61 @@ class ScoutingAssignmentServiceTest {
     }
 
     @Test
+    fun testAssignmentClearsWhenDataAlreadyOnServer() {
+        val (adminSession, scoutSession) = transaction {
+            val adminId = Users.insertAndGetId {
+                it[username] = "lead_admin"
+                it[passwordHash] = "hash"
+                it[teamNumber] = 254
+                it[program] = "FRC"
+                it[role] = UserRole.ADMIN.name
+                it[createdAt] = Instant.now()
+            }
+            val scoutId = Users.insertAndGetId {
+                it[username] = "scout_alex"
+                it[passwordHash] = "hash"
+                it[teamNumber] = 254
+                it[program] = "FRC"
+                it[role] = UserRole.SCOUT.name
+                it[createdAt] = Instant.now()
+            }
+            UserSession(adminId.value.toString(), "lead_admin", 254, "FRC", UserRole.ADMIN, "lead_admin") to
+                UserSession(scoutId.value.toString(), "scout_alex", 254, "FRC", UserRole.SCOUT, "Alex")
+        }
+
+        val created = ScoutingAssignmentService.createAssignment(
+            adminSession,
+            CreateAssignmentRequest(
+                eventKey = "2026txhou",
+                assignmentType = "MATCH",
+                assignedUserId = scoutSession.userId,
+                matchKey = "2026txhou_qm4",
+                matchNumber = 4,
+                targetTeamNumber = 118
+            )
+        )
+        assertEquals("PENDING", created.status)
+
+        // Entry landed without going through auto-completion (e.g. an earlier upload), with differently-cased keys
+        transaction {
+            ScoutingEntries.insertAndGetId {
+                it[ownerTeamNumber] = 254
+                it[program] = "FRC"
+                it[targetTeamNumber] = 118
+                it[eventKey] = "2026TXHOU"
+                it[matchKey] = "2026TXHOU_qm4"
+                it[matchNumber] = 4
+                it[dataJson] = "{}"
+                it[submittedByUserId] = org.jetbrains.exposed.v1.core.dao.id.EntityID(java.util.UUID.fromString(scoutSession.userId), Users)
+                it[createdAt] = Instant.now()
+            }
+        }
+
+        val mine = ScoutingAssignmentService.getMyAssignments(scoutSession)
+        assertEquals("COMPLETED", mine.single { it.id == created.id }.status)
+    }
+
+    @Test
     fun testAssignmentLifecycleAndConflictDetection() {
         val (adminSession, scout1Session, scout2Session) = transaction {
             val adminId = Users.insertAndGetId {

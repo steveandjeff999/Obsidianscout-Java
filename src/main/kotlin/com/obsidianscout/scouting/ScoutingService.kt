@@ -264,7 +264,24 @@ object ScoutingService {
             }
         }
 
+        // Runs for duplicates too: a re-sent entry (offline sync, cache, QR scan) must still clear the assignment.
+        val completeAssignments = {
+            try {
+                ScoutingAssignmentService.handleScoutingSubmission(
+                    ownerTeam = session.teamNumber,
+                    program = session.program,
+                    eventKey = meta.eventKey,
+                    assignmentType = "MATCH",
+                    matchNumber = meta.matchNumber,
+                    matchKey = meta.matchKey,
+                    targetTeamNumber = meta.targetTeamNumber,
+                    userId = session.userId
+                )
+            } catch (_: Exception) {}
+        }
+
         if (duplicate != null) {
+            completeAssignments()
             val mKey = duplicate[ScoutingEntries.matchKey]
             val matchPlayedTime = transaction {
                 mKey?.let { mk ->
@@ -316,18 +333,7 @@ object ScoutingService {
             }
         }
 
-        try {
-            ScoutingAssignmentService.handleScoutingSubmission(
-                ownerTeam = session.teamNumber,
-                program = session.program,
-                eventKey = meta.eventKey,
-                assignmentType = "MATCH",
-                matchNumber = meta.matchNumber,
-                matchKey = meta.matchKey,
-                targetTeamNumber = meta.targetTeamNumber,
-                userId = session.userId
-            )
-        } catch (_: Exception) {}
+        completeAssignments()
 
         // Recalculate discrepancies for the group
         recalculateDiscrepancies(meta.eventKey, meta.matchKey, meta.targetTeamNumber, isPrescout)

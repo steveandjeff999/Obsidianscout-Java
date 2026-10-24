@@ -1360,6 +1360,23 @@ object ScoutingAssignmentService {
         }
     }
 
+    private val lastCompletionSync = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /**
+     * Safety net before listing: marks open assignments whose data is already on the server
+     * (entries that arrived via a path that skipped auto-completion). Throttled per event.
+     */
+    private fun reconcileCompleted(program: String, eventKeys: Collection<String>) {
+        val nowMs = System.currentTimeMillis()
+        for (key in eventKeys.map { it.trim().lowercase() }.filter { it.isNotBlank() }.distinct()) {
+            val cacheKey = "$program|$key"
+            val last = lastCompletionSync[cacheKey]
+            if (last != null && nowMs - last < 10_000) continue
+            lastCompletionSync[cacheKey] = nowMs
+            syncCompletedAssignments(program, key)
+        }
+    }
+
     fun listAssignments(
         session: UserSession,
         eventKey: String? = null,
@@ -1368,6 +1385,7 @@ object ScoutingAssignmentService {
         status: String? = null
     ): List<ScoutingAssignmentRecord> {
         val prog = session.program.uppercase().trim()
+        if (!eventKey.isNullOrBlank()) reconcileCompleted(prog, listOf(eventKey))
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where { ScoutingAssignments.program eq prog }
             if (session.role != UserRole.SUPERADMIN || session.teamNumber != 0) {
@@ -1398,6 +1416,14 @@ object ScoutingAssignmentService {
     fun getMyAssignments(session: UserSession, eventKey: String? = null): List<ScoutingAssignmentRecord> {
         val userUuid = runCatching { UUID.fromString(session.userId) }.getOrNull() ?: return emptyList()
         val prog = session.program.uppercase().trim()
+        val openEvents = if (!eventKey.isNullOrBlank()) listOf(eventKey) else readTransaction {
+            ScoutingAssignments.select(ScoutingAssignments.eventKey).where {
+                (ScoutingAssignments.assignedUserId eq userUuid) and
+                (ScoutingAssignments.program eq prog) and
+                ((ScoutingAssignments.status eq "PENDING") or (ScoutingAssignments.status eq "IN_PROGRESS"))
+            }.withDistinct().map { it[ScoutingAssignments.eventKey] }
+        }
+        reconcileCompleted(prog, openEvents)
         return readTransaction {
             val query = ScoutingAssignments.selectAll().where {
                 (ScoutingAssignments.assignedUserId eq userUuid) and
@@ -1830,14 +1856,14 @@ object ScoutingAssignmentService {
      */
     fun syncCompletedAssignments(program: String, eventKey: String?) {
         if (eventKey.isNullOrBlank()) return
-        val eventClean = eventKey.trim()
+        val eventClean = eventKey.trim().lowercase()
         val now = Instant.now()
 
         try {
             transaction {
                 val pendingAsgns = ScoutingAssignments.selectAll().where {
                     (ScoutingAssignments.program eq program) and
-                    (ScoutingAssignments.eventKey eq eventClean) and
+                    (ScoutingAssignments.eventKey.lowerCase() eq eventClean) and
                     ((ScoutingAssignments.status eq "PENDING") or (ScoutingAssignments.status eq "IN_PROGRESS"))
                 }.toList()
 
@@ -1846,7 +1872,7 @@ object ScoutingAssignmentService {
                 // Load all existing match scouting data keys for this event
                 val matchEntries = ScoutingEntries.selectAll().where {
                     (ScoutingEntries.program eq program) and
-                    (ScoutingEntries.eventKey eq eventClean)
+                    (ScoutingEntries.eventKey.lowerCase() eq eventClean)
                 }.toList()
                 val matchEntryKeys = matchEntries.mapNotNull { row ->
                     val mKey = row[ScoutingEntries.matchKey]?.trim()?.lowercase()
@@ -1863,14 +1889,14 @@ object ScoutingAssignmentService {
                 // Load all existing pit scouting data for this event
                 val pitEntries = PitScoutingEntries.selectAll().where {
                     (PitScoutingEntries.program eq program) and
-                    (PitScoutingEntries.eventKey eq eventClean)
+                    (PitScoutingEntries.eventKey.lowerCase() eq eventClean)
                 }.toList()
                 val pitTeams = pitEntries.mapNotNull { it[PitScoutingEntries.targetTeamNumber] }.toSet()
 
                 // Load all existing qualitative scouting data for this event
                 val qualEntries = QualitativeScoutingEntries.selectAll().where {
                     (QualitativeScoutingEntries.program eq program) and
-                    (QualitativeScoutingEntries.eventKey eq eventClean)
+                    (QualitativeScoutingEntries.eventKey.lowerCase() eq eventClean)
                 }.toList()
                 val qualEntryKeys = qualEntries.mapNotNull { row ->
                     val mKey = row[QualitativeScoutingEntries.matchKey]?.trim()?.lowercase()
@@ -1885,7 +1911,7 @@ object ScoutingAssignmentService {
                 }.flatten().toSet()
 
                 // Load match alliances for qualitative alliance resolution
-                val matchesForEvent = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventClean }.associate { row ->
+                val matchesForEvent = ApiMatches.selectAll().where { ApiMatches.eventKey.lowerCase() eq eventClean }.associate { row ->
                     val mKey = row[ApiMatches.matchKey].trim().lowercase()
                     val red = row[ApiMatches.redTeams].split(",").mapNotNull { it.replace(Regex("^(frc|ftc)", RegexOption.IGNORE_CASE), "").trim().toIntOrNull() }.toSet()
                     val blue = row[ApiMatches.blueTeams].split(",").mapNotNull { it.replace(Regex("^(frc|ftc)", RegexOption.IGNORE_CASE), "").trim().toIntOrNull() }.toSet()
@@ -1973,14 +1999,14 @@ object ScoutingAssignmentService {
         val completedFor = transaction {
             val query = ScoutingAssignments.selectAll().where {
                 (ScoutingAssignments.program eq program) and
-                (ScoutingAssignments.eventKey eq eventKey.trim()) and
+                (ScoutingAssignments.eventKey.lowerCase() eq eventKey.trim().lowercase()) and
                 (ScoutingAssignments.assignmentType eq typeClean) and
                 ((ScoutingAssignments.status eq "PENDING") or (ScoutingAssignments.status eq "IN_PROGRESS"))
             }
 
             if (typeClean == "MATCH") {
                 if (!matchKey.isNullOrBlank()) {
-                    query.andWhere { ScoutingAssignments.matchKey eq matchKey.trim() }
+                    query.andWhere { ScoutingAssignments.matchKey.lowerCase() eq matchKey.trim().lowercase() }
                 } else if (matchNumber != null) {
                     query.andWhere { ScoutingAssignments.matchNumber eq matchNumber }
                 }
@@ -1993,7 +2019,7 @@ object ScoutingAssignmentService {
                 }
             } else if (typeClean == "QUALITATIVE") {
                 if (!matchKey.isNullOrBlank()) {
-                    query.andWhere { ScoutingAssignments.matchKey eq matchKey.trim() }
+                    query.andWhere { ScoutingAssignments.matchKey.lowerCase() eq matchKey.trim().lowercase() }
                 } else if (matchNumber != null) {
                     query.andWhere { ScoutingAssignments.matchNumber eq matchNumber }
                 }
