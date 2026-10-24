@@ -20,6 +20,11 @@
 
 <body data-page="assistant">
     <script>
+        // Every form on this page is sent by JS via fetch. Block native submits so a tap on a
+        // slow connection, before the page scripts load, cannot reload or POST the page.
+        document.addEventListener("submit", function(e) { e.preventDefault(); }, true);
+    </script>
+    <script>
         (function() {
             try {
                 const saved = localStorage.getItem("obsidian-theme") || "light";

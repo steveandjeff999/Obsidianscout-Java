@@ -21,6 +21,9 @@
             } catch (e) {
                 console.warn("Theme storage access failed:", e);
             }
+            // These forms are only ever sent by login.js via fetch. On slow connections a tap can
+            // land before login.js loads, and the browser would natively POST /login (405).
+            document.addEventListener("submit", function(e) { e.preventDefault(); }, true);
         })();
     </script>
     <div class="orb orb-1"></div>

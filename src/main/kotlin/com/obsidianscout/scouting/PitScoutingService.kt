@@ -27,13 +27,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.obsidianscout.db.readTransaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.util.Base64
-import javax.imageio.ImageIO
-import java.awt.Graphics2D
-import java.awt.RenderingHints
-import java.awt.image.BufferedImage
 import java.time.Instant
 import java.util.UUID
 
@@ -449,13 +443,21 @@ object PitScoutingService {
     }
 }
 
-private fun sanitizePitData(data: JsonObject): JsonObject {
+private const val MAX_PIT_IMAGE_BYTES = 2L * 1024 * 1024
+
+internal fun sanitizePitData(data: JsonObject): JsonObject {
     val sanitized = mutableMapOf<String, JsonElement>()
     for ((key, value) in data) {
         if (value is JsonPrimitive && value.isString) {
             val content = value.content
             if (content.startsWith("data:image/") || (content.length > 5000 && content.startsWith("/9j/"))) {
-                sanitized[key] = JsonPrimitive(sanitizeAndDownscaleBase64Image(content))
+                // The server can no longer downscale (no ImageIO in the native image), so cap what
+                // a modified client can store. Web and app clients send <=1280px, ~300 KB photos.
+                val approxBytes = content.substringAfter(",").length.toLong() * 3 / 4
+                if (approxBytes > MAX_PIT_IMAGE_BYTES) {
+                    throw ApiException(HttpStatusCode.PayloadTooLarge, "Photo is too large. Retake or re-select it so it can be compressed.")
+                }
+                sanitized[key] = JsonPrimitive(sanitizeBase64Image(content))
                 continue
             }
         }
@@ -464,61 +466,21 @@ private fun sanitizePitData(data: JsonObject): JsonObject {
     return JsonObject(sanitized)
 }
 
-private fun sanitizeAndDownscaleBase64Image(dataUriOrBase64: String, maxDim: Int = 1280): String {
+// The client already downscales to 1280px and re-encodes through a canvas; this is the
+// server-side guarantee that EXIF/GPS and other metadata never get stored, even from a
+// modified client. It must not use ImageIO/AWT, which fail to initialize in the native image.
+internal fun sanitizeBase64Image(dataUriOrBase64: String): String {
     try {
         val base64Data = if (dataUriOrBase64.contains(",")) {
             dataUriOrBase64.substringAfter(",")
         } else {
             dataUriOrBase64
         }
-        val bytes = Base64.getDecoder().decode(base64Data.trim())
-        if (bytes.size < 4) return dataUriOrBase64
-        val isJpeg = bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()
-        val isPng = bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()
-        // RIFF container whose form type is WEBP (plain RIFF would also match WAV/AVI).
-        val isWebp = bytes.size > 12 && String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP"
-
-        if (!isJpeg && !isPng && !isWebp) {
-            return dataUriOrBase64
-        }
-
-        val originalImage: BufferedImage? = ImageIO.read(ByteArrayInputStream(bytes))
-        if (originalImage == null) {
-            return if (dataUriOrBase64.startsWith("data:image/")) dataUriOrBase64 else "data:image/${if (isWebp) "webp" else if (isPng) "png" else "jpeg"};base64,$base64Data"
-        }
-
-        var width = originalImage.width
-        var height = originalImage.height
-
-        val needsResize = width > maxDim || height > maxDim
-        if (isWebp && !needsResize) {
-            // Client-side WebP compression already stripped EXIF/GPS and compressed to ~300–500 KB.
-            return if (dataUriOrBase64.startsWith("data:image/")) dataUriOrBase64 else "data:image/webp;base64,$base64Data"
-        }
-        if (needsResize) {
-            if (width > height) {
-                height = ((height.toDouble() * maxDim) / width).toInt().coerceAtLeast(1)
-                width = maxDim
-            } else {
-                width = ((width.toDouble() * maxDim) / height).toInt().coerceAtLeast(1)
-                height = maxDim
-            }
-        }
-
-        // Re-render to clean RGB BufferedImage to strip all EXIF/GPS/malicious chunks
-        val cleanImage = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
-        val g2d: Graphics2D = cleanImage.createGraphics()
-        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-        g2d.drawImage(originalImage, 0, 0, width, height, null)
-        g2d.dispose()
-
-        val outputStream = ByteArrayOutputStream()
-        ImageIO.write(cleanImage, "jpg", outputStream)
-        val cleanBytes = outputStream.toByteArray()
-        val cleanBase64 = Base64.getEncoder().encodeToString(cleanBytes)
-        return "data:image/jpeg;base64,$cleanBase64"
+        val bytes = Base64.getMimeDecoder().decode(base64Data.trim())
+        val format = ImageMetadataStripper.detect(bytes) ?: return dataUriOrBase64
+        val cleanBytes = ImageMetadataStripper.strip(bytes, format)
+            ?: return if (dataUriOrBase64.startsWith("data:image/")) dataUriOrBase64 else "data:${format.mime};base64,$base64Data"
+        return "data:${format.mime};base64,${Base64.getEncoder().encodeToString(cleanBytes)}"
     } catch (e: Exception) {
         return dataUriOrBase64
     }
