@@ -1522,7 +1522,7 @@ object IntegrationService {
             ApiMatches.deleteWhere { ApiMatches.eventKey eq key }
             val count = ApiEvents.deleteWhere { ApiEvents.eventKey eq key }
             count > 0
-        }
+        }.also { com.obsidianscout.scouting.EntrySync.markBulkChange() }
     }
 
     fun deleteTeam(eventKey: String, teamKey: String): Boolean {

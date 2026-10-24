@@ -79,44 +79,7 @@ object QualitativeScoutingService {
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            val rows = query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList()
-            val matchKeys = rows.mapNotNull { it[QualitativeScoutingEntries.matchKey] }.distinct()
-            val matchTimes = if (matchKeys.isNotEmpty()) {
-                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
-                    .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
-            } else {
-                emptyMap()
-            }
-            val userIds = rows.map { it[QualitativeScoutingEntries.submittedByUserId].value }.distinct()
-            val userNames = if (userIds.isNotEmpty()) {
-                Users.selectAll().where { Users.id inList userIds }
-                    .associate { it[Users.id].value to it[Users.username] }
-            } else {
-                emptyMap()
-            }
-            val rawRecords = rows.map { row ->
-                val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
-                val mKey = row[QualitativeScoutingEntries.matchKey]
-                val conflictStr = row[QualitativeScoutingEntries.conflictingTeams]
-                val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
-                QualitativeScoutingEntryRecord(
-                    id = row[QualitativeScoutingEntries.id].value.toString(),
-                    ownerTeamNumber = row[QualitativeScoutingEntries.ownerTeamNumber],
-                    targetTeamNumber = row[QualitativeScoutingEntries.targetTeamNumber],
-                    eventKey = row[QualitativeScoutingEntries.eventKey],
-                    matchKey = mKey,
-                    matchNumber = row[QualitativeScoutingEntries.matchNumber],
-                    data = data,
-                    createdAt = row[QualitativeScoutingEntries.createdAt].toString(),
-                    isPrescout = row[QualitativeScoutingEntries.isPrescout],
-                    matchPlayedTime = matchTimes[mKey],
-                    hasDiscrepancy = row[QualitativeScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = conflicting,
-                    username = userNames[row[QualitativeScoutingEntries.submittedByUserId].value],
-                    completenessPct = row[QualitativeScoutingEntries.completenessPct]
-                )
-            }
-            resolveEntriesList(rawRecords, session.teamNumber, all)
+            resolveEntriesList(buildRecords(query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList()), session.teamNumber, all)
         }
     }
 
@@ -132,45 +95,72 @@ object QualitativeScoutingService {
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            val rows = query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList()
-            val matchKeys = rows.mapNotNull { it[QualitativeScoutingEntries.matchKey] }.distinct()
-            val matchTimes = if (matchKeys.isNotEmpty()) {
-                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
-                    .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
-            } else {
-                emptyMap()
-            }
-            val userIds = rows.map { it[QualitativeScoutingEntries.submittedByUserId].value }.distinct()
-            val userNames = if (userIds.isNotEmpty()) {
-                Users.selectAll().where { Users.id inList userIds }
-                    .associate { it[Users.id].value to it[Users.username] }
-            } else {
-                emptyMap()
-            }
-            val rawRecords = rows.map { row ->
-                val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
-                val mKey = row[QualitativeScoutingEntries.matchKey]
-                val conflictStr = row[QualitativeScoutingEntries.conflictingTeams]
-                val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
-                QualitativeScoutingEntryRecord(
-                    id = row[QualitativeScoutingEntries.id].value.toString(),
-                    ownerTeamNumber = row[QualitativeScoutingEntries.ownerTeamNumber],
-                    targetTeamNumber = row[QualitativeScoutingEntries.targetTeamNumber],
-                    eventKey = row[QualitativeScoutingEntries.eventKey],
-                    matchKey = mKey,
-                    matchNumber = row[QualitativeScoutingEntries.matchNumber],
-                    data = data,
-                    createdAt = row[QualitativeScoutingEntries.createdAt].toString(),
-                    isPrescout = row[QualitativeScoutingEntries.isPrescout],
-                    matchPlayedTime = matchTimes[mKey],
-                    hasDiscrepancy = row[QualitativeScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = conflicting,
-                    username = userNames[row[QualitativeScoutingEntries.submittedByUserId].value],
-                    completenessPct = row[QualitativeScoutingEntries.completenessPct]
-                )
-            }
-            resolveEntriesList(rawRecords, session.teamNumber, all)
+            resolveEntriesList(buildRecords(query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList()), session.teamNumber, all)
         }
+    }
+
+    /**
+     * Entries visible to the caller, prescout included, changed at or after [since] (all of them when null). For delta sync.
+     * With [eventKey], only that event's entries plus every prescout entry.
+     */
+    fun listChangedEntries(session: UserSession, since: Instant?, eventKey: String? = null): List<QualitativeScoutingEntryRecord> {
+        return readTransaction {
+            val query = QualitativeScoutingEntries.selectAll()
+            query.andWhere { QualitativeScoutingEntries.program eq session.program }
+            if (session.role != UserRole.SUPERADMIN) {
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
+                val visibleTeams = partnerTeams + session.teamNumber
+                query.andWhere { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
+            }
+            if (!eventKey.isNullOrBlank()) {
+                query.andWhere { (QualitativeScoutingEntries.eventKey.lowerCase() eq eventKey.trim().lowercase()) or (QualitativeScoutingEntries.isPrescout eq true) }
+            }
+            if (since != null) {
+                query.andWhere { EntrySync.changedSince(QualitativeScoutingEntries.updatedAt, QualitativeScoutingEntries.createdAt, since) }
+            }
+            buildRecords(query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList())
+        }
+    }
+
+    /** Turns rows into records. Call inside a transaction. */
+    private fun buildRecords(rows: List<ResultRow>): List<QualitativeScoutingEntryRecord> {
+        val matchKeys = rows.mapNotNull { it[QualitativeScoutingEntries.matchKey] }.distinct()
+        val matchTimes = if (matchKeys.isNotEmpty()) {
+            com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
+                .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
+        } else {
+            emptyMap()
+        }
+        val userIds = rows.map { it[QualitativeScoutingEntries.submittedByUserId].value }.distinct()
+        val userNames = if (userIds.isNotEmpty()) {
+            Users.selectAll().where { Users.id inList userIds }
+                .associate { it[Users.id].value to it[Users.username] }
+        } else {
+            emptyMap()
+        }
+        val rawRecords = rows.map { row ->
+            val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
+            val mKey = row[QualitativeScoutingEntries.matchKey]
+            val conflictStr = row[QualitativeScoutingEntries.conflictingTeams]
+            val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
+            QualitativeScoutingEntryRecord(
+                id = row[QualitativeScoutingEntries.id].value.toString(),
+                ownerTeamNumber = row[QualitativeScoutingEntries.ownerTeamNumber],
+                targetTeamNumber = row[QualitativeScoutingEntries.targetTeamNumber],
+                eventKey = row[QualitativeScoutingEntries.eventKey],
+                matchKey = mKey,
+                matchNumber = row[QualitativeScoutingEntries.matchNumber],
+                data = data,
+                createdAt = row[QualitativeScoutingEntries.createdAt].toString(),
+                isPrescout = row[QualitativeScoutingEntries.isPrescout],
+                matchPlayedTime = matchTimes[mKey],
+                hasDiscrepancy = row[QualitativeScoutingEntries.hasDiscrepancy],
+                conflictingTeams = conflicting,
+                username = userNames[row[QualitativeScoutingEntries.submittedByUserId].value],
+                completenessPct = row[QualitativeScoutingEntries.completenessPct]
+            )
+        }
+        return rawRecords
     }
 
     fun resolveEntriesList(
@@ -233,6 +223,7 @@ object QualitativeScoutingService {
             }) {
                 it[hasDiscrepancy] = hasDiscrepancyVal
                 it[conflictingTeams] = conflictingTeamsVal
+                it[QualitativeScoutingEntries.updatedAt] = Instant.now()
             }
         }
     }
@@ -317,6 +308,7 @@ object QualitativeScoutingService {
                 it[createdAt] = now
                 it[QualitativeScoutingEntries.isPrescout] = isPrescout
                 it[completenessPct] = completeness
+                it[QualitativeScoutingEntries.updatedAt] = now
             }
         }
 
@@ -439,6 +431,7 @@ object QualitativeScoutingService {
                 it[matchNumber] = meta.matchNumber
                 it[QualitativeScoutingEntries.dataJson] = dataJson
                 it[completenessPct] = completeness
+                it[QualitativeScoutingEntries.updatedAt] = Instant.now()
             }
 
             recalculateDiscrepancies(oldEventKey, oldMatchKey, oldTargetTeamNumber, oldIsPrescout)
@@ -502,6 +495,7 @@ object QualitativeScoutingService {
             val isPrescout = row[QualitativeScoutingEntries.isPrescout]
 
             QualitativeScoutingEntries.deleteWhere { QualitativeScoutingEntries.id eq entryUuid }
+            EntrySync.recordDeletions(EntrySync.KIND_QUAL, listOf(entryId), ownerTeam, row[QualitativeScoutingEntries.program])
 
             recalculateDiscrepancies(eventKey, matchKey, targetTeamNumber, isPrescout)
         }

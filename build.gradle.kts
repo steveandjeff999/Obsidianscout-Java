@@ -70,7 +70,7 @@ val jsTest = tasks.register<Exec>("jsTest") {
     group = "verification"
     val nodeAvailable = runCatching { ProcessBuilder("node", "--version").start().waitFor() == 0 }.getOrDefault(false)
     onlyIf { nodeAvailable }
-    commandLine("node", "--test", "src/test/js/ai-assistant.test.mjs", "src/test/js/config-collab.test.mjs", "src/test/js/battery-rotation.test.mjs", "src/test/js/battery-rooms.test.mjs", "src/test/js/media-compression.test.mjs", "src/test/js/banner-sanitizer.test.mjs")
+    commandLine("node", "--test", "src/test/js/ai-assistant.test.mjs", "src/test/js/config-collab.test.mjs", "src/test/js/battery-rotation.test.mjs", "src/test/js/battery-rooms.test.mjs", "src/test/js/media-compression.test.mjs", "src/test/js/banner-sanitizer.test.mjs", "src/test/js/low-bandwidth.test.mjs")
 }
 tasks.named("check") { dependsOn(jsTest) }
 

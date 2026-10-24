@@ -478,7 +478,8 @@ fun Route.adminRoutes() {
                         )
                         SettingsService.updateSettings(session.teamNumber, clearedSettings)
                     }
-                    
+                    com.obsidianscout.scouting.EntrySync.markBulkChange()
+
                     call.respond(mapOf("success" to true))
                 }
 
@@ -586,6 +587,7 @@ fun Route.adminRoutes() {
                     } else {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Unsupported file format. Please upload .obsidiandb or .zip")
                     }
+                    com.obsidianscout.scouting.EntrySync.markBulkChange()
 
                     call.respond(report)
                 }
@@ -648,6 +650,7 @@ fun Route.adminRoutes() {
                         val file = com.obsidianscout.db.SnapshotService.getSnapshotFile(fileName)
                             ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Snapshot file not found")
                         val report = com.obsidianscout.db.SnapshotService.restoreFromSnapshot(file)
+                        com.obsidianscout.scouting.EntrySync.markBulkChange()
                         call.respond(report)
                     }
 
@@ -676,6 +679,7 @@ fun Route.adminRoutes() {
 
                         try {
                             val report = com.obsidianscout.db.SnapshotService.restoreFromSnapshot(file)
+                            com.obsidianscout.scouting.EntrySync.markBulkChange()
                             call.respond(report)
                         } finally {
                             file.delete()

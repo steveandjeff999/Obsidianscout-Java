@@ -89,7 +89,7 @@ object DeduplicationScheduler {
                     row[ScoutingEntries.submittedByUserId].value
                 )
             },
-            delete = { ids -> transaction { ScoutingEntries.deleteWhere { ScoutingEntries.id inList ids } } },
+            delete = { ids -> transaction { ScoutingEntries.deleteWhere { ScoutingEntries.id inList ids }; EntrySync.recordDeletions(EntrySync.KIND_MATCH, ids.map { it.toString() }, 0, "*") } },
             recalculate = { key -> ScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout) }
         )
 
@@ -108,7 +108,7 @@ object DeduplicationScheduler {
                     row[PitScoutingEntries.submittedByUserId].value
                 )
             },
-            delete = { ids -> transaction { PitScoutingEntries.deleteWhere { PitScoutingEntries.id inList ids } } },
+            delete = { ids -> transaction { PitScoutingEntries.deleteWhere { PitScoutingEntries.id inList ids }; EntrySync.recordDeletions(EntrySync.KIND_PIT, ids.map { it.toString() }, 0, "*") } },
             recalculate = { key -> PitScoutingService.recalculateDiscrepancies(key.eventKey, key.targetTeamNumber, key.isPrescout) }
         )
 
@@ -128,7 +128,7 @@ object DeduplicationScheduler {
                     row[QualitativeScoutingEntries.submittedByUserId].value
                 )
             },
-            delete = { ids -> transaction { QualitativeScoutingEntries.deleteWhere { QualitativeScoutingEntries.id inList ids } } },
+            delete = { ids -> transaction { QualitativeScoutingEntries.deleteWhere { QualitativeScoutingEntries.id inList ids }; EntrySync.recordDeletions(EntrySync.KIND_QUAL, ids.map { it.toString() }, 0, "*") } },
             recalculate = { key -> QualitativeScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout) }
         )
 

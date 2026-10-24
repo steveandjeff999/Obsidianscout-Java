@@ -13,9 +13,102 @@ import {
     isScoutingDataPath
 } from './idb-cache.js';
 
+import { isLowBandwidth, recordTransfer, recordStall } from './net-quality.js';
+import { schedule, priorityFor } from './request-scheduler.js';
+import { serveFromEntryStore, noteEntryWrite, clearEntryStore } from '../services/entry-store.js';
+
 export { isScoutingDataPath };
 
+/** How long a request may go without any progress (no headers yet, or no new body bytes) before it is dropped. */
 export const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
+/** On a slow link a single chunk can legitimately take this long. */
+const LOW_BW_MIN_IDLE_MS = 30000;
+/** Hard cap for one request, however steadily it is progressing. */
+const MAX_REQUEST_MS = 10 * 60 * 1000;
+/** JSON bodies at least this large are gzipped before upload. */
+const GZIP_MIN_BYTES = 1024;
+let gzipUploadsDisabled = false;
+
+function nowMs() {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+}
+
+async function gzipText(text) {
+    if (gzipUploadsDisabled || typeof CompressionStream === 'undefined') return null;
+    try {
+        const stream = new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * fetch() that gives up only when the transfer stops moving: no response headers within `idleMs`, or no new body
+ * bytes for `idleMs`. A large download on a slow link keeps going as long as bytes keep arriving.
+ * Resolves to `{ response, text }`; rejects with an AbortError (`stalled: true` when it timed out).
+ */
+async function fetchWithProgress(url, init, idleMs, externalSignal) {
+    const controller = new AbortController();
+    let stalled = false;
+    let idleTimer = null;
+    const arm = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => { stalled = true; controller.abort(); }, idleMs);
+    };
+    const totalTimer = setTimeout(() => { stalled = true; controller.abort(); }, MAX_REQUEST_MS);
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) {
+        if (externalSignal.aborted) controller.abort();
+        else externalSignal.addEventListener("abort", onExternalAbort);
+    }
+
+    const started = nowMs();
+    arm();
+    try {
+        const response = await fetch(url, { ...init, signal: controller.signal });
+        const headersAt = nowMs();
+        arm();
+        let text = "";
+        if (response.status !== 204 && response.status !== 304) {
+            if (response.body && typeof response.body.getReader === 'function' && typeof TextDecoder !== 'undefined') {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                for (;;) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    text += decoder.decode(value, { stream: true });
+                    arm();
+                }
+                text += decoder.decode();
+            } else {
+                text = await response.text();
+            }
+        }
+        const encoding = (response.headers && response.headers.get && response.headers.get("Content-Encoding")) || "";
+        recordTransfer({
+            url,
+            decodedBytes: text.length,
+            gzipped: /gzip|deflate|br/i.test(encoding) || text.length > 4096,
+            ttfbMs: headersAt - started,
+            downloadMs: nowMs() - headersAt
+        });
+        return { response, text };
+    } catch (error) {
+        if (stalled) {
+            recordStall(nowMs() - started);
+            const err = new Error("Request stalled");
+            err.name = "AbortError";
+            err.stalled = true;
+            throw err;
+        }
+        throw error;
+    } finally {
+        if (idleTimer) clearTimeout(idleTimer);
+        clearTimeout(totalTimer);
+        if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
+    }
+}
 
 export function getOrCreateDeviceId() {
     let deviceId = safeGetItem("obsidian_device_id");
@@ -178,6 +271,11 @@ export function getCachedData(path) {
 
 export async function purgeScoutingCache() {
     try {
+        await clearEntryStore();
+    } catch (e) {
+        console.warn("[Entry Store] Failed to clear:", e);
+    }
+    try {
         await purgeScoutingHttpCache();
     } catch (e) {
         console.warn("[HTTP Cache] Failed to purge scouting cache:", e);
@@ -211,6 +309,19 @@ export async function request(path, options = {}) {
         }
     } catch (e) {}
 
+    // Scouting lists and analytics come from the delta-synced entry store when the link is slow or down.
+    if (method === "GET" && !options.skipEntryStore) {
+        try {
+            const served = await serveFromEntryStore(path);
+            if (served !== undefined) {
+                if (options.button) setButtonLoading(options.button, false);
+                return served;
+            }
+        } catch (e) {
+            console.warn("[Entry Store] Falling back to the network for", path, e);
+        }
+    }
+
     if (method === "GET" && !navigator.onLine) {
         const cached = await getHttpCache(path);
         if (cached && cached.text !== null) {
@@ -219,26 +330,14 @@ export async function request(path, options = {}) {
         }
     }
 
-    const controller = new AbortController();
-    const defaultTimeout = options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS;
-    const timeoutMs = defaultTimeout;
-    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-
-    // Listen to option signal to cancel request
-    if (options.signal) {
-        options.signal.addEventListener("abort", () => {
-            controller.abort();
-        });
-        if (options.signal.aborted) {
-            controller.abort();
-        }
-    }
+    const idleMs = Math.max(options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS, isLowBandwidth() ? LOW_BW_MIN_IDLE_MS : 0);
+    const priority = options.priority !== undefined ? options.priority : priorityFor(method, path);
+    const send = (init) => schedule(priority, () => fetchWithProgress(path, init, idleMs, options.signal));
 
     const opts = {
         method: method,
         headers: options.headers || {},
-        credentials: "same-origin",
-        signal: controller.signal
+        credentials: "same-origin"
     };
     opts.headers["X-Requested-With"] = "XMLHttpRequest";
     if (!opts.headers["Accept"]) {
@@ -254,21 +353,37 @@ export async function request(path, options = {}) {
     }
 
     let cached = null;
-    if (method === "GET") {
+    if (method === "GET" && !options.noCache) {
         cached = await getHttpCache(path);
         if (cached && cached.etag && cached.text !== null && !opts.headers["If-None-Match"]) {
             opts.headers["If-None-Match"] = cached.etag;
         }
     }
+    let plainJsonBody = null;
     if (options.json !== undefined) {
         opts.headers["Content-Type"] = "application/json";
-        opts.body = JSON.stringify(options.json);
+        plainJsonBody = JSON.stringify(options.json);
+        opts.body = plainJsonBody;
+        if (plainJsonBody.length >= GZIP_MIN_BYTES) {
+            const gz = await gzipText(plainJsonBody);
+            if (gz && gz.byteLength < plainJsonBody.length) {
+                opts.body = gz;
+                opts.headers["Content-Encoding"] = "gzip";
+            }
+        }
     } else if (options.body !== undefined) {
         opts.body = options.body;
     }
 
     try {
-        const response = await fetch(path, opts);
+        let { response, text } = await send(opts);
+        // A proxy that can't pass compressed bodies through: resend as plain JSON and stop compressing.
+        if (opts.headers["Content-Encoding"] === "gzip" && (response.status === 415 || (response.status === 400 && /json|parse|unexpected|malformed|illegal/i.test(text || "")))) {
+            gzipUploadsDisabled = true;
+            delete opts.headers["Content-Encoding"];
+            opts.body = plainJsonBody;
+            ({ response, text } = await send(opts));
+        }
         if (response.status >= 502 && response.status <= 504) {
             if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.setServerOnline === 'function') {
                 window.Obsidianscout.setServerOnline(false);
@@ -296,20 +411,19 @@ export async function request(path, options = {}) {
             const retryHeaders = { ...opts.headers };
             delete retryHeaders["If-None-Match"];
             retryHeaders["Cache-Control"] = "no-cache";
-            const retryResponse = await fetch(path, {
+            const { response: retryResponse, text: freshText } = await send({
                 ...opts,
                 headers: retryHeaders,
                 cache: "reload"
             });
             if (!retryResponse.ok) {
-                const retryText = await retryResponse.text();
+                const retryText = freshText;
                 const retryData = retryText ? safeParse(retryText) : null;
                 const message = retryData && retryData.error ? retryData.error : "Request failed";
                 const err = new Error(message);
                 err.status = retryResponse.status;
                 throw err;
             }
-            const freshText = await retryResponse.text();
             const freshData = freshText ? safeParse(freshText) : null;
             const freshEtag = retryResponse.headers && retryResponse.headers.get && retryResponse.headers.get("ETag");
             await setHttpCache(path, freshText, freshEtag);
@@ -320,7 +434,6 @@ export async function request(path, options = {}) {
             return null;
         }
 
-        const text = await response.text();
         const data = text ? safeParse(text) : null;
         if (!response.ok) {
             if (response.status === 401) {
@@ -354,7 +467,9 @@ export async function request(path, options = {}) {
             throw err;
         }
 
-        if (opts.method === "GET") {
+        if (opts.method === "GET" && options.noCache) {
+            // Caller manages its own storage (e.g. the entry store's delta responses).
+        } else if (opts.method === "GET") {
             const isScoutingData = isScoutingDataPath(path);
             let shouldCache = true;
             let textToCache = text;
@@ -433,6 +548,7 @@ export async function request(path, options = {}) {
         } else {
             await removeHttpCache(path);
             const basePath = path.split("?")[0];
+            noteEntryWrite(basePath);
             await removeHttpCache(basePath);
             if (basePath === "/api/auth/logout") {
                 await removeHttpCache("/api/auth/me");
@@ -473,7 +589,6 @@ export async function request(path, options = {}) {
         }
         throw error;
     } finally {
-        window.clearTimeout(timeout);
         if (options.button) {
             setButtonLoading(options.button, false);
         }

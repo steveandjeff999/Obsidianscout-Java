@@ -205,6 +205,7 @@ fun Route.staticWebRoutes() {
             "alliances" to "alliances.html",
             "alliance-edit" to "alliance-edit.html",
             "alliance-selection" to "alliance-selection.html",
+            "pick-list" to "pick-list.html",
             "match-planning" to "match-planning.html",
             "match-checklist" to "match-checklist.html",
             "battery-tracker" to "battery-tracker.html",

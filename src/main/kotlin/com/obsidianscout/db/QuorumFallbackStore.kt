@@ -928,6 +928,7 @@ object QuorumFallbackStore {
                         it[isPrescout] = row[ScoutingEntries.isPrescout]
                         it[hasDiscrepancy] = row[ScoutingEntries.hasDiscrepancy]
                         it[conflictingTeams] = row[ScoutingEntries.conflictingTeams]
+                        it[ScoutingEntries.updatedAt] = row[ScoutingEntries.updatedAt]
                     }
                 }
 
@@ -945,6 +946,7 @@ object QuorumFallbackStore {
                         it[isPrescout] = row[PitScoutingEntries.isPrescout]
                         it[hasDiscrepancy] = row[PitScoutingEntries.hasDiscrepancy]
                         it[conflictingTeams] = row[PitScoutingEntries.conflictingTeams]
+                        it[PitScoutingEntries.updatedAt] = row[PitScoutingEntries.updatedAt]
                     }
                 }
 
@@ -964,6 +966,7 @@ object QuorumFallbackStore {
                         it[isPrescout] = row[QualitativeScoutingEntries.isPrescout]
                         it[hasDiscrepancy] = row[QualitativeScoutingEntries.hasDiscrepancy]
                         it[conflictingTeams] = row[QualitativeScoutingEntries.conflictingTeams]
+                        it[QualitativeScoutingEntries.updatedAt] = row[QualitativeScoutingEntries.updatedAt]
                     }
                 }
             }

@@ -427,6 +427,7 @@ object SnapshotService {
                         it[isPrescout] = row[ScoutingEntries.isPrescout]
                         it[hasDiscrepancy] = row[ScoutingEntries.hasDiscrepancy]
                         it[conflictingTeams] = row[ScoutingEntries.conflictingTeams]
+                        it[ScoutingEntries.updatedAt] = row[ScoutingEntries.updatedAt]
                     }
                 }
                 for (row in pitEntriesList) {
@@ -442,6 +443,7 @@ object SnapshotService {
                         it[isPrescout] = row[PitScoutingEntries.isPrescout]
                         it[hasDiscrepancy] = row[PitScoutingEntries.hasDiscrepancy]
                         it[conflictingTeams] = row[PitScoutingEntries.conflictingTeams]
+                        it[PitScoutingEntries.updatedAt] = row[PitScoutingEntries.updatedAt]
                     }
                 }
                 for (row in qualEntriesList) {
@@ -459,6 +461,7 @@ object SnapshotService {
                         it[isPrescout] = row[QualitativeScoutingEntries.isPrescout]
                         it[hasDiscrepancy] = row[QualitativeScoutingEntries.hasDiscrepancy]
                         it[conflictingTeams] = row[QualitativeScoutingEntries.conflictingTeams]
+                        it[QualitativeScoutingEntries.updatedAt] = row[QualitativeScoutingEntries.updatedAt]
                     }
                 }
 
@@ -1117,6 +1120,7 @@ object SnapshotService {
                         it[isPrescout] = row[ScoutingEntries.isPrescout]
                         it[hasDiscrepancy] = row[ScoutingEntries.hasDiscrepancy]
                         it[conflictingTeams] = row[ScoutingEntries.conflictingTeams]
+                        it[ScoutingEntries.updatedAt] = row[ScoutingEntries.updatedAt]
                     }
                 }
                 restoredCounts["scouting_entries"] = sEntries.size.toLong()
@@ -1134,6 +1138,7 @@ object SnapshotService {
                         it[isPrescout] = row[PitScoutingEntries.isPrescout]
                         it[hasDiscrepancy] = row[PitScoutingEntries.hasDiscrepancy]
                         it[conflictingTeams] = row[PitScoutingEntries.conflictingTeams]
+                        it[PitScoutingEntries.updatedAt] = row[PitScoutingEntries.updatedAt]
                     }
                 }
                 restoredCounts["pit_scouting_entries"] = pEntries.size.toLong()
@@ -1153,6 +1158,7 @@ object SnapshotService {
                         it[isPrescout] = row[QualitativeScoutingEntries.isPrescout]
                         it[hasDiscrepancy] = row[QualitativeScoutingEntries.hasDiscrepancy]
                         it[conflictingTeams] = row[QualitativeScoutingEntries.conflictingTeams]
+                        it[QualitativeScoutingEntries.updatedAt] = row[QualitativeScoutingEntries.updatedAt]
                     }
                 }
                 restoredCounts["qualitative_scouting_entries"] = qEntries.size.toLong()

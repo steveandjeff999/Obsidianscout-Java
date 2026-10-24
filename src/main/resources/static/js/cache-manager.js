@@ -104,8 +104,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         let grandTotal = 0;
         for (const statId in stats) {
             const key = stats[statId];
-            const pending = JSON.parse(Obsidianscout.safeGetItem(key) || "[]");
-            const count = pending.length;
+            const count = Obsidianscout.readPendingQueue(key).length;
             grandTotal += count;
             const el = document.getElementById(`count-${statId}`);
             if (el) el.textContent = count;
@@ -135,8 +134,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <div><strong>${esc(label)}</strong> ${esc(what)}</div>
                 <div class="muted">HTTP ${esc(f.status)}: ${esc(f.message || "")}</div>
                 <div class="row gap-12">
-                    <button type="button" class="btn ghost" data-rejected-action="retry" data-index="${i}">Retry</button>
-                    <button type="button" class="btn danger" data-rejected-action="discard" data-index="${i}">Discard</button>
+                    <button type="button" class="btn ghost" data-rejected-action="retry" data-index="${esc(f.failedId || String(i))}">Retry</button>
+                    <button type="button" class="btn danger" data-rejected-action="discard" data-index="${esc(f.failedId || String(i))}">Discard</button>
                 </div>
             </li>`;
         }).join("");
@@ -148,7 +147,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.addEventListener("click", (e) => {
         const btn = e.target.closest("[data-rejected-action]");
         if (!btn) return;
-        const index = Number(btn.dataset.index);
+        const index = btn.dataset.index;
         if (btn.dataset.rejectedAction === "retry") {
             Obsidianscout.retryFailedEntry(index);
         } else if (confirm("Discard this entry? It will not be uploaded.")) {
@@ -166,7 +165,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Read all 6 caches
         for (const type in cacheConfigs) {
             const config = cacheConfigs[type];
-            const pending = JSON.parse(Obsidianscout.safeGetItem(config.key) || "[]");
+            const pending = Obsidianscout.readPendingQueue(config.key);
             pending.forEach((item, index) => {
                 const itemData = item.data || item;
                 allEntries.push({
@@ -323,9 +322,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             
             // Remove from cache
-            const pending = JSON.parse(Obsidianscout.safeGetItem(entry.config.key) || "[]");
-            pending.splice(entry.index, 1);
-            Obsidianscout.safeSetItem(entry.config.key, JSON.stringify(pending));
+            Obsidianscout.removePendingItem(entry.config.key, entry.item && entry.item.clientId);
 
             // Mark matching record as synced in device history
             try {
@@ -346,9 +343,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function deletePendingEntry(entry) {
         if (confirm(`Are you sure you want to delete this cached ${entry.config.label} entry for Team ${entry.teamNumber}?`)) {
-            const pending = JSON.parse(Obsidianscout.safeGetItem(entry.config.key) || "[]");
-            pending.splice(entry.index, 1);
-            Obsidianscout.safeSetItem(entry.config.key, JSON.stringify(pending));
+            Obsidianscout.removePendingItem(entry.config.key, entry.item && entry.item.clientId);
 
             Obsidianscout.showToast("Entry deleted from cache", "success");
             Obsidianscout.updateConnectionStatus();
@@ -381,7 +376,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         for (const type in cacheConfigs) {
             const config = cacheConfigs[type];
-            const pending = JSON.parse(Obsidianscout.safeGetItem(config.key) || "[]");
+            const pending = Obsidianscout.readPendingQueue(config.key);
             cacheData[config.key] = pending;
             count += pending.length;
         }
@@ -422,11 +417,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                             );
                             if (!isDuplicate) {
                                 existing.push(newItem);
-                                importCount++;
+                                toAdd.push(newItem);
                             }
                         });
 
-                        Obsidianscout.safeSetItem(key, JSON.stringify(existing));
+                        if (toAdd.length && Obsidianscout.enqueueOfflineEntries(key, toAdd)) importCount += toAdd.length;
                     }
                 }
 
@@ -446,7 +441,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (confirm("WARNING: Are you sure you want to delete ALL offline cached entries? These entries will NOT be uploaded to the server.")) {
             for (const type in cacheConfigs) {
                 const config = cacheConfigs[type];
-                Obsidianscout.safeRemoveItem(config.key);
+                Obsidianscout.clearPendingQueue(config.key);
             }
             Obsidianscout.showToast("All cached entries cleared", "success");
             Obsidianscout.updateConnectionStatus();
@@ -690,7 +685,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             // If an identical entry exists in the pending offline cache, remove it as well
             if (config && config.key) {
                 try {
-                    const pending = JSON.parse(Obsidianscout.safeGetItem(config.key) || "[]");
+                    const pending = Obsidianscout.readPendingQueue(config.key);
                     const targetTeam = String(entry.teamNumber);
                     const targetEvent = String(entry.eventKey || "").toLowerCase();
                     const targetMatch = entry.matchKey ? String(entry.matchKey).toLowerCase() : null;
@@ -704,8 +699,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     });
 
                     if (matchIdx >= 0) {
-                        pending.splice(matchIdx, 1);
-                        Obsidianscout.safeSetItem(config.key, JSON.stringify(pending));
+                        Obsidianscout.removePendingItem(config.key, pending[matchIdx].clientId);
                         Obsidianscout.updateConnectionStatus();
                     }
                 } catch (e) {

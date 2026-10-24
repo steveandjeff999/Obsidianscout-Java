@@ -614,12 +614,15 @@ object AuthService {
             // Transfer scouting entries to the placeholder user
             ScoutingEntries.update({ ScoutingEntries.submittedByUserId eq targetUuid }) {
                 it[submittedByUserId] = deletedUserEntityId
+                it[ScoutingEntries.updatedAt] = java.time.Instant.now()
             }
             PitScoutingEntries.update({ PitScoutingEntries.submittedByUserId eq targetUuid }) {
                 it[submittedByUserId] = deletedUserEntityId
+                it[PitScoutingEntries.updatedAt] = java.time.Instant.now()
             }
             QualitativeScoutingEntries.update({ QualitativeScoutingEntries.submittedByUserId eq targetUuid }) {
                 it[submittedByUserId] = deletedUserEntityId
+                it[QualitativeScoutingEntries.updatedAt] = java.time.Instant.now()
             }
 
             // Transfer or clear scouting assignment references

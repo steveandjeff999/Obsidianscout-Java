@@ -1,0 +1,991 @@
+{
+    "config": {
+        "version": 1,
+        "title": "ObsidianScout",
+        "fields": [
+            {
+                "id": "auto_coral",
+                "label": "Auto Coral",
+                "type": "counter",
+                "required": false,
+                "phase": "auto",
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": 3.0
+            },
+            {
+                "id": "leave",
+                "label": "Leave",
+                "type": "checkbox",
+                "required": false,
+                "phase": "auto",
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": 2.0
+            },
+            {
+                "id": "teleop_coral",
+                "label": "Teleop Coral",
+                "type": "counter",
+                "required": false,
+                "phase": "teleop",
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": 2.0
+            },
+            {
+                "id": "defense",
+                "label": "Defense",
+                "type": "rating",
+                "required": false,
+                "phase": "teleop",
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": null
+            },
+            {
+                "id": "climb",
+                "label": "Climb",
+                "type": "select",
+                "required": false,
+                "phase": "endgame",
+                "options": [
+                    {
+                        "label": "None",
+                        "value": "none",
+                        "points": 0.0
+                    },
+                    {
+                        "label": "Shallow",
+                        "value": "shallow",
+                        "points": 6.0
+                    },
+                    {
+                        "label": "Deep",
+                        "value": "deep",
+                        "points": 12.0
+                    }
+                ],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": null
+            },
+            {
+                "id": "notes",
+                "label": "Notes",
+                "type": "text",
+                "required": false,
+                "phase": null,
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": null
+            },
+            {
+                "id": "hdr",
+                "label": "",
+                "type": "header",
+                "required": false,
+                "phase": null,
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": null
+            }
+        ],
+        "analytics": [],
+        "tba_key": null,
+        "first_username": null,
+        "first_key": null,
+        "event_code": null,
+        "enable_robot_role_collection": false
+    },
+    "customConfig": {
+        "version": 1,
+        "title": "ObsidianScout",
+        "fields": [
+            {
+                "id": "auto_coral",
+                "label": "Auto Coral",
+                "type": "counter",
+                "required": false,
+                "phase": "auto",
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": 3.0
+            },
+            {
+                "id": "leave",
+                "label": "Leave",
+                "type": "checkbox",
+                "required": false,
+                "phase": "auto",
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": 2.0
+            },
+            {
+                "id": "teleop_coral",
+                "label": "Teleop Coral",
+                "type": "counter",
+                "required": false,
+                "phase": "teleop",
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": 2.0
+            },
+            {
+                "id": "defense",
+                "label": "Defense",
+                "type": "rating",
+                "required": false,
+                "phase": "teleop",
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": null
+            },
+            {
+                "id": "climb",
+                "label": "Climb",
+                "type": "select",
+                "required": false,
+                "phase": "endgame",
+                "options": [
+                    {
+                        "label": "None",
+                        "value": "none",
+                        "points": 0.0
+                    },
+                    {
+                        "label": "Shallow",
+                        "value": "shallow",
+                        "points": 6.0
+                    },
+                    {
+                        "label": "Deep",
+                        "value": "deep",
+                        "points": 12.0
+                    }
+                ],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": null
+            },
+            {
+                "id": "notes",
+                "label": "Notes",
+                "type": "text",
+                "required": false,
+                "phase": null,
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": null
+            },
+            {
+                "id": "hdr",
+                "label": "",
+                "type": "header",
+                "required": false,
+                "phase": null,
+                "options": [],
+                "min": null,
+                "max": null,
+                "step": null,
+                "doubleStep": null,
+                "pointsPer": null
+            }
+        ],
+        "analytics": [
+            {
+                "id": "w_min",
+                "title": "Min Auto",
+                "type": "min",
+                "fieldId": "auto_coral"
+            },
+            {
+                "id": "w_max",
+                "title": "Max Teleop",
+                "type": "max",
+                "fieldId": "teleop_coral"
+            },
+            {
+                "id": "w_pct",
+                "title": "Leave %",
+                "type": "pct",
+                "fieldId": "leave"
+            },
+            {
+                "id": "w_bar",
+                "title": "Climbs",
+                "type": "bar",
+                "fieldId": "climb"
+            },
+            {
+                "id": "w_unknown",
+                "title": "Unknown",
+                "type": "median",
+                "fieldId": "auto_coral"
+            }
+        ],
+        "tba_key": null,
+        "first_username": null,
+        "first_key": null,
+        "event_code": null,
+        "enable_robot_role_collection": false
+    },
+    "entries": [
+        {
+            "id": "a1",
+            "ownerTeamNumber": 254,
+            "targetTeamNumber": 1678,
+            "eventKey": "2026test",
+            "matchKey": "2026test_qm1",
+            "matchNumber": 1,
+            "data": {
+                "auto_coral": 3,
+                "leave": true,
+                "teleop_coral": 8,
+                "defense": 4,
+                "climb": "deep",
+                "notes": "fast"
+            },
+            "createdAt": "2026-03-01T10:00:00Z",
+            "isPrescout": false,
+            "matchPlayedTime": null,
+            "hasDiscrepancy": false,
+            "conflictingTeams": [],
+            "username": null,
+            "completenessPct": null
+        },
+        {
+            "id": "a2",
+            "ownerTeamNumber": 254,
+            "targetTeamNumber": 1678,
+            "eventKey": "2026test",
+            "matchKey": "2026test_qm9",
+            "matchNumber": 9,
+            "data": {
+                "auto_coral": "2",
+                "leave": "false",
+                "teleop_coral": 5,
+                "defense": "3",
+                "climb": "shallow"
+            },
+            "createdAt": "2026-03-01T12:00:00Z",
+            "isPrescout": false,
+            "matchPlayedTime": null,
+            "hasDiscrepancy": false,
+            "conflictingTeams": [],
+            "username": null,
+            "completenessPct": null
+        },
+        {
+            "id": "a3",
+            "ownerTeamNumber": 254,
+            "targetTeamNumber": 1678,
+            "eventKey": "2026test",
+            "matchKey": "2026test_sf2m1",
+            "matchNumber": 1,
+            "data": {
+                "auto_coral": 4,
+                "leave": true,
+                "teleop_coral": 10,
+                "defense": 5,
+                "climb": "Deep"
+            },
+            "createdAt": "2026-03-02T09:00:00Z",
+            "isPrescout": false,
+            "matchPlayedTime": null,
+            "hasDiscrepancy": false,
+            "conflictingTeams": [],
+            "username": null,
+            "completenessPct": null
+        },
+        {
+            "id": "a4",
+            "ownerTeamNumber": 254,
+            "targetTeamNumber": 1678,
+            "eventKey": "2026test",
+            "matchKey": "2026test_qm_s1_m14",
+            "matchNumber": 14,
+            "data": {
+                "auto_coral": 1,
+                "leave": false,
+                "teleop_coral": 2,
+                "climb": "none"
+            },
+            "createdAt": "2026-03-01T15:00:00Z",
+            "isPrescout": false,
+            "matchPlayedTime": null,
+            "hasDiscrepancy": false,
+            "conflictingTeams": [],
+            "username": null,
+            "completenessPct": null
+        },
+        {
+            "id": "a5",
+            "ownerTeamNumber": 9999,
+            "targetTeamNumber": 1678,
+            "eventKey": "2026test",
+            "matchKey": "2026test_qm14",
+            "matchNumber": 14,
+            "data": {
+                "auto_coral": 2,
+                "leave": true,
+                "teleop_coral": 3,
+                "defense": 2,
+                "climb": "bogus"
+            },
+            "createdAt": "2026-03-01T15:05:00Z",
+            "isPrescout": false,
+            "matchPlayedTime": null,
+            "hasDiscrepancy": false,
+            "conflictingTeams": [],
+            "username": null,
+            "completenessPct": null
+        },
+        {
+            "id": "p1",
+            "ownerTeamNumber": 254,
+            "targetTeamNumber": 1678,
+            "eventKey": "2026old",
+            "matchKey": "2026old_qm3",
+            "matchNumber": 3,
+            "data": {
+                "auto_coral": 6,
+                "leave": true,
+                "teleop_coral": 12,
+                "defense": 5,
+                "climb": "deep"
+            },
+            "createdAt": "2026-02-01T10:00:00Z",
+            "isPrescout": true,
+            "matchPlayedTime": null,
+            "hasDiscrepancy": false,
+            "conflictingTeams": [],
+            "username": null,
+            "completenessPct": null
+        },
+        {
+            "id": "b1",
+            "ownerTeamNumber": 254,
+            "targetTeamNumber": 118,
+            "eventKey": "2026test",
+            "matchKey": "2026test_qm2",
+            "matchNumber": 2,
+            "data": {
+                "auto_coral": " 5",
+                "leave": true,
+                "teleop_coral": "x",
+                "defense": 1
+            },
+            "createdAt": "2026-03-01T10:30:00Z",
+            "isPrescout": false,
+            "matchPlayedTime": null,
+            "hasDiscrepancy": false,
+            "conflictingTeams": [],
+            "username": null,
+            "completenessPct": null
+        },
+        {
+            "id": "b2",
+            "ownerTeamNumber": 254,
+            "targetTeamNumber": 118,
+            "eventKey": "2026test",
+            "matchKey": null,
+            "matchNumber": 7,
+            "data": {
+                "auto_coral": 0,
+                "leave": "TRUE",
+                "teleop_coral": 1.5,
+                "defense": null,
+                "climb": "shallow"
+            },
+            "createdAt": "2026-03-01T11:30:00Z",
+            "isPrescout": false,
+            "matchPlayedTime": null,
+            "hasDiscrepancy": false,
+            "conflictingTeams": [],
+            "username": null,
+            "completenessPct": null
+        },
+        {
+            "id": "b3",
+            "ownerTeamNumber": 254,
+            "targetTeamNumber": 118,
+            "eventKey": "2026test",
+            "matchKey": null,
+            "matchNumber": null,
+            "data": {
+                "auto_coral": 1,
+                "teleop_coral": 0,
+                "defense": 0,
+                "climb": "deep"
+            },
+            "createdAt": "not-a-date",
+            "isPrescout": false,
+            "matchPlayedTime": null,
+            "hasDiscrepancy": false,
+            "conflictingTeams": [],
+            "username": null,
+            "completenessPct": null
+        }
+    ],
+    "expected": {
+        "scores": {
+            "a1": 39.0,
+            "a2": 22.0,
+            "a3": 46.0,
+            "a4": 7.0,
+            "a5": 14.0,
+            "p1": 56.0,
+            "b1": 17.0,
+            "b2": 11.0,
+            "b3": 15.0
+        },
+        "defaultWidgets": [
+            {
+                "id": "entryCount",
+                "title": "Entries Collected",
+                "type": "count",
+                "value": 9.0,
+                "series": []
+            },
+            {
+                "id": "avgScore",
+                "title": "Average Score",
+                "type": "score_avg",
+                "value": 25.22222222222222,
+                "series": []
+            },
+            {
+                "id": "totalScore",
+                "title": "Total Points",
+                "type": "score_total",
+                "value": 227.0,
+                "series": []
+            },
+            {
+                "id": "avg_auto_coral",
+                "title": "Avg Auto Coral",
+                "type": "avg",
+                "value": 2.6666666666666665,
+                "series": []
+            },
+            {
+                "id": "sum_auto_coral",
+                "title": "Total Auto Coral",
+                "type": "sum",
+                "value": 24.0,
+                "series": []
+            },
+            {
+                "id": "rate_leave",
+                "title": "Leave Rate",
+                "type": "rate",
+                "value": 66.66666666666666,
+                "series": []
+            },
+            {
+                "id": "avg_teleop_coral",
+                "title": "Avg Teleop Coral",
+                "type": "avg",
+                "value": 5.1875,
+                "series": []
+            },
+            {
+                "id": "sum_teleop_coral",
+                "title": "Total Teleop Coral",
+                "type": "sum",
+                "value": 41.5,
+                "series": []
+            },
+            {
+                "id": "avg_defense",
+                "title": "Avg Defense",
+                "type": "avg",
+                "value": 2.857142857142857,
+                "series": []
+            },
+            {
+                "id": "bar_climb",
+                "title": "Climb Breakdown",
+                "type": "bar",
+                "value": null,
+                "series": [
+                    {
+                        "label": "Deep",
+                        "value": 4.0
+                    },
+                    {
+                        "label": "Shallow",
+                        "value": 2.0
+                    },
+                    {
+                        "label": "None",
+                        "value": 1.0
+                    },
+                    {
+                        "label": "bogus",
+                        "value": 1.0
+                    }
+                ]
+            }
+        ],
+        "customWidgets": [
+            {
+                "id": "w_min",
+                "title": "Min Auto",
+                "type": "min",
+                "value": 1.0,
+                "series": []
+            },
+            {
+                "id": "w_max",
+                "title": "Max Teleop",
+                "type": "max",
+                "value": 12.0,
+                "series": []
+            },
+            {
+                "id": "w_pct",
+                "title": "Leave %",
+                "type": "pct",
+                "value": 66.66666666666666,
+                "series": []
+            },
+            {
+                "id": "w_bar",
+                "title": "Climbs",
+                "type": "bar",
+                "value": null,
+                "series": [
+                    {
+                        "label": "Deep",
+                        "value": 3.0
+                    },
+                    {
+                        "label": "None",
+                        "value": 1.0
+                    },
+                    {
+                        "label": "Shallow",
+                        "value": 1.0
+                    },
+                    {
+                        "label": "bogus",
+                        "value": 1.0
+                    }
+                ]
+            },
+            {
+                "id": "w_unknown",
+                "title": "Unknown",
+                "type": "median",
+                "value": 0.0,
+                "series": []
+            }
+        ],
+        "emptyWidgets": [
+            {
+                "id": "w_min",
+                "title": "Min Auto",
+                "type": "min",
+                "value": 0.0,
+                "series": []
+            },
+            {
+                "id": "w_max",
+                "title": "Max Teleop",
+                "type": "max",
+                "value": 0.0,
+                "series": []
+            },
+            {
+                "id": "w_pct",
+                "title": "Leave %",
+                "type": "pct",
+                "value": 0.0,
+                "series": []
+            },
+            {
+                "id": "w_bar",
+                "title": "Climbs",
+                "type": "bar",
+                "value": null,
+                "series": [
+                    {
+                        "label": "None",
+                        "value": 0.0
+                    },
+                    {
+                        "label": "Shallow",
+                        "value": 0.0
+                    },
+                    {
+                        "label": "Deep",
+                        "value": 0.0
+                    }
+                ]
+            },
+            {
+                "id": "w_unknown",
+                "title": "Unknown",
+                "type": "median",
+                "value": 0.0,
+                "series": []
+            }
+        ],
+        "mergedIds": [
+            "a1",
+            "a2",
+            "a3",
+            "a4",
+            "a5",
+            "b1",
+            "b2",
+            "b3"
+        ],
+        "recency": [
+            {
+                "name": "disabled",
+                "settings": {
+                    "enabled": false,
+                    "mode": "exponential",
+                    "halfLifeMatches": 4.0,
+                    "windowSize": 6,
+                    "minMatches": 4,
+                    "prescoutWeight": 0.5
+                },
+                "weights": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "name": "exponential",
+                "settings": {
+                    "enabled": true,
+                    "mode": "exponential",
+                    "halfLifeMatches": 2.0,
+                    "windowSize": 6,
+                    "minMatches": 2,
+                    "prescoutWeight": 0.25
+                },
+                "weights": [
+                    0.3535533905932738,
+                    0.5,
+                    1.0,
+                    0.7071067811865476,
+                    0.7071067811865476,
+                    0.0625
+                ]
+            },
+            {
+                "name": "lastN",
+                "settings": {
+                    "enabled": true,
+                    "mode": "lastN",
+                    "halfLifeMatches": 4.0,
+                    "windowSize": 2,
+                    "minMatches": 1,
+                    "prescoutWeight": 0.5
+                },
+                "weights": [
+                    0.0,
+                    0.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    0.0
+                ]
+            },
+            {
+                "name": "tooFew",
+                "settings": {
+                    "enabled": true,
+                    "mode": "exponential",
+                    "halfLifeMatches": 4.0,
+                    "windowSize": 6,
+                    "minMatches": 15,
+                    "prescoutWeight": 0.5
+                },
+                "weights": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            }
+        ],
+        "packed": {
+            "cols": [
+                "id",
+                "ownerTeamNumber",
+                "targetTeamNumber",
+                "eventKey",
+                "matchKey",
+                "matchNumber",
+                "createdAt",
+                "isPrescout",
+                "matchPlayedTime",
+                "hasDiscrepancy",
+                "conflictingTeams",
+                "username",
+                "completenessPct"
+            ],
+            "keys": [
+                "auto_coral",
+                "leave",
+                "teleop_coral",
+                "defense",
+                "climb",
+                "notes"
+            ],
+            "rows": [
+                [
+                    "a1",
+                    254,
+                    1678,
+                    "2026test",
+                    "2026test_qm1",
+                    1,
+                    "2026-03-01T10:00:00Z",
+                    false,
+                    null,
+                    false,
+                    [],
+                    null,
+                    null,
+                    [
+                        3,
+                        true,
+                        8,
+                        4,
+                        "deep",
+                        "fast"
+                    ]
+                ],
+                [
+                    "a2",
+                    254,
+                    1678,
+                    "2026test",
+                    "2026test_qm9",
+                    9,
+                    "2026-03-01T12:00:00Z",
+                    false,
+                    null,
+                    false,
+                    [],
+                    null,
+                    null,
+                    [
+                        "2",
+                        "false",
+                        5,
+                        "3",
+                        "shallow"
+                    ]
+                ],
+                [
+                    "a3",
+                    254,
+                    1678,
+                    "2026test",
+                    "2026test_sf2m1",
+                    1,
+                    "2026-03-02T09:00:00Z",
+                    false,
+                    null,
+                    false,
+                    [],
+                    null,
+                    null,
+                    [
+                        4,
+                        true,
+                        10,
+                        5,
+                        "Deep"
+                    ]
+                ],
+                [
+                    "a4",
+                    254,
+                    1678,
+                    "2026test",
+                    "2026test_qm_s1_m14",
+                    14,
+                    "2026-03-01T15:00:00Z",
+                    false,
+                    null,
+                    false,
+                    [],
+                    null,
+                    null,
+                    [
+                        1,
+                        false,
+                        2,
+                        null,
+                        "none"
+                    ]
+                ],
+                [
+                    "a5",
+                    9999,
+                    1678,
+                    "2026test",
+                    "2026test_qm14",
+                    14,
+                    "2026-03-01T15:05:00Z",
+                    false,
+                    null,
+                    false,
+                    [],
+                    null,
+                    null,
+                    [
+                        2,
+                        true,
+                        3,
+                        2,
+                        "bogus"
+                    ]
+                ],
+                [
+                    "p1",
+                    254,
+                    1678,
+                    "2026old",
+                    "2026old_qm3",
+                    3,
+                    "2026-02-01T10:00:00Z",
+                    true,
+                    null,
+                    false,
+                    [],
+                    null,
+                    null,
+                    [
+                        6,
+                        true,
+                        12,
+                        5,
+                        "deep"
+                    ]
+                ],
+                [
+                    "b1",
+                    254,
+                    118,
+                    "2026test",
+                    "2026test_qm2",
+                    2,
+                    "2026-03-01T10:30:00Z",
+                    false,
+                    null,
+                    false,
+                    [],
+                    null,
+                    null,
+                    [
+                        " 5",
+                        true,
+                        "x",
+                        1
+                    ]
+                ],
+                [
+                    "b2",
+                    254,
+                    118,
+                    "2026test",
+                    null,
+                    7,
+                    "2026-03-01T11:30:00Z",
+                    false,
+                    null,
+                    false,
+                    [],
+                    null,
+                    null,
+                    [
+                        0,
+                        "TRUE",
+                        1.5,
+                        null,
+                        "shallow"
+                    ],
+                    [
+                        3
+                    ]
+                ],
+                [
+                    "b3",
+                    254,
+                    118,
+                    "2026test",
+                    null,
+                    null,
+                    "not-a-date",
+                    false,
+                    null,
+                    false,
+                    [],
+                    null,
+                    null,
+                    [
+                        1,
+                        null,
+                        0,
+                        0,
+                        "deep"
+                    ]
+                ]
+            ]
+        }
+    }
+}

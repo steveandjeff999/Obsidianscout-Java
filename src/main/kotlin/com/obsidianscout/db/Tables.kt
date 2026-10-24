@@ -114,6 +114,8 @@ object ScoutingEntries : UUIDTable("scouting_entries") {
     val hasDiscrepancy = bool("has_discrepancy").default(false)
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
     val completenessPct = float("completeness_pct").nullable().default(null)
+    /** Last change to the row, for delta sync. Null on rows written before the column existed (use createdAt). */
+    val updatedAt = timestamp("updated_at").nullable()
 
     init {
         index("idx_scouting_entries_event_program", false, eventKey, program)
@@ -135,6 +137,8 @@ object PitScoutingEntries : UUIDTable("pit_scouting_entries") {
     val hasDiscrepancy = bool("has_discrepancy").default(false)
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
     val completenessPct = float("completeness_pct").nullable().default(null)
+    /** Last change to the row, for delta sync. Null on rows written before the column existed (use createdAt). */
+    val updatedAt = timestamp("updated_at").nullable()
 
     init {
         index("idx_pit_scouting_entries_event_program", false, eventKey, program)
@@ -157,11 +161,30 @@ object QualitativeScoutingEntries : UUIDTable("qualitative_scouting_entries") {
     val hasDiscrepancy = bool("has_discrepancy").default(false)
     val conflictingTeams = varchar("conflicting_teams", 255).default("")
     val completenessPct = float("completeness_pct").nullable().default(null)
+    /** Last change to the row, for delta sync. Null on rows written before the column existed (use createdAt). */
+    val updatedAt = timestamp("updated_at").nullable()
 
     init {
         index("idx_qualitative_scouting_entries_event_program", false, eventKey, program)
         index("idx_qualitative_scouting_entries_match_key", false, matchKey)
         index("idx_qualitative_scouting_entries_owner_team_program", false, ownerTeamNumber, program)
+    }
+}
+
+/**
+ * Scouting entries deleted since a client last synced, so `GET /api/sync/entries` can tell clients to drop them.
+ * `kind` is `match`, `pit` or `qual`; a row with kind `*` marks a bulk change (restore, bulk delete) after which
+ * every client re-downloads the full list.
+ */
+object EntryTombstones : UUIDTable("entry_tombstones") {
+    val kind = varchar("kind", 16)
+    val entryId = varchar("entry_id", 64)
+    val ownerTeamNumber = integer("owner_team_number").default(0)
+    val program = varchar("program", 8).default("FRC")
+    val deletedAt = timestamp("deleted_at")
+
+    init {
+        index("idx_entry_tombstones_deleted_at", false, deletedAt)
     }
 }
 

@@ -243,6 +243,8 @@ fun Route.analyticsRoutes() {
                             sb.append("\n")
                         }
                     }
+                    com.obsidianscout.scouting.AllianceSelectionService.getRankedPickList(session, eventKey).ranking
+                        .forEachIndexed { idx, team -> sb.append("${csvCell("Pick List")},${csvCell("#${idx + 1}")},$team\n") }
                     call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"alliance_selection_${eventKey}.csv\"")
                     call.respondText(sb.toString(), ContentType.Text.CSV, HttpStatusCode.OK)
                 }
@@ -266,6 +268,31 @@ fun Route.analyticsRoutes() {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey")
                         }
                         call.respond(com.obsidianscout.scouting.AllianceSelectionService.updatePickLists(session, request))
+                    }
+                }
+                // Ranked pick list. Shares the Do Not Pick list with the pick lists above.
+                route("/picklist") {
+                    get {
+                        val session = call.requireSession()
+                        val eventKey = call.request.queryParameters["eventKey"]
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
+                        call.respond(com.obsidianscout.scouting.AllianceSelectionService.getRankedPickList(session, eventKey))
+                    }
+                    post {
+                        val session = call.requireSession()
+                        val request = call.receive<com.obsidianscout.scouting.RankedPickListUpdateRequest>()
+                        if (request.eventKey.isBlank()) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey")
+                        }
+                        call.respond(com.obsidianscout.scouting.AllianceSelectionService.updateRankedPickList(session, request))
+                    }
+                    post("/dnp") {
+                        val session = call.requireSession()
+                        val request = call.receive<com.obsidianscout.scouting.DoNotPickUpdateRequest>()
+                        if (request.eventKey.isBlank() || request.teamNumber <= 0) {
+                            throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey or teamNumber")
+                        }
+                        call.respond(com.obsidianscout.scouting.AllianceSelectionService.setDoNotPick(session, request))
                     }
                 }
             }

@@ -18,7 +18,8 @@ import {
     getOfflineSyncProgress,
     isOfflineSyncInProgress,
     syncOfflineEntries,
-    notifyPendingChanged
+    notifyPendingChanged,
+    isQueueStorageKey
 } from '../services/offline-sync.js';
 
 export const SCOUTING_PAGES = ["scout", "pit-scout", "qual-scout", "prescout-scout", "prescout-pit", "prescout-qual"];
@@ -218,7 +219,7 @@ export function initSyncStatusBanner() {
     window.addEventListener("offline", rerender);
     // Another tab saved or uploaded entries.
     window.addEventListener("storage", (e) => {
-        if (!e.key || e.key.startsWith("pending_") || e.key === "failed_offline_entries") rerender();
+        if (!e.key || isQueueStorageKey(e.key)) rerender();
     });
 
     // Remember the address used while online, for the "different address" note.

@@ -158,6 +158,7 @@ object MigrationService {
         thread(name = "db-migration-worker") {
             try {
                 runMigrationImpl(sourceType, sqliteInstancePath, pgConfig)
+                com.obsidianscout.scouting.EntrySync.markBulkChange()
                 updateStatus(
                     isRunning = false,
                     isSuccess = true,

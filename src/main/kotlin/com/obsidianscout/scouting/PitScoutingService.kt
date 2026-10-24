@@ -77,33 +77,7 @@ object PitScoutingService {
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { PitScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            val rows = query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).toList()
-            val userIds = rows.map { it[PitScoutingEntries.submittedByUserId].value }.distinct()
-            val userNames = if (userIds.isNotEmpty()) {
-                Users.selectAll().where { Users.id inList userIds }
-                    .associate { it[Users.id].value to it[Users.username] }
-            } else {
-                emptyMap()
-            }
-            val rawRecords = rows.map { row ->
-                val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
-                val conflictStr = row[PitScoutingEntries.conflictingTeams]
-                val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
-                PitScoutingEntryRecord(
-                    id = row[PitScoutingEntries.id].value.toString(),
-                    ownerTeamNumber = row[PitScoutingEntries.ownerTeamNumber],
-                    targetTeamNumber = row[PitScoutingEntries.targetTeamNumber],
-                    eventKey = row[PitScoutingEntries.eventKey],
-                    data = data,
-                    createdAt = row[PitScoutingEntries.createdAt].toString(),
-                    isPrescout = row[PitScoutingEntries.isPrescout],
-                    hasDiscrepancy = row[PitScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = conflicting,
-                    username = userNames[row[PitScoutingEntries.submittedByUserId].value],
-                    completenessPct = row[PitScoutingEntries.completenessPct]
-                )
-            }
-            resolveEntriesList(rawRecords, session.teamNumber, all)
+            resolveEntriesList(buildRecords(query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).toList()), session.teamNumber, all)
         }
     }
 
@@ -119,34 +93,61 @@ object PitScoutingService {
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { PitScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            val rows = query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).toList()
-            val userIds = rows.map { it[PitScoutingEntries.submittedByUserId].value }.distinct()
-            val userNames = if (userIds.isNotEmpty()) {
-                Users.selectAll().where { Users.id inList userIds }
-                    .associate { it[Users.id].value to it[Users.username] }
-            } else {
-                emptyMap()
-            }
-            val rawRecords = rows.map { row ->
-                val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
-                val conflictStr = row[PitScoutingEntries.conflictingTeams]
-                val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
-                PitScoutingEntryRecord(
-                    id = row[PitScoutingEntries.id].value.toString(),
-                    ownerTeamNumber = row[PitScoutingEntries.ownerTeamNumber],
-                    targetTeamNumber = row[PitScoutingEntries.targetTeamNumber],
-                    eventKey = row[PitScoutingEntries.eventKey],
-                    data = data,
-                    createdAt = row[PitScoutingEntries.createdAt].toString(),
-                    isPrescout = row[PitScoutingEntries.isPrescout],
-                    hasDiscrepancy = row[PitScoutingEntries.hasDiscrepancy],
-                    conflictingTeams = conflicting,
-                    username = userNames[row[PitScoutingEntries.submittedByUserId].value],
-                    completenessPct = row[PitScoutingEntries.completenessPct]
-                )
-            }
-            resolveEntriesList(rawRecords, session.teamNumber, all)
+            resolveEntriesList(buildRecords(query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).toList()), session.teamNumber, all)
         }
+    }
+
+    /**
+     * Entries visible to the caller, prescout included, changed at or after [since] (all of them when null). For delta sync.
+     * With [eventKey], only that event's entries plus every prescout entry.
+     */
+    fun listChangedEntries(session: UserSession, since: Instant?, eventKey: String? = null): List<PitScoutingEntryRecord> {
+        return readTransaction {
+            val query = PitScoutingEntries.selectAll()
+            query.andWhere { PitScoutingEntries.program eq session.program }
+            if (session.role != UserRole.SUPERADMIN) {
+                val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
+                val visibleTeams = partnerTeams + session.teamNumber
+                query.andWhere { PitScoutingEntries.ownerTeamNumber inList visibleTeams }
+            }
+            if (!eventKey.isNullOrBlank()) {
+                query.andWhere { (PitScoutingEntries.eventKey.lowerCase() eq eventKey.trim().lowercase()) or (PitScoutingEntries.isPrescout eq true) }
+            }
+            if (since != null) {
+                query.andWhere { EntrySync.changedSince(PitScoutingEntries.updatedAt, PitScoutingEntries.createdAt, since) }
+            }
+            buildRecords(query.orderBy(PitScoutingEntries.createdAt, SortOrder.DESC).toList())
+        }
+    }
+
+    /** Turns rows into records. Call inside a transaction. */
+    private fun buildRecords(rows: List<ResultRow>): List<PitScoutingEntryRecord> {
+        val userIds = rows.map { it[PitScoutingEntries.submittedByUserId].value }.distinct()
+        val userNames = if (userIds.isNotEmpty()) {
+            Users.selectAll().where { Users.id inList userIds }
+                .associate { it[Users.id].value to it[Users.username] }
+        } else {
+            emptyMap()
+        }
+        val rawRecords = rows.map { row ->
+            val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
+            val conflictStr = row[PitScoutingEntries.conflictingTeams]
+            val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
+            PitScoutingEntryRecord(
+                id = row[PitScoutingEntries.id].value.toString(),
+                ownerTeamNumber = row[PitScoutingEntries.ownerTeamNumber],
+                targetTeamNumber = row[PitScoutingEntries.targetTeamNumber],
+                eventKey = row[PitScoutingEntries.eventKey],
+                data = data,
+                createdAt = row[PitScoutingEntries.createdAt].toString(),
+                isPrescout = row[PitScoutingEntries.isPrescout],
+                hasDiscrepancy = row[PitScoutingEntries.hasDiscrepancy],
+                conflictingTeams = conflicting,
+                username = userNames[row[PitScoutingEntries.submittedByUserId].value],
+                completenessPct = row[PitScoutingEntries.completenessPct]
+            )
+        }
+        return rawRecords
     }
 
     fun resolveEntriesList(
@@ -207,6 +208,7 @@ object PitScoutingService {
             }) {
                 it[hasDiscrepancy] = hasDiscrepancyVal
                 it[conflictingTeams] = conflictingTeamsVal
+                it[PitScoutingEntries.updatedAt] = Instant.now()
             }
         }
     }
@@ -278,6 +280,7 @@ object PitScoutingService {
                 it[createdAt] = now
                 it[PitScoutingEntries.isPrescout] = isPrescout
                 it[completenessPct] = completeness
+                it[PitScoutingEntries.updatedAt] = now
             }
         }
 
@@ -385,6 +388,7 @@ object PitScoutingService {
                 it[eventKey] = meta.eventKey
                 it[PitScoutingEntries.dataJson] = dataJson
                 it[completenessPct] = completeness
+                it[PitScoutingEntries.updatedAt] = Instant.now()
             }
 
             recalculateDiscrepancies(oldEventKey, oldTargetTeamNumber, oldIsPrescout)
@@ -437,6 +441,7 @@ object PitScoutingService {
             val isPrescout = row[PitScoutingEntries.isPrescout]
 
             PitScoutingEntries.deleteWhere { PitScoutingEntries.id eq entryUuid }
+            EntrySync.recordDeletions(EntrySync.KIND_PIT, listOf(entryId), ownerTeam, row[PitScoutingEntries.program])
 
             recalculateDiscrepancies(eventKey, targetTeamNumber, isPrescout)
         }

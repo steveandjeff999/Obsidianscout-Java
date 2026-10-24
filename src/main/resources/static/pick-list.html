@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Pick List</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .page-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            min-width: 0;
+            width: 100%;
+        }
+
+        /* The sidebar takes ~220px, so only split into two columns when each has room for a full row. */
+        @media (min-width: 1280px) {
+            .page-container {
+                grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+                align-items: start;
+            }
+        }
+
+        .page-container > * { min-width: 0; }
+
+        .side-column {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-width: 0;
+        }
+
+        .pl-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .pl-toolbar select { min-width: 160px; }
+
+        .pl-summary {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--muted);
+            margin-top: 8px;
+        }
+
+        .pl-private-note {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .pl-list {
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .pl-scroll {
+            max-height: 60vh;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .pl-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            background: var(--surface-2);
+            border: 1px solid transparent;
+            border-left: 4px solid var(--accent);
+            min-width: 0;
+            /* In a narrow card the badges and buttons drop to a second line instead of squeezing the name. */
+            flex-wrap: wrap;
+        }
+
+        body.theme-dark .pl-row { background: rgba(255, 255, 255, 0.03); }
+
+        .pl-row.unranked { border-left-color: var(--surface-3); }
+        .pl-row.dnp { border-left-color: #dc2626; }
+        .pl-row.is-next { border-color: #16a34a; box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.25); }
+        .pl-row.is-picked .pl-team-number,
+        .pl-row.is-picked .pl-team-name { text-decoration: line-through; opacity: 0.55; }
+        .pl-row.dragging { opacity: 0.4; }
+        .pl-row.drag-over { border-color: var(--accent); }
+
+        .pl-handle {
+            cursor: grab;
+            color: var(--muted);
+            flex-shrink: 0;
+            display: inline-flex;
+        }
+
+        .pl-rank {
+            min-width: 28px;
+            font-weight: 900;
+            color: var(--muted);
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .pl-team-number {
+            font-weight: 900;
+            color: var(--accent);
+            flex-shrink: 0;
+            text-decoration: none;
+        }
+
+        .pl-team-info {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            flex: 1 1 120px;
+        }
+
+        .pl-team-name {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--ink);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pl-note {
+            font-size: 0.75rem;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pl-score {
+            font-size: 0.75rem;
+            font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--surface-3);
+            color: var(--ink);
+            flex-shrink: 0;
+        }
+
+        body.theme-dark .pl-score { background: rgba(255, 255, 255, 0.08); }
+
+        .pl-status {
+            font-size: 0.68rem;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 999px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .pl-status.picked { background: var(--surface-3); color: var(--muted); }
+        .pl-status.next { background: #16a34a; color: #fff; }
+
+        .pl-actions {
+            display: flex;
+            gap: 2px;
+            flex-shrink: 0;
+            margin-left: auto;
+        }
+
+        .pl-icon-btn {
+            font: inherit;
+            line-height: 1;
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            background: none;
+            color: var(--muted);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pl-icon-btn svg { width: 0.85em; height: 0.85em; }
+        .pl-icon-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
+        .pl-icon-btn:disabled { opacity: 0.3; cursor: default; }
+        .pl-icon-btn.danger:hover:not(:disabled) { border-color: #dc2626; color: #dc2626; }
+
+        .pl-dnp-tag {
+            font-size: 0.68rem;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: #b91c1c;
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .pl-empty {
+            padding: 16px 8px;
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 600px) {
+            .pl-row { gap: 6px; padding: 8px; }
+            .pl-handle { display: none; }
+            .pl-rank { min-width: 20px; }
+        }
+    </style>
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="pick-list">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div class="card">
+                <div class="row gap-12 wrap justify-between align-center">
+                    <div>
+                        <h1 data-i18n="nav.pick_list">Pick List</h1>
+                        <p class="notice">Rank the teams you want to pick. Teams on your Do Not Pick list from <a href="/alliance-selection">Alliance Selection</a> are kept out of the ranking.</p>
+                    </div>
+                    <div class="pl-toolbar">
+                        <select id="event-filter" class="select-wide" aria-label="Event">
+                            <option value="">Loading events...</option>
+                        </select>
+                        <select id="metric-select" aria-label="Data source" title="Data source for each team's score">
+                            <option value="weighted">Weighted</option>
+                            <option value="scouted">Scouted</option>
+                            <option value="epa">EPA</option>
+                            <option value="exp">EXP</option>
+                            <option value="opr">OPR</option>
+                        </select>
+                        <button class="btn secondary" id="fill-btn" type="button" title="Add every unranked team to the end of the list, best score first">Add all by score</button>
+                        <button class="btn ghost danger" id="clear-btn" type="button">Clear ranking</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="page-container mt-20">
+                <div class="card">
+                    <div class="row justify-between align-center">
+                        <h2>Ranking</h2>
+                        <span class="pl-private-note" title="Only your team sees this list, even when you share the alliance board with a scouting alliance.">Private to your team</span>
+                    </div>
+                    <div class="pl-summary" id="ranking-summary"></div>
+                    <div class="pl-list" id="ranking-list">
+                        <div class="empty-indicator pl-empty">Loading pick list...</div>
+                    </div>
+                </div>
+
+                <div class="side-column">
+                    <div class="card">
+                        <div class="row justify-between align-center">
+                            <h2>Unranked Teams</h2>
+                            <span class="pl-private-note" id="unranked-count"></span>
+                        </div>
+                        <div class="field" style="margin-top: 12px;">
+                            <input type="text" id="team-search" placeholder="Search team # or name..." style="padding: 6px 12px; width: 100%;" />
+                        </div>
+                        <div class="pl-list pl-scroll" id="unranked-list"></div>
+                    </div>
+
+                    <div class="card">
+                        <div class="row justify-between align-center">
+                            <h2>Do Not Pick</h2>
+                            <span class="pl-private-note" id="dnp-count"></span>
+                        </div>
+                        <p class="notice" style="margin-top: 6px;">Shared with the Do Not Pick list on Alliance Selection.</p>
+                        <div class="pl-list pl-scroll" id="dnp-list"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/pick-list.js"></script>
+</body>
+</html>

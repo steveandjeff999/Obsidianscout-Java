@@ -153,6 +153,17 @@ suspend fun ApplicationCall.resolveSessionOrMobileJwt(jwtSecret: String): UserSe
 }
 
 fun Route.scoutingRoutes() {
+            // Delta sync for low-bandwidth clients: only entries changed since `cursor`, optionally in compact form.
+            get("/sync/entries") {
+                val session = call.requireSession()
+                val kind = call.request.queryParameters["kind"]?.trim()?.lowercase()
+                    ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing kind parameter")
+                val cursor = call.request.queryParameters["cursor"]
+                val compact = call.request.queryParameters["format"]?.equals("compact", ignoreCase = true) == true
+                val eventKey = call.request.queryParameters["eventKey"]
+                call.respond(com.obsidianscout.scouting.EntrySync.changes(session, kind, cursor, compact, eventKey))
+            }
+
             route("/scouting") {
                 get {
                     val session = call.requireSession()

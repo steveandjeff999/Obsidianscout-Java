@@ -292,13 +292,13 @@ async function initPrescoutScout(me) {
                 if (!payload) return;
 
                 const createdAt = new Date().toISOString();
-                const pending = JSON.parse(Obsidianscout.safeGetItem("pending_prescout_scouting_entries") || "[]");
+                const pending = [];
                 pending.push({
                     data: payload,
                     createdAt
                 });
                 // Large photos can fill the browser's storage; never report a save that did not happen.
-                if (!Obsidianscout.safeSetItem("pending_prescout_scouting_entries", JSON.stringify(pending))) {
+                if (!Obsidianscout.enqueueOfflineEntries("pending_prescout_scouting_entries", pending)) {
                     Obsidianscout.showToast("This device is out of storage, so the entry was NOT saved. Sync or clear cached data, then save again.", "error");
                     return;
                 }
@@ -382,13 +382,13 @@ async function initPrescoutScout(me) {
             } catch (error) {
                 if (!navigator.onLine || error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
                     const createdAt = new Date().toISOString();
-                    const pending = JSON.parse(Obsidianscout.safeGetItem("pending_prescout_scouting_entries") || "[]");
+                    const pending = [];
                     pending.push({
                         data: payload,
                         createdAt
                     });
                     // Large photos can fill the browser's storage; never report a save that did not happen.
-                    if (!Obsidianscout.safeSetItem("pending_prescout_scouting_entries", JSON.stringify(pending))) {
+                    if (!Obsidianscout.enqueueOfflineEntries("pending_prescout_scouting_entries", pending)) {
                         Obsidianscout.showToast("This device is out of storage, so the entry was NOT saved. Sync or clear cached data, then save again.", "error");
                         return;
                     }

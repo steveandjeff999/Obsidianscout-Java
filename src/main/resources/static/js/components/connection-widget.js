@@ -6,7 +6,7 @@
 
 import { safeGetItem, safeSetItem } from '../base/storage.js';
 import { t } from '../base/i18n.js';
-import { CACHE_CONFIGS } from '../services/offline-sync.js';
+import { CACHE_CONFIGS, readPendingQueue } from '../services/offline-sync.js';
 
 let _serverOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 let _isProbing = false;
@@ -163,8 +163,7 @@ export function updateConnectionStatus(forcedStatus = null) {
     let count = 0;
     for (const type in CACHE_CONFIGS) {
         const config = CACHE_CONFIGS[type];
-        const pending = JSON.parse(safeGetItem(config.key) || "[]");
-        count += pending.length;
+        count += readPendingQueue(config.key).length;
     }
     // Pages call this after saving offline; let the scouting-page sync banner know the queue changed.
     if (_lastPendingCount !== count && typeof window !== 'undefined') {

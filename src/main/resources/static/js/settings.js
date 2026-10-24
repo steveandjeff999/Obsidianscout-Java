@@ -388,6 +388,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    /** Slow-connection mode: queues bulk downloads behind uploads and answers scouting/analytics pages from this device. */
+    function wireLowBandwidthPrefWidget() {
+        const select = document.getElementById("personal-low-bandwidth-pref");
+        const status = document.getElementById("personal-low-bandwidth-status");
+        if (!select || typeof Obsidianscout.getLowBandwidthMode !== "function") return;
+
+        const renderStatus = () => {
+            if (!status) return;
+            const stats = Obsidianscout.getLinkStats();
+            const speed = stats.kbps !== null ? `about ${stats.kbps} kbps` : "not measured yet";
+            const latency = stats.rttMs !== null ? `, ${stats.rttMs} ms response time` : "";
+            status.textContent = `${stats.low ? "On" : "Off"} right now. Connection: ${speed}${latency}.`;
+        };
+
+        select.value = Obsidianscout.getLowBandwidthMode();
+        renderStatus();
+        window.addEventListener("obsidianscout:link-quality-changed", renderStatus);
+        select.addEventListener("change", (e) => {
+            Obsidianscout.setLowBandwidthMode(e.target.value);
+            renderStatus();
+            Obsidianscout.showToast("Personal settings saved", "success");
+        });
+    }
+
     function wirePersonalHapticPrefWidget() {
         const personalHapticPref = document.getElementById("personal-haptic-pref");
         if (!personalHapticPref) return;
@@ -868,6 +892,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalGamepadSettingsWidget();
     wirePersonalDeleteAccountWidget(me);
     wirePersonalHapticPrefWidget();
+    wireLowBandwidthPrefWidget();
     wirePersonalNavLayoutWidget();
     wirePersonalTutorialPrefWidget(me);
 });

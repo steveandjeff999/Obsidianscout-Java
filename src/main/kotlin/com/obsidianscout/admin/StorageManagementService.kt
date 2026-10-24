@@ -735,6 +735,7 @@ object StorageManagementService {
             }
         }
 
+        com.obsidianscout.scouting.EntrySync.markBulkChange()
         val targetDesc = if (teamNumber != null) "Team $teamNumber ($program)" else "all teams ($program)"
         consoleLog.info("[StorageManagement] DELETED scouting data for event $trimmedKey ($targetDesc): $deletedRecords entries permanently deleted.")
         return StorageActionResultDto(
@@ -803,6 +804,7 @@ object StorageManagementService {
             }.toLong()
         }
 
+        com.obsidianscout.scouting.EntrySync.markBulkChange()
         consoleLog.info("[StorageManagement] DELETED entire dataset for Team $teamNumber ($program): $deletedRecords records permanently deleted.")
         return StorageActionResultDto(
             success = true,

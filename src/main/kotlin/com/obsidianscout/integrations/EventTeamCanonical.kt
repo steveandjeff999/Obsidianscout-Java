@@ -230,9 +230,9 @@ object EventTeamCanonical {
         }
 
         // Plain event references.
-        ScoutingEntries.update({ ScoutingEntries.eventKey eq oldKey }) { it[ScoutingEntries.eventKey] = newKey }
-        PitScoutingEntries.update({ PitScoutingEntries.eventKey eq oldKey }) { it[PitScoutingEntries.eventKey] = newKey }
-        QualitativeScoutingEntries.update({ QualitativeScoutingEntries.eventKey eq oldKey }) { it[QualitativeScoutingEntries.eventKey] = newKey }
+        ScoutingEntries.update({ ScoutingEntries.eventKey eq oldKey }) { it[ScoutingEntries.eventKey] = newKey; it[ScoutingEntries.updatedAt] = java.time.Instant.now() }
+        PitScoutingEntries.update({ PitScoutingEntries.eventKey eq oldKey }) { it[PitScoutingEntries.eventKey] = newKey; it[PitScoutingEntries.updatedAt] = java.time.Instant.now() }
+        QualitativeScoutingEntries.update({ QualitativeScoutingEntries.eventKey eq oldKey }) { it[QualitativeScoutingEntries.eventKey] = newKey; it[QualitativeScoutingEntries.updatedAt] = java.time.Instant.now() }
         ScoutingAssignments.update({ ScoutingAssignments.eventKey eq oldKey }) { it[ScoutingAssignments.eventKey] = newKey }
         ScoutingAlliances.update({ ScoutingAlliances.eventKey eq oldKey }) { it[ScoutingAlliances.eventKey] = newKey }
         SharedLinks.update({ SharedLinks.targetEventKey eq oldKey }) { it[SharedLinks.targetEventKey] = newKey }

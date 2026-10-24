@@ -166,8 +166,15 @@ import {
     getFailedEntries,
     retryFailedEntry,
     discardFailedEntry,
-    notifyPendingChanged
+    notifyPendingChanged,
+    readPendingQueue,
+    enqueueOfflineEntries,
+    enqueueOfflineEntry,
+    removePendingItem,
+    clearPendingQueue
 } from './services/offline-sync.js';
+import { getLowBandwidthMode, setLowBandwidthMode, isLowBandwidth, getLinkStats } from './base/net-quality.js';
+import { syncAllKinds, getSyncInfo } from './services/entry-store.js';
 
 import {
     initSyncStatusBanner,
@@ -326,6 +333,17 @@ window.Obsidianscout = {
     retryFailedEntry,
     discardFailedEntry,
     notifyPendingChanged,
+    readPendingQueue,
+    enqueueOfflineEntries,
+    enqueueOfflineEntry,
+    removePendingItem,
+    clearPendingQueue,
+    getLowBandwidthMode,
+    setLowBandwidthMode,
+    isLowBandwidth,
+    getLinkStats,
+    syncAllKinds,
+    getSyncInfo,
     initSyncStatusBanner,
     renderSyncStatusBanner,
     isPendingLocally,

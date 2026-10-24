@@ -9,6 +9,9 @@ import { showToast } from '../components/toast.js';
 import { checkLoginStatus, getMe, isAdmin } from '../base/auth.js';
 import { resolveEventKey } from '../utilities/helpers.js';
 import { markMatchingEntryAsSynced } from './device-history.js';
+import { syncAllKinds } from './entry-store.js';
+import { isLowBandwidth } from '../base/net-quality.js';
+import { PRIORITY } from '../base/request-scheduler.js';
 
 export const CACHE_CONFIGS = {
     "match-scouting": {
@@ -56,13 +59,155 @@ export const SYNC_PROGRESS_EVENT = "obsidianscout:offline-sync-progress";
 let _syncInProgress = false;
 let _syncProgress = null;
 
-function readQueue(key) {
+/*
+ * Queue storage. Each queued entry lives under its own localStorage key, `osq:<queue key>:<clientId>`, and each
+ * rejected entry under `osf:<clientId>`. Saving, uploading and deleting therefore each touch one key and never
+ * rewrite a shared array, so two tabs (or a save during a sync) can't overwrite each other's changes.
+ * The old layout, one JSON array per queue key, is still read and is moved into per-entry keys when found.
+ */
+const ITEM_PREFIX = "osq:";
+const FAILED_PREFIX = "osf:";
+export const ENTRY_QUEUED_EVENT = "obsidianscout:offline-entry-queued";
+
+function itemPrefix(key) {
+    return `${ITEM_PREFIX}${key}:`;
+}
+
+function allStorageKeys() {
+    const out = [];
     try {
-        const parsed = JSON.parse(safeGetItem(key) || "[]");
-        return Array.isArray(parsed) ? parsed : [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k) out.push(k);
+        }
+    } catch (e) {}
+    return out;
+}
+
+function parseJson(text, fallback) {
+    try {
+        const parsed = JSON.parse(text);
+        return parsed === undefined ? fallback : parsed;
     } catch (e) {
-        return [];
+        return fallback;
     }
+}
+
+function readLegacyArray(key) {
+    const parsed = parseJson(safeGetItem(key) || "[]", []);
+    return Array.isArray(parsed) ? parsed : [];
+}
+
+/**
+ * Moves entries a page from an older version (or an old open tab) left in the shared array into per-entry keys.
+ * Entries appended to the array while this runs stay there and move on the next read.
+ */
+function migrateLegacyQueue(key) {
+    const legacy = readLegacyArray(key);
+    if (!legacy.length) return;
+    for (const item of legacy) {
+        if (!item || typeof item !== 'object') continue;
+        const clientId = item.clientId || newClientId();
+        // Out of storage: leave the array as it is; it is still read below.
+        if (!safeSetItem(itemPrefix(key) + clientId, JSON.stringify({ ...item, clientId }))) return;
+    }
+    const latest = readLegacyArray(key);
+    const appendedMeanwhile = latest.slice(legacy.length);
+    if (appendedMeanwhile.length) safeSetItem(key, JSON.stringify(appendedMeanwhile));
+    else safeRemoveItem(key);
+}
+
+function readItemKeys(prefix) {
+    const out = [];
+    for (const k of allStorageKeys()) {
+        if (!k.startsWith(prefix)) continue;
+        const item = parseJson(safeGetItem(k), null);
+        if (item && typeof item === 'object') out.push(item);
+    }
+    return out;
+}
+
+function byCreatedAt(a, b) {
+    return String(a.createdAt || a.failedAt || "").localeCompare(String(b.createdAt || b.failedAt || ""));
+}
+
+/** Every entry waiting in one queue (by its storage key), oldest first. Each has a `clientId`. */
+export function readPendingQueue(key) {
+    migrateLegacyQueue(key);
+    const seen = new Set();
+    const items = [];
+    for (const item of readItemKeys(itemPrefix(key)).concat(readLegacyArray(key))) {
+        if (!item || typeof item !== 'object') continue;
+        if (item.clientId) {
+            if (seen.has(item.clientId)) continue;
+            seen.add(item.clientId);
+        }
+        items.push(item);
+    }
+    return items.sort(byCreatedAt);
+}
+
+const readQueue = readPendingQueue;
+
+/** Config for a form type ("match-scouting") or a queue storage key ("pending_scouting_entries"). */
+function resolveQueueKey(typeOrKey) {
+    if (CACHE_CONFIGS[typeOrKey]) return CACHE_CONFIGS[typeOrKey].key;
+    return typeOrKey;
+}
+
+/**
+ * Saves entries for later upload. All or nothing: returns false (and stores none of them) when the device is out
+ * of storage, so a page never reports a save that didn't happen.
+ */
+export function enqueueOfflineEntries(typeOrKey, items) {
+    const key = resolveQueueKey(typeOrKey);
+    const written = [];
+    for (const raw of items) {
+        const item = { ...raw, clientId: raw.clientId || newClientId(), createdAt: raw.createdAt || new Date().toISOString() };
+        const storageKey = itemPrefix(key) + item.clientId;
+        if (!safeSetItem(storageKey, JSON.stringify(item))) {
+            written.forEach(k => safeRemoveItem(k));
+            return false;
+        }
+        written.push(storageKey);
+    }
+    notifyPendingChanged();
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(ENTRY_QUEUED_EVENT, { detail: { key, count: items.length } }));
+    }
+    return true;
+}
+
+export function enqueueOfflineEntry(typeOrKey, item) {
+    return enqueueOfflineEntries(typeOrKey, [item]);
+}
+
+/** Removes one queued entry. Safe to call from any tab at any time. */
+export function removePendingItem(typeOrKey, clientId) {
+    const key = resolveQueueKey(typeOrKey);
+    if (!clientId) return;
+    safeRemoveItem(itemPrefix(key) + clientId);
+    const legacy = readLegacyArray(key);
+    const next = legacy.filter(item => !item || item.clientId !== clientId);
+    if (next.length !== legacy.length) {
+        if (next.length) safeSetItem(key, JSON.stringify(next));
+        else safeRemoveItem(key);
+    }
+    notifyPendingChanged();
+}
+
+export function clearPendingQueue(typeOrKey) {
+    const key = resolveQueueKey(typeOrKey);
+    const prefix = itemPrefix(key);
+    for (const k of allStorageKeys()) if (k.startsWith(prefix)) safeRemoveItem(k);
+    safeRemoveItem(key);
+    notifyPendingChanged();
+}
+
+/** True for localStorage keys that hold queued or rejected entries (for `storage` event listeners). */
+export function isQueueStorageKey(storageKey) {
+    return !!storageKey && (storageKey.startsWith(ITEM_PREFIX) || storageKey.startsWith(FAILED_PREFIX) ||
+        storageKey.startsWith("pending_") || storageKey === FAILED_ENTRIES_KEY);
 }
 
 function newClientId() {
@@ -114,9 +259,31 @@ export function getPendingEntries(eventKey = null) {
     return out;
 }
 
-/** Entries the server refused (4xx). They are kept for review instead of being retried forever. */
+/** Entries the server refused (4xx), oldest first. They are kept for review instead of being retried forever. */
 export function getFailedEntries() {
-    return readQueue(FAILED_ENTRIES_KEY);
+    // Move the old shared list into per-entry keys.
+    const legacy = readLegacyArray(FAILED_ENTRIES_KEY);
+    if (legacy.length) {
+        let moved = true;
+        for (const f of legacy) {
+            const id = f.failedId || (f.item && f.item.clientId) || newClientId();
+            if (!safeSetItem(FAILED_PREFIX + id, JSON.stringify({ ...f, failedId: id }))) { moved = false; break; }
+        }
+        if (moved) safeRemoveItem(FAILED_ENTRIES_KEY);
+    }
+    return readItemKeys(FAILED_PREFIX).sort(byCreatedAt);
+}
+
+function addFailedEntry(entry) {
+    const failedId = (entry.item && entry.item.clientId) || newClientId();
+    safeSetItem(FAILED_PREFIX + failedId, JSON.stringify({ ...entry, failedId }));
+}
+
+/** Looks up a rejected entry by its id (or, for older callers, its position in getFailedEntries()). */
+function findFailed(idOrIndex) {
+    const failed = getFailedEntries();
+    if (typeof idOrIndex === 'number') return failed[idOrIndex] || null;
+    return failed.find(f => f.failedId === idOrIndex) || null;
 }
 
 export function getPendingSummary(eventKey = null) {
@@ -130,27 +297,6 @@ export function getPendingSummary(eventKey = null) {
         if (created && (!oldestCreatedAt || created < oldestCreatedAt)) oldestCreatedAt = created;
     }
     return { total, byType, oldestCreatedAt, failed: getFailedEntries().length };
-}
-
-/** Gives every queued item a stable clientId so a sync can remove exactly what it uploaded. */
-function ensureClientIds(key) {
-    const queue = readQueue(key);
-    let changed = false;
-    for (const item of queue) {
-        if (item && typeof item === 'object' && !item.clientId) {
-            item.clientId = newClientId();
-            changed = true;
-        }
-    }
-    if (changed) safeSetItem(key, JSON.stringify(queue));
-    return queue;
-}
-
-/** Removes one item by clientId, re-reading the queue so entries added mid-sync survive. */
-function removeFromQueue(key, clientId) {
-    const queue = readQueue(key);
-    const next = queue.filter(item => !item || item.clientId !== clientId);
-    if (next.length !== queue.length) safeSetItem(key, JSON.stringify(next));
 }
 
 function withSyncLock(fn) {
@@ -191,7 +337,7 @@ async function runSync() {
     const work = [];
     for (const type in CACHE_CONFIGS) {
         const config = CACHE_CONFIGS[type];
-        for (const item of ensureClientIds(config.key)) {
+        for (const item of readQueue(config.key)) {
             if (item && item.clientId) work.push({ type, config, item });
         }
     }
@@ -209,13 +355,19 @@ async function runSync() {
 
     for (let i = 0; i < work.length; i++) {
         const { type, config, item } = work[i];
+        // Another tab uploaded or deleted it since this sync started.
+        if (safeGetItem(itemPrefix(config.key) + item.clientId) === null &&
+            !readLegacyArray(config.key).some(x => x && x.clientId === item.clientId)) {
+            setSyncProgress({ done: i + 1, total: work.length });
+            continue;
+        }
         try {
             await request(config.endpoint, {
                 method: "POST",
                 json: item
             });
             successCount++;
-            removeFromQueue(config.key, item.clientId);
+            removePendingItem(config.key, item.clientId);
             try {
                 const itemData = getQueuedPayload(item);
                 markMatchingEntryAsSynced(type, itemData.eventKey, itemData.targetTeamNumber || itemData.teamNumber, itemData.matchKey || itemData.matchNumber);
@@ -227,16 +379,14 @@ async function runSync() {
             const status = error && error.status;
             // 4xx (other than auth / timeout / rate limit) means the server will never accept this as-is.
             if (status && status >= 400 && status < 500 && ![401, 403, 408, 429].includes(status)) {
-                const failed = getFailedEntries();
-                failed.push({
+                addFailedEntry({
                     type,
                     item,
                     status,
                     message: (error && error.message) || `HTTP ${status}`,
                     failedAt: new Date().toISOString()
                 });
-                safeSetItem(FAILED_ENTRIES_KEY, JSON.stringify(failed));
-                removeFromQueue(config.key, item.clientId);
+                removePendingItem(config.key, item.clientId);
                 rejectedCount++;
             } else if (status === 401 || !status) {
                 // Logged out or the connection dropped: stop and keep everything for the next attempt.
@@ -258,31 +408,52 @@ async function runSync() {
     }
 }
 
-/** Puts a rejected entry back in its queue so the next sync retries it. */
-export function retryFailedEntry(index) {
-    const failed = getFailedEntries();
-    const entry = failed[index];
+/** Puts a rejected entry back in its queue so the next sync retries it. Takes its `failedId`. */
+export function retryFailedEntry(idOrIndex) {
+    const entry = findFailed(idOrIndex);
     if (!entry) return;
     const config = CACHE_CONFIGS[entry.type];
-    if (config) {
-        const queue = readQueue(config.key);
-        queue.push(entry.item);
-        safeSetItem(config.key, JSON.stringify(queue));
-    }
-    failed.splice(index, 1);
-    safeSetItem(FAILED_ENTRIES_KEY, JSON.stringify(failed));
+    if (config && entry.item && !enqueueOfflineEntry(config.key, entry.item)) return;
+    safeRemoveItem(FAILED_PREFIX + entry.failedId);
     notifyPendingChanged();
 }
 
-export function discardFailedEntry(index) {
-    const failed = getFailedEntries();
-    failed.splice(index, 1);
-    safeSetItem(FAILED_ENTRIES_KEY, JSON.stringify(failed));
+export function discardFailedEntry(idOrIndex) {
+    const entry = findFailed(idOrIndex);
+    if (!entry) return;
+    safeRemoveItem(FAILED_PREFIX + entry.failedId);
     notifyPendingChanged();
 }
 
 const LAST_SYNC_KEY = "obsidianscout:last_offline_sync_ts";
 const SYNC_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes cooldown
+/** On a slow link the warm-up runs less often. */
+const LOW_BW_SYNC_COOLDOWN_MS = 45 * 60 * 1000;
+/**
+ * On a slow link, endpoints whose data rarely changes are refreshed at most this often. On a normal link they're
+ * refreshed every round; the ETag makes an unchanged one a tiny 304.
+ */
+const STATIC_REFRESH_MS = 30 * 60 * 1000;
+const STATIC_WARM_PREFIX = "obsidianscout:warm:";
+
+/** Configs, event lists and similar: rarely change between matches. */
+function isStaticEndpoint(endpoint) {
+    const clean = endpoint.split("?")[0];
+    return clean === "/api/config" || clean === "/api/pit-config" || clean === "/api/qual-config" ||
+        clean === "/api/events" || clean === "/api/alliances/import-sources" || clean === "/api/admin/email-settings";
+}
+
+/** Large or derived responses: skipped on a slow link (analytics are computed on the device instead). */
+function isBulkEndpoint(endpoint) {
+    const clean = endpoint.split("?")[0];
+    return clean === "/api/analytics" || clean.startsWith("/api/custom-analytics") ||
+        clean === "/api/matches/predict-all" || clean === "/api/admin/users" || clean === "/api/summary";
+}
+
+function staticIsFresh(endpoint) {
+    const last = parseInt(safeGetItem(STATIC_WARM_PREFIX + endpoint) || "0", 10);
+    return Date.now() - last < STATIC_REFRESH_MS;
+}
 
 export async function syncOfflineCache(clearOldOthers = false, force = false) {
     if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.isServerOnline === 'function') {
@@ -291,9 +462,10 @@ export async function syncOfflineCache(clearOldOthers = false, force = false) {
         return;
     }
 
+    const lowBandwidth = isLowBandwidth();
     if (!force) {
         const lastSync = parseInt(safeGetItem(LAST_SYNC_KEY) || "0", 10);
-        if (Date.now() - lastSync < SYNC_COOLDOWN_MS) {
+        if (Date.now() - lastSync < (lowBandwidth ? LOW_BW_SYNC_COOLDOWN_MS : SYNC_COOLDOWN_MS)) {
             console.log("[Offline Cache] Cooldown active, skipping background sync.");
             return;
         }
@@ -350,27 +522,13 @@ export async function syncOfflineCache(clearOldOthers = false, force = false) {
         }
 
         if (canCacheScoutingData) {
-            // Endpoints required so that offline data and analytics pages work for current event
+            // Match, pit and qualitative entries come through the delta-synced entry store (one small request per
+            // kind when little changed), which also answers every scouting list and analytics request offline.
             endpoints.push(
                 "/api/analytics",
                 "/api/analytics?usePrescout=true",
                 "/api/custom-analytics/reports",
-                "/api/custom-analytics/dataset",
-                "/api/scouting",
-                "/api/scouting?includePrescout=true",
-                "/api/scouting?includePrescout=true&all=true",
-                "/api/pit-scouting",
-                "/api/pit-scouting?includePrescout=true",
-                "/api/pit-scouting?includePrescout=true&all=true",
-                "/api/qual-scouting",
-                "/api/qual-scouting?includePrescout=true",
-                "/api/qual-scouting?includePrescout=true&all=true",
-                "/api/prescout/scouting",
-                "/api/prescout/scouting?all=true",
-                "/api/prescout/pit-scouting",
-                "/api/prescout/pit-scouting?all=true",
-                "/api/prescout/qual-scouting",
-                "/api/prescout/qual-scouting?all=true"
+                "/api/custom-analytics/dataset"
             );
             if (eventKey) {
                 endpoints.push(`/api/custom-analytics/dataset?eventKey=${eventKey}`);
@@ -382,15 +540,25 @@ export async function syncOfflineCache(clearOldOthers = false, force = false) {
             purgeScoutingCache();
         }
 
-        console.log("[Offline Cache] Starting background sync of " + endpoints.length + " endpoints...");
-        
-        const updatedKeys = new Set();
-        let successCount = 0;
+        if (canCacheScoutingData) {
+            const results = await syncAllKinds();
+            console.log("[Offline Cache] Entry store sync:", results);
+        }
 
-        for (const endpoint of endpoints) {
+        // Kept even when skipped this round, so pruning below doesn't throw away still-valid copies.
+        const updatedKeys = new Set(endpoints);
+        let successCount = 0;
+        const toFetch = endpoints.filter(endpoint => {
+            if (lowBandwidth && isBulkEndpoint(endpoint)) return false;
+            if (!force && lowBandwidth && isStaticEndpoint(endpoint) && staticIsFresh(endpoint)) return false;
+            return true;
+        });
+        console.log(`[Offline Cache] Refreshing ${toFetch.length} of ${endpoints.length} endpoints${lowBandwidth ? " (slow link)" : ""}...`);
+
+        for (const endpoint of toFetch) {
             try {
-                await request(endpoint, { timeoutMs: 8000 });
-                updatedKeys.add(endpoint);
+                await request(endpoint, { timeoutMs: 8000, priority: isBulkEndpoint(endpoint) ? PRIORITY.LOW : PRIORITY.NORMAL });
+                if (isStaticEndpoint(endpoint)) safeSetItem(STATIC_WARM_PREFIX + endpoint, String(Date.now()));
                 successCount++;
             } catch (e) {
                 console.warn("[Offline Cache] Sync failed for " + endpoint + ":", e.message || e);

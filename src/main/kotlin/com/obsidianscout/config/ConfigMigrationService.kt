@@ -160,6 +160,7 @@ object ConfigMigrationService {
                         val afterJson = JsonSupport.json.encodeToString(JsonElement.serializer(), after)
                         ScoutingEntries.update({ ScoutingEntries.id eq id }) {
                             it[dataJson] = afterJson
+                            it[ScoutingEntries.updatedAt] = java.time.Instant.now()
                         }
                         updatedCount++
                     }
@@ -176,6 +177,7 @@ object ConfigMigrationService {
                         val afterJson = JsonSupport.json.encodeToString(JsonElement.serializer(), after)
                         PitScoutingEntries.update({ PitScoutingEntries.id eq id }) {
                             it[dataJson] = afterJson
+                            it[PitScoutingEntries.updatedAt] = java.time.Instant.now()
                         }
                         updatedCount++
                     }
@@ -192,6 +194,7 @@ object ConfigMigrationService {
                         val afterJson = JsonSupport.json.encodeToString(JsonElement.serializer(), after)
                         QualitativeScoutingEntries.update({ QualitativeScoutingEntries.id eq id }) {
                             it[dataJson] = afterJson
+                            it[QualitativeScoutingEntries.updatedAt] = java.time.Instant.now()
                         }
                         updatedCount++
                     }

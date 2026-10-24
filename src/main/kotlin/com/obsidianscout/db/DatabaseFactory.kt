@@ -264,7 +264,8 @@ object DatabaseFactory {
                 ScoutingAssignments,
                 GamepadProfiles,
                 SharedLinks,
-                SharedLinkAccessLogs
+                SharedLinkAccessLogs,
+                EntryTombstones
             )
 
             if (isCockroach) {
@@ -585,7 +586,11 @@ object DatabaseFactory {
                                 "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_status ON scouting_assignments (status)",
                                 "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_type ON scouting_assignments (assignment_type)",
                                 "CREATE INDEX IF NOT EXISTS idx_scouting_assignments_match_team ON scouting_assignments (event_key, match_number, target_team_number)",
-                            "ALTER TABLE scouting_assignments ADD COLUMN IF NOT EXISTS scout_group VARCHAR(64)"
+                            "ALTER TABLE scouting_assignments ADD COLUMN IF NOT EXISTS scout_group VARCHAR(64)",
+                                // Delta sync (EntrySync): last-change time on entries.
+                                "ALTER TABLE scouting_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL",
+                                "ALTER TABLE pit_scouting_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL",
+                                "ALTER TABLE qualitative_scouting_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL"
                             )
                             for (sql in pgMigrations) {
                                 try {

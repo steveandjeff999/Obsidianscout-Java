@@ -99,6 +99,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         { id: "event-predictor", label: "Event Predictor" },
         { id: "alliances", label: "Alliances" },
         { id: "alliance-selection", label: "Alliance Selection" },
+        { id: "pick-list", label: "Pick List" },
         { id: "match-planning", label: "Match Planning" },
         { id: "chat", label: "Chat" },
         { id: "backup", label: "Data Sharing" },

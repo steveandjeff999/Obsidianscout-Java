@@ -55,6 +55,38 @@ data class PickListsUpdateRequest(
     val pickLists: PickLists
 )
 
+/** A team's ranked pick list for one event, best pick first. */
+@Serializable
+data class RankedPickList(
+    val ranking: List<Int> = emptyList()
+)
+
+/**
+ * The ranked pick list as clients see it: [ranking] never contains a team on the
+ * Do Not Pick list from Alliance Selection, which is returned alongside as [dnp].
+ */
+@Serializable
+data class RankedPickListResponse(
+    val ranking: List<Int>,
+    val dnp: List<Int>,
+    val notes: Map<String, String>,
+    /** Latest change to either the ranking or the pick lists, for polling. */
+    val updatedAt: Long
+)
+
+@Serializable
+data class RankedPickListUpdateRequest(
+    val eventKey: String,
+    val ranking: List<Int>
+)
+
+@Serializable
+data class DoNotPickUpdateRequest(
+    val eventKey: String,
+    val teamNumber: Int,
+    val dnp: Boolean
+)
+
 object AllianceSelectionService {
 
     private fun resolveOwnerKey(session: UserSession): String {
@@ -125,6 +157,83 @@ object AllianceSelectionService {
             }
             PickListsResponse(clean, now.toEpochMilli())
         }
+    }
+
+    /** Ranked pick lists are private to the team, like the Want / Avoid / Do Not Pick lists. */
+    fun rankedPickListOwnerKey(teamNumber: Int, program: String): String = "rankedpicklist_team_${teamNumber}_$program"
+
+    /** Dedupes, drops invalid team numbers, and removes every team on the Do Not Pick list. */
+    fun sanitizeRanking(ranking: List<Int>, dnp: Collection<Int>): List<Int> {
+        val excluded = dnp.toSet()
+        val seen = mutableSetOf<Int>()
+        return ranking.filter { it > 0 && it !in excluded && seen.add(it) }.take(MAX_LIST_SIZE)
+    }
+
+    private fun readRanking(session: UserSession, eventKey: String): Pair<List<Int>, Long> {
+        val row = AllianceSelections.selectAll().where {
+            (AllianceSelections.ownerKey eq rankedPickListOwnerKey(session.teamNumber, session.program)) and
+            (AllianceSelections.eventKey eq eventKey)
+        }.firstOrNull() ?: return emptyList<Int>() to 0L
+        val ranking = runCatching {
+            JsonSupport.json.decodeFromString(RankedPickList.serializer(), row[AllianceSelections.selectionJson]).ranking
+        }.getOrDefault(emptyList())
+        return ranking to row[AllianceSelections.updatedAt].toEpochMilli()
+    }
+
+    private fun buildRankedResponse(ranking: List<Int>, rankingUpdatedAt: Long, lists: PickListsResponse) =
+        RankedPickListResponse(
+            ranking = sanitizeRanking(ranking, lists.pickLists.dnp),
+            dnp = lists.pickLists.dnp,
+            notes = lists.pickLists.notes,
+            updatedAt = maxOf(rankingUpdatedAt, lists.updatedAt)
+        )
+
+    fun getRankedPickList(session: UserSession, eventKey: String): RankedPickListResponse {
+        val lists = getPickLists(session, eventKey)
+        val (ranking, updatedAt) = readTransaction { readRanking(session, eventKey) }
+        return buildRankedResponse(ranking, updatedAt, lists)
+    }
+
+    fun updateRankedPickList(session: UserSession, request: RankedPickListUpdateRequest): RankedPickListResponse {
+        val lists = getPickLists(session, request.eventKey)
+        val clean = sanitizeRanking(request.ranking, lists.pickLists.dnp)
+        val now = transaction {
+            val now = Instant.now()
+            AllianceSelections.upsert(
+                AllianceSelections.ownerKey,
+                AllianceSelections.eventKey
+            ) {
+                it[ownerKey] = rankedPickListOwnerKey(session.teamNumber, session.program)
+                it[eventKey] = request.eventKey
+                it[selectionJson] = JsonSupport.json.encodeToString(RankedPickList.serializer(), RankedPickList(clean))
+                it[updatedAt] = now
+            }
+            now
+        }
+        return buildRankedResponse(clean, now.toEpochMilli(), lists)
+    }
+
+    /**
+     * Adds a team to, or removes it from, the Do Not Pick list shared with Alliance Selection.
+     * A team can only be on one of Want / Avoid / Do Not Pick, so adding it takes it off the others.
+     * The stored ranking is left alone, so taking a team off Do Not Pick puts it back where it was
+     * unless the ranking has been saved since (saves drop Do Not Pick teams).
+     */
+    fun setDoNotPick(session: UserSession, request: DoNotPickUpdateRequest): RankedPickListResponse {
+        val current = getPickLists(session, request.eventKey).pickLists
+        val team = request.teamNumber
+        val updated = if (request.dnp) {
+            current.copy(
+                want = current.want - team,
+                avoid = current.avoid - team,
+                dnp = if (team in current.dnp) current.dnp else current.dnp + team
+            )
+        } else {
+            current.copy(dnp = current.dnp - team, notes = current.notes - team.toString())
+        }
+        val lists = updatePickLists(session, PickListsUpdateRequest(request.eventKey, updated))
+        val (ranking, updatedAt) = readTransaction { readRanking(session, request.eventKey) }
+        return buildRankedResponse(ranking, updatedAt, lists)
     }
 
     fun getSelection(session: UserSession, eventKey: String): AllianceSelectionResponse {

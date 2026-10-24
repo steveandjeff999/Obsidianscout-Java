@@ -431,9 +431,11 @@ object MatchCanonical {
         }
         ScoutingEntries.update({ ScoutingEntries.matchKey eq oldKey }) {
             it[ScoutingEntries.matchKey] = newKey
+            it[ScoutingEntries.updatedAt] = java.time.Instant.now()
         }
         QualitativeScoutingEntries.update({ QualitativeScoutingEntries.matchKey eq oldKey }) {
             it[QualitativeScoutingEntries.matchKey] = newKey
+            it[QualitativeScoutingEntries.updatedAt] = java.time.Instant.now()
         }
         ScoutingAssignments.update({ ScoutingAssignments.matchKey eq oldKey }) {
             it[ScoutingAssignments.matchKey] = newKey
