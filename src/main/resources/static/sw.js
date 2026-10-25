@@ -49,6 +49,8 @@ const ASSETS = [
     '/match-planning',
     '/match-checklist',
     '/battery-tracker',
+    '/match-predictions',
+    '/prediction-leaderboard',
     '/error-reports',
     '/shared-links',
     '/login',
@@ -101,6 +103,7 @@ const ASSETS = [
     '/css/utilities/helpers.css',
     '/css/utilities/animations.css',
     '/css/components/gamepad-settings.css',
+    '/css/components/match-predictions.css',
     '/css/share-modal.css',
     '/js/common.js',
     '/js/base/storage.js',
@@ -128,6 +131,7 @@ const ASSETS = [
     '/js/services/device-history.js',
     '/js/services/match-utils.js',
     '/js/services/battery-rotation.js',
+    '/js/services/match-prediction-picker.js',
     '/js/services/collab-rooms.js',
     '/js/services/config-collab.js',
     '/js/services/gamepad-service.js',
@@ -143,6 +147,11 @@ const ASSETS = [
     '/js/services/chat-poller.js',
     '/js/services/theme-sync.js',
     '/js/services/form-draft.js',
+    '/js/services/queue-store.js',
+    '/js/services/scouting-save.js',
+    '/js/services/form-validation.js',
+    '/js/components/save-receipt.js',
+    '/js/components/stale-data-notice.js',
     '/js/utilities/helpers.js',
     '/js/utilities/haptics.js',
     '/js/utilities/media.js',
@@ -182,6 +191,8 @@ const ASSETS = [
     '/js/match-planning.js',
     '/js/match-checklist.js',
     '/js/battery-tracker.js',
+    '/js/match-predictions.js',
+    '/js/prediction-leaderboard.js',
     '/js/error-reports.js',
     '/js/shared-links.js',
     '/js/all-data.js',
@@ -393,6 +404,38 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'GET_VERSION' && event.ports && event.ports[0]) {
         event.ports[0].postMessage({ cacheName: CACHE_NAME });
+    }
+    // Offline readiness: which shell files this version actually has cached (a failed download during install is
+    // skipped so install can finish, and would otherwise go unnoticed until that page is opened offline).
+    if (event.data && event.data.type === 'GET_SHELL_STATUS' && event.ports && event.ports[0]) {
+        const port = event.ports[0];
+        event.waitUntil(caches.open(CACHE_NAME).then(async (cache) => {
+            const missing = [];
+            for (const url of ASSETS) {
+                const hit = await cache.match(url, { ignoreSearch: true });
+                if (!hit) missing.push(url);
+            }
+            port.postMessage({ cacheName: CACHE_NAME, total: ASSETS.length, missing });
+        }).catch((err) => port.postMessage({ cacheName: CACHE_NAME, total: ASSETS.length, missing: null, error: String(err) })));
+    }
+    // Retry the shell files that failed to download during install.
+    if (event.data && event.data.type === 'RECACHE_MISSING' && event.ports && event.ports[0]) {
+        const port = event.ports[0];
+        event.waitUntil(caches.open(CACHE_NAME).then(async (cache) => {
+            let fixed = 0;
+            for (const url of ASSETS) {
+                if (await cache.match(url, { ignoreSearch: true })) continue;
+                try {
+                    const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}_sw_ver=${encodeURIComponent(CACHE_NAME)}`;
+                    const response = await fetch(fetchUrl, { cache: 'reload' });
+                    if (response.status === 200) {
+                        await cache.put(url, response);
+                        fixed++;
+                    }
+                } catch (err) { /* still offline */ }
+            }
+            port.postMessage({ fixed });
+        }).catch(() => port.postMessage({ fixed: 0 })));
     }
 });
 

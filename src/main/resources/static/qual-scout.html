@@ -141,6 +141,7 @@
 
                 </div>
 
+                <div id="match-prediction-host"></div>
 
                 <form id="scouting-form" class="form-grid">
 
@@ -152,7 +153,7 @@
 
                         <button id="scout-submit" class="btn" type="submit" data-i18n="qual_scout.save_entry">Save entry</button>
 
-                        <button id="scout-save-offline-btn" class="btn secondary" type="button" data-i18n="qual_scout.save_offline">Save Offline</button>
+                        <button id="scout-save-offline-btn" class="btn secondary" type="button" data-i18n="qual_scout.save_offline">Save on device, upload later</button>
 
                         <button id="scout-export-json" class="btn secondary" type="button" data-i18n="pit-scout.export_json">Export JSON</button>
 
@@ -185,6 +186,7 @@
     <script defer src="/vendor/qrcode.min.js"></script>
     <script type="module" src="/vendor/jabcodeJSLib.min.js"></script>
 
+    <script defer src="/js/services/match-prediction-picker.js"></script>
     <script defer src="/js/qual-scout.js"></script>
 
     <script type="module" src="/js/ai/ai-features.js"></script>

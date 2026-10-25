@@ -2011,9 +2011,10 @@
                 blueContainer.appendChild(card);
             });
 
-            red.forEach((teamKey, idx) => {
+            // Red lists stations 3, 2, 1; blue lists 1, 2, 3.
+            red.map((teamKey, idx) => ({ teamKey, station: idx + 1 })).reverse().forEach(({ teamKey, station }) => {
                 const teamNum = cleanTeamNum(teamKey);
-                const card = createTeamProfileCard(teamNum, "red", idx + 1, teamKey);
+                const card = createTeamProfileCard(teamNum, "red", station, teamKey);
                 redContainer.appendChild(card);
             });
 

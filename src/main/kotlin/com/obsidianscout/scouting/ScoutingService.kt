@@ -248,6 +248,10 @@ object ScoutingService {
             throw ApiException(HttpStatusCode.BadRequest, "Team and match are required")
         }
 
+        val kindKey = if (isPrescout) "match-prescout" else "match"
+        // A retry of an upload this node already took: same entry, whatever the content comparison says.
+        val knownEntryId = RecentSubmissions.find(kindKey, session, request.clientId)
+
         val duplicate = transaction {
             val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
             val visibleTeams = partnerTeams + session.teamNumber
@@ -258,9 +262,12 @@ object ScoutingService {
                 (ScoutingEntries.eventKey eq meta.eventKey) and
                 (ScoutingEntries.matchKey eq meta.matchKey) and
                 (ScoutingEntries.isPrescout eq isPrescout)
-            }.firstOrNull { row ->
-                val existingData = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
-                JsonSupport.scoutingDataAgrees(existingData, request.data)
+            }.toList().let { rows ->
+                rows.firstOrNull { knownEntryId != null && it[ScoutingEntries.id].value.toString() == knownEntryId }
+                    ?: rows.firstOrNull { row ->
+                        val existingData = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
+                        JsonSupport.scoutingDataAgrees(existingData, request.data)
+                    }
             }
         }
 
@@ -281,6 +288,7 @@ object ScoutingService {
         }
 
         if (duplicate != null) {
+            RecentSubmissions.remember(kindKey, session, request.clientId, duplicate[ScoutingEntries.id].value.toString())
             completeAssignments()
             val mKey = duplicate[ScoutingEntries.matchKey]
             val matchPlayedTime = transaction {
@@ -332,6 +340,7 @@ object ScoutingService {
                 it[ScoutingEntries.updatedAt] = now
             }
         }
+        RecentSubmissions.remember(kindKey, session, request.clientId, id.value.toString())
 
         completeAssignments()
 

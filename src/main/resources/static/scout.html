@@ -93,6 +93,8 @@
 
                 </div>
 
+                <div id="match-prediction-host"></div>
+
                 <form id="scouting-form" class="form-grid">
 
                     <div id="form-blocked" class="notice" data-i18n="scout.select_a_team_and_match_to_sta">Select a team and match to start scouting.</div>
@@ -154,7 +156,7 @@
 
                         <button id="scout-submit" class="btn" type="submit" data-i18n="scout.save_entry">Save entry</button>
 
-                        <button id="scout-save-offline" class="btn secondary" type="button" data-i18n="scout.save_offline">Save Offline</button>
+                        <button id="scout-save-offline" class="btn secondary" type="button" data-i18n="scout.save_offline">Save on device, upload later</button>
 
                         <button id="scout-export-json" class="btn secondary" type="button" data-i18n="pit-scout.export_json">Export JSON</button>
 
@@ -181,6 +183,7 @@
     <script defer src="/vendor/qrcode.min.js"></script>
     <script type="module" src="/vendor/jabcodeJSLib.min.js"></script>
 
+    <script defer src="/js/services/match-prediction-picker.js"></script>
     <script defer src="/js/services/gamepad-service.js"></script>
     <script defer src="/js/components/gamepad-settings.js"></script>
     <script defer src="/js/scout.js"></script>

@@ -209,6 +209,8 @@ fun Route.staticWebRoutes() {
             "match-planning" to "match-planning.html",
             "match-checklist" to "match-checklist.html",
             "battery-tracker" to "battery-tracker.html",
+            "match-predictions" to "match-predictions.html",
+            "prediction-leaderboard" to "prediction-leaderboard.html",
             "assignments" to "assignments.html",
             "my-assignments" to "my-assignments.html",
             "users" to "users.html",

@@ -148,12 +148,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         const btn = e.target.closest("[data-rejected-action]");
         if (!btn) return;
         const index = btn.dataset.index;
+        let done = null;
         if (btn.dataset.rejectedAction === "retry") {
-            Obsidianscout.retryFailedEntry(index);
+            done = Promise.resolve(Obsidianscout.retryFailedEntry(index)).then((ok) => {
+                if (ok === false) Obsidianscout.showToast("Couldn't move the entry back: this device is out of storage.", "error");
+            });
         } else if (confirm("Discard this entry? It will not be uploaded.")) {
-            Obsidianscout.discardFailedEntry(index);
+            done = Promise.resolve(Obsidianscout.discardFailedEntry(index));
         }
-        loadAndRenderPendingEntries();
+        if (done) done.finally(() => loadAndRenderPendingEntries());
     });
 
     function loadAndRenderPendingEntries() {
@@ -322,7 +325,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             
             // Remove from cache
-            Obsidianscout.removePendingItem(entry.config.key, entry.item && entry.item.clientId);
+            await Obsidianscout.removePendingItem(entry.config.key, entry.item && entry.item.clientId);
 
             // Mark matching record as synced in device history
             try {
@@ -341,9 +344,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    function deletePendingEntry(entry) {
+    async function deletePendingEntry(entry) {
         if (confirm(`Are you sure you want to delete this cached ${entry.config.label} entry for Team ${entry.teamNumber}?`)) {
-            Obsidianscout.removePendingItem(entry.config.key, entry.item && entry.item.clientId);
+            await Obsidianscout.removePendingItem(entry.config.key, entry.item && entry.item.clientId);
 
             Obsidianscout.showToast("Entry deleted from cache", "success");
             Obsidianscout.updateConnectionStatus();
@@ -399,17 +402,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = function(evt) {
+        reader.onload = async function(evt) {
             try {
                 const data = JSON.parse(evt.target.result);
                 let importCount = 0;
+                let notStored = 0;
 
                 for (const key in data) {
                     const matchedConfig = Object.values(cacheConfigs).find(c => c.key === key);
                     if (matchedConfig && Array.isArray(data[key])) {
-                        const existing = JSON.parse(Obsidianscout.safeGetItem(key) || "[]");
-                        
+                        const existing = Obsidianscout.readPendingQueue(key).slice();
+                        const toAdd = [];
+
                         data[key].forEach(newItem => {
+                            if (!newItem || typeof newItem !== "object") return;
                             const isDuplicate = existing.some(oldItem => 
                                 (oldItem.data?.eventKey || oldItem.eventKey) === (newItem.data?.eventKey || newItem.eventKey) &&
                                 (oldItem.data?.targetTeamNumber || oldItem.targetTeamNumber) === (newItem.data?.targetTeamNumber || newItem.targetTeamNumber) &&
@@ -421,10 +427,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                             }
                         });
 
-                        if (toAdd.length && Obsidianscout.enqueueOfflineEntries(key, toAdd)) importCount += toAdd.length;
+                        if (toAdd.length) {
+                            if (await Obsidianscout.enqueueOfflineEntries(key, toAdd)) importCount += toAdd.length;
+                            else notStored += toAdd.length;
+                        }
                     }
                 }
 
+                if (notStored) {
+                    Obsidianscout.showToast(`${notStored} entries could NOT be imported: this device is out of storage.`, "error");
+                }
                 Obsidianscout.showToast(`Imported ${importCount} new entries from backup!`, "success");
                 Obsidianscout.updateConnectionStatus();
                 loadAndRenderPendingEntries();
@@ -437,11 +449,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         reader.readAsText(file);
     });
 
-    btnClearCache.addEventListener("click", () => {
+    btnClearCache.addEventListener("click", async () => {
         if (confirm("WARNING: Are you sure you want to delete ALL offline cached entries? These entries will NOT be uploaded to the server.")) {
             for (const type in cacheConfigs) {
                 const config = cacheConfigs[type];
-                Obsidianscout.clearPendingQueue(config.key);
+                await Obsidianscout.clearPendingQueue(config.key);
             }
             Obsidianscout.showToast("All cached entries cleared", "success");
             Obsidianscout.updateConnectionStatus();
@@ -803,8 +815,88 @@ document.addEventListener("DOMContentLoaded", async () => {
         else loadAndRenderHistoryEntries();
     });
 
-    // Initial load
+    /** Asks the service worker something and waits up to `ms` for the answer. */
+    function askWorker(message, ms = 8000) {
+        return new Promise((resolve) => {
+            const worker = navigator.serviceWorker && navigator.serviceWorker.controller;
+            if (!worker) { resolve(null); return; }
+            const channel = new MessageChannel();
+            const timer = setTimeout(() => resolve(null), ms);
+            channel.port1.onmessage = (event) => { clearTimeout(timer); resolve(event.data || null); };
+            try {
+                worker.postMessage(message, [channel.port2]);
+            } catch (e) {
+                clearTimeout(timer);
+                resolve(null);
+            }
+        });
+    }
+
+    /** Whether this device can open the app offline, and whether saved entries are stored durably. */
+    async function renderShellStatus() {
+        const host = document.getElementById("offline-readiness");
+        if (!host) return;
+        const esc = Obsidianscout.escapeHtml;
+        const icon = (name) => Obsidianscout.faIcon(name, 15);
+        const lines = [];
+        let tone = "banner-success";
+
+        const status = ("serviceWorker" in navigator) ? await askWorker({ type: "GET_SHELL_STATUS" }) : null;
+        if (!("serviceWorker" in navigator)) {
+            tone = "banner-danger";
+            lines.push(`${icon("circle-xmark")} This browser can't keep the app for offline use. Use Chrome, Edge, Safari or Firefox, and open the site over https.`);
+        } else if (!status) {
+            tone = "banner-warning";
+            lines.push(`${icon("triangle-exclamation")} Offline support is still installing. Reload this page once while online.`);
+        } else if (status.missing && status.missing.length) {
+            tone = "banner-warning";
+            const pages = status.missing.filter((u) => !u.includes("."));
+            const sample = status.missing.slice(0, 6).map(esc).join(", ") + (status.missing.length > 6 ? ", ..." : "");
+            lines.push(`${icon("triangle-exclamation")} <strong>${status.missing.length} of ${status.total} app files aren't saved on this device</strong>${pages.length ? `, including ${pages.length} ${pages.length === 1 ? "page" : "pages"}` : ""}. Those won't open offline: ${sample}
+                <div class="sync-status-actions"><button type="button" class="btn" id="btn-recache-missing">${icon("arrows-rotate")} Download them now</button></div>`);
+        } else {
+            lines.push(`${icon("circle-check")} <strong>Ready for offline use.</strong> All ${status.total} app files are saved on this device.`);
+        }
+
+        const mode = typeof Obsidianscout.storageMode === "function" ? Obsidianscout.storageMode() : null;
+        if (mode === "localstorage") {
+            if (tone === "banner-success") tone = "banner-warning";
+            lines.push(`${icon("triangle-exclamation")} Saved entries are in limited browser storage (about 5 MB) because IndexedDB isn't available, which happens in some private windows. Photos may not fit.`);
+        } else if (mode === "memory") {
+            tone = "banner-danger";
+            lines.push(`${icon("circle-xmark")} <strong>This browser can't store entries.</strong> Anything saved offline is lost when the page closes. Leave private browsing mode.`);
+        }
+        try {
+            if (navigator.storage && navigator.storage.persisted && !(await navigator.storage.persisted())) {
+                lines.push(`${icon("mobile-screen-button")} The browser may clear this site's data when the device is low on space. Installing the app (Add to Home Screen) protects it.`);
+            }
+        } catch (e) { /* ignore */ }
+
+        host.innerHTML = `<div class="banner-item ${tone}"><div class="banner-body">${lines.map((l) => `<div class="banner-message">${l}</div>`).join("")}</div></div>`;
+        const btn = document.getElementById("btn-recache-missing");
+        if (btn) {
+            btn.addEventListener("click", async () => {
+                Obsidianscout.setButtonLoading(btn, true, "Downloading...");
+                const result = await askWorker({ type: "RECACHE_MISSING" }, 120000);
+                Obsidianscout.showToast(result && result.fixed ? `Saved ${result.fixed} more files for offline use` : "Couldn't download them. Check the connection and try again.", result && result.fixed ? "success" : "error");
+                renderShellStatus();
+            });
+        }
+    }
+
+    // Saved, uploaded or removed in another tab, or moved out of old storage.
+    window.addEventListener("obsidianscout:pending-entries-changed", () => {
+        updatePendingStats();
+        if (activeTab === "pending") loadAndRenderPendingEntries();
+    });
+
+    // Initial load: saved entries are read from IndexedDB first.
+    if (typeof Obsidianscout.queueReady === "function") {
+        try { await Obsidianscout.queueReady(); } catch (e) { /* render what's loaded */ }
+    }
     updatePendingStats();
     updateHistoryStats();
-    loadAndRenderHistoryEntries();
+    if (activeTab === "pending") loadAndRenderPendingEntries();
+    else loadAndRenderHistoryEntries();
+    renderShellStatus();
 });

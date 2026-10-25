@@ -11,6 +11,7 @@ import com.obsidianscout.db.EpaOprHistoryCache
 import com.obsidianscout.db.BatteryTrackers
 import com.obsidianscout.db.MatchChecklists
 import com.obsidianscout.db.MatchPlans
+import com.obsidianscout.db.MatchPredictions
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.ScoutingAlliances
@@ -48,7 +49,7 @@ class ManualEventTeamMergeTest {
         transaction {
             SchemaUtils.create(
                 Users, ApiEvents, ApiTeams, ApiMatches, ScoutingEntries, PitScoutingEntries, QualitativeScoutingEntries,
-                ScoutingAssignments, MatchPlans, MatchChecklists, BatteryTrackers, AllianceSelections, EpaOprHistoryCache,
+                ScoutingAssignments, MatchPlans, MatchChecklists, BatteryTrackers, MatchPredictions, AllianceSelections, EpaOprHistoryCache,
                 ScoutingAlliances, SharedLinks
             )
             userId = Users.insertAndGetId {

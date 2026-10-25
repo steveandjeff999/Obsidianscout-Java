@@ -299,7 +299,9 @@ data class NodeAlertsEnrollmentResponse(
 
 @Serializable
 data class ScoutingEntryRequest(
-    val data: JsonObject
+    val data: JsonObject,
+    /** The device's own id for this entry, the same on every retry of one upload (see RecentSubmissions). */
+    val clientId: String? = null
 )
 
 @Serializable
@@ -324,6 +326,8 @@ data class ApiSettingsPayload(
     /** Omitted (null) on save keeps the team's current value. */
     val recencyBias: com.obsidianscout.integrations.RecencyBiasSettings? = null,
     val chatEnabled: Boolean = true,
+    /** Omitted (null) on save keeps the team's current value. */
+    val matchPredictionsEnabled: Boolean? = null,
     val apiKeys: ApiKeysPayload = ApiKeysPayload(),
     val scoutPages: List<String> = emptyList(),
     val analyticsPages: List<String> = emptyList(),

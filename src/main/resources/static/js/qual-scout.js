@@ -125,6 +125,17 @@ async function loadQualScoutPageData(me) {
             return list;
         }
 
+        // Match predictions game: the scout's red / blue call for the selected match (hidden while it's off).
+        const predictionHost = document.getElementById("match-prediction-host");
+        const predictionPicker = (predictionHost && window.MatchPredictionPicker)
+            ? window.MatchPredictionPicker.mount(predictionHost, { eventKey })
+            : null;
+        function syncPrediction() {
+            if (!predictionPicker) return;
+            const key = matchSelect.value;
+            predictionPicker.setMatch(key ? matches.find(m => m.matchKey === key) : null);
+        }
+
         const reserved = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
         const fields = injectSections(config.fields || []);
 
@@ -205,6 +216,7 @@ async function loadQualScoutPageData(me) {
 
         async function refreshAllianceState() {
             renderAssignmentChip();
+            syncPrediction();
             const selectedMatchKey = matchSelect.value;
             const selectedMatch = matches.find(m => m.matchKey === selectedMatchKey);
 
@@ -404,6 +416,11 @@ async function loadQualScoutPageData(me) {
             const ready = Boolean(teamSelect && teamSelect.value && matchSelect && matchSelect.value);
             setFormEnabled(form, formBlocked, ready);
 
+            // The draft's team or match may no longer be on the schedule (or the event changed).
+            const lost = [];
+            if (draft._targetTeamNumber && (!teamSelect || String(teamSelect.value) !== String(draft._targetTeamNumber))) lost.push(`team ${draft._targetTeamNumber}`);
+            if (draft._matchKey && (!matchSelect || matchSelect.value !== draft._matchKey)) lost.push(`match ${String(draft._matchKey).split("_").pop().toUpperCase()}`);
+
             if (config && config.fields) {
                 config.fields.forEach(f => {
                     if (draft[f.id] === undefined || draft[f.id] === null) return;
@@ -431,6 +448,10 @@ async function loadQualScoutPageData(me) {
                     }
                 });
             }
+            if (lost.length) {
+                return { warning: `Draft restored, but ${lost.join(" and ")} isn't on the schedule any more. Pick the team and match before saving.` };
+            }
+            return null;
         }
 
         if (typeof Obsidianscout.startDraftAutosave === 'function') {
@@ -778,118 +799,42 @@ async function loadQualScoutPageData(me) {
             });
         }
 
-        const saveOfflineButton = document.getElementById("scout-save-offline-btn");
-        if (saveOfflineButton) {
-            saveOfflineButton.addEventListener("click", () => {
-                if (currentScope === "team") {
-                    if (!teamSelect.value || !matchSelect.value) {
-                        Obsidianscout.showToast("Select both a team and a match", "error");
-                        return;
-                    }
-
-                    const payload = buildPayload(config.fields, form);
-                    if (!payload) return;
-
-                    payload.eventKey = eventKey;
-                    payload.targetTeamNumber = teamSelect.value ? Number(teamSelect.value) : null;
-                    payload.matchKey = matchSelect.value || null;
-                    const selectedMatch = matchSelect.value ? matchSelect.selectedOptions[0] : null;
-                    const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
-                    payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
-
-                    const pending = [];
-                    pending.push({
-                        data: payload,
-                        createdAt: new Date().toISOString(),
-                        ownerTeamNumber: me.teamNumber,
-                        pending: true
-                    });
-                    // Large photos can fill the browser's storage; never report a save that did not happen.
-                    if (!Obsidianscout.enqueueOfflineEntries("pending_qualitative_entries", pending)) {
-                        Obsidianscout.showToast("This device is out of storage, so the entry was NOT saved. Sync or clear cached data, then save again.", "error");
-                        return;
-                    }
-
-                    Obsidianscout.recordDeviceHistory({
-                        action: "offline_save",
-                        formType: "qual-scouting",
-                        eventKey: payload.eventKey,
-                        teamNumber: payload.targetTeamNumber,
-                        matchKey: payload.matchKey,
-                        matchNumber: payload.matchNumber,
-                        scoutName: me ? me.username : null,
-                        payload,
-                        serverSynced: false
-                    });
-
-                    Obsidianscout.showSaveResult("local");
-                    Obsidianscout.updateConnectionStatus();
-
-                    if (typeof Obsidianscout.clearDraft === 'function') {
-                        Obsidianscout.clearDraft("qual-scout");
-                    }
-
-                    window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
-
-                    clearFormFields(fields, form);
-                    handleSelectionChange().then(() => advanceAfterSave(teamSelection(payload)));
+        function rememberSavedEntries(payloads, response) {
+            payloads.forEach(payload => {
+                const newEntry = (payloads.length === 1 && response && response.entry) ? response.entry : {
+                    eventKey: payload.eventKey,
+                    targetTeamNumber: payload.targetTeamNumber,
+                    matchKey: payload.matchKey,
+                    matchNumber: payload.matchNumber,
+                    data: payload,
+                    scoutName: me ? me.username : null,
+                    updatedAt: new Date().toISOString()
+                };
+                const existingIdx = entryCache.findIndex(e => e.eventKey === newEntry.eventKey && e.targetTeamNumber === newEntry.targetTeamNumber && e.matchKey === newEntry.matchKey);
+                if (existingIdx >= 0) {
+                    entryCache[existingIdx] = newEntry;
                 } else {
-                    if (!matchSelect.value || !currentAllianceTeams.length) {
-                        Obsidianscout.showToast("Select a match first", "error");
-                        return;
-                    }
-                    const entriesToSave = collectAllianceEntries();
-                    if (!entriesToSave || !entriesToSave.length) return;
-
-                    const pending = [];
-                    entriesToSave.forEach(payload => {
-                        pending.push({
-                            data: payload,
-                            createdAt: new Date().toISOString(),
-                            ownerTeamNumber: me.teamNumber,
-                            pending: true
-                        });
-                        Obsidianscout.recordDeviceHistory({
-                            action: "offline_save",
-                            formType: "qual-scouting",
-                            eventKey: payload.eventKey,
-                            teamNumber: payload.targetTeamNumber,
-                            matchKey: payload.matchKey,
-                            matchNumber: payload.matchNumber,
-                            scoutName: me ? me.username : null,
-                            payload,
-                            serverSynced: false
-                        });
-                    });
-                    // Large photos can fill the browser's storage; never report a save that did not happen.
-                    if (!Obsidianscout.enqueueOfflineEntries("pending_qualitative_entries", pending)) {
-                        Obsidianscout.showToast("This device is out of storage, so the entry was NOT saved. Sync or clear cached data, then save again.", "error");
-                        return;
-                    }
-                    Obsidianscout.showSaveResult("local", `${entriesToSave.length} teams`);
-                    Obsidianscout.updateConnectionStatus();
-                    window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
-                    advanceAfterSave(allianceSelection());
+                    entryCache.push(newEntry);
                 }
             });
+            Obsidianscout.safeSetItem("cache:/api/qual-scouting", JSON.stringify(entryCache));
         }
 
-        form.addEventListener("submit", async (event) => {
-            event.preventDefault();
-            Obsidianscout.setButtonLoading(submitButton, true, t('scout.saving', 'Saving entry...'));
+        // One save path for both buttons and both scopes: "auto" tries the server and keeps the entries on this
+        // device when it can't take them right now; "local" (Save on device, upload later) skips the
+        // first attempt and lets the background upload send it.
+        async function saveQualEntries(mode) {
+            const itemExtras = { ownerTeamNumber: me.teamNumber, pending: true };
+            const scoutName = me ? me.username : null;
 
             if (currentScope === "team") {
                 if (!teamSelect.value || !matchSelect.value) {
                     Obsidianscout.showToast("Select both a team and a match", "error");
-                    Obsidianscout.setButtonLoading(submitButton, false);
                     return;
                 }
 
                 const payload = buildPayload(config.fields, form);
-                if (!payload) {
-                    Obsidianscout.setButtonLoading(submitButton, false);
-                    return;
-                }
+                if (!payload) return;
 
                 payload.eventKey = eventKey;
                 payload.targetTeamNumber = teamSelect.value ? Number(teamSelect.value) : null;
@@ -898,201 +843,78 @@ async function loadQualScoutPageData(me) {
                 const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
                 payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
 
-                try {
-                    const response = await Obsidianscout.request("/api/qual-scouting", {
-                        method: "POST",
-                        queueable: true,
-                        json: {
-                            data: payload
-                        }
-                    });
-                    Obsidianscout.showSaveResult("server");
-
-                    Obsidianscout.recordDeviceHistory({
-                        action: "upload",
-                        formType: "qual-scouting",
-                        eventKey: payload.eventKey,
-                        teamNumber: payload.targetTeamNumber,
-                        matchKey: payload.matchKey,
-                        matchNumber: payload.matchNumber,
-                        scoutName: me ? me.username : null,
-                        payload,
-                        serverSynced: true,
-                        syncedAt: new Date().toISOString()
-                    });
-                    
-                    const newEntry = (response && response.entry) ? response.entry : {
-                        eventKey: payload.eventKey,
-                        targetTeamNumber: payload.targetTeamNumber,
-                        matchKey: payload.matchKey,
-                        matchNumber: payload.matchNumber,
-                        data: payload,
-                        scoutName: me ? me.username : null,
-                        updatedAt: new Date().toISOString()
-                    };
-                    const existingIdx = entryCache.findIndex(e => e.eventKey === newEntry.eventKey && e.targetTeamNumber === newEntry.targetTeamNumber && e.matchKey === newEntry.matchKey);
-                    if (existingIdx >= 0) {
-                        entryCache[existingIdx] = newEntry;
-                    } else {
-                        entryCache.push(newEntry);
-                    }
-                    Obsidianscout.safeSetItem("cache:/api/qual-scouting", JSON.stringify(entryCache));
-
-                    if (typeof Obsidianscout.clearDraft === 'function') {
-                        Obsidianscout.clearDraft("qual-scout");
-                    }
-
+                const result = await Obsidianscout.saveScoutingEntry({
+                    kind: "qual-scouting", entry: payload, mode, itemExtras, scoutName
+                });
+                if (result.where === "server") {
+                    rememberSavedEntries([payload], result.response);
+                    Obsidianscout.clearDraft("qual-scout");
                     window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
                     await advanceAfterSave(teamSelection(payload));
-                } catch (error) {
-                    if (Obsidianscout.isNetworkError(error)) {
-                        const pending = [];
-                        pending.push({
-                            data: payload,
-                            createdAt: new Date().toISOString(),
-                            ownerTeamNumber: me.teamNumber,
-                            pending: true
-                        });
-                        // Large photos can fill the browser's storage; never report a save that did not happen.
-                        if (!Obsidianscout.enqueueOfflineEntries("pending_qualitative_entries", pending)) {
-                            Obsidianscout.showToast("This device is out of storage, so the entry was NOT saved. Sync or clear cached data, then save again.", "error");
-                            return;
-                        }
-
-                        Obsidianscout.recordDeviceHistory({
-                            action: "offline_save",
-                            actionLabel: "Offline Fallback",
-                            formType: "qual-scouting",
-                            eventKey: payload.eventKey,
-                            teamNumber: payload.targetTeamNumber,
-                            matchKey: payload.matchKey,
-                            matchNumber: payload.matchNumber,
-                            scoutName: me ? me.username : null,
-                            payload,
-                            serverSynced: false
-                        });
-
-                        Obsidianscout.showSaveResult("local");
-                        Obsidianscout.updateConnectionStatus();
-
-                        if (typeof Obsidianscout.clearDraft === 'function') {
-                            Obsidianscout.clearDraft("qual-scout");
-                        }
-
-                        window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
-
-                        clearFormFields(fields, form);
-                        handleSelectionChange().then(() => advanceAfterSave(teamSelection(payload)));
-                    } else {
-                        Obsidianscout.showToast(error.message || "Failed to save", "error");
-                    }
-                } finally {
-                    Obsidianscout.setButtonLoading(submitButton, false);
-                }
-            } else {
-                // Alliance Scope Submit
-                if (!matchSelect.value || !currentAllianceTeams.length) {
-                    Obsidianscout.showToast("Select a match to save alliance data", "error");
-                    Obsidianscout.setButtonLoading(submitButton, false);
-                    return;
-                }
-
-                const entriesToSave = collectAllianceEntries();
-                if (!entriesToSave || !entriesToSave.length) {
-                    Obsidianscout.setButtonLoading(submitButton, false);
-                    return;
-                }
-
-                try {
-                    const response = await Obsidianscout.request("/api/qual-scouting/batch", {
-                        method: "POST",
-                        queueable: true,
-                        json: { entries: entriesToSave }
-                    });
-                    Obsidianscout.showSaveResult("server", `${entriesToSave.length} teams`);
-
-                    entriesToSave.forEach(payload => {
-                        Obsidianscout.recordDeviceHistory({
-                            action: "upload",
-                            formType: "qual-scouting",
-                            eventKey: payload.eventKey,
-                            teamNumber: payload.targetTeamNumber,
-                            matchKey: payload.matchKey,
-                            matchNumber: payload.matchNumber,
-                            scoutName: me ? me.username : null,
-                            payload,
-                            serverSynced: true,
-                            syncedAt: new Date().toISOString()
-                        });
-
-                        const newEntry = {
-                            eventKey: payload.eventKey,
-                            targetTeamNumber: payload.targetTeamNumber,
-                            matchKey: payload.matchKey,
-                            matchNumber: payload.matchNumber,
-                            data: payload,
-                            scoutName: me ? me.username : null,
-                            updatedAt: new Date().toISOString()
-                        };
-                        const existingIdx = entryCache.findIndex(e => e.eventKey === newEntry.eventKey && e.targetTeamNumber === newEntry.targetTeamNumber && e.matchKey === newEntry.matchKey);
-                        if (existingIdx >= 0) {
-                            entryCache[existingIdx] = newEntry;
-                        } else {
-                            entryCache.push(newEntry);
-                        }
-                    });
-
-                    Obsidianscout.safeSetItem("cache:/api/qual-scouting", JSON.stringify(entryCache));
+                } else if (result.where === "local") {
+                    Obsidianscout.clearDraft("qual-scout");
                     window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
-                    await advanceAfterSave(allianceSelection());
-                } catch (error) {
-                    if (Obsidianscout.isNetworkError(error)) {
-                        const pending = [];
-                        entriesToSave.forEach(payload => {
-                            pending.push({
-                                data: payload,
-                                createdAt: new Date().toISOString(),
-                                ownerTeamNumber: me.teamNumber,
-                                pending: true
-                            });
-                            Obsidianscout.recordDeviceHistory({
-                                action: "offline_save",
-                                actionLabel: "Offline Fallback",
-                                formType: "qual-scouting",
-                                eventKey: payload.eventKey,
-                                teamNumber: payload.targetTeamNumber,
-                                matchKey: payload.matchKey,
-                                matchNumber: payload.matchNumber,
-                                scoutName: me ? me.username : null,
-                                payload,
-                                serverSynced: false
-                            });
-                        });
-                        // Large photos can fill the browser's storage; never report a save that did not happen.
-                        if (!Obsidianscout.enqueueOfflineEntries("pending_qualitative_entries", pending)) {
-                            Obsidianscout.showToast("This device is out of storage, so the entry was NOT saved. Sync or clear cached data, then save again.", "error");
-                            return;
-                        }
-
-                        Obsidianscout.showSaveResult("local", `${entriesToSave.length} teams`);
-                        Obsidianscout.updateConnectionStatus();
-                        window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
-                        advanceAfterSave(allianceSelection());
-                    } else {
-                        Obsidianscout.showToast(error.message || "Failed to save", "error");
-                    }
-                } finally {
-                    Obsidianscout.setButtonLoading(submitButton, false);
+                    clearFormFields(fields, form);
+                    handleSelectionChange().then(() => advanceAfterSave(teamSelection(payload)));
                 }
+                return;
+            }
+
+            // Alliance scope: every team on the alliance in one save.
+            if (!matchSelect.value || !currentAllianceTeams.length) {
+                Obsidianscout.showToast("Select a match to save alliance data", "error");
+                return;
+            }
+            const entriesToSave = collectAllianceEntries();
+            if (!entriesToSave || !entriesToSave.length) return;
+
+            const result = await Obsidianscout.saveScoutingEntries({
+                kind: "qual-scouting",
+                entries: entriesToSave,
+                mode,
+                itemExtras,
+                scoutName,
+                endpoint: "/api/qual-scouting/batch",
+                body: (items) => ({ entries: items.map(item => item.data) })
+            });
+            if (result.where === "server") {
+                rememberSavedEntries(entriesToSave, null);
+            }
+            if (result.where === "server" || result.where === "local") {
+                window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
+                await advanceAfterSave(allianceSelection());
+            }
+        }
+
+        const saveOfflineButton = document.getElementById("scout-save-offline-btn");
+        if (saveOfflineButton) {
+            saveOfflineButton.addEventListener("click", async () => {
+                Obsidianscout.setButtonLoading(saveOfflineButton, true);
+                try {
+                    await saveQualEntries("local");
+                } finally {
+                    Obsidianscout.setButtonLoading(saveOfflineButton, false);
+                }
+            });
+        }
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            Obsidianscout.setButtonLoading(submitButton, true, t('scout.saving', 'Saving entry...'));
+            try {
+                await saveQualEntries("auto");
+            } finally {
+                Obsidianscout.setButtonLoading(submitButton, false);
             }
         });
 
-        async function handleSelectionChange() {
+        async function loadSelection() {
             const teamValue = teamSelect.value;
             const matchValue = matchSelect.value;
             const ready = Boolean(teamValue && matchValue);
             setFormEnabled(form, formBlocked, ready);
             refreshLocalOnlyChip();
+            syncPrediction();
 
             clearFormFields(fields, form);
 
@@ -1105,6 +927,14 @@ async function loadQualScoutPageData(me) {
             if (entry) {
                 applyEntryToForm(entry, fields, form);
             }
+        }
+
+        // Drafts compare against what the form shows once a selection is loaded (its saved entry or a blank form),
+        // so only the scout's own changes count as unsaved work.
+        async function handleSelectionChange(...args) {
+            const result = await loadSelection(...args);
+            if (typeof Obsidianscout.resetDraftBaseline === "function") Obsidianscout.resetDraftBaseline("qual-scout");
+            return result;
         }
     } catch (error) {
         console.error("Failed to load qual scout page:", error);
@@ -1695,47 +1525,14 @@ function applyNumberBounds(input, field) {
 }
 
 function buildPayload(fields, form) {
-    const payload = {};
-    for (const field of fields) {
-        const input = form.querySelector(`[name='${field.id}']`);
-        if (!input) {
-            continue;
-        }
-        const value = readFieldValue(field, input);
-        const label = (window.Obsidianscout && typeof Obsidianscout.localize === 'function') ? Obsidianscout.localize(field.label) : field.label;
-
-        if (field.required && (value === null || value === "")) {
-            Obsidianscout.showToast(`Missing ${label}`, "error");
-            if (typeof switchTab === "function" && typeof getFieldPhase === "function") {
-                const phase = getFieldPhase(field);
-                if (phase) switchTab(phase);
-            }
-            return null;
-        }
-
-        if (value !== null && value !== "") {
-            if (field.type === "number" || field.type === "counter" || field.type === "rating") {
-                const numVal = Number(value);
-                if (field.min !== null && field.min !== undefined && numVal < field.min) {
-                    Obsidianscout.showToast(`${label} must be at least ${field.min}`, "error");
-                    if (typeof switchTab === "function" && typeof getFieldPhase === "function") {
-                        const phase = getFieldPhase(field);
-                        if (phase) switchTab(phase);
-                    }
-                    return null;
-                }
-                if (field.max !== null && field.max !== undefined && numVal > field.max) {
-                    Obsidianscout.showToast(`${label} must be at most ${field.max}`, "error");
-                    if (typeof switchTab === "function" && typeof getFieldPhase === "function") {
-                        const phase = getFieldPhase(field);
-                        if (phase) switchTab(phase);
-                    }
-                    return null;
-                }
-            }
-            payload[field.id] = value;
-        }
-    }
+    // Marks every missing or out-of-range field at once and jumps to the first.
+    const payload = Obsidianscout.collectValidatedPayload(fields, form, {
+        readValue: readFieldValue,
+        getPhase: getFieldPhase,
+        switchTab: typeof switchTab === "function" ? switchTab : null,
+        localize: (label) => (typeof Obsidianscout.localize === 'function' ? Obsidianscout.localize(label) : label)
+    });
+    if (!payload) return null;
 
     // Role collection payload
     const roleContainer = form.querySelector(".robot-role-collection-container") || form.querySelector("#robot-role-collection-container");

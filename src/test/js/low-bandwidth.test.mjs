@@ -187,15 +187,15 @@ test("link estimate turns low-bandwidth mode on and off with hysteresis", () => 
 
 // ── Offline queue ───────────────────────────────────────────────────────────
 
-test("queued entries each get their own key and survive concurrent removal", () => {
+test("queued entries each get their own key and survive concurrent removal", async () => {
     localStorage.clear();
     const key = "pending_scouting_entries";
-    assert.equal(offline.enqueueOfflineEntries(key, [{ data: { a: 1 } }, { data: { a: 2 } }]), true);
+    assert.equal(await offline.enqueueOfflineEntries(key, [{ data: { a: 1 } }, { data: { a: 2 } }]), true);
     const [first, second] = offline.readPendingQueue(key);
     assert.ok(first.clientId && second.clientId && first.clientId !== second.clientId);
     // A sync in another tab removes the first while this tab saves a third: nothing is lost or resurrected.
-    offline.removePendingItem(key, first.clientId);
-    offline.enqueueOfflineEntry(key, { data: { a: 3 } });
+    await offline.removePendingItem(key, first.clientId);
+    await offline.enqueueOfflineEntry(key, { data: { a: 3 } });
     assert.deepEqual(offline.readPendingQueue(key).map((i) => i.data.a).sort(), [2, 3]);
     assert.equal(localStorage.getItem(key), null, "the shared array is never written");
 });
@@ -211,7 +211,7 @@ test("entries left in the old shared array are moved and keep everything", () =>
     assert.equal(offline.readPendingQueue(key).length, 2, "reading again finds the same two");
 });
 
-test("rejected entries are retried and discarded by id", () => {
+test("rejected entries are retried and discarded by id", async () => {
     localStorage.clear();
     localStorage.setItem("failed_offline_entries", JSON.stringify([
         { type: "match-scouting", item: { clientId: "f1", data: {} }, status: 400, failedAt: "2026-01-01" },
@@ -219,8 +219,8 @@ test("rejected entries are retried and discarded by id", () => {
     ]));
     const failed = offline.getFailedEntries();
     assert.deepEqual(failed.map((f) => f.failedId), ["f1", "f2"]);
-    offline.retryFailedEntry("f2");
-    offline.discardFailedEntry("f1");
+    assert.equal(await offline.retryFailedEntry("f2"), true);
+    await offline.discardFailedEntry("f1");
     assert.equal(offline.getFailedEntries().length, 0);
     assert.deepEqual(offline.readPendingQueue("pending_scouting_entries").map((i) => i.clientId), ["f2"]);
 });

@@ -647,6 +647,31 @@ fun Route.scoutingRoutes() {
                 }
             }
 
+            // Match predictions game (Admin Settings > Match Predictions). Every route 403s while it's off.
+            route("/match-predictions") {
+                get {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing eventKey parameter"))
+                    call.respond(com.obsidianscout.scouting.MatchPredictionService.listMine(session, eventKey))
+                }
+                put {
+                    val session = call.requireSession()
+                    val request = call.receive<com.obsidianscout.scouting.MatchPredictionRequest>()
+                    call.respond(com.obsidianscout.scouting.MatchPredictionService.save(session, request))
+                }
+                get("/leaderboard") {
+                    val session = call.requireSession()
+                    val eventKey = call.request.queryParameters["eventKey"]
+                    val year = call.request.queryParameters["year"]?.toIntOrNull()
+                    call.respond(com.obsidianscout.scouting.MatchPredictionService.leaderboard(session, eventKey, year))
+                }
+                get("/leaderboard/options") {
+                    val session = call.requireSession()
+                    call.respond(com.obsidianscout.scouting.MatchPredictionService.leaderboardOptions(session))
+                }
+            }
+
             route("/shares") {
                 post {
                     val appConfig = AppConfigLoader.load()

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Match Predictions</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="match-predictions">
+    <script>
+        document.addEventListener("submit", function(e) { e.preventDefault(); }, true);
+    </script>
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div id="predictions-off" class="card hidden">
+                <h2 data-i18n="predictions.off_title">Match predictions are off</h2>
+                <p class="notice" data-i18n="predictions.off_notice">A team admin can turn them on in Admin Settings, under Permissions.</p>
+            </div>
+
+            <div id="predictions-panel" class="card">
+                <h1 data-i18n="predictions.page_title">Match Predictions</h1>
+                <p class="notice" data-i18n="predictions.page_notice">Pick who you think will win each match. You can change a pick until the result comes in, then it counts toward the leaderboard.</p>
+
+                <div class="prediction-toolbar">
+                    <div class="field">
+                        <label data-i18n="events.event">Event</label>
+                        <div id="event-badge" class="badge"></div>
+                    </div>
+                    <div class="field">
+                        <label for="show-select" data-i18n="predictions.show">Show</label>
+                        <select id="show-select" class="select-wide">
+                            <option value="open" data-i18n="predictions.show_open">Matches without a result</option>
+                            <option value="needs" data-i18n="predictions.show_needs">Still need my pick</option>
+                            <option value="done" data-i18n="predictions.show_done">Finished matches</option>
+                            <option value="all" data-i18n="predictions.show_all">All matches</option>
+                        </select>
+                    </div>
+                    <div class="field" style="min-width: 200px; flex: 1;">
+                        <label for="team-search" data-i18n="predictions.team_search">Find a Team</label>
+                        <input type="text" id="team-search" inputmode="numeric" placeholder="Team number" data-i18n-placeholder="predictions.team_search_placeholder" />
+                    </div>
+                </div>
+
+                <div class="row gap-12 wrap mt-20">
+                    <a class="btn secondary" href="/prediction-leaderboard" id="open-leaderboard" data-i18n="predictions.open_leaderboard">View Leaderboard</a>
+                    <button class="btn ghost" id="refresh-predictions" type="button" data-i18n="predictions.refresh">Refresh Results</button>
+                </div>
+
+                <div class="prediction-kpis" id="prediction-kpis"></div>
+            </div>
+
+            <div class="card mt-20" id="prediction-list-card">
+                <div class="prediction-list" id="prediction-list"></div>
+                <p class="notice prediction-empty hidden" id="prediction-empty"></p>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/services/match-utils.js"></script>
+    <script defer src="/js/services/match-prediction-picker.js"></script>
+    <script defer src="/js/match-predictions.js"></script>
+</body>
+</html>

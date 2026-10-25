@@ -26,6 +26,7 @@
 @import url('./components/widgets.css');
 @import url('./components/gamepad-settings.css');
 @import url('./components/local-ai.css');
+@import url('./components/match-predictions.css');
 
 /* 4. Page-Specific Styles */
 @import url('./pages/dashboard.css');

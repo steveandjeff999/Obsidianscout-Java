@@ -222,6 +222,8 @@ data class ApiSettings(
     val useMatch13Exp: Boolean = false,
     val recencyBias: RecencyBiasSettings = RecencyBiasSettings(),
     val chatEnabled: Boolean = true,
+    /** Match predictions game: scouts call each match's winner and compete on a leaderboard. Off until an admin enables it. */
+    val matchPredictionsEnabled: Boolean = false,
     val apiKeys: ApiKeys = ApiKeys(),
     val scoutPages: List<String> = DEFAULT_SCOUT_PAGES,
     val analyticsPages: List<String> = DEFAULT_ANALYTICS_PAGES,

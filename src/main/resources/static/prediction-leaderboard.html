@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Prediction Leaderboard</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="prediction-leaderboard">
+    <script>
+        document.addEventListener("submit", function(e) { e.preventDefault(); }, true);
+    </script>
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-1"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div id="predictions-off" class="card hidden">
+                <h2 data-i18n="predictions.off_title">Match predictions are off</h2>
+                <p class="notice" data-i18n="predictions.off_notice">A team admin can turn them on in Admin Settings, under Permissions.</p>
+            </div>
+
+            <div id="leaderboard-panel" class="card">
+                <h1 data-i18n="leaderboard.title">Prediction Leaderboard</h1>
+                <p class="notice" data-i18n="leaderboard.notice">Scouts ranked by how often they picked the winning alliance. Ties and matches without a result don't count.</p>
+
+                <div class="prediction-toolbar">
+                    <div class="field">
+                        <label for="scope-select" data-i18n="leaderboard.scope">Rank By</label>
+                        <select id="scope-select" class="select-wide">
+                            <option value="event" data-i18n="leaderboard.scope_event">One event</option>
+                            <option value="year" data-i18n="leaderboard.scope_year">Whole season</option>
+                        </select>
+                    </div>
+                    <div class="field" id="event-field" style="min-width: 260px; flex: 1;">
+                        <label for="event-select" data-i18n="leaderboard.event">Event</label>
+                        <select id="event-select" class="select-wide"></select>
+                    </div>
+                    <div class="field hidden" id="year-field">
+                        <label for="year-select" data-i18n="leaderboard.season">Season</label>
+                        <select id="year-select" class="select-wide"></select>
+                    </div>
+                </div>
+
+                <div class="row gap-12 wrap mt-20">
+                    <a class="btn secondary" href="/match-predictions" data-i18n="leaderboard.make_picks">Make Picks</a>
+                </div>
+
+                <div class="prediction-kpis" id="leaderboard-kpis"></div>
+            </div>
+
+            <div class="card mt-20" id="leaderboard-card">
+                <div class="table-scroll">
+                    <table class="table" id="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th data-i18n="leaderboard.col_rank">Rank</th>
+                                <th data-i18n="leaderboard.col_scout">Scout</th>
+                                <th class="num" data-i18n="leaderboard.col_accuracy">Accuracy</th>
+                                <th class="num" title="Right picks out of picks on matches with a winner" data-i18n="leaderboard.col_correct">Correct</th>
+                                <th class="num" title="Picks on matches that haven't finished" data-i18n="leaderboard.col_pending">Pending</th>
+                                <th class="num" title="Picks on tied matches (not counted)" data-i18n="leaderboard.col_ties">Ties</th>
+                                <th class="num" title="Right picks in a row, up to the latest scored match" data-i18n="leaderboard.col_streak">Streak</th>
+                                <th class="num" data-i18n="leaderboard.col_best_streak">Best Streak</th>
+                                <th class="num season-only hidden" data-i18n="leaderboard.col_events">Events</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <p class="notice hidden" id="leaderboard-empty" data-i18n="leaderboard.empty">No predictions for this selection yet.</p>
+                <div class="report-meta" id="leaderboard-meta" style="font-size: 0.8rem; color: var(--muted); margin-top: 10px;"></div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/prediction-leaderboard.js"></script>
+</body>
+</html>

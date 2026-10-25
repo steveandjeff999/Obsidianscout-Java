@@ -126,6 +126,7 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         useMatch13Exp = useMatch13Exp,
         recencyBias = recencyBias,
         chatEnabled = chatEnabled,
+        matchPredictionsEnabled = matchPredictionsEnabled,
         apiKeys = ApiKeysPayload(
             tbaKey = if (apiKeys.tbaKey.isNotBlank()) "********" else "",
             firstUsername = apiKeys.firstUsername,
@@ -158,6 +159,7 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         useMatch13Exp = useMatch13Exp,
         recencyBias = recencyBias ?: com.obsidianscout.integrations.RecencyBiasSettings(),
         chatEnabled = chatEnabled,
+        matchPredictionsEnabled = matchPredictionsEnabled ?: false,
         apiKeys = com.obsidianscout.integrations.ApiKeys(
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
@@ -528,6 +530,7 @@ fun Route.configRoutes() {
                     val selfRegisterRoles = payload.selfRegisterRoles ?: previous.selfRegisterRoles
                     val recencyBias = payload.recencyBias ?: previous.recencyBias
                     val alternateEventCode = payload.alternateEventCode ?: previous.alternateEventCode
+                    val matchPredictionsEnabled = payload.matchPredictionsEnabled ?: previous.matchPredictionsEnabled
                     val updated = SettingsService.updateSettings(
                         session.teamNumber,
                         payload.toSettings().copy(
@@ -535,6 +538,7 @@ fun Route.configRoutes() {
                             selfRegisterRoles = selfRegisterRoles,
                             recencyBias = recencyBias,
                             alternateEventCode = alternateEventCode,
+                            matchPredictionsEnabled = matchPredictionsEnabled,
                             // Edited on the assignments page, never sent by the settings form
                             pitScoutGroups = previous.pitScoutGroups,
                             assignmentShifts = previous.assignmentShifts

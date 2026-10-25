@@ -206,6 +206,13 @@ import {
 
 import { faIcon } from './utilities/fa-icons.js';
 
+// New files in this release; always fetched fresh, so plain named imports are safe.
+import { saveScoutingEntries, saveScoutingEntry, shouldKeepOnDevice } from './services/scouting-save.js';
+import { collectValidatedPayload, clearValidation } from './services/form-validation.js';
+import { showSaveReceipt, hideSaveReceipt, signInUrl } from './components/save-receipt.js';
+import { queueReady, storageMode } from './services/queue-store.js';
+import { initStaleDataNotice } from './components/stale-data-notice.js';
+
 import {
     saveDraft,
     loadDraft,
@@ -213,6 +220,8 @@ import {
     offerDraftRestore,
     startDraftAutosave
 } from './services/form-draft.js';
+// Newest form-draft exports, by namespace (see the note on httpModule above).
+import * as formDraftModule from './services/form-draft.js';
 
 import {
     downloadJson,
@@ -279,6 +288,8 @@ import {
 
 console.log("[CommonJS] Script initialized and loaded (Modular Architecture).");
 initErrorReporter();
+// Before any page script asks for data, so a first answer from the offline cache is noticed too.
+initStaleDataNotice();
 
 export function showModal(modalIdOrEl) {
     const el = typeof modalIdOrEl === 'string' ? document.getElementById(modalIdOrEl) : modalIdOrEl;
@@ -434,7 +445,22 @@ window.Obsidianscout = {
     exportDeviceHistory,
     importDeviceHistory,
     HISTORY_STORAGE_KEY,
-    RETENTION_DAYS
+    RETENTION_DAYS,
+    saveScoutingEntries,
+    saveScoutingEntry,
+    shouldKeepOnDevice,
+    collectValidatedPayload,
+    clearValidation,
+    showSaveReceipt,
+    hideSaveReceipt,
+    signInUrl,
+    queueReady,
+    storageMode,
+    isSignInNeededForUpload: offlineSyncModule.isSignInNeededForUpload || (() => false),
+    collectDraftFields: formDraftModule.collectDraftFields || (() => ({})),
+    applyDraftFields: formDraftModule.applyDraftFields || (() => {}),
+    resetDraftBaseline: formDraftModule.resetDraftBaseline || (() => {}),
+    newClientId: offlineSyncModule.newClientId
 };
 
 // Re-export for ES module consumers
@@ -771,12 +797,7 @@ async function onDOMContentLoaded() {
                 syncOfflineEntries();
             }
             syncOfflineCache();
-            const isDataPage = ['dashboard', 'qual-data', 'pit-data', 'all-data', 'analytics', 'graphs', 'events', 'teams', 'matches', 'predictor', 'alliances', 'users', 'config', 'settings'].includes(document.body.dataset.page);
-            const isUserEditing = document.querySelector('input:focus, textarea:focus') !== null;
-            if (isDataPage && !isUserEditing) {
-                saveScrollPositions();
-                window.location.reload();
-            }
+            // Caches refresh in the background; fresh data shows on the next page load (no forced reload).
         }
     });
     window.addEventListener("offline", () => {

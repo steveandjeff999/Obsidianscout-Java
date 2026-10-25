@@ -1,25 +1,37 @@
 /**
  * Service Form-Draft Module - ObsidianScout
- * LocalStorage draft auto-save and restoration popup modal for scouting forms.
+ * Draft auto-save and restore prompt for scouting forms. Drafts are stored with the offline queue (IndexedDB), so a
+ * draft with photos fits, and are saved shortly after every change and whenever the page is hidden or closed.
  */
 
-import { safeGetItem, safeSetItem, safeRemoveItem } from '../base/storage.js';
+import * as queueStore from './queue-store.js';
 import { showToast } from '../components/toast.js';
+import { faIcon } from '../utilities/fa-icons.js';
 
-const DRAFT_PREFIX = "obsidianscout:draft:";
+const MODAL_ID = "obsidian-draft-restore-modal";
+const UNDO_ID = "obsidian-draft-undo";
+const CHANGE_DEBOUNCE_MS = 700;
+/** formId -> resets that form's autosave starting point (after a save clears or keeps the form). */
+const rebaselineHooks = new Map();
+
+function escapeHtml(value) {
+    return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
 
 /**
- * Checks if form draft contains meaningful user input (not just empty strings or zero defaults).
+ * True when a draft holds something the scout entered. Fields starting with "_" (the team and match selection)
+ * don't count on their own, so picking a team without filling anything in doesn't leave a draft behind.
  */
 export function hasMeaningfulDraftData(data) {
     if (!data || typeof data !== 'object') return false;
     for (const [key, value] of Object.entries(data)) {
         if (value === null || value === undefined) continue;
-        if (key.startsWith("_")) {
-            if (typeof value === 'string' && value.trim() !== "") return true;
-            if (typeof value === 'number' && value > 0) return true;
-            continue;
-        }
+        if (key.startsWith("_")) continue;
         if (typeof value === 'string' && value.trim() !== "") return true;
         if (typeof value === 'number' && value !== 0) return true;
         if (typeof value === 'boolean' && value === true) return true;
@@ -28,192 +40,352 @@ export function hasMeaningfulDraftData(data) {
     return false;
 }
 
-/**
- * Saves draft data for a given form identifier.
- */
+/** Saves draft data for a form. Resolves once stored. */
 export function saveDraft(formId, data) {
-    if (!formId) return;
+    if (!formId) return Promise.resolve(false);
     if (!hasMeaningfulDraftData(data)) {
-        clearDraft(formId);
-        return;
+        return deleteStoredDraft(formId).then(() => false);
     }
-    try {
-        const payload = {
-            data: data,
-            savedAt: Date.now()
-        };
-        safeSetItem(DRAFT_PREFIX + formId, JSON.stringify(payload));
-    } catch (e) {
+    return queueStore.putDraftRecord(formId, data, Date.now()).catch((e) => {
         console.warn("[FormDraft] Failed to save draft for", formId, e);
-    }
+        return false;
+    });
 }
 
-/**
- * Loads draft data for a given form identifier.
- */
+/** `{ data, savedAt }` for a form, or null. Complete once the queue store has loaded. */
 export function loadDraft(formId) {
     if (!formId) return null;
     try {
-        const raw = safeGetItem(DRAFT_PREFIX + formId);
-        if (!raw) return null;
-        return JSON.parse(raw);
+        return queueStore.getDraftRecord(formId);
     } catch (e) {
         console.warn("[FormDraft] Failed to load draft for", formId, e);
         return null;
     }
 }
 
+function deleteStoredDraft(formId) {
+    return queueStore.deleteDraftRecord(formId).catch(() => {});
+}
+
 /**
- * Clears draft data for a given form identifier.
+ * Tells autosave the form has just been filled for a new selection (a saved entry loaded, or cleared), so what it
+ * shows now isn't the scout's unsaved work.
  */
+export function resetDraftBaseline(formId) {
+    const hook = rebaselineHooks.get(formId);
+    if (hook) hook.now();
+}
+
+/** Clears a form's draft (after it was saved, or the form was cleared on purpose). */
 export function clearDraft(formId) {
     if (!formId) return;
-    safeRemoveItem(DRAFT_PREFIX + formId);
-    const existingModal = document.getElementById("obsidian-draft-restore-modal");
-    if (existingModal) {
-        existingModal.remove();
+    deleteStoredDraft(formId);
+    const hook = rebaselineHooks.get(formId);
+    if (hook) hook.soon();
+    const existingModal = document.getElementById(MODAL_ID);
+    if (existingModal) existingModal.remove();
+}
+
+function ageText(savedAt) {
+    const ageMin = Math.max(1, Math.round((Date.now() - (savedAt || Date.now())) / 60000));
+    if (ageMin < 60) return `${ageMin} min ago`;
+    const hrs = Math.round(ageMin / 60);
+    if (hrs < 48) return `${hrs} h ago`;
+    return `${Math.round(hrs / 24)} days ago`;
+}
+
+function contextText(data) {
+    const team = data._targetTeamNumber || "";
+    const match = data._matchKey ? String(data._matchKey).split("_").pop().toUpperCase() : "";
+    if (team && match) return `Team ${team}, ${match}`;
+    if (team) return `Team ${team}`;
+    if (match) return match;
+    return "";
+}
+
+/** A short bar offering to bring back a draft that was just discarded. */
+function offerUndoDiscard(formId, draft, applyFn) {
+    const old = document.getElementById(UNDO_ID);
+    if (old) old.remove();
+    const bar = document.createElement("div");
+    bar.id = UNDO_ID;
+    bar.className = "draft-undo-bar";
+    bar.setAttribute("role", "status");
+    bar.innerHTML = `<span>Draft discarded.</span> <button type="button" class="btn ghost draft-undo-btn">${faIcon("arrows-rotate", 13)} Undo</button>`;
+    document.body.appendChild(bar);
+    const timer = setTimeout(() => bar.remove(), 8000);
+    bar.querySelector(".draft-undo-btn").addEventListener("click", () => {
+        clearTimeout(timer);
+        bar.remove();
+        queueStore.putDraftRecord(formId, draft.data, draft.savedAt || Date.now());
+        runRestore(draft, applyFn);
+    });
+}
+
+function runRestore(draft, applyFn) {
+    try {
+        // A form can return a warning, e.g. when the draft's team or match is no longer on the schedule.
+        const result = applyFn(draft.data);
+        const warning = result && typeof result === "object" ? result.warning : (typeof result === "string" ? result : null);
+        if (warning) showToast(warning, "warning");
+        else showToast("Draft restored", "success");
+    } catch (e) {
+        console.error("[FormDraft] Failed restoring draft:", e);
+        showToast("Couldn't restore the draft", "error");
     }
 }
 
 /**
- * Displays a popup modal asking the user if they want to restore an unsaved draft.
+ * Asks whether to restore a form's unsaved draft. `applyFn(data)` fills the form; it may return
+ * `{ warning }` (or a string) when part of the draft couldn't be applied.
  */
-export function offerDraftRestore(formId, applyFn) {
+export async function offerDraftRestore(formId, applyFn) {
+    try {
+        await queueStore.queueReady();
+    } catch (e) { /* fall through with whatever is loaded */ }
     const draft = loadDraft(formId);
     if (!draft || !draft.data || !hasMeaningfulDraftData(draft.data)) {
-        clearDraft(formId);
+        if (draft) deleteStoredDraft(formId);
         return;
     }
 
-    const existingModal = document.getElementById("obsidian-draft-restore-modal");
+    const existingModal = document.getElementById(MODAL_ID);
     if (existingModal) existingModal.remove();
 
-    const ageMin = Math.max(1, Math.round((Date.now() - (draft.savedAt || Date.now())) / 60000));
-    let timeStr = `${ageMin}m ago`;
-    if (ageMin > 60) {
-        const hrs = Math.round(ageMin / 60);
-        timeStr = `${hrs}h ago`;
-    }
+    const context = contextText(draft.data);
+    const previousFocus = document.activeElement;
 
-    const tNum = draft.data._targetTeamNumber || "";
-    const mKey = draft.data._matchKey || "";
-    let contextStr = "";
-    if (tNum && mKey) {
-        contextStr = ` for <strong>Team ${tNum} (Match ${mKey})</strong>`;
-    } else if (tNum) {
-        contextStr = ` for <strong>Team ${tNum}</strong>`;
-    }
-
-    const modalOverlay = document.createElement("div");
-    modalOverlay.id = "obsidian-draft-restore-modal";
-    modalOverlay.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0, 0, 0, 0.75); z-index: 99999;
-        display: flex; align-items: center; justify-content: center;
-        padding: 16px; backdrop-filter: blur(5px);
-    `;
-
-    const modalBox = document.createElement("div");
-    modalBox.className = "card";
-    modalBox.style.cssText = `
-        max-width: 480px; width: 100%; border-radius: 14px;
-        background: var(--surface-1, #18181b); color: var(--text-color, #f8fafc);
-        border: 1px solid var(--border-color, rgba(255,255,255,0.12));
-        padding: 24px; display: flex; flex-direction: column; gap: 16px;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-        animation: fadeIn 0.15s ease-out;
-    `;
-
-    modalBox.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="font-size: 1.5rem;">📋</div>
+    const overlay = document.createElement("div");
+    overlay.id = MODAL_ID;
+    overlay.className = "draft-restore-overlay";
+    overlay.innerHTML = `
+        <div class="card draft-restore-box" role="dialog" aria-modal="true" aria-labelledby="draft-restore-title" aria-describedby="draft-restore-desc">
+            <div class="draft-restore-head">
+                <div class="draft-restore-icon">${faIcon("clock", 22)}</div>
                 <div>
-                    <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700;">Restore Saved Draft?</h3>
-                    <div style="font-size: 0.8rem; color: var(--muted, #94a3b8); margin-top: 2px;">Saved ${timeStr}</div>
+                    <h3 id="draft-restore-title" class="draft-restore-title">Restore unsaved draft?</h3>
+                    <div class="draft-restore-age">Saved ${escapeHtml(ageText(draft.savedAt))}</div>
                 </div>
+                <button type="button" class="draft-restore-close" data-draft-action="close" aria-label="Decide later">${faIcon("xmark", 16)}</button>
             </div>
-            <button type="button" class="btn-close-draft-modal" style="background: none; border: none; color: var(--muted); font-size: 1.4rem; cursor: pointer; padding: 2px 6px;">✕</button>
-        </div>
-        <p style="margin: 0; color: var(--text-color, #cbd5e1); font-size: 0.9rem; line-height: 1.5;">
-            An unsaved scouting draft was recovered on this device${contextStr}. Would you like to restore your progress or discard the draft?
-        </p>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px;">
-            <button type="button" class="btn secondary btn-discard-draft" style="padding: 8px 16px; font-size: 0.85rem;">Discard Draft</button>
-            <button type="button" class="btn primary btn-restore-draft" style="padding: 8px 18px; font-size: 0.85rem; font-weight: 700;">Restore Draft</button>
-        </div>
-    `;
+            <p id="draft-restore-desc" class="draft-restore-desc">
+                This device has a scouting entry that was never saved${context ? ` for <strong>${escapeHtml(context)}</strong>` : ""}.
+                Restore it to keep going, or discard it.
+            </p>
+            <div class="draft-restore-actions">
+                <button type="button" class="btn secondary" data-draft-action="discard">Discard draft</button>
+                <button type="button" class="btn primary" data-draft-action="restore">Restore draft</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
 
-    modalOverlay.appendChild(modalBox);
-    document.body.appendChild(modalOverlay);
-
-    const closeModal = () => {
-        if (modalOverlay.parentElement) {
-            modalOverlay.parentElement.removeChild(modalOverlay);
+    const box = overlay.querySelector(".draft-restore-box");
+    const close = () => {
+        document.removeEventListener("keydown", onKey, true);
+        overlay.remove();
+        if (previousFocus && typeof previousFocus.focus === "function" && document.contains(previousFocus)) {
+            try { previousFocus.focus(); } catch (e) { /* ignore */ }
         }
     };
+    const onKey = (e) => {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            close();
+        } else if (e.key === "Tab") {
+            // Keep focus inside the dialog.
+            const focusable = Array.from(box.querySelectorAll("button"));
+            if (!focusable.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+    };
+    document.addEventListener("keydown", onKey, true);
 
-    modalBox.querySelector(".btn-close-draft-modal").addEventListener("click", closeModal);
-
-    modalBox.querySelector(".btn-discard-draft").addEventListener("click", () => {
-        clearDraft(formId);
-        closeModal();
-        if (typeof showToast === 'function') {
-            showToast("Draft discarded", "info");
+    overlay.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-draft-action]");
+        if (!btn) return;
+        const action = btn.dataset.draftAction;
+        if (action === "close") {
+            // Closing keeps the draft; it's offered again next time.
+            close();
+        } else if (action === "discard") {
+            deleteStoredDraft(formId);
+            close();
+            offerUndoDiscard(formId, draft, applyFn);
+        } else if (action === "restore") {
+            close();
+            runRestore(draft, applyFn);
         }
     });
 
-    modalBox.querySelector(".btn-restore-draft").addEventListener("click", () => {
-        try {
-            applyFn(draft.data);
-            closeModal();
-            if (typeof showToast === 'function') {
-                showToast("Draft restored successfully", "success");
-            }
-        } catch (e) {
-            console.error("[FormDraft] Failed restoring draft:", e);
-            closeModal();
-        }
-    });
+    const restoreBtn = overlay.querySelector('[data-draft-action="restore"]');
+    if (restoreBtn) restoreBtn.focus();
 }
 
 /**
- * Starts periodic draft auto-save (15s) and binds blur listeners on the form.
- * Returns a teardown function.
+ * Keeps a form's draft saved: shortly after every change (typing, picking, tapping a counter), every
+ * `intervalMs`, and right away when the page is hidden or closed. Returns a teardown function.
  */
 export function startDraftAutosave(formId, formElement, getFormData, intervalMs = 15000) {
     if (!formId || typeof getFormData !== 'function') return () => {};
 
+    let debounceTimer = null;
+    let lastSaved = null;
+    // What the form held when it was loaded, cleared or switched to another team or match. Only answers that differ
+    // from it are the scout's own work; defaults (a rating's starting value) and an entry loaded from the server aren't.
+    let baseline = null;
+    let baselineSelection = null;
+    let lastAnswers = null;
+    let savedHere = false;
+
+    const split = (data) => {
+        const selection = {};
+        const answers = {};
+        for (const [key, value] of Object.entries(data)) {
+            if (key.startsWith("_")) selection[key] = value;
+            else answers[key] = value;
+        }
+        return { selection: JSON.stringify(selection), answers };
+    };
+    const differs = (a, b) => {
+        if (!a || !b) return true;
+        const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+        for (const key of keys) {
+            if (JSON.stringify(a[key] ?? null) !== JSON.stringify(b[key] ?? null)) return true;
+        }
+        return false;
+    };
+    const differsFromBaseline = (answers) => !baseline || differs(answers, baseline);
+
     const doSave = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
         try {
             const data = getFormData();
-            if (data && hasMeaningfulDraftData(data)) {
+            if (!data) return;
+            const { selection, answers } = split(data);
+            const answersMoved = differs(answers, lastAnswers);
+            lastAnswers = answers;
+            if (selection !== baselineSelection) {
+                baselineSelection = selection;
+                if (!answersMoved) {
+                    // Only the team or match changed: start over from what the form shows now.
+                    baseline = answers;
+                    lastSaved = null;
+                    return;
+                }
+                // The selection and the answers changed together, and the form didn't say it reloaded: keep the
+                // answers as unsaved work rather than risk dropping them.
+            }
+            const serialized = JSON.stringify(data);
+            if (serialized === lastSaved) return;
+            lastSaved = serialized;
+            if (hasMeaningfulDraftData(data) && differsFromBaseline(answers)) {
                 saveDraft(formId, data);
+                savedHere = true;
+            } else if (savedHere) {
+                // The scout cleared or undid everything they entered: no draft left to offer.
+                deleteStoredDraft(formId);
+                savedHere = false;
             }
         } catch (e) {
             console.warn("[FormDraft] Autosave error:", e);
         }
     };
+    // The form as it is now is the starting point.
+    const rebaseline = () => {
+        try {
+            const data = getFormData();
+            if (!data) return;
+            const parts = split(data);
+            baselineSelection = parts.selection;
+            baseline = parts.answers;
+            lastAnswers = parts.answers;
+            lastSaved = null;
+        } catch (e) { /* ignore */ }
+    };
+    rebaseline();
+    rebaselineHooks.set(formId, { now: rebaseline, soon: () => setTimeout(rebaseline, CHANGE_DEBOUNCE_MS) });
+    const soon = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(doSave, CHANGE_DEBOUNCE_MS);
+    };
 
-    // Periodic timer (15 seconds)
     const timerId = setInterval(doSave, intervalMs);
-
-    // Save on input blur
-    const blurHandler = (e) => {
-        if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA")) {
-            doSave();
-        }
+    const onHidden = () => {
+        if (document.visibilityState === "hidden") doSave();
     };
 
     if (formElement) {
-        formElement.addEventListener("focusout", blurHandler);
+        formElement.addEventListener("input", soon);
+        formElement.addEventListener("change", soon);
+        // Counter and toggle buttons change values without input events.
+        formElement.addEventListener("click", soon);
+        formElement.addEventListener("focusout", soon);
     }
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pagehide", doSave);
 
     return () => {
+        rebaselineHooks.delete(formId);
         clearInterval(timerId);
+        clearTimeout(debounceTimer);
         if (formElement) {
-            formElement.removeEventListener("focusout", blurHandler);
+            formElement.removeEventListener("input", soon);
+            formElement.removeEventListener("change", soon);
+            formElement.removeEventListener("click", soon);
+            formElement.removeEventListener("focusout", soon);
         }
+        document.removeEventListener("visibilitychange", onHidden);
+        window.removeEventListener("pagehide", doSave);
     };
 }
 
+/** Every config field's current value in a form, for a draft. */
+export function collectDraftFields(form, fields) {
+    const data = {};
+    if (!form) return data;
+    (fields || []).forEach((f) => {
+        if (!f || !f.id || f.type === "section") return;
+        const el = form.elements[f.id];
+        if (!el) return;
+        if (el.type === "checkbox") {
+            data[f.id] = el.checked;
+        } else if (el.type === "radio" || (typeof RadioNodeList !== "undefined" && el instanceof RadioNodeList)) {
+            const checked = form.querySelector(`input[name="${CSS.escape(f.id)}"]:checked`);
+            if (checked) data[f.id] = checked.value;
+        } else if (el.value !== undefined && el.value !== "") {
+            data[f.id] = el.value;
+        }
+    });
+    return data;
+}
+
+/** Puts a draft's values back into a form's config fields. */
+export function applyDraftFields(form, fields, data) {
+    if (!form || !data) return;
+    (fields || []).forEach((f) => {
+        if (!f || !f.id || data[f.id] === undefined || data[f.id] === null) return;
+        const val = data[f.id];
+        const name = CSS.escape(f.id);
+        if (f.type === "checkbox") {
+            const el = form.querySelector(`input[name="${name}"]`);
+            if (el) el.checked = Boolean(val);
+        } else if (f.type === "radio") {
+            const radio = form.querySelector(`input[name="${name}"][value="${CSS.escape(String(val))}"]`);
+            if (radio) radio.checked = true;
+        } else if (f.type === "image" || f.type === "image_upload" || f.type === "photo") {
+            const input = form.querySelector(`[name="${name}"]`);
+            const container = input ? input.closest(".image-upload-field-container") : null;
+            if (container && typeof container.updateImage === "function") container.updateImage(val);
+        } else {
+            const el = form.elements[f.id] || form.querySelector(`[name="${name}"]`);
+            if (el) {
+                el.value = val;
+                if (f.type === "rating") el.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+        }
+    });
+}

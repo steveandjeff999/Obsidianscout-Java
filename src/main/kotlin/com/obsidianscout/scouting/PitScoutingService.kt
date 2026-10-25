@@ -230,6 +230,10 @@ object PitScoutingService {
             throw ApiException(HttpStatusCode.BadRequest, "Team is required")
         }
 
+        val kindKey = if (isPrescout) "pit-prescout" else "pit"
+        // A retry of an upload this node already took: same entry, whatever the content comparison says.
+        val knownEntryId = RecentSubmissions.find(kindKey, session, request.clientId)
+
         val duplicate = transaction {
             val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
             val visibleTeams = partnerTeams + session.teamNumber
@@ -239,9 +243,12 @@ object PitScoutingService {
                 (PitScoutingEntries.targetTeamNumber eq meta.targetTeamNumber) and
                 (PitScoutingEntries.eventKey eq meta.eventKey) and
                 (PitScoutingEntries.isPrescout eq isPrescout)
-            }.firstOrNull { row ->
-                val existingData = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
-                JsonSupport.scoutingDataAgrees(existingData, request.data)
+            }.toList().let { rows ->
+                rows.firstOrNull { knownEntryId != null && it[PitScoutingEntries.id].value.toString() == knownEntryId }
+                    ?: rows.firstOrNull { row ->
+                        val existingData = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
+                        JsonSupport.scoutingDataAgrees(existingData, request.data)
+                    }
             }
         }
 
@@ -262,6 +269,7 @@ object PitScoutingService {
         }
 
         if (duplicate != null) {
+            RecentSubmissions.remember(kindKey, session, request.clientId, duplicate[PitScoutingEntries.id].value.toString())
             completeAssignments()
             val conflictStr = duplicate[PitScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
@@ -300,6 +308,7 @@ object PitScoutingService {
                 it[PitScoutingEntries.updatedAt] = now
             }
         }
+        RecentSubmissions.remember(kindKey, session, request.clientId, id.value.toString())
 
         completeAssignments()
 

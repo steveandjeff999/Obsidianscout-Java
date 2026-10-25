@@ -516,3 +516,213 @@ body.theme-dark .next-assignment-chip {
 @media (prefers-reduced-motion: reduce) {
     .select-attention { animation: none; outline: 2px solid rgba(37, 99, 235, 0.6); }
 }
+
+/* ── Save receipt (scouting pages) ── */
+.save-receipt-host {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    width: min(520px, calc(100vw - 32px));
+    z-index: 99998;
+    pointer-events: none;
+}
+
+.save-receipt {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    border-left-width: 6px;
+    box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.35);
+    animation: toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.save-receipt-success { background: #ecfdf5; color: #065f46; border-color: #10b981; }
+.save-receipt-warning { background: #fffbeb; color: #92400e; border-color: #f59e0b; }
+.save-receipt-danger  { background: #fef2f2; color: #991b1b; border-color: #ef4444; }
+
+body.theme-dark .save-receipt-success { background: #052e22; color: #d1fae5; border-color: #34d399; }
+body.theme-dark .save-receipt-warning { background: #3b2203; color: #fef3c7; border-color: #fbbf24; }
+body.theme-dark .save-receipt-danger  { background: #3b0d0d; color: #fee2e2; border-color: #f87171; }
+
+.save-receipt-icon { padding-top: 1px; }
+.save-receipt-text { flex: 1; min-width: 0; }
+.save-receipt-title { font-weight: 800; font-size: 15px; }
+.save-receipt-what { font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.save-receipt-body { margin-top: 4px; opacity: 0.92; }
+.save-receipt-body a { color: inherit; font-weight: 700; text-decoration: underline; }
+
+.save-receipt-close {
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.7;
+    cursor: pointer;
+    padding: 4px;
+    min-width: 32px;
+    min-height: 32px;
+}
+
+.save-receipt-close:hover { opacity: 1; }
+
+/* ── Draft restore dialog and undo bar ── */
+.draft-restore-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    backdrop-filter: blur(4px);
+}
+
+.draft-restore-box {
+    max-width: 480px;
+    width: 100%;
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+}
+
+.draft-restore-head { display: flex; align-items: flex-start; gap: 12px; }
+.draft-restore-head > div:nth-child(2) { flex: 1; }
+.draft-restore-icon { color: var(--accent); padding-top: 2px; }
+.draft-restore-title { margin: 0; font-size: 1.15rem; font-weight: 700; }
+.draft-restore-age { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+.draft-restore-desc { margin: 0; font-size: 0.92rem; line-height: 1.5; }
+.draft-restore-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+
+.draft-restore-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    min-width: 36px;
+    min-height: 36px;
+}
+
+.draft-undo-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px 8px 16px;
+    border-radius: 12px;
+    background: var(--ink);
+    color: var(--bg);
+    box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.3);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.draft-undo-bar .btn {
+    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    min-height: 0;
+}
+
+/* ── Inline validation on scouting forms ── */
+.field-invalid {
+    outline: 2px solid var(--danger);
+    outline-offset: 4px;
+    border-radius: 8px;
+}
+
+.field-error-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    color: var(--danger);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.phase-error-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    border-radius: var(--radius-pill);
+    background: var(--danger);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.form-error-summary {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    background: var(--danger-surface);
+    color: var(--danger);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* ── Sign-in needed and "showing saved data" notes ── */
+.sync-status-host .btn.sync-status-signin { font-weight: 700; }
+
+.stale-data-pill {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 9990;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100vw - 32px);
+    padding: 8px 12px;
+    border-radius: var(--radius-pill);
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #f59e0b;
+    box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.25);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+body.theme-dark .stale-data-pill { background: #3b2203; color: #fef3c7; border-color: #fbbf24; }
+
+.stale-data-pill button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 2px;
+    opacity: 0.75;
+}
+
+@media (max-width: 640px) {
+    .save-receipt-host, .draft-undo-bar { bottom: 12px; }
+    .stale-data-pill { left: 16px; right: 16px; bottom: 12px; justify-content: space-between; border-radius: 12px; }
+}

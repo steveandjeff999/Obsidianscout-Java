@@ -110,7 +110,8 @@ object SnapshotService {
         ReportedErrors,
         PasskeyCredentials,
         PasskeyChallenges,
-        ScoutingAssignments
+        ScoutingAssignments,
+        MatchPredictions
     )
 
     var customStorageDirectory: File? = null

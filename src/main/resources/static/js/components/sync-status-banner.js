@@ -21,6 +21,14 @@ import {
     notifyPendingChanged,
     isQueueStorageKey
 } from '../services/offline-sync.js';
+// Namespace imports for the newest exports (see common.js): an older cached copy of these modules must not stop the page.
+import * as offlineSync from '../services/offline-sync.js';
+import * as httpModule from '../base/http.js';
+import { showSaveReceipt, signInUrl } from './save-receipt.js';
+
+const isSignInNeeded = () => (typeof offlineSync.isSignInNeededForUpload === 'function' ? offlineSync.isSignInNeededForUpload() : false);
+const SIGN_IN_NEEDED_EVENT = offlineSync.SIGN_IN_NEEDED_EVENT || "obsidianscout:upload-sign-in-needed";
+const SESSION_EXPIRED_EVENT = httpModule.SESSION_EXPIRED_EVENT || "obsidianscout:session-expired";
 
 export const SCOUTING_PAGES = ["scout", "pit-scout", "qual-scout", "prescout-scout", "prescout-pit", "prescout-qual"];
 
@@ -96,6 +104,8 @@ function ensureHost() {
         } else if (action === "toggle") {
             _expanded = !_expanded;
             renderSyncStatusBanner();
+        } else if (action === "signin") {
+            window.location.href = signInUrl();
         } else if (action === "dismiss-origin") {
             safeSetItem(ORIGIN_NOTE_DISMISSED_KEY, window.location.origin);
             renderSyncStatusBanner();
@@ -112,14 +122,40 @@ function originNoteHtml() {
     const current = window.location.origin;
     // Saved entries live in this browser per address, so a different address shows a different queue.
     if (!previous || previous === current || safeGetItem(ORIGIN_NOTE_DISMISSED_KEY) === current) return "";
+    let previousHref = "";
+    try {
+        const url = new URL(previous);
+        if (url.protocol === "http:" || url.protocol === "https:") previousHref = url.origin + window.location.pathname;
+    } catch (e) { /* not a usable address */ }
     return `
-        <div class="banner-item banner-info sync-status-origin">
+        <div class="banner-item banner-warning sync-status-origin">
             <div class="banner-body">
-                <div class="banner-message">${faIcon("triangle-exclamation", 15)}
-                    You last scouted at <strong>${escapeHtml(previous)}</strong>. Entries saved there offline only show up at that address.
-                    Open it once while online so they upload.</div>
+                <div class="banner-message">${faIcon("triangle-exclamation", 16)}
+                    <strong>You're using a different address than last time.</strong></div>
+                <div class="banner-message">This page is <strong>${escapeHtml(current)}</strong>, but you last scouted at
+                    <strong>${escapeHtml(previous)}</strong>. Entries saved on this device there are kept separately and only
+                    upload from that address.</div>
+                <div class="sync-status-actions">
+                    ${previousHref ? `<a class="btn" href="${escapeHtml(previousHref)}">${faIcon("cloud-arrow-up", 14)} Open ${escapeHtml(previous)} to upload them</a>` : ""}
+                    <button type="button" class="btn ghost" data-sync-action="dismiss-origin">Nothing is waiting there</button>
+                </div>
             </div>
-            <button class="btn-banner-close" type="button" data-sync-action="dismiss-origin" aria-label="Dismiss">${faIcon("xmark", 14)}</button>
+        </div>`;
+}
+
+function signInNoteHtml(pendingTotal) {
+    if (!isSignInNeeded()) return "";
+    const what = pendingTotal > 0
+        ? `${plural(pendingTotal, "entry is", "entries are")} waiting on this device and can't upload until you sign in again.`
+        : "New entries will be kept on this device until you sign in again.";
+    return `
+        <div class="banner-item banner-danger sync-status-item sync-status-signin-note">
+            <div class="banner-body">
+                <div class="banner-message">${faIcon("lock", 15)} <strong>Your sign-in has expired.</strong> ${what}</div>
+                <div class="sync-status-actions">
+                    <button type="button" class="btn sync-status-signin" data-sync-action="signin">${faIcon("lock", 14)} Sign in again</button>
+                </div>
+            </div>
         </div>`;
 }
 
@@ -140,7 +176,7 @@ export function renderSyncStatusBanner() {
     _lastTotal = summary.total;
     if (summary.total === 0) _expanded = false;
 
-    let html = originNoteHtml();
+    let html = originNoteHtml() + signInNoteHtml(summary.total);
 
     if (syncing && progress && progress.total > 0) {
         html += `
@@ -183,6 +219,17 @@ export function renderSyncStatusBanner() {
             </div>`;
     }
 
+    if (summary.otherTeam > 0) {
+        html += `
+            <div class="banner-item banner-info sync-status-item">
+                <div class="banner-body">
+                    <div class="banner-message">${faIcon("lock", 15)}
+                        ${plural(summary.otherTeam, "entry on this device was", "entries on this device were")} saved by another team's account.
+                        ${summary.otherTeam === 1 ? "It stays" : "They stay"} here and upload when someone from that team signs in on this device.</div>
+                </div>
+            </div>`;
+    }
+
     if (summary.failed > 0) {
         html += `
             <div class="banner-item banner-danger sync-status-item">
@@ -207,6 +254,9 @@ export function initSyncStatusBanner() {
     if (!SCOUTING_PAGES.includes(page)) return;
 
     renderSyncStatusBanner();
+    if (typeof offlineSync.queueReady === 'function') {
+        offlineSync.queueReady().then(() => renderSyncStatusBanner()).catch(() => {});
+    }
     if (_listenersWired) return;
     _listenersWired = true;
 
@@ -217,6 +267,10 @@ export function initSyncStatusBanner() {
     window.addEventListener("obsidianscout:offline-entries-synced", rerender);
     window.addEventListener("online", rerender);
     window.addEventListener("offline", rerender);
+    window.addEventListener(SIGN_IN_NEEDED_EVENT, rerender);
+    // A background request found the sign-in gone. Confirm with the server before asking the scout to sign in.
+    window.addEventListener(SESSION_EXPIRED_EVENT, () => { confirmSignIn(); });
+    if (isSignInNeeded()) confirmSignIn();
     // Another tab saved or uploaded entries.
     window.addEventListener("storage", (e) => {
         if (!e.key || isQueueStorageKey(e.key)) rerender();
@@ -228,6 +282,28 @@ export function initSyncStatusBanner() {
     });
     if (isServerOnline() && getPendingSummary().total === 0) {
         safeSetItem(ORIGIN_MARKER_KEY, window.location.origin);
+    }
+}
+
+let _confirming = false;
+
+/** Asks the server whether this browser is still signed in, and sets or clears the sign-in note to match. */
+async function confirmSignIn() {
+    if (_confirming || typeof offlineSync.setSignInNeededForUpload !== 'function') return;
+    _confirming = true;
+    try {
+        const res = await fetch("/api/auth/status", { credentials: "same-origin", cache: "no-store", headers: { "Accept": "application/json" } });
+        if (res.status === 401) {
+            offlineSync.setSignInNeededForUpload(true);
+        } else if (res.ok) {
+            const data = await res.json().catch(() => null);
+            if (data && typeof data.loggedIn === "boolean") offlineSync.setSignInNeededForUpload(!data.loggedIn);
+        }
+    } catch (e) {
+        // Offline: can't tell; leave it as it is.
+    } finally {
+        _confirming = false;
+        renderSyncStatusBanner();
     }
 }
 
@@ -270,11 +346,6 @@ export function updateLocalOnlyChip(anchor, type, selection) {
 
 /** One wording for every scouting page: where did that save actually go? */
 export function showSaveResult(where, detail = "") {
-    const suffix = detail ? ` (${detail})` : "";
-    if (where === "server") {
-        showToast(`Uploaded to server${suffix}`, "success");
-    } else {
-        showToast(`Saved on this device only, not on the server yet${suffix}`, "warning");
-    }
+    showSaveReceipt({ where: where === "server" ? "server" : "local", detail, signInNeeded: where !== "server" && isSignInNeeded() });
     notifyPendingChanged();
 }

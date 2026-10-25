@@ -1,10 +1,10 @@
 /**
  * Service Offline-Sync Module - ObsidianScout
- * LocalStorage caching for scouting entries, background synchronizer, and comprehensive offline asset/endpoint pre-caching.
+ * On-device queue of scouting entries waiting to upload, background synchronizer, and offline endpoint pre-caching.
  */
 
 import { safeGetItem, safeSetItem, safeRemoveItem, pruneHttpCaches } from '../base/storage.js';
-import { request, purgeScoutingCache } from '../base/http.js';
+import { request, purgeScoutingCache, getCachedData } from '../base/http.js';
 import { showToast } from '../components/toast.js';
 import { checkLoginStatus, getMe, isAdmin } from '../base/auth.js';
 import { resolveEventKey } from '../utilities/helpers.js';
@@ -12,6 +12,18 @@ import { markMatchingEntryAsSynced } from './device-history.js';
 import { syncAllKinds } from './entry-store.js';
 import { isLowBandwidth } from '../base/net-quality.js';
 import { PRIORITY } from '../base/request-scheduler.js';
+import {
+    STORE_CHANGED_EVENT,
+    queueReady,
+    listPending,
+    putPending,
+    deletePending,
+    clearPending,
+    pendingStillStored,
+    listFailed,
+    putFailed,
+    deleteFailed
+} from './queue-store.js';
 
 export const CACHE_CONFIGS = {
     "match-scouting": {
@@ -60,71 +72,27 @@ let _syncInProgress = false;
 let _syncProgress = null;
 
 /*
- * Queue storage. Each queued entry lives under its own localStorage key, `osq:<queue key>:<clientId>`, and each
- * rejected entry under `osf:<clientId>`. Saving, uploading and deleting therefore each touch one key and never
- * rewrite a shared array, so two tabs (or a save during a sync) can't overwrite each other's changes.
- * The old layout, one JSON array per queue key, is still read and is moved into per-entry keys when found.
+ * Queue storage lives in queue-store.js (IndexedDB, with localStorage as a fallback). Each entry is stored on its
+ * own under its queue key and `clientId`, so saving, uploading and deleting never rewrite a shared list and two tabs
+ * (or a save during a sync) can't overwrite each other's changes. Reads here are synchronous and complete once
+ * queueReady() has resolved; writes resolve after storage has committed them.
  */
-const ITEM_PREFIX = "osq:";
-const FAILED_PREFIX = "osf:";
 export const ENTRY_QUEUED_EVENT = "obsidianscout:offline-entry-queued";
+/** Fired when uploads stop because the sign-in expired, and again when it is fixed. */
+export const SIGN_IN_NEEDED_EVENT = "obsidianscout:upload-sign-in-needed";
+const SIGN_IN_NEEDED_KEY = "obsidianscout:upload_sign_in_needed";
 
-function itemPrefix(key) {
-    return `${ITEM_PREFIX}${key}:`;
-}
+export { queueReady, storageMode } from './queue-store.js';
 
-function allStorageKeys() {
-    const out = [];
-    try {
-        for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (k) out.push(k);
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    // Another tab (or a migration) changed what's stored.
+    window.addEventListener(STORE_CHANGED_EVENT, () => notifyPendingChanged());
+    // Signed in again in another tab.
+    window.addEventListener("storage", (e) => {
+        if (e.key === SIGN_IN_NEEDED_KEY) {
+            window.dispatchEvent(new CustomEvent(SIGN_IN_NEEDED_EVENT, { detail: { needed: e.newValue === "1" } }));
         }
-    } catch (e) {}
-    return out;
-}
-
-function parseJson(text, fallback) {
-    try {
-        const parsed = JSON.parse(text);
-        return parsed === undefined ? fallback : parsed;
-    } catch (e) {
-        return fallback;
-    }
-}
-
-function readLegacyArray(key) {
-    const parsed = parseJson(safeGetItem(key) || "[]", []);
-    return Array.isArray(parsed) ? parsed : [];
-}
-
-/**
- * Moves entries a page from an older version (or an old open tab) left in the shared array into per-entry keys.
- * Entries appended to the array while this runs stay there and move on the next read.
- */
-function migrateLegacyQueue(key) {
-    const legacy = readLegacyArray(key);
-    if (!legacy.length) return;
-    for (const item of legacy) {
-        if (!item || typeof item !== 'object') continue;
-        const clientId = item.clientId || newClientId();
-        // Out of storage: leave the array as it is; it is still read below.
-        if (!safeSetItem(itemPrefix(key) + clientId, JSON.stringify({ ...item, clientId }))) return;
-    }
-    const latest = readLegacyArray(key);
-    const appendedMeanwhile = latest.slice(legacy.length);
-    if (appendedMeanwhile.length) safeSetItem(key, JSON.stringify(appendedMeanwhile));
-    else safeRemoveItem(key);
-}
-
-function readItemKeys(prefix) {
-    const out = [];
-    for (const k of allStorageKeys()) {
-        if (!k.startsWith(prefix)) continue;
-        const item = parseJson(safeGetItem(k), null);
-        if (item && typeof item === 'object') out.push(item);
-    }
-    return out;
+    });
 }
 
 function byCreatedAt(a, b) {
@@ -133,10 +101,9 @@ function byCreatedAt(a, b) {
 
 /** Every entry waiting in one queue (by its storage key), oldest first. Each has a `clientId`. */
 export function readPendingQueue(key) {
-    migrateLegacyQueue(key);
     const seen = new Set();
     const items = [];
-    for (const item of readItemKeys(itemPrefix(key)).concat(readLegacyArray(key))) {
+    for (const item of listPending(resolveQueueKey(key))) {
         if (!item || typeof item !== 'object') continue;
         if (item.clientId) {
             if (seen.has(item.clientId)) continue;
@@ -155,25 +122,59 @@ function resolveQueueKey(typeOrKey) {
     return typeOrKey;
 }
 
+/** A new id for an entry. Sent with the first upload attempt too, so the server can recognise a retry. */
+export function newClientId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** The signed-in account as last seen by this device, or null. */
+function currentAccount() {
+    try {
+        const me = getCachedData("/api/auth/me");
+        const user = me && (me.user || me);
+        if (!user || user.teamNumber == null) return null;
+        return {
+            userId: user.userId || user.id || null,
+            username: user.username || null,
+            teamNumber: user.teamNumber,
+            program: user.program ? String(user.program).toUpperCase() : null
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
 /**
- * Saves entries for later upload. All or nothing: returns false (and stores none of them) when the device is out
+ * True when a queued entry was saved by another team's account (shared tablets). It stays on the device until
+ * someone from that team signs in, so it is never uploaded into the wrong team's data.
+ */
+export function isFromOtherTeam(item, account = currentAccount()) {
+    const owner = item && item.savedBy;
+    if (!owner || owner.teamNumber == null || !account) return false;
+    if (String(owner.teamNumber) !== String(account.teamNumber)) return true;
+    return !!(owner.program && account.program && owner.program !== account.program);
+}
+
+/**
+ * Saves entries for later upload. All or nothing: resolves false (and stores none of them) when the device is out
  * of storage, so a page never reports a save that didn't happen.
  */
-export function enqueueOfflineEntries(typeOrKey, items) {
+export async function enqueueOfflineEntries(typeOrKey, items) {
     const key = resolveQueueKey(typeOrKey);
-    const written = [];
-    for (const raw of items) {
-        const item = { ...raw, clientId: raw.clientId || newClientId(), createdAt: raw.createdAt || new Date().toISOString() };
-        const storageKey = itemPrefix(key) + item.clientId;
-        if (!safeSetItem(storageKey, JSON.stringify(item))) {
-            written.forEach(k => safeRemoveItem(k));
-            return false;
-        }
-        written.push(storageKey);
-    }
+    const savedBy = currentAccount();
+    const prepared = items.map(raw => ({
+        ...(savedBy && !raw.savedBy ? { savedBy } : {}),
+        ...raw,
+        clientId: raw.clientId || newClientId(),
+        createdAt: raw.createdAt || new Date().toISOString()
+    }));
+    if (!(await putPending(key, prepared))) return false;
     notifyPendingChanged();
     if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent(ENTRY_QUEUED_EVENT, { detail: { key, count: items.length } }));
+        window.dispatchEvent(new CustomEvent(ENTRY_QUEUED_EVENT, { detail: { key, count: prepared.length } }));
     }
     return true;
 }
@@ -183,38 +184,23 @@ export function enqueueOfflineEntry(typeOrKey, item) {
 }
 
 /** Removes one queued entry. Safe to call from any tab at any time. */
-export function removePendingItem(typeOrKey, clientId) {
-    const key = resolveQueueKey(typeOrKey);
+export async function removePendingItem(typeOrKey, clientId) {
     if (!clientId) return;
-    safeRemoveItem(itemPrefix(key) + clientId);
-    const legacy = readLegacyArray(key);
-    const next = legacy.filter(item => !item || item.clientId !== clientId);
-    if (next.length !== legacy.length) {
-        if (next.length) safeSetItem(key, JSON.stringify(next));
-        else safeRemoveItem(key);
-    }
+    const done = deletePending(resolveQueueKey(typeOrKey), clientId);
     notifyPendingChanged();
+    await done;
 }
 
-export function clearPendingQueue(typeOrKey) {
-    const key = resolveQueueKey(typeOrKey);
-    const prefix = itemPrefix(key);
-    for (const k of allStorageKeys()) if (k.startsWith(prefix)) safeRemoveItem(k);
-    safeRemoveItem(key);
+export async function clearPendingQueue(typeOrKey) {
+    const done = clearPending(resolveQueueKey(typeOrKey));
     notifyPendingChanged();
+    await done;
 }
 
 /** True for localStorage keys that hold queued or rejected entries (for `storage` event listeners). */
 export function isQueueStorageKey(storageKey) {
-    return !!storageKey && (storageKey.startsWith(ITEM_PREFIX) || storageKey.startsWith(FAILED_PREFIX) ||
+    return !!storageKey && (storageKey.startsWith("osq:") || storageKey.startsWith("osf:") ||
         storageKey.startsWith("pending_") || storageKey === FAILED_ENTRIES_KEY);
-}
-
-function newClientId() {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return crypto.randomUUID();
-    }
-    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function notifyPendingChanged() {
@@ -236,6 +222,20 @@ export function isOfflineSyncInProgress() {
 
 export function getOfflineSyncProgress() {
     return _syncProgress;
+}
+
+/** True after an upload was refused because the sign-in expired; cleared by the next upload that gets through. */
+export function isSignInNeededForUpload() {
+    return safeGetItem(SIGN_IN_NEEDED_KEY) === "1";
+}
+
+export function setSignInNeededForUpload(needed) {
+    const was = isSignInNeededForUpload();
+    if (needed) safeSetItem(SIGN_IN_NEEDED_KEY, "1");
+    else safeRemoveItem(SIGN_IN_NEEDED_KEY);
+    if (was !== !!needed && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(SIGN_IN_NEEDED_EVENT, { detail: { needed: !!needed } }));
+    }
 }
 
 /** Returns the payload stored in a queued item, regardless of which page wrote it. */
@@ -261,42 +261,34 @@ export function getPendingEntries(eventKey = null) {
 
 /** Entries the server refused (4xx), oldest first. They are kept for review instead of being retried forever. */
 export function getFailedEntries() {
-    // Move the old shared list into per-entry keys.
-    const legacy = readLegacyArray(FAILED_ENTRIES_KEY);
-    if (legacy.length) {
-        let moved = true;
-        for (const f of legacy) {
-            const id = f.failedId || (f.item && f.item.clientId) || newClientId();
-            if (!safeSetItem(FAILED_PREFIX + id, JSON.stringify({ ...f, failedId: id }))) { moved = false; break; }
-        }
-        if (moved) safeRemoveItem(FAILED_ENTRIES_KEY);
-    }
-    return readItemKeys(FAILED_PREFIX).sort(byCreatedAt);
+    return listFailed().sort(byCreatedAt);
 }
 
 function addFailedEntry(entry) {
-    const failedId = (entry.item && entry.item.clientId) || newClientId();
-    safeSetItem(FAILED_PREFIX + failedId, JSON.stringify({ ...entry, failedId }));
+    return putFailed(entry);
 }
 
 /** Looks up a rejected entry by its id (or, for older callers, its position in getFailedEntries()). */
 function findFailed(idOrIndex) {
-    const failed = getFailedEntries();
-    if (typeof idOrIndex === 'number') return failed[idOrIndex] || null;
-    return failed.find(f => f.failedId === idOrIndex) || null;
+    const failedList = getFailedEntries();
+    if (typeof idOrIndex === 'number') return failedList[idOrIndex] || null;
+    return failedList.find(f => f.failedId === idOrIndex) || null;
 }
 
 export function getPendingSummary(eventKey = null) {
     const byType = {};
     let total = 0;
+    let otherTeam = 0;
     let oldestCreatedAt = null;
+    const account = currentAccount();
     for (const entry of getPendingEntries(eventKey)) {
+        if (isFromOtherTeam(entry.item, account)) otherTeam++;
         byType[entry.type] = (byType[entry.type] || 0) + 1;
         total++;
         const created = entry.item && entry.item.createdAt;
         if (created && (!oldestCreatedAt || created < oldestCreatedAt)) oldestCreatedAt = created;
     }
-    return { total, byType, oldestCreatedAt, failed: getFailedEntries().length };
+    return { total, byType, oldestCreatedAt, otherTeam, failed: getFailedEntries().length };
 }
 
 function withSyncLock(fn) {
@@ -318,7 +310,9 @@ export async function syncOfflineEntries() {
     }
     if (_syncInProgress) return;
 
-    if (getPendingSummary().total === 0) return;
+    await queueReady();
+    const before = getPendingSummary();
+    if (before.total - before.otherTeam === 0) return;
 
     _syncInProgress = true;
     try {
@@ -327,27 +321,37 @@ export async function syncOfflineEntries() {
         _syncInProgress = false;
         setSyncProgress(null);
         notifyPendingChanged();
-        if (window.Obsidianscout && typeof window.Obsidianscout.updateConnectionStatus === 'function') {
+        if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.updateConnectionStatus === 'function') {
             window.Obsidianscout.updateConnectionStatus();
         }
     }
 }
 
+/** How an upload failure is handled: "reject" keeps it for review, "stop" ends this round, "skip" tries the next. */
+export function classifyUploadFailure(error) {
+    const status = error && error.status;
+    if (status === 401) return "stop";
+    // 408 timeout / 429 too many requests: the server is busy, so the rest would fail too.
+    if (status === 408 || status === 429) return "stop";
+    // 403 can be a stale CSRF token or a role change; keep it and retry later.
+    if (status === 403) return "skip";
+    // Any other 4xx means the server will never accept this as-is.
+    if (status && status >= 400 && status < 500) return "reject";
+    // 5xx can be specific to one entry; carry on with the others. Unreachable server: stop.
+    if (status && status >= 500 && !error.network) return "skip";
+    return "stop";
+}
+
 async function runSync() {
     const work = [];
+    const account = currentAccount();
     for (const type in CACHE_CONFIGS) {
         const config = CACHE_CONFIGS[type];
         for (const item of readQueue(config.key)) {
-            if (item && item.clientId) work.push({ type, config, item });
+            if (item && item.clientId && !isFromOtherTeam(item, account)) work.push({ type, config, item });
         }
     }
     if (!work.length) return;
-
-    const syncBtn = document.querySelector("#btn-sync-offline");
-    if (syncBtn) {
-        syncBtn.disabled = true;
-        syncBtn.textContent = "Syncing...";
-    }
 
     let successCount = 0;
     let rejectedCount = 0;
@@ -356,18 +360,20 @@ async function runSync() {
     for (let i = 0; i < work.length; i++) {
         const { type, config, item } = work[i];
         // Another tab uploaded or deleted it since this sync started.
-        if (safeGetItem(itemPrefix(config.key) + item.clientId) === null &&
-            !readLegacyArray(config.key).some(x => x && x.clientId === item.clientId)) {
+        if (!(await pendingStillStored(config.key, item.clientId))) {
             setSyncProgress({ done: i + 1, total: work.length });
             continue;
         }
         try {
             await request(config.endpoint, {
                 method: "POST",
-                json: item
+                json: item,
+                // Uploading in the background must never navigate away from a form being filled in.
+                authRedirect: false
             });
             successCount++;
-            removePendingItem(config.key, item.clientId);
+            setSignInNeededForUpload(false);
+            await removePendingItem(config.key, item.clientId);
             try {
                 const itemData = getQueuedPayload(item);
                 markMatchingEntryAsSynced(type, itemData.eventKey, itemData.targetTeamNumber || itemData.teamNumber, itemData.matchKey || itemData.matchNumber);
@@ -376,20 +382,21 @@ async function runSync() {
             }
         } catch (error) {
             console.error(`[Offline Sync] Failed to sync ${config.label}:`, error);
-            const status = error && error.status;
-            // 4xx (other than auth / timeout / rate limit) means the server will never accept this as-is.
-            if (status && status >= 400 && status < 500 && ![401, 403, 408, 429].includes(status)) {
-                addFailedEntry({
+            const outcome = classifyUploadFailure(error);
+            if (outcome === "reject") {
+                const status = error.status;
+                if (await addFailedEntry({
                     type,
                     item,
                     status,
                     message: (error && error.message) || `HTTP ${status}`,
                     failedAt: new Date().toISOString()
-                });
-                removePendingItem(config.key, item.clientId);
-                rejectedCount++;
-            } else if (status === 401 || !status || error.network) {
-                // Logged out or the connection dropped: stop and keep everything for the next attempt.
+                })) {
+                    await removePendingItem(config.key, item.clientId);
+                    rejectedCount++;
+                }
+            } else if (outcome === "stop") {
+                if (error && error.status === 401) setSignInNeededForUpload(true);
                 setSyncProgress({ done: i + 1, total: work.length });
                 break;
             }
@@ -428,7 +435,11 @@ function scheduleAutoUpload(delayMs) {
     _autoTimer = setTimeout(async () => {
         _autoTimer = null;
         if (!autoUploadAllowed()) return;
-        const before = getPendingSummary().total;
+        const uploadable = () => {
+            const summary = getPendingSummary();
+            return summary.total - summary.otherTeam;
+        };
+        const before = uploadable();
         if (before === 0) {
             _autoStep = 0;
             return;
@@ -438,7 +449,7 @@ function scheduleAutoUpload(delayMs) {
         } catch (e) {
             console.warn("[Offline Sync] Automatic upload failed:", e);
         }
-        const after = getPendingSummary().total;
+        const after = uploadable();
         if (after === 0) {
             _autoStep = 0;
             return;
@@ -461,25 +472,36 @@ export function startAutoUpload() {
         _autoStep = 0;
         scheduleAutoUpload(2000);
     });
-    if (getPendingSummary().total > 0) {
-        scheduleAutoUpload(AUTO_RETRY_SECONDS[0] * 1000);
-    }
+    // Signing in again (in this tab or another) lets the waiting entries go up straight away.
+    window.addEventListener(SIGN_IN_NEEDED_EVENT, (e) => {
+        if (e.detail && !e.detail.needed) {
+            _autoStep = 0;
+            scheduleAutoUpload(1000);
+        }
+    });
+    queueReady().then(() => {
+        const summary = getPendingSummary();
+        if (summary.total - summary.otherTeam > 0) {
+            scheduleAutoUpload(AUTO_RETRY_SECONDS[0] * 1000);
+        }
+    });
 }
 
-/** Puts a rejected entry back in its queue so the next sync retries it. Takes its `failedId`. */
-export function retryFailedEntry(idOrIndex) {
+/** Puts a rejected entry back in its queue so the next sync retries it. Takes its `failedId`. Resolves true on success. */
+export async function retryFailedEntry(idOrIndex) {
     const entry = findFailed(idOrIndex);
-    if (!entry) return;
+    if (!entry) return false;
     const config = CACHE_CONFIGS[entry.type];
-    if (config && entry.item && !enqueueOfflineEntry(config.key, entry.item)) return;
-    safeRemoveItem(FAILED_PREFIX + entry.failedId);
+    if (config && entry.item && !(await enqueueOfflineEntry(config.key, entry.item))) return false;
+    await deleteFailed(entry.failedId);
     notifyPendingChanged();
+    return true;
 }
 
-export function discardFailedEntry(idOrIndex) {
+export async function discardFailedEntry(idOrIndex) {
     const entry = findFailed(idOrIndex);
     if (!entry) return;
-    safeRemoveItem(FAILED_PREFIX + entry.failedId);
+    await deleteFailed(entry.failedId);
     notifyPendingChanged();
 }
 

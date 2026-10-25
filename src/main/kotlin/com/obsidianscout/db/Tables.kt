@@ -362,6 +362,27 @@ object BatteryTrackers : UUIDTable("battery_trackers") {
     }
 }
 
+/**
+ * Scouts' calls on who wins each match (the match predictions game, off until a team admin turns it on).
+ * One row per user per match; [predictedWinner] is "red" or "blue". Scored against the synced result.
+ */
+object MatchPredictions : UUIDTable("match_predictions") {
+    val ownerTeamNumber = integer("owner_team_number")
+    val program = varchar("program", 8).default("FRC")
+    val userId = varchar("user_id", 36)
+    val eventKey = varchar("event_key", 64)
+    val matchKey = varchar("match_key", 64)
+    val predictedWinner = varchar("predicted_winner", 8)
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_match_predictions_user_match", userId, matchKey)
+        index("idx_match_predictions_owner_program", false, ownerTeamNumber, program)
+        index("idx_match_predictions_event", false, eventKey)
+    }
+}
+
 object Banners : UUIDTable("banners") {
     val teamNumber = integer("team_number").default(0)
     val program = varchar("program", 8).default("FRC")

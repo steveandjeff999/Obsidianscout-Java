@@ -431,6 +431,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             setChecked("settings-opr", loadedSettings.useTbaOpr);
             setRecencyBias(loadedSettings.recencyBias);
             setChecked("settings-chat", loadedSettings.chatEnabled);
+            setChecked("settings-match-predictions", loadedSettings.matchPredictionsEnabled === true);
             setChecked("settings-lock-registration", loadedSettings.registrationLocked || false);
             setSelfRegisterRoles(loadedSettings.selfRegisterRoles);
             syncSelfRegisterRolesEnabled();
@@ -714,6 +715,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.useTbaOpr = getChecked("settings-opr");
                     loadedSettings.recencyBias = getRecencyBias();
                     loadedSettings.chatEnabled = getChecked("settings-chat");
+                    loadedSettings.matchPredictionsEnabled = getChecked("settings-match-predictions");
                     loadedSettings.registrationLocked = getChecked("settings-lock-registration");
                     loadedSettings.selfRegisterRoles = getSelfRegisterRoles();
                     loadedSettings.statboticsBaseUrl = getVal("settings-statbotics-url").trim() || "https://api.statbotics.io";
@@ -879,6 +881,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.analyticsPages = analyticsPages;
                     loadedSettings.adminPages = adminPages;
                     loadedSettings.chatEnabled = getChecked("settings-chat");
+                    loadedSettings.matchPredictionsEnabled = getChecked("settings-match-predictions");
                     loadedSettings.registrationLocked = getChecked("settings-lock-registration");
                     loadedSettings.selfRegisterRoles = getSelfRegisterRoles();
                     loadedSettings.setupWizardCompleted = true;

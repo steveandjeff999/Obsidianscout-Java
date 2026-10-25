@@ -6,7 +6,7 @@
 
 import { safeGetItem, safeSetItem } from '../base/storage.js';
 import { t } from '../base/i18n.js';
-import { CACHE_CONFIGS, readPendingQueue } from '../services/offline-sync.js';
+import { CACHE_CONFIGS, readPendingQueue, isOfflineSyncInProgress } from '../services/offline-sync.js';
 import { isLowBandwidth } from '../base/net-quality.js';
 
 /** A slow event link can take longer than this for one round trip; give the probe room before calling it down. */
@@ -20,7 +20,20 @@ const HIDDEN_PROBE_INTERVAL_MS = 20000;
 const PROBE_FAILURES_TO_OFFLINE = 2;
 let _probeFailures = 0;
 
-let _serverOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+/** When the server was last found unreachable, kept for the tab so the next page starts out knowing it. */
+const OFFLINE_SINCE_KEY = "obsidianscout:server_offline_since";
+const REMEMBER_OFFLINE_MS = 2 * 60 * 1000;
+
+function rememberedOffline() {
+    try {
+        const since = Number(sessionStorage.getItem(OFFLINE_SINCE_KEY) || 0);
+        return since > 0 && Date.now() - since < REMEMBER_OFFLINE_MS;
+    } catch (e) {
+        return false;
+    }
+}
+
+let _serverOnline = typeof navigator !== 'undefined' ? (navigator.onLine && !rememberedOffline()) : true;
 let _isProbing = false;
 let _probeTimer = null;
 let _monitoringStarted = false;
@@ -33,6 +46,10 @@ export function setServerOnline(status) {
     const nextStatus = !!status;
     const changed = _serverOnline !== nextStatus;
     _serverOnline = nextStatus;
+    try {
+        if (nextStatus) sessionStorage.removeItem(OFFLINE_SINCE_KEY);
+        else sessionStorage.setItem(OFFLINE_SINCE_KEY, String(Date.now()));
+    } catch (e) { /* ignore */ }
     updateConnectionStatus(isServerOnline());
     if (changed && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent("obsidianscout:connection-changed", {
@@ -80,9 +97,18 @@ export async function checkServerConnection({ force = false } = {}) {
 
         clearTimeout(timeoutId);
 
+        // Venue Wi-Fi sign-in pages answer every address with 200 and an HTML page. Only this server's own JSON
+        // reply counts as reachable.
+        let data = null;
         if (res.ok) {
             try {
-                const data = await res.json();
+                data = await res.json();
+            } catch (jsonErr) {
+                data = null;
+            }
+        }
+        if (res.ok && data && data.version) {
+            try {
                 if (data && data.version) {
                     safeSetItem("obsidianscout:server_version", data.version);
                     const versionEl = document.getElementById("server-version") || document.querySelector(".sidebar #server-version");
@@ -91,14 +117,14 @@ export async function checkServerConnection({ force = false } = {}) {
                         versionEl.textContent = `Server ${displayVer}`;
                     }
                 }
-            } catch (jsonErr) {
-                // Response was OK even if JSON parsing failed
+            } catch (displayErr) {
+                // Showing the version is cosmetic.
             }
             _probeFailures = 0;
             setServerOnline(true);
             return true;
         } else {
-            // 502/503/504 or server error response
+            // 502/503/504, a server error, or a captive portal page
             return probeFailed();
         }
     } catch (e) {
@@ -208,7 +234,11 @@ export function updateConnectionStatus(forcedStatus = null) {
             text.textContent = (typeof t === 'function') ? t('connection.online', 'Online') : 'Online';
         }
         if (syncBtn) {
-            if (count > 0) {
+            if (count > 0 && isOfflineSyncInProgress()) {
+                syncBtn.classList.remove("hidden");
+                syncBtn.textContent = (typeof t === 'function' ? t('connection.syncing', 'Syncing...') : 'Syncing...');
+                syncBtn.disabled = true;
+            } else if (count > 0) {
                 syncBtn.classList.remove("hidden");
                 syncBtn.textContent = `${(typeof t === 'function' ? t('connection.sync','Sync') : 'Sync')} (${count})`;
                 syncBtn.disabled = false;

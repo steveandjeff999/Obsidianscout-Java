@@ -11,6 +11,13 @@ import { loadAndRenderBanners } from '../components/banners.js';
 export const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "SCOUT"];
 
 export async function checkLoginStatus() {
+    // Server already known to be unreachable: don't hold the page for a check that can only time out. The cached
+    // sign-in stands until the server answers again.
+    try {
+        const knownOffline = window.Obsidianscout && typeof window.Obsidianscout.isServerOnline === 'function' &&
+            !window.Obsidianscout.isServerOnline();
+        if (knownOffline && safeGetItem("cache:/api/auth/me")) return true;
+    } catch (e) { /* fall through to the real check */ }
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -129,7 +136,7 @@ export async function requireAuth() {
     if (currentPage && settings && (me.role === "SCOUT" || me.role === "ANALYTICS" || me.role === "ADMIN")) {
         const allowedPages = me.role === "SCOUT" ? settings.scoutPages : (me.role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
         if (allowedPages && Array.isArray(allowedPages)) {
-            const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant", "match-checklist", "battery-tracker"];
+            const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant", "match-checklist", "battery-tracker", "match-predictions", "prediction-leaderboard"];
             if (isAdmin(me.role) || isSuperAdmin(me.role)) {
                 bypassPages.push("assignments");
             }
@@ -204,6 +211,18 @@ export function wireLogout() {
         return;
     }
     button.addEventListener("click", async () => {
+        // Entries still on this device stay queued after signing out; say so before the scout walks away.
+        try {
+            const summary = window.Obsidianscout && typeof window.Obsidianscout.getPendingSummary === 'function'
+                ? window.Obsidianscout.getPendingSummary() : null;
+            const waiting = summary ? summary.total - (summary.otherTeam || 0) : 0;
+            if (waiting > 0) {
+                const message = `${waiting} ${waiting === 1 ? "entry saved on this device hasn't" : "entries saved on this device haven't"} uploaded yet.\n\n` +
+                    `If you sign out now, ${waiting === 1 ? "it stays" : "they stay"} on this device and ${waiting === 1 ? "uploads" : "upload"} the next time someone from your team signs in here. ` +
+                    "To upload them now, cancel and press Sync while connected.\n\nSign out anyway?";
+                if (!window.confirm(message)) return;
+            }
+        } catch (e) { /* never block signing out */ }
         try {
             await request("/api/auth/logout", { method: "POST" });
             // Shared tablets: don't leave this account's cached data for the next person.

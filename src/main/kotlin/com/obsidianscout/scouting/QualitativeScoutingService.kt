@@ -245,6 +245,10 @@ object QualitativeScoutingService {
             throw ApiException(HttpStatusCode.BadRequest, "Team and match are required")
         }
 
+        val kindKey = if (isPrescout) "qual-prescout" else "qual"
+        // A retry of an upload this node already took: same entry, whatever the content comparison says.
+        val knownEntryId = RecentSubmissions.find(kindKey, session, request.clientId)
+
         val duplicate = transaction {
             val partnerTeams = AllianceService.getAlliancePartnerTeams(session.teamNumber, session.program)
             val visibleTeams = partnerTeams + session.teamNumber
@@ -255,9 +259,12 @@ object QualitativeScoutingService {
                 (QualitativeScoutingEntries.eventKey eq meta.eventKey) and
                 (QualitativeScoutingEntries.matchKey eq meta.matchKey) and
                 (QualitativeScoutingEntries.isPrescout eq isPrescout)
-            }.firstOrNull { row ->
-                val existingData = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
-                JsonSupport.scoutingDataAgrees(existingData, request.data)
+            }.toList().let { rows ->
+                rows.firstOrNull { knownEntryId != null && it[QualitativeScoutingEntries.id].value.toString() == knownEntryId }
+                    ?: rows.firstOrNull { row ->
+                        val existingData = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
+                        JsonSupport.scoutingDataAgrees(existingData, request.data)
+                    }
             }
         }
 
@@ -278,6 +285,7 @@ object QualitativeScoutingService {
         }
 
         if (duplicate != null) {
+            RecentSubmissions.remember(kindKey, session, request.clientId, duplicate[QualitativeScoutingEntries.id].value.toString())
             completeAssignments()
             val mKey = duplicate[QualitativeScoutingEntries.matchKey]
             val matchPlayedTime = transaction {
@@ -328,6 +336,7 @@ object QualitativeScoutingService {
                 it[QualitativeScoutingEntries.updatedAt] = now
             }
         }
+        RecentSubmissions.remember(kindKey, session, request.clientId, id.value.toString())
 
         completeAssignments()
 

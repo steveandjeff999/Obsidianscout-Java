@@ -263,7 +263,7 @@ export function adjustNavForRole(user) {
                 if (allowedPages && Array.isArray(allowedPages)) {
                     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                         const page = link.dataset.page;
-                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant", "match-checklist", "battery-tracker"];
+                        const bypassPages = ["settings", "login", "index", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant", "match-checklist", "battery-tracker", "match-predictions", "prediction-leaderboard"];
                         if (isAdmin(role) || isSuperAdmin(role)) {
                             bypassPages.push("assignments");
                         }
@@ -295,6 +295,13 @@ export function adjustNavForRole(user) {
         link.style.display = allowed ? "" : "none";
     });
 
+    // Match predictions are a team switch (Admin Settings > Match Predictions), open to every role while it's on.
+    const predictionsOn = isMatchPredictionsEnabled();
+    document.querySelectorAll('.sidebar-link[data-match-predictions]').forEach((link) => {
+        link.dataset.roleHidden = (!predictionsOn).toString();
+        link.style.display = predictionsOn ? "" : "none";
+    });
+
     // Clean up empty section headers in sidebar
     updateSectionHeaderVisibility(document);
 
@@ -316,9 +323,22 @@ export function adjustNavForRole(user) {
     }
 }
 
+/** Whether the team admin has turned on match predictions, from the cached team settings. */
+export function isMatchPredictionsEnabled() {
+    try {
+        const settingsText = safeGetItem("cache:/api/settings");
+        if (!settingsText) return false;
+        const parsed = JSON.parse(settingsText);
+        const settings = parsed.settings || parsed;
+        return settings.matchPredictionsEnabled === true;
+    } catch (err) {
+        return false;
+    }
+}
+
 export function isPageAccessible(page, role) {
     if (isSuperAdmin(role)) return true;
-    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials", "my-assignments", "assistant", "match-checklist", "battery-tracker"];
+    const bypassPages = ["dashboard", "settings", "login", "index", "theme-editor", "tutorials", "my-assignments", "assistant", "match-checklist", "battery-tracker", "match-predictions", "prediction-leaderboard"];
     if (isAdmin(role)) {
         bypassPages.push("assignments");
     }

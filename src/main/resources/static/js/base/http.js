@@ -21,6 +21,12 @@ export { isScoutingDataPath };
 
 /** How long a request may go without any progress (no headers yet, or no new body bytes) before it is dropped. */
 export const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
+/**
+ * Saves that can fall back to the offline queue give up sooner: a scout at an event is better off with the entry
+ * saved on the device in a few seconds than watching a spinner. Large bodies (photos) get the normal allowance.
+ */
+export const QUEUEABLE_REQUEST_TIMEOUT_MS = 8000;
+const QUEUEABLE_LARGE_BODY_BYTES = 256 * 1024;
 /** On a slow link a single chunk can legitimately take this long. */
 const LOW_BW_MIN_IDLE_MS = 30000;
 /** Hard cap for one request, however steadily it is progressing. */
@@ -154,6 +160,38 @@ function networkError(message, cause) {
     err.network = true;
     if (cause) err.cause = cause;
     return err;
+}
+
+/** Pages where a scout may be partway through a form. A lapsed sign-in there never navigates away on its own. */
+const FORM_PAGES = ["scout", "pit-scout", "qual-scout", "prescout-scout", "prescout-pit", "prescout-qual"];
+export const SESSION_EXPIRED_EVENT = "obsidianscout:session-expired";
+
+function onFormPage() {
+    try {
+        const page = typeof document !== 'undefined' && document.body && document.body.getAttribute("data-page");
+        return !!page && FORM_PAGES.includes(page);
+    } catch (e) {
+        return false;
+    }
+}
+
+function announceSessionExpired(path) {
+    try {
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { path } }));
+        }
+    } catch (e) { /* ignore */ }
+}
+
+/** Lets the page say it's showing a saved copy (components/stale-data-notice.js listens). */
+function announceServedFromCache(path, record) {
+    try {
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent("obsidianscout:served-from-cache", {
+                detail: { path, timestamp: record && record.timestamp }
+            }));
+        }
+    } catch (e) { /* ignore */ }
 }
 
 function serverKnownOffline() {
@@ -359,15 +397,25 @@ export async function request(path, options = {}) {
         throw networkError(serverKnownOffline() ? "Server unreachable" : "Slow connection");
     }
 
-    if (method === "GET" && !navigator.onLine) {
+    // No connection, or the server is already known to be unreachable: answer from the saved copy straight away
+    // instead of making every page wait on a request that will fail. The connection check flips this back as soon
+    // as the server answers again.
+    if (method === "GET" && !options.noCache && (!navigator.onLine || serverKnownOffline())) {
         const cached = await getHttpCache(path);
         if (cached && cached.text !== null) {
             console.log("[Offline Cache] Offline mode: Serving cached response for:", path);
+            announceServedFromCache(path, cached);
             return safeParse(cached.text);
         }
     }
 
-    const idleMs = Math.max(options.timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS, isLowBandwidth() ? LOW_BW_MIN_IDLE_MS : 0);
+    let defaultIdleMs = DEFAULT_REQUEST_TIMEOUT_MS;
+    if (method !== "GET" && options.queueable) {
+        let bodyBytes = 0;
+        try { bodyBytes = options.json !== undefined ? JSON.stringify(options.json).length : 0; } catch (e) { bodyBytes = 0; }
+        if (bodyBytes < QUEUEABLE_LARGE_BODY_BYTES) defaultIdleMs = QUEUEABLE_REQUEST_TIMEOUT_MS;
+    }
+    const idleMs = Math.max(options.timeoutMs || defaultIdleMs, isLowBandwidth() ? LOW_BW_MIN_IDLE_MS : 0);
     const priority = options.priority !== undefined ? options.priority : priorityFor(method, path);
     const send = (init) => schedule(priority, () => fetchWithProgress(path, init, idleMs, options.signal));
 
@@ -479,6 +527,16 @@ export async function request(path, options = {}) {
                                       path.includes("/api/auth/status") ||
                                       path.includes("/api/auth/me") ||
                                       path.includes("/api/push");
+                // Saves that can wait in the offline queue, background uploads, and anything on a scouting form keep
+                // the scout where they are: the entry is kept and a banner asks them to sign in again.
+                const allowRedirect = (options.authRedirect !== undefined ? options.authRedirect : !options.queueable) && !onFormPage();
+                if (!isPublicPage && !isAuthRequest && !allowRedirect) {
+                    announceSessionExpired(path);
+                    const err = new Error("Your sign-in has expired. Sign in again to upload.");
+                    err.status = 401;
+                    err.authExpired = true;
+                    throw err;
+                }
                 if (!isPublicPage && !isAuthRequest) {
                     if (window.Obsidianscout && typeof window.Obsidianscout.checkLoginStatus === 'function') {
                         window.Obsidianscout.checkLoginStatus().then(loggedIn => {
@@ -617,6 +675,7 @@ export async function request(path, options = {}) {
             const cachedFallback = await getHttpCache(path);
             if (cachedFallback && cachedFallback.text !== null) {
                 console.warn("[Offline Cache] Network fetch failed, falling back to cache for:", path, error);
+                announceServedFromCache(path, cachedFallback);
                 return safeParse(cachedFallback.text);
             }
         }

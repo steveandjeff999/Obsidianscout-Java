@@ -3,6 +3,24 @@ function t(key, fallback) {
     return (window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t(key, fallback) : fallback;
 }
 
+/**
+ * Where to go after signing in: back to the page that sent the user here (`?next=/scout?...`, same site only), or the
+ * dashboard. Signing in also lets entries that were waiting on an expired sign-in upload again.
+ */
+function postLoginDestination() {
+    try {
+        localStorage.removeItem("obsidianscout:upload_sign_in_needed");
+    } catch (e) { /* ignore */ }
+    try {
+        const next = new URLSearchParams(window.location.search).get("next");
+        if (next && /^\/(?![/\\])/.test(next) && !/^\/(login|index)?(\?|$)/.test(next)) {
+            const url = new URL(next, window.location.origin);
+            if (url.origin === window.location.origin) return url.pathname + url.search + url.hash;
+        }
+    } catch (e) { /* ignore */ }
+    return "/dashboard";
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     Obsidianscout.initTheme();
     const loginForm = document.getElementById("login-form");
@@ -157,7 +175,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     });
                     await Obsidianscout.resetCachesForUser(loginResponse);
 
-                    window.location.href = "/dashboard";
+                    window.location.href = postLoginDestination();
                 } catch (err) {
                     if (err.name !== "NotAllowedError") {
                         console.error("Passkey auth error:", err);
@@ -360,13 +378,13 @@ document.addEventListener("DOMContentLoaded", () => {
     async function handlePostLoginPasskeyCheck() {
         try {
             if (!window.PublicKeyCredential) {
-                window.location.href = "/dashboard";
+                window.location.href = postLoginDestination();
                 return;
             }
 
             const dismissed = localStorage.getItem(PASSKEY_DISMISSED_KEY);
             if (dismissed === "true") {
-                window.location.href = "/dashboard";
+                window.location.href = postLoginDestination();
                 return;
             }
 
@@ -374,16 +392,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const credentials = await Obsidianscout.request("/api/auth/passkey/credentials");
             if (Array.isArray(credentials) && credentials.length > 0) {
                 // User already has passkeys registered
-                window.location.href = "/dashboard";
+                window.location.href = postLoginDestination();
                 return;
             }
 
             // Prompt user to enroll passkey
             await promptPasskeyEnrollment();
-            window.location.href = "/dashboard";
+            window.location.href = postLoginDestination();
         } catch (e) {
             console.warn("Passkey check failed, continuing to dashboard:", e);
-            window.location.href = "/dashboard";
+            window.location.href = postLoginDestination();
         }
     }
 
@@ -446,7 +464,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             await Obsidianscout.resetCachesForUser(loginResponse);
             Obsidianscout.showToast("Account created!", "success");
-            window.location.href = "/dashboard";
+            window.location.href = postLoginDestination();
         } catch (error) {
             const errorMsg = error.message || "Registration failed";
             Obsidianscout.showToast(errorMsg, "error");
@@ -606,7 +624,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Active session program differs from selected program; do not redirect.
                 return;
             }
-            window.location.href = "/dashboard";
+            window.location.href = postLoginDestination();
         }
     }
 
