@@ -99,7 +99,11 @@
                         <h1 data-i18n="compare.title">Team Comparison</h1>
                         <p class="notice" data-i18n="compare.notice">Compare 2 or 3 teams side-by-side using scouting metrics.</p>
                     </div>
-                    <div>
+                    <div class="row align-center wrap gap-12">
+                        <select id="source-select" class="select-wide hidden" style="min-width: 150px;" title="Compare by" data-i18n-title="compare.source_label">
+                            <option value="scouted" data-i18n="compare.source_scouted">Scouted</option>
+                            <option value="match13" data-i18n="compare.source_match13">Match 13 xP</option>
+                        </select>
                         <select id="event-select" class="select-wide" style="min-width: 180px;">
                             <option value="" data-i18n="compare.loading_events">Loading events...</option>
                         </select>

@@ -2698,5 +2698,11 @@
   "scouter-report.generated": "Oluşturuldu",
   "scouter-report.with_prescout": "ön gözlem dahil",
   "scouter-report.expand_hint": "Etkinlik bazında sayıları görmek için tıklayın",
-  "scouter-report.no_event": "Etkinlik yok"
+  "scouter-report.no_event": "Etkinlik yok",
+  "compare.source_label": "Compare by",
+  "compare.source_scouted": "Scouted",
+  "compare.source_match13": "Match 13 xP",
+  "compare.exp_needs_event": "Pick an event to compare Match 13 xP.",
+  "compare.exp_no_data": "No Match 13 match data for these teams at this event.",
+  "compare.matches_with_xp": "matches with xP"
 }

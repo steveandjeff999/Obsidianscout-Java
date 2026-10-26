@@ -164,6 +164,13 @@ fun Route.scoutingRoutes() {
                 call.respond(com.obsidianscout.scouting.EntrySync.changes(session, kind, cursor, compact, eventKey))
             }
 
+            // A device's saved submissions in one request (see OutboxBatch): one round trip instead of one per entry.
+            post("/sync/outbox") {
+                val session = call.requireSession()
+                val request = call.receive<com.obsidianscout.scouting.OutboxBatchRequest>()
+                call.respond(com.obsidianscout.scouting.OutboxBatch.process(session, request))
+            }
+
             route("/scouting") {
                 get {
                     val session = call.requireSession()

@@ -2776,5 +2776,11 @@
   "predictions.save_failed": "Couldn't save your pick",
   "predictions.form_title": "Who wins this match?",
   "nav.match-predictions": "Match Predictions",
-  "nav.prediction-leaderboard": "Prediction Leaderboard"
+  "nav.prediction-leaderboard": "Prediction Leaderboard",
+  "compare.source_label": "Compare by",
+  "compare.source_scouted": "Scouted",
+  "compare.source_match13": "Match 13 xP",
+  "compare.exp_needs_event": "Pick an event to compare Match 13 xP.",
+  "compare.exp_no_data": "No Match 13 match data for these teams at this event.",
+  "compare.matches_with_xp": "matches with xP"
 }

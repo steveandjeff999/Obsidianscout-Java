@@ -10,6 +10,9 @@ object JsonSupport {
         encodeDefaults = true
     }
 
+    /** [json] without indentation, for HTTP responses: indentation is pure overhead on the wire (and for gzip). */
+    val wireJson: Json = Json(json) { prettyPrint = false }
+
     fun scoutingDataAgrees(data1: JsonObject, data2: JsonObject): Boolean {
         val excludedKeys = setOf(
             "eventKey", "matchKey", "matchNumber", "targetTeamNumber",

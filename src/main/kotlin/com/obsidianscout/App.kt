@@ -72,6 +72,15 @@ import kotlin.time.Duration.Companion.seconds
 // where logging may not be usable.
 private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.App")
 
+/** Security headers for pages and assets; API JSON responses leave them out (see the send pipeline in [module]). */
+private val documentHeaders = listOf(
+    "X-Frame-Options" to "DENY",
+    "X-XSS-Protection" to "1; mode=block",
+    "Content-Security-Policy" to "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: blob:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';",
+    "Referrer-Policy" to "strict-origin-when-cross-origin",
+    "Permissions-Policy" to "geolocation=(), microphone=(), camera=(self)",
+)
+
 
 private var cockroachOrchestrator: CockroachOrchestrator? = null
 
@@ -202,17 +211,26 @@ fun Application.module(appConfig: AppConfig) {
     install(AutoHeadResponse)
     install(com.obsidianscout.utils.ServerTimingPlugin)
     install(DefaultHeaders) {
-        header("X-Frame-Options", "DENY")
         header("X-Content-Type-Options", "nosniff")
-        header("X-XSS-Protection", "1; mode=block")
         header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-        header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: blob:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self';")
-        header("Referrer-Policy", "strict-origin-when-cross-origin")
-        header("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)")
+    }
+    // Headers that only mean something for a document a browser renders. API JSON (and its bodyless 304s) goes
+    // without them: on HTTP/1.1 headers aren't compressed, and these ~800 bytes would be most of a small poll reply.
+    sendPipeline.intercept(ApplicationSendPipeline.After) { message ->
+        val contentType = (message as? OutgoingContent)?.contentType
+        val apiData = call.request.path().startsWith("/api/") &&
+            (contentType == null || contentType.match(ContentType.Application.Json))
+        if (!apiData) {
+            documentHeaders.forEach { (name, value) ->
+                if (!call.response.headers.contains(name)) call.response.headers.append(name, value)
+            }
+        }
     }
     install(WebSockets) {
         pingPeriod = 15.seconds
-        timeout = 15.seconds
+        // A congested event network can stall for longer than one ping period; dropping the socket then costs a full
+        // reconnect (TCP + TLS) on exactly the link that can least afford it.
+        timeout = 45.seconds
         maxFrameSize = 1 * 1024 * 1024L // 1 MB
         masking = false
     }
@@ -302,6 +320,9 @@ fun Application.module(appConfig: AppConfig) {
         } else if (!isAsset) {
             if (method == "GET" && path.startsWith("/api/")) {
                 call.response.headers.append("Cache-Control", "private, no-cache, must-revalidate")
+            } else if (path.startsWith("/api/")) {
+                // Pragma/Expires only matter to HTTP/1.0 caches; API clients all honour Cache-Control.
+                call.response.headers.append("Cache-Control", "no-store, no-cache, must-revalidate, private")
             } else {
                 call.response.headers.append("Cache-Control", "no-store, no-cache, must-revalidate, private")
                 call.response.headers.append("Pragma", "no-cache")
@@ -312,7 +333,9 @@ fun Application.module(appConfig: AppConfig) {
             call.response.headers.append("Cloudflare-CDN-Cache-Control", "no-cache")
         }
 
-        if (call.request.cookies["XSRF-TOKEN"] == null) {
+        // The app never sends this cookie back (its requests carry X-Mobile-App and skip the CSRF check), so it would
+        // otherwise get a fresh Set-Cookie on every response.
+        if (call.request.cookies["XSRF-TOKEN"] == null && call.request.headers["X-Mobile-App"] == null) {
             val isHttps = appConfig.server.cookieSecure ||
                     call.request.headers["X-Forwarded-Proto"]?.equals("https", ignoreCase = true) == true ||
                     call.request.local.scheme.equals("https", ignoreCase = true)
@@ -459,12 +482,12 @@ fun Application.module(appConfig: AppConfig) {
         }
     }
     install(ContentNegotiation) {
-        json(JsonSupport.json, ContentType.Application.Json)
-        json(JsonSupport.json, ContentType.Any)
-        json(JsonSupport.json, ContentType.Text.Plain)
-        json(JsonSupport.json, ContentType.Text.Html)
-        json(JsonSupport.json, ContentType.Application.Any)
-        json(JsonSupport.json, ContentType.Text.Any)
+        json(JsonSupport.wireJson, ContentType.Application.Json)
+        json(JsonSupport.wireJson, ContentType.Any)
+        json(JsonSupport.wireJson, ContentType.Text.Plain)
+        json(JsonSupport.wireJson, ContentType.Text.Html)
+        json(JsonSupport.wireJson, ContentType.Application.Any)
+        json(JsonSupport.wireJson, ContentType.Text.Any)
     }
     val cookieConfig = io.ktor.server.sessions.CookieConfiguration().apply {
         httpOnly = true

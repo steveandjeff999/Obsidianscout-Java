@@ -21,6 +21,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
 
     const eventSelect = document.getElementById("event-select");
+    const sourceSelect = document.getElementById("source-select");
     const team1Select = document.getElementById("team-1-select");
     const team2Select = document.getElementById("team-2-select");
     const team3Select = document.getElementById("team-3-select");
@@ -30,6 +31,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         const settingsResponse = await Obsidianscout.request("/api/settings");
         state.settings = settingsResponse ? (settingsResponse.settings || settingsResponse) : {};
         state.currentEventKey = Obsidianscout.resolveEventKey(state.settings);
+
+        // "Match 13 xP" compares teams by xP instead of scouting averages; only offered when Match 13 is on.
+        const programIsFtc = (window.Obsidianscout && typeof Obsidianscout.getProgram === "function")
+            ? Obsidianscout.getProgram() === "FTC"
+            : state.settings.program === "FTC";
+        if (sourceSelect && !programIsFtc && state.settings.useMatch13Exp) {
+            sourceSelect.classList.remove("hidden");
+        }
 
         // Load events
         const events = await Obsidianscout.request(`/api/events?year=${state.settings.year || new Date().getFullYear()}&cached=1`);
@@ -57,6 +66,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const pTeam2 = urlParams.get("team2") || urlParams.get("t2");
         const pTeam3 = urlParams.get("team3") || urlParams.get("t3");
         const pEvent = urlParams.get("eventKey");
+        if (urlParams.get("source") === "match13" && sourceSelect && !sourceSelect.classList.contains("hidden")) {
+            sourceSelect.value = "match13";
+        }
 
         if (pEvent !== null && eventSelect) {
             eventSelect.value = pEvent;
@@ -84,6 +96,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         [team1Select, team2Select, team3Select].forEach(sel => {
             if (sel) sel.addEventListener("change", runComparison);
         });
+        if (sourceSelect) sourceSelect.addEventListener("change", runComparison);
 
     } catch (e) {
         console.error("Failed to initialize compare page:", e);
@@ -140,11 +153,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        const useMatch13 = currentSource() === "match13";
+        if (useMatch13 && !state.currentEventKey) {
+            resultsContainer.innerHTML = `
+                <div class="card" style="text-align: center; color: var(--muted); padding: 48px 16px;">
+                    ${t("compare.exp_needs_event", "Pick an event to compare Match 13 xP.")}
+                </div>
+            `;
+            return;
+        }
         Obsidianscout.showLoadingSpinner(resultsContainer, t("compare.comparing_teams", "Comparing teams..."));
 
         try {
             const eventQuery = state.currentEventKey ? `&eventKey=${encodeURIComponent(state.currentEventKey)}` : "";
-            const response = await Obsidianscout.request(`/api/analytics/compare?teams=${teams.join(",")}${eventQuery}`);
+            const response = await Obsidianscout.request(`/api/analytics/compare?teams=${teams.join(",")}${eventQuery}${useMatch13 ? "&source=match13" : ""}`);
 
             renderComparisonResults(teams, response || {});
         } catch (e) {
@@ -152,11 +174,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    function currentSource() {
+        return sourceSelect && !sourceSelect.classList.contains("hidden") ? sourceSelect.value : "scouted";
+    }
+
     function renderComparisonResults(selectedTeams, compResponse) {
         resultsContainer.innerHTML = "";
 
         const teamsData = compResponse.teams || {};
         const metricDefs = compResponse.metricDefinitions || [];
+        const isMatch13 = compResponse.source === "match13";
 
         // 1. Team Hero Header Cards
         const heroRow = document.createElement("div");
@@ -176,7 +203,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             card.className = "team-hero-card";
 
             const countBadge = (tData.matchesScouted !== undefined)
-                ? `<div style="font-size: 0.8rem; margin-top: 8px; color: var(--muted);"><span style="background: var(--surface-3, rgba(255,255,255,0.06)); padding: 2px 8px; border-radius: 999px;">${tData.matchesScouted} matches</span></div>`
+                ? `<div style="font-size: 0.8rem; margin-top: 8px; color: var(--muted);"><span style="background: var(--surface-3, rgba(255,255,255,0.06)); padding: 2px 8px; border-radius: 999px;">${tData.matchesScouted} ${isMatch13 ? t("compare.matches_with_xp", "matches with xP") : "matches"}</span></div>`
                 : "";
 
             const epaBadge = (effectiveUseEpa && tData.epa != null)
@@ -205,7 +232,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             emptyCard.style.textAlign = "center";
             emptyCard.style.color = "var(--muted)";
             emptyCard.style.padding = "32px 16px";
-            emptyCard.textContent = t("compare.no_data", "No scouting data available for these teams at this event.");
+            emptyCard.textContent = isMatch13
+                ? (compResponse.note || t("compare.exp_no_data", "No Match 13 match data for these teams at this event."))
+                : t("compare.no_data", "No scouting data available for these teams at this event.");
             resultsContainer.appendChild(emptyCard);
             return;
         }

@@ -142,7 +142,13 @@ fun Route.analyticsRoutes() {
                     }
 
                     val eventKey = call.request.queryParameters["eventKey"]
-                    val response = com.obsidianscout.analytics.AnalyticsService.compareTeams(session, teamNumbers, eventKey)
+                    // source=match13 (or exp) compares Match 13 xP instead of scouting averages.
+                    val source = call.request.queryParameters["source"]?.trim()?.lowercase()
+                    val response = if (source == com.obsidianscout.analytics.Match13Compare.SOURCE || source == "exp") {
+                        com.obsidianscout.analytics.Match13Compare.compare(session, teamNumbers, eventKey)
+                    } else {
+                        com.obsidianscout.analytics.AnalyticsService.compareTeams(session, teamNumbers, eventKey)
+                    }
                     call.respond(response)
                 }
             }

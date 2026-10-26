@@ -73,7 +73,11 @@ data class TeamComparisonData(
 data class TeamComparisonResponse(
     val eventKey: String? = null,
     val metricDefinitions: List<TeamComparisonMetric> = emptyList(),
-    val teams: Map<String, TeamComparisonData> = emptyMap()
+    val teams: Map<String, TeamComparisonData> = emptyMap(),
+    /** "scouted" (scouting averages) or "match13" ([Match13Compare]). */
+    val source: String = "scouted",
+    /** Why there is nothing to compare, when that is the case. */
+    val note: String? = null
 )
 
 object AnalyticsService {

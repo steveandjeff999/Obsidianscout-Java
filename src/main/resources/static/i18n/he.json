@@ -2698,5 +2698,11 @@
   "scouter-report.generated": "נוצר",
   "scouter-report.with_prescout": "כולל סקאוטינג מקדים",
   "scouter-report.expand_hint": "לחצו לצפייה בספירה לפי אירוע",
-  "scouter-report.no_event": "ללא אירוע"
+  "scouter-report.no_event": "ללא אירוע",
+  "compare.source_label": "Compare by",
+  "compare.source_scouted": "Scouted",
+  "compare.source_match13": "Match 13 xP",
+  "compare.exp_needs_event": "Pick an event to compare Match 13 xP.",
+  "compare.exp_no_data": "No Match 13 match data for these teams at this event.",
+  "compare.matches_with_xp": "matches with xP"
 }
