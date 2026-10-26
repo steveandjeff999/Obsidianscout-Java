@@ -102,7 +102,9 @@ export async function saveScoutingEntries(options) {
                 }));
             } catch (e) { /* history is a convenience */ }
         });
-        receipt("local", { signInNeeded });
+        // Nothing durable to store into (some strict private windows): it only lives as long as this page.
+        const volatile = typeof offlineSync.storageMode === "function" && offlineSync.storageMode() === "memory";
+        receipt("local", { signInNeeded, volatile });
         try { updateConnectionStatus(); } catch (e) { /* ignore */ }
         return { where: "local", error: reason || null, items };
     };

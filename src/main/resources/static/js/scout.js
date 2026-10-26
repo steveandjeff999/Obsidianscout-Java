@@ -471,7 +471,7 @@ async function loadScoutPageData(me) {
                 updatePointsPreview(config.fields, form, pointsPreview);
             }
             if (lost.length) {
-                return { warning: `Draft restored, but ${lost.join(" and ")} isn't on the schedule any more. Pick the team and match before saving.` };
+                return { warning: `Draft restored, but ${lost.join(" and ")} ${lost.length > 1 ? "aren't" : "isn't"} on the schedule any more. Pick the team and match before saving.` };
             }
             return null;
         }

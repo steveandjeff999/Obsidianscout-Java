@@ -214,7 +214,15 @@ async function loadQualScoutPageData(me) {
             fieldContainer.appendChild(gridContainer);
         }
 
-        async function refreshAllianceState() {
+        // Drafts compare against the alliance cards as loaded (saved entries or blank), so only the scout's own
+        // changes count as unsaved work.
+        async function refreshAllianceState(...args) {
+            const result = await loadAllianceState(...args);
+            if (typeof Obsidianscout.resetDraftBaseline === "function") Obsidianscout.resetDraftBaseline("qual-scout");
+            return result;
+        }
+
+        async function loadAllianceState() {
             renderAssignmentChip();
             syncPrediction();
             const selectedMatchKey = matchSelect.value;
@@ -276,35 +284,36 @@ async function loadQualScoutPageData(me) {
 
         if (scopeButtons && scopeButtons.length > 0) {
             scopeButtons.forEach(btn => {
-                btn.addEventListener("click", async () => {
-                    const newScope = btn.dataset.scope;
-                    if (newScope === currentScope) return;
-
-                    currentScope = newScope;
-                    scopeButtons.forEach(b => {
-                        const isActive = b.dataset.scope === currentScope;
-                        b.classList.toggle("active", isActive);
-                        b.classList.toggle("secondary", !isActive);
-                    });
-
-                    if (currentScope === "team") {
-                        if (teamFieldContainer) teamFieldContainer.classList.remove("hidden");
-                        submitButton.textContent = Obsidianscout.t("qual_scout.save_entry", "Save entry");
-                        renderSingleTeamView();
-                        updateMatchOptions(matchSelect, matches, eventTz, teamSelect.value, matchSelect.value);
-                        updateTeamOptions(teamSelect, teams, matchSelect.value, matches, teamSelect.value);
-                        lastSelectedTeam = teamSelect.value;
-                        lastSelectedMatch = matchSelect.value;
-                        await handleSelectionChange();
-                    } else {
-                        if (teamFieldContainer) teamFieldContainer.classList.add("hidden");
-                        const currentMatchVal = matchSelect.value;
-                        updateMatchOptions(matchSelect, matches, eventTz, null, currentMatchVal);
-                        lastSelectedMatch = currentMatchVal;
-                        await refreshAllianceState();
-                    }
-                });
+                btn.addEventListener("click", () => switchScope(btn.dataset.scope));
             });
+        }
+
+        async function switchScope(newScope) {
+            if (!newScope || newScope === currentScope) return;
+
+            currentScope = newScope;
+            scopeButtons.forEach(b => {
+                const isActive = b.dataset.scope === currentScope;
+                b.classList.toggle("active", isActive);
+                b.classList.toggle("secondary", !isActive);
+            });
+
+            if (currentScope === "team") {
+                if (teamFieldContainer) teamFieldContainer.classList.remove("hidden");
+                submitButton.textContent = Obsidianscout.t("qual_scout.save_entry", "Save entry");
+                renderSingleTeamView();
+                updateMatchOptions(matchSelect, matches, eventTz, teamSelect.value, matchSelect.value);
+                updateTeamOptions(teamSelect, teams, matchSelect.value, matches, teamSelect.value);
+                lastSelectedTeam = teamSelect.value;
+                lastSelectedMatch = matchSelect.value;
+                await handleSelectionChange();
+            } else {
+                if (teamFieldContainer) teamFieldContainer.classList.add("hidden");
+                const currentMatchVal = matchSelect.value;
+                updateMatchOptions(matchSelect, matches, eventTz, null, currentMatchVal);
+                lastSelectedMatch = currentMatchVal;
+                await refreshAllianceState();
+            }
         }
 
         function populateAllTeamsIfBothSelected() {
@@ -370,8 +379,59 @@ async function loadQualScoutPageData(me) {
         // Initialize single team fields by default
         renderSingleTeamView();
 
+        /** One alliance card's answers, keyed "<team>::<field id>" (every card uses the same field names). */
+        function collectAllianceCardData(data) {
+            for (const t of currentAllianceTeams) {
+                const card = fieldContainer.querySelector(`[data-team-number='${t.teamNumber}']`);
+                if (!card || !config || !config.fields) continue;
+                config.fields.forEach(f => {
+                    const els = card.querySelectorAll(`[name="${CSS.escape(f.id)}"]`);
+                    if (!els.length) return;
+                    const el = els[0];
+                    const key = `${t.teamNumber}::${f.id}`;
+                    if (el.type === "checkbox") {
+                        data[key] = el.checked;
+                    } else if (el.type === "radio") {
+                        const checked = Array.from(els).find(r => r.checked);
+                        if (checked) data[key] = checked.value;
+                    } else if (el.value !== undefined && el.value !== "") {
+                        data[key] = el.value;
+                    }
+                });
+            }
+            return data;
+        }
+
+        function applyAllianceCardData(draft) {
+            for (const t of currentAllianceTeams) {
+                const card = fieldContainer.querySelector(`[data-team-number='${t.teamNumber}']`);
+                if (!card || !config || !config.fields) continue;
+                config.fields.forEach(f => {
+                    const val = draft[`${t.teamNumber}::${f.id}`];
+                    if (val === undefined || val === null) return;
+                    const els = card.querySelectorAll(`[name="${CSS.escape(f.id)}"]`);
+                    if (!els.length) return;
+                    const el = els[0];
+                    if (el.type === "checkbox") {
+                        el.checked = Boolean(val);
+                    } else if (el.type === "radio") {
+                        const radio = Array.from(els).find(r => r.value === String(val));
+                        if (radio) radio.checked = true;
+                    } else {
+                        el.value = val;
+                        if (f.type === "rating") el.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                });
+            }
+        }
+
         function collectCurrentFormData() {
-            if (currentScope !== "team") return null;
+            if (currentScope !== "team") {
+                // Alliance view: the scope and match, plus every team card's answers.
+                const data = { _scope: currentScope };
+                if (matchSelect && matchSelect.value) data._matchKey = matchSelect.value;
+                return collectAllianceCardData(data);
+            }
             const data = {};
             if (teamSelect && teamSelect.value) data._targetTeamNumber = teamSelect.value;
             if (matchSelect && matchSelect.value) data._matchKey = matchSelect.value;
@@ -392,8 +452,22 @@ async function loadQualScoutPageData(me) {
             return data;
         }
 
-        function applyDraftData(draft) {
+        async function applyDraftData(draft) {
             if (!draft) return;
+            if (draft._scope && draft._scope !== "team") {
+                if (draft._matchKey && matchSelect) {
+                    updateMatchOptions(matchSelect, matches, eventTz, null, draft._matchKey);
+                    matchSelect.value = draft._matchKey;
+                    lastSelectedMatch = matchSelect.value;
+                }
+                if (currentScope === draft._scope) await refreshAllianceState();
+                else await switchScope(draft._scope);
+                applyAllianceCardData(draft);
+                if (draft._matchKey && (!matchSelect || matchSelect.value !== draft._matchKey)) {
+                    return { warning: `Draft restored, but match ${String(draft._matchKey).split("_").pop().toUpperCase()} isn't on the schedule any more. Pick the match before saving.` };
+                }
+                return null;
+            }
             if (draft._targetTeamNumber && teamSelect) {
                 teamSelect.value = draft._targetTeamNumber;
                 lastSelectedTeam = teamSelect.value;
@@ -449,7 +523,7 @@ async function loadQualScoutPageData(me) {
                 });
             }
             if (lost.length) {
-                return { warning: `Draft restored, but ${lost.join(" and ")} isn't on the schedule any more. Pick the team and match before saving.` };
+                return { warning: `Draft restored, but ${lost.join(" and ")} ${lost.length > 1 ? "aren't" : "isn't"} on the schedule any more. Pick the team and match before saving.` };
             }
             return null;
         }
@@ -881,6 +955,7 @@ async function loadQualScoutPageData(me) {
                 rememberSavedEntries(entriesToSave, null);
             }
             if (result.where === "server" || result.where === "local") {
+                Obsidianscout.clearDraft("qual-scout");
                 window.dispatchEvent(new CustomEvent("obsidianscout:qualitative-entries-changed"));
                 await advanceAfterSave(allianceSelection());
             }

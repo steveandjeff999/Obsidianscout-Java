@@ -292,7 +292,11 @@ async function confirmSignIn() {
     if (_confirming || typeof offlineSync.setSignInNeededForUpload !== 'function') return;
     _confirming = true;
     try {
-        const res = await fetch("/api/auth/status", { credentials: "same-origin", cache: "no-store", headers: { "Accept": "application/json" } });
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch("/api/auth/status", {
+            credentials: "same-origin", cache: "no-store", headers: { "Accept": "application/json" }, signal: controller.signal
+        }).finally(() => clearTimeout(timer));
         if (res.status === 401) {
             offlineSync.setSignInNeededForUpload(true);
         } else if (res.ok) {

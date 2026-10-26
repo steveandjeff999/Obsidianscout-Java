@@ -150,6 +150,8 @@ function writeTx(storeNames, fn) {
         try {
             tx = db.transaction(storeNames, "readwrite");
         } catch (e) {
+            // Typically "the connection is closing" (Safari drops it after the app was in the background).
+            dropConnection();
             resolve(false);
             return;
         }
@@ -167,30 +169,55 @@ function writeTx(storeNames, fn) {
     });
 }
 
+/** Every record in a store, or null when the read failed (as opposed to an empty store). */
 function readAll(storeName) {
     return new Promise((resolve) => {
-        if (!db) { resolve([]); return; }
+        if (!db) { resolve(null); return; }
         try {
             const req = db.transaction(storeName, "readonly").objectStore(storeName).getAll();
             req.onsuccess = () => resolve(req.result || []);
-            req.onerror = () => resolve([]);
+            req.onerror = () => resolve(null);
         } catch (e) {
-            resolve([]);
+            dropConnection();
+            resolve(null);
         }
     });
 }
 
+/** One record, undefined when it isn't there, or null when the read failed. */
 function readOne(storeName, key) {
     return new Promise((resolve) => {
-        if (!db) { resolve(undefined); return; }
+        if (!db) { resolve(null); return; }
         try {
             const req = db.transaction(storeName, "readonly").objectStore(storeName).get(key);
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => resolve(undefined);
+            req.onsuccess = () => resolve(req.result === undefined ? undefined : req.result);
+            req.onerror = () => resolve(null);
         } catch (e) {
-            resolve(undefined);
+            dropConnection();
+            resolve(null);
         }
     });
+}
+
+/** Forgets a broken connection so the next use opens a fresh one. */
+function dropConnection() {
+    if (db) { try { db.close(); } catch (e) { /* ignore */ } }
+    db = null;
+}
+
+/** Reopens the database after a dropped connection. True when it's usable again. */
+async function reconnect() {
+    if (mode !== "indexeddb") return false;
+    dropConnection();
+    db = await openDb();
+    return !!db;
+}
+
+/** A write that survives one dropped connection: tries, reconnects, tries again. */
+async function writeWithRetry(storeNames, fn) {
+    if (await writeTx(storeNames, fn)) return true;
+    if (!(await reconnect())) return false;
+    return writeTx(storeNames, fn);
 }
 
 // ── Loading, migration and cross-tab updates ────────────────────────────────
@@ -205,7 +232,13 @@ function newId() {
 }
 
 async function loadMirror() {
-    const [p, f, d] = await Promise.all([readAll(PENDING), readAll(FAILED), readAll(DRAFTS)]);
+    let [p, f, d] = await Promise.all([readAll(PENDING), readAll(FAILED), readAll(DRAFTS)]);
+    if (p === null || f === null || d === null) {
+        // A failed read isn't an empty queue: reconnect and read again rather than hide waiting entries.
+        if (!(await reconnect())) return;
+        [p, f, d] = await Promise.all([readAll(PENDING), readAll(FAILED), readAll(DRAFTS)]);
+        if (p === null || f === null || d === null) return;
+    }
     pending.clear();
     p.forEach((rec) => { if (rec && rec.id && rec.item) pending.set(rec.id, rec); });
     failed.clear();
@@ -426,28 +459,36 @@ export function listPending(queueKey) {
     return out;
 }
 
+/** All or nothing: writes each item under its own localStorage key, or none of them. */
+function putPendingInLocalStorage(queueKey, items) {
+    if (!hasLocalStorage()) return false;
+    const written = [];
+    for (const item of items) {
+        const k = `${ITEM_PREFIX}${queueKey}:${item.clientId}`;
+        if (!lsSet(k, JSON.stringify(item))) {
+            written.forEach(lsRemove);
+            return false;
+        }
+        written.push(k);
+    }
+    return true;
+}
+
 /** Stores items (each with a clientId). All or nothing: resolves false and stores none when storage is full. */
 export async function putPending(queueKey, items) {
     await ensureDb();
     requestPersistence();
     if (mode === "indexeddb") {
         const recs = items.map((item) => ({ id: pendingId(queueKey, item.clientId), queueKey, item }));
-        const ok = await writeTx([PENDING], (s) => recs.forEach((rec) => s[PENDING].put(rec)));
-        if (!ok) return false;
+        const ok = await writeWithRetry([PENDING], (s) => recs.forEach((rec) => s[PENDING].put(rec)));
+        // IndexedDB still refuses: keep the entries in localStorage instead (moved back on the next load).
+        if (!ok && !putPendingInLocalStorage(queueKey, items)) return false;
         recs.forEach((rec) => pending.set(rec.id, rec));
         emitChanged(true);
         return true;
     }
     if (mode === "localstorage") {
-        const written = [];
-        for (const item of items) {
-            const k = `${ITEM_PREFIX}${queueKey}:${item.clientId}`;
-            if (!lsSet(k, JSON.stringify(item))) {
-                written.forEach(lsRemove);
-                return false;
-            }
-            written.push(k);
-        }
+        if (!putPendingInLocalStorage(queueKey, items)) return false;
         emitChanged(false);
         return true;
     }
@@ -474,8 +515,10 @@ export async function deletePending(queueKey, clientId) {
         return;
     }
     if (mode === "indexeddb") {
+        // A copy kept in localStorage when IndexedDB refused it.
+        lsRemove(`${ITEM_PREFIX}${queueKey}:${clientId}`);
         await ensureDb();
-        await writeTx([PENDING], (s) => s[PENDING].delete(pendingId(queueKey, clientId)));
+        await writeWithRetry([PENDING], (s) => s[PENDING].delete(pendingId(queueKey, clientId)));
         emitChanged(true);
     }
 }
@@ -492,8 +535,10 @@ export async function clearPending(queueKey) {
         return;
     }
     if (mode === "indexeddb") {
+        const prefix = `${ITEM_PREFIX}${queueKey}:`;
+        lsKeys().filter((k) => k.startsWith(prefix)).forEach(lsRemove);
         await ensureDb();
-        await writeTx([PENDING], (s) => ids.forEach((id) => s[PENDING].delete(id)));
+        await writeWithRetry([PENDING], (s) => ids.forEach((id) => s[PENDING].delete(id)));
         emitChanged(true);
     }
 }
@@ -510,7 +555,11 @@ export async function pendingStillStored(queueKey, clientId) {
     }
     if (mode === "indexeddb") {
         await ensureDb();
-        const rec = await readOne(PENDING, pendingId(queueKey, clientId));
+        if (lsGet(`${ITEM_PREFIX}${queueKey}:${clientId}`) !== null) return true;
+        let rec = await readOne(PENDING, pendingId(queueKey, clientId));
+        if (rec === null && (await reconnect())) rec = await readOne(PENDING, pendingId(queueKey, clientId));
+        // Still unreadable: assume it's there. Sending an entry twice is harmless (the server spots it); skipping isn't.
+        if (rec === null) return pending.has(pendingId(queueKey, clientId));
         if (!rec) pending.delete(pendingId(queueKey, clientId));
         return !!rec;
     }
@@ -543,7 +592,8 @@ export async function putFailed(entry) {
     await ensureDb();
     const rec = { ...entry, failedId: entry.failedId || (entry.item && entry.item.clientId) || newId() };
     if (mode === "indexeddb") {
-        const ok = await writeTx([FAILED], (s) => s[FAILED].put(rec));
+        let ok = await writeWithRetry([FAILED], (s) => s[FAILED].put(rec));
+        if (!ok) ok = lsSet(FAILED_PREFIX + rec.failedId, JSON.stringify(rec));
         if (ok) failed.set(rec.failedId, rec);
         emitChanged(true);
         return ok;
@@ -573,8 +623,9 @@ export async function deleteFailed(failedId) {
         return;
     }
     if (mode === "indexeddb") {
+        lsRemove(FAILED_PREFIX + failedId);
         await ensureDb();
-        await writeTx([FAILED], (s) => s[FAILED].delete(failedId));
+        await writeWithRetry([FAILED], (s) => s[FAILED].delete(failedId));
         emitChanged(true);
     }
 }
@@ -596,16 +647,38 @@ export async function putDraftRecord(formId, data, savedAt = Date.now()) {
     // Readable at once, even before storage commits.
     drafts.set(formId, rec);
     await ensureDb();
-    if (mode === "indexeddb") return writeTx([DRAFTS], (s) => s[DRAFTS].put(rec));
+    if (mode === "indexeddb") {
+        if (await writeWithRetry([DRAFTS], (s) => s[DRAFTS].put(rec))) return true;
+        return lsSet(DRAFT_PREFIX + formId, JSON.stringify({ data, savedAt }));
+    }
     if (mode === "localstorage") return lsSet(DRAFT_PREFIX + formId, JSON.stringify({ data, savedAt }));
     return true;
+}
+
+/**
+ * For when the page is closing: writes the draft to localStorage synchronously, which the browser finishes before
+ * unloading (an IndexedDB write started then may not). The copy moves into IndexedDB on the next load.
+ */
+export function putDraftRecordNow(formId, data, savedAt = Date.now()) {
+    drafts.set(formId, { formId, data, savedAt });
+    const kept = lsSet(DRAFT_PREFIX + formId, JSON.stringify({ data, savedAt }));
+    if (mode === "indexeddb") {
+        // Also start the IndexedDB write; once it commits the localStorage copy isn't needed.
+        writeWithRetry([DRAFTS], (s) => s[DRAFTS].put({ formId, data, savedAt })).then((ok) => {
+            if (ok && kept) {
+                const current = parseJson(lsGet(DRAFT_PREFIX + formId), null);
+                if (current && current.savedAt === savedAt) lsRemove(DRAFT_PREFIX + formId);
+            }
+        });
+    }
+    return kept;
 }
 
 export async function deleteDraftRecord(formId) {
     drafts.delete(formId);
     lsRemove(DRAFT_PREFIX + formId);
     await ensureDb();
-    if (mode === "indexeddb") await writeTx([DRAFTS], (s) => s[DRAFTS].delete(formId));
+    if (mode === "indexeddb") await writeWithRetry([DRAFTS], (s) => s[DRAFTS].delete(formId));
 }
 
 /** For tests: forget everything loaded so the next queueReady() starts over. */

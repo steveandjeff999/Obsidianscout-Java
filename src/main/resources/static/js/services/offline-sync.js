@@ -70,6 +70,8 @@ export const SYNC_PROGRESS_EVENT = "obsidianscout:offline-sync-progress";
 
 let _syncInProgress = false;
 let _syncProgress = null;
+/** A sync was asked for while one was running (say, a new save): run once more when it ends. */
+let _syncAgain = false;
 
 /*
  * Queue storage lives in queue-store.js (IndexedDB, with localStorage as a fallback). Each entry is stored on its
@@ -308,15 +310,20 @@ export async function syncOfflineEntries() {
     } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
         return;
     }
-    if (_syncInProgress) return;
+    if (_syncInProgress) {
+        _syncAgain = true;
+        return;
+    }
 
     await queueReady();
     const before = getPendingSummary();
     if (before.total - before.otherTeam === 0) return;
 
     _syncInProgress = true;
+    let stoppedEarly = false;
+    _syncAgain = false;
     try {
-        await withSyncLock(runSync);
+        stoppedEarly = (await withSyncLock(runSync)) === "stopped";
     } finally {
         _syncInProgress = false;
         setSyncProgress(null);
@@ -324,6 +331,11 @@ export async function syncOfflineEntries() {
         if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.updateConnectionStatus === 'function') {
             window.Obsidianscout.updateConnectionStatus();
         }
+    }
+    // Entries saved during that round go up now, unless the round stopped because the server can't take them.
+    if (_syncAgain && !stoppedEarly) {
+        _syncAgain = false;
+        await syncOfflineEntries();
     }
 }
 
@@ -355,6 +367,7 @@ async function runSync() {
 
     let successCount = 0;
     let rejectedCount = 0;
+    let stopped = false;
     setSyncProgress({ done: 0, total: work.length });
 
     for (let i = 0; i < work.length; i++) {
@@ -398,6 +411,7 @@ async function runSync() {
             } else if (outcome === "stop") {
                 if (error && error.status === 401) setSignInNeededForUpload(true);
                 setSyncProgress({ done: i + 1, total: work.length });
+                stopped = true;
                 break;
             }
         }
@@ -413,6 +427,7 @@ async function runSync() {
     if (rejectedCount > 0) {
         showToast(`${rejectedCount} saved ${rejectedCount === 1 ? "entry was" : "entries were"} rejected by the server. Review them in Cache Manager.`, "error");
     }
+    return stopped ? "stopped" : "done";
 }
 
 /*

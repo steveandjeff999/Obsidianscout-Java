@@ -201,7 +201,8 @@ export function applyTranslations() {
     if (widget) {
         const textEl = widget.querySelector('.status-text');
         if (textEl) {
-            const isOnline = navigator.onLine;
+            // The widget's own state is whether the server answers; Wi-Fi being up (navigator.onLine) isn't enough.
+            const isOnline = widget.classList.contains('online');
             const text = isOnline ? t('connection.online') : t('connection.offline');
             if (textEl.textContent !== text) textEl.textContent = text;
         }

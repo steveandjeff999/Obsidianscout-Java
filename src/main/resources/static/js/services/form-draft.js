@@ -40,11 +40,14 @@ export function hasMeaningfulDraftData(data) {
     return false;
 }
 
-/** Saves draft data for a form. Resolves once stored. */
-export function saveDraft(formId, data) {
+/** Saves draft data for a form. Resolves once stored. `urgent`: the page is closing, so write synchronously too. */
+export function saveDraft(formId, data, { urgent = false } = {}) {
     if (!formId) return Promise.resolve(false);
     if (!hasMeaningfulDraftData(data)) {
         return deleteStoredDraft(formId).then(() => false);
+    }
+    if (urgent && typeof queueStore.putDraftRecordNow === "function") {
+        return Promise.resolve(queueStore.putDraftRecordNow(formId, data, Date.now()));
     }
     return queueStore.putDraftRecord(formId, data, Date.now()).catch((e) => {
         console.warn("[FormDraft] Failed to save draft for", formId, e);
@@ -81,7 +84,12 @@ export function clearDraft(formId) {
     if (!formId) return;
     deleteStoredDraft(formId);
     const hook = rebaselineHooks.get(formId);
-    if (hook) hook.soon();
+    if (hook) {
+        // What the form shows now was just saved: cancel a pending autosave of it, and look again once the form
+        // has been cleared or moved on.
+        hook.now();
+        hook.soon();
+    }
     const existingModal = document.getElementById(MODAL_ID);
     if (existingModal) existingModal.remove();
 }
@@ -95,8 +103,10 @@ function ageText(savedAt) {
 }
 
 function contextText(data) {
-    const team = data._targetTeamNumber || "";
     const match = data._matchKey ? String(data._matchKey).split("_").pop().toUpperCase() : "";
+    const alliance = { red: "Red alliance", blue: "Blue alliance", both: "Both alliances" }[data._scope];
+    if (alliance) return match ? `${alliance}, ${match}` : alliance;
+    const team = data._targetTeamNumber || "";
     if (team && match) return `Team ${team}, ${match}`;
     if (team) return `Team ${team}`;
     if (match) return match;
@@ -122,10 +132,10 @@ function offerUndoDiscard(formId, draft, applyFn) {
     });
 }
 
-function runRestore(draft, applyFn) {
+async function runRestore(draft, applyFn) {
     try {
-        // A form can return a warning, e.g. when the draft's team or match is no longer on the schedule.
-        const result = applyFn(draft.data);
+        // A form can return (or resolve to) a warning, e.g. when the draft's team or match is no longer on the schedule.
+        const result = await applyFn(draft.data);
         const warning = result && typeof result === "object" ? result.warning : (typeof result === "string" ? result : null);
         if (warning) showToast(warning, "warning");
         else showToast("Draft restored", "success");
@@ -259,7 +269,7 @@ export function startDraftAutosave(formId, formElement, getFormData, intervalMs 
     };
     const differsFromBaseline = (answers) => !baseline || differs(answers, baseline);
 
-    const doSave = () => {
+    const doSave = (urgent = false) => {
         clearTimeout(debounceTimer);
         debounceTimer = null;
         try {
@@ -283,7 +293,7 @@ export function startDraftAutosave(formId, formElement, getFormData, intervalMs 
             if (serialized === lastSaved) return;
             lastSaved = serialized;
             if (hasMeaningfulDraftData(data) && differsFromBaseline(answers)) {
-                saveDraft(formId, data);
+                saveDraft(formId, data, { urgent });
                 savedHere = true;
             } else if (savedHere) {
                 // The scout cleared or undid everything they entered: no draft left to offer.
@@ -296,6 +306,9 @@ export function startDraftAutosave(formId, formElement, getFormData, intervalMs 
     };
     // The form as it is now is the starting point.
     const rebaseline = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+        savedHere = false;
         try {
             const data = getFormData();
             if (!data) return;
@@ -313,10 +326,11 @@ export function startDraftAutosave(formId, formElement, getFormData, intervalMs 
         debounceTimer = setTimeout(doSave, CHANGE_DEBOUNCE_MS);
     };
 
-    const timerId = setInterval(doSave, intervalMs);
+    const timerId = setInterval(() => doSave(), intervalMs);
     const onHidden = () => {
-        if (document.visibilityState === "hidden") doSave();
+        if (document.visibilityState === "hidden") doSave(true);
     };
+    const onPageHide = () => doSave(true);
 
     if (formElement) {
         formElement.addEventListener("input", soon);
@@ -326,7 +340,7 @@ export function startDraftAutosave(formId, formElement, getFormData, intervalMs 
         formElement.addEventListener("focusout", soon);
     }
     document.addEventListener("visibilitychange", onHidden);
-    window.addEventListener("pagehide", doSave);
+    window.addEventListener("pagehide", onPageHide);
 
     return () => {
         rebaselineHooks.delete(formId);
@@ -339,7 +353,7 @@ export function startDraftAutosave(formId, formElement, getFormData, intervalMs 
             formElement.removeEventListener("focusout", soon);
         }
         document.removeEventListener("visibilitychange", onHidden);
-        window.removeEventListener("pagehide", doSave);
+        window.removeEventListener("pagehide", onPageHide);
     };
 }
 

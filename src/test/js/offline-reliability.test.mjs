@@ -271,6 +271,75 @@ test("entries saved by another team's account stay on a shared tablet", async ()
     reset();
 });
 
+test("one entry the server can't handle (500) doesn't hold up the others", async () => {
+    reset();
+    await offline.enqueueOfflineEntries("match-scouting", [{ data: entry(1), createdAt: "2026-01-01T00:00:01Z" }, { data: entry(2), createdAt: "2026-01-01T00:00:02Z" }]);
+    const calls = [];
+    globalThis.fetch = async (url, init) => {
+        const body = JSON.parse(init.body);
+        calls.push(body.data.targetTeamNumber);
+        const status = body.data.targetTeamNumber === 1 ? 500 : 200;
+        return new Response(JSON.stringify(status === 500 ? { error: "boom" } : {}), { status, headers: { "Content-Type": "application/json" } });
+    };
+    await offline.syncOfflineEntries();
+    assert.deepEqual(calls, [1, 2]);
+    assert.deepEqual(queued().map((i) => i.data.targetTeamNumber), [1], "the 500 one waits for the next round");
+    assert.equal(offline.getFailedEntries().length, 0, "a 500 isn't a refusal");
+    reset();
+});
+
+test("'too many requests' (429) stops the round and keeps everything", async () => {
+    reset();
+    await offline.enqueueOfflineEntries("match-scouting", [{ data: entry(1) }, { data: entry(2) }, { data: entry(3) }]);
+    const calls = respondWith(429, { error: "slow down" });
+    await offline.syncOfflineEntries();
+    assert.equal(calls.length, 1);
+    assert.equal(queued().length, 3);
+    reset();
+});
+
+test("an entry saved while an upload round is running goes up straight after it", async () => {
+    reset();
+    await offline.enqueueOfflineEntries("match-scouting", [{ data: entry(1) }]);
+    const sent = [];
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    globalThis.fetch = async (url, init) => {
+        const team = JSON.parse(init.body).data.targetTeamNumber;
+        sent.push(team);
+        if (team === 1) await gate;
+        return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+    const round = offline.syncOfflineEntries();
+    await new Promise((r) => setTimeout(r, 20));
+    await offline.enqueueOfflineEntries("match-scouting", [{ data: entry(2) }]);
+    await offline.syncOfflineEntries(); // asked while the first round is busy
+    release();
+    await round;
+    assert.deepEqual(sent, [1, 2]);
+    assert.equal(queued().length, 0);
+    reset();
+});
+
+test("a large entry gets time to upload on a slow link before it counts as stalled", async () => {
+    reset();
+    // The reply only starts once the body has gone up (~150 ms here).
+    globalThis.fetch = (url, init) => new Promise((resolve, reject) => {
+        const t = setTimeout(() => resolve(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } })), 150);
+        init.signal.addEventListener("abort", () => { clearTimeout(t); reject(Object.assign(new Error("aborted"), { name: "AbortError" })); });
+    });
+    try {
+        // 20 KB: about 0.8 s of allowance at the assumed slow-link speed, so a 50 ms idle limit doesn't cut it off.
+        const big = { data: { photo: "x".repeat(20 * 1024) } };
+        assert.deepEqual(await http.request("/api/pit-scouting", { method: "POST", json: big, timeoutMs: 50 }), {});
+        // A tiny body gets no such allowance and is reported as stalled.
+        await assert.rejects(http.request("/api/pit-scouting", { method: "POST", json: { data: {} }, timeoutMs: 50 }),
+            (err) => http.isNetworkError(err));
+    } finally {
+        reset();
+    }
+});
+
 // ── Drafts ───────────────────────────────────────────────────────────────────
 
 function fakeForm() {
@@ -362,6 +431,28 @@ test("drafts are saved shortly after a change, without waiting for the interval"
         form.fire("click");
         await new Promise((r) => setTimeout(r, 900));
         assert.ok(localStorage.getItem(draftKey("t-soon")), "saved about 0.7 s after the tap");
+    } finally {
+        stop();
+        reset();
+    }
+});
+
+test("saving within the autosave delay doesn't leave a draft of what was just saved", async () => {
+    reset();
+    const form = fakeForm();
+    let data = { _targetTeamNumber: "971", notes: "" };
+    const stop = drafts.startDraftAutosave("t-race", form, () => data, 60000);
+    try {
+        data = { ...data, notes: "Tank drive" };
+        form.fire("input");                 // autosave due in 0.7 s
+        drafts.clearDraft("t-race");         // the scout pressed Save first; the form still shows the answers
+        await new Promise((r) => setTimeout(r, 1000));
+        assert.equal(localStorage.getItem(draftKey("t-race")), null);
+
+        data = { ...data, notes: "Tank drive, then an edit" };
+        form.fire("input");
+        await new Promise((r) => setTimeout(r, 900));
+        assert.ok(localStorage.getItem(draftKey("t-race")), "a later edit is still saved");
     } finally {
         stop();
         reset();

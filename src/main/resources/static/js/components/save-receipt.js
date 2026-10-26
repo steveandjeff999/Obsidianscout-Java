@@ -86,7 +86,7 @@ export function hideSaveReceipt() {
  * nothing was saved; the form still holds it), "not-saved" (couldn't be stored at all).
  * entries: the saved payloads, used to name them. detail: optional extra text. signInNeeded: adds a sign-in link.
  */
-export function showSaveReceipt({ where, kindLabel = "", entries = [], detail = "", message = "", signInNeeded = false } = {}) {
+export function showSaveReceipt({ where, kindLabel = "", entries = [], detail = "", message = "", signInNeeded = false, volatile = false } = {}) {
     if (typeof document === "undefined" || !document.body) return;
     const host = ensureHost();
     const what = [kindLabel, describeAll(entries) || detail].filter(Boolean).join(" · ");
@@ -104,6 +104,10 @@ export function showSaveReceipt({ where, kindLabel = "", entries = [], detail = 
         body = signInNeeded
             ? `Your sign-in has expired, so it can't upload yet. <a href="${escapeHtml(signInUrl())}">Sign in again</a> and it uploads automatically.`
             : "It uploads automatically when the server is reachable. You can keep scouting.";
+        if (volatile) {
+            tone = "danger";
+            body += " <strong>This browser can't keep saved data (private browsing?), so keep this page open until it uploads.</strong>";
+        }
     } else if (where === "rejected") {
         tone = "danger";
         icon = "circle-xmark";

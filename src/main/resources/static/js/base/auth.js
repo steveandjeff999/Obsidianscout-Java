@@ -219,7 +219,7 @@ export function wireLogout() {
             if (waiting > 0) {
                 const message = `${waiting} ${waiting === 1 ? "entry saved on this device hasn't" : "entries saved on this device haven't"} uploaded yet.\n\n` +
                     `If you sign out now, ${waiting === 1 ? "it stays" : "they stay"} on this device and ${waiting === 1 ? "uploads" : "upload"} the next time someone from your team signs in here. ` +
-                    "To upload them now, cancel and press Sync while connected.\n\nSign out anyway?";
+                    `To upload ${waiting === 1 ? "it" : "them"} now, cancel and press Sync while connected.\n\nSign out anyway?`;
                 if (!window.confirm(message)) return;
             }
         } catch (e) { /* never block signing out */ }

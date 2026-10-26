@@ -27,6 +27,8 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
  */
 export const QUEUEABLE_REQUEST_TIMEOUT_MS = 8000;
 const QUEUEABLE_LARGE_BODY_BYTES = 256 * 1024;
+/** Upload speed assumed when allowing time to send a request body (about 200 kbit/s, a poor venue link). */
+const SLOW_UPLOAD_BYTES_PER_SEC = 25 * 1024;
 /** On a slow link a single chunk can legitimately take this long. */
 const LOW_BW_MIN_IDLE_MS = 30000;
 /** Hard cap for one request, however steadily it is progressing. */
@@ -54,13 +56,13 @@ async function gzipText(text) {
  * bytes for `idleMs`. A large download on a slow link keeps going as long as bytes keep arriving.
  * Resolves to `{ response, text }`; rejects with an AbortError (`stalled: true` when it timed out).
  */
-async function fetchWithProgress(url, init, idleMs, externalSignal) {
+async function fetchWithProgress(url, init, idleMs, externalSignal, firstResponseMs = idleMs) {
     const controller = new AbortController();
     let stalled = false;
     let idleTimer = null;
-    const arm = () => {
+    const arm = (ms = idleMs) => {
         if (idleTimer) clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => { stalled = true; controller.abort(); }, idleMs);
+        idleTimer = setTimeout(() => { stalled = true; controller.abort(); }, ms);
     };
     const totalTimer = setTimeout(() => { stalled = true; controller.abort(); }, MAX_REQUEST_MS);
     const onExternalAbort = () => controller.abort();
@@ -70,7 +72,8 @@ async function fetchWithProgress(url, init, idleMs, externalSignal) {
     }
 
     const started = nowMs();
-    arm();
+    // Until the response starts, the body may still be uploading: that wait gets the upload allowance too.
+    arm(firstResponseMs);
     try {
         const response = await fetch(url, { ...init, signal: controller.signal });
         const headersAt = nowMs();
@@ -410,14 +413,21 @@ export async function request(path, options = {}) {
     }
 
     let defaultIdleMs = DEFAULT_REQUEST_TIMEOUT_MS;
-    if (method !== "GET" && options.queueable) {
-        let bodyBytes = 0;
-        try { bodyBytes = options.json !== undefined ? JSON.stringify(options.json).length : 0; } catch (e) { bodyBytes = 0; }
-        if (bodyBytes < QUEUEABLE_LARGE_BODY_BYTES) defaultIdleMs = QUEUEABLE_REQUEST_TIMEOUT_MS;
+    let bodyBytes = 0;
+    if (method !== "GET") {
+        try {
+            if (options.json !== undefined) bodyBytes = JSON.stringify(options.json).length;
+            else if (typeof options.body === "string") bodyBytes = options.body.length;
+            else if (options.body && typeof options.body.size === "number") bodyBytes = options.body.size;
+        } catch (e) { bodyBytes = 0; }
+        if (options.queueable && bodyBytes < QUEUEABLE_LARGE_BODY_BYTES) defaultIdleMs = QUEUEABLE_REQUEST_TIMEOUT_MS;
     }
     const idleMs = Math.max(options.timeoutMs || defaultIdleMs, isLowBandwidth() ? LOW_BW_MIN_IDLE_MS : 0);
+    // fetch() can't report upload progress, so a large body (photos) gets time to send at a slow link's pace before
+    // the wait for a reply counts as stalled. Otherwise it would time out on every retry and never arrive.
+    const firstResponseMs = idleMs + Math.round((bodyBytes / SLOW_UPLOAD_BYTES_PER_SEC) * 1000);
     const priority = options.priority !== undefined ? options.priority : priorityFor(method, path);
-    const send = (init) => schedule(priority, () => fetchWithProgress(path, init, idleMs, options.signal));
+    const send = (init) => schedule(priority, () => fetchWithProgress(path, init, idleMs, options.signal, firstResponseMs));
 
     const opts = {
         method: method,
