@@ -47,12 +47,25 @@ data class UserSession(
     val bugReportPreference: String = "ask",
     val localAiEnabled: Boolean = false,
     val nonScoutingToolsEnabled: Boolean = false,
-    val sessionId: String? = null
+    val sessionId: String? = null,
+    /** Synthetic read-only session for a public data request (/api/public/...). Never stored in a cookie. */
+    val publicView: Boolean = false
 )
 
 class ApiException(val status: HttpStatusCode, override val message: String) : RuntimeException(message)
 
 suspend fun ApplicationCall.requireSession(): UserSession {
+    // Public data requests run as the owner team, whoever (if anyone) is signed in.
+    attributes.getOrNull(com.obsidianscout.publicdata.PublicViewContext.AttributeKey)?.let { publicView ->
+        return UserSession(
+            userId = com.obsidianscout.publicdata.PublicDataService.PUBLIC_USER_ID,
+            username = "public",
+            teamNumber = publicView.teamNumber,
+            program = publicView.program,
+            role = UserRole.ANALYTICS,
+            publicView = true
+        )
+    }
     val session = sessions.get<UserSession>()
     if (session == null) {
         val cookieHeader = request.headers["Cookie"]
@@ -213,7 +226,7 @@ suspend fun ApplicationCall.requireSession(): UserSession {
  */
 suspend fun ApplicationCall.requireAdmin(): UserSession {
     val session = requireSession()
-    if (!session.role.isAtLeast(UserRole.ADMIN)) {
+    if (session.publicView || !session.role.isAtLeast(UserRole.ADMIN)) {
         throw ApiException(HttpStatusCode.Forbidden, "Admin access required")
     }
     return session
@@ -277,7 +290,7 @@ suspend fun ApplicationCall.hasValidClusterSignature(): Boolean {
  */
 suspend fun ApplicationCall.requireSuperAdmin(): UserSession {
     val session = requireSession()
-    if (session.role != UserRole.SUPERADMIN) {
+    if (session.publicView || session.role != UserRole.SUPERADMIN) {
         throw ApiException(HttpStatusCode.Forbidden, "Superadmin access required")
     }
     return session

@@ -224,6 +224,10 @@ data class ApiSettings(
     val chatEnabled: Boolean = true,
     /** Match predictions game: scouts call each match's winner and compete on a leaderboard. Off until an admin enables it. */
     val matchPredictionsEnabled: Boolean = false,
+    /** Anyone can browse and analyze this team's own scouting data on the Public Data page. Off until an admin enables it. */
+    val dataPublic: Boolean = false,
+    /** With [dataPublic], also show free-text notes and comments instead of redacting them. */
+    val dataPublicIncludeNotes: Boolean = false,
     val apiKeys: ApiKeys = ApiKeys(),
     val scoutPages: List<String> = DEFAULT_SCOUT_PAGES,
     val analyticsPages: List<String> = DEFAULT_ANALYTICS_PAGES,
@@ -278,7 +282,18 @@ object SettingsService {
         }
     }
 
+    /**
+     * The team's settings. On a public data request for this team, the event is the one the visitor picked
+     * (see [com.obsidianscout.publicdata.PublicViewContext]).
+     */
     fun getSettings(teamNumber: Int, program: String = "FRC"): ApiSettings {
+        val settings = getSettingsRaw(teamNumber, program)
+        val publicView = com.obsidianscout.publicdata.PublicViewContext.current() ?: return settings
+        return publicView.applyEvent(teamNumber, program, settings)
+    }
+
+    /** The team's stored settings, never adjusted for a public data request. Use this for anything that is cached or saved. */
+    fun getSettingsRaw(teamNumber: Int, program: String = "FRC"): ApiSettings {
         val (jsonText, isTeamSpecific) = readTransaction {
             // Try team-specific settings first
             val teamSettings = AppSettings
@@ -315,7 +330,7 @@ object SettingsService {
 
     fun updateSettings(teamNumber: Int, settings: ApiSettings): ApiSettings {
         val program = settings.program
-        val existing = getSettings(teamNumber, program)
+        val existing = getSettingsRaw(teamNumber, program)
         val mergedKeys = settings.apiKeys.copy(
             tbaKey = if (settings.apiKeys.tbaKey == "********") existing.apiKeys.tbaKey else settings.apiKeys.tbaKey,
             firstKey = if (settings.apiKeys.firstKey == "********") existing.apiKeys.firstKey else settings.apiKeys.firstKey,
@@ -354,6 +369,9 @@ object SettingsService {
             }
         }
         com.obsidianscout.scouting.AllianceService.clearEffectiveSettingsCache()
+        if (normalized.dataPublic != existing.dataPublic || normalized.dataPublicIncludeNotes != existing.dataPublicIncludeNotes) {
+            com.obsidianscout.publicdata.PublicDataService.clearDirectoryCache()
+        }
         // Page permissions or the chat switch may have changed what widgets the team may have.
         com.obsidianscout.widgets.WidgetPushService.notifyTeam(teamNumber, program, "access")
         return normalized

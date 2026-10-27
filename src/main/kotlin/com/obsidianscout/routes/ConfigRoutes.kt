@@ -127,6 +127,8 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         recencyBias = recencyBias,
         chatEnabled = chatEnabled,
         matchPredictionsEnabled = matchPredictionsEnabled,
+        dataPublic = dataPublic,
+        dataPublicIncludeNotes = dataPublicIncludeNotes,
         apiKeys = ApiKeysPayload(
             tbaKey = if (apiKeys.tbaKey.isNotBlank()) "********" else "",
             firstUsername = apiKeys.firstUsername,
@@ -148,6 +150,29 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
     )
 }
 
+/** What a public data visitor may see of a team's settings: the event, stat sources and theme, nothing else. */
+private fun ApiSettings.toPublicPayload(): ApiSettingsPayload {
+    val full = toPayload()
+    return ApiSettingsPayload(
+        year = full.year,
+        eventCode = full.eventCode,
+        eventKey = full.eventKey.ifBlank { resolvedEventKey() },
+        timezone = full.timezone,
+        useStatboticsEpa = full.useStatboticsEpa,
+        useTbaOpr = full.useTbaOpr,
+        useMatch13Exp = full.useMatch13Exp,
+        recencyBias = full.recencyBias,
+        chatEnabled = false,
+        matchPredictionsEnabled = false,
+        dataPublic = true,
+        theme = full.theme,
+        themes = full.themes,
+        activeThemeName = full.activeThemeName,
+        setupWizardCompleted = true,
+        program = full.program
+    )
+}
+
 private fun ApiSettingsPayload.toSettings(): ApiSettings {
     return ApiSettings(
         year = year,
@@ -160,6 +185,8 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         recencyBias = recencyBias ?: com.obsidianscout.integrations.RecencyBiasSettings(),
         chatEnabled = chatEnabled,
         matchPredictionsEnabled = matchPredictionsEnabled ?: false,
+        dataPublic = dataPublic ?: false,
+        dataPublicIncludeNotes = dataPublicIncludeNotes ?: false,
         apiKeys = com.obsidianscout.integrations.ApiKeys(
             tbaKey = apiKeys.tbaKey,
             firstUsername = apiKeys.firstUsername,
@@ -519,7 +546,7 @@ fun Route.configRoutes() {
                             )
                         }
                     }
-                    call.respond(SettingsResponse(settings.toPayload()))
+                    call.respond(SettingsResponse(if (session.publicView) settings.toPublicPayload() else settings.toPayload()))
                 }
                 put {
                     val session = call.requireAdmin()
@@ -531,6 +558,8 @@ fun Route.configRoutes() {
                     val recencyBias = payload.recencyBias ?: previous.recencyBias
                     val alternateEventCode = payload.alternateEventCode ?: previous.alternateEventCode
                     val matchPredictionsEnabled = payload.matchPredictionsEnabled ?: previous.matchPredictionsEnabled
+                    val dataPublic = payload.dataPublic ?: previous.dataPublic
+                    val dataPublicIncludeNotes = payload.dataPublicIncludeNotes ?: previous.dataPublicIncludeNotes
                     val updated = SettingsService.updateSettings(
                         session.teamNumber,
                         payload.toSettings().copy(
@@ -539,6 +568,8 @@ fun Route.configRoutes() {
                             recencyBias = recencyBias,
                             alternateEventCode = alternateEventCode,
                             matchPredictionsEnabled = matchPredictionsEnabled,
+                            dataPublic = dataPublic,
+                            dataPublicIncludeNotes = dataPublicIncludeNotes,
                             // Edited on the assignments page, never sent by the settings form
                             pitScoutGroups = previous.pitScoutGroups,
                             assignmentShifts = previous.assignmentShifts

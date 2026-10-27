@@ -364,6 +364,20 @@ document.addEventListener("DOMContentLoaded", async () => {
                 document.querySelectorAll(".self-register-role").forEach(cb => { cb.disabled = locked; });
             };
 
+            // The notes option and public page link only matter while public data is on.
+            const syncDataPublicEnabled = () => {
+                const isPublic = getChecked("settings-data-public");
+                const extra = document.getElementById("settings-data-public-extra");
+                if (extra) extra.style.opacity = isPublic ? "1" : "0.5";
+                const notes = document.getElementById("settings-data-public-notes");
+                if (notes) notes.disabled = !isPublic;
+                const link = document.getElementById("settings-data-public-link");
+                if (link) {
+                    link.href = `/public-data?team=${encodeURIComponent(me.teamNumber)}`;
+                    link.classList.toggle("hidden", !(isPublic && loadedSettings && loadedSettings.dataPublic === true));
+                }
+            };
+
             // Recency bias: mirrors RecencyBiasSettings on the server (defaults and clamping included).
             const RECENCY_DEFAULTS = { enabled: false, mode: "exponential", halfLifeMatches: 4, windowSize: 6, minMatches: 4, prescoutWeight: 0.5 };
             const clampNum = (value, min, max, fallback) => {
@@ -432,6 +446,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             setRecencyBias(loadedSettings.recencyBias);
             setChecked("settings-chat", loadedSettings.chatEnabled);
             setChecked("settings-match-predictions", loadedSettings.matchPredictionsEnabled === true);
+            setChecked("settings-data-public", loadedSettings.dataPublic === true);
+            setChecked("settings-data-public-notes", loadedSettings.dataPublicIncludeNotes === true);
+            syncDataPublicEnabled();
+            const dataPublicToggle = document.getElementById("settings-data-public");
+            if (dataPublicToggle) {
+                dataPublicToggle.addEventListener("change", () => {
+                    // Turning sharing on publishes the team's data to anyone, so make the admin confirm it.
+                    if (dataPublicToggle.checked && !confirm(t("config.make_data_public_confirm",
+                        "Make your team's scouting data public?\n\nAnyone, without signing in, will be able to browse and analyze your match, pit and qualitative entries on the Public Data page. Scout names stay hidden. You can uncheck this at any time to hide it again."))) {
+                        dataPublicToggle.checked = false;
+                    }
+                    syncDataPublicEnabled();
+                });
+            }
             setChecked("settings-lock-registration", loadedSettings.registrationLocked || false);
             setSelfRegisterRoles(loadedSettings.selfRegisterRoles);
             syncSelfRegisterRolesEnabled();
@@ -716,6 +744,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.recencyBias = getRecencyBias();
                     loadedSettings.chatEnabled = getChecked("settings-chat");
                     loadedSettings.matchPredictionsEnabled = getChecked("settings-match-predictions");
+                    loadedSettings.dataPublic = getChecked("settings-data-public");
+                    loadedSettings.dataPublicIncludeNotes = getChecked("settings-data-public-notes");
                     loadedSettings.registrationLocked = getChecked("settings-lock-registration");
                     loadedSettings.selfRegisterRoles = getSelfRegisterRoles();
                     loadedSettings.statboticsBaseUrl = getVal("settings-statbotics-url").trim() || "https://api.statbotics.io";
@@ -736,6 +766,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             button: settingsSaveBtn
                         });
                         loadedSettings = response.settings;
+                        syncDataPublicEnabled();
                         Obsidianscout.showToast("API settings saved", "success");
                     } catch (error) {
                         Obsidianscout.showToast(error.message || "Save failed", "error");
@@ -882,6 +913,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     loadedSettings.adminPages = adminPages;
                     loadedSettings.chatEnabled = getChecked("settings-chat");
                     loadedSettings.matchPredictionsEnabled = getChecked("settings-match-predictions");
+                    loadedSettings.dataPublic = getChecked("settings-data-public");
+                    loadedSettings.dataPublicIncludeNotes = getChecked("settings-data-public-notes");
                     loadedSettings.registrationLocked = getChecked("settings-lock-registration");
                     loadedSettings.selfRegisterRoles = getSelfRegisterRoles();
                     loadedSettings.setupWizardCompleted = true;

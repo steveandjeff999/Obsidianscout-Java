@@ -167,9 +167,30 @@ internal fun injectAssetVersioning(html: String, version: String): String {
     }
 }
 
+/** Pages that can run in public mode at /public/{team}/{page}. */
+internal val PUBLIC_DATA_PAGES = setOf(
+    "graphs", "analytics", "compare", "custom-analytics", "rankings", "projected-rankings",
+    "predictor", "event-predictor", "team", "match-data", "pit-data", "qual-data", "all-data"
+) + com.obsidianscout.publicdata.PUBLIC_NOTES_PAGES
+
 fun Route.staticWebRoutes() {
         get("/shared/{token}") {
             call.respondStaticHtml("shared.html")
+        }
+
+        // Read-only analytics pages over a team's public data. The HTML holds no data, so no login is needed;
+        // the page's API calls go through /api/public/..., which checks the team still shares its data.
+        get("/public/{team}/{page}") {
+            val page = call.parameters["page"].orEmpty()
+            val team = call.parameters["team"]?.toIntOrNull()
+            val program = call.request.queryParameters["program"]?.trim()?.uppercase()?.takeIf { it == "FTC" } ?: "FRC"
+            val notesPageBlocked = page in com.obsidianscout.publicdata.PUBLIC_NOTES_PAGES && team != null &&
+                com.obsidianscout.publicdata.PublicDataService.publicSettings(team, program)?.dataPublicIncludeNotes != true
+            if (team == null || page !in PUBLIC_DATA_PAGES || notesPageBlocked) {
+                call.respondStaticHtml("404.html", HttpStatusCode.NotFound)
+            } else {
+                call.respondStaticHtml("$page.html")
+            }
         }
 
         val pages = mapOf(
@@ -237,6 +258,7 @@ fun Route.staticWebRoutes() {
             "about" to "about.html",
             "login" to "login.html",
             "shared-links" to "shared-links.html",
+            "public-data" to "public-data.html",
             "tutorials" to "tutorials.html",
             "404" to "404.html",
             "500" to "500.html",

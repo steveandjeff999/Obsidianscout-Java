@@ -267,6 +267,8 @@ fun Application.module(appConfig: AppConfig) {
                 CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 3600 * 24 * 30, visibility = CacheControl.Visibility.Public))
             } else if (path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".json")) {
                 CachingOptions(CacheControl.NoCache(visibility = CacheControl.Visibility.Public))
+            } else if (path.startsWith("/api/public/")) {
+                CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
             } else if (method == "GET" && path.startsWith("/api/")) {
                 CachingOptions(CacheControl.NoCache(visibility = CacheControl.Visibility.Private))
             } else {
@@ -318,7 +320,10 @@ fun Application.module(appConfig: AppConfig) {
             call.response.headers.append("CDN-Cache-Control", "no-store")
             call.response.headers.append("Cloudflare-CDN-Cache-Control", "no-store")
         } else if (!isAsset) {
-            if (method == "GET" && path.startsWith("/api/")) {
+            if (path.startsWith("/api/public/")) {
+                // Public data must disappear the moment a team turns sharing off, so nothing may keep a copy.
+                call.response.headers.append("Cache-Control", "no-store, private")
+            } else if (method == "GET" && path.startsWith("/api/")) {
                 call.response.headers.append("Cache-Control", "private, no-cache, must-revalidate")
             } else if (path.startsWith("/api/")) {
                 // Pragma/Expires only matter to HTTP/1.0 caches; API clients all honour Cache-Control.

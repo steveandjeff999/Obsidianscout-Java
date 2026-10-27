@@ -3,6 +3,7 @@
  * Fetches, renders, and manages dismissible & expandable system alert banners.
  */
 
+import { isPublicMode } from '../base/public-mode.js';
 import { request, getCachedData } from '../base/http.js';
 import { ensureDOMPurify, sanitizeBannerHtml } from '../utilities/sanitizer.js';
 
@@ -127,6 +128,8 @@ function renderBanners(banners, mainContent) {
 }
 
 export async function loadAndRenderBanners() {
+    // Team banners belong to signed-in users; a public data view shows none.
+    if (isPublicMode()) return;
     initBannerEventDelegation();
     const mainContent = document.querySelector(".main-content") || document.querySelector(".login-shell") || document.querySelector(".shell");
     if (!mainContent) return;

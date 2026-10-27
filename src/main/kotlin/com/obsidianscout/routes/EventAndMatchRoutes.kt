@@ -110,7 +110,8 @@ fun Route.eventAndMatchRoutes() {
                     if (!eventKeyParam.isNullOrBlank()) {
                         val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                         var event = IntegrationService.getEvent(eventKeyParam)
-                        if (event == null || event.timezone.isNullOrBlank() || event.timezone == "UTC") {
+                        // Public visitors only see what's cached: they mustn't spend the team's API keys.
+                        if (!session.publicView && (event == null || event.timezone.isNullOrBlank() || event.timezone == "UTC")) {
                             try {
                                 val fetched = IntegrationService.fetchAndUpsertEvent(settings, eventKeyParam)
                                 if (fetched != null && !fetched.timezone.isNullOrBlank() && fetched.timezone != "UTC") {
@@ -143,7 +144,7 @@ fun Route.eventAndMatchRoutes() {
                         }
                     }
                     val year = call.request.queryParameters["year"]?.toIntOrNull()
-                    val cachedOnly = call.request.queryParameters["cached"]?.let { value ->
+                    val cachedOnly = session.publicView || call.request.queryParameters["cached"]?.let { value ->
                         value == "1" || value.equals("true", ignoreCase = true)
                     } ?: false
 
@@ -228,7 +229,7 @@ fun Route.eventAndMatchRoutes() {
                 }
                 get("/projected-rankings") {
                     val session = call.requireSession()
-                    if (!SettingsService.canAccessPage(session.teamNumber, session.program, session.role, "projected-rankings")) {
+                    if (!session.publicView && !SettingsService.canAccessPage(session.teamNumber, session.program, session.role, "projected-rankings")) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Your role doesn't have access to Projected Rankings")
                     }
                     val eventKey = call.request.queryParameters["eventKey"]

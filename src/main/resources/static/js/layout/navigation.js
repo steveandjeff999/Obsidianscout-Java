@@ -6,10 +6,13 @@
 import { safeGetItem, safeSetItem } from '../base/storage.js';
 import { isAdmin, isSuperAdmin } from '../base/auth.js';
 import { wireThemeToggle } from './theme.js';
+import { isPublicMode } from '../base/public-mode.js';
 
 export let lastUser = null;
 
 export function setUserBadge(user) {
+    // The public view draws its own sidebar (see public-mode.js); there is no signed-in user to show.
+    if (isPublicMode()) return;
     if (!user && lastUser) {
         user = lastUser;
     }
@@ -220,7 +223,7 @@ export function updateSectionHeaderVisibility(sidebar) {
  * Adjusts sidebar navigation visibility based on user role.
  */
 export function adjustNavForRole(user) {
-    if (!user) return;
+    if (!user || isPublicMode()) return;
     const role = user.role;
     const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "fcm-settings", "migration", "default-configs"];
 

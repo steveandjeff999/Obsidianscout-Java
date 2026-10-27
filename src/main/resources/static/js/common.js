@@ -37,6 +37,7 @@ import {
 // Namespace imports for the newest exports: right after a deploy the previous service worker can still hand out the
 // previous copy of these unversioned modules, and a missing named export would stop every page from loading.
 import * as httpModule from './base/http.js';
+import { isPublicMode, renderPublicChrome, wirePublicLinks } from './base/public-mode.js';
 import * as offlineSyncModule from './services/offline-sync.js';
 
 const isNetworkError = httpModule.isNetworkError || ((error) => {
@@ -723,7 +724,8 @@ async function onDOMContentLoaded() {
         // ignore
     }
 
-    if ('serviceWorker' in navigator) {
+    // Visitors to a public data view aren't part of the team: no offline shell, no push prompt.
+    if ('serviceWorker' in navigator && !isPublicMode()) {
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             console.log('[ServiceWorker] Active controller updated to new version. Updates will apply on next navigation or refresh.');
         });
@@ -768,6 +770,16 @@ async function onDOMContentLoaded() {
     applyNavLayout();
     wireThemeToggle();
     initScrollReveal();
+
+    // Public data view: own sidebar, no sign-in, nothing to sync, poll or upload.
+    if (isPublicMode()) {
+        await renderPublicChrome(document.querySelector(".sidebar"));
+        wirePublicLinks();
+        wireSidebarToggle();
+        injectMobileTopBar();
+        loadLocale(safeGetItem('obsidianscout:lang') || 'en').then(() => applyTranslations());
+        return;
+    }
 
     const sidebar = document.querySelector(".sidebar");
     if (sidebar) {

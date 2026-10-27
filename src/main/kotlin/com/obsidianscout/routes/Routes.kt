@@ -35,6 +35,7 @@ fun Application.configureRoutes() {
             bannerRoutes()
             contactRoutes()
             widgetRoutes()
+            publicDataRoutes()
         }
 
         localAiModelFileRoutes()

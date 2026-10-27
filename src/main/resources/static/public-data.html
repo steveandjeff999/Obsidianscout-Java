@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Public Data</title>
+    <meta name="description" content="Browse and analyze scouting data that teams have made public." />
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .public-data-shell {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 16px 60px;
+        }
+        .public-data-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .public-data-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+            color: var(--text);
+            text-decoration: none;
+        }
+        .public-data-brand img {
+            width: 32px;
+            height: 32px;
+        }
+    </style>
+</head>
+<body data-page="public-data">
+    <script>
+        (function() {
+            try {
+                if ((localStorage.getItem("obsidian-theme") || "light") === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="public-data-shell public-data-page">
+        <header class="public-data-top">
+            <a class="public-data-brand" href="/">
+                <img src="/assets/images/obsidian/obsidian-192.png" alt="" />
+                <span>ObsidianScout</span>
+            </a>
+            <a class="btn ghost" id="public-account-link" href="/login" data-i18n="public.sign_in">Sign in</a>
+        </header>
+
+        <main class="card">
+            <h1 data-i18n="public.title">Public Data</h1>
+            <p class="notice" data-i18n="public.intro">Scouting data that teams have chosen to share. Pick a team or an event, then open any analytics page. Everything here is read-only, and scout names are never shown.</p>
+
+            <div class="public-toolbar">
+                <div class="public-tabs" role="tablist" aria-label="Browse by">
+                    <button type="button" class="public-tab" role="tab" id="public-tab-team" aria-selected="true" data-tab="team" data-i18n="public.by_team">By team</button>
+                    <button type="button" class="public-tab" role="tab" id="public-tab-event" aria-selected="false" data-tab="event" data-i18n="public.by_event">By event</button>
+                </div>
+                <select id="public-year" aria-label="Filter by year">
+                    <option value="" data-i18n="public.all_years">All years</option>
+                </select>
+                <input type="search" id="public-search" placeholder="Search teams or events" aria-label="Search teams or events" data-i18n-placeholder="public.search_placeholder" />
+            </div>
+
+            <div id="public-results" aria-live="polite">
+                <p class="public-empty" data-i18n="public.loading">Loading public data...</p>
+            </div>
+        </main>
+    </div>
+    <script type="module" src="/js/public-data.js"></script>
+</body>
+</html>

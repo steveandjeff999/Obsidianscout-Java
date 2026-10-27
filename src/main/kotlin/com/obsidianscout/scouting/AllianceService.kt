@@ -808,7 +808,13 @@ object AllianceService {
      * Used by ScoutingService / PitScoutingService / QualitativeScoutingService
      * to transparently include partner data in list queries.
      */
-    fun getAlliancePartnerTeams(teamNumber: Int, program: String = "FRC"): Set<Int> = readTransaction {
+    fun getAlliancePartnerTeams(teamNumber: Int, program: String = "FRC"): Set<Int> {
+        // Public data is the owner team's own entries only: partners never agreed to publish theirs.
+        if (com.obsidianscout.publicdata.PublicViewContext.current() != null) return emptySet()
+        return queryAlliancePartnerTeams(teamNumber, program)
+    }
+
+    private fun queryAlliancePartnerTeams(teamNumber: Int, program: String): Set<Int> = readTransaction {
         // Find all alliance IDs where this team is ADMIN or ACCEPTED and active in this program
         val myAllianceIds = AllianceMemberships
             .selectAll().where {
@@ -1147,12 +1153,19 @@ object AllianceService {
     }
 
     fun getEffectiveSettings(teamNumber: Int, program: String = "FRC"): com.obsidianscout.integrations.ApiSettings {
+        val settings = getEffectiveSettingsCached(teamNumber, program)
+        // Applied after the cache so the shared cache only ever holds the team's real event.
+        val publicView = com.obsidianscout.publicdata.PublicViewContext.current() ?: return settings
+        return publicView.applyEvent(teamNumber, program, settings)
+    }
+
+    private fun getEffectiveSettingsCached(teamNumber: Int, program: String): com.obsidianscout.integrations.ApiSettings {
         val key = "$program-$teamNumber"
         val cached = effectiveSettingsCache[key]
         if (cached != null && !cached.isExpired()) return cached.settings
 
         val computed = readTransaction {
-            val localSettings = com.obsidianscout.integrations.SettingsService.getSettings(teamNumber, program)
+            val localSettings = com.obsidianscout.integrations.SettingsService.getSettingsRaw(teamNumber, program)
             val activeAllianceId = getActiveAllianceId(teamNumber, program) ?: return@readTransaction localSettings
 
             val allianceRow = ScoutingAlliances

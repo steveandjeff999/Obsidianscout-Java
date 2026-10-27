@@ -24,6 +24,7 @@ import com.obsidianscout.routes.MatchPredictionResponse
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlinx.coroutines.asContextElement
 import java.security.SecureRandom
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -861,19 +862,25 @@ object ShareService {
                 StatsHistoryResponse()
             }
 
+            // Predictions and datasets would otherwise widen to alliance partners' entries, who never shared them.
+            val ownTeamOnly = com.obsidianscout.publicdata.PublicViewContext(ownerTeamNumber, program, effectiveEventKey, includeNotes = !redactNotes)
             val predictionData = if (resourceType == "predictor" || resourceType == "event_predictor") {
                 val parsedQuery = runCatching { JsonSupport.json.parseToJsonElement(queryConfigJson).jsonObject }.getOrNull()
                 val matchKey = parsedQuery?.get("matchKey")?.jsonPrimitive?.contentOrNull
                 if (!matchKey.isNullOrBlank()) {
                     runCatching {
-                        PredictorService.predict(fakeSession, matchKey, false, effectiveEventKey)
+                        kotlinx.coroutines.withContext(com.obsidianscout.publicdata.PublicViewContext.local.asContextElement(ownTeamOnly)) {
+                            PredictorService.predict(fakeSession, matchKey, false, effectiveEventKey)
+                        }
                     }.getOrNull()
                 } else null
             } else null
 
             val datasetData = if (resourceType == "custom_analytics") {
                 runCatching {
-                    AnalyticsReportService.generateDataset(fakeSession, effectiveEventKey.ifBlank { null })
+                    kotlinx.coroutines.withContext(com.obsidianscout.publicdata.PublicViewContext.local.asContextElement(ownTeamOnly)) {
+                        AnalyticsReportService.generateDataset(fakeSession, effectiveEventKey.ifBlank { null })
+                    }
                 }.getOrNull()
             } else null
 

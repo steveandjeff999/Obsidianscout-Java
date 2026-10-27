@@ -34,6 +34,7 @@
 @import url('./pages/team-profile.css');
 @import url('./pages/graphs-analytics.css');
 @import url('./pages/tour-wizard.css');
+@import url('./pages/public-data.css');
 
 /* 5. Responsive & Mobile Overrides */
 @import url('./layout/responsive.css');

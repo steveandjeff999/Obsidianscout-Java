@@ -328,6 +328,10 @@ data class ApiSettingsPayload(
     val chatEnabled: Boolean = true,
     /** Omitted (null) on save keeps the team's current value. */
     val matchPredictionsEnabled: Boolean? = null,
+    /** Omitted (null) on save keeps the team's current value. */
+    val dataPublic: Boolean? = null,
+    /** Omitted (null) on save keeps the team's current value. */
+    val dataPublicIncludeNotes: Boolean? = null,
     val apiKeys: ApiKeysPayload = ApiKeysPayload(),
     val scoutPages: List<String> = emptyList(),
     val analyticsPages: List<String> = emptyList(),

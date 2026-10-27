@@ -7,10 +7,12 @@ import { safeGetItem, safeSetItem, safeRemoveItem } from './storage.js';
 import { request, getCachedData } from './http.js';
 import { clearAllHttpCaches } from './idb-cache.js';
 import { loadAndRenderBanners } from '../components/banners.js';
+import { isPublicMode, makePublicUser } from './public-mode.js';
 
 export const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "SCOUT"];
 
 export async function checkLoginStatus() {
+    if (isPublicMode()) return true;
     // Server already known to be unreachable: don't hold the page for a check that can only time out. The cached
     // sign-in stands until the server answers again.
     try {
@@ -52,6 +54,7 @@ export async function checkLoginStatus() {
 }
 
 export async function getMe() {
+    if (isPublicMode()) return makePublicUser();
     try {
         const result = await request("/api/auth/me");
         return result ? (result.user || result) : null;
@@ -86,6 +89,8 @@ export function canAccessAnalytics(role) {
 }
 
 export async function requireAuth() {
+    // Public data views need no sign-in: pages run as a read-only stand-in for the owner team.
+    if (isPublicMode()) return makePublicUser();
     const loggedIn = await checkLoginStatus();
     if (!loggedIn) {
         window.location.href = "/";

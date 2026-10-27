@@ -16,6 +16,7 @@ import {
 import { isLowBandwidth, recordTransfer, recordStall } from './net-quality.js';
 import { schedule, priorityFor } from './request-scheduler.js';
 import { serveFromEntryStore, noteEntryWrite, clearEntryStore } from '../services/entry-store.js';
+import { isPublicMode, publicRequest } from './public-mode.js';
 
 export { isScoutingDataPath };
 
@@ -327,6 +328,8 @@ export function getActiveEventKey() {
 }
 
 export function getCachedData(path) {
+    // Saved responses are the signed-in user's own team; never show them on another team's public view.
+    if (isPublicMode()) return null;
     try {
         const cached = getHttpCacheSync(path);
         if (cached && cached.text !== null) {
@@ -354,6 +357,15 @@ export async function purgeScoutingCache() {
 }
 
 export async function request(path, options = {}) {
+    // Public data views read another team's data through /api/public/...: no session, caches or offline stores.
+    if (isPublicMode()) {
+        if (options.button) setButtonLoading(options.button, true, options.loadingText);
+        try {
+            return await publicRequest(path, options);
+        } finally {
+            if (options.button) setButtonLoading(options.button, false);
+        }
+    }
     const method = options.method || "GET";
     let isPublicPage = false;
 

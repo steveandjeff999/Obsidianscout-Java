@@ -590,6 +590,13 @@
                             <label><input id="settings-chat" type="checkbox" /> <span data-i18n="config.enable_team_chat">Enable Team Chat</span></label>
                             <label><input id="settings-match-predictions" type="checkbox" /> <span data-i18n="config.enable_match_predictions">Enable Match Predictions</span></label>
                             <div style="font-size: 12px; color: var(--muted); margin: -4px 0 4px 24px;" data-i18n="config.enable_match_predictions_hint">Scouts pick red or blue to win each match on the scouting forms and the Match Predictions page, then compete on an accuracy leaderboard.</div>
+                            <label><input id="settings-data-public" type="checkbox" /> <span data-i18n="config.make_data_public">Make data publicly available</span></label>
+                            <div style="font-size: 12px; color: var(--muted); margin: -4px 0 4px 24px;" data-i18n="config.make_data_public_hint">Anyone can browse and analyze your team's match, pit and qualitative scouting data on the Public Data page. Scout names are never shown. Uncheck to hide it again.</div>
+                            <div id="settings-data-public-extra" style="margin-left: 24px; display: grid; gap: 6px;">
+                                <label><input id="settings-data-public-notes" type="checkbox" /> <span data-i18n="config.make_data_public_notes">Include notes and comments</span></label>
+                                <div style="font-size: 12px; color: var(--muted); margin: -4px 0 0 24px;" data-i18n="config.make_data_public_notes_hint">Also adds Qual Rankings to your public pages.</div>
+                                <a id="settings-data-public-link" class="hidden" href="/public-data" target="_blank" rel="noopener" style="font-size: 13px;" data-i18n="config.view_public_page">View your public page</a>
+                            </div>
                             <label><input id="settings-lock-registration" type="checkbox" /> <span data-i18n="config.lock_user_registration">Lock new user registration via create account page</span></label>
 
                             <div id="settings-self-register-roles" style="margin-left: 24px;">
