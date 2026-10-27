@@ -233,6 +233,31 @@ export function markEntryAsSynced(id) {
 }
 
 /**
+ * Marks several history records as on the server with one save.
+ * @param {string[]} ids
+ * @returns {number} how many records changed
+ */
+export function markEntriesAsSynced(ids) {
+    const wanted = new Set(ids || []);
+    if (!wanted.size) return 0;
+    const history = getDeviceHistory();
+    const now = new Date().toISOString();
+    let count = 0;
+    for (const entry of history) {
+        if (wanted.has(entry.id) && !entry.serverSynced) {
+            entry.serverSynced = true;
+            entry.syncedAt = now;
+            count++;
+        }
+    }
+    if (count) {
+        saveDeviceHistory(history);
+        window.dispatchEvent(new CustomEvent("obsidianscout:device-history-changed", { detail: { count } }));
+    }
+    return count;
+}
+
+/**
  * Find and mark matching entries as synced with the server.
  * Useful when offline queue syncer finishes an upload.
  * @param {string} formType
@@ -266,7 +291,7 @@ export function markMatchingEntryAsSynced(formType, eventKey, teamNumber, matchK
                 entry.serverSynced = true;
                 entry.syncedAt = now;
                 updated = true;
-                break; // Match the earliest unsynced entry
+                // Keep going: one match can have several records (saved offline, QR generated, ...).
             }
         }
     }

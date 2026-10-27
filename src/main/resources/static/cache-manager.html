@@ -429,6 +429,11 @@
                     <div class="row gap-12 wrap mb-18">
                         <button id="btn-sync-all" class="btn" type="button"
                             data-i18n="cache-manager.upload_all_caches">Upload All Caches</button>
+                        <button id="btn-qr-stack-pending" class="btn secondary" type="button"><span
+                                data-i18n="cache-manager.qr_stack_unuploaded">QR Stack: Not Uploaded</span>
+                            (<span id="qr-stack-pending-count">0</span>)</button>
+                        <button id="btn-check-server-pending" class="btn secondary" type="button"
+                            data-i18n="cache-manager.check_server">Check Server</button>
                         <button id="btn-export-cache" class="btn secondary" type="button"
                             data-i18n="cache-manager.export_cache_json">Export Cache JSON</button>
                         <button id="btn-import-cache" class="btn secondary" type="button"
@@ -439,6 +444,7 @@
 
                         <input type="file" id="cache-import-file" class="input-hidden" accept=".json" />
                     </div>
+                    <div id="server-check-status-pending" class="muted mb-18" aria-live="polite"></div>
 
                     <hr style="border: none; border-top: 1px solid rgba(0, 0, 0, 0.08); margin: 24px 0;" />
 
@@ -527,6 +533,11 @@
 
                     <!-- Global History Actions -->
                     <div class="row gap-12 wrap mb-18">
+                        <button id="btn-qr-stack-history" class="btn" type="button"><span
+                                data-i18n="cache-manager.qr_stack_unuploaded">QR Stack: Not Uploaded</span>
+                            (<span id="qr-stack-history-count">0</span>)</button>
+                        <button id="btn-check-server-history" class="btn secondary" type="button"
+                            data-i18n="cache-manager.check_server">Check Server</button>
                         <button id="btn-export-history" class="btn secondary" type="button"
                             data-i18n="cache-manager.export_device_history_backup">Export History Backup (JSON)</button>
                         <button id="btn-import-history" class="btn secondary" type="button"
@@ -537,6 +548,7 @@
 
                         <input type="file" id="history-import-file" class="input-hidden" accept=".json" />
                     </div>
+                    <div id="server-check-status-history" class="muted mb-18" aria-live="polite"></div>
 
                     <hr style="border: none; border-top: 1px solid rgba(0, 0, 0, 0.08); margin: 24px 0;" />
 

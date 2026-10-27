@@ -69,8 +69,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    tabBtnPending.addEventListener("click", () => switchTab("pending"));
-    tabBtnHistory.addEventListener("click", () => switchTab("history"));
+    tabBtnPending.addEventListener("click", () => { switchTab("pending"); runServerCheck(); });
+    tabBtnHistory.addEventListener("click", () => { switchTab("history"); runServerCheck(); });
 
     // =========================================================================
     // SECTION 1: PENDING OFFLINE CACHE
@@ -113,6 +113,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (pendingBadgeTotal) {
             pendingBadgeTotal.textContent = grandTotal;
         }
+        setQrStackCount("pending", grandTotal);
     }
 
     function renderRejectedEntries() {
@@ -225,8 +226,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Server status cell
             const tdStatus = document.createElement("td");
             const statusBadge = document.createElement("span");
-            statusBadge.className = "badge-status badge-pending";
-            statusBadge.innerHTML = `⚠️ <span data-i18n="cache-manager.not_on_server">Not on Server</span>`;
+            if (pendingOnServer.has(identityKey(serverIdentity(entry.type, entry.itemData)))) {
+                // A copy reached the server another way; uploading this one just updates it.
+                statusBadge.className = "badge-status badge-synced";
+                statusBadge.textContent = "Already on Server";
+            } else {
+                statusBadge.className = "badge-status badge-pending";
+                statusBadge.innerHTML = `⚠️ <span data-i18n="cache-manager.not_on_server">Not on Server</span>`;
+            }
             tdStatus.appendChild(statusBadge);
             tr.appendChild(tdStatus);
 
@@ -508,6 +515,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (historyBadgeTotal) {
             historyBadgeTotal.textContent = total;
         }
+        setQrStackCount("history", unsynced);
     }
 
     function loadAndRenderHistoryEntries() {
@@ -777,6 +785,282 @@ document.addEventListener("DOMContentLoaded", async () => {
     histFilterTeam.addEventListener("input", loadAndRenderHistoryEntries);
     histFilterEvent.addEventListener("input", loadAndRenderHistoryEntries);
 
+    // =========================================================================
+    // QR STACK: every entry not on the server, in one multi-part QR bundle
+    // =========================================================================
+    const SCANNER_TYPES = {
+        "match": "scout",
+        "pit": "pit-scout",
+        "qual": "qual-scout",
+        "prescout-match": "prescout-scout",
+        "prescout-pit": "prescout-pit",
+        "prescout-qual": "prescout-qual"
+    };
+
+    function setQrStackCount(which, count) {
+        const countEl = document.getElementById(`qr-stack-${which}-count`);
+        const btn = document.getElementById(`btn-qr-stack-${which}`);
+        if (countEl) countEl.textContent = count;
+        if (btn) btn.disabled = count === 0;
+    }
+
+    /**
+     * Shows one QR bundle holding all the given entries. The scanner pages read its `entries` list and queue each
+     * one under its own form type, so a single scan session uploads everything.
+     * items: [{ formType, data, eventKey, teamNumber, matchKey }], newest first; repeats of the same entry are dropped.
+     */
+    function showQrStack(items) {
+        const seen = new Set();
+        const entries = [];
+        items.forEach(item => {
+            if (!item.data || typeof item.data !== "object") return;
+            const data = JSON.parse(JSON.stringify(item.data));
+            const team = data.targetTeamNumber || data.teamNumber || item.teamNumber;
+            if (!team) return;
+            data.targetTeamNumber = Number(team);
+            if (!data.eventKey && item.eventKey) data.eventKey = item.eventKey;
+            if (!data.matchKey && item.matchKey && typeof item.matchKey === "string") data.matchKey = item.matchKey;
+
+            const type = SCANNER_TYPES[getBadgeClass(item.formType)];
+            const key = [type, data.eventKey || "", data.targetTeamNumber, data.matchKey || data.matchNumber || ""].join("|").toLowerCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            entries.push({ type, data });
+        });
+
+        if (entries.length === 0) {
+            Obsidianscout.showToast("No unuploaded entries to put in a QR stack", "info");
+            return;
+        }
+
+        const teams = [...new Set(entries.map(e => e.data.targetTeamNumber))];
+        Obsidianscout.showQrModal(
+            { type: "bundle", scope: "QR Stack", entries },
+            `QR Stack (${entries.length} ${entries.length === 1 ? "entry" : "entries"})`,
+            teams.join(", ")
+        );
+    }
+
+    document.getElementById("btn-qr-stack-pending").addEventListener("click", () => {
+        const items = [];
+        for (const type in cacheConfigs) {
+            Obsidianscout.readPendingQueue(cacheConfigs[type].key).forEach(item => {
+                const d = item.data || item;
+                items.push({ formType: type, data: d, eventKey: d.eventKey, teamNumber: d.targetTeamNumber || d.teamNumber, matchKey: d.matchKey, createdAt: item.createdAt || d.createdAt || "" });
+            });
+        }
+        items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+        showQrStack(items);
+    });
+
+    document.getElementById("btn-qr-stack-history").addEventListener("click", () => {
+        const items = Obsidianscout.getDeviceHistoryForAccount(me?.username, me?.id)
+            .filter(e => !e.serverSynced)
+            .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+            .map(e => ({
+                formType: e.formType,
+                data: (e.payload && e.payload.data && typeof e.payload.data === "object") ? e.payload.data : e.payload,
+                eventKey: e.eventKey,
+                teamNumber: e.teamNumber,
+                matchKey: e.matchKey
+            }));
+        showQrStack(items);
+    });
+
+    // =========================================================================
+    // SERVER CHECK: finds records that reached the server another way (another device, a scanned QR, an auto
+    // upload) and marks them as on the server, so they stop showing as local only.
+    // =========================================================================
+    const SERVER_LISTS = { match: "/api/scouting", pit: "/api/pit-scouting", qual: "/api/qual-scouting" };
+    const SERVER_CHECK_MIN_GAP_MS = 20000;
+    const SERVER_CHECK_INTERVAL_MS = 60000;
+    let serverCheckInFlight = null;
+    let lastServerCheck = null; // { at, ok, found }
+    const pendingOnServer = new Set(); // identityKey() of pending cache entries the server already has
+
+    function historyData(e) {
+        return (e.payload && e.payload.data && typeof e.payload.data === "object") ? e.payload.data : (e.payload || {});
+    }
+
+    /** "2026mitry_qm12" and "qm12" name the same match; a bare number is a match number, not a key. */
+    function normMatchKey(key) {
+        if (key == null) return "";
+        const s = String(key).trim().toLowerCase();
+        const i = s.lastIndexOf("_");
+        const k = i >= 0 ? s.slice(i + 1) : s;
+        return /^\d+$/.test(k) ? "" : k;
+    }
+
+    function matchNumOf(key, num) {
+        const n = Number(num);
+        if (n > 0) return n;
+        if (key != null && /^\d+$/.test(String(key).trim())) return Number(key);
+        const m = /^qm(\d+)$/.exec(normMatchKey(key));
+        return m ? Number(m[1]) : 0;
+    }
+
+    /** What identifies a record on the server: form kind, prescout or not, team, event and match. */
+    function serverIdentity(formType, data, extra = {}) {
+        data = data || {};
+        const team = Number(data.targetTeamNumber || data.teamNumber || extra.teamNumber) || 0;
+        if (!team) return null;
+        const badge = getBadgeClass(formType);
+        const event = String(data.eventKey || extra.eventKey || "").trim();
+        return {
+            kind: badge.includes("pit") ? "pit" : (badge.includes("qual") ? "qual" : "match"),
+            prescout: badge.startsWith("prescout"),
+            team,
+            event,
+            matchKey: data.matchKey != null ? data.matchKey : extra.matchKey,
+            matchNumber: data.matchNumber != null ? data.matchNumber : extra.matchNumber
+        };
+    }
+
+    function identityKey(who) {
+        if (!who) return "";
+        const match = who.kind === "pit" ? "" : (normMatchKey(who.matchKey) || matchNumOf(who.matchKey, who.matchNumber) || "");
+        return [who.kind, who.prescout, who.team, who.event.toLowerCase(), match].join("|");
+    }
+
+    function recordField(rec, keys) {
+        for (const k of keys) {
+            if (rec[k] != null && rec[k] !== "") return rec[k];
+            if (rec.data && rec.data[k] != null && rec.data[k] !== "") return rec.data[k];
+        }
+        return null;
+    }
+
+    function sameMatch(aKey, aNum, bKey, bNum) {
+        const ak = normMatchKey(aKey), bk = normMatchKey(bKey);
+        if (ak && bk) return ak === bk;
+        const an = matchNumOf(aKey, aNum), bn = matchNumOf(bKey, bNum);
+        if (an && bn) return an === bn;
+        // Only when this record names no match at all is team + event enough.
+        return !ak && !an;
+    }
+
+    function isOnServer(who, records) {
+        return records.some(rec => {
+            if (!rec || typeof rec !== "object") return false;
+            if (typeof rec.isPrescout === "boolean" && rec.isPrescout !== who.prescout) return false;
+            if (Number(recordField(rec, ["targetTeamNumber", "teamNumber", "team_number"])) !== who.team) return false;
+            const event = String(recordField(rec, ["eventKey", "event_key"]) || "").toLowerCase();
+            if (event && who.event && event !== who.event.toLowerCase()) return false;
+            if (who.kind === "pit") return true;
+            return sameMatch(who.matchKey, who.matchNumber,
+                recordField(rec, ["matchKey", "match_key"]), recordField(rec, ["matchNumber", "match_number"]));
+        });
+    }
+
+    function isOnlineNow() {
+        return (Obsidianscout && typeof Obsidianscout.isServerOnline === 'function') ? Obsidianscout.isServerOnline() : navigator.onLine;
+    }
+
+    function renderServerCheckStatus(checking) {
+        let text;
+        if (checking) text = "Checking the server for records uploaded another way...";
+        else if (!lastServerCheck) text = isOnlineNow() ? "" : "Offline: statuses show what this device knows.";
+        else if (!lastServerCheck.ok) text = "Couldn't reach the server for every form type; some statuses may be out of date.";
+        else text = `Checked with the server at ${new Date(lastServerCheck.at).toLocaleTimeString()}.`;
+        ["pending", "history"].forEach(which => {
+            const el = document.getElementById(`server-check-status-${which}`);
+            if (el) el.textContent = text;
+            const btn = document.getElementById(`btn-check-server-${which}`);
+            if (btn) btn.disabled = !!checking || !isOnlineNow();
+        });
+    }
+
+    async function checkAgainstServer() {
+        const unsynced = Obsidianscout.getDeviceHistoryForAccount(me?.username, me?.id)
+            .filter(e => !e.serverSynced)
+            .map(e => ({ id: e.id, who: serverIdentity(e.formType, historyData(e), e) }))
+            .filter(l => l.who);
+        const pending = [];
+        for (const type in cacheConfigs) {
+            Obsidianscout.readPendingQueue(cacheConfigs[type].key).forEach(item => {
+                const who = serverIdentity(type, item.data || item);
+                if (who) pending.push({ who });
+            });
+        }
+
+        // One request per form kind and event, so only the events these records belong to are downloaded.
+        const groupOf = (who) => `${who.kind}|${who.event}`;
+        const groups = new Map();
+        [...unsynced, ...pending].forEach(l => groups.set(groupOf(l.who), l.who));
+        const records = new Map();
+        let failed = 0;
+        await Promise.all([...groups].map(async ([group, who]) => {
+            const params = new URLSearchParams({ includePrescout: "true", all: "true" });
+            if (who.event) params.set("eventKey", who.event);
+            try {
+                const res = await Obsidianscout.request(`${SERVER_LISTS[who.kind]}?${params}`, { skipEntryStore: true, noCache: true });
+                records.set(group, Array.isArray(res) ? res : (res && Array.isArray(res.entries) ? res.entries : []));
+            } catch (e) {
+                failed++;
+                console.warn("[Cache Manager] Server check failed for", group, e);
+            }
+        }));
+
+        const onServer = (l) => records.has(groupOf(l.who)) && isOnServer(l.who, records.get(groupOf(l.who)));
+        pendingOnServer.clear();
+        pending.filter(onServer).forEach(l => pendingOnServer.add(identityKey(l.who)));
+        const found = Obsidianscout.markEntriesAsSynced(unsynced.filter(onServer).map(l => l.id));
+
+        lastServerCheck = { at: Date.now(), ok: failed === 0, found };
+        updateHistoryStats();
+        if (activeTab === "pending") loadAndRenderPendingEntries();
+        else loadAndRenderHistoryEntries();
+        return lastServerCheck;
+    }
+
+    /** Runs a server check unless one ran moments ago (a failed one is always retried). */
+    function runServerCheck({ force = false } = {}) {
+        if (serverCheckInFlight) return serverCheckInFlight;
+        if (!isOnlineNow()) {
+            renderServerCheckStatus(false);
+            return Promise.resolve(null);
+        }
+        if (!force && lastServerCheck && lastServerCheck.ok && Date.now() - lastServerCheck.at < SERVER_CHECK_MIN_GAP_MS) {
+            return Promise.resolve(lastServerCheck);
+        }
+        renderServerCheckStatus(true);
+        serverCheckInFlight = checkAgainstServer()
+            .catch(e => {
+                console.warn("[Cache Manager] Server check failed:", e);
+                lastServerCheck = { at: Date.now(), ok: false, found: 0 };
+                return lastServerCheck;
+            })
+            .finally(() => {
+                serverCheckInFlight = null;
+                renderServerCheckStatus(false);
+            });
+        return serverCheckInFlight;
+    }
+
+    ["pending", "history"].forEach(which => {
+        const btn = document.getElementById(`btn-check-server-${which}`);
+        if (!btn) return;
+        btn.addEventListener("click", async () => {
+            const result = await runServerCheck({ force: true });
+            if (!result) {
+                Obsidianscout.showToast("Server is offline", "error");
+            } else if (!result.ok) {
+                Obsidianscout.showToast("Couldn't reach the server for every form type. Try again.", "error");
+            } else if (result.found > 0) {
+                Obsidianscout.showToast(`${result.found} ${result.found === 1 ? "record was" : "records were"} already on the server`, "success");
+            } else {
+                Obsidianscout.showToast("Statuses match the server", "success");
+            }
+        });
+    });
+
+    setInterval(() => {
+        if (document.visibilityState === "visible") runServerCheck();
+    }, SERVER_CHECK_INTERVAL_MS);
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") runServerCheck();
+    });
+
     function getBadgeClass(type) {
         const t = String(type || "").toLowerCase().replace(/_/g, '-');
         if (t.includes('pit')) return t.includes('prescout') ? "prescout-pit" : "pit";
@@ -791,6 +1075,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.addEventListener("online", () => {
         if (activeTab === "pending") loadAndRenderPendingEntries();
         else loadAndRenderHistoryEntries();
+        runServerCheck();
     });
 
     window.addEventListener("offline", () => {
@@ -813,6 +1098,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.addEventListener("obsidianscout:connection-changed", () => {
         if (activeTab === "pending") loadAndRenderPendingEntries();
         else loadAndRenderHistoryEntries();
+        runServerCheck();
     });
 
     /** Asks the service worker something and waits up to `ms` for the answer. */
@@ -899,4 +1185,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (activeTab === "pending") loadAndRenderPendingEntries();
     else loadAndRenderHistoryEntries();
     renderShellStatus();
+    runServerCheck();
 });
