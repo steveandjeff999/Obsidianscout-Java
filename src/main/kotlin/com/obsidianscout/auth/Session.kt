@@ -124,19 +124,19 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                     bugReportPreference = dbBugReportPreference,
                     localAiEnabled = dbLocalAiEnabled,
                     nonScoutingToolsEnabled = dbNonScoutingToolsEnabled
-                ).also { updated ->
-                    runCatching { sessions.set(updated) }
-                }
+                )
+                // The cookie isn't re-issued here: without the session row its lifetime is unknown, and re-sending it
+                // with the 12-hour default would cut a "keep me logged in" sign-in short.
             } else {
                 session
             }
             return effectiveSession
         }
 
-        val (userRow, sessionValid) = try {
+        val (userRow, sessionRow) = try {
             com.obsidianscout.db.readTransaction {
                 val row = Users.selectAll().where { Users.id eq userUuid }.firstOrNull()
-                val sessionOk = if (!session.sessionId.isNullOrBlank()) {
+                val activeSession = if (!session.sessionId.isNullOrBlank()) {
                     val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
                     if (sUuid != null) {
                         val now = Instant.now()
@@ -144,13 +144,13 @@ suspend fun ApplicationCall.requireSession(): UserSession {
                             (UserSessions.id eq sUuid) and
                             (UserSessions.userId eq userUuid) and
                             (UserSessions.expiresAt.isNull() or (UserSessions.expiresAt greater now))
-                        }.any()
-                    } else false
+                        }.firstOrNull()
+                    } else null
                 } else {
                     // Every login creates a server-side session row; tokens without one cannot be revoked.
-                    false
+                    null
                 }
-                Pair(row, sessionOk)
+                Pair(row, activeSession)
             }
         } catch (e: Throwable) {
             if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
@@ -165,11 +165,17 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             sessions.clear<UserSession>()
             throw ApiException(HttpStatusCode.Unauthorized, "Account has been deleted")
         }
-        if (!sessionValid) {
+        if (sessionRow == null) {
             application.environment.log.warn("[requireSession] 401 Session ${session.sessionId} for user ${session.userId} is invalid or expired in DB")
             sessions.clear<UserSession>()
             throw ApiException(HttpStatusCode.Unauthorized, "Session has expired or been revoked")
         }
+
+        // Any cookie re-issued during this call (here or by the route) keeps the lifetime picked at sign-in.
+        attributes.put(
+            KeepMeLoggedInSessionTransport.KEEP_ME_LOGGED_IN_KEY,
+            AuthService.isLongLivedSession(sessionRow[UserSessions.createdAt], sessionRow[UserSessions.expiresAt])
+        )
 
         val dbRole = runCatching { UserRole.valueOf(userRow[Users.role]) }.getOrDefault(session.role)
         val dbTeamNumber = userRow[Users.teamNumber]
@@ -213,8 +219,10 @@ suspend fun ApplicationCall.requireSession(): UserSession {
             session
         }
 
-        if (!effectiveSession.sessionId.isNullOrBlank()) {
-            AuthService.touchSession(effectiveSession.sessionId)
+        // The server just pushed the session's expiry forward; move the browser cookie's expiry with it, or the
+        // cookie still lapses at its original time and signs an active user out mid-session.
+        if (!effectiveSession.sessionId.isNullOrBlank() && AuthService.touchSession(effectiveSession.sessionId)) {
+            runCatching { sessions.set(effectiveSession) }
         }
         return effectiveSession
     }

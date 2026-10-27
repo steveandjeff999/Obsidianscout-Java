@@ -1657,6 +1657,8 @@
   "my_assignments.tab_active": "Aktif ve Yaklaşan",
   "my_assignments.tab_all": "Tümü",
   "my_assignments.tab_completed": "Tamamlanan",
+  "my_assignments.tab_passed": "Geçmiş",
+  "my_assignments.empty_passed": "Geçmiş görev yok. Tamamlanmamış görevler başlangıç saatinden 3 dakika sonra buraya taşınır.",
   "my_assignments.title": "Görevlerim",
   "my_assignments.up_next": "SIRADAKİ",
   "nav.admin-settings": "Yönetici Ayarları",

@@ -1657,6 +1657,8 @@
   "my_assignments.tab_active": "Activas y Próximas",
   "my_assignments.tab_all": "Todas",
   "my_assignments.tab_completed": "Completadas",
+  "my_assignments.tab_passed": "Pasadas",
+  "my_assignments.empty_passed": "No hay asignaciones pasadas. Las asignaciones sin terminar se mueven aquí 3 minutos después de su hora de inicio.",
   "my_assignments.title": "Mis Asignaciones",
   "my_assignments.up_next": "A CONTINUACIÓN",
   "nav.admin-settings": "Ajustes de Administrador",

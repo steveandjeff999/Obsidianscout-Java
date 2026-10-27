@@ -58,15 +58,19 @@ function readLocalDone() {
  */
 export async function initAssignmentAdvance(eventKey) {
     _eventKey = eventKey || null;
+    // Assignments belong to one event; without an event there is nothing to advance through.
+    if (!eventKey) {
+        _assignments = [];
+        return _assignments;
+    }
     let raw = [];
     try {
-        const url = eventKey ? `/api/assignments/my?eventKey=${encodeURIComponent(eventKey)}` : "/api/assignments/my";
-        raw = await request(url).catch(() => request("/api/assignments/my"));
+        raw = await request(`/api/assignments/my?eventKey=${encodeURIComponent(eventKey)}`);
     } catch (e) {
         raw = [];
     }
     const list = Array.isArray(raw) ? raw : ((raw && raw.assignments) || []);
-    _assignments = list.filter(a => !eventKey || !a.eventKey || norm(a.eventKey) === norm(eventKey));
+    _assignments = list.filter(a => norm(a.eventKey) === norm(eventKey));
     return _assignments;
 }
 

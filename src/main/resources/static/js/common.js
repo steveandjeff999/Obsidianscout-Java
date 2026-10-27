@@ -129,6 +129,10 @@ import {
     showImageModal,
     openInlineCameraModal
 } from './components/modals.js';
+// Photo helpers by namespace (see the note on httpModule above).
+import * as modalsModule from './components/modals.js';
+const isImageValue = modalsModule.isImageValue || (() => false);
+const imageThumbHtml = modalsModule.imageThumbHtml || (() => "");
 
 import {
     showQrModal
@@ -430,6 +434,8 @@ window.Obsidianscout = {
     isWebpSupported,
     openInlineCameraModal,
     showImageModal,
+    isImageValue,
+    imageThumbHtml,
     purgeScoutingCache,
     isScoutingDataPath,
     canRoleCacheScouting,
@@ -547,6 +553,8 @@ export {
     isWebpSupported,
     openInlineCameraModal,
     showImageModal,
+    isImageValue,
+    imageThumbHtml,
     purgeScoutingCache,
     isScoutingDataPath,
     canRoleCacheScouting,

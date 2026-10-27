@@ -14,8 +14,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     let assignments = [];
     let matches = [];
     let teams = [];
-    let activeTab = "active"; // "active" | "completed" | "all"
+    let activeTab = "active"; // "active" | "completed" | "passed" | "all"
     let countdownInterval = null;
+    let passedSignature = "";
+
+    // Unfinished assignments move to the Passed tab this long after their start time.
+    const PASSED_GRACE_MS = 3 * 60 * 1000;
 
     // DOM Elements
     const eventBadge = document.getElementById("event-badge");
@@ -30,6 +34,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const tabBtns = document.querySelectorAll(".tab-btn");
     const countActive = document.getElementById("count-active");
     const countCompleted = document.getElementById("count-completed");
+    const countPassed = document.getElementById("count-passed");
     const countAll = document.getElementById("count-all");
     const assignmentsGrid = document.getElementById("assignments-grid");
 
@@ -86,20 +91,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         try {
             const [myAsgnsRes, matchesRes, teamsRes] = await Promise.all([
-                Obsidianscout.request(`/api/assignments/my?eventKey=${encodeURIComponent(currentEventKey)}`).catch(async () => {
-                    // Fallback to /api/assignments/my without query param if cached
-                    const fallback = await Obsidianscout.request("/api/assignments/my").catch(() => []);
-                    return fallback;
-                }),
+                Obsidianscout.request(`/api/assignments/my?eventKey=${encodeURIComponent(currentEventKey)}`).catch(() => []),
                 Obsidianscout.request(`/api/matches?eventKey=${encodeURIComponent(currentEventKey)}`).catch(() => []),
                 Obsidianscout.request(`/api/teams?eventKey=${encodeURIComponent(currentEventKey)}`).catch(() => [])
             ]);
 
             let rawAsgns = Array.isArray(myAsgnsRes) ? myAsgnsRes : (myAsgnsRes.assignments || []);
             if (rawAsgns.length === 0) {
-                // Secondary offline fallback check
-                const cachedRaw = localStorage.getItem(`cache:/api/assignments/my?eventKey=${encodeURIComponent(currentEventKey)}`) ||
-                                  localStorage.getItem("cache:/api/assignments/my");
+                // Secondary offline fallback check (this event's cache only)
+                const cachedRaw = localStorage.getItem(`cache:/api/assignments/my?eventKey=${encodeURIComponent(currentEventKey)}`);
                 if (cachedRaw) {
                     try {
                         const parsed = JSON.parse(cachedRaw);
@@ -107,7 +107,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     } catch (_) {}
                 }
             }
-            assignments = rawAsgns.filter(a => !currentEventKey || !a.eventKey || a.eventKey.trim().toLowerCase() === currentEventKey.trim().toLowerCase());
+            const eventNorm = currentEventKey.trim().toLowerCase();
+            assignments = rawAsgns.filter(a => String(a.eventKey || "").trim().toLowerCase() === eventNorm);
 
             // Deduplicate matches & teams
             const rawMatches = Array.isArray(matchesRes) ? matchesRes : (matchesRes.matches || []);
@@ -338,20 +339,38 @@ document.addEventListener("DOMContentLoaded", async () => {
         return mKey || "Match";
     }
 
+    function isOpen(a) {
+        return a.status !== "COMPLETED" && a.status !== "CANCELLED";
+    }
+
+    function isPassed(a) {
+        if (!isOpen(a)) return false;
+        const startMs = parseTimestampMs(a.predictedTime || a.scheduledTime);
+        return !!startMs && Date.now() > startMs + PASSED_GRACE_MS;
+    }
+
+    function computePassedSignature() {
+        return assignments.filter(isPassed).map(a => a.id).join(",");
+    }
+
     function updateTabCounts() {
-        const activeCount = assignments.filter(a => a.status !== "COMPLETED" && a.status !== "CANCELLED").length;
+        const passedCount = assignments.filter(isPassed).length;
+        const activeCount = assignments.filter(isOpen).length - passedCount;
         const compCount = assignments.filter(a => a.status === "COMPLETED").length;
 
         countActive.textContent = activeCount;
         countCompleted.textContent = compCount;
+        countPassed.textContent = passedCount;
         countAll.textContent = assignments.length;
+        passedSignature = computePassedSignature();
     }
 
     function renderHeroBanner() {
         // Find next pending or in_progress match assignment
         const pendingMatches = assignments.filter(a => 
             (a.status === "PENDING" || a.status === "IN_PROGRESS") && 
-            parseTimestampMs(a.predictedTime || a.scheduledTime)
+            parseTimestampMs(a.predictedTime || a.scheduledTime) &&
+            !isPassed(a)
         );
 
         if (pendingMatches.length === 0) {
@@ -422,10 +441,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function updateCountdowns() {
+        // Move assignments into the Passed tab as their grace period runs out
+        if (computePassedSignature() !== passedSignature) {
+            updateTabCounts();
+            renderHeroBanner();
+            renderAssignments();
+            return; // renderAssignments calls back into updateCountdowns
+        }
+
         // Update hero countdown
         const pendingMatches = assignments.filter(a => 
             (a.status === "PENDING" || a.status === "IN_PROGRESS") && 
-            parseTimestampMs(a.predictedTime || a.scheduledTime)
+            parseTimestampMs(a.predictedTime || a.scheduledTime) &&
+            !isPassed(a)
         );
         if (pendingMatches.length > 0 && !heroBanner.classList.contains("hidden")) {
             const next = pendingMatches[0];
@@ -461,14 +489,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     function renderAssignments() {
         let filtered = assignments;
         if (activeTab === "active") {
-            filtered = assignments.filter(a => a.status !== "COMPLETED" && a.status !== "CANCELLED");
+            filtered = assignments.filter(a => isOpen(a) && !isPassed(a));
         } else if (activeTab === "completed") {
             filtered = assignments.filter(a => a.status === "COMPLETED");
+        } else if (activeTab === "passed") {
+            filtered = assignments.filter(isPassed);
         }
 
         if (filtered.length === 0) {
             const emptyMsg = activeTab === "completed" 
                 ? (Obsidianscout.t ? Obsidianscout.t("my_assignments.empty_completed", "You have not completed any assignments yet.") : "You have not completed any assignments yet.")
+                : activeTab === "passed"
+                ? (Obsidianscout.t ? Obsidianscout.t("my_assignments.empty_passed", "No passed assignments. Unfinished assignments move here 3 minutes after their start time.") : "No passed assignments. Unfinished assignments move here 3 minutes after their start time.")
                 : (Obsidianscout.t ? Obsidianscout.t("my_assignments.empty", "You have no active scouting assignments! Enjoy the matches or ask your scouting lead.") : "You have no active scouting assignments! Enjoy the matches or ask your scouting lead.");
             assignmentsGrid.innerHTML = `
                 <div style="color: var(--muted); padding: 36px; text-align: center; grid-column: 1 / -1; display:flex; flex-direction:column; align-items:center; justify-content:center;">

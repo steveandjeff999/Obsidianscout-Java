@@ -1657,6 +1657,8 @@
   "my_assignments.tab_active": "פעילות וקרובות",
   "my_assignments.tab_all": "הכל",
   "my_assignments.tab_completed": "הושלמו",
+  "my_assignments.tab_passed": "שעברו",
+  "my_assignments.empty_passed": "אין משימות שעברו. משימות שלא הושלמו עוברות לכאן 3 דקות אחרי שעת ההתחלה.",
   "my_assignments.title": "המשימות שלי",
   "my_assignments.up_next": "הבא בתור",
   "nav.admin-settings": "הגדרות מנהל",

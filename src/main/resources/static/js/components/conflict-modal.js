@@ -6,6 +6,11 @@
 import { request } from '../base/http.js';
 import { showToast } from './toast.js';
 import { localize } from '../base/i18n.js';
+import * as modalsModule from './modals.js';
+
+// Photo helpers by namespace, so a stale cached modals.js cannot break this module's import.
+const isImageValue = (value) => typeof modalsModule.isImageValue === "function" && modalsModule.isImageValue(value);
+const imageThumbHtml = (...args) => (typeof modalsModule.imageThumbHtml === "function" ? modalsModule.imageThumbHtml(...args) : "");
 
 export function openConflictResolutionModal(options) {
     const { type = 'match', fields = [], conflictingEntries = [], onResolved = () => {} } = options;
@@ -173,12 +178,12 @@ export function openConflictResolutionModal(options) {
             </td>`;
 
         vals.forEach(v => {
-            const displayVal = (v === true) ? '✓ True' : (v === false ? '✗ False' : (v !== undefined && v !== null ? v : '--'));
+            const displayVal = isImageValue(v) ? imageThumbHtml(v, label, 90) : (v === true) ? '✓ True' : (v === false ? '✗ False' : (v !== undefined && v !== null ? v : '--'));
             tbodyHtml += `<td style="padding: 8px 14px;">${displayVal}</td>`;
         });
 
         const consVal = consensusData[field.id];
-        const displayCons = (consVal === true) ? '✓ True' : (consVal === false ? '✗ False' : (consVal !== undefined && consVal !== null ? consVal : '--'));
+        const displayCons = isImageValue(consVal) ? imageThumbHtml(consVal, label, 90) : (consVal === true) ? '✓ True' : (consVal === false ? '✗ False' : (consVal !== undefined && consVal !== null ? consVal : '--'));
         tbodyHtml += `<td style="padding: 8px 14px; font-weight: 700; color: #fbbf24; background: rgba(234, 179, 8, 0.05);">${displayCons}</td></tr>`;
     });
     tbodyHtml += `</tbody>`;

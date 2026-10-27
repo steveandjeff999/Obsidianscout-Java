@@ -365,17 +365,18 @@ fun Route.scoutingRoutes() {
             route("/assignments") {
                 get {
                     val session = call.requireSession()
-                    val eventKey = call.request.queryParameters["eventKey"]
+                    val eventKey = ScoutingAssignmentService.scopedEventKey(session, call.request.queryParameters["eventKey"])
                     val type = call.request.queryParameters["type"]
                     val userId = call.request.queryParameters["userId"]
                     val status = call.request.queryParameters["status"]
-                    val list = ScoutingAssignmentService.listAssignments(session, eventKey, type, userId, status)
+                    val list = if (eventKey == null) emptyList()
+                        else ScoutingAssignmentService.listAssignments(session, eventKey, type, userId, status)
                     call.respond(mapOf("assignments" to list))
                 }
                 get("/my") {
                     val session = call.requireSession()
-                    val eventKey = call.request.queryParameters["eventKey"]
-                    val list = ScoutingAssignmentService.getMyAssignments(session, eventKey)
+                    val eventKey = ScoutingAssignmentService.scopedEventKey(session, call.request.queryParameters["eventKey"])
+                    val list = if (eventKey == null) emptyList() else ScoutingAssignmentService.getMyAssignments(session, eventKey)
                     call.respond(mapOf("assignments" to list))
                 }
                 get("/coverage") {

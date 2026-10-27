@@ -1413,6 +1413,16 @@ object ScoutingAssignmentService {
         }
     }
 
+    /**
+     * The event an assignment listing is for: the one the caller asked for, else the team's active event.
+     * Null when neither exists, in which case the routes return nothing rather than every event's assignments.
+     */
+    fun scopedEventKey(session: UserSession, requested: String?): String? {
+        if (!requested.isNullOrBlank()) return requested.trim().lowercase()
+        return AllianceService.getEffectiveSettings(session.teamNumber, session.program)
+            .resolvedEventKey().trim().lowercase().ifBlank { null }
+    }
+
     fun getMyAssignments(session: UserSession, eventKey: String? = null): List<ScoutingAssignmentRecord> {
         val userUuid = runCatching { UUID.fromString(session.userId) }.getOrNull() ?: return emptyList()
         val prog = session.program.uppercase().trim()

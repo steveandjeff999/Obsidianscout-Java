@@ -9,6 +9,15 @@ function escText(value) {
         .replace(/'/g, "&#039;");
 }
 
+// Uploaded photos are image data URLs; show them as thumbnails instead of their base64 text.
+function isPhoto(value) {
+    return !!(window.Obsidianscout && typeof Obsidianscout.isImageValue === 'function' && Obsidianscout.isImageValue(value));
+}
+
+function photoHtml(value, title) {
+    return Obsidianscout.imageThumbHtml(value, title, 200);
+}
+
 let currentUser = null;
 let currentEventKey = "";
 let currentTeamNumber = null;
@@ -548,7 +557,7 @@ function renderQualFeedback(qualEntries) {
         
         let notes = d.notes || d.comments || d.driver_skill || d.defense || "";
         if (!notes) {
-            notes = Object.entries(d).filter(([k]) => !RESERVED_FIELDS.has(k)).map(([k, v]) => `${k}: ${v}`).join(" | ");
+            notes = Object.entries(d).filter(([k]) => !RESERVED_FIELDS.has(k)).map(([k, v]) => `${k}: ${isPhoto(v) ? "[Photo]" : v}`).join(" | ");
         }
 
         return `
@@ -582,11 +591,13 @@ function renderPitDetails() {
         container.innerHTML = groups.map(group => {
             const fieldsHtml = group.fields.map(f => {
                 const val = d[f.id];
-                const formatted = formatFieldValue(f, val);
+                const valueHtml = isPhoto(val)
+                    ? photoHtml(val, `${localize(f.label)} - Team ${latest.targetTeamNumber || ""}`)
+                    : escText(formatFieldValue(f, val));
                 return `
                     <div class="pit-profile-item">
                         <span class="pit-profile-label">${escText(localize(f.label))}</span>
-                        <strong class="pit-profile-value">${escText(formatted)}</strong>
+                        <strong class="pit-profile-value">${valueHtml}</strong>
                     </div>
                 `;
             }).join("");
@@ -604,7 +615,7 @@ function renderPitDetails() {
         const items = Object.entries(d).filter(([k]) => !RESERVED_FIELDS.has(k)).map(([k, v]) => `
             <div class="pit-profile-item">
                 <span class="pit-profile-label">${escText(k)}</span>
-                <strong class="pit-profile-value">${escText(v)}</strong>
+                <strong class="pit-profile-value">${isPhoto(v) ? photoHtml(v, k) : escText(v)}</strong>
             </div>
         `).join("");
         container.innerHTML = `<div class="pit-section-grid">${items}</div>`;
@@ -804,7 +815,11 @@ function renderScoutingRecords() {
                     
                     const valEl = document.createElement("span");
                     valEl.className = "record-field-value";
-                    valEl.textContent = formatFieldValue(field, value, (entry.type || "").toLowerCase() === "match");
+                    if (isPhoto(value)) {
+                        valEl.innerHTML = photoHtml(value, `${localize(field.label)} - Team ${entry.targetTeamNumber || ""}`);
+                    } else {
+                        valEl.textContent = formatFieldValue(field, value, (entry.type || "").toLowerCase() === "match");
+                    }
 
                     item.appendChild(label);
                     item.appendChild(valEl);

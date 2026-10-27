@@ -1346,6 +1346,8 @@
                     let formattedVal = val;
                     if (f.type === "checkbox") {
                         formattedVal = val === true || val === "true" || val === 1 ? "Yes" : "No";
+                    } else if (typeof Obsidianscout.isImageValue === "function" && Obsidianscout.isImageValue(val)) {
+                        formattedVal = Obsidianscout.imageThumbHtml(val, `${Obsidianscout.localize(f.label) || f.label} - Team ${teamNumber}`, 140);
                     }
                     const item = document.createElement("div");
                     item.className = "pit-spec-item";

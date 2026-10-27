@@ -167,6 +167,7 @@
         }
         .tab-nav {
             display: flex;
+            flex-wrap: wrap;
             gap: 8px;
             border-bottom: 1px solid var(--border);
             padding-bottom: 8px;
@@ -266,6 +267,10 @@
                     <button class="tab-btn" id="tab-btn-completed" type="button" data-tab="completed">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                         <span data-i18n="my_assignments.tab_completed">Completed</span> (<span id="count-completed">0</span>)
+                    </button>
+                    <button class="tab-btn" id="tab-btn-passed" type="button" data-tab="passed">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                        <span data-i18n="my_assignments.tab_passed">Passed</span> (<span id="count-passed">0</span>)
                     </button>
                     <button class="tab-btn" id="tab-btn-all" type="button" data-tab="all">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>

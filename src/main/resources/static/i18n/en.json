@@ -1657,6 +1657,8 @@
   "my_assignments.tab_active": "Active & Upcoming",
   "my_assignments.tab_all": "All",
   "my_assignments.tab_completed": "Completed",
+  "my_assignments.tab_passed": "Passed",
+  "my_assignments.empty_passed": "No passed assignments. Unfinished assignments move here 3 minutes after their start time.",
   "my_assignments.title": "My Assignments",
   "my_assignments.up_next": "UP NEXT",
   "nav.admin-settings": "Admin Settings",

@@ -2394,18 +2394,22 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             // Assignments
             get("/assignments") {
                 val session = call.requireMobileSession(secret)
-                val eventKey = call.request.queryParameters["event_key"] ?: call.request.queryParameters["eventKey"]
+                val eventKey = com.obsidianscout.scouting.ScoutingAssignmentService.scopedEventKey(
+                    session, call.request.queryParameters["event_key"] ?: call.request.queryParameters["eventKey"])
                 val type = call.request.queryParameters["type"]
                 val userId = call.request.queryParameters["user_id"] ?: call.request.queryParameters["userId"]
                 val status = call.request.queryParameters["status"]
-                val list = com.obsidianscout.scouting.ScoutingAssignmentService.listAssignments(session, eventKey, type, userId, status)
+                val list = if (eventKey == null) emptyList()
+                    else com.obsidianscout.scouting.ScoutingAssignmentService.listAssignments(session, eventKey, type, userId, status)
                 call.respond(MobileAssignmentsResponse(success = true, assignments = list))
             }
 
             get("/assignments/my") {
                 val session = call.requireMobileSession(secret)
-                val eventKey = call.request.queryParameters["event_key"] ?: call.request.queryParameters["eventKey"]
-                val list = com.obsidianscout.scouting.ScoutingAssignmentService.getMyAssignments(session, eventKey)
+                val eventKey = com.obsidianscout.scouting.ScoutingAssignmentService.scopedEventKey(
+                    session, call.request.queryParameters["event_key"] ?: call.request.queryParameters["eventKey"])
+                val list = if (eventKey == null) emptyList()
+                    else com.obsidianscout.scouting.ScoutingAssignmentService.getMyAssignments(session, eventKey)
                 call.respond(MobileAssignmentsResponse(success = true, assignments = list))
             }
 

@@ -820,45 +820,52 @@ object AuthService {
         }
     }
 
-    fun touchSession(sessionIdStr: String) {
-        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return
-        val sessionUuid = runCatching { UUID.fromString(sessionIdStr) }.getOrNull() ?: return
+    /**
+     * A "keep me logged in" sign-in gets a 30-day row, a normal one 12 hours; rows with no expiry never lapse.
+     * The row's lifetime is the only server-side record of which one the user picked.
+     */
+    fun isLongLivedSession(createdAt: Instant, expiresAt: Instant?): Boolean =
+        expiresAt == null || java.time.Duration.between(createdAt, expiresAt).toHours() > 48
+
+    /** Pushes the session's expiry forward (at most every 5 minutes). Returns true when it did. */
+    fun touchSession(sessionIdStr: String): Boolean {
+        if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) return false
+        val sessionUuid = runCatching { UUID.fromString(sessionIdStr) }.getOrNull() ?: return false
         val nowMs = System.currentTimeMillis()
         val lastTouch = sessionTouchCache[sessionUuid] ?: 0L
-        if (nowMs - lastTouch > 300_000L) { // 5 minutes throttle
-            sessionTouchCache[sessionUuid] = nowMs
-            try {
-                transaction {
-                    if (com.obsidianscout.db.DatabaseFactory.isPostgresCompatible) {
-                        exec("SET LOCAL statement_timeout = '3000ms';")
-                    }
-                    val row = UserSessions.selectAll().where { UserSessions.id eq sessionUuid }.firstOrNull()
-                    if (row != null) {
-                        val currentExpires = row[UserSessions.expiresAt]
-                        val nowInstant = Instant.ofEpochMilli(nowMs)
-                        val newExpires = if (currentExpires != null) {
-                            val durationHours = java.time.Duration.between(row[UserSessions.createdAt], currentExpires).toHours()
-                            if (durationHours > 48) {
-                                nowInstant.plus(30, ChronoUnit.DAYS)
-                            } else {
-                                nowInstant.plus(12, ChronoUnit.HOURS)
-                            }
-                        } else null
-
-                        UserSessions.update({ UserSessions.id eq sessionUuid }) {
-                            it[lastActiveAt] = nowInstant
-                            if (newExpires != null) {
-                                it[expiresAt] = newExpires
-                            }
+        if (nowMs - lastTouch <= 300_000L) return false // 5 minutes throttle
+        sessionTouchCache[sessionUuid] = nowMs
+        return try {
+            transaction {
+                if (com.obsidianscout.db.DatabaseFactory.isPostgresCompatible) {
+                    exec("SET LOCAL statement_timeout = '3000ms';")
+                }
+                val row = UserSessions.selectAll().where { UserSessions.id eq sessionUuid }.firstOrNull()
+                if (row != null) {
+                    val currentExpires = row[UserSessions.expiresAt]
+                    val nowInstant = Instant.ofEpochMilli(nowMs)
+                    val newExpires = if (currentExpires != null) {
+                        if (isLongLivedSession(row[UserSessions.createdAt], currentExpires)) {
+                            nowInstant.plus(30, ChronoUnit.DAYS)
+                        } else {
+                            nowInstant.plus(12, ChronoUnit.HOURS)
                         }
-                    }
-                }
-            } catch (e: Throwable) {
-                if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
-                    com.obsidianscout.db.orchestration.CockroachOrchestrator.markQuorumLost(e.message)
-                }
-                // Non-critical background update: do not fail user requests during quorum loss or timeout
+                    } else null
+
+                    UserSessions.update({ UserSessions.id eq sessionUuid }) {
+                        it[lastActiveAt] = nowInstant
+                        if (newExpires != null) {
+                            it[expiresAt] = newExpires
+                        }
+                    } > 0
+                } else false
             }
+        } catch (e: Throwable) {
+            if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLossException(e)) {
+                com.obsidianscout.db.orchestration.CockroachOrchestrator.markQuorumLost(e.message)
+            }
+            // Non-critical background update: do not fail user requests during quorum loss or timeout
+            false
         }
     }
 

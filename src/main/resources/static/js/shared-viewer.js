@@ -6,6 +6,11 @@
 
 import { request } from './base/http.js';
 import { showToast } from './components/toast.js';
+import * as modalsModule from './components/modals.js';
+
+// Photo helpers by namespace, so a stale cached modals.js cannot break this module's import.
+const isImageValue = (value) => typeof modalsModule.isImageValue === "function" && modalsModule.isImageValue(value);
+const imageThumbHtml = (...args) => (typeof modalsModule.imageThumbHtml === "function" ? modalsModule.imageThumbHtml(...args) : "");
 import { t, applyTranslations, loadLocale, currentLang } from './base/i18n.js';
 
 const PLOTLY_CONFIG = {
@@ -2144,7 +2149,7 @@ function renderDataTableView(target, config, snapshot, live) {
             fieldsHtml = fields.map(f => {
                 if (f.type === "section" || RESERVED_FIELDS.has(f.id)) return "";
                 const val = data[f.id];
-                const displayVal = val !== undefined && val !== null ? (typeof val === "boolean" ? (val ? "Yes" : "No") : val) : "--";
+                const displayVal = isImageValue(val) ? imageThumbHtml(val, f.label || f.id, 200) : (val !== undefined && val !== null ? (typeof val === "boolean" ? (val ? "Yes" : "No") : val) : "--");
                 return `
                     <div style="padding: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;">
                         <span style="color: var(--muted); font-size: 0.9rem;">${f.label || f.id}</span>
@@ -2156,7 +2161,7 @@ function renderDataTableView(target, config, snapshot, live) {
             fieldsHtml = Object.entries(data).map(([k, v]) => `
                 <div style="padding: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;">
                     <span style="color: var(--muted); font-size: 0.9rem;">${k}</span>
-                    <strong style="color: var(--ink); font-size: 0.95rem;">${String(v)}</strong>
+                    <strong style="color: var(--ink); font-size: 0.95rem;">${isImageValue(v) ? imageThumbHtml(v, k, 200) : String(v)}</strong>
                 </div>
             `).join("");
         }

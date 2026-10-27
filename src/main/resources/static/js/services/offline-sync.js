@@ -594,8 +594,7 @@ export async function syncOfflineCache(clearOldOthers = false, force = false) {
             "/api/alliances",
             "/api/alliances/invites",
             "/api/alliances/invites/count",
-            "/api/alliances/import-sources",
-            "/api/assignments/my"
+            "/api/alliances/import-sources"
         ];
 
         if (settings.year) {

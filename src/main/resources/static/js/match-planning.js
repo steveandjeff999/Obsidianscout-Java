@@ -2278,6 +2278,8 @@
                     let formattedVal = val;
                     if (f.type === "checkbox") {
                         formattedVal = (val === true || val === "true" || val === 1) ? "Yes" : "No";
+                    } else if (typeof Obsidianscout.isImageValue === "function" && Obsidianscout.isImageValue(val)) {
+                        formattedVal = Obsidianscout.imageThumbHtml(val, `${Obsidianscout.localize(f.label) || f.label} - Team ${teamNumber}`, 120);
                     }
                     const item = document.createElement("div");
                     item.className = "pit-spec-item";
@@ -2308,7 +2310,7 @@
                         if ((f.type === "text" || f.type === "textarea") && e.data[f.id]) {
                             notes.push({
                                 type: typeLabel + (e.matchNumber ? ` M${e.matchNumber}` : ""),
-                                scouter: e.ownerTeamNumber,
+                                scouter: Obsidianscout.formatScouter(e),
                                 date: e.createdAt,
                                 label: Obsidianscout.localize(f.label) || f.label,
                                 text: e.data[f.id]
@@ -2338,7 +2340,7 @@
             item.className = "note-card";
             item.innerHTML = `
                 <div class="note-header">
-                    <span>${esc(n.type)} | Scouter ${esc(n.scouter || '')}</span>
+                    <span>${esc(n.type)} | Submitted by ${esc(n.scouter)}</span>
                     <span>${formatDateString(n.date)}</span>
                 </div>
                 <div class="note-body">

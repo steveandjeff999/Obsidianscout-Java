@@ -18,10 +18,10 @@ export function showImageModal(imageSrc, title = "Robot Photo Preview") {
     topBar.style.cssText = "width:100%;max-width:900px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;color:#f8fafc;";
     topBar.innerHTML = `
         <div style="font-weight:700;font-size:1.1rem;display:flex;align-items:center;gap:8px;">
-            <span>${title}</span>
+            <span>${escAttr(title)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
-            <a href="${imageSrc}" download="robot_photo.jpg" class="btn btn-sm" style="background:rgba(255,255,255,0.1);color:#fff;text-decoration:none;padding:6px 12px;border-radius:8px;font-size:0.85rem;">Download</a>
+            <a href="${escAttr(imageSrc)}" download="robot_photo.jpg" class="btn btn-sm" style="background:rgba(255,255,255,0.1);color:#fff;text-decoration:none;padding:6px 12px;border-radius:8px;font-size:0.85rem;">Download</a>
             <button type="button" class="btn-close-lightbox" style="background:none;border:none;color:#cbd5e1;font-size:1.6rem;cursor:pointer;padding:2px 8px;">✕</button>
         </div>
     `;
@@ -45,6 +45,37 @@ export function showImageModal(imageSrc, title = "Robot Photo Preview") {
     modal.addEventListener("click", (e) => {
         if (e.target === modal) closeFn();
     });
+}
+
+const IMAGE_DATA_URL = /^data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+$/i;
+
+/**
+ * True when a scouting value is an uploaded photo (an image data URL).
+ */
+export function isImageValue(value) {
+    return typeof value === "string" && value.startsWith("data:image/") && IMAGE_DATA_URL.test(value);
+}
+
+function escAttr(value) {
+    return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+let zoomListenerInstalled = false;
+
+/**
+ * Returns an <img> thumbnail for an uploaded photo, for pages that build HTML strings.
+ * Clicking it opens the lightbox. Returns "" when the value is not a photo.
+ */
+export function imageThumbHtml(value, title = "Robot Photo Preview", maxHeight = 160) {
+    if (!isImageValue(value)) return "";
+    if (!zoomListenerInstalled && typeof document !== "undefined") {
+        zoomListenerInstalled = true;
+        document.addEventListener("click", (e) => {
+            const img = e.target.closest && e.target.closest("img[data-photo-zoom]");
+            if (img) showImageModal(img.getAttribute("src"), img.getAttribute("data-photo-zoom"));
+        });
+    }
+    return `<img src="${escAttr(value)}" data-photo-zoom="${escAttr(title)}" alt="${escAttr(title)}" title="Click to inspect full image" style="display:block;max-width:100%;max-height:${Number(maxHeight) || 160}px;object-fit:contain;border-radius:8px;cursor:zoom-in;">`;
 }
 
 /**
