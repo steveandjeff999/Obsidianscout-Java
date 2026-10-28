@@ -110,7 +110,9 @@ data class CreateUserRequest(
     val password: String,
     val program: String = "FRC",
     val role: UserRole = UserRole.SCOUT,
-    val email: String? = null
+    val email: String? = null,
+    /** Pages for a CUSTOM user; ignored for other roles. */
+    val customPages: List<String>? = null
 )
 
 @Serializable
@@ -132,7 +134,9 @@ data class UpdateUserRequest(
     val nodeAlertsEnabled: Boolean? = null,
     val bugReportPreference: String? = null,
     val localAiEnabled: Boolean? = null,
-    val nonScoutingToolsEnabled: Boolean? = null
+    val nonScoutingToolsEnabled: Boolean? = null,
+    /** Pages for a CUSTOM user (admins only); null leaves them as they are. */
+    val customPages: List<String>? = null
 )
 
 @Serializable
@@ -336,6 +340,8 @@ data class ApiSettingsPayload(
     val scoutPages: List<String> = emptyList(),
     val analyticsPages: List<String> = emptyList(),
     val adminPages: List<String> = emptyList(),
+    /** Sent only to a CUSTOM user: the pages picked for them. Ignored on save. */
+    val customPages: List<String>? = null,
     val theme: com.obsidianscout.integrations.ThemeSettings = com.obsidianscout.integrations.ThemeSettings(),
     val themes: List<com.obsidianscout.integrations.ThemeSettings> = emptyList(),
     val activeThemeName: String = "",
@@ -687,6 +693,46 @@ data class BannerUpdateRequest(
 )
 
 @Serializable
+data class EventInfoFileDto(
+    val id: String,
+    val fileName: String,
+    val contentType: String,
+    val sizeBytes: Long,
+    val isImage: Boolean,
+    val url: String
+)
+
+@Serializable
+data class EventInfoPostDto(
+    val id: String,
+    val eventKey: String,
+    val title: String,
+    val body: String,
+    val pinned: Boolean,
+    val authorUsername: String,
+    val createdAt: String,
+    val updatedAt: String,
+    val files: List<EventInfoFileDto> = emptyList()
+)
+
+@Serializable
+data class EventInfoListResponse(
+    val eventKey: String,
+    val canEdit: Boolean,
+    val maxFileBytes: Long,
+    val posts: List<EventInfoPostDto>
+)
+
+@Serializable
+data class EventInfoPostRequest(
+    val title: String? = null,
+    val body: String? = null,
+    val pinned: Boolean? = null,
+    /** true posts to every event; false ties the post to the team's current event. */
+    val allEvents: Boolean? = null
+)
+
+@Serializable
 data class ChatMessageDto(
     val id: String,
     val teamNumber: Int,
@@ -813,7 +859,9 @@ data class FcmPublicConfigDto(
     val apiKey: String,
     val appId: String,
     val messagingSenderId: String,
-    val vapidKey: String
+    val vapidKey: String,
+    val appleAppId: String = "",
+    val appleApiKey: String = ""
 )
 
 @Serializable
@@ -824,6 +872,8 @@ data class FcmAdminConfigDto(
     val appId: String,
     val messagingSenderId: String,
     val vapidKey: String,
+    val appleAppId: String = "",
+    val appleApiKey: String = "",
     val hasServiceAccountJson: Boolean,
     val isInitialized: Boolean
 )
@@ -836,7 +886,9 @@ data class SaveFcmConfigRequest(
     val appId: String = "",
     val messagingSenderId: String = "",
     val serviceAccountJson: String = "",
-    val vapidKey: String = ""
+    val vapidKey: String = "",
+    val appleAppId: String = "",
+    val appleApiKey: String = ""
 )
 
 @Serializable

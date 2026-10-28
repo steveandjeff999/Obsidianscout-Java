@@ -19,6 +19,13 @@ data class MatchPlanResponse(
 )
 
 @Serializable
+data class MatchPlanSummary(
+    val matchKey: String,
+    val planJson: String,
+    val updatedAt: Long
+)
+
+@Serializable
 data class MatchPlanUpdateRequest(
     val eventKey: String,
     val matchKey: String,
@@ -71,6 +78,30 @@ object MatchPlanningService {
                     updatedAt = 0L
                 )
             }
+        }
+    }
+
+    /** Every saved plan for an event in one response, so a device can take the whole event offline. */
+    fun listForEvent(session: UserSession, eventKey: String): List<MatchPlanSummary> {
+        return readTransaction {
+            val owner = resolveOwnerKey(session)
+            val toSummary = { row: ResultRow ->
+                MatchPlanSummary(
+                    matchKey = row[MatchPlans.matchKey],
+                    planJson = row[MatchPlans.planJson],
+                    updatedAt = row[MatchPlans.updatedAt].toEpochMilli()
+                )
+            }
+            val plans = MatchPlans.selectAll().where {
+                (MatchPlans.ownerKey eq owner) and (MatchPlans.eventKey eq eventKey)
+            }.map(toSummary)
+            if (!owner.startsWith("team_")) return@readTransaction plans
+
+            // Same legacy owner key fallback as getPlan, for matches the current key has no row for.
+            val have = plans.map { it.matchKey }.toSet()
+            plans + MatchPlans.selectAll().where {
+                (MatchPlans.ownerKey eq "team_${session.teamNumber}") and (MatchPlans.eventKey eq eventKey)
+            }.map(toSummary).filter { it.matchKey !in have }
         }
     }
 

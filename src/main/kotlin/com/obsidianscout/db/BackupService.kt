@@ -765,6 +765,7 @@ object BackupService {
             val teamImportableRoles = setOf(
                 com.obsidianscout.auth.UserRole.ADMIN.name,
                 com.obsidianscout.auth.UserRole.ANALYTICS.name,
+                com.obsidianscout.auth.UserRole.CUSTOM.name,
                 com.obsidianscout.auth.UserRole.SCOUT.name
             )
             fun sanitizeImportedRole(role: String): String {

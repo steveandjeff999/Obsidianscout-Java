@@ -229,7 +229,7 @@ fun Route.eventAndMatchRoutes() {
                 }
                 get("/projected-rankings") {
                     val session = call.requireSession()
-                    if (!session.publicView && !SettingsService.canAccessPage(session.teamNumber, session.program, session.role, "projected-rankings")) {
+                    if (!session.publicView && !SettingsService.canAccessPage(session.teamNumber, session.program, session.role, "projected-rankings", session.userId)) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Your role doesn't have access to Projected Rankings")
                     }
                     val eventKey = call.request.queryParameters["eventKey"]

@@ -190,7 +190,9 @@ fun Route.notificationRoutes() {
                         appId = req.appId,
                         messagingSenderId = req.messagingSenderId,
                         serviceAccountJson = req.serviceAccountJson,
-                        vapidKey = req.vapidKey
+                        vapidKey = req.vapidKey,
+                        appleAppId = req.appleAppId,
+                        appleApiKey = req.appleApiKey
                     )
                     call.respond(buildJsonObject { put("success", success) })
                 }

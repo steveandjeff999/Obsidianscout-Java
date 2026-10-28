@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    const isUserAdmin = Obsidianscout.isAdmin(me.role);
+    const isUserAdmin = Obsidianscout.canUseAdminPage(me.role, "admin-settings");
     if (!isUserAdmin) {
         document.getElementById("admin-locked").classList.remove("hidden");
         document.getElementById("history-container").classList.add("hidden");

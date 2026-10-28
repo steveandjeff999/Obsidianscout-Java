@@ -73,6 +73,26 @@ class WidgetLogicTest {
     }
 
     @Test
+    fun customUsersGetOnlyTheirOwnPickedPages() {
+        val settings = ApiSettings(
+            customUserPages = mapOf("u1" to listOf("matches", "users"), "u2" to listOf("predictor"))
+        )
+        val pages = WidgetAccess.pageAccess(UserRole.CUSTOM, settings, false, "u1")
+        val w = WidgetAccess.widgetAccess(pages)
+        assertTrue(w.getValue("next_match"))
+        assertTrue(w.getValue("assignments"), "my-assignments is always included")
+        assertFalse(w.getValue("predictor"), "another user's pick doesn't carry over")
+        assertFalse(w.getValue("quick_actions"))
+        assertTrue(WidgetAccess.canAccessPage("users", UserRole.CUSTOM, settings, false, "u1"), "team admin pages can be granted")
+        assertFalse(WidgetAccess.canAccessPage("users", UserRole.CUSTOM, settings, false, "u2"), "only when picked")
+        val everything = ApiSettings(customUserPages = mapOf("u1" to listOf("logs", "error-reports", "cluster-management")))
+        for (page in listOf("logs", "error-reports", "cluster-management")) {
+            assertFalse(WidgetAccess.canAccessPage(page, UserRole.CUSTOM, everything, false, "u1"), "$page is superadmin-only")
+        }
+        assertFalse(access(UserRole.CUSTOM, settings).getValue("next_match"), "no user id, no picked pages")
+    }
+
+    @Test
     fun scoutAliasCountsForQuickActions() {
         val w = access(UserRole.SCOUT, ApiSettings(scoutPages = listOf("match-scout")))
         assertTrue(w.getValue("quick_actions"))

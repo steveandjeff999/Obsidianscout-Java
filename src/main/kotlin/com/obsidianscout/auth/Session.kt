@@ -49,7 +49,13 @@ data class UserSession(
     val nonScoutingToolsEnabled: Boolean = false,
     val sessionId: String? = null,
     /** Synthetic read-only session for a public data request (/api/public/...). Never stored in a cookie. */
-    val publicView: Boolean = false
+    val publicView: Boolean = false,
+    /**
+     * Set only on the per-request session [requireAdminOrPage] hands a CUSTOM user who was given an admin page:
+     * that user's own pages. Such a session acts as a team admin for the one request and is never stored.
+     */
+    @kotlinx.serialization.Transient
+    val actingCustomPages: List<String>? = null
 )
 
 class ApiException(val status: HttpStatusCode, override val message: String) : RuntimeException(message)
@@ -241,6 +247,20 @@ suspend fun ApplicationCall.requireAdmin(): UserSession {
 }
 
 /**
+ * Requires ADMIN or SUPERADMIN, or a CUSTOM user who was given [page]. The CUSTOM user gets a session that acts
+ * as an admin of their own team for this request only (see [UserSession.actingCustomPages]); never store it.
+ */
+suspend fun ApplicationCall.requireAdminOrPage(page: String): UserSession {
+    val session = requireSession()
+    if (!session.publicView && session.role.isAtLeast(UserRole.ADMIN)) return session
+    if (!session.publicView && session.role == UserRole.CUSTOM) {
+        val pages = com.obsidianscout.integrations.SettingsService.customPagesFor(session.teamNumber, session.program, session.userId)
+        if (page in pages) return session.copy(role = UserRole.ADMIN, actingCustomPages = pages)
+    }
+    throw ApiException(HttpStatusCode.Forbidden, "Admin access required")
+}
+
+/**
  * Requires ADMIN / SUPERADMIN role OR valid HMAC signed inter-node cluster request.
  */
 suspend fun ApplicationCall.requireAdminOrClusterAuth(): Boolean {
@@ -314,11 +334,14 @@ suspend fun ApplicationCall.requireSuperAdminOrClusterAuth(): Boolean {
 }
 
 /**
- * Requires ANALYTICS, ADMIN, or SUPERADMIN role.
+ * Requires ANALYTICS, ADMIN, or SUPERADMIN role, or a CUSTOM user who was given [page] (the page the route serves).
+ * Without a [page], CUSTOM users are refused.
  */
-suspend fun ApplicationCall.requireAnalyticsOrAbove(): UserSession {
+suspend fun ApplicationCall.requireAnalyticsOrAbove(page: String? = null): UserSession {
     val session = requireSession()
-    if (!session.role.isAtLeast(UserRole.ANALYTICS)) {
+    val customWithPage = session.role == UserRole.CUSTOM && page != null &&
+        page in com.obsidianscout.integrations.SettingsService.customPagesFor(session.teamNumber, session.program, session.userId)
+    if (!session.role.isAtLeast(UserRole.ANALYTICS) && !customWithPage) {
         throw ApiException(HttpStatusCode.Forbidden, "Analytics access required")
     }
     return session

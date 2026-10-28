@@ -74,18 +74,18 @@ fun normalizeSelfRegisterRoles(roles: List<String>): List<String> {
 }
 
 val DEFAULT_SCOUT_PAGES = listOf(
-    "dashboard", "my-assignments", "chat", "scout", "pit-scout", "qual-scout", "qr-scanner", "contact", "scout-history"
+    "dashboard", "my-assignments", "event-info", "chat", "scout", "pit-scout", "qual-scout", "qr-scanner", "contact", "scout-history"
 )
 
 val DEFAULT_ANALYTICS_PAGES = listOf(
-    "dashboard", "my-assignments", "events", "scout", "pit-scout", "qual-scout", "qr-scanner",
+    "dashboard", "my-assignments", "event-info", "events", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "teams", "rankings", "projected-rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "pick-list", "match-planning", "chat", "backup", "docs", "contact", "scout-history"
 )
 
 val DEFAULT_ADMIN_PAGES = listOf(
-    "dashboard", "my-assignments", "assignments", "admin-settings", "users", "scouter-report", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
+    "dashboard", "my-assignments", "event-info", "assignments", "admin-settings", "users", "scouter-report", "banners", "scout", "pit-scout", "qual-scout", "qr-scanner",
     "all-data", "match-data", "qual-data", "pit-data", "analytics", "custom-analytics", "data-validation", "graphs",
     "events", "teams", "rankings", "projected-rankings", "qual-rankings", "matches", "predictor",
     "event-predictor", "alliances", "alliance-selection", "pick-list", "match-planning", "chat", "backup", "docs", "contact", "scout-history"
@@ -99,10 +99,24 @@ val DEFAULT_ADMIN_PAGES = listOf(
 private val PAGES_ADDED_BY_VERSION: List<Pair<Int, List<Pair<String, Set<String>>>>> = listOf(
     1 to listOf("projected-rankings" to setOf("ANALYTICS", "ADMIN")),
     2 to listOf("pick-list" to setOf("ANALYTICS", "ADMIN")),
-    3 to listOf("scouter-report" to setOf("ADMIN"))
+    3 to listOf("scouter-report" to setOf("ADMIN")),
+    4 to listOf("event-info" to setOf("SCOUT", "ANALYTICS", "ADMIN"))
 )
 
 val CURRENT_PAGE_DEFAULTS_VERSION: Int = PAGES_ADDED_BY_VERSION.maxOf { it.first }
+
+/** Pages every CUSTOM user has, whatever was picked for them. */
+val CUSTOM_ROLE_BASE_PAGES = listOf("dashboard", "my-assignments")
+
+/** Team admin pages a CUSTOM user can be given; their routes check [com.obsidianscout.auth.requireAdminOrPage]. */
+val CUSTOM_ROLE_ADMIN_PAGES = listOf("assignments", "admin-settings", "users", "scouter-report", "banners")
+
+/** Pages an admin may give a CUSTOM user. Superadmin-only pages are never among them. */
+val CUSTOM_ROLE_GRANTABLE_PAGES: Set<String> =
+    (DEFAULT_SCOUT_PAGES + DEFAULT_ANALYTICS_PAGES + "prescout" + CUSTOM_ROLE_ADMIN_PAGES).toSet()
+
+fun normalizeCustomPages(pages: List<String>): List<String> =
+    (CUSTOM_ROLE_BASE_PAGES + pages.map { it.trim() }.filter { it in CUSTOM_ROLE_GRANTABLE_PAGES }).distinct()
 
 fun canonicalTbaEventCode(code: String): String = code.trim().lowercase().removePrefix("frc")
 
@@ -189,9 +203,12 @@ data class AssignmentShift(
     val name: String = "",
     /** YYYY-MM-DD in the event's timezone. */
     val day: String = "",
-    /** HH:MM, event local time; matches scheduled at or after this are in the shift. */
+    /**
+     * HH:MM, event local time; matches expected to start at or after this are in the shift. Expected start is the
+     * schedule shifted by how far ahead or behind the event is running, so seats follow drift between shifts.
+     */
     val startTime: String = "",
-    /** HH:MM, event local time; matches scheduled before this are in the shift. */
+    /** HH:MM, event local time; matches expected to start before this are in the shift. */
     val endTime: String = "",
     val stageFilter: String = "all",
     /** Match scouting, one scout per robot station in order red 1-3 then blue 1-3. Blank leaves a station open. */
@@ -232,6 +249,8 @@ data class ApiSettings(
     val scoutPages: List<String> = DEFAULT_SCOUT_PAGES,
     val analyticsPages: List<String> = DEFAULT_ANALYTICS_PAGES,
     val adminPages: List<String> = DEFAULT_ADMIN_PAGES,
+    /** User id -> pages, for this team's CUSTOM-role users. Only changed through [SettingsService.setCustomUserPages]. */
+    val customUserPages: Map<String, List<String>> = emptyMap(),
     val theme: ThemeSettings = ThemeSettings(),
     val themes: List<ThemeSettings> = emptyList(),
     val activeThemeName: String = "",
@@ -328,9 +347,41 @@ object SettingsService {
         }
     }
 
-    fun updateSettings(teamNumber: Int, settings: ApiSettings): ApiSettings {
-        val program = settings.program
+    fun updateSettings(teamNumber: Int, settings: ApiSettings): ApiSettings =
+        writeSettings(teamNumber, settings, keepCustomUserPages = true)
+
+    /** The pages a CUSTOM user on this team was given (always including [CUSTOM_ROLE_BASE_PAGES]). */
+    fun customPagesFor(teamNumber: Int, program: String, userId: String): List<String> =
+        normalizeCustomPages(getSettingsRaw(teamNumber, program).customUserPages[userId].orEmpty())
+
+    /**
+     * One lock per team and program around every settings read-modify-write, so a custom page change and a settings
+     * save running at the same time can't overwrite each other.
+     */
+    private val writeLocks = java.util.concurrent.ConcurrentHashMap<Pair<Int, String>, Any>()
+
+    private fun writeLock(teamNumber: Int, program: String): Any = writeLocks.computeIfAbsent(teamNumber to program) { Any() }
+
+    /** Replaces one user's custom pages; null removes the user's entry. */
+    fun setCustomUserPages(teamNumber: Int, program: String, userId: String, pages: List<String>?): List<String> =
+        synchronized(writeLock(teamNumber, program)) {
+            val existing = getSettingsRaw(teamNumber, program)
+            val normalized = pages?.let { normalizeCustomPages(it) }
+            val updatedMap = if (normalized == null) existing.customUserPages - userId else existing.customUserPages + (userId to normalized)
+            if (updatedMap != existing.customUserPages) {
+                writeSettings(teamNumber, existing.copy(program = program, customUserPages = updatedMap), keepCustomUserPages = false)
+            }
+            normalized ?: emptyList()
+        }
+
+    private fun writeSettings(teamNumber: Int, incoming: ApiSettings, keepCustomUserPages: Boolean): ApiSettings =
+        synchronized(writeLock(teamNumber, incoming.program)) { writeSettingsLocked(teamNumber, incoming, keepCustomUserPages) }
+
+    private fun writeSettingsLocked(teamNumber: Int, incoming: ApiSettings, keepCustomUserPages: Boolean): ApiSettings {
+        val program = incoming.program
         val existing = getSettingsRaw(teamNumber, program)
+        // The settings form never sends per-user grants, so a normal save keeps the stored ones.
+        val settings = if (keepCustomUserPages) incoming.copy(customUserPages = existing.customUserPages) else incoming
         val mergedKeys = settings.apiKeys.copy(
             tbaKey = if (settings.apiKeys.tbaKey == "********") existing.apiKeys.tbaKey else settings.apiKeys.tbaKey,
             firstKey = if (settings.apiKeys.firstKey == "********") existing.apiKeys.firstKey else settings.apiKeys.firstKey,
@@ -377,13 +428,17 @@ object SettingsService {
         return normalized
     }
 
-    /** Whether [role] may use [page] under the team's page permissions. Superadmins always may. */
-    fun canAccessPage(teamNumber: Int, program: String, role: com.obsidianscout.auth.UserRole, page: String): Boolean {
+    /**
+     * Whether [role] may use [page] under the team's page permissions. Superadmins always may.
+     * A CUSTOM user goes by their own page list, so [userId] is needed for that role.
+     */
+    fun canAccessPage(teamNumber: Int, program: String, role: com.obsidianscout.auth.UserRole, page: String, userId: String? = null): Boolean {
         val settings = getSettings(teamNumber, program)
         return when (role) {
             com.obsidianscout.auth.UserRole.SUPERADMIN -> true
             com.obsidianscout.auth.UserRole.ADMIN -> page in settings.adminPages
             com.obsidianscout.auth.UserRole.ANALYTICS -> page in settings.analyticsPages
+            com.obsidianscout.auth.UserRole.CUSTOM -> userId != null && page in normalizeCustomPages(settings.customUserPages[userId].orEmpty())
             com.obsidianscout.auth.UserRole.SCOUT -> page in settings.scoutPages
         }
     }

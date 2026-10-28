@@ -147,6 +147,10 @@
                                 <span data-i18n="fcm.btn_upload_google_services"><i class="fa-solid fa-mobile-screen"></i> Upload google-services.json</span>
                             </button>
                             <input type="file" id="google-services-file-input" accept=".json" style="display: none;" />
+                            <button type="button" id="btn-upload-apple-plist" class="btn secondary" style="font-size: 12px; padding: 6px 12px;">
+                                <i class="fa-brands fa-apple"></i> <span data-i18n="fcm.btn_upload_apple_plist">Upload GoogleService-Info.plist</span>
+                            </button>
+                            <input type="file" id="apple-plist-file-input" accept=".plist" style="display: none;" />
                         </div>
 
                         <div class="fcm-grid">
@@ -165,6 +169,17 @@
                             <div>
                                 <label style="font-size: 13px; font-weight: 600;" data-i18n="fcm.sender_id_label">Messaging Sender ID:</label>
                                 <input type="text" id="fcm-sender-id" placeholder="123456789012" style="width: 100%; margin-top: 4px;" />
+                            </div>
+                        </div>
+
+                        <div class="fcm-grid" style="margin-top: 16px;">
+                            <div>
+                                <label style="font-size: 13px; font-weight: 600;" data-i18n="fcm.apple_app_id_label">iOS / macOS App ID:</label>
+                                <input type="text" id="fcm-apple-app-id" placeholder="1:123456789:ios:abcdef" style="width: 100%; margin-top: 4px;" />
+                            </div>
+                            <div>
+                                <label style="font-size: 13px; font-weight: 600;" data-i18n="fcm.apple_api_key_label">iOS / macOS API Key:</label>
+                                <input type="text" id="fcm-apple-api-key" placeholder="AIzaSy..." style="width: 100%; margin-top: 4px;" />
                             </div>
                         </div>
 
@@ -222,6 +237,8 @@
             const appIdInput = document.getElementById("fcm-app-id");
             const senderIdInput = document.getElementById("fcm-sender-id");
             const vapidKeyInput = document.getElementById("fcm-vapid-key");
+            const appleAppIdInput = document.getElementById("fcm-apple-app-id");
+            const appleApiKeyInput = document.getElementById("fcm-apple-api-key");
             const fcmForm = document.getElementById("fcm-form");
             const btnTestFcm = document.getElementById("btn-test-fcm");
             const fcmAlert = document.getElementById("fcm-alert");
@@ -267,6 +284,8 @@
                 appIdInput.value = cfg.appId || "";
                 senderIdInput.value = cfg.messagingSenderId || "";
                 vapidKeyInput.value = cfg.vapidKey || "";
+                appleAppIdInput.value = cfg.appleAppId || "";
+                appleApiKeyInput.value = cfg.appleApiKey || "";
                 if (cfg.hasServiceAccountJson) {
                     jsonTextarea.placeholder = t("fcm.placeholder_stored", "(Service Account JSON stored in database. Paste new JSON here to update)");
                 }
@@ -352,6 +371,37 @@
                 }
             });
 
+            // GoogleService-Info.plist (iOS app; the macOS build uses the same one)
+            function parseApplePlist(text) {
+                const doc = new DOMParser().parseFromString(text, "application/xml");
+                const values = {};
+                doc.querySelectorAll("dict > key").forEach((keyEl) => {
+                    const valueEl = keyEl.nextElementSibling;
+                    if (valueEl && valueEl.tagName === "string") values[keyEl.textContent] = valueEl.textContent;
+                });
+                if (!values.GOOGLE_APP_ID) {
+                    showAlert(t("fcm.apple_plist_invalid", "That file has no GOOGLE_APP_ID. Download GoogleService-Info.plist for the iOS app from Firebase Console -> Project Settings."), true);
+                    return;
+                }
+                appleAppIdInput.value = values.GOOGLE_APP_ID;
+                if (values.API_KEY) appleApiKeyInput.value = values.API_KEY;
+                if (values.PROJECT_ID && !projectIdInput.value) projectIdInput.value = values.PROJECT_ID;
+                if (values.GCM_SENDER_ID && !senderIdInput.value) senderIdInput.value = values.GCM_SENDER_ID;
+                showAlert(t("fcm.apple_plist_loaded", "iOS / macOS App ID and API Key extracted. Save to apply."), false);
+            }
+
+            const btnUploadApplePlist = document.getElementById("btn-upload-apple-plist");
+            const applePlistFileInput = document.getElementById("apple-plist-file-input");
+            btnUploadApplePlist.addEventListener("click", () => applePlistFileInput.click());
+            applePlistFileInput.addEventListener("change", (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => parseApplePlist(evt.target.result);
+                    reader.readAsText(file);
+                }
+            });
+
             // Form Submit (Save)
             fcmForm.addEventListener("submit", async (e) => {
                 e.preventDefault();
@@ -367,7 +417,9 @@
                             appId: appIdInput.value.trim(),
                             messagingSenderId: senderIdInput.value.trim(),
                             serviceAccountJson: jsonTextarea.value.trim(),
-                            vapidKey: vapidKeyInput.value.trim()
+                            vapidKey: vapidKeyInput.value.trim(),
+                            appleAppId: appleAppIdInput.value.trim(),
+                            appleApiKey: appleApiKeyInput.value.trim()
                         },
                         button: saveBtn
                     });

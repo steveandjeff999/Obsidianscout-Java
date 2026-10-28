@@ -17,6 +17,7 @@ import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.requireAdmin
+import com.obsidianscout.auth.requireAdminOrPage
 import com.obsidianscout.auth.requireAnalyticsOrAbove
 import com.obsidianscout.auth.requireSession
 import com.obsidianscout.auth.requireSuperAdmin
@@ -158,7 +159,7 @@ fun Route.adminRoutes() {
 
             route("/admin") {
                 get("/users") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("users")
                     val q = call.request.queryParameters["q"]
                     val teamNumber = call.request.queryParameters["teamNumber"]?.toIntOrNull()
                     val program = call.request.queryParameters["program"]
@@ -186,7 +187,7 @@ fun Route.adminRoutes() {
                     )
                 }
                 post("/users") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("users")
                     val request = call.receive<CreateUserRequest>()
                     val targetTeam = if (session.role == UserRole.SUPERADMIN) request.teamNumber else session.teamNumber
                     val targetProgram = if (session.role == UserRole.SUPERADMIN) request.program else session.program
@@ -197,12 +198,13 @@ fun Route.adminRoutes() {
                         password = request.password,
                         program = targetProgram,
                         role = request.role,
-                        email = request.email
+                        email = request.email,
+                        customPages = request.customPages
                     )
                     call.respond(user)
                 }
                 put("/users/{id}") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("users")
                     val userId = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid user id")
                     val request = call.receive<UpdateUserRequest>()
@@ -214,7 +216,8 @@ fun Route.adminRoutes() {
                         newRole = request.role,
                         newEmail = request.email,
                         newProfilePicture = request.profilePicture,
-                        clearProfilePicture = request.clearProfilePicture
+                        clearProfilePicture = request.clearProfilePicture,
+                        newCustomPages = request.customPages
                     )
                     if (userId == session.userId) {
                         val updatedSession = session.copy(
@@ -232,7 +235,7 @@ fun Route.adminRoutes() {
                     call.respond(updated)
                 }
                 delete("/users/{id}") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("users")
                     val userId = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid user id")
                     AuthService.deleteUser(session, userId)
@@ -552,13 +555,13 @@ fun Route.adminRoutes() {
                 }
 
                 get("/scouter-report/options") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("scouter-report")
                     val teamNumber = scouterReportTeam(session, call.request.queryParameters["teamNumber"])
                     call.respond(com.obsidianscout.scouting.ScouterReportService.listOptions(teamNumber, session.program))
                 }
 
                 get("/scouter-report") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("scouter-report")
                     val params = call.request.queryParameters
                     val teamNumber = scouterReportTeam(session, params["teamNumber"])
                     val eventKey = params["eventKey"]?.trim()?.takeIf { it.isNotEmpty() }

@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    if (!Obsidianscout.isAdmin(me.role)) {
+    if (!Obsidianscout.canUseAdminPage(me.role, "scouter-report")) {
         document.getElementById("admin-locked").classList.remove("hidden");
         document.getElementById("report-panel").classList.add("hidden");
         document.getElementById("table-card").classList.add("hidden");

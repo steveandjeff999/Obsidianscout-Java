@@ -234,6 +234,9 @@ const ASSETS = [
     '/js/theme-editor.js',
     '/js/tutorials.js',
     '/assets/images/zachary.png',
+    // Match planning field drawings (the page also keeps its own copy per year in the obsidianscout-field-images cache)
+    '/assets/images/field-images/2025/reefscape.png',
+    '/assets/images/field-images/2026/rebuilt.png',
     '/vendor/qrcode.min.js',
     '/vendor/qr-scanner.min.js',
     '/vendor/qr-scanner-worker.min.js',

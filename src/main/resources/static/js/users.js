@@ -14,6 +14,118 @@ let currentSortDir = "asc";
 let loadUsersController = null;
 let currentUsers = [];
 
+// Pages an admin can give a CUSTOM user. Matches CUSTOM_ROLE_GRANTABLE_PAGES on the server; superadmin pages are never offered.
+const CUSTOM_GRANTABLE_PAGES = [
+    { id: "scout", label: "Scout" },
+    { id: "pit-scout", label: "Pit Scout" },
+    { id: "qual-scout", label: "Qual Scout" },
+    { id: "prescout", label: "Pre-Scout" },
+    { id: "qr-scanner", label: "QR Scanner" },
+    { id: "scout-history", label: "Scout History" },
+    { id: "all-data", label: "All Data" },
+    { id: "match-data", label: "Match Data" },
+    { id: "qual-data", label: "Qual Data" },
+    { id: "pit-data", label: "Pit Data" },
+    { id: "analytics", label: "Analytics" },
+    { id: "custom-analytics", label: "Custom Analytics" },
+    { id: "data-validation", label: "Data Validation" },
+    { id: "graphs", label: "Graphs" },
+    { id: "events", label: "Events" },
+    { id: "teams", label: "Teams" },
+    { id: "rankings", label: "Rankings" },
+    { id: "projected-rankings", label: "Projected Rankings" },
+    { id: "qual-rankings", label: "Qual Rankings" },
+    { id: "matches", label: "Matches" },
+    { id: "predictor", label: "Predictor" },
+    { id: "event-predictor", label: "Event Predictor" },
+    { id: "alliances", label: "Alliances" },
+    { id: "alliance-selection", label: "Alliance Selection" },
+    { id: "pick-list", label: "Pick List" },
+    { id: "match-planning", label: "Match Planning" },
+    { id: "event-info", label: "Event Info" },
+    { id: "chat", label: "Chat" },
+    { id: "backup", label: "Data Sharing" },
+    { id: "docs", label: "Docs" },
+    { id: "contact", label: "Contact" },
+    { id: "assignments", label: "Scouting Assignments (Admin)" },
+    { id: "admin-settings", label: "Admin Settings" },
+    { id: "users", label: "Users" },
+    { id: "scouter-report", label: "Scouter Report" },
+    { id: "banners", label: "Banners" }
+];
+
+/** Team role page lists, loaded once for the "Copy Scout/Analytics pages" buttons. */
+let rolePagesPromise = null;
+function loadRolePages() {
+    if (!rolePagesPromise) {
+        rolePagesPromise = Obsidianscout.request("/api/settings")
+            .then((res) => {
+                const settings = (res && res.settings) || res || {};
+                return { SCOUT: settings.scoutPages || [], ANALYTICS: settings.analyticsPages || [], MINE: settings.customPages || null };
+            })
+            .catch(() => {
+                rolePagesPromise = null;
+                return { SCOUT: [], ANALYTICS: [], MINE: null };
+            });
+    }
+    return rolePagesPromise;
+}
+
+/**
+ * Wires a role select to its page picker: the picker shows only while CUSTOM is selected.
+ * [grantable] limits which boxes can be changed (a CUSTOM user managing accounts can only hand out their own
+ * pages; the server enforces the same); null means every page. Returns helpers to fill and read the boxes.
+ */
+function setupPagesPicker(roleSelect, field, grantable = null) {
+    const list = field.querySelector(".custom-pages-list");
+    list.innerHTML = "";
+    CUSTOM_GRANTABLE_PAGES.forEach((page) => {
+        const canGrant = !grantable || grantable.includes(page.id);
+        const label = document.createElement("label");
+        label.style.display = "flex";
+        label.style.alignItems = "center";
+        label.style.gap = "8px";
+        label.style.cursor = canGrant ? "pointer" : "not-allowed";
+        if (!canGrant) label.style.opacity = "0.6";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = page.id;
+        input.disabled = !canGrant;
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(page.label));
+        list.appendChild(label);
+    });
+
+    const boxes = () => Array.from(list.querySelectorAll('input[type="checkbox"]'));
+    const setPages = (pages) => {
+        const wanted = new Set(pages || []);
+        boxes().forEach((box) => { box.checked = wanted.has(box.value); });
+    };
+    const getPages = () => boxes().filter((box) => box.checked).map((box) => box.value);
+    const syncVisibility = () => field.classList.toggle("hidden", roleSelect.value !== "CUSTOM");
+
+    // Shortcuts only touch the boxes the caller can change; locked ones keep what the user already had.
+    const setChangeablePages = (pages) => {
+        const wanted = new Set(pages || []);
+        boxes().filter((box) => !box.disabled).forEach((box) => { box.checked = wanted.has(box.value); });
+    };
+
+    roleSelect.addEventListener("change", syncVisibility);
+    field.querySelectorAll("[data-pages-preset]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            const preset = btn.getAttribute("data-pages-preset");
+            if (preset === "NONE") {
+                setChangeablePages([]);
+                return;
+            }
+            const rolePages = await loadRolePages();
+            setChangeablePages(rolePages[preset]);
+        });
+    });
+    syncVisibility();
+    return { setPages, getPages, syncVisibility };
+}
+
 // Track pending avatar change for the edit modal
 let pendingAvatarBase64 = undefined;  // undefined = no change, null = remove, string = new picture
 
@@ -56,7 +168,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
 
-    if (!Obsidianscout.isAdmin(me.role)) {
+    if (!Obsidianscout.canUseAdminPage(me.role, "users")) {
         document.getElementById("admin-locked").classList.remove("hidden");
         document.getElementById("admin-panel").classList.add("hidden");
         return;
@@ -105,6 +217,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // A CUSTOM user given the Users page manages scout-level accounts: no admin roles, and only their own pages.
+    const isCustomManager = me.role === "CUSTOM";
+    let grantablePages = null;
+    if (isCustomManager) {
+        document.querySelectorAll('#user-role option[value="ADMIN"], #edit-role option[value="ADMIN"]').forEach((opt) => opt.remove());
+        grantablePages = (await loadRolePages()).MINE || [];
+    }
+
+    const createPagesPicker = setupPagesPicker(document.getElementById("user-role"), document.getElementById("user-pages-field"), grantablePages);
+    const editPagesPicker = setupPagesPicker(document.getElementById("edit-role"), document.getElementById("edit-pages-field"), grantablePages);
+
     // ── Modal wiring ──────────────────────────────────────────────────────────
     const modal = document.getElementById("edit-modal");
 
@@ -114,6 +237,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("edit-email").value    = user.email || "";
         document.getElementById("edit-password").value = "";
         document.getElementById("edit-role").value     = user.role;
+        editPagesPicker.setPages(user.customPages || []);
+        editPagesPicker.syncVisibility();
 
         // Reset pending avatar state
         pendingAvatarBase64 = undefined;
@@ -233,6 +358,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (username) payload.username = username;
         if (password) payload.password = password;
         if (role)     payload.role     = role;
+        if (role === "CUSTOM") payload.customPages = editPagesPicker.getPages();
         payload.email = email;
 
         // Profile picture: undefined = no change, null = remove, string = new pic
@@ -284,11 +410,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             await Obsidianscout.request("/api/admin/users", {
                 method: "POST",
-                json: { username, email, teamNumber, password, role, program },
+                json: { username, email, teamNumber, password, role, program, customPages: role === "CUSTOM" ? createPagesPicker.getPages() : undefined },
                 button: submitBtn
             });
             Obsidianscout.showToast("User created", "success");
             event.target.reset();
+            createPagesPicker.setPages([]);
+            createPagesPicker.syncVisibility();
             if (!Obsidianscout.isSuperAdmin(me.role)) {
                 if (teamInput) {
                     teamInput.value = me.teamNumber;
@@ -471,11 +599,14 @@ async function loadUsers(me, openModal, append = false) {
         users.forEach((user) => {
             currentUsers.push(user);
             const roleLabel = user.role === "SUPERADMIN" ? "Site Admin"
+                : user.role === "CUSTOM" ? `${t("users.custom_role", "Custom")} (${(user.customPages || []).length} ${t("users.pages_count", "pages")})`
                 : user.role.charAt(0) + user.role.slice(1).toLowerCase();
 
-            // Superadmin can edit anyone; admin can edit non-superadmin users on their team
+            // Superadmin can edit anyone; admin can edit non-superadmin users on their team;
+            // a custom user with the Users page can't touch admin accounts either
             const canEdit = Obsidianscout.isSuperAdmin(me.role)
-                || (user.role !== "SUPERADMIN" && Number(user.teamNumber) === Number(me.teamNumber));
+                || (user.role !== "SUPERADMIN" && Number(user.teamNumber) === Number(me.teamNumber)
+                    && !(me.role === "CUSTOM" && user.role === "ADMIN"));
 
             const emailDisplay = user.email || `<span style="color: var(--muted); font-style: italic;">None</span>`;
             const lastLoginDisplay = user.lastLogin 

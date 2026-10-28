@@ -136,9 +136,20 @@
                         <select id="user-role">
                             <option value="SCOUT">Scout</option>
                             <option value="ANALYTICS">Analytics</option>
+                            <option value="CUSTOM" data-i18n="users.custom_role">Custom</option>
                             <option value="ADMIN" data-i18n="index.admin">Admin</option>
                             <option value="SUPERADMIN" class="superadmin-option" style="display:none" data-i18n="users.super_admin">Super Admin</option>
                         </select>
+                    </div>
+                    <div class="field hidden" id="user-pages-field" style="grid-column: 1 / -1;">
+                        <label data-i18n="users.custom_pages">Pages this user can open</label>
+                        <p class="form-note" data-i18n="users.custom_pages_note">Dashboard and My Assignments are always included. Superadmin pages can't be given to a custom user.</p>
+                        <div class="row gap-8 wrap" style="margin-bottom: 8px;">
+                            <button type="button" class="btn ghost" data-pages-preset="SCOUT" data-i18n="users.copy_scout_pages">Copy Scout pages</button>
+                            <button type="button" class="btn ghost" data-pages-preset="ANALYTICS" data-i18n="users.copy_analytics_pages">Copy Analytics pages</button>
+                            <button type="button" class="btn ghost" data-pages-preset="NONE" data-i18n="users.clear_pages">Clear</button>
+                        </div>
+                        <div class="custom-pages-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;"></div>
                     </div>
                     <button class="btn dark" type="submit" data-i18n="users.create_user">Create user</button>
                 </form>
@@ -170,6 +181,7 @@
                                 <option value="" data-i18n="users.all_roles">All Roles</option>
                                 <option value="SCOUT">Scout</option>
                                 <option value="ANALYTICS">Analytics</option>
+                                <option value="CUSTOM" data-i18n="users.custom_role">Custom</option>
                                 <option value="ADMIN" data-i18n="index.admin">Admin</option>
                                 <option value="SUPERADMIN" class="filter-superadmin-option" style="display:none" data-i18n="users.super_admin">Super Admin</option>
                             </select>
@@ -250,9 +262,20 @@
                     <select id="edit-role">
                         <option value="SCOUT">Scout</option>
                         <option value="ANALYTICS">Analytics</option>
+                        <option value="CUSTOM" data-i18n="users.custom_role">Custom</option>
                         <option value="ADMIN" data-i18n="index.admin">Admin</option>
                         <option value="SUPERADMIN" class="edit-superadmin-option" style="display:none" data-i18n="users.super_admin">Super Admin</option>
                     </select>
+                </div>
+                <div class="field hidden" id="edit-pages-field" style="grid-column: 1 / -1;">
+                    <label data-i18n="users.custom_pages">Pages this user can open</label>
+                    <p class="form-note" data-i18n="users.custom_pages_note">Dashboard and My Assignments are always included. Superadmin pages can't be given to a custom user.</p>
+                    <div class="row gap-8 wrap" style="margin-bottom: 8px;">
+                        <button type="button" class="btn ghost" data-pages-preset="SCOUT" data-i18n="users.copy_scout_pages">Copy Scout pages</button>
+                        <button type="button" class="btn ghost" data-pages-preset="ANALYTICS" data-i18n="users.copy_analytics_pages">Copy Analytics pages</button>
+                        <button type="button" class="btn ghost" data-pages-preset="NONE" data-i18n="users.clear_pages">Clear</button>
+                    </div>
+                    <div class="custom-pages-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;"></div>
                 </div>
             </form>
             <div class="modal-footer">

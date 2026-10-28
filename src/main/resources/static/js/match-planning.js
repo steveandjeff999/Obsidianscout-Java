@@ -23,6 +23,7 @@
     let lastSyncedTime = 0;
     let fieldImageLoadedYear = null;
     let fieldImageLoadedSrc = null;
+    let fieldImageObjectUrl = null;
 
     // Resilient offline-first sync & polling state
     let hasUnsavedChanges = false;
@@ -189,7 +190,9 @@
 
             // Populate event filter select dropdown
             const eventFilter = document.getElementById("event-filter");
-            const events = await Obsidianscout.request(`/api/events?year=${currentYear}&cached=1`);
+            // Offline with no saved event list, the current event alone still lets its saved matches open.
+            const events = await Obsidianscout.request(`/api/events?year=${currentYear}&cached=1`)
+                .catch(() => (currentEventKey ? [{ eventKey: currentEventKey, name: currentEventKey }] : []));
             eventFilter.innerHTML = "";
             events.forEach(e => {
                 const opt = document.createElement("option");
@@ -212,6 +215,8 @@
                 if (hasUnsavedChanges || getPendingPlansQueue().length > 0) {
                     triggerSavePipeline();
                 }
+                prefetchEventPlans(currentEventKey);
+                warmFieldImageCache();
                 scheduleNextPoll(1000);
             });
 
@@ -261,6 +266,7 @@
                 }
             });
 
+            warmFieldImageCache();
             await loadMatches(currentEventKey);
         } catch (error) {
             console.error("Failed to initialize match planning page:", error);
@@ -312,6 +318,8 @@
                     await selectMatch(match);
                 }
             };
+
+            prefetchEventPlans(eventKey);
 
             // If there's a match query param, select it automatically
             const urlParams = new URLSearchParams(window.location.search);
@@ -819,6 +827,37 @@
         }
     }
 
+    /**
+     * Pulls every saved plan for the event into local storage while online, so any match can be opened offline later,
+     * not just the ones already viewed. Unsynced local edits and newer local copies are left alone.
+     */
+    let prefetchedEventKey = null;
+    async function prefetchEventPlans(eventKey) {
+        if (!eventKey || prefetchedEventKey === eventKey || !isOnlineConnection()) return;
+        prefetchedEventKey = eventKey;
+        try {
+            const plans = await Obsidianscout.request(
+                `/api/match-planning/event?eventKey=${encodeURIComponent(eventKey)}`,
+                { timeoutMs: 15000, noCache: true }
+            );
+            (plans || []).forEach(plan => {
+                if (!plan || !plan.matchKey || !plan.planJson || plan.planJson === "{}") return;
+                if (currentEventKey === eventKey && currentMatch && currentMatch.matchKey === plan.matchKey) return;
+                const local = loadPlanLocally(eventKey, plan.matchKey);
+                if (local && (local.synced === false || (local.updatedAt || 0) >= plan.updatedAt)) return;
+                try {
+                    const data = JSON.parse(plan.planJson);
+                    savePlanLocally(eventKey, plan.matchKey, { ...data, updatedAt: plan.updatedAt }, true);
+                } catch (e) {
+                    // skip a malformed plan
+                }
+            });
+        } catch (e) {
+            prefetchedEventKey = null; // retry next time we're online
+            console.warn("[Match Plan] Event plan prefetch skipped:", e);
+        }
+    }
+
     async function loadSavedPlan(eventKey, matchKey) {
         // 1. Immediately check local storage
         const local = loadPlanLocally(eventKey, matchKey);
@@ -992,44 +1031,8 @@
         // 2. Load saved drawings and team positions (offline-first: local then server)
         await loadSavedPlan(currentEventKey, match.matchKey);
 
-        // 3. Fetch field image dynamically for this year (with caching and auto-invalidation on change)
-        try {
-            const imageInfo = await Obsidianscout.request(`/api/field-images?year=${currentYear}`, { timeoutMs: 8000 });
-            const targetPath = (imageInfo && imageInfo.imagePath) ? imageInfo.imagePath : `/assets/images/field-images/${currentYear}/rebuilt.png`;
-            if (!fieldImageObj || fieldImageLoadedYear !== currentYear || fieldImageLoadedSrc !== targetPath) {
-                await loadFieldImage(targetPath);
-                fieldImageLoadedYear = currentYear;
-                fieldImageLoadedSrc = targetPath;
-            } else {
-                resizeCanvas();
-                renderCanvas();
-                updateFieldMarkerPositions();
-            }
-        } catch (e) {
-            console.warn(`No specific field image found for year ${currentYear}, attempting fallback...`, e);
-            const fallbackPath = `/assets/images/field-images/${currentYear}/rebuilt.png`;
-            if (!fieldImageObj || fieldImageLoadedYear !== currentYear || fieldImageLoadedSrc !== fallbackPath) {
-                try {
-                    await loadFieldImage(fallbackPath);
-                    fieldImageLoadedYear = currentYear;
-                    fieldImageLoadedSrc = fallbackPath;
-                } catch (err2) {
-                    try {
-                        const fallbackPath2 = `/assets/images/field-images/${currentYear}/reefscape.png`;
-                        await loadFieldImage(fallbackPath2);
-                        fieldImageLoadedYear = currentYear;
-                        fieldImageLoadedSrc = fallbackPath2;
-                    } catch (err3) {
-                        console.error("Failed to load any field image:", err3);
-                        renderPlaceholderField();
-                    }
-                }
-            } else {
-                resizeCanvas();
-                renderCanvas();
-                updateFieldMarkerPositions();
-            }
-        }
+        // 3. Field image for this year (kept in its own cache so it's there offline)
+        await ensureFieldImage();
 
         // 4. Render Draggable Square Team Markers on field
         renderFieldMarkers();
@@ -1071,6 +1074,114 @@
             if (teamEl) teamEl.textContent = info ? info.number : "—";
             if (nickEl) nickEl.textContent = info ? info.nickname : "";
         });
+    }
+
+    // Survives service worker version bumps (the worker only prunes obsidianscout-shell-* caches).
+    const FIELD_IMAGE_CACHE = "obsidianscout-field-images";
+
+    function fieldImageCacheKey(year) {
+        return `/__field-image__/${year}`;
+    }
+
+    async function readCachedFieldImage(year) {
+        if (typeof caches === "undefined") return null;
+        try {
+            const cache = await caches.open(FIELD_IMAGE_CACHE);
+            const res = await cache.match(fieldImageCacheKey(year));
+            if (!res) return null;
+            return { src: res.headers.get("X-Field-Image-Src") || "", blob: await res.blob() };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function storeFieldImage(year, src) {
+        if (typeof caches === "undefined" || !src || src.startsWith("blob:")) return;
+        try {
+            const res = await fetch(src, { credentials: "same-origin" });
+            if (!res.ok) return;
+            const blob = await res.blob();
+            if (!blob.type.startsWith("image/")) return;
+            const cache = await caches.open(FIELD_IMAGE_CACHE);
+            await cache.put(fieldImageCacheKey(year), new Response(blob, {
+                headers: { "Content-Type": blob.type, "X-Field-Image-Src": src }
+            }));
+        } catch (e) {
+            console.warn("[Match Plan] Could not cache field image:", e);
+        }
+    }
+
+    async function resolveFieldImageSrc(year) {
+        try {
+            const info = await Obsidianscout.request(`/api/field-images?year=${year}`, { timeoutMs: 8000 });
+            return (info && info.imagePath) ? info.imagePath : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /** Saves this year's field image for offline use as soon as the page opens, before any match is picked. */
+    async function warmFieldImageCache() {
+        if (!currentYear || !isOnlineConnection()) return;
+        const year = currentYear;
+        const src = await resolveFieldImageSrc(year);
+        if (!src) return;
+        const cached = await readCachedFieldImage(year);
+        if (!cached || cached.src !== src) await storeFieldImage(year, src);
+    }
+
+    async function ensureFieldImage() {
+        const year = currentYear;
+        const [src, cached] = await Promise.all([resolveFieldImageSrc(year), readCachedFieldImage(year)]);
+
+        if (fieldImageObj && fieldImageLoadedYear === year && (!src || fieldImageLoadedSrc === src)) {
+            resizeCanvas();
+            renderCanvas();
+            updateFieldMarkerPositions();
+            return;
+        }
+
+        const networkCandidates = [...new Set([
+            src,
+            `/assets/images/field-images/${year}/rebuilt.png`,
+            `/assets/images/field-images/${year}/reefscape.png`
+        ].filter(Boolean))];
+
+        const loadFromCache = async () => {
+            if (!cached) return false;
+            const url = URL.createObjectURL(cached.blob);
+            try {
+                await loadFieldImage(url);
+            } catch (e) {
+                URL.revokeObjectURL(url);
+                return false;
+            }
+            if (fieldImageObjectUrl) URL.revokeObjectURL(fieldImageObjectUrl);
+            fieldImageObjectUrl = url;
+            fieldImageLoadedYear = year;
+            fieldImageLoadedSrc = cached.src;
+            return true;
+        };
+
+        // Offline, the saved copy is the one most likely to work, so it goes first.
+        if (!isOnlineConnection() && await loadFromCache()) return;
+
+        for (const candidate of networkCandidates) {
+            try {
+                await loadFieldImage(candidate);
+                fieldImageLoadedYear = year;
+                fieldImageLoadedSrc = candidate;
+                if (!cached || cached.src !== candidate) storeFieldImage(year, candidate);
+                return;
+            } catch (e) {
+                // try the next one
+            }
+        }
+
+        if (await loadFromCache()) return;
+
+        console.error(`Failed to load any field image for ${year}`);
+        renderPlaceholderField();
     }
 
     function loadFieldImage(src) {

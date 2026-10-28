@@ -249,6 +249,8 @@ object DatabaseFactory {
                 MatchPredictions,
                 WidgetTokens,
                 Banners,
+                EventInfoPosts,
+                EventInfoFiles,
                 ChatMessages,
                 UserChatLastRead,
                 ChatGroups,

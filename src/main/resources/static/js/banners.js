@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireThemeToggle();
 
     const isSuper = Obsidianscout.isSuperAdmin(me.role);
-    const isAdmin = Obsidianscout.isAdmin(me.role);
+    const isAdmin = Obsidianscout.canUseAdminPage(me.role, "banners");
 
     if (!isAdmin) {
         document.getElementById("admin-locked").classList.remove("hidden");

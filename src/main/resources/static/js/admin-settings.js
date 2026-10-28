@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let originalAdminPanelHTML = "";
     let loadedSettings = null;
 
-    const isUserAdmin = Obsidianscout.isAdmin(me.role);
+    const isUserAdmin = Obsidianscout.canUseAdminPage(me.role, "admin-settings");
     const isUserSuperAdmin = Obsidianscout.isSuperAdmin(me.role);
     if (!isUserAdmin) {
         document.getElementById("admin-locked").classList.remove("hidden");
@@ -74,6 +74,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const configurablePages = [
         { id: "dashboard", label: "Dashboard" },
         { id: "my-assignments", label: "My Assignments" },
+        { id: "event-info", label: "Event Info" },
         { id: "assignments", label: "Scouting Assignments (Admin)" },
         { id: "scout", label: "Scout" },
         { id: "pit-scout", label: "Pit Scout" },

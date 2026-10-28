@@ -2,6 +2,7 @@ package com.obsidianscout.widgets
 
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.integrations.ApiSettings
+import com.obsidianscout.integrations.normalizeCustomPages
 
 /**
  * Which home-screen widgets a user may have. Each widget belongs to app pages, and the user gets the widget
@@ -41,18 +42,21 @@ object WidgetAccess {
         role: UserRole,
         settings: ApiSettings,
         nonScoutingToolsEnabled: Boolean,
+        userId: String? = null,
     ): Boolean {
         if (pageId in NON_SCOUTING_TOOL_PAGES) return nonScoutingToolsEnabled
         // The server refuses chat to everyone when the team turns it off, superadmins included.
         if (pageId == "chat" && !settings.chatEnabled) return false
         if (role == UserRole.SUPERADMIN) return true
         if (pageId in SUPERADMIN_ONLY_PAGES) return false
-        if (pageId in ADMIN_ONLY_BASE_PAGES && role != UserRole.ADMIN) return false
+        // CUSTOM users can be given team admin pages; their own page list below decides.
+        if (pageId in ADMIN_ONLY_BASE_PAGES && role != UserRole.ADMIN && role != UserRole.CUSTOM) return false
         if (pageId in BYPASS_PAGES) return true
 
         val allowed = when (role) {
             UserRole.ADMIN -> settings.adminPages
             UserRole.ANALYTICS -> settings.analyticsPages
+            UserRole.CUSTOM -> normalizeCustomPages(userId?.let { settings.customUserPages[it] }.orEmpty())
             else -> settings.scoutPages
         }
         return aliasesOf(pageId).any { it in allowed }
@@ -82,8 +86,8 @@ object WidgetAccess {
     }
 
     /** Page id -> allowed, for every page a widget depends on. */
-    fun pageAccess(role: UserRole, settings: ApiSettings, nonScoutingToolsEnabled: Boolean): Map<String, Boolean> =
-        REPORTED_PAGES.associateWith { canAccessPage(it, role, settings, nonScoutingToolsEnabled) }
+    fun pageAccess(role: UserRole, settings: ApiSettings, nonScoutingToolsEnabled: Boolean, userId: String? = null): Map<String, Boolean> =
+        REPORTED_PAGES.associateWith { canAccessPage(it, role, settings, nonScoutingToolsEnabled, userId) }
 
     /** Widget kind -> allowed. */
     fun widgetAccess(pages: Map<String, Boolean>): Map<String, Boolean> =

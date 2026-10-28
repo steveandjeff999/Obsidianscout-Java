@@ -17,6 +17,7 @@ import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.requireAdmin
+import com.obsidianscout.auth.requireAdminOrPage
 import com.obsidianscout.auth.requireAnalyticsOrAbove
 import com.obsidianscout.auth.requireSession
 import com.obsidianscout.auth.requireSuperAdmin
@@ -245,7 +246,7 @@ fun Route.bannerRoutes() {
 
             route("/admin/banners") {
                 get {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("banners")
                     val all = if (session.role == com.obsidianscout.auth.UserRole.SUPERADMIN) {
                         com.obsidianscout.db.BannerService.getAll(program = session.program)
                     } else {
@@ -254,7 +255,7 @@ fun Route.bannerRoutes() {
                     call.respond(all)
                 }
                 post {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("banners")
                     val request = call.receive<com.obsidianscout.routes.BannerCreateRequest>()
                     
                     val targetTeam = request.teamNumber ?: 0
@@ -272,7 +273,7 @@ fun Route.bannerRoutes() {
                     call.respond(created)
                 }
                 put("/{id}") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("banners")
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
                     val request = call.receive<com.obsidianscout.routes.BannerUpdateRequest>()
@@ -312,7 +313,7 @@ fun Route.bannerRoutes() {
                     call.respond(updated)
                 }
                 delete("/{id}") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("banners")
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid id")
 

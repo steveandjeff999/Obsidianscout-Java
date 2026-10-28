@@ -216,7 +216,7 @@ fun Route.analyticsRoutes() {
                     call.respond(response)
                 }
                 get("/export/csv") {
-                    val session = call.requireAnalyticsOrAbove()
+                    val session = call.requireAnalyticsOrAbove("alliance-selection")
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
                     val response = com.obsidianscout.scouting.AllianceSelectionService.getSelection(session, eventKey)

@@ -219,7 +219,7 @@ object WidgetSnapshotService {
 
     suspend fun build(session: UserSession, now: Instant = Instant.now()): WidgetSnapshot {
         val settings = SettingsService.getSettings(session.teamNumber, session.program)
-        val pages = WidgetAccess.pageAccess(session.role, settings, session.nonScoutingToolsEnabled)
+        val pages = WidgetAccess.pageAccess(session.role, settings, session.nonScoutingToolsEnabled, session.userId)
         val widgets = WidgetAccess.widgetAccess(pages)
         fun can(page: String) = pages[page] == true
 

@@ -9,7 +9,18 @@ import { clearAllHttpCaches } from './idb-cache.js';
 import { loadAndRenderBanners } from '../components/banners.js';
 import { isPublicMode, makePublicUser } from './public-mode.js';
 
-export const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "SCOUT"];
+export const ROLE_HIERARCHY = ["SUPERADMIN", "ADMIN", "ANALYTICS", "CUSTOM", "SCOUT"];
+
+/** Roles whose pages come from the team settings: a role page list, or for CUSTOM the user's own picks. */
+export const PAGE_LIST_ROLES = ["SCOUT", "CUSTOM", "ANALYTICS", "ADMIN"];
+
+export function allowedPagesForRole(role, settings) {
+    if (!settings) return null;
+    if (role === "SCOUT") return settings.scoutPages;
+    if (role === "CUSTOM") return settings.customPages || ["dashboard", "my-assignments"];
+    if (role === "ANALYTICS") return settings.analyticsPages;
+    return settings.adminPages;
+}
 
 export async function checkLoginStatus() {
     if (isPublicMode()) return true;
@@ -80,6 +91,29 @@ export function isAdmin(role) {
     return hasRole(role, "ADMIN");
 }
 
+/** Team admin pages a CUSTOM user can be given (matches CUSTOM_ROLE_ADMIN_PAGES on the server). */
+export const CUSTOM_ADMIN_PAGES = ["assignments", "admin-settings", "users", "scouter-report", "banners"];
+
+/** The cached team settings, or null. */
+function cachedSettings() {
+    try {
+        const text = safeGetItem("cache:/api/settings");
+        if (!text) return null;
+        const parsed = JSON.parse(text);
+        return parsed.settings || parsed;
+    } catch (e) {
+        return null;
+    }
+}
+
+/** Whether [role] may use the team admin page [page]: admins always, a CUSTOM user when it was picked for them. */
+export function canUseAdminPage(role, page) {
+    if (isAdmin(role)) return true;
+    if (role !== "CUSTOM" || !CUSTOM_ADMIN_PAGES.includes(page)) return false;
+    const settings = cachedSettings();
+    return Boolean(settings && Array.isArray(settings.customPages) && settings.customPages.includes(page));
+}
+
 export function isSuperAdmin(role) {
     return role === "SUPERADMIN";
 }
@@ -138,8 +172,8 @@ export async function requireAuth() {
         }
     }
 
-    if (currentPage && settings && (me.role === "SCOUT" || me.role === "ANALYTICS" || me.role === "ADMIN")) {
-        const allowedPages = me.role === "SCOUT" ? settings.scoutPages : (me.role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
+    if (currentPage && settings && PAGE_LIST_ROLES.includes(me.role)) {
+        const allowedPages = allowedPagesForRole(me.role, settings);
         if (allowedPages && Array.isArray(allowedPages)) {
             const bypassPages = ["settings", "login", "index", "dashboard", "theme-editor", "team", "reset-password", "config-migration", "schema-history", "tutorials", "my-assignments", "assistant", "match-checklist", "battery-tracker", "match-predictions", "prediction-leaderboard"];
             if (isAdmin(me.role) || isSuperAdmin(me.role)) {

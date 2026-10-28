@@ -33,6 +33,7 @@ fun Application.configureRoutes() {
             notificationRoutes()
             allianceRoutes()
             bannerRoutes()
+            eventInfoRoutes()
             contactRoutes()
             widgetRoutes()
             publicDataRoutes()

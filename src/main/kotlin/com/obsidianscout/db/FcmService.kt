@@ -133,7 +133,9 @@ object FcmService {
                 apiKey = row[FcmConfigs.apiKey],
                 appId = row[FcmConfigs.appId],
                 messagingSenderId = row[FcmConfigs.messagingSenderId],
-                vapidKey = row[FcmConfigs.vapidKey]
+                vapidKey = row[FcmConfigs.vapidKey],
+                appleAppId = row[FcmConfigs.appleAppId],
+                appleApiKey = row[FcmConfigs.appleApiKey]
             )
         }
     }
@@ -160,6 +162,8 @@ object FcmService {
                 appId = row[FcmConfigs.appId],
                 messagingSenderId = row[FcmConfigs.messagingSenderId],
                 vapidKey = row[FcmConfigs.vapidKey],
+                appleAppId = row[FcmConfigs.appleAppId],
+                appleApiKey = row[FcmConfigs.appleApiKey],
                 hasServiceAccountJson = hasJson,
                 isInitialized = isInitialized
             )
@@ -173,7 +177,9 @@ object FcmService {
         appId: String,
         messagingSenderId: String,
         serviceAccountJson: String,
-        vapidKey: String
+        vapidKey: String,
+        appleAppId: String,
+        appleApiKey: String
     ): Boolean {
         val now = Instant.now()
         transaction {
@@ -193,6 +199,8 @@ object FcmService {
                     it[FcmConfigs.messagingSenderId] = messagingSenderId
                     it[FcmConfigs.serviceAccountJson] = finalJson
                     it[FcmConfigs.vapidKey] = vapidKey
+                    it[FcmConfigs.appleAppId] = appleAppId
+                    it[FcmConfigs.appleApiKey] = appleApiKey
                     it[FcmConfigs.updatedAt] = now
                 }
             } else {
@@ -205,6 +213,8 @@ object FcmService {
                     it[FcmConfigs.messagingSenderId] = messagingSenderId
                     it[FcmConfigs.serviceAccountJson] = finalJson
                     it[FcmConfigs.vapidKey] = vapidKey
+                    it[FcmConfigs.appleAppId] = appleAppId
+                    it[FcmConfigs.appleApiKey] = appleApiKey
                     it[FcmConfigs.updatedAt] = now
                 }
             }
@@ -289,6 +299,9 @@ object FcmService {
     "notification": { "title": "$escapedTitle", "body": "$escapedBody" },
     "android": {
       "notification": { "click_action": "FLUTTER_NOTIFICATION_CLICK", "sound": "default" }
+    },
+    "apns": {
+      "payload": { "aps": { "sound": "default" } }
     },
     "data": { $dataJson }
   }

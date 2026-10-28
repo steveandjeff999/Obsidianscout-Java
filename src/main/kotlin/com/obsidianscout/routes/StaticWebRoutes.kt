@@ -247,6 +247,7 @@ fun Route.staticWebRoutes() {
             "qr-scanner" to "qr-scanner.html",
             "cache-manager" to "cache-manager.html",
             "banners" to "banners.html",
+            "event-info" to "event-info.html",
             "chat" to "chat.html",
             "docs" to "docs.html",
             "contact" to "contact.html",

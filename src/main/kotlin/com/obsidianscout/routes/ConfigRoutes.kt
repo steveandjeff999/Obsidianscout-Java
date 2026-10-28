@@ -17,6 +17,7 @@ import com.obsidianscout.auth.AuthService
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.requireAdmin
+import com.obsidianscout.auth.requireAdminOrPage
 import com.obsidianscout.auth.requireAnalyticsOrAbove
 import com.obsidianscout.auth.requireSession
 import com.obsidianscout.auth.requireSuperAdmin
@@ -216,13 +217,13 @@ fun Route.configRoutes() {
                     call.respond(presets)
                 }
                 post("/apply-default") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val request = call.receive<ApplyDefaultConfigRequest>()
                     val updated = ConfigService.applyDefaultConfig(session.teamNumber, session.program, request.configType, request.presetName)
                     call.respond(updated)
                 }
                 post("/reset") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val request = call.receive<ResetConfigRequest>()
                     val updated = ConfigService.resetToDefaultConfig(session.teamNumber, session.program, request.configType)
                     call.respond(updated)
@@ -271,7 +272,7 @@ fun Route.configRoutes() {
                     call.respondText(raw, ContentType.Application.Json)
                 }
                 put {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val request = call.receive<ConfigUpdateRequest>()
                     val oldConfig = runCatching { ConfigService.getConfig(session.teamNumber, session.program, local = true) }.getOrNull()
                     ConfigService.requireNoBlankOptionValues(request.configJson)
@@ -342,7 +343,7 @@ fun Route.configRoutes() {
                     call.respondText(raw, ContentType.Application.Json)
                 }
                 put {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val request = call.receive<ConfigUpdateRequest>()
                     val oldConfig = runCatching { ConfigService.getPitConfig(session.teamNumber, session.program, local = true) }.getOrNull()
                     ConfigService.requireNoBlankOptionValues(request.configJson)
@@ -413,7 +414,7 @@ fun Route.configRoutes() {
                     call.respondText(raw, ContentType.Application.Json)
                 }
                 put {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val request = call.receive<ConfigUpdateRequest>()
                     val oldConfig = runCatching { ConfigService.getQualitativeConfig(session.teamNumber, session.program, local = true) }.getOrNull()
                     ConfigService.requireNoBlankOptionValues(request.configJson)
@@ -443,19 +444,19 @@ fun Route.configRoutes() {
 
             route("/config-migration") {
                 get("/status") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val kind = call.request.queryParameters["kind"] ?: "game"
                     val status = ConfigMigrationService.getSchemaStatus(session.teamNumber, session.program, kind)
                     call.respond(status)
                 }
                 post("/preview") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val request = call.receive<ConfigMigrationRequest>()
                     val preview = ConfigMigrationService.previewMigration(session.teamNumber, session.program, request)
                     call.respond(preview)
                 }
                 post("/apply") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val request = call.receive<ConfigMigrationRequest>()
                     val result = ConfigMigrationService.applyMigration(session.teamNumber, session.program, request)
                     call.respond(result)
@@ -464,20 +465,20 @@ fun Route.configRoutes() {
 
             route("/config-history") {
                 get {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val kind = call.request.queryParameters["kind"] ?: "game"
                     val revisions = ConfigMigrationService.listRevisions(session.teamNumber, session.program, kind)
                     call.respond(revisions)
                 }
                 get("/{id}") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val id = call.parameters["id"] ?: throw IllegalArgumentException("Missing revision id")
                     val revision = ConfigMigrationService.getRevision(id, session.teamNumber, session.program)
                         ?: throw ApiException(HttpStatusCode.NotFound, "Revision not found")
                     call.respond(revision)
                 }
                 post("/{id}/restore") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val id = call.parameters["id"] ?: throw IllegalArgumentException("Missing revision id")
                     val result = ConfigMigrationService.restoreRevision(id, session.teamNumber, session.program, session.username)
                     call.respond(result)
@@ -546,10 +547,18 @@ fun Route.configRoutes() {
                             )
                         }
                     }
-                    call.respond(SettingsResponse(if (session.publicView) settings.toPublicPayload() else settings.toPayload()))
+                    val payload = when {
+                        session.publicView -> settings.toPublicPayload()
+                        // A CUSTOM user only learns their own pages, never anyone else's.
+                        session.role == UserRole.CUSTOM -> settings.toPayload().copy(
+                            customPages = SettingsService.customPagesFor(session.teamNumber, session.program, session.userId)
+                        )
+                        else -> settings.toPayload()
+                    }
+                    call.respond(SettingsResponse(payload))
                 }
                 put {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val payload = call.receive<ApiSettingsPayload>()
                     val targetProgram = if (payload.program.isNotBlank()) payload.program else session.program
                     // Pages that save only part of the settings don't send selfRegisterRoles; keep the saved value then.
@@ -591,12 +600,12 @@ fun Route.configRoutes() {
                     call.respond(SettingsResponse(updated.toPayload()))
                 }
                 post("/dismiss-wizard") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val updated = SettingsService.dismissSetupWizard(session.teamNumber, session.program)
                     call.respond(SettingsResponse(updated.toPayload()))
                 }
                 post("/test-api") {
-                    val session = call.requireAdmin()
+                    val session = call.requireAdminOrPage("admin-settings")
                     val request = call.receive<TestApiRequest>()
                     val response = IntegrationService.testApiKey(session, request)
                     call.respond(response)

@@ -4,7 +4,7 @@
  */
 
 import { safeGetItem, safeSetItem } from '../base/storage.js';
-import { isAdmin, isSuperAdmin } from '../base/auth.js';
+import { isAdmin, isSuperAdmin, allowedPagesForRole, PAGE_LIST_ROLES, canUseAdminPage } from '../base/auth.js';
 import { wireThemeToggle } from './theme.js';
 import { isPublicMode } from '../base/public-mode.js';
 
@@ -184,6 +184,7 @@ export const PAGE_SEARCH_KEYWORDS = {
     "users": ["accounts", "roster", "roles", "permissions", "team members", "usuarios"],
     "chat": ["messages", "team chat", "conversations", "mensajes"],
     "assistant": ["ai", "local ai", "zachary", "bot", "scouting assistant", "llm", "asistente", "ia"],
+    "event-info": ["announcements", "event info", "files", "documents", "photos", "pit map", "schedule", "informacion del evento"],
     "banners": ["announcements", "notifications", "alerts", "notice", "avisos"],
     "shared-links": ["public links", "external sharing", "enlaces compartidos"],
     "admin-settings": ["admin", "system settings", "permissions", "security", "configuracion de admin"],
@@ -247,7 +248,7 @@ export function adjustNavForRole(user) {
 
     // Hide Admin-only links for SCOUT and ANALYTICS
     if (!isAdmin(role)) {
-        ["users", "scouter-report", "assignments", "banners", "admin-settings", "default-configs"].forEach((page) => {
+        ["users", "scouter-report", "assignments", "banners", "admin-settings", "default-configs"].filter((page) => !canUseAdminPage(role, page)).forEach((page) => {
             document.querySelectorAll(`.sidebar-link[data-page="${page}"]`).forEach((link) => {
                 link.dataset.roleHidden = "true";
                 link.style.display = "none";
@@ -256,13 +257,13 @@ export function adjustNavForRole(user) {
     }
 
     // Hide links based on dynamic role permissions list
-    if (role === "SCOUT" || role === "ANALYTICS" || role === "ADMIN") {
+    if (PAGE_LIST_ROLES.includes(role)) {
         try {
             const settingsText = safeGetItem("cache:/api/settings");
             if (settingsText) {
                 const parsed = JSON.parse(settingsText);
                 const settings = parsed.settings || parsed;
-                const allowedPages = role === "SCOUT" ? settings.scoutPages : (role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
+                const allowedPages = allowedPagesForRole(role, settings);
                 if (allowedPages && Array.isArray(allowedPages)) {
                     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {
                         const page = link.dataset.page;
@@ -347,7 +348,7 @@ export function isPageAccessible(page, role) {
     }
     if (bypassPages.includes(page)) return true;
 
-    if (["users", "banners", "admin-settings", "default-configs", "assignments"].includes(page) && !isAdmin(role)) {
+    if (["users", "banners", "admin-settings", "default-configs", "assignments"].includes(page) && !canUseAdminPage(role, page)) {
         return false;
     }
     if ((page === "migration" || page === "default-configs") && !isSuperAdmin(role)) {
@@ -359,7 +360,7 @@ export function isPageAccessible(page, role) {
         if (settingsText) {
             const parsed = JSON.parse(settingsText);
             const settings = parsed.settings || parsed;
-            const allowedPages = role === "SCOUT" ? settings.scoutPages : (role === "ANALYTICS" ? settings.analyticsPages : settings.adminPages);
+            const allowedPages = allowedPagesForRole(role, settings);
             if (allowedPages && Array.isArray(allowedPages)) {
                 if (page === "cache-manager" && (allowedPages.includes("cache-manager") || allowedPages.includes("scout-history") || allowedPages.includes("history"))) {
                     return true;

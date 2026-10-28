@@ -36,7 +36,9 @@ private suspend fun DefaultWebSocketServerSession.reject(reason: String) =
 fun Route.configCollabRoutes() {
     webSocket("/config-collab/team/{kind}") {
         val session = runCatching { call.requireSession() }.getOrNull() ?: return@webSocket reject("No session")
-        if (!session.role.isAtLeast(UserRole.ADMIN)) return@webSocket reject("Admin access required")
+        val canEditConfig = session.role.isAtLeast(UserRole.ADMIN) || (session.role == UserRole.CUSTOM &&
+            "admin-settings" in com.obsidianscout.integrations.SettingsService.customPagesFor(session.teamNumber, session.program, session.userId))
+        if (session.publicView || !canEditConfig) return@webSocket reject("Admin access required")
         val kind = ConfigCollabScope.normalizeKind(call.parameters["kind"]) ?: return@webSocket reject("Invalid config kind")
         val participant = CollabParticipant(
             sid = CollabParticipant.sanitizeSid(call.request.queryParameters["sid"]),

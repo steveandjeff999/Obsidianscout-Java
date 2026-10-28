@@ -793,6 +793,14 @@ object StorageManagementService {
                 (ChatGroups.teamNumber eq teamNumber) and ((ChatGroups.program eq progUpper) or (ChatGroups.program eq progLower))
             }.toLong()
 
+            // Delete Event Info (files first, they reference their post)
+            deletedRecords += EventInfoFiles.deleteWhere {
+                (EventInfoFiles.teamNumber eq teamNumber) and ((EventInfoFiles.program eq progUpper) or (EventInfoFiles.program eq progLower))
+            }.toLong()
+            deletedRecords += EventInfoPosts.deleteWhere {
+                (EventInfoPosts.teamNumber eq teamNumber) and ((EventInfoPosts.program eq progUpper) or (EventInfoPosts.program eq progLower))
+            }.toLong()
+
             // Delete Team Settings
             deletedRecords += AppSettings.deleteWhere {
                 (AppSettings.teamNumber eq teamNumber) and ((AppSettings.program eq progUpper) or (AppSettings.program eq progLower))
@@ -808,7 +816,7 @@ object StorageManagementService {
         consoleLog.info("[StorageManagement] DELETED entire dataset for Team $teamNumber ($program): $deletedRecords records permanently deleted.")
         return StorageActionResultDto(
             success = true,
-            message = "Permanently deleted all scouting entries, configs, revisions, chat, and reports for Team $teamNumber ($program) ($deletedRecords records deleted).",
+            message = "Permanently deleted all scouting entries, configs, revisions, chat, event info, and reports for Team $teamNumber ($program) ($deletedRecords records deleted).",
             affectedRecords = deletedRecords
         )
     }

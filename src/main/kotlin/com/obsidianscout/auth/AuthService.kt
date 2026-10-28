@@ -50,6 +50,8 @@ enum class UserRole {
     SUPERADMIN,
     ADMIN,
     ANALYTICS,
+    /** Scout-level account whose pages are picked one by one by an admin (see [com.obsidianscout.integrations.ApiSettings.customUserPages]). */
+    CUSTOM,
     SCOUT;
 
     fun isAtLeast(required: UserRole): Boolean {
@@ -73,7 +75,9 @@ data class UserRecord(
     val bugReportPreference: String = "ask",
     val localAiEnabled: Boolean = false,
     val nonScoutingToolsEnabled: Boolean = false,
-    val lastLogin: String? = null
+    val lastLogin: String? = null,
+    /** For a CUSTOM user, the pages an admin picked (from the team settings); empty for other roles. */
+    val customPages: List<String> = emptyList()
 )
 
 @Serializable
@@ -296,7 +300,7 @@ object AuthService {
         sortBy: String? = null,
         sortDir: String? = null
     ): List<UserRecord> {
-        return readTransaction {
+        return withCustomPages(readTransaction {
             val query = when (callerSession.role) {
                 UserRole.SUPERADMIN -> {
                     val q = Users.selectAll().where { Users.username neq "Deleted User" }
@@ -357,6 +361,29 @@ object AuthService {
                 .orderBy(*orderPairs.toTypedArray())
                 .limit(limit).offset(offset.toLong())
                 .map { rowToUser(it) }
+        })
+    }
+
+    /**
+     * A CUSTOM user managing accounts may only hand out pages they have themselves; pages the target
+     * already had ([keptPages]) can stay even if the caller lacks them.
+     */
+    private fun requireCustomGrantWithin(requested: List<String>, callerPages: List<String>, keptPages: List<String>) {
+        val extra = com.obsidianscout.integrations.normalizeCustomPages(requested) - callerPages.toSet() - keptPages.toSet()
+        if (extra.isNotEmpty()) {
+            throw ApiException(HttpStatusCode.Forbidden, "You can only give pages you have yourself (not: ${extra.joinToString(", ")})")
+        }
+    }
+
+    /** Fills in [UserRecord.customPages] for CUSTOM users, reading each team's settings once. */
+    fun withCustomPages(users: List<UserRecord>): List<UserRecord> {
+        val byTeam = mutableMapOf<Pair<Int, String>, Map<String, List<String>>>()
+        return users.map { user ->
+            if (user.role != UserRole.CUSTOM) return@map user
+            val grants = byTeam.getOrPut(user.teamNumber to user.program) {
+                com.obsidianscout.integrations.SettingsService.getSettingsRaw(user.teamNumber, user.program).customUserPages
+            }
+            user.copy(customPages = com.obsidianscout.integrations.normalizeCustomPages(grants[user.id].orEmpty()))
         }
     }
 
@@ -373,7 +400,8 @@ object AuthService {
         password: String,
         program: String = callerSession.program,
         role: UserRole,
-        email: String? = null
+        email: String? = null,
+        customPages: List<String>? = null
     ): UserRecord {
         if (username.isBlank() || password.isBlank()) {
             throw ApiException(HttpStatusCode.BadRequest, "Username and password are required")
@@ -391,10 +419,17 @@ object AuthService {
             throw ApiException(HttpStatusCode.Forbidden, "Admins can only create users on their own team and program")
         }
 
+        callerSession.actingCustomPages?.let { callerPages ->
+            if (role == UserRole.ADMIN || role == UserRole.SUPERADMIN) {
+                throw ApiException(HttpStatusCode.Forbidden, "Custom users cannot create admin accounts")
+            }
+            if (role == UserRole.CUSTOM) requireCustomGrantWithin(customPages.orEmpty(), callerPages, emptyList())
+        }
+
         // Hash the password BEFORE opening a transaction so the slow CPU work
         // does not hold a HikariCP connection.
         val hash = hashPassword(password)
-        return transaction {
+        val created = transaction {
             val existing = Users
                 .selectAll().where { (Users.username eq username) and (Users.teamNumber eq teamNumber) and (Users.program eq program) }
                 .limit(1)
@@ -414,6 +449,10 @@ object AuthService {
             val row = Users.selectAll().where { Users.id eq id }.first()
             rowToUser(row)
         }
+        if (role == UserRole.CUSTOM) {
+            com.obsidianscout.integrations.SettingsService.setCustomUserPages(teamNumber, program, created.id, customPages.orEmpty())
+        }
+        return withCustomPages(listOf(created)).first()
     }
 
     /**
@@ -437,7 +476,8 @@ object AuthService {
         newNodeAlertsEnabled: Boolean? = null,
         newBugReportPreference: String? = null,
         newLocalAiEnabled: Boolean? = null,
-        newNonScoutingToolsEnabled: Boolean? = null
+        newNonScoutingToolsEnabled: Boolean? = null,
+        newCustomPages: List<String>? = null
     ): UserRecord {
         val targetUuid = runCatching { UUID.fromString(targetUserId) }.getOrElse {
             throw ApiException(HttpStatusCode.BadRequest, "Invalid user ID format")
@@ -453,7 +493,8 @@ object AuthService {
         val newHash = newPassword?.takeIf { it.isNotBlank() }
             ?.let { hashPassword(it) }
 
-        return transaction {
+        var customPagesChange: Pair<Boolean, UserRecord>? = null
+        val result = transaction {
             val targetRow = Users.selectAll().where { Users.id eq targetUuid }
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "User not found")
@@ -497,6 +538,34 @@ object AuthService {
                 }
             }
 
+            // Page picks are an admin's call, never the user's own.
+            if (newCustomPages != null && !callerSession.role.isAtLeast(UserRole.ADMIN)) {
+                throw ApiException(HttpStatusCode.Forbidden, "Only admins can choose a user's pages")
+            }
+
+            // A CUSTOM user given the Users page manages scout-level accounts only, and can't widen anyone's access
+            // (their own included) past what they have themselves.
+            callerSession.actingCustomPages?.let { callerPages ->
+                if (targetRole == UserRole.ADMIN || targetRole == UserRole.SUPERADMIN) {
+                    throw ApiException(HttpStatusCode.Forbidden, "Custom users cannot edit admin accounts")
+                }
+                if (newRole == UserRole.ADMIN || newRole == UserRole.SUPERADMIN) {
+                    throw ApiException(HttpStatusCode.Forbidden, "Custom users cannot grant admin roles")
+                }
+                if (newCustomPages != null) {
+                    val currentPages = com.obsidianscout.integrations.normalizeCustomPages(
+                        com.obsidianscout.integrations.SettingsService.getSettingsRaw(targetTeam, targetProgram).customUserPages[targetUserId].orEmpty()
+                    )
+                    if (isSelfUpdate) {
+                        if (com.obsidianscout.integrations.normalizeCustomPages(newCustomPages).toSet() != currentPages.toSet()) {
+                            throw ApiException(HttpStatusCode.Forbidden, "You cannot change your own pages")
+                        }
+                    } else {
+                        requireCustomGrantWithin(newCustomPages, callerPages, currentPages)
+                    }
+                }
+            }
+
             val targetTeamFinal = newTeamNumber ?: targetTeam
             val checkUsername = newUsername?.trim() ?: targetRow[Users.username]
 
@@ -524,7 +593,13 @@ object AuthService {
                 }
             }
 
-            Users.update({ Users.id eq targetUuid }) { stmt ->
+            // A request can change only the custom pages (kept in team settings), which leaves no column to update.
+            val changesUserRow = !newUsername.isNullOrBlank() || newHash != null || newRole != null || newEmail != null ||
+                newNotificationPreference != null || newNodeAlertsEnabled != null || newBugReportPreference != null ||
+                newLocalAiEnabled != null || newNonScoutingToolsEnabled != null ||
+                (newTeamNumber != null && callerSession.role == UserRole.SUPERADMIN) ||
+                clearProfilePicture || newProfilePicture != null || newTourProgress != null
+            if (changesUserRow) Users.update({ Users.id eq targetUuid }) { stmt ->
                 if (!newUsername.isNullOrBlank()) stmt[username] = newUsername.trim()
                 if (newHash != null)             stmt[passwordHash] = newHash
                 if (newRole != null)             stmt[role] = newRole.name
@@ -552,8 +627,26 @@ object AuthService {
                 // Role or Non-Scouting Tools changed: the user's widgets may need to appear or go away.
                 com.obsidianscout.widgets.WidgetPushService.notifyUsers(listOf(targetUuid.toString()), "access")
             }
-            rowToUser(updated)
+            val record = rowToUser(updated)
+            // Grants live in team settings, written after this transaction. Leaving CUSTOM drops them.
+            if (record.role == UserRole.CUSTOM && (newCustomPages != null || targetRole != UserRole.CUSTOM || newTeamNumber != null)) {
+                customPagesChange = true to record
+            } else if (record.role != UserRole.CUSTOM && targetRole == UserRole.CUSTOM) {
+                customPagesChange = false to record
+            }
+            record
         }
+        customPagesChange?.let { (isCustom, record) ->
+            val settingsService = com.obsidianscout.integrations.SettingsService
+            if (isCustom) {
+                val pages = newCustomPages ?: settingsService.getSettingsRaw(record.teamNumber, record.program).customUserPages[record.id].orEmpty()
+                settingsService.setCustomUserPages(record.teamNumber, record.program, record.id, pages)
+            } else {
+                settingsService.setCustomUserPages(record.teamNumber, record.program, record.id, null)
+            }
+            com.obsidianscout.widgets.WidgetPushService.notifyUsers(listOf(record.id), "access")
+        }
+        return withCustomPages(listOf(result)).first()
     }
 
     fun deleteUser(callerSession: UserSession, targetUserId: String) {
@@ -582,6 +675,9 @@ object AuthService {
                 }
                 if (targetRole == UserRole.SUPERADMIN) {
                     throw ApiException(HttpStatusCode.Forbidden, "Admins cannot delete superadmin accounts")
+                }
+                if (callerSession.actingCustomPages != null && targetRole == UserRole.ADMIN) {
+                    throw ApiException(HttpStatusCode.Forbidden, "Custom users cannot delete admin accounts")
                 }
             }
         }
@@ -656,6 +752,9 @@ object AuthService {
 
             // Delete the target user
             Users.deleteWhere { Users.id eq targetUuid }
+        }
+        if (targetRole == UserRole.CUSTOM) {
+            com.obsidianscout.integrations.SettingsService.setCustomUserPages(targetTeam, targetProgram, targetUserId, null)
         }
     }
 

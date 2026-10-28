@@ -397,6 +397,39 @@ object Banners : UUIDTable("banners") {
     val updatedAt = timestamp("updated_at")
 }
 
+/** Announcements a team's admins post on the Event Info page. A blank [eventKey] shows at every event. */
+object EventInfoPosts : UUIDTable("event_info_posts") {
+    val teamNumber = integer("team_number")
+    val program = varchar("program", 8).default("FRC")
+    val eventKey = varchar("event_key", 64).default("")
+    val title = varchar("title", 200).default("")
+    val body = text("body").default("")
+    val pinned = bool("pinned").default(false)
+    val authorUsername = varchar("author_username", 64)
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        index("idx_event_info_posts_team_program", false, teamNumber, program)
+    }
+}
+
+/** Images and files attached to an [EventInfoPosts] row. Stored base64 in the database so every cluster node can serve them. */
+object EventInfoFiles : UUIDTable("event_info_files") {
+    val postId = reference("post_id", EventInfoPosts)
+    val teamNumber = integer("team_number")
+    val program = varchar("program", 8).default("FRC")
+    val fileName = varchar("file_name", 255)
+    val contentType = varchar("content_type", 128)
+    val sizeBytes = long("size_bytes")
+    val data = text("data")
+    val createdAt = timestamp("created_at")
+
+    init {
+        index("idx_event_info_files_post", false, postId)
+    }
+}
+
 object ChatMessages : UUIDTable("chat_messages") {
     val teamNumber = integer("team_number")
     val program = varchar("program", 8).default("FRC")
@@ -456,6 +489,9 @@ object FcmConfigs : UUIDTable("fcm_config") {
     val apiKey = varchar("api_key", 128).default("")
     val appId = varchar("app_id", 128).default("")
     val messagingSenderId = varchar("messaging_sender_id", 128).default("")
+    /** The iOS app registered in the same Firebase project (GoogleService-Info.plist); the macOS build shares it. */
+    val appleAppId = varchar("apple_app_id", 128).default("")
+    val appleApiKey = varchar("apple_api_key", 128).default("")
     val serviceAccountJson = text("service_account_json").default("")
     val vapidKey = varchar("vapid_key", 255).default("")
     val enabled = bool("enabled").default(false)

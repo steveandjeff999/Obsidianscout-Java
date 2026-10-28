@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ObsidianScout | Event Info</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .ei-icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; }
+        .ei-composer textarea { min-height: 110px; resize: vertical; }
+        .ei-drop {
+            border: 2px dashed rgba(0,0,0,0.15);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            color: var(--muted);
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .ei-drop.dragover, .ei-drop:hover { border-color: var(--accent); background: var(--surface-2); }
+        body.theme-dark .ei-drop { border-color: rgba(255,255,255,0.15); }
+        .ei-pending { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .ei-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 10px; border-radius: 999px; font-size: 12px;
+            background: var(--surface-2); color: var(--ink);
+        }
+        .ei-chip button { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0; line-height: 1; }
+        .ei-chip button:hover { color: #dc3545; }
+        .ei-feed { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+        .ei-post { position: relative; }
+        .ei-post.pinned { border-left: 4px solid var(--accent); }
+        .ei-post-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+        .ei-post-title { margin: 0 0 4px; font-size: 18px; }
+        .ei-meta { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .ei-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+            background: #e0f2fe; color: #0369a1;
+        }
+        body.theme-dark .ei-badge { background: #0c4a6e; color: #e0f2fe; }
+        .ei-body { white-space: pre-wrap; word-break: break-word; margin: 12px 0 0; line-height: 1.5; }
+        .ei-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-top: 12px; }
+        .ei-images a { display: block; border-radius: 10px; overflow: hidden; background: var(--surface-2); aspect-ratio: 4 / 3; }
+        .ei-images img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .ei-files { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
+        .ei-file {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 12px; border-radius: 10px; background: var(--surface-2);
+        }
+        .ei-file a.ei-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); text-decoration: none; font-weight: 600; }
+        .ei-file a.ei-file-name:hover { text-decoration: underline; }
+        .ei-file-size { font-size: 12px; color: var(--muted); white-space: nowrap; }
+        .ei-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .ei-icon-btn {
+            cursor: pointer; background: transparent; border: 1px solid rgba(0,0,0,0.1); color: var(--muted);
+            padding: 6px 10px; border-radius: 8px; font-size: 13px; line-height: 1; transition: all 0.2s;
+        }
+        .ei-icon-btn:hover { background: var(--surface-2); color: var(--ink); border-color: var(--accent); }
+        .ei-icon-btn.danger:hover { color: #dc3545; border-color: #dc3545; background: rgba(220, 53, 69, 0.1); }
+        body.theme-dark .ei-icon-btn { border-color: rgba(255,255,255,0.1); }
+        .ei-image-remove { position: relative; }
+        .ei-image-remove .ei-icon-btn { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.55); color: #fff; border: 0; }
+        .ei-empty { text-align: center; padding: 32px 16px; color: var(--muted); }
+        .ei-lightbox {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none;
+            align-items: center; justify-content: center; z-index: 2000; padding: 16px;
+        }
+        .ei-lightbox.show { display: flex; }
+        .ei-lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+        .ei-lightbox button { position: absolute; top: 16px; right: 16px; }
+        @media (max-width: 600px) {
+            .ei-post-head { flex-direction: column; }
+            .ei-images { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="event-info">
+    <script>
+        // Every form on this page is sent by JS via fetch. Block native submits so a tap on a
+        // slow connection, before the page scripts load, cannot reload or POST the page.
+        document.addEventListener("submit", function(e) { e.preventDefault(); }, true);
+    </script>
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-2"></div>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div class="card">
+                <h1 data-i18n="event_info.title">Event Info</h1>
+                <p class="notice" id="ei-subtitle" data-i18n="event_info.subtitle">Announcements, images and files from your team's admins.</p>
+            </div>
+
+            <div id="ei-composer" class="card ei-composer hidden">
+                <h3 data-i18n="event_info.new_post">New Post</h3>
+                <form id="ei-form" class="form-grid">
+                    <div class="field">
+                        <label for="ei-title" data-i18n="event_info.post_title">Title</label>
+                        <input id="ei-title" type="text" maxlength="200" data-i18n-placeholder="event_info.placeholder_title" placeholder="e.g. Pit map and load-in times" />
+                    </div>
+                    <div class="field">
+                        <label for="ei-body" data-i18n="event_info.post_body">Announcement</label>
+                        <textarea id="ei-body" maxlength="20000" data-i18n-placeholder="event_info.placeholder_body" placeholder="Write an announcement for the team..."></textarea>
+                    </div>
+                    <div class="field">
+                        <label data-i18n="event_info.attachments">Images and files</label>
+                        <div id="ei-drop" class="ei-drop" tabindex="0" role="button">
+                            <span id="ei-drop-icon"></span>
+                            <span data-i18n="event_info.drop_hint">Drop files here or click to choose</span>
+                        </div>
+                        <input id="ei-files" type="file" multiple class="hidden" />
+                        <div id="ei-pending" class="ei-pending"></div>
+                    </div>
+                    <div class="field checkbox-field">
+                        <input id="ei-pinned" type="checkbox" />
+                        <label for="ei-pinned" data-i18n="event_info.pin">Pin to top</label>
+                    </div>
+                    <div class="field checkbox-field">
+                        <input id="ei-all-events" type="checkbox" />
+                        <label for="ei-all-events" data-i18n="event_info.all_events">Show at every event (not just the current one)</label>
+                    </div>
+                    <button class="btn dark" type="submit" id="ei-submit" data-i18n="event_info.btn_post">Post</button>
+                </form>
+            </div>
+
+            <div id="ei-feed" class="ei-feed">
+                <div class="card ei-empty" data-i18n="event_info.loading">Loading...</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Edit modal -->
+    <div id="ei-edit-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="ei-edit-title-heading">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 class="modal-title" id="ei-edit-title-heading" data-i18n="event_info.edit_post">Edit Post</h2>
+                <button type="button" class="modal-close" id="ei-edit-close" aria-label="Close">&#x2715;</button>
+            </div>
+            <form id="ei-edit-form" class="form-grid">
+                <div class="field">
+                    <label for="ei-edit-title" data-i18n="event_info.post_title">Title</label>
+                    <input id="ei-edit-title" type="text" maxlength="200" />
+                </div>
+                <div class="field">
+                    <label for="ei-edit-body" data-i18n="event_info.post_body">Announcement</label>
+                    <textarea id="ei-edit-body" rows="6" maxlength="20000"></textarea>
+                </div>
+                <div class="field">
+                    <label data-i18n="event_info.attachments">Images and files</label>
+                    <ul id="ei-edit-existing" class="ei-files"></ul>
+                    <button type="button" class="btn secondary mt-12" id="ei-edit-add-files" data-i18n="event_info.add_files">Add files</button>
+                    <input id="ei-edit-files" type="file" multiple class="hidden" />
+                    <div id="ei-edit-pending" class="ei-pending"></div>
+                </div>
+                <div class="field checkbox-field">
+                    <input id="ei-edit-pinned" type="checkbox" />
+                    <label for="ei-edit-pinned" data-i18n="event_info.pin">Pin to top</label>
+                </div>
+                <div class="field checkbox-field">
+                    <input id="ei-edit-all-events" type="checkbox" />
+                    <label for="ei-edit-all-events" data-i18n="event_info.all_events">Show at every event (not just the current one)</label>
+                </div>
+                <div class="row gap-12 mt-20" style="justify-content: flex-end;">
+                    <button class="btn secondary" type="button" id="ei-edit-cancel" data-i18n="common.cancel">Cancel</button>
+                    <button class="btn dark" type="submit" id="ei-edit-save" data-i18n="event_info.btn_save">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="ei-lightbox" class="ei-lightbox" role="dialog" aria-modal="true">
+        <button type="button" class="btn secondary" id="ei-lightbox-close" aria-label="Close">&#x2715;</button>
+        <img id="ei-lightbox-img" alt="" />
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script defer src="/js/event-info.js"></script>
+</body>
+</html>

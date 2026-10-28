@@ -90,8 +90,8 @@ class AssignmentShiftsTest {
             it[compLevel] = "qm"
             it[matchNumber] = number
             it[scheduledTime] = ZonedDateTime.of(shiftDay, localTime, zone).toEpochSecond()
-            it[redTeams] = "frc1,frc2,frc3"
-            it[blueTeams] = "frc4,frc5,frc6"
+            it[redTeams] = """["frc1","frc2","frc3"]"""
+            it[blueTeams] = """["frc4","frc5","frc6"]"""
             it[dataJson] = "{}"
             it[updatedAt] = Instant.now()
         }
@@ -183,6 +183,73 @@ class AssignmentShiftsTest {
         assertFailsWith<ApiException> { ScoutingAssignmentService.saveShift(admin, request(scouts)) }
         assertFailsWith<ApiException> { ScoutingAssignmentService.saveShift(admin, request(qualMode = "ALLIANCE", qual = scouts.take(3))) }
         assertFailsWith<ApiException> { ScoutingAssignmentService.saveShift(admin, request(match = listOf(scouts[0]), qual = listOf(scouts[0]))) }
+    }
+
+    private fun playMatch(number: Int, localTime: LocalTime) = transaction {
+        ApiMatches.update({ ApiMatches.matchKey eq "${eventKey}_qm$number" }) {
+            it[actualTime] = ZonedDateTime.of(shiftDay, localTime, zone).toEpochSecond()
+        }
+    }
+
+    private fun shift(match: List<String>, start: String, end: String) =
+        SaveAssignmentShiftRequest(eventKey = eventKey, day = shiftDay.toString(), startTime = start, endTime = end, matchScouterIds = match)
+
+    @Test
+    fun matchesFollowScheduleDriftIntoTheShiftThatWillScoutThem() {
+        val admin = admin()
+        val morning = listOf(addUser("am1"), addUser("am2"))
+        val midday = listOf(addUser("mid1"), addUser("mid2"))
+        addMatch(1, LocalTime.of(8, 30))
+        addMatch(2, LocalTime.of(9, 50))
+        addMatch(3, LocalTime.of(10, 10))
+        ScoutingAssignmentService.saveShift(admin, shift(morning, "08:00", "10:00"))
+        ScoutingAssignmentService.saveShift(admin, shift(midday, "10:00", "12:00"))
+        val morningSeats = mapOf(slot(1, "RED") to morning[0], slot(2, "RED") to morning[1])
+        val middaySeats = mapOf(slot(1, "RED") to midday[0], slot(2, "RED") to midday[1])
+        assertEquals(morningSeats, seats(2, "MATCH"))
+        assertEquals(middaySeats, seats(3, "MATCH"))
+
+        // Running 25 minutes behind: qm2 now starts around 10:15, when the midday shift is scouting
+        playMatch(1, LocalTime.of(8, 55))
+        ScoutingAssignmentService.applyShiftsAfterSync("FRC", listOf(eventKey))
+        assertEquals(morningSeats, seats(1, "MATCH"))
+        assertEquals(middaySeats, seats(2, "MATCH"))
+        assertEquals(middaySeats, seats(3, "MATCH"))
+
+        // Then 30 minutes ahead: qm2 and qm3 both land back in the morning
+        playMatch(1, LocalTime.of(8, 0))
+        ScoutingAssignmentService.applyShiftsAfterSync("FRC", listOf(eventKey))
+        assertEquals(morningSeats, seats(2, "MATCH"))
+        assertEquals(morningSeats, seats(3, "MATCH"))
+    }
+
+    @Test
+    fun driftLeavesStartedAndHandMadeAssignmentsAlone() {
+        val admin = admin()
+        val morning = addUser("am1")
+        val midday = addUser("mid1")
+        val helper = addUser("helper")
+        addMatch(1, LocalTime.of(8, 30))
+        addMatch(2, LocalTime.of(9, 50))
+        ScoutingAssignmentService.saveShift(admin, shift(listOf(morning), "08:00", "10:00"))
+        ScoutingAssignmentService.saveShift(admin, shift(listOf(midday, ""), "10:00", "12:00"))
+        // Red 2 of qm2 is covered by hand, and red 1 has already been started
+        ScoutingAssignmentService.createAssignment(
+            admin,
+            CreateAssignmentRequest(
+                assignedUserId = helper, assignmentType = "MATCH", eventKey = eventKey,
+                matchKey = "${eventKey}_qm2", matchNumber = 2, targetTeamNumber = 2, allianceColor = "RED"
+            )
+        )
+        transaction {
+            ScoutingAssignments.update({ (ScoutingAssignments.matchNumber eq 2) and (ScoutingAssignments.targetTeamNumber eq 1) }) {
+                it[status] = "IN_PROGRESS"
+            }
+        }
+
+        playMatch(1, LocalTime.of(8, 55))
+        ScoutingAssignmentService.applyShiftsAfterSync("FRC", listOf(eventKey))
+        assertEquals(mapOf(slot(1, "RED") to morning, slot(2, "RED") to helper), seats(2, "MATCH"))
     }
 
     @Test
