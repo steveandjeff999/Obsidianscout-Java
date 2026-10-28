@@ -290,6 +290,16 @@ import {
 } from './utilities/wake-lock.js';
 
 import {
+    showSubmitReview,
+    buildReviewSections,
+    reviewRowForField,
+    isReviewBeforeSubmitEnabled,
+    confirmOpenSubmitReview,
+    phaseTitle as reviewPhaseTitle,
+    reviewActionLabel
+} from './components/submit-review.js';
+
+import {
     processImageUpload,
     isWebpSupported
 } from './utilities/media.js';
@@ -337,6 +347,13 @@ window.Obsidianscout = {
     triggerHaptic,
     keepScreenAwake,
     releaseScreenAwake,
+    showSubmitReview,
+    buildReviewSections,
+    reviewRowForField,
+    isReviewBeforeSubmitEnabled,
+    confirmOpenSubmitReview,
+    reviewPhaseTitle,
+    reviewActionLabel,
     setUserBadge,
     refreshNavAvatar,
     setActiveNav,
@@ -497,6 +514,13 @@ export {
     triggerHaptic,
     keepScreenAwake,
     releaseScreenAwake,
+    showSubmitReview,
+    buildReviewSections,
+    reviewRowForField,
+    isReviewBeforeSubmitEnabled,
+    confirmOpenSubmitReview,
+    reviewPhaseTitle,
+    reviewActionLabel,
     setUserBadge,
     refreshNavAvatar,
     setActiveNav,

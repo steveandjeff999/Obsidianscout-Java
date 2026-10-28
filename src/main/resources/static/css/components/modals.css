@@ -118,3 +118,115 @@ body.theme-dark .modal-container {
     }
 }
 
+/* Pre-submit review modal (js/components/submit-review.js) */
+.submit-review-modal {
+    width: min(620px, 94vw);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 24px;
+}
+
+.submit-review-modal .modal-header {
+    margin-bottom: 4px;
+}
+
+.submit-review-modal .modal-footer {
+    margin-top: 16px;
+}
+
+.submit-review-subtitle {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.submit-review-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.submit-review-chip {
+    padding: 5px 10px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.submit-review-chip-label {
+    color: var(--muted);
+    font-weight: 500;
+    margin-right: 6px;
+}
+
+.submit-review-body {
+    overflow-y: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 4px 2px 8px;
+}
+
+.submit-review-section-title {
+    margin: 14px 0 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.submit-review-rows {
+    margin: 0;
+}
+
+.submit-review-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 5px 0;
+    font-size: 14px;
+}
+
+.submit-review-row dt {
+    color: var(--ink);
+    margin: 0;
+}
+
+.submit-review-row dd {
+    margin: 0;
+    text-align: right;
+    font-weight: 700;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+    max-width: 55%;
+}
+
+.submit-review-row.is-blank dt,
+.submit-review-row.is-blank dd {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+@media (max-width: 600px) {
+    .submit-review-backdrop {
+        align-items: flex-end;
+    }
+
+    .submit-review-modal {
+        width: 100vw;
+        max-height: 88vh;
+        border-radius: 20px 20px 0 0;
+        padding: 18px 16px calc(16px + env(safe-area-inset-bottom));
+    }
+
+    .submit-review-modal .modal-footer .btn {
+        flex: 1;
+    }
+}

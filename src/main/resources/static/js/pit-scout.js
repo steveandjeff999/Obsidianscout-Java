@@ -91,9 +91,20 @@ async function loadPitScoutPageData(me) {
             });
         }
 
+        // Pre-submit review used by Save, Save on device, Export JSON and Generate QR.
+        async function reviewPitEntry(payload, action) {
+            if (!Obsidianscout.isReviewBeforeSubmitEnabled()) return true;
+            return Obsidianscout.showSubmitReview({
+                title: t('review.pit_title', 'Review Pit Entry'),
+                chips: [{ label: t('review.team', 'Team'), value: payload.targetTeamNumber }],
+                sections: Obsidianscout.buildReviewSections(config.fields, payload),
+                action
+            });
+        }
+
         const exportJsonBtn = document.getElementById("pit-export-json");
         if (exportJsonBtn) {
-            exportJsonBtn.addEventListener("click", () => {
+            exportJsonBtn.addEventListener("click", async () => {
                 if (!teamSelect.value) {
                     Obsidianscout.showToast("Select a team", "error");
                     return;
@@ -103,6 +114,7 @@ async function loadPitScoutPageData(me) {
                 payload.eventKey = eventKey;
                 payload.targetTeamNumber = Number(teamSelect.value);
                 payload.type = "pit-scout";
+                if (!(await reviewPitEntry(payload, "json"))) return;
 
                 const filename = `pit_${eventKey || 'event'}_team${payload.targetTeamNumber}.json`;
                 Obsidianscout.downloadJson(payload, filename);
@@ -125,7 +137,7 @@ async function loadPitScoutPageData(me) {
 
         const genQrBtn = document.getElementById("pit-gen-qr");
         if (genQrBtn) {
-            genQrBtn.addEventListener("click", () => {
+            genQrBtn.addEventListener("click", async () => {
                 if (!teamSelect.value) {
                     Obsidianscout.showToast("Select a team", "error");
                     return;
@@ -135,6 +147,7 @@ async function loadPitScoutPageData(me) {
                 payload.eventKey = eventKey;
                 payload.targetTeamNumber = Number(teamSelect.value);
                 payload.type = "pit-scout";
+                if (!(await reviewPitEntry(payload, "qr"))) return;
 
                 if (typeof Obsidianscout.clearDraft === 'function') {
                     Obsidianscout.clearDraft("pit-scout");
@@ -316,6 +329,8 @@ async function loadPitScoutPageData(me) {
 
             payload.eventKey = eventKey;
             payload.targetTeamNumber = Number(teamSelect.value);
+
+            if (!(await reviewPitEntry(payload, mode))) return;
 
             const result = await Obsidianscout.saveScoutingEntry({
                 kind: "pit-scouting",

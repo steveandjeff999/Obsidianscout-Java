@@ -729,9 +729,43 @@ async function loadQualScoutPageData(me) {
             });
         }
 
+        // Pre-submit review used by Save, Save on device, Export JSON and Generate QR.
+        // Team scope reviews one entry; alliance scope gets one section per team.
+        async function reviewQualTeamEntry(payload, action) {
+            if (!Obsidianscout.isReviewBeforeSubmitEnabled()) return true;
+            const selectedMatch = matchSelect.selectedOptions[0];
+            return Obsidianscout.showSubmitReview({
+                title: t('review.qual_title', 'Review Qualitative Entry'),
+                chips: [
+                    { label: t('review.team', 'Team'), value: payload.targetTeamNumber },
+                    { label: t('review.match', 'Match'), value: selectedMatch ? selectedMatch.textContent.trim() : payload.matchKey }
+                ],
+                sections: Obsidianscout.buildReviewSections(config.fields, payload),
+                action
+            });
+        }
+
+        async function reviewQualAllianceEntries(entries, action) {
+            if (!Obsidianscout.isReviewBeforeSubmitEnabled()) return true;
+            const allianceMatch = matchSelect.selectedOptions[0];
+            const teamLabel = t('review.team', 'Team');
+            return Obsidianscout.showSubmitReview({
+                title: t('review.qual_title', 'Review Qualitative Entry'),
+                chips: [
+                    { label: t('review.teams', 'Teams'), value: entries.map(e => e.targetTeamNumber).join(", ") },
+                    { label: t('review.match', 'Match'), value: allianceMatch ? allianceMatch.textContent.trim() : matchSelect.value }
+                ],
+                sections: entries.map(entry => ({
+                    title: `${teamLabel} ${entry.targetTeamNumber}`,
+                    rows: Obsidianscout.buildReviewSections(config.fields, entry).flatMap(s => s.rows)
+                })),
+                action
+            });
+        }
+
         const exportJsonBtn = document.getElementById("scout-export-json");
         if (exportJsonBtn) {
-            exportJsonBtn.addEventListener("click", () => {
+            exportJsonBtn.addEventListener("click", async () => {
                 if (currentScope === "team") {
                     if (!teamSelect.value || !matchSelect.value) {
                         Obsidianscout.showToast("Select both a team and a match", "error");
@@ -746,6 +780,7 @@ async function loadQualScoutPageData(me) {
                     const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
                     payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
                     payload.type = "qual-scout";
+                    if (!(await reviewQualTeamEntry(payload, "json"))) return;
 
                     const filename = `qual_${eventKey || 'event'}_team${payload.targetTeamNumber}_match${payload.matchNumber || 'unknown'}.json`;
                     Obsidianscout.downloadJson(payload, filename);
@@ -770,6 +805,7 @@ async function loadQualScoutPageData(me) {
                     }
                     const entriesList = collectAllianceEntries();
                     if (!entriesList || !entriesList.length) return;
+                    if (!(await reviewQualAllianceEntries(entriesList, "json"))) return;
                     const selectedMatch = matches.find(m => m.matchKey === matchSelect.value);
                     const matchNumberRaw = selectedMatch ? selectedMatch.matchNumber : "";
                     const matchNum = matchNumberRaw ? Number(matchNumberRaw) : null;
@@ -803,7 +839,7 @@ async function loadQualScoutPageData(me) {
 
         const genQrBtn = document.getElementById("scout-gen-qr");
         if (genQrBtn) {
-            genQrBtn.addEventListener("click", () => {
+            genQrBtn.addEventListener("click", async () => {
                 if (currentScope === "team") {
                     if (!teamSelect.value || !matchSelect.value) {
                         Obsidianscout.showToast("Select both a team and a match", "error");
@@ -818,6 +854,7 @@ async function loadQualScoutPageData(me) {
                     const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
                     payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
                     payload.type = "qual-scout";
+                    if (!(await reviewQualTeamEntry(payload, "qr"))) return;
 
                     if (typeof Obsidianscout.clearDraft === 'function') {
                         Obsidianscout.clearDraft("qual-scout");
@@ -842,6 +879,7 @@ async function loadQualScoutPageData(me) {
                     }
                     const entriesList = collectAllianceEntries();
                     if (!entriesList || !entriesList.length) return;
+                    if (!(await reviewQualAllianceEntries(entriesList, "qr"))) return;
                     const selectedMatch = matches.find(m => m.matchKey === matchSelect.value);
                     const matchNumberRaw = selectedMatch ? selectedMatch.matchNumber : "";
                     const matchNum = matchNumberRaw ? Number(matchNumberRaw) : null;
@@ -918,6 +956,8 @@ async function loadQualScoutPageData(me) {
                 const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
                 payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
 
+                if (!(await reviewQualTeamEntry(payload, mode))) return;
+
                 const result = await Obsidianscout.saveScoutingEntry({
                     kind: "qual-scouting", entry: payload, mode, itemExtras, scoutName
                 });
@@ -942,6 +982,8 @@ async function loadQualScoutPageData(me) {
             }
             const entriesToSave = collectAllianceEntries();
             if (!entriesToSave || !entriesToSave.length) return;
+
+            if (!(await reviewQualAllianceEntries(entriesToSave, mode))) return;
 
             const result = await Obsidianscout.saveScoutingEntries({
                 kind: "qual-scouting",

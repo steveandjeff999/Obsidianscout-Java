@@ -206,6 +206,8 @@ async function loadScoutPageData(me) {
                 }
 
                 if (binding.actionType === 'submit') {
+                    // A second Submit press while the review is open confirms it.
+                    if (Obsidianscout.confirmOpenSubmitReview()) return;
                     const submitBtn = document.getElementById("scout-submit");
                     if (submitBtn && !submitBtn.disabled) submitBtn.click();
                     return;
@@ -304,9 +306,38 @@ async function loadScoutPageData(me) {
             });
         }
 
+        // Pre-submit review used by Save, Save on device, Export JSON and Generate QR.
+        // Resolves true when the scout confirms (or when review is turned off in settings).
+        async function reviewMatchEntry(payload, action) {
+            if (!Obsidianscout.isReviewBeforeSubmitEnabled()) return true;
+            const selectedMatch = matchSelect.selectedOptions[0];
+            const total = pointsPreview && pointsPreview.total ? pointsPreview.total.textContent.trim() : "";
+            const chips = [
+                { label: t('review.team', 'Team'), value: payload.targetTeamNumber },
+                { label: t('review.match', 'Match'), value: selectedMatch ? selectedMatch.textContent.trim() : payload.matchKey }
+            ];
+            if (total && Number(total) !== 0) {
+                chips.push(
+                    { label: t('review.auto', 'Auto'), value: pointsPreview.auto ? pointsPreview.auto.textContent.trim() : "0" },
+                    { label: t('review.teleop', 'Teleop'), value: pointsPreview.teleop ? pointsPreview.teleop.textContent.trim() : "0" },
+                    { label: t('review.endgame', 'Endgame'), value: pointsPreview.endgame ? pointsPreview.endgame.textContent.trim() : "0" },
+                    { label: t('review.total_points', 'Total'), value: `${total} pts` }
+                );
+            }
+            return Obsidianscout.showSubmitReview({
+                title: t('review.match_title', 'Review Match Entry'),
+                chips,
+                sections: Obsidianscout.buildReviewSections(config.fields, payload, {
+                    groupOf: getFieldPhase,
+                    groupTitle: Obsidianscout.reviewPhaseTitle
+                }),
+                action
+            });
+        }
+
         const exportJsonBtn = document.getElementById("scout-export-json");
         if (exportJsonBtn) {
-            exportJsonBtn.addEventListener("click", () => {
+            exportJsonBtn.addEventListener("click", async () => {
                 if (!teamSelect.value || !matchSelect.value) {
                     Obsidianscout.showToast("Select both a team and a match", "error");
                     return;
@@ -320,6 +351,7 @@ async function loadScoutPageData(me) {
                 const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
                 payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
                 payload.type = "scout";
+                if (!(await reviewMatchEntry(payload, "json"))) return;
 
                 const filename = `scout_${eventKey || 'event'}_team${payload.targetTeamNumber}_match${payload.matchNumber || 'unknown'}.json`;
                 Obsidianscout.downloadJson(payload, filename);
@@ -342,7 +374,7 @@ async function loadScoutPageData(me) {
 
         const genQrBtn = document.getElementById("scout-gen-qr");
         if (genQrBtn) {
-            genQrBtn.addEventListener("click", () => {
+            genQrBtn.addEventListener("click", async () => {
                 if (!teamSelect.value || !matchSelect.value) {
                     Obsidianscout.showToast("Select both a team and a match", "error");
                     return;
@@ -356,6 +388,7 @@ async function loadScoutPageData(me) {
                 const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
                 payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
                 payload.type = "scout";
+                if (!(await reviewMatchEntry(payload, "qr"))) return;
 
                 if (typeof Obsidianscout.clearDraft === 'function') {
                     Obsidianscout.clearDraft("match-scout");
@@ -633,6 +666,8 @@ async function loadScoutPageData(me) {
             const selectedMatch = matchSelect.value ? matchSelect.selectedOptions[0] : null;
             const matchNumberRaw = selectedMatch ? selectedMatch.dataset.matchNumber : "";
             payload.matchNumber = matchNumberRaw ? Number(matchNumberRaw) : null;
+
+            if (!(await reviewMatchEntry(payload, mode))) return;
 
             const result = await Obsidianscout.saveScoutingEntry({
                 kind: "match-scouting",

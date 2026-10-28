@@ -412,6 +412,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalReviewBeforeSubmitPrefWidget() {
+        const pref = document.getElementById("personal-review-before-submit-pref");
+        if (!pref) return;
+
+        pref.value = Obsidianscout.safeGetItem("obsidianscout:review_before_submit") || "enabled";
+
+        pref.addEventListener("change", (e) => {
+            Obsidianscout.safeSetItem("obsidianscout:review_before_submit", e.target.value);
+            Obsidianscout.showToast("Personal settings saved", "success");
+        });
+    }
+
     function wirePersonalKeepScreenOnPrefWidget() {
         const pref = document.getElementById("personal-keep-screen-on-pref");
         if (!pref) return;
@@ -905,6 +917,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalDeleteAccountWidget(me);
     wirePersonalHapticPrefWidget();
     wirePersonalKeepScreenOnPrefWidget();
+    wirePersonalReviewBeforeSubmitPrefWidget();
     wireLowBandwidthPrefWidget();
     wirePersonalNavLayoutWidget();
     wirePersonalTutorialPrefWidget(me);

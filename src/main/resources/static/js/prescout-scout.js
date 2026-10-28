@@ -251,11 +251,33 @@ async function initPrescoutScout(me) {
             return payload;
         }
 
+        // Pre-submit review used by Save, Save on device, Export JSON and Generate QR.
+        async function reviewPrescoutEntry(payload, action) {
+            if (!Obsidianscout.isReviewBeforeSubmitEnabled()) return true;
+            const total = pointsPreview && pointsPreview.total ? pointsPreview.total.textContent.trim() : "";
+            const chips = [
+                { label: t('review.team', 'Team'), value: payload.targetTeamNumber },
+                { label: t('review.event', 'Event'), value: payload.eventKey },
+                { label: t('review.match', 'Match'), value: `Q${payload.matchNumber}` }
+            ];
+            if (total && Number(total) !== 0) chips.push({ label: t('review.total_points', 'Total'), value: `${total} pts` });
+            return Obsidianscout.showSubmitReview({
+                title: t('review.prescout_title', 'Review Prescout Entry'),
+                chips,
+                sections: Obsidianscout.buildReviewSections(config.fields, payload, {
+                    groupOf: getFieldPhase,
+                    groupTitle: Obsidianscout.reviewPhaseTitle
+                }),
+                action
+            });
+        }
+
         const exportJsonBtn = document.getElementById("scout-export-json");
         if (exportJsonBtn) {
-            exportJsonBtn.addEventListener("click", () => {
+            exportJsonBtn.addEventListener("click", async () => {
                 const payload = resolvePayload();
                 if (!payload) return;
+                if (!(await reviewPrescoutEntry(payload, "json"))) return;
 
                 const filename = `prescout_scout_${payload.eventKey}_team${payload.targetTeamNumber}_match${payload.matchNumber}.json`;
                 Obsidianscout.downloadJson(payload, filename);
@@ -275,9 +297,10 @@ async function initPrescoutScout(me) {
 
         const genQrBtn = document.getElementById("scout-gen-qr");
         if (genQrBtn) {
-            genQrBtn.addEventListener("click", () => {
+            genQrBtn.addEventListener("click", async () => {
                 const payload = resolvePayload();
                 if (!payload) return;
+                if (!(await reviewPrescoutEntry(payload, "qr"))) return;
 
                 Obsidianscout.showQrModal(payload, "Match Prescouting", payload.targetTeamNumber, payload.matchKey);
                 Obsidianscout.recordDeviceHistory({
@@ -321,6 +344,8 @@ async function initPrescoutScout(me) {
         async function savePrescoutEntry(mode) {
             const payload = resolvePayload();
             if (!payload) return;
+
+            if (!(await reviewPrescoutEntry(payload, mode))) return;
 
             const result = await Obsidianscout.saveScoutingEntry({
                 kind: "prescout-scouting",
