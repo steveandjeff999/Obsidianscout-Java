@@ -1,4 +1,5 @@
 {
+  "config.keep_screen_on": "Keep Screen On While Scouting",
   "app.update_available": "New version installed. Refresh to apply latest changes.",
   "admin.cluster_keys.btn": "Regenerate Cluster Keys",
   "admin.cluster_keys.desc": "Database-backed secret synchronization for CockroachDB clusters. Regenerating keys updates all nodes, syncs offline instances upon reconnection, and persists keys.",
@@ -1713,6 +1714,7 @@
   "nav.match_data": "Match Data",
   "nav.match_planning": "Match Planning",
   "nav.pick_list": "Pick List",
+  "nav.picklist": "Pick List",
   "pick_list.notice": "Rank the teams you want to pick. Teams on your Do Not Pick list from Alliance Selection are kept out of the ranking.",
   "pick_list.loading_events": "Loading events...",
   "pick_list.add_all": "Add all by score",
@@ -2861,6 +2863,7 @@
   "config.make_data_public_notes_hint": "Also adds Qual Rankings to your public pages.",
   "public.go_to_dashboard": "Go to your dashboard",
   "nav.event_info": "Event Info",
+  "nav.event-info": "Event Info",
   "event_info.title": "Event Info",
   "event_info.subtitle": "Announcements, images and files from your team's admins.",
   "event_info.subtitle_event": "Announcements, images and files for {event}.",

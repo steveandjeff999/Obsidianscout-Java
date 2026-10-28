@@ -1,4 +1,5 @@
 {
+  "config.keep_screen_on": "השאר את המסך דולק בזמן סקאוטינג",
   "app.update_available": "גרסה חדשה הותקנה. רענן כדי להחיל את השינויים האחרונים.",
   "admin.cluster_keys.btn": "צור מחדש מפתחות קלאסטר",
   "admin.cluster_keys.desc": "סנכרון סודות מבוסס מאגר נתונים עבור קלאסטרים של CockroachDB. יצירת מפתחות מחדש מעדכנת את כל הצמתים ומסנכרנת מופעים שאינם מקוונים.",
@@ -1713,6 +1714,7 @@
   "nav.match_data": "נתוני משחק",
   "nav.match_planning": "תכנון משחקים",
   "nav.pick_list": "רשימת בחירה",
+  "nav.picklist": "רשימת בחירה",
   "pick_list.notice": "דרגו את הקבוצות שתרצו לבחור. קבוצות ברשימת 'לא לבחור' מבחירת בריתות לא נכללות בדירוג.",
   "pick_list.loading_events": "טוען אירועים...",
   "pick_list.add_all": "הוסף הכל לפי ציון",
@@ -2783,6 +2785,7 @@
   "config.make_data_public_notes_hint": "מוסיף גם את הדירוג האיכותי לעמודים הציבוריים שלך.",
   "public.go_to_dashboard": "מעבר ללוח הבקרה שלך",
   "nav.event_info": "מידע על האירוע",
+  "nav.event-info": "מידע על האירוע",
   "event_info.title": "מידע על האירוע",
   "event_info.subtitle": "הודעות, תמונות וקבצים ממנהלי הקבוצה שלך.",
   "event_info.subtitle_event": "הודעות, תמונות וקבצים עבור {event}.",

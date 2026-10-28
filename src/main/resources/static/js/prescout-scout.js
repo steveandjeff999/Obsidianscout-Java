@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.adjustNavForRole(me);
     Obsidianscout.wireLogout();
     Obsidianscout.wireThemeToggle();
+    Obsidianscout.keepScreenAwake();
 
     mainContent = document.querySelector(".main-content");
     if (mainContent) {

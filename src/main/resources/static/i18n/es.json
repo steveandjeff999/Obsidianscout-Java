@@ -1,4 +1,5 @@
 {
+  "config.keep_screen_on": "Mantener la pantalla encendida al scoutear",
   "app.update_available": "Nueva versión instalada. Actualiza para aplicar los cambios más recientes.",
   "admin.cluster_keys.btn": "Regenerar Claves del Clúster",
   "admin.cluster_keys.desc": "Sincronización de secretos respaldada por base de datos para clústeres CockroachDB. Regenerar claves actualiza todos los nodos y sincroniza instancias.",
@@ -1713,6 +1714,7 @@
   "nav.match_data": "Datos de Match",
   "nav.match_planning": "Planificación de Partidos",
   "nav.pick_list": "Lista de Selección",
+  "nav.picklist": "Lista de Selección",
   "pick_list.notice": "Clasifica los equipos que quieres elegir. Los equipos de tu lista No Elegir de Selección de Alianzas quedan fuera de la clasificación.",
   "pick_list.loading_events": "Cargando eventos...",
   "pick_list.add_all": "Agregar todos por puntuación",
@@ -2783,6 +2785,7 @@
   "config.make_data_public_notes_hint": "También añade la Clasificación cualitativa a tus páginas públicas.",
   "public.go_to_dashboard": "Ir a tu panel",
   "nav.event_info": "Info del evento",
+  "nav.event-info": "Info del evento",
   "event_info.title": "Info del evento",
   "event_info.subtitle": "Anuncios, imágenes y archivos de los administradores de tu equipo.",
   "event_info.subtitle_event": "Anuncios, imágenes y archivos para {event}.",

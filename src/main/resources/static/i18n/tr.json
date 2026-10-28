@@ -1,4 +1,5 @@
 {
+  "config.keep_screen_on": "Scouting Sırasında Ekranı Açık Tut",
   "app.update_available": "Yeni sürüm yüklendi. En son değişiklikleri uygulamak için yenileyin.",
   "admin.cluster_keys.btn": "Küme Anahtarlarını Yeniden Oluştur",
   "admin.cluster_keys.desc": "CockroachDB kümeleri için veritabanı destekli gizli anahtar senkronizasyonu. Anahtarları yeniden oluşturmak tüm düğümleri günceller ve çevrimdışı örnekleri senkronize eder.",
@@ -1713,6 +1714,7 @@
   "nav.match_data": "Maç Verileri",
   "nav.match_planning": "Maç Planlama",
   "nav.pick_list": "Seçim Listesi",
+  "nav.picklist": "Seçim Listesi",
   "pick_list.notice": "Seçmek istediğiniz takımları sıralayın. İttifak Seçimi'ndeki Seçilmeyecekler listenizdeki takımlar sıralamaya alınmaz.",
   "pick_list.loading_events": "Etkinlikler yükleniyor...",
   "pick_list.add_all": "Tümünü puana göre ekle",
@@ -2783,6 +2785,7 @@
   "config.make_data_public_notes_hint": "Herkese açık sayfalarınıza Nitel Sıralamaları da ekler.",
   "public.go_to_dashboard": "Panonuza gidin",
   "nav.event_info": "Etkinlik Bilgisi",
+  "nav.event-info": "Etkinlik Bilgisi",
   "event_info.title": "Etkinlik Bilgisi",
   "event_info.subtitle": "Takım yöneticilerinizden duyurular, görseller ve dosyalar.",
   "event_info.subtitle_event": "{event} için duyurular, görseller ve dosyalar.",

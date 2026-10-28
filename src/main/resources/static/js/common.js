@@ -285,6 +285,11 @@ import {
 } from './utilities/haptics.js';
 
 import {
+    keepScreenAwake,
+    releaseScreenAwake
+} from './utilities/wake-lock.js';
+
+import {
     processImageUpload,
     isWebpSupported
 } from './utilities/media.js';
@@ -330,6 +335,8 @@ window.Obsidianscout = {
     requireAuth,
     showToast,
     triggerHaptic,
+    keepScreenAwake,
+    releaseScreenAwake,
     setUserBadge,
     refreshNavAvatar,
     setActiveNav,
@@ -488,6 +495,8 @@ export {
     requireAuth,
     showToast,
     triggerHaptic,
+    keepScreenAwake,
+    releaseScreenAwake,
     setUserBadge,
     refreshNavAvatar,
     setActiveNav,

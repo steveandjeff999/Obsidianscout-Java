@@ -412,6 +412,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function wirePersonalKeepScreenOnPrefWidget() {
+        const pref = document.getElementById("personal-keep-screen-on-pref");
+        if (!pref) return;
+
+        pref.value = Obsidianscout.safeGetItem("obsidianscout:keep_screen_on") || "enabled";
+
+        pref.addEventListener("change", (e) => {
+            Obsidianscout.safeSetItem("obsidianscout:keep_screen_on", e.target.value);
+            Obsidianscout.showToast("Personal settings saved", "success");
+        });
+    }
+
     function wirePersonalHapticPrefWidget() {
         const personalHapticPref = document.getElementById("personal-haptic-pref");
         if (!personalHapticPref) return;
@@ -892,6 +904,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalGamepadSettingsWidget();
     wirePersonalDeleteAccountWidget(me);
     wirePersonalHapticPrefWidget();
+    wirePersonalKeepScreenOnPrefWidget();
     wireLowBandwidthPrefWidget();
     wirePersonalNavLayoutWidget();
     wirePersonalTutorialPrefWidget(me);
