@@ -266,7 +266,11 @@ data class ObsidianDbBackup(
     val allianceSelections: List<AllianceSelectionBackupDto> = emptyList(),
     val pushSubscriptions: List<PushSubscriptionBackupDto> = emptyList(),
     val userChatLastReads: List<UserChatLastReadBackupDto> = emptyList(),
-    val passwordResetTokens: List<PasswordResetTokenBackupDto> = emptyList()
+    val passwordResetTokens: List<PasswordResetTokenBackupDto> = emptyList(),
+
+    // Slack (team settings; "entire" and global backups)
+    val slackIntegrations: List<com.obsidianscout.slack.SlackIntegrationBackupDto> = emptyList(),
+    val slackUserPreferences: List<com.obsidianscout.slack.SlackUserPreferenceBackupDto> = emptyList()
 )
 
 @Serializable
@@ -309,6 +313,8 @@ data class ImportReport(
     val chatLastReadsSkipped: Int = 0,
     val passwordResetTokensImported: Int = 0,
     val passwordResetTokensSkipped: Int = 0,
+    val slackIntegrationsImported: Int = 0,
+    val slackPreferencesImported: Int = 0,
     val message: String = ""
 )
 
@@ -342,6 +348,7 @@ object BackupService {
 
 
     fun exportBackup(teamNumber: Int, type: String, scope: String = "team", program: String = "FRC"): ObsidianDbBackup {
+        val slackKey = if (scope == "global" || type == "entire") com.obsidianscout.slack.SlackBackup.dataKey() else null
         return transaction {
             val userMap = Users.selectAll()
                 .associate { it[Users.id].value to Pair(it[Users.username], it[Users.teamNumber]) }
@@ -682,6 +689,14 @@ object BackupService {
                 }
             } else emptyList()
 
+            val slackTeam = if (scope == "global") null else teamNumber
+            val slackIntegrations = if (scope == "global" || type == "entire") {
+                com.obsidianscout.slack.SlackBackup.exportIntegrations(slackKey, slackTeam, program)
+            } else emptyList()
+            val slackUserPreferences = if (scope == "global" || type == "entire") {
+                com.obsidianscout.slack.SlackBackup.exportPreferences(slackTeam, program)
+            } else emptyList()
+
             ObsidianDbBackup(
                 teamNumber = teamNumber,
                 type = type,
@@ -705,12 +720,15 @@ object BackupService {
                 allianceSelections = allianceSelections,
                 pushSubscriptions = pushSubscriptions,
                 userChatLastReads = userChatLastReads,
-                passwordResetTokens = passwordResetTokens
+                passwordResetTokens = passwordResetTokens,
+                slackIntegrations = slackIntegrations,
+                slackUserPreferences = slackUserPreferences
             )
         }
     }
 
     fun importBackup(targetTeamNumber: Int, backup: ObsidianDbBackup, currentUserId: String, isSuperAdmin: Boolean = false, targetProgram: String = "FRC"): ImportReport {
+        val slackKey = if (backup.slackIntegrations.isNotEmpty()) com.obsidianscout.slack.SlackBackup.dataKey() else null
         return transaction {
             val isGlobalImport = isSuperAdmin && backup.scope == "global"
 
@@ -1354,6 +1372,21 @@ object BackupService {
                 }
             }
 
+            // 15. Slack connection and personal preferences (need the users imported above)
+            var slackIntegrationsImported = 0
+            var slackPreferencesImported = 0
+            if (backup.type == "entire") {
+                val slackUserId = { username: String, team: Int, program: String -> userMap[Triple(username, team, program)] }
+                if (slackKey != null) {
+                    slackIntegrationsImported = com.obsidianscout.slack.SlackBackup.importIntegrations(
+                        backup.slackIntegrations, slackKey, ::getTargetTeam, ::programFor, slackUserId
+                    )
+                }
+                slackPreferencesImported = com.obsidianscout.slack.SlackBackup.importPreferences(
+                    backup.slackUserPreferences, ::getTargetTeam, ::programFor, slackUserId
+                )
+            }
+
             ImportReport(
                 success = true,
                 type = backup.type,
@@ -1392,8 +1425,15 @@ object BackupService {
                 chatLastReadsSkipped = chatLastReadsSkipped,
                 passwordResetTokensImported = passwordResetTokensImported,
                 passwordResetTokensSkipped = passwordResetTokensSkipped,
+                slackIntegrationsImported = slackIntegrationsImported,
+                slackPreferencesImported = slackPreferencesImported,
                 message = "Backup imported successfully"
             )
+        }.also { report ->
+            if (report.slackIntegrationsImported > 0 || report.slackPreferencesImported > 0) {
+                com.obsidianscout.slack.SlackIntegrationService.clearAllCaches()
+                com.obsidianscout.slack.SlackSocketSupervisor.poke()
+            }
         }
     }
 
@@ -1609,6 +1649,19 @@ object BackupService {
                 listOf(t.username ?: "", t.teamNumber?.toString() ?: "", t.email ?: "", t.token, t.expiresAt.toString(), t.used.toString())
             }
             files["password_reset_tokens.csv"] = CSVHelper.toCSV(tokenHeaders, tokenRows)
+        }
+
+        if (backup.slackIntegrations.isNotEmpty()) {
+            files[com.obsidianscout.slack.SlackBackup.INTEGRATIONS_CSV] = CSVHelper.toCSV(
+                com.obsidianscout.slack.SlackBackup.integrationHeaders,
+                backup.slackIntegrations.map(com.obsidianscout.slack.SlackBackup::integrationRow)
+            )
+        }
+        if (backup.slackUserPreferences.isNotEmpty()) {
+            files[com.obsidianscout.slack.SlackBackup.PREFERENCES_CSV] = CSVHelper.toCSV(
+                com.obsidianscout.slack.SlackBackup.preferenceHeaders,
+                backup.slackUserPreferences.map(com.obsidianscout.slack.SlackBackup::preferenceRow)
+            )
         }
 
         val bos = ByteArrayOutputStream()
@@ -1907,6 +1960,13 @@ object BackupService {
             }
         } ?: emptyList()
 
+        val slackIntegrations = files[com.obsidianscout.slack.SlackBackup.INTEGRATIONS_CSV]?.let { content ->
+            CSVHelper.parseCSV(content).mapNotNull(com.obsidianscout.slack.SlackBackup::integrationFromCsv)
+        } ?: emptyList()
+        val slackUserPreferences = files[com.obsidianscout.slack.SlackBackup.PREFERENCES_CSV]?.let { content ->
+            CSVHelper.parseCSV(content).mapNotNull(com.obsidianscout.slack.SlackBackup::preferenceFromCsv)
+        } ?: emptyList()
+
         val isGlobal = isSuperAdmin && apiEvents.isNotEmpty()
         val backup = ObsidianDbBackup(
             teamNumber = targetTeamNumber,
@@ -1931,7 +1991,9 @@ object BackupService {
             allianceSelections = allianceSelections,
             pushSubscriptions = pushSubscriptions,
             userChatLastReads = userChatLastReads,
-            passwordResetTokens = passwordResetTokens
+            passwordResetTokens = passwordResetTokens,
+            slackIntegrations = slackIntegrations,
+            slackUserPreferences = slackUserPreferences
         )
 
         return importBackup(targetTeamNumber, backup, currentUserId, isSuperAdmin, targetProgram)

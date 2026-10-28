@@ -55,6 +55,46 @@ object ClusterSecretService {
         return if (current.isNull_or_blank()) ephemeralFallbackSecret else current
     }
 
+    private val dataEncryptionKeyRef = AtomicReference<String>("")
+
+    /**
+     * Key for encrypting stored third-party secrets (Slack tokens). Kept apart from the session secret on purpose:
+     * [regenerateClusterKeys] rotates that one, which would make every stored token unreadable. Created on first
+     * use and shared by every node through `cluster_secrets`. Throws if the database can't be reached.
+     */
+    fun getDataEncryptionKey(): String {
+        dataEncryptionKeyRef.get().takeIf { it.isNotBlank() }?.let { return it }
+        synchronized(dataEncryptionKeyRef) {
+            dataEncryptionKeyRef.get().takeIf { it.isNotBlank() }?.let { return it }
+            fun read() = com.obsidianscout.db.readTransaction {
+                ClusterSecrets.selectAll().where { ClusterSecrets.keyName eq DATA_ENCRYPTION_KEY }
+                    .firstOrNull()?.get(ClusterSecrets.keyValue)
+            }
+            val key = read()?.takeIf { it.isNotBlank() } ?: run {
+                // Another node may insert at the same moment; the unique index makes one of us lose, so read back.
+                runCatching {
+                    transaction {
+                        ClusterSecrets.insert {
+                            it[keyName] = DATA_ENCRYPTION_KEY
+                            it[keyValue] = AppConfigLoader.generateSecret()
+                            it[updatedAt] = Instant.now()
+                        }
+                    }
+                }
+                read() ?: error("Data encryption key unavailable")
+            }
+            dataEncryptionKeyRef.set(key)
+            return key
+        }
+    }
+
+    private const val DATA_ENCRYPTION_KEY = "data_encryption_key"
+
+    /** Drops the cached key so the next use rereads it (after a database restore may have replaced it). */
+    fun forgetDataEncryptionKey() {
+        dataEncryptionKeyRef.set("")
+    }
+
     fun getVapidPublicKey(): String = vapidPublicKeyRef.get() ?: ""
 
     fun getVapidPrivateKey(): String = vapidPrivateKeyRef.get() ?: ""

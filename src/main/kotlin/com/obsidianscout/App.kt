@@ -679,6 +679,8 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.db.QuorumFallbackStore.init(appConfig)
                 com.obsidianscout.db.QuorumFallbackStore.start()
                 com.obsidianscout.db.AutoBackupScheduler.start(appConfig)
+                com.obsidianscout.slack.SlackNotificationRelay.start()
+                com.obsidianscout.slack.SlackSocketSupervisor.start()
                 consoleLog.info("[Database] Background database initialization completed successfully.")
                 
                 // Mark update boot successful once startup completes
@@ -700,6 +702,8 @@ fun Application.module(appConfig: AppConfig) {
 
     environment.monitor.subscribe(ApplicationStopped) {
         com.obsidianscout.auth.SessionCleanupScheduler.stop()
+        com.obsidianscout.slack.SlackSocketSupervisor.stop()
+        com.obsidianscout.slack.SlackNotificationRelay.stop()
         com.obsidianscout.db.AutoBackupScheduler.stop()
         com.obsidianscout.db.QuorumFallbackStore.stop()
         com.obsidianscout.admin.PeerLoadRouter.stop()

@@ -46,21 +46,24 @@ object NotificationWebSocketManager {
             put("url", "/chat?group=$groupName")
         }.toString()
 
+        targetUserIds.forEach { sendToUser(it, jsonPayload) }
+    }
+
+    /** Sends a ready-made JSON message to every socket [userId] has open on this node. */
+    fun sendToUser(userId: String, jsonPayload: String) {
+        val sessions = activeSessions[userId] ?: return
         scope.launch {
-            for (userId in targetUserIds) {
-                val sessions = activeSessions[userId] ?: continue
-                val iterator = sessions.iterator()
-                while (iterator.hasNext()) {
-                    val session = iterator.next()
-                    try {
-                        session.send(Frame.Text(jsonPayload))
-                    } catch (e: Exception) {
-                        iterator.remove()
-                    }
+            val iterator = sessions.iterator()
+            while (iterator.hasNext()) {
+                val session = iterator.next()
+                try {
+                    session.send(Frame.Text(jsonPayload))
+                } catch (e: Exception) {
+                    iterator.remove()
                 }
-                if (sessions.isEmpty()) {
-                    activeSessions.remove(userId)
-                }
+            }
+            if (sessions.isEmpty()) {
+                activeSessions.remove(userId)
             }
         }
     }

@@ -37,6 +37,7 @@ fun Application.configureRoutes() {
             contactRoutes()
             widgetRoutes()
             publicDataRoutes()
+            slackRoutes()
         }
 
         localAiModelFileRoutes()

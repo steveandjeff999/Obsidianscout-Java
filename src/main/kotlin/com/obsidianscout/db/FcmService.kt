@@ -18,6 +18,9 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.time.Instant
 import java.util.UUID
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 
 private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.db.FcmService")
 
@@ -287,25 +290,30 @@ object FcmService {
         body: String,
         data: Map<String, String> = emptyMap()
     ): String {
-        val dataJson = data.entries.joinToString(",") { (k, v) ->
-            "\"${k.replace("\"", "\\\"")}\": \"${v.replace("\"", "\\\"")}\""
-        }
-        val escapedTitle = title.replace("\\", "\\\\").replace("\"", "\\\"")
-        val escapedBody = body.replace("\\", "\\\\").replace("\"", "\\\"")
-        val escapedToken = token.replace("\"", "\\\"")
-        return """{
-  "message": {
-    "token": "$escapedToken",
-    "notification": { "title": "$escapedTitle", "body": "$escapedBody" },
-    "android": {
-      "notification": { "click_action": "FLUTTER_NOTIFICATION_CLICK", "sound": "default" }
-    },
-    "apns": {
-      "payload": { "aps": { "sound": "default" } }
-    },
-    "data": { $dataJson }
-  }
-}"""
+        // Built with the JSON library: titles and bodies can hold newlines, quotes and backslashes (Slack messages do).
+        return buildJsonObject {
+            put("message", buildJsonObject {
+                put("token", JsonPrimitive(token))
+                put("notification", buildJsonObject {
+                    put("title", JsonPrimitive(title))
+                    put("body", JsonPrimitive(body))
+                })
+                put("android", buildJsonObject {
+                    put("notification", buildJsonObject {
+                        put("click_action", JsonPrimitive("FLUTTER_NOTIFICATION_CLICK"))
+                        put("sound", JsonPrimitive("default"))
+                    })
+                })
+                put("apns", buildJsonObject {
+                    put("payload", buildJsonObject {
+                        put("aps", buildJsonObject {
+                            put("sound", JsonPrimitive("default"))
+                        })
+                    })
+                })
+                put("data", JsonObject(data.mapValues { JsonPrimitive(it.value) }))
+            })
+        }.toString()
     }
 
     /**
@@ -356,7 +364,8 @@ object FcmService {
         title: String,
         body: String,
         groupName: String,
-        url: String
+        url: String,
+        extraData: Map<String, String> = emptyMap()
     ) {
         checkClusterSync()
         if (!isInitialized || targetUserUuids.isEmpty()) return
@@ -375,7 +384,7 @@ object FcmService {
             "click_action" to "FLUTTER_NOTIFICATION_CLICK",
             "title" to title,
             "body" to body
-        )
+        ) + extraData
 
         var successCount = 0
         var failureCount = 0

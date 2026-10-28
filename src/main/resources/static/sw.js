@@ -145,6 +145,8 @@ const ASSETS = [
     '/js/utilities/sanitizer.js',
     '/js/services/data-compression.js',
     '/js/services/chat-poller.js',
+    '/js/services/notification-socket.js',
+    '/js/components/slack-banner.js',
     '/js/services/theme-sync.js',
     '/js/services/form-draft.js',
     '/js/services/queue-store.js',
@@ -474,6 +476,13 @@ self.addEventListener('push', (event) => {
 // Notification click listener: Open chat or focus tab and route group
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
+
+    // Slack banners link straight to the message in Slack.
+    if (event.notification.data && event.notification.data.groupName === 'Slack') {
+        const slackUrl = event.notification.data.url || '/';
+        if (clients.openWindow) event.waitUntil(clients.openWindow(slackUrl));
+        return;
+    }
 
     let urlToOpen = '/chat';
     if (event.notification.data && event.notification.data.url) {

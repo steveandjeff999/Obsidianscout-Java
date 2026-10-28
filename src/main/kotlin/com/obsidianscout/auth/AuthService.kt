@@ -749,6 +749,7 @@ object AuthService {
             FcmDeviceTokens.deleteWhere { userId eq targetUuid }
             PasskeyCredentials.deleteWhere { userId eq targetUuid }
             PasskeyChallenges.deleteWhere { userId eq targetUuid }
+            com.obsidianscout.db.SlackUserPreferences.deleteWhere { com.obsidianscout.db.SlackUserPreferences.userId eq targetUuid }
 
             // Delete the target user
             Users.deleteWhere { Users.id eq targetUuid }

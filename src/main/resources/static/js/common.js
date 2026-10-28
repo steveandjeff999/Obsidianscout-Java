@@ -241,6 +241,10 @@ import {
 } from './services/chat-poller.js';
 
 import {
+    initNotificationSocket
+} from './services/notification-socket.js';
+
+import {
     initThemeSync
 } from './services/theme-sync.js';
 
@@ -880,6 +884,7 @@ async function onDOMContentLoaded() {
     loadLocale(safeGetItem('obsidianscout:lang') || 'en').then(() => applyTranslations());
     restoreScrollPositions();
     initChatUnreadPolling();
+    initNotificationSocket();
     initThemeSync();
 
     // Global form submit listener to automatically show button loading indicators

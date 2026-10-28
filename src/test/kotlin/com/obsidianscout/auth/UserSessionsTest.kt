@@ -57,6 +57,7 @@ class UserSessionsTest {
                 AppSettings,
                 UserSessions,
                 com.obsidianscout.db.WidgetTokens,
+                com.obsidianscout.db.SlackUserPreferences,
                 ScoutingEntries,
                 PitScoutingEntries,
                 QualitativeScoutingEntries,
@@ -323,6 +324,13 @@ class UserSessionsTest {
                 it[userId] = EntityID(userUuid, Users)
                 it[groupName] = "general"
                 it[lastReadAt] = now
+            }
+
+            // SlackUserPreferences
+            com.obsidianscout.db.SlackUserPreferences.insert {
+                it[com.obsidianscout.db.SlackUserPreferences.userId] = EntityID(userUuid, Users)
+                it[com.obsidianscout.db.SlackUserPreferences.preference] = "none"
+                it[com.obsidianscout.db.SlackUserPreferences.updatedAt] = now
             }
 
             // ChatGroups

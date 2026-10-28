@@ -510,6 +510,69 @@ object FcmDeviceTokens : UUIDTable("fcm_device_tokens") {
     }
 }
 
+/**
+ * A team's Slack connection. Tokens are AES-GCM encrypted with [com.obsidianscout.auth.ClusterSecretService.getDataEncryptionKey]
+ * and never leave the server. [rulesJson] is a list of [com.obsidianscout.slack.SlackChannelRule].
+ */
+object SlackIntegrations : UUIDTable("slack_integrations") {
+    val teamNumber = integer("team_number")
+    val program = varchar("program", 8).default("FRC")
+    val enabled = bool("enabled").default(false)
+    val botTokenEnc = text("bot_token_enc").default("")
+    val appTokenEnc = text("app_token_enc").default("")
+    val workspaceId = varchar("workspace_id", 32).default("")
+    val workspaceName = varchar("workspace_name", 128).default("")
+    val workspaceUrl = varchar("workspace_url", 255).default("")
+    val botUserId = varchar("bot_user_id", 32).default("")
+    val botId = varchar("bot_id", 32).default("")
+    val rulesJson = text("rules_json").default("[]")
+    val userLinksJson = text("user_links_json").default("{}")
+    val status = varchar("status", 32).default("disconnected")
+    val statusDetail = text("status_detail").default("")
+    val lastEventAt = timestamp("last_event_at").nullable()
+    val updatedAt = timestamp("updated_at")
+    val updatedBy = varchar("updated_by", 64).default("")
+
+    init {
+        uniqueIndex("ux_slack_integrations_team_program", teamNumber, program)
+    }
+}
+
+/**
+ * Slack messages that matched a channel rule, with the users who should see them. Written once by the node holding
+ * the team's Slack socket; every node tails it to push banners to its own WebSocket clients. Kept 7 days.
+ */
+object SlackNotifications : UUIDTable("slack_notifications") {
+    val teamNumber = integer("team_number")
+    val program = varchar("program", 8).default("FRC")
+    val slackEventId = varchar("slack_event_id", 128)
+    val channelId = varchar("channel_id", 32)
+    val channelName = varchar("channel_name", 128).default("")
+    val authorName = varchar("author_name", 128).default("")
+    val text = text("text").default("")
+    val permalink = text("permalink").default("")
+    /** JSON object: Obsidianscout user id -> true when that user was mentioned. */
+    val targetsJson = text("targets_json").default("{}")
+    val push = bool("push").default(false)
+    val createdAt = timestamp("created_at")
+
+    init {
+        uniqueIndex("ux_slack_notifications_event", teamNumber, program, slackEventId)
+        index("idx_slack_notifications_created", false, createdAt)
+    }
+}
+
+/** A user's own choice for Slack banners: "all", "mentions" or "none". No row means "all". */
+object SlackUserPreferences : UUIDTable("slack_user_preferences") {
+    val userId = reference("user_id", Users)
+    val preference = varchar("preference", 16).default("all")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_slack_user_preferences_user", userId)
+    }
+}
+
 object ClusterSecrets : UUIDTable("cluster_secrets") {
     val keyName = varchar("key_name", 64)
     val keyValue = text("key_value")

@@ -313,6 +313,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             updateConfigModeButtons();
             wireTabs();
+            if (window.ObsidianscoutAdminSlack) {
+                window.ObsidianscoutAdminSlack.mount(document.getElementById("slack-integration-root"));
+            }
 
             // Populate configs
             currentConfig = normalizeConfig(configResponse, mode.defaultTitle);

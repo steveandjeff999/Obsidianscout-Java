@@ -88,6 +88,8 @@
                     <button class="tab hidden" data-tab="cloudflared" id="tab-cloudflared" type="button" data-i18n="config.cloudflared_settings">Cloudflare Tunnel</button>
 
                     <button class="tab" data-tab="permissions" id="tab-permissions" type="button" data-i18n="settings.permissions">Permissions</button>
+
+                    <button class="tab" data-tab="integrations" id="tab-integrations" type="button" data-i18n="slack.tab">Integrations</button>
                 </div>
 
                 <div data-panel="config">
@@ -577,6 +579,11 @@
 
                 </div>
 
+                <div data-panel="integrations" class="hidden">
+                    <p class="notice" data-i18n="slack.panel_intro">Connect outside services to your team. Slack messages you choose show up as popup banners on the site and in the app.</p>
+                    <div id="slack-integration-root" class="card soft mt-20"></div>
+                </div>
+
                 <div data-panel="permissions" class="hidden">
 
                     <p class="notice" data-i18n="config.configure_role_page_access">Configure which pages each user role (Scout and Analytics) can access and see in the sidebar.</p>
@@ -714,6 +721,7 @@
 
     <script defer src="/js/utilities/config-duplicates.js"></script>
     <script defer src="/js/services/config-collab.js"></script>
+<script defer src="/js/admin-slack.js"></script>
 <script defer src="/js/admin-settings.js"></script>
 
 </body>

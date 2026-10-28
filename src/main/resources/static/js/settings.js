@@ -230,6 +230,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    async function wirePersonalSlackPrefWidget() {
+        const select = document.getElementById("personal-slack-pref");
+        if (!select) return;
+        try {
+            const current = await Obsidianscout.request("/api/slack/me/preference", { noCache: true });
+            select.value = (current && current.preference) || "all";
+        } catch (err) {
+            select.value = "all";
+        }
+        select.addEventListener("change", async (e) => {
+            try {
+                const updated = await Obsidianscout.request("/api/slack/me/preference", {
+                    method: "PUT",
+                    json: { preference: e.target.value }
+                });
+                select.value = updated.preference || "all";
+                Obsidianscout.showToast(Obsidianscout.t ? Obsidianscout.t("slack.pref_saved", "Slack banner preference updated") : "Slack banner preference updated", "success");
+            } catch (err) {
+                Obsidianscout.showToast(err.message || "Failed to update Slack banner preference", "error");
+            }
+        });
+    }
+
     function wirePersonalBugReportPrefWidget(currentMe) {
         const personalBugPref = document.getElementById("personal-bug-report-pref");
         if (!personalBugPref) return;
@@ -907,6 +930,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     wirePersonalPasswordWidget();
     wirePersonalEmailWidget(me);
     wirePersonalNotificationPrefWidget(me);
+    wirePersonalSlackPrefWidget();
     wirePersonalBugReportPrefWidget(me);
     wirePersonalLocalAiPrefWidget(me);
     wirePersonalNonScoutingToolsPrefWidget(me);

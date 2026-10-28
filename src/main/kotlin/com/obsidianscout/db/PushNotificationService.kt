@@ -278,4 +278,61 @@ object PushNotificationService {
             }
         }
     }
+
+    /**
+     * System push for a Slack banner whose channel rule asked for it: FCM to the app, Web Push to browsers.
+     * Called only by the node that stored the notification, so each user gets one push.
+     */
+    fun sendSlackNotification(notification: com.obsidianscout.slack.SlackIntegrationService.StoredNotification) {
+        scope.launch {
+            try {
+                val userUuids = notification.targets.keys.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+                if (userUuids.isEmpty()) return@launch
+                val channel = if (notification.channelName.startsWith("#")) notification.channelName else "#${notification.channelName}"
+                val title = "$channel · ${notification.authorName}"
+                val body = if (notification.text.length > 180) notification.text.take(177) + "..." else notification.text
+
+                FcmService.sendNotificationToUsers(
+                    targetUserUuids = userUuids,
+                    title = title,
+                    body = body,
+                    groupName = "Slack",
+                    url = notification.permalink,
+                    extraData = mapOf("type" to "slack", "slackNotificationId" to notification.id)
+                )
+
+                val subscriptions = readTransaction {
+                    PushSubscriptions.selectAll().where { PushSubscriptions.userId inList userUuids }.map { row ->
+                        Subscription(
+                            row[PushSubscriptions.endpoint],
+                            Subscription.Keys(row[PushSubscriptions.p256dh], row[PushSubscriptions.auth])
+                        )
+                    }
+                }
+                if (subscriptions.isEmpty()) return@launch
+                val payload = JsonSupport.json.encodeToString(
+                    PushPayload(
+                        title = title,
+                        body = body,
+                        tag = "slack-${notification.id}",
+                        data = PushPayloadData(url = notification.permalink.ifBlank { "/" }, groupName = "Slack")
+                    )
+                )
+                val pushService = getPushService()
+                for (sub in subscriptions) {
+                    try {
+                        val response = pushService.send(Notification(sub, payload), Encoding.AES128GCM)
+                        val statusCode = response.statusLine.statusCode
+                        if (statusCode == 410 || statusCode == 404) {
+                            transaction { PushSubscriptions.deleteWhere { PushSubscriptions.endpoint eq sub.endpoint } }
+                        }
+                    } catch (e: Exception) {
+                        consoleLog.error("[Push] Failed to send Slack push to ${sub.endpoint}: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                consoleLog.error("[Push] Error dispatching Slack notification: ${e.message}")
+            }
+        }
+    }
 }

@@ -111,10 +111,22 @@ object SnapshotService {
         PasskeyCredentials,
         PasskeyChallenges,
         ScoutingAssignments,
-        MatchPredictions
+        MatchPredictions,
+        SlackIntegrations,
+        SlackUserPreferences
     )
 
     var customStorageDirectory: File? = null
+
+    /** Copies every column of [rows] into [table]. Must run inside a transaction on the target database. */
+    @Suppress("UNCHECKED_CAST")
+    private fun copyRows(table: Table, rows: List<ResultRow>) {
+        for (row in rows) {
+            table.insert { statement ->
+                table.columns.forEach { column -> statement[column as Column<Any?>] = row[column] }
+            }
+        }
+    }
 
     private fun getStorageDir(): File {
         val dir = customStorageDirectory ?: File(AppConfigLoader.load().auto_backup.storage_directory.ifBlank { "data/snapshots" })
@@ -255,6 +267,8 @@ object SnapshotService {
             val clusterLocksList = DatabaseFactory.readTransaction { ClusterNotificationLocks.selectAll().toList() }
             val analyticsReportsList = DatabaseFactory.readTransaction { AnalyticsReports.selectAll().toList() }
             val reportedErrorsList = DatabaseFactory.readTransaction { ReportedErrors.selectAll().toList() }
+            val slackIntegrationsList = DatabaseFactory.readTransaction { SlackIntegrations.selectAll().toList() }
+            val slackPreferencesList = DatabaseFactory.readTransaction { SlackUserPreferences.selectAll().toList() }
 
             // 3. Batch insert into SQLite inside an atomic transaction
             transaction(
@@ -581,6 +595,10 @@ object SnapshotService {
                     }
                 }
 
+                // Slack: tokens stay encrypted; cluster_secrets (copied below) holds the key that opens them.
+                copyRows(SlackIntegrations, slackIntegrationsList)
+                copyRows(SlackUserPreferences, slackPreferencesList)
+
                 // Secrets & Push Notifications
                 for (row in pushSubsList) {
                     PushSubscriptions.insert {
@@ -674,7 +692,8 @@ object SnapshotService {
                     allianceSelectionsList.size + epaOprList.size + passwordResetTokensList.size + bannersList.size +
                     chatGroupsList.size + chatMessagesList.size + lastReadsList.size + pushSubsList.size +
                     fcmConfigsList.size + fcmTokensList.size + clusterSecretsList.size + clusterLocksList.size +
-                    analyticsReportsList.size + reportedErrorsList.size).toLong()
+                    analyticsReportsList.size + reportedErrorsList.size + slackIntegrationsList.size +
+                    slackPreferencesList.size).toLong()
 
             return total
         } finally {
@@ -764,6 +783,9 @@ object SnapshotService {
             val locks: List<ResultRow> = transaction(snapshotDb) { ClusterNotificationLocks.selectAll().toList() }
             val reports: List<ResultRow> = transaction(snapshotDb) { AnalyticsReports.selectAll().toList() }
             val errors: List<ResultRow> = transaction(snapshotDb) { ReportedErrors.selectAll().toList() }
+            // Null when the snapshot predates the Slack integration (the table is missing from the file).
+            val slackIntegrations: List<ResultRow>? = runCatching { transaction(snapshotDb) { SlackIntegrations.selectAll().toList() } }.getOrNull()
+            val slackPreferences: List<ResultRow> = runCatching { transaction(snapshotDb) { SlackUserPreferences.selectAll().toList() } }.getOrDefault(emptyList())
 
             // Restore primary DB pointer
             if (previousDefaultDb != null) {
@@ -778,6 +800,9 @@ object SnapshotService {
                 UserSessions.deleteAll()
                 ChatMessages.deleteAll()
                 UserChatLastRead.deleteAll()
+                SlackUserPreferences.deleteAll()
+                // An older snapshot has no Slack table: keep the current connection rather than wiping it.
+                if (slackIntegrations != null) SlackIntegrations.deleteAll()
                 PushSubscriptions.deleteAll()
                 FcmDeviceTokens.deleteAll()
                 AnalyticsReports.deleteAll()
@@ -1258,7 +1283,19 @@ object SnapshotService {
                     }
                 }
                 restoredCounts["analytics_reports"] = reports.size.toLong()
+
+                if (slackIntegrations != null) {
+                    copyRows(SlackIntegrations, slackIntegrations)
+                    restoredCounts["slack_integrations"] = slackIntegrations.size.toLong()
+                }
+                copyRows(SlackUserPreferences, slackPreferences)
+                restoredCounts["slack_user_preferences"] = slackPreferences.size.toLong()
             }
+
+            // The restore may have replaced the Slack data key and connections; drop what this node cached.
+            com.obsidianscout.auth.ClusterSecretService.forgetDataEncryptionKey()
+            com.obsidianscout.slack.SlackIntegrationService.clearAllCaches()
+            com.obsidianscout.slack.SlackSocketSupervisor.poke()
 
             // Ensure superadmin exists from seed config in case the restored snapshot didn't have one
             try {

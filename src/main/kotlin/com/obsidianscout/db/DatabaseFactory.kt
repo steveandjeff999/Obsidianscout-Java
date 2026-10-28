@@ -268,7 +268,10 @@ object DatabaseFactory {
                 GamepadProfiles,
                 SharedLinks,
                 SharedLinkAccessLogs,
-                EntryTombstones
+                EntryTombstones,
+                SlackIntegrations,
+                SlackNotifications,
+                SlackUserPreferences
             )
 
             if (isCockroach) {

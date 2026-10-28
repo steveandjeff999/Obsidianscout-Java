@@ -726,3 +726,183 @@ body.theme-dark .stale-data-pill { background: #3b2203; color: #fef3c7; border-c
     .save-receipt-host, .draft-undo-bar { bottom: 12px; }
     .stale-data-pill { left: 16px; right: 16px; bottom: 12px; justify-content: space-between; border-radius: 12px; }
 }
+
+/* ── Slack popup banners (js/components/slack-banner.js) ── */
+.slack-banner-root {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 99998;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    width: min(380px, calc(100vw - 32px));
+    pointer-events: none;
+}
+
+.slack-banner,
+.slack-banner-more {
+    pointer-events: auto;
+}
+
+.slack-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 12px 12px 14px;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-left: 4px solid #4a154b;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.12);
+    animation: slack-banner-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.slack-banner.mentioned {
+    border-left-color: var(--accent);
+}
+
+.slack-banner.leaving {
+    opacity: 0;
+    transform: translateX(16px);
+}
+
+.slack-banner-icon {
+    display: inline-flex;
+    margin-top: 2px;
+    color: #4a154b;
+}
+
+body.theme-dark .slack-banner {
+    border-left-color: #e01e5a;
+}
+
+body.theme-dark .slack-banner-icon {
+    color: #e8d5f0;
+}
+
+body.theme-dark .slack-banner.mentioned {
+    border-left-color: var(--accent);
+}
+
+.slack-banner-body {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.slack-banner-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.slack-banner-channel {
+    font-weight: 700;
+}
+
+.slack-banner-author {
+    color: var(--muted);
+}
+
+.slack-banner-tag {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+}
+
+.slack-banner-text {
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: pre-line;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.slack-banner-open {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.slack-banner-open:hover {
+    text-decoration: underline;
+}
+
+.slack-banner-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: -4px -4px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.slack-banner-close:hover {
+    background: var(--surface-2);
+    color: var(--ink);
+}
+
+.slack-banner-more {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    cursor: pointer;
+}
+
+@keyframes slack-banner-in {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .slack-banner-root {
+        top: 8px;
+        right: 8px;
+        left: 8px;
+        width: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .slack-banner {
+        animation: none;
+        transition: none;
+    }
+}
