@@ -71,6 +71,36 @@
 
     let state = null;
     let root = null;
+    let statusTimer = null;
+    let statusTicks = 0;
+
+    /**
+     * Re-reads the connection status: the socket connects a few seconds after a save, and Slack drops and reopens it
+     * now and then. Only the badge is swapped, so nothing the admin is typing is lost.
+     */
+    async function refreshStatus() {
+        if (!root || !root.isConnected) {
+            clearInterval(statusTimer);
+            statusTimer = null;
+            return;
+        }
+        const i = state && state.integration;
+        if (!i || !i.configured || !i.enabled || document.hidden) return;
+        // Every 4 s while it's settling, every 30 s or so once it's connected or has stopped with an error.
+        if ((i.status === "connected" || i.status === "error") && ++statusTicks % 8 !== 0) return;
+        let latest;
+        try {
+            latest = await api("/api/slack/integration");
+        } catch (e) {
+            return;
+        }
+        if (latest.status === i.status && latest.statusDetail === i.statusDetail) return;
+        i.status = latest.status;
+        i.statusDetail = latest.statusDetail;
+        i.lastEventAt = latest.lastEventAt;
+        const pill = root.querySelector("[data-slack-status]");
+        if (pill) pill.replaceWith(statusPill());
+    }
 
     async function mount(el) {
         if (!el) return;
@@ -99,6 +129,7 @@
             await Promise.all([loadChannels(false), loadGroups(), loadLinks()]);
         }
         render();
+        if (!statusTimer) statusTimer = setInterval(refreshStatus, 4000);
     }
 
     async function loadChannels(refresh) {
@@ -153,6 +184,7 @@
             [label, color] = map[i.status] || [t("slack.status_connecting", "Connecting..."), "var(--warning)"];
         }
         return h("span", {
+            "data-slack-status": "",
             style: `display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:9999px;border:1px solid var(--border);color:${color};`
         }, h("span", { style: `width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;` }), label);
     }

@@ -37,12 +37,14 @@ object SlackSocketSupervisor {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var loop: Job? = null
 
-    private class Connection(val job: Job, val updatedAt: Instant)
+    /** [tokens] is what the socket was opened with; channel and people edits don't need a reconnect. */
+    private class Connection(val job: Job, val tokens: Pair<String, String>)
     private val connections = ConcurrentHashMap<String, Connection>()
     /** Config version that failed with an error reconnecting can't fix; skipped until an admin saves again. */
     private val fatalAt = ConcurrentHashMap<String, Instant>()
 
     private fun key(r: SlackIntegrationRecord) = "${r.teamNumber}:${r.program}"
+    private fun tokens(r: SlackIntegrationRecord) = r.botToken to r.appToken
     private fun leaseKey(k: String) = "slack:$k"
 
     fun start() {
@@ -72,10 +74,10 @@ object SlackSocketSupervisor {
     private fun tickLocked(ready: List<SlackIntegrationRecord>) {
         val byKey = ready.associateBy(::key)
 
-        // Drop connections whose team was switched off, or whose settings changed (reconnect with the new tokens).
+        // Drop connections whose team was switched off, or whose tokens changed (reconnect with the new ones).
         connections.entries.toList().forEach { (k, c) ->
             val current = byKey[k]
-            if (current == null || current.updatedAt != c.updatedAt || !c.job.isActive) {
+            if (current == null || tokens(current) != c.tokens || !c.job.isActive) {
                 c.job.cancel()
                 connections.remove(k)
                 if (current == null) ClusterLease.release(leaseKey(k))
@@ -86,7 +88,7 @@ object SlackSocketSupervisor {
             if (fatalAt[k] == r.updatedAt) continue
             when (ClusterLease.tryAcquire(leaseKey(k), LEASE_TTL_SECONDS)) {
                 ClusterLease.Result.ACQUIRED -> if (connections[k] == null) {
-                    connections[k] = Connection(scope.launch { runConnection(r) }, r.updatedAt)
+                    connections[k] = Connection(scope.launch { runConnection(r) }, tokens(r))
                 }
                 ClusterLease.Result.HELD_ELSEWHERE -> connections.remove(k)?.job?.cancel()
                 ClusterLease.Result.UNAVAILABLE -> Unit

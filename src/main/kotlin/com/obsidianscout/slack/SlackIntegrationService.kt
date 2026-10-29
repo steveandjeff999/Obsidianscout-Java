@@ -188,7 +188,9 @@ object SlackIntegrationService {
         val now = Instant.now()
         val rulesJson = update.rules?.let { JsonSupport.json.encodeToString(rulesSerializer, it) }
         val linksJson = update.userLinks?.let { JsonSupport.json.encodeToString(linksSerializer, it) }
-        val tokensChanged = newBot != null || newApp != null
+        // Only a real change reconnects; the supervisor writes the status itself when it does.
+        val reconnects = (newBot != null && newBot != previous?.botToken) || (newApp != null && newApp != previous?.appToken) ||
+            (update.enabled == true && previous?.enabled != true)
 
         transaction {
             val exists = SlackIntegrations.selectAll()
@@ -214,7 +216,7 @@ object SlackIntegrationService {
                 rulesJson?.let { v -> it[SlackIntegrations.rulesJson] = v }
                 linksJson?.let { v -> it[userLinksJson] = v }
                 // A fresh token clears an "error" left by the old one, so the supervisor tries again.
-                if (tokensChanged || update.enabled != null) {
+                if (reconnects) {
                     it[status] = "connecting"
                     it[statusDetail] = ""
                 }
