@@ -1257,6 +1257,9 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val session = call.requireMobileSession(secret)
                 val expiresAt = Date(System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000)
                 val token = JwtHelper.generateToken(session, secret, expiresAt, session.sessionId)
+                session.sessionId?.let { sid ->
+                    com.obsidianscout.auth.AuthService.touchSession(sid)
+                }
 
                 call.respond(
                     MobileLoginResponse(
@@ -1359,7 +1362,8 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         Users
                             .selectAll().where { 
                                 (Users.username eq username) and 
-                                (Users.teamNumber eq teamNumber) 
+                                (Users.teamNumber eq teamNumber) and
+                                (if (!request.program.isNullOrBlank()) (Users.program eq request.program.uppercase()) else org.jetbrains.exposed.v1.core.Op.TRUE)
                             }
                             .limit(1)
                             .firstOrNull()
@@ -2698,7 +2702,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             }
 
             post("/invitations/{invitation_id}/respond") {
-                val session = call.requireMobileSession(secret)
+                val session = call.requireMobileAdmin(secret)
                 val invitationId = call.parameters["invitation_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing invitation_id", "MISSING_DATA")
                 val req = call.receive<MobileRespondInviteRequest>()
@@ -2725,7 +2729,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             }
 
             post("/alliances/{alliance_id}/leave") {
-                val session = call.requireMobileSession(secret)
+                val session = call.requireMobileAdmin(secret)
                 val allianceId = call.parameters["alliance_id"]
                     ?: throw MobileApiException(HttpStatusCode.BadRequest, "Missing alliance_id", "MISSING_DATA")
                 
@@ -2763,11 +2767,18 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                             .flatMap { loadMessages(it) }
                     }
                 } else {
-                    val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
-                        ?: throw MobileApiException(HttpStatusCode.Forbidden, "Not in an active alliance", "USER_NOT_IN_SCOPE")
+                    val groupName = call.request.queryParameters["group"]
+                    if (type == "group" && !groupName.isNullOrBlank()) {
+                        val sanitizedGroup = groupName.trim().replace("/", "_").replace("\\", "_")
+                        val groupFile = chatFile("instance/chat/groups/$program/$teamNumber/${sanitizedGroup}_group_chat_history.json")
+                        loadMessages(groupFile)
+                    } else {
+                        val activeAllianceId = AllianceService.getActiveAllianceId(teamNumber, program)
+                            ?: throw MobileApiException(HttpStatusCode.Forbidden, "Not in an active alliance", "USER_NOT_IN_SCOPE")
 
-                    val groupFile = chatFile("instance/chat/groups/$program/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
-                    loadMessages(groupFile)
+                        val groupFile = chatFile("instance/chat/groups/$program/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
+                        loadMessages(groupFile)
+                    }
                 }
 
                 val sorted = messages.sortedByDescending { it.timestamp }

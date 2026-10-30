@@ -439,8 +439,10 @@ object QualitativeScoutingService {
                                   callerActiveAllianceId == entryActiveAllianceId && 
                                   AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId, session.program)
 
+            val isSubmitter = row[QualitativeScoutingEntries.submittedByUserId].value.toString() == session.userId
+            val isTeamAdmin = (ownerTeam == session.teamNumber && session.role.isAtLeast(UserRole.ADMIN))
             val hasPermission = session.role == UserRole.SUPERADMIN ||
-                                (entryProgram == session.program && (ownerTeam == session.teamNumber || isAllianceAdmin))
+                                (entryProgram == session.program && (isSubmitter || isTeamAdmin || (isAllianceAdmin && session.role.isAtLeast(UserRole.ADMIN))))
 
             if (!hasPermission) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to edit this entry")
@@ -511,8 +513,10 @@ object QualitativeScoutingService {
                                   callerActiveAllianceId == entryActiveAllianceId && 
                                   AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId, session.program)
 
+            val isSubmitter = row[QualitativeScoutingEntries.submittedByUserId].value.toString() == session.userId
+            val isTeamAdmin = (ownerTeam == session.teamNumber && session.role.isAtLeast(UserRole.ADMIN))
             val hasPermission = session.role == UserRole.SUPERADMIN ||
-                                (entryProgram == session.program && (ownerTeam == session.teamNumber || isAllianceAdmin))
+                                (entryProgram == session.program && (isSubmitter || isTeamAdmin || (isAllianceAdmin && session.role.isAtLeast(UserRole.ADMIN))))
 
             if (!hasPermission) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to delete this entry")

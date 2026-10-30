@@ -604,7 +604,7 @@ object ChatService {
         emoji.isNotBlank() && emoji.length <= 32 &&
             emoji.none { it.isISOControl() || it.isWhitespace() || it in "<>&\"'`=/\\" || it.isLetterOrDigit() }
 
-    fun toggleReaction(id: String, username: String, emoji: String, teamNumber: Int, program: String): ChatMessageDto? = transaction {
+    fun toggleReaction(id: String, username: String, emoji: String, teamNumber: Int, program: String, userId: String? = null, userRole: com.obsidianscout.auth.UserRole? = null): ChatMessageDto? = transaction {
         if (!isValidReaction(emoji)) {
             throw IllegalArgumentException("Invalid reaction")
         }
@@ -612,6 +612,19 @@ object ChatService {
         val row = ChatMessages.selectAll().where {
             (ChatMessages.id eq msgUuid) and (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.program eq program)
         }.firstOrNull() ?: return@transaction null
+        if (userId != null && userRole != null) {
+            val group = row[ChatMessages.groupName]
+            val groupRow = ChatGroups.selectAll().where {
+                (ChatGroups.teamNumber eq teamNumber) and (ChatGroups.program eq program) and (ChatGroups.groupName eq group)
+            }.firstOrNull()
+            if (groupRow != null) {
+                val allowedRolesJson = groupRow[ChatGroups.allowedRoles]
+                val allowedUserIdsJson = groupRow[ChatGroups.allowedUserIds]
+                if (!canUserAccessGroup(allowedRolesJson, allowedUserIdsJson, userId, userRole)) {
+                    throw IllegalArgumentException("Cannot access channel")
+                }
+            }
+        }
         if (row[ChatMessages.username] == username) {
             throw IllegalArgumentException("Cannot react to your own message")
         }

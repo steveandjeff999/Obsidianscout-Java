@@ -168,6 +168,13 @@ object ShareService {
     }
 
     fun createShare(session: UserSession, request: CreateShareRequest, baseUrl: String = ""): ShareLinkDTO {
+        if (session.role != UserRole.SUPERADMIN && !session.role.isAtLeast(UserRole.ANALYTICS)) {
+            throw ApiException(HttpStatusCode.Forbidden, "Analytics or admin role is required to create share links")
+        }
+        if ((!request.redactPrivateNotes || request.resourceType.lowercase() == "all_data") &&
+            session.role != UserRole.SUPERADMIN && !session.role.isAtLeast(UserRole.ADMIN)) {
+            throw ApiException(HttpStatusCode.Forbidden, "Admin role is required to share unredacted notes or entire team datasets")
+        }
         val trimmedTitle = request.title.trim()
         if (trimmedTitle.isEmpty()) {
             throw ApiException(HttpStatusCode.BadRequest, "Share title cannot be blank")
@@ -181,7 +188,10 @@ object ShareService {
             }
         }
 
-        val pinHashVal = if (!request.pin.isNullOrBlank() && (request.accessScope == "pin" || request.accessScope == "pin_protected")) {
+        if ((request.accessScope.lowercase() == "pin" || request.accessScope.lowercase() == "pin_protected") && request.pin.isNullOrBlank()) {
+            throw ApiException(HttpStatusCode.BadRequest, "A PIN is required when access scope is PIN protected")
+        }
+        val pinHashVal = if (!request.pin.isNullOrBlank() && (request.accessScope.lowercase() == "pin" || request.accessScope.lowercase() == "pin_protected")) {
             hashPin(request.pin.trim())
         } else null
 
@@ -622,8 +632,10 @@ object ShareService {
             val target = SharedLinks.selectAll().where { SharedLinks.token eq token }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Share link not found")
 
-            // Team check
-            if ((target[SharedLinks.ownerTeamNumber] != session.teamNumber || !target[SharedLinks.program].equals(session.program, ignoreCase = true)) && session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+            val isOwner = target[SharedLinks.createdByUsername].equals(session.username, ignoreCase = true)
+            val isAdmin = session.role.isAtLeast(com.obsidianscout.auth.UserRole.ADMIN)
+            val sameTeam = target[SharedLinks.ownerTeamNumber] == session.teamNumber && target[SharedLinks.program].equals(session.program, ignoreCase = true)
+            if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && (!sameTeam || (!isOwner && !isAdmin))) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to revoke this link")
             }
 
@@ -641,7 +653,10 @@ object ShareService {
             val target = SharedLinks.selectAll().where { SharedLinks.token eq token }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Share link not found")
 
-            if ((target[SharedLinks.ownerTeamNumber] != session.teamNumber || !target[SharedLinks.program].equals(session.program, ignoreCase = true)) && session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+            val isOwner = target[SharedLinks.createdByUsername].equals(session.username, ignoreCase = true)
+            val isAdmin = session.role.isAtLeast(com.obsidianscout.auth.UserRole.ADMIN)
+            val sameTeam = target[SharedLinks.ownerTeamNumber] == session.teamNumber && target[SharedLinks.program].equals(session.program, ignoreCase = true)
+            if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && (!sameTeam || (!isOwner && !isAdmin))) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to update this link")
             }
 
@@ -653,7 +668,11 @@ object ShareService {
                     it[description] = req.description.take(1000)
                 }
                 if (req.accessScope != null && req.accessScope.isNotBlank()) {
-                    it[accessScope] = req.accessScope.lowercase()
+                    val newScope = req.accessScope.lowercase()
+                    it[accessScope] = newScope
+                    if (newScope != "pin" && req.pin == null) {
+                        it[pinHash] = null
+                    }
                 }
                 if (req.allowedTeams != null) {
                     it[allowedTeams] = req.allowedTeams
@@ -693,7 +712,10 @@ object ShareService {
             val target = SharedLinks.selectAll().where { SharedLinks.token eq token }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Share link not found")
 
-            if ((target[SharedLinks.ownerTeamNumber] != session.teamNumber || !target[SharedLinks.program].equals(session.program, ignoreCase = true)) && session.role != com.obsidianscout.auth.UserRole.SUPERADMIN) {
+            val isOwner = target[SharedLinks.createdByUsername].equals(session.username, ignoreCase = true)
+            val isAdmin = session.role.isAtLeast(com.obsidianscout.auth.UserRole.ADMIN)
+            val sameTeam = target[SharedLinks.ownerTeamNumber] == session.teamNumber && target[SharedLinks.program].equals(session.program, ignoreCase = true)
+            if (session.role != com.obsidianscout.auth.UserRole.SUPERADMIN && (!sameTeam || (!isOwner && !isAdmin))) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to delete this link")
             }
 
@@ -856,7 +878,8 @@ object ShareService {
 
             val statsHistory = if (settings != null && effectiveEventKey.isNotBlank()) {
                 runCatching {
-                    IntegrationService.getFullStatsHistory(settings, effectiveEventKey.lowercase().trim())
+                    val safeSettings = settings.copy(apiKeys = com.obsidianscout.integrations.ApiKeys())
+                    IntegrationService.getFullStatsHistory(safeSettings, effectiveEventKey.lowercase().trim())
                 }.getOrNull() ?: StatsHistoryResponse()
             } else {
                 StatsHistoryResponse()
@@ -914,7 +937,13 @@ object ShareService {
                     put("qualConfig", JsonSupport.json.encodeToJsonElement(ScoutingConfig.serializer(), qualConfig))
                 }
                 if (settings != null) {
-                    put("settings", JsonSupport.json.encodeToJsonElement(ApiSettings.serializer(), settings))
+                    val sanitizedSettings = settings.copy(
+                        apiKeys = com.obsidianscout.integrations.ApiKeys(),
+                        customUserPages = emptyMap(),
+                        pitScoutGroups = emptyList(),
+                        assignmentShifts = emptyList()
+                    )
+                    put("settings", JsonSupport.json.encodeToJsonElement(ApiSettings.serializer(), sanitizedSettings))
                 }
             }.toString()
         } catch (e: Exception) {

@@ -349,6 +349,9 @@ data class ApiSettingsPayload(
     val registrationLocked: Boolean = false,
     /** Roles allowed on the create-account page. Omitted (null) on save keeps the team's current value. */
     val selfRegisterRoles: List<String>? = null,
+    val assignmentReminderMinutes: Int? = null,
+    val enableAssignmentPushReminders: Boolean? = null,
+    val enableAssignmentEmailReminders: Boolean? = null,
     val program: String = "FRC",
     val statboticsBaseUrl: String = "https://api.statbotics.io",
     val match13BaseUrl: String = "https://actions.match13.com"
@@ -615,7 +618,8 @@ data class ForgotPasswordRequest(
     val username: String? = null,
     val teamNumber: Int? = null,
     val email: String? = null,
-    val isApp: Boolean = false
+    val isApp: Boolean = false,
+    val program: String? = null
 )
 
 @Serializable

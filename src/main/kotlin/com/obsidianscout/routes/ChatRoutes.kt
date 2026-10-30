@@ -200,7 +200,7 @@ fun Route.chatRoutes() {
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
                     val request = call.receive<ReactMessageRequest>()
                     try {
-                        val updated = ChatService.toggleReaction(id, session.username, request.emoji, session.teamNumber, session.program)
+                        val updated = ChatService.toggleReaction(id, session.username, request.emoji, session.teamNumber, session.program, session.userId, session.role)
                             ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
                         chatChanged(session)
                         call.respond(updated)
@@ -263,7 +263,7 @@ fun Route.chatRoutes() {
                     }
                 }
                 post("/groups") {
-                    val session = call.requireChatSession()
+                    val session = call.requireChatAdmin()
                     val request = call.receive<CreateGroupRequest>()
                     val success = ChatService.createGroup(
                         teamNumber = session.teamNumber,

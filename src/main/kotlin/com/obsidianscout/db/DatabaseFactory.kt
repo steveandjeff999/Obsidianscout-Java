@@ -21,6 +21,58 @@ private val consoleLog = org.slf4j.LoggerFactory.getLogger("com.obsidianscout.db
 class QuorumLostException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
 object DatabaseFactory {
+    val allTables: List<org.jetbrains.exposed.v1.core.Table> = listOf(
+        ReportedErrors,
+        Users,
+        ScoutingConfigs,
+        PitScoutingConfigs,
+        QualitativeScoutingConfigs,
+        ConfigRevisions,
+        DefaultConfigs,
+        DeletedDefaultConfigs,
+        ScoutingEntries,
+        PitScoutingEntries,
+        QualitativeScoutingEntries,
+        AppSettings,
+        ApiEvents,
+        ApiTeams,
+        ApiMatches,
+        TeamCacheOverrides,
+        ScoutingAlliances,
+        AllianceMemberships,
+        EpaOprHistoryCache,
+        PasswordResetTokens,
+        AllianceSelections,
+        MatchPlans,
+        MatchChecklists,
+        BatteryTrackers,
+        MatchPredictions,
+        WidgetTokens,
+        Banners,
+        EventInfoPosts,
+        EventInfoFiles,
+        ChatMessages,
+        UserChatLastRead,
+        ChatGroups,
+        PushSubscriptions,
+        FcmConfigs,
+        FcmDeviceTokens,
+        ClusterSecrets,
+        ClusterNotificationLocks,
+        SyncStatuses,
+        AnalyticsReports,
+        UserSessions,
+        PasskeyCredentials,
+        PasskeyChallenges,
+        ScoutingAssignments,
+        GamepadProfiles,
+        SharedLinks,
+        SharedLinkAccessLogs,
+        EntryTombstones,
+        SlackIntegrations,
+        SlackNotifications,
+        SlackUserPreferences
+    )
     private val uuidMigratedTables = listOf(
         "users", "scouting_configs", "pit_scouting_configs",
         "qualitative_scouting_configs", "default_configs", "scouting_entries",
@@ -217,63 +269,12 @@ object DatabaseFactory {
         primaryDatabase = primaryDb
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = primaryDb
 
+        val tables = allTables
+
         // Run the INT->UUID migration if the database still has the old schema
         if (runMigration) {
             migrateIntToUuidIfNeeded(config, isCockroach)
             dropOldIndicesIfNeeded(dataSource)
-
-            val tables = listOf(
-                ReportedErrors,
-                Users,
-                ScoutingConfigs,
-                PitScoutingConfigs,
-                QualitativeScoutingConfigs,
-                ConfigRevisions,
-                DefaultConfigs,
-                DeletedDefaultConfigs,
-                ScoutingEntries,
-                PitScoutingEntries,
-                QualitativeScoutingEntries,
-                AppSettings,
-                ApiEvents,
-                ApiTeams,
-                ApiMatches,
-                TeamCacheOverrides,
-                ScoutingAlliances,
-                AllianceMemberships,
-                EpaOprHistoryCache,
-                PasswordResetTokens,
-                AllianceSelections,
-                MatchPlans,
-                MatchChecklists,
-                BatteryTrackers,
-                MatchPredictions,
-                WidgetTokens,
-                Banners,
-                EventInfoPosts,
-                EventInfoFiles,
-                ChatMessages,
-                UserChatLastRead,
-                ChatGroups,
-                PushSubscriptions,
-                FcmConfigs,
-                FcmDeviceTokens,
-                ClusterSecrets,
-                ClusterNotificationLocks,
-                SyncStatuses,
-                AnalyticsReports,
-                UserSessions,
-                PasskeyCredentials,
-                PasskeyChallenges,
-                ScoutingAssignments,
-                GamepadProfiles,
-                SharedLinks,
-                SharedLinkAccessLogs,
-                EntryTombstones,
-                SlackIntegrations,
-                SlackNotifications,
-                SlackUserPreferences
-            )
 
             if (isCockroach) {
                 consoleLog.info("[Database] Executing raw DDL schema creation for CockroachDB...")

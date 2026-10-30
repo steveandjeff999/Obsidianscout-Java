@@ -44,7 +44,9 @@ object PasskeyService {
     private val secureRandom = SecureRandom()
 
     fun getEffectiveRpIdAndOrigin(clientOrigin: String? = null, hostHeader: String? = null): Pair<String, Origin> {
-        // Auto-resolve dynamically from client Origin or Host header if present
+        val appConfig = AppConfigLoader.load()
+        val siteUri = runCatching { URI(appConfig.getEffectiveSiteUrl()) }.getOrNull()
+        val siteHost = siteUri?.host?.lowercase() ?: "localhost"
         val candidate = clientOrigin?.takeIf { it.isNotBlank() } ?: hostHeader?.takeIf { it.isNotBlank() }
         if (!candidate.isNullOrBlank()) {
             val parsed = try {
@@ -52,12 +54,11 @@ object PasskeyService {
             } catch (_: Exception) { null }
 
             val rawHost = parsed?.host ?: candidate.substringBefore(":").trim()
-            if (rawHost.isNotBlank()) {
-                val candidateLower = rawHost.lowercase()
-                val isLocal = candidateLower == "localhost" || candidateLower == "127.0.0.1"
-                val rpId = if (candidateLower == "127.0.0.1") "localhost" else rawHost
-
-                // Determine scheme: clientOrigin scheme -> parsed scheme -> https (unless localhost)
+            val candidateLower = rawHost.lowercase()
+            val isLocal = candidateLower == "localhost" || candidateLower == "127.0.0.1"
+            val matchesSiteUrl = siteHost.isNotBlank() && (candidateLower == siteHost || candidateLower.endsWith(".$siteHost"))
+            if (rawHost.isNotBlank() && (isLocal || matchesSiteUrl)) {
+                val rpId = if (candidateLower == "127.0.0.1") "localhost" else (if (matchesSiteUrl) siteHost else rawHost)
                 val scheme = if (isLocal) {
                     parsed?.scheme?.takeIf { it.isNotBlank() } ?: "http"
                 } else {
@@ -70,9 +71,6 @@ object PasskeyService {
                 return Pair(rpId, Origin.create(originStr))
             }
         }
-
-        // Fallback to configured site_url in config.json
-        val appConfig = AppConfigLoader.load()
         val siteUrl = appConfig.getEffectiveSiteUrl()
         val uri = try {
             URI(siteUrl)
@@ -230,6 +228,7 @@ object PasskeyService {
         val attestedCredentialData = authData?.attestedCredentialData
             ?: throw ApiException(HttpStatusCode.BadRequest, "Missing attested credential data")
 
+        val validatedCredId = Base64.getUrlEncoder().withoutPadding().encodeToString(attestedCredentialData.credentialId)
         val coseKeyBytes = cborConverter.writeValueAsBytes(attestedCredentialData.coseKey)
         val coseKeyBase64Url = Base64.getUrlEncoder().withoutPadding().encodeToString(coseKeyBytes)
         val aaguidStr = attestedCredentialData.aaguid.value.toString()
@@ -240,7 +239,7 @@ object PasskeyService {
         val insertedId = transaction {
             PasskeyCredentials.insertAndGetId {
                 it[PasskeyCredentials.userId] = userUuid
-                it[PasskeyCredentials.credentialId] = credentialId
+                it[PasskeyCredentials.credentialId] = validatedCredId
                 it[publicKeyCose] = coseKeyBase64Url
                 it[signCount] = authData.signCount
                 it[aaguid] = aaguidStr
@@ -422,8 +421,16 @@ object PasskeyService {
             }
         }
 
+        val challengeUserId = challengeRow[PasskeyChallenges.userId]?.value
+        if (challengeUserId != null && challengeUserId != storedUserId) {
+            throw ApiException(HttpStatusCode.Unauthorized, "Passkey challenge user mismatch")
+        }
+
         // Return user record
         val userRow = transaction {
+            Users.update({ Users.id eq storedUserId }) {
+                it[Users.lastLogin] = now
+            }
             Users.selectAll().where { Users.id eq storedUserId }.firstOrNull()
         } ?: throw ApiException(HttpStatusCode.Unauthorized, "User for passkey no longer exists")
 

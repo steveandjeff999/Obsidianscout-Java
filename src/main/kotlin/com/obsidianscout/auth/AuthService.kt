@@ -903,12 +903,19 @@ object AuthService {
 
     fun revokeAllOtherSessions(userId: UUID, currentSessionId: String?): Int {
         val currentUuid = currentSessionId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        com.obsidianscout.widgets.WidgetTokenService.revokeForSession(currentUuid?.toString())
         return transaction {
             if (currentUuid != null) {
+                com.obsidianscout.db.WidgetTokens.deleteWhere {
+                    (com.obsidianscout.db.WidgetTokens.userId eq userId) and (com.obsidianscout.db.WidgetTokens.sessionId neq currentUuid)
+                }
                 UserSessions.deleteWhere {
                     (UserSessions.userId eq userId) and (UserSessions.id neq currentUuid)
                 }
             } else {
+                com.obsidianscout.db.WidgetTokens.deleteWhere {
+                    com.obsidianscout.db.WidgetTokens.userId eq userId
+                }
                 UserSessions.deleteWhere {
                     UserSessions.userId eq userId
                 }
@@ -918,6 +925,9 @@ object AuthService {
 
     fun revokeAllSessions(userId: UUID): Int {
         return transaction {
+            com.obsidianscout.db.WidgetTokens.deleteWhere {
+                com.obsidianscout.db.WidgetTokens.userId eq userId
+            }
             UserSessions.deleteWhere {
                 UserSessions.userId eq userId
             }

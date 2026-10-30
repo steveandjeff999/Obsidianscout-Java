@@ -145,6 +145,9 @@ private fun ApiSettings.toPayload(): ApiSettingsPayload {
         setupWizardCompleted = setupWizardCompleted,
         registrationLocked = registrationLocked,
         selfRegisterRoles = selfRegisterRoles,
+        assignmentReminderMinutes = assignmentReminderMinutes,
+        enableAssignmentPushReminders = enableAssignmentPushReminders,
+        enableAssignmentEmailReminders = enableAssignmentEmailReminders,
         program = program,
         statboticsBaseUrl = statboticsBaseUrl,
         match13BaseUrl = match13BaseUrl
@@ -202,6 +205,9 @@ private fun ApiSettingsPayload.toSettings(): ApiSettings {
         activeThemeName = activeThemeName,
         setupWizardCompleted = setupWizardCompleted,
         registrationLocked = registrationLocked,
+        assignmentReminderMinutes = assignmentReminderMinutes ?: 15,
+        enableAssignmentPushReminders = enableAssignmentPushReminders ?: true,
+        enableAssignmentEmailReminders = enableAssignmentEmailReminders ?: true,
         program = program,
         statboticsBaseUrl = statboticsBaseUrl,
         match13BaseUrl = match13BaseUrl
@@ -569,6 +575,9 @@ fun Route.configRoutes() {
                     val matchPredictionsEnabled = payload.matchPredictionsEnabled ?: previous.matchPredictionsEnabled
                     val dataPublic = payload.dataPublic ?: previous.dataPublic
                     val dataPublicIncludeNotes = payload.dataPublicIncludeNotes ?: previous.dataPublicIncludeNotes
+                    val assignmentReminderMinutes = payload.assignmentReminderMinutes ?: previous.assignmentReminderMinutes
+                    val enableAssignmentPushReminders = payload.enableAssignmentPushReminders ?: previous.enableAssignmentPushReminders
+                    val enableAssignmentEmailReminders = payload.enableAssignmentEmailReminders ?: previous.enableAssignmentEmailReminders
                     val updated = SettingsService.updateSettings(
                         session.teamNumber,
                         payload.toSettings().copy(
@@ -579,6 +588,10 @@ fun Route.configRoutes() {
                             matchPredictionsEnabled = matchPredictionsEnabled,
                             dataPublic = dataPublic,
                             dataPublicIncludeNotes = dataPublicIncludeNotes,
+                            assignmentReminderMinutes = assignmentReminderMinutes,
+                            enableAssignmentPushReminders = enableAssignmentPushReminders,
+                            enableAssignmentEmailReminders = enableAssignmentEmailReminders,
+                            customUserPages = previous.customUserPages,
                             // Edited on the assignments page, never sent by the settings form
                             pitScoutGroups = previous.pitScoutGroups,
                             assignmentShifts = previous.assignmentShifts

@@ -407,17 +407,20 @@ object AllianceService {
      * The calling team must have a pending INVITED membership.
      */
     fun respondToInvite(session: UserSession, allianceId: String, accept: Boolean) {
-        val allianceUuid = UUID.fromString(allianceId)
+        val inputUuid = runCatching { UUID.fromString(allianceId) }.getOrElse {
+            throw ApiException(HttpStatusCode.BadRequest, "Invalid alliance or invitation id format")
+        }
         transaction {
-            AllianceMemberships
+            val membership = AllianceMemberships
                 .selectAll().where {
-                    (AllianceMemberships.allianceId eq allianceUuid) and
+                    ((AllianceMemberships.allianceId eq inputUuid) or (AllianceMemberships.id eq inputUuid)) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
                     (AllianceMemberships.program eq session.program) and
                     (AllianceMemberships.status eq STATUS_INVITED)
                 }
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "No pending invite found for your team in this alliance")
+            val allianceUuid = membership[AllianceMemberships.allianceId]
 
             if (accept) {
                 val hasAnyActive = AllianceMemberships.selectAll().where {
@@ -959,6 +962,33 @@ object AllianceService {
     /**
      * Toggles the active status for a team's membership in an alliance, deactivating others in the same program.
      */
+    fun toggleDisabledMembership(session: UserSession, allianceId: String, disabled: Boolean) {
+        val allianceUuid = UUID.fromString(allianceId)
+        transaction {
+            AllianceMemberships
+                .selectAll().where {
+                    (AllianceMemberships.allianceId eq allianceUuid) and
+                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program) and
+                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED))
+                }
+                .firstOrNull()
+                ?: throw ApiException(HttpStatusCode.NotFound, "No accepted membership found for your team in this alliance")
+
+            AllianceMemberships.update({
+                (AllianceMemberships.allianceId eq allianceUuid) and
+                (AllianceMemberships.teamNumber eq session.teamNumber) and
+                (AllianceMemberships.program eq session.program)
+            }) {
+                it[AllianceMemberships.disabled] = disabled
+                if (disabled) {
+                    it[AllianceMemberships.active] = false
+                }
+            }
+            clearEffectiveSettingsCache()
+        }
+    }
+
     fun toggleActiveMembership(session: UserSession, allianceId: String, active: Boolean) {
         val allianceUuid = UUID.fromString(allianceId)
         transaction {

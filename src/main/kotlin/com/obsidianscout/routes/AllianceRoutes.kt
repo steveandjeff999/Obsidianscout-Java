@@ -177,7 +177,7 @@ fun Route.allianceRoutes() {
                     )
                 }
                 post("/{id}/respond") {
-                    val session = call.requireSession()
+                    val session = call.requireAdmin()
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val req = call.receive<RespondInviteRequest>()
@@ -185,7 +185,7 @@ fun Route.allianceRoutes() {
                     call.respond(HttpStatusCode.NoContent)
                 }
                 delete("/{id}/members/{teamNumber}") {
-                    val session = call.requireSession()
+                    val session = call.requireAdmin()
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val targetTeam = call.parameters["teamNumber"]?.toIntOrNull()
@@ -230,7 +230,7 @@ fun Route.allianceRoutes() {
                 }
                 // Saves an alliance form directly; the editor uses this when live editing can't connect.
                 put("/{id}/config/{kind}") {
-                    val session = call.requireSession()
+                    val session = call.requireAdmin()
                     val idUuid = runCatching { java.util.UUID.fromString(call.parameters["id"]) }.getOrElse {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id format")
                     }
@@ -248,7 +248,7 @@ fun Route.allianceRoutes() {
                     call.respond(HttpStatusCode.NoContent)
                 }
                 post("/{id}/toggle-active") {
-                    val session = call.requireSession()
+                    val session = call.requireAdmin()
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val req = call.receive<ToggleAllianceActiveRequest>()
@@ -256,11 +256,11 @@ fun Route.allianceRoutes() {
                     call.respond(HttpStatusCode.NoContent)
                 }
                 post("/{id}/toggle-disable") {
-                    val session = call.requireSession()
+                    val session = call.requireAdmin()
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid alliance id")
                     val req = call.receive<ToggleAllianceDisableRequest>()
-                    AllianceService.toggleActiveMembership(session, id, !req.disabled)
+                    AllianceService.toggleDisabledMembership(session, id, req.disabled)
                     call.respond(HttpStatusCode.NoContent)
                 }
                 post("/{id}/members/{teamNumber}/promote") {

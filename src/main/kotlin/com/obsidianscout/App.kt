@@ -372,12 +372,21 @@ fun Application.module(appConfig: AppConfig) {
         }
 
         if (method in listOf("POST", "PUT", "DELETE", "PATCH")) {
-            val isExcludedPath = path.startsWith("/api/push") ||
-                    path.startsWith("/api/mobile") ||
+            val isClusterNodeAuth = call.request.headers["X-Cluster-Signature"] != null
+            val isExcludedPath = path.startsWith("/api/mobile") ||
                     path.startsWith("/api/cluster") ||
-                    path.startsWith("/api/admin/cluster") ||
-                    path.startsWith("/api/auth/") ||
-                    call.request.headers["X-Cluster-Signature"] != null ||
+                    (path.startsWith("/api/admin/cluster") && isClusterNodeAuth) ||
+                    path in listOf(
+                        "/api/auth/login",
+                        "/api/auth/register",
+                        "/api/auth/forgot-password",
+                        "/api/auth/reset-password",
+                        "/api/auth/first-time-setup",
+                        "/api/auth/verify-reset-token"
+                    ) ||
+                    path.startsWith("/api/auth/passkey/authenticate") ||
+                    path.startsWith("/api/auth/slack") ||
+                    isClusterNodeAuth ||
                     call.request.headers["X-Mobile-App"] != null
             if (!isExcludedPath) {
                 val origin = call.request.headers["Origin"]

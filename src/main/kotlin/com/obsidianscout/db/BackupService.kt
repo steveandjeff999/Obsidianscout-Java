@@ -131,7 +131,8 @@ data class BannerBackupDto(
     val isActive: Boolean,
     val createdAt: Long,
     val updatedAt: Long,
-    val program: String = "FRC"
+    val program: String = "FRC",
+    val showOnLogin: Boolean = false
 )
 
 @Serializable
@@ -198,7 +199,8 @@ data class EpaOprHistoryCacheBackupDto(
     val eventKey: String,
     val oprsJson: String,
     val epaHistoryJson: String,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val match13HistoryJson: String? = null
 )
 
 @Serializable
@@ -1992,7 +1994,7 @@ object BackupService {
         val isGlobal = isSuperAdmin && apiEvents.isNotEmpty()
         val backup = ObsidianDbBackup(
             teamNumber = targetTeamNumber,
-            type = if (users.isNotEmpty() || scoutingConfigs.isNotEmpty()) "entire" else "scouting",
+            type = if (users.isNotEmpty() || appSettings.isNotEmpty()) "entire" else "scouting",
             scope = if (isGlobal) "global" else "team",
             scoutingConfigs = scoutingConfigs,
             pitScoutingConfigs = pitScoutingConfigs,

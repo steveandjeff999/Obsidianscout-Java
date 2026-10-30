@@ -125,25 +125,31 @@ fun Route.contactRoutes() {
                     
                     val teamDisplay = session?.let { "Team ${it.teamNumber}" } 
                         ?: (request.teamNumber?.let { "Team $it" } ?: "Unauthenticated / Locked Out")
-                    val senderDisplay = session?.username ?: request.name.ifBlank { "Visitor" }
-                    val subject = "ObsidianScout: ${formattedType} from ${senderDisplay} (${teamDisplay})"
-                    val userEmailInfo = session?.email?.let { "<strong>Account Email:</strong> ${it}<br/>" } ?: ""
-                    val replyToInfo = if (request.replyToEmail.isNullOrBlank()) "" else "<strong>Reply-To Email:</strong> ${request.replyToEmail}<br/>"
-                    val loggedInInfo = session?.let { "${it.username} (Team ${it.teamNumber})" } ?: "None (Unauthenticated / Locked Out Visitor)"
+                    fun esc(s: String): String = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#x27;")
+                    val safeName = esc(request.name)
+                    val safeType = esc(formattedType)
+                    val safeReplyTo = request.replyToEmail?.let { esc(it) }
+                    val safeMessage = esc(request.message)
+
+                    val senderDisplay = session?.username ?: safeName.ifBlank { "Visitor" }
+                    val subject = "ObsidianScout: ${safeType} from ${senderDisplay} (${teamDisplay})"
+                    val userEmailInfo = session?.email?.let { "<strong>Account Email:</strong> ${esc(it)}<br/>" } ?: ""
+                    val replyToInfo = if (safeReplyTo.isNullOrBlank()) "" else "<strong>Reply-To Email:</strong> ${safeReplyTo}<br/>"
+                    val loggedInInfo = session?.let { "${esc(it.username)} (Team ${it.teamNumber})" } ?: "None (Unauthenticated / Locked Out Visitor)"
                     
                     val body = """
                         <html>
                         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                             <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
                                 <h2 style="color: #4f46e5; border-bottom: 2px solid #edf2f7; padding-bottom: 10px;">New Contact Form Submission</h2>
-                                <p><strong>Type:</strong> ${formattedType}</p>
-                                <p><strong>Sender Name:</strong> ${request.name}</p>
+                                <p><strong>Type:</strong> ${safeType}</p>
+                                <p><strong>Sender Name:</strong> ${safeName}</p>
                                 <p><strong>Logged-in Account:</strong> ${loggedInInfo}</p>
                                 <p>${userEmailInfo}</p>
                                 <p>${replyToInfo}</p>
                                 <p><strong>Message:</strong></p>
                                 <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; border: 1px solid #e5e7eb; white-space: pre-wrap;">
-                                    ${request.message}
+                                    ${safeMessage}
                                 </div>
                             </div>
                         </body>

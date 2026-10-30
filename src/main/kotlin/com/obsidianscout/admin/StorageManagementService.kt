@@ -746,8 +746,8 @@ object StorageManagementService {
     }
 
     fun deleteTeamData(teamNumber: Int, program: String = "FRC"): StorageActionResultDto {
-        if (teamNumber < 0) {
-            return StorageActionResultDto(false, "Invalid team number: must be non-negative")
+        if (teamNumber <= 0) {
+            return StorageActionResultDto(false, "Invalid team number: must be greater than zero")
         }
 
         val progUpper = program.trim().uppercase()
@@ -814,6 +814,47 @@ object StorageManagementService {
             // Delete Alliance Memberships
             deletedRecords += AllianceMemberships.deleteWhere {
                 (AllianceMemberships.teamNumber eq teamNumber) and ((AllianceMemberships.program eq progUpper) or (AllianceMemberships.program eq progLower))
+            }.toLong()
+
+            // Delete Assignments, Predictions, Selections, Plans, Checklists, Batteries, Banners, Slack, Profiles, Shares
+            val teamUserIds = Users.selectAll().where {
+                (Users.teamNumber eq teamNumber) and ((Users.program eq progUpper) or (Users.program eq progLower))
+            }.map { it[Users.id].value.toString() }
+
+            if (teamUserIds.isNotEmpty()) {
+                deletedRecords += MatchPredictions.deleteWhere {
+                    MatchPredictions.userId inList teamUserIds
+                }.toLong()
+            }
+
+            val ownerKeys = listOf("$progUpper:$teamNumber", "$progLower:$teamNumber", "$teamNumber")
+
+            deletedRecords += ScoutingAssignments.deleteWhere {
+                (ScoutingAssignments.ownerTeamNumber eq teamNumber) and ((ScoutingAssignments.program eq progUpper) or (ScoutingAssignments.program eq progLower))
+            }.toLong()
+            deletedRecords += AllianceSelections.deleteWhere {
+                AllianceSelections.ownerKey inList ownerKeys
+            }.toLong()
+            deletedRecords += MatchPlans.deleteWhere {
+                MatchPlans.ownerKey inList ownerKeys
+            }.toLong()
+            deletedRecords += MatchChecklists.deleteWhere {
+                MatchChecklists.ownerKey inList ownerKeys
+            }.toLong()
+            deletedRecords += BatteryTrackers.deleteWhere {
+                BatteryTrackers.ownerKey inList ownerKeys
+            }.toLong()
+            deletedRecords += Banners.deleteWhere {
+                (Banners.teamNumber eq teamNumber) and ((Banners.program eq progUpper) or (Banners.program eq progLower))
+            }.toLong()
+            deletedRecords += SlackIntegrations.deleteWhere {
+                (SlackIntegrations.teamNumber eq teamNumber) and ((SlackIntegrations.program eq progUpper) or (SlackIntegrations.program eq progLower))
+            }.toLong()
+            deletedRecords += GamepadProfiles.deleteWhere {
+                (GamepadProfiles.ownerTeamNumber eq teamNumber) and ((GamepadProfiles.program eq progUpper) or (GamepadProfiles.program eq progLower))
+            }.toLong()
+            deletedRecords += SharedLinks.deleteWhere {
+                (SharedLinks.ownerTeamNumber eq teamNumber) and ((SharedLinks.program eq progUpper) or (SharedLinks.program eq progLower))
             }.toLong()
         }
 

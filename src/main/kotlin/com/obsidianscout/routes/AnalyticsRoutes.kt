@@ -263,7 +263,7 @@ fun Route.analyticsRoutes() {
                     call.respondText(sb.toString(), ContentType.Text.CSV, HttpStatusCode.OK)
                 }
                 post {
-                    val session = call.requireSession()
+                    val session = call.requireAnalyticsOrAbove()
                     val request = call.receive<com.obsidianscout.scouting.AllianceSelectionUpdateRequest>()
                     val response = com.obsidianscout.scouting.AllianceSelectionService.updateSelection(session, request)
                     allianceSelectionChanged()
@@ -277,7 +277,7 @@ fun Route.analyticsRoutes() {
                         call.respond(com.obsidianscout.scouting.AllianceSelectionService.getPickLists(session, eventKey))
                     }
                     post {
-                        val session = call.requireSession()
+                        val session = call.requireAnalyticsOrAbove()
                         val request = call.receive<com.obsidianscout.scouting.PickListsUpdateRequest>()
                         if (request.eventKey.isBlank()) {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey")
@@ -295,7 +295,7 @@ fun Route.analyticsRoutes() {
                         call.respond(com.obsidianscout.scouting.AllianceSelectionService.getRankedPickList(session, eventKey))
                     }
                     post {
-                        val session = call.requireSession()
+                        val session = call.requireAnalyticsOrAbove()
                         val request = call.receive<com.obsidianscout.scouting.RankedPickListUpdateRequest>()
                         if (request.eventKey.isBlank()) {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey")
@@ -304,7 +304,7 @@ fun Route.analyticsRoutes() {
                         allianceSelectionChanged()
                     }
                     post("/dnp") {
-                        val session = call.requireSession()
+                        val session = call.requireAnalyticsOrAbove()
                         val request = call.receive<com.obsidianscout.scouting.DoNotPickUpdateRequest>()
                         if (request.eventKey.isBlank() || request.teamNumber <= 0) {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey or teamNumber")

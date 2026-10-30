@@ -361,51 +361,8 @@ fun Route.adminRoutes() {
                     val originalNotificationPreference = userRecord[com.obsidianscout.db.Users.notificationPreference]
 
                     transaction {
-                        org.jetbrains.exposed.v1.jdbc.SchemaUtils.drop(
-                            com.obsidianscout.db.Users,
-                            com.obsidianscout.db.ScoutingConfigs,
-                            com.obsidianscout.db.PitScoutingConfigs,
-                            com.obsidianscout.db.QualitativeScoutingConfigs,
-                            com.obsidianscout.db.ScoutingEntries,
-                            com.obsidianscout.db.PitScoutingEntries,
-                            com.obsidianscout.db.QualitativeScoutingEntries,
-                            com.obsidianscout.db.AppSettings,
-                            com.obsidianscout.db.ApiEvents,
-                            com.obsidianscout.db.ApiTeams,
-                            com.obsidianscout.db.ApiMatches,
-                            com.obsidianscout.db.ScoutingAlliances,
-                            com.obsidianscout.db.AllianceMemberships,
-                            com.obsidianscout.db.EpaOprHistoryCache,
-                            com.obsidianscout.db.PasswordResetTokens,
-                            com.obsidianscout.db.AllianceSelections,
-                            com.obsidianscout.db.Banners,
-                            com.obsidianscout.db.ChatMessages,
-                            com.obsidianscout.db.UserChatLastRead,
-                            com.obsidianscout.db.PushSubscriptions
-                        )
-
-                        org.jetbrains.exposed.v1.jdbc.SchemaUtils.create(
-                            com.obsidianscout.db.Users,
-                            com.obsidianscout.db.ScoutingConfigs,
-                            com.obsidianscout.db.PitScoutingConfigs,
-                            com.obsidianscout.db.QualitativeScoutingConfigs,
-                            com.obsidianscout.db.ScoutingEntries,
-                            com.obsidianscout.db.PitScoutingEntries,
-                            com.obsidianscout.db.QualitativeScoutingEntries,
-                            com.obsidianscout.db.AppSettings,
-                            com.obsidianscout.db.ApiEvents,
-                            com.obsidianscout.db.ApiTeams,
-                            com.obsidianscout.db.ApiMatches,
-                            com.obsidianscout.db.ScoutingAlliances,
-                            com.obsidianscout.db.AllianceMemberships,
-                            com.obsidianscout.db.EpaOprHistoryCache,
-                            com.obsidianscout.db.PasswordResetTokens,
-                            com.obsidianscout.db.AllianceSelections,
-                            com.obsidianscout.db.Banners,
-                            com.obsidianscout.db.ChatMessages,
-                            com.obsidianscout.db.UserChatLastRead,
-                            com.obsidianscout.db.PushSubscriptions
-                        )
+                        org.jetbrains.exposed.v1.jdbc.SchemaUtils.drop(*com.obsidianscout.db.DatabaseFactory.allTables.reversed().toTypedArray())
+                        org.jetbrains.exposed.v1.jdbc.SchemaUtils.create(*com.obsidianscout.db.DatabaseFactory.allTables.toTypedArray())
 
                         com.obsidianscout.db.Users.insert {
                             it[id] = EntityID(UUID.fromString(originalId), com.obsidianscout.db.Users)
@@ -418,6 +375,21 @@ fun Route.adminRoutes() {
                             it[profilePicture] = originalProfilePicture
                             it[notificationPreference] = originalNotificationPreference
                             it[createdAt] = Instant.now()
+                        }
+
+                        if (!session.sessionId.isNullOrBlank()) {
+                            val sid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
+                            if (sid != null) {
+                                com.obsidianscout.db.UserSessions.insert {
+                                    it[id] = EntityID(sid, com.obsidianscout.db.UserSessions)
+                                    it[userId] = EntityID(UUID.fromString(originalId), com.obsidianscout.db.Users)
+                                    it[clientType] = "web"
+                                    it[deviceName] = "Web Session"
+                                    it[createdAt] = Instant.now()
+                                    it[lastActiveAt] = Instant.now()
+                                    it[expiresAt] = Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS)
+                                }
+                            }
                         }
                     }
 
@@ -700,9 +672,20 @@ fun Route.adminRoutes() {
                             val part = multipart.readPart() ?: break
                             if (part is PartData.FileItem) {
                                 val tempFile = File.createTempFile("restore-upload-", ".db")
+                                var totalBytes = 0L
+                                val buffer = ByteArray(8192)
                                 part.streamProvider().use { input ->
                                     tempFile.outputStream().use { output ->
-                                        input.copyTo(output)
+                                        while (true) {
+                                            val read = input.read(buffer)
+                                            if (read == -1) break
+                                            totalBytes += read
+                                            if (totalBytes > com.obsidianscout.db.BackupService.MAX_IMPORT_BYTES) {
+                                                tempFile.delete()
+                                                throw com.obsidianscout.auth.ApiException(HttpStatusCode.PayloadTooLarge, "Uploaded snapshot exceeds maximum size limit")
+                                            }
+                                            output.write(buffer, 0, read)
+                                        }
                                     }
                                 }
                                 uploadedFile = tempFile

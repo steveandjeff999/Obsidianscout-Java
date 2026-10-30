@@ -538,7 +538,8 @@ fun Route.authRoutes() {
                             com.obsidianscout.db.Users
                                 .selectAll().where { 
                                     (com.obsidianscout.db.Users.username eq username) and 
-                                    (com.obsidianscout.db.Users.teamNumber eq teamNumber) 
+                                    (com.obsidianscout.db.Users.teamNumber eq teamNumber) and
+                                    (if (!request.program.isNullOrBlank()) (com.obsidianscout.db.Users.program eq request.program.uppercase()) else org.jetbrains.exposed.v1.core.Op.TRUE)
                                 }
                                 .limit(1)
                                 .firstOrNull()
