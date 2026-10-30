@@ -247,39 +247,43 @@ fun Application.module(appConfig: AppConfig) {
         }
         identity()
     }
+    // Pages ask for JS/CSS as ?v=<app version>, which changes every release, so browsers and the CDN may keep those
+    // files. Not under `gradlew run` (resources served from a plain directory), where files change without a version bump.
+    val versionedAssetsCacheable = File("static").isDirectory ||
+        Thread.currentThread().contextClassLoader.getResource("static/index.html")?.protocol.let { it != null && it != "file" }
+    val isVersionedAsset = { call: io.ktor.server.application.ApplicationCall ->
+        val path = call.request.path()
+        versionedAssetsCacheable && (path.endsWith(".js") || path.endsWith(".css")) && call.request.queryParameters["v"] != null
+    }
+
+    // Cache-Control comes from exactly one place per response: here for responses whose caching depends on their
+    // status, the interceptor below for everything else (it skips these paths).
     install(CachingHeaders) {
         options { call, content ->
-            val path = call.request.path()
-            val method = call.request.local.method.value.uppercase()
-            if (path == "/sw.js" || path.endsWith("/sw.js")) {
-                CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
-            } else if (path.startsWith("/models/")) {
-                // Local AI weights/runtime: URLs embed a pinned revision, so files never change. Errors (401/404) must
-                // not be cached, or a browser keeps failing after the model is installed.
-                // (The file content is wrapped by PartialContent, so decide by status rather than content type.)
-                val status = content.status ?: call.response.status()
-                if (status == null || status.isSuccess()) {
-                    CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 31_536_000, visibility = CacheControl.Visibility.Private))
-                } else {
-                    CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
-                }
-            } else if (path.contains("/vendor/") || path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) {
-                CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 3600 * 24 * 30, visibility = CacheControl.Visibility.Public))
-            } else if (path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".json")) {
-                CachingOptions(CacheControl.NoCache(visibility = CacheControl.Visibility.Public))
-            } else if (path.startsWith("/api/public/")) {
-                CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
-            } else if (method == "GET" && path.startsWith("/api/")) {
-                CachingOptions(CacheControl.NoCache(visibility = CacheControl.Visibility.Private))
+            val isModel = call.request.path().startsWith("/models/")
+            if (!isModel && !isVersionedAsset(call)) return@options null
+            // Local AI weights/runtime URLs embed a pinned revision, and versioned assets change URL every release.
+            // Errors (401/404) must not be cached, or a browser keeps failing after the file appears.
+            // (Model files are wrapped by PartialContent, so decide by status rather than content type.)
+            val status = content.status ?: call.response.status()
+            // A missing .js/.css falls through to the index.html default with a 200: never let that be kept.
+            val type = content.contentType
+            val isScriptOrStyle = type != null && (type.match(ContentType.Text.CSS) || type.contentSubtype.contains("javascript"))
+            val visibility = if (isModel) CacheControl.Visibility.Private else CacheControl.Visibility.Public
+            if ((status == null || status.isSuccess()) && (isModel || isScriptOrStyle)) {
+                CachingOptions(CacheControl.MaxAge(maxAgeSeconds = 31_536_000, visibility = visibility))
             } else {
                 CachingOptions(CacheControl.NoStore(visibility = CacheControl.Visibility.Private))
             }
         }
     }
     install(CallLogging) {
-        filter { call -> 
-            if (appConfig.server.logging) true 
-            else call.request.path().startsWith("/api") 
+        // With server.logging off, log only API writes and failed API calls: the polled GETs are most of the traffic.
+        filter { call ->
+            if (appConfig.server.logging) return@filter true
+            if (!call.request.path().startsWith("/api")) return@filter false
+            val status = call.response.status()?.value ?: 0
+            call.request.local.method.value != "GET" || status >= 400
         }
     }
 
@@ -319,6 +323,10 @@ fun Application.module(appConfig: AppConfig) {
             call.response.headers.append("Expires", "0")
             call.response.headers.append("CDN-Cache-Control", "no-store")
             call.response.headers.append("Cloudflare-CDN-Cache-Control", "no-store")
+        } else if (path.startsWith("/models/") || isVersionedAsset(call)) {
+            // Set by CachingHeaders once the status is known.
+        } else if (isAvatarPath(path) && call.request.queryParameters["v"] != null) {
+            // The avatar route sets its own long-lived header on success.
         } else if (!isAsset) {
             if (path.startsWith("/api/public/")) {
                 // Public data must disappear the moment a team turns sharing off, so nothing may keep a copy.
@@ -328,14 +336,20 @@ fun Application.module(appConfig: AppConfig) {
             } else if (path.startsWith("/api/")) {
                 // Pragma/Expires only matter to HTTP/1.0 caches; API clients all honour Cache-Control.
                 call.response.headers.append("Cache-Control", "no-store, no-cache, must-revalidate, private")
+            } else if (method == "GET" && (path.endsWith(".json") || path.endsWith(".webmanifest"))) {
+                call.response.headers.append("Cache-Control", "public, no-cache")
             } else {
-                call.response.headers.append("Cache-Control", "no-store, no-cache, must-revalidate, private")
-                call.response.headers.append("Pragma", "no-cache")
-                call.response.headers.append("Expires", "0")
+                // Pages: revalidated on every load (they carry an ETag, so an unchanged page costs a 304).
+                call.response.headers.append("Cache-Control", "private, no-cache, must-revalidate")
             }
-        } else if (path.endsWith(".js") || path.endsWith(".css")) {
-            call.response.headers.append("CDN-Cache-Control", "no-cache")
-            call.response.headers.append("Cloudflare-CDN-Cache-Control", "no-cache")
+        } else if (path.contains("/vendor/") || path.endsWith(".png") || path.endsWith(".ico") || path.endsWith(".woff2")) {
+            call.response.headers.append("Cache-Control", "public, max-age=2592000")
+        } else {
+            call.response.headers.append("Cache-Control", "public, no-cache")
+            if (path.endsWith(".js") || path.endsWith(".css")) {
+                call.response.headers.append("CDN-Cache-Control", "no-cache")
+                call.response.headers.append("Cloudflare-CDN-Cache-Control", "no-cache")
+            }
         }
 
         // The app never sends this cookie back (its requests carry X-Mobile-App and skip the CSRF check), so it would
@@ -777,6 +791,9 @@ private fun isAutoGeneratedCertMissingSan(keystoreFile: File, httpsConfig: com.o
         sans.none { it.equals(dnsName, ignoreCase = true) }
     }.getOrDefault(false)
 }
+
+/** `/api/users/{id}/avatar`: profile pictures, referenced by versioned URL. */
+internal fun isAvatarPath(path: String): Boolean = path.startsWith("/api/users/") && path.endsWith("/avatar")
 
 /** True when [url] (an Origin or Referer value) points at exactly [hostHeader] (host[:port]). */
 private fun sameHost(url: String?, hostHeader: String): Boolean {

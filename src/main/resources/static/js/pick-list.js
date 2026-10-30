@@ -15,6 +15,9 @@
     let saveChain = Promise.resolve();
     let pendingSaves = 0;
     let pollIntervalId = null;
+    // Board changes arrive as a push over the notification socket; the poll only catches changes made through
+    // another cluster node.
+    Obsidianscout.onInvalidate(["alliance-selection"], () => poll());
     let dragTeamNumber = null;
 
     const METRIC_PREF_KEY = "obsidian-pick-list-metric";
@@ -167,7 +170,7 @@
         boardSyncedAt = null;
         await Promise.all([refreshPickList(true), refreshBoard()]);
         renderAll();
-        pollIntervalId = setInterval(poll, 4000);
+        pollIntervalId = setInterval(() => { if (!document.hidden) poll(); }, 15000);
     }
 
     async function refreshPickList(force) {

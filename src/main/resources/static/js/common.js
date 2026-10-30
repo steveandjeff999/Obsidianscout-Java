@@ -241,7 +241,8 @@ import {
 } from './services/chat-poller.js';
 
 import {
-    initNotificationSocket
+    initNotificationSocket,
+    onInvalidate
 } from './services/notification-socket.js';
 
 import {
@@ -334,6 +335,7 @@ export function hideModal(modalIdOrEl) {
 
 // Export public API to window.Obsidianscout
 window.Obsidianscout = {
+    onInvalidate,
     showModal,
     hideModal,
     initErrorReporter,

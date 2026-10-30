@@ -9,6 +9,8 @@ import com.obsidianscout.db.PushNotificationService
 import com.obsidianscout.db.ScoutingAssignments
 import com.obsidianscout.db.Users
 import com.obsidianscout.db.readTransaction
+import com.obsidianscout.config.AppConfigLoader
+import com.obsidianscout.integrations.ClusterLease
 import com.obsidianscout.integrations.SettingsService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,42 +55,53 @@ object ScoutingReminderScheduler {
         consoleLog.info("[ScoutingReminderScheduler] Background reminder scheduler stopped.")
     }
 
+    /** One node sends reminders; the lease outlives a sweep so it stays put while the holder is alive. */
+    private const val LEASE_KEY = "assignment-reminders"
+    private const val LEASE_SECONDS = 150L
+
     fun checkAndSendReminders() {
+        if (ClusterLease.tryAcquire(LEASE_KEY, LEASE_SECONDS) != ClusterLease.Result.ACQUIRED) return
+
         val now = Instant.now()
         val nowEpochSec = now.epochSecond
 
-        // 1. Fetch pending assignments with a matchKey
-        val pendingAssignments = readTransaction {
-            ScoutingAssignments.selectAll().where {
-                (ScoutingAssignments.status eq "PENDING") and
-                (ScoutingAssignments.matchKey.isNotNull())
-            }.toList()
+        // Only assignments whose match starts between 15 minutes ago and 2 hours from now, with a reminder still unsent.
+        val due = readTransaction {
+            ScoutingAssignments
+                .join(ApiMatches, JoinType.INNER, ScoutingAssignments.matchKey, ApiMatches.matchKey)
+                .select(
+                    ScoutingAssignments.id, ScoutingAssignments.matchKey, ScoutingAssignments.eventKey,
+                    ScoutingAssignments.ownerTeamNumber, ScoutingAssignments.program,
+                    ScoutingAssignments.assignedUserId, ScoutingAssignments.reminderMinutesBefore,
+                    ScoutingAssignments.pushReminderSentAt, ScoutingAssignments.emailReminderSentAt,
+                    ScoutingAssignments.matchNumber, ScoutingAssignments.targetTeamNumber,
+                    ScoutingAssignments.assignmentType, ApiMatches.scheduledTime, ApiMatches.matchNumber
+                )
+                .where {
+                    (ScoutingAssignments.status eq "PENDING") and
+                    (ApiMatches.scheduledTime greaterEq (nowEpochSec - 900)) and
+                    (ApiMatches.scheduledTime lessEq (nowEpochSec + 7200)) and
+                    (ScoutingAssignments.pushReminderSentAt.isNull() or ScoutingAssignments.emailReminderSentAt.isNull())
+                }
+                .toList()
         }
+        if (due.isEmpty()) return
 
-        if (pendingAssignments.isEmpty()) return
-
-        val matchKeys = pendingAssignments.mapNotNull { it[ScoutingAssignments.matchKey] }.distinct()
-        val matchesMap = readTransaction {
-            ApiMatches.selectAll().where { ApiMatches.matchKey inList matchKeys }
-                .associateBy { it[ApiMatches.matchKey] }
-        }
-
-        val userIds = pendingAssignments.map { it[ScoutingAssignments.assignedUserId].value }.distinct()
+        val userIds = due.map { it[ScoutingAssignments.assignedUserId].value }.distinct()
         val usersMap = readTransaction {
-            Users.selectAll().where { Users.id inList userIds }.associateBy { it[Users.id].value }
+            Users.select(Users.id, Users.username, Users.email)
+                .where { Users.id inList userIds }
+                .associateBy { it[Users.id].value }
         }
 
+        val baseUrl = AppConfigLoader.load().getEffectiveSiteUrl()
         // Cache team settings by (teamNumber, program)
         val teamSettingsMap = mutableMapOf<Pair<Int, String>, com.obsidianscout.integrations.ApiSettings>()
 
-        for (assignment in pendingAssignments) {
+        for (assignment in due) {
             val mKey = assignment[ScoutingAssignments.matchKey] ?: continue
-            val matchRow = matchesMap[mKey] ?: continue
-            val scheduledTimeSec = matchRow[ApiMatches.scheduledTime] ?: continue
-
-            // Don't remind for matches older than 15 minutes or more than 2 hours in future
+            val scheduledTimeSec = assignment[ApiMatches.scheduledTime] ?: continue
             val diffSec = scheduledTimeSec - nowEpochSec
-            if (diffSec < -900 || diffSec > 7200) continue
 
             val teamNumber = assignment[ScoutingAssignments.ownerTeamNumber]
             val program = assignment[ScoutingAssignments.program]
@@ -100,82 +113,89 @@ object ScoutingReminderScheduler {
             val reminderWindowSec = reminderMinutes * 60L
 
             // Trigger when within the reminder window before match scheduled start
-            if (diffSec <= reminderWindowSec && diffSec > -300) {
-                val userUuid = assignment[ScoutingAssignments.assignedUserId].value
-                val userRow = usersMap[userUuid] ?: continue
-                val assignmentId = assignment[ScoutingAssignments.id].value
+            if (diffSec > reminderWindowSec || diffSec <= -300) continue
 
-                val pushSent = assignment[ScoutingAssignments.pushReminderSentAt] != null
-                val emailSent = assignment[ScoutingAssignments.emailReminderSentAt] != null
+            val userUuid = assignment[ScoutingAssignments.assignedUserId].value
+            val userRow = usersMap[userUuid] ?: continue
+            val assignmentId = assignment[ScoutingAssignments.id].value
 
-                val matchNumber = assignment[ScoutingAssignments.matchNumber] ?: matchRow[ApiMatches.matchNumber] ?: 0
-                val targetTeam = assignment[ScoutingAssignments.targetTeamNumber]
-                val type = assignment[ScoutingAssignments.assignmentType]
+            val matchNumber = assignment[ScoutingAssignments.matchNumber] ?: assignment[ApiMatches.matchNumber] ?: 0
+            val targetTeam = assignment[ScoutingAssignments.targetTeamNumber]
+            val type = assignment[ScoutingAssignments.assignmentType]
+            val eventKey = assignment[ScoutingAssignments.eventKey]
 
-                val title = when (type) {
-                    "MATCH" -> "Match #$matchNumber starting soon!"
-                    "QUALITATIVE" -> "Qualitative Scouting Match #$matchNumber"
-                    else -> "Scouting Reminder"
+            val title = when (type) {
+                "MATCH" -> "Match #$matchNumber starting soon!"
+                "QUALITATIVE" -> "Qualitative Scouting Match #$matchNumber"
+                else -> "Scouting Reminder"
+            }
+
+            val teamDetail = if (targetTeam != null) "Team $targetTeam" else "your assigned team"
+            val body = "You are assigned to scout $teamDetail in Match #$matchNumber in approx ${maxOf(1, diffSec / 60)} min(s)."
+            val scoutUrl = when (type) {
+                "MATCH" -> "/scout?matchKey=$mKey&matchNumber=$matchNumber${if (targetTeam != null) "&team=$targetTeam" else ""}&event=$eventKey"
+                "QUALITATIVE" -> "/qual-scout?matchKey=$mKey&matchNumber=$matchNumber${if (targetTeam != null) "&team=$targetTeam" else ""}&event=$eventKey"
+                else -> "/my-assignments"
+            }
+
+            // Push reminder
+            if (assignment[ScoutingAssignments.pushReminderSentAt] == null && settings.enableAssignmentPushReminders &&
+                claim(assignmentId, ScoutingAssignments.pushReminderSentAt, now)
+            ) {
+                try {
+                    PushNotificationService.sendAssignmentReminder(
+                        userId = userUuid,
+                        title = title,
+                        body = body,
+                        url = scoutUrl,
+                        tag = "reminder-match-$matchNumber"
+                    )
+                    consoleLog.info("[ScoutingReminderScheduler] Sent push reminder for assignment $assignmentId to user ${userRow[Users.username]} for Match #$matchNumber")
+                } catch (e: Exception) {
+                    unclaim(assignmentId, ScoutingAssignments.pushReminderSentAt)
+                    consoleLog.error("[ScoutingReminderScheduler] Failed to send push reminder for assignment $assignmentId: ${e.message}")
                 }
+            }
 
-                val teamDetail = if (targetTeam != null) "Team $targetTeam" else "your assigned team"
-                val body = "You are assigned to scout $teamDetail in Match #$matchNumber in approx ${maxOf(1, diffSec / 60)} min(s)."
-                val scoutUrl = when (type) {
-                    "MATCH" -> "/scout?matchKey=$mKey&matchNumber=$matchNumber${if (targetTeam != null) "&team=$targetTeam" else ""}&event=${assignment[ScoutingAssignments.eventKey]}"
-                    "QUALITATIVE" -> "/qual-scout?matchKey=$mKey&matchNumber=$matchNumber${if (targetTeam != null) "&team=$targetTeam" else ""}&event=${assignment[ScoutingAssignments.eventKey]}"
-                    else -> "/my-assignments"
+            // Email reminder
+            val userEmail = userRow[Users.email]
+            if (assignment[ScoutingAssignments.emailReminderSentAt] == null && settings.enableAssignmentEmailReminders &&
+                !userEmail.isNullOrBlank() && claim(assignmentId, ScoutingAssignments.emailReminderSentAt, now)
+            ) {
+                try {
+                    EmailService.sendAssignmentReminderEmail(
+                        to = userEmail,
+                        username = userRow[Users.username],
+                        teamNumber = teamNumber,
+                        title = title,
+                        details = body,
+                        actionUrl = "$baseUrl$scoutUrl"
+                    )
+                    consoleLog.info("[ScoutingReminderScheduler] Sent email reminder for assignment $assignmentId to user ${userRow[Users.username]} for Match #$matchNumber")
+                } catch (e: Exception) {
+                    unclaim(assignmentId, ScoutingAssignments.emailReminderSentAt)
+                    consoleLog.error("[ScoutingReminderScheduler] Failed to send email reminder for assignment $assignmentId: ${e.message}")
                 }
+            }
+        }
+    }
 
-                var newlyPushSent = false
-                var newlyEmailSent = false
+    /**
+     * Marks one reminder as sent before sending it, so it can only go out once even if two senders overlap (a lease
+     * handover). False when it was already claimed.
+     */
+    private fun claim(assignmentId: UUID, sentAt: Column<Instant?>, now: Instant): Boolean = transaction {
+        ScoutingAssignments.update({ (ScoutingAssignments.id eq assignmentId) and sentAt.isNull() }) {
+            it[sentAt] = now
+            it[ScoutingAssignments.updatedAt] = now
+        } == 1
+    }
 
-                // Push reminder
-                if (!pushSent && settings.enableAssignmentPushReminders) {
-                    try {
-                        PushNotificationService.sendAssignmentReminder(
-                            userId = userUuid,
-                            title = title,
-                            body = body,
-                            url = scoutUrl,
-                            tag = "reminder-match-$matchNumber"
-                        )
-                        newlyPushSent = true
-                    } catch (e: Exception) {
-                        consoleLog.error("[ScoutingReminderScheduler] Failed to send push reminder for assignment $assignmentId: ${e.message}")
-                    }
-                }
-
-                // Email reminder
-                if (!emailSent && settings.enableAssignmentEmailReminders) {
-                    val userEmail = userRow[Users.email]
-                    if (!userEmail.isNullOrBlank()) {
-                        try {
-                            val baseUrl = "http://localhost:8080" // or system domain
-                            EmailService.sendAssignmentReminderEmail(
-                                to = userEmail,
-                                username = userRow[Users.username],
-                                teamNumber = teamNumber,
-                                title = title,
-                                details = body,
-                                actionUrl = "$baseUrl$scoutUrl"
-                            )
-                            newlyEmailSent = true
-                        } catch (e: Exception) {
-                            consoleLog.error("[ScoutingReminderScheduler] Failed to send email reminder for assignment $assignmentId: ${e.message}")
-                        }
-                    }
-                }
-
-                if (newlyPushSent || newlyEmailSent) {
-                    transaction {
-                        ScoutingAssignments.update({ ScoutingAssignments.id eq assignmentId }) {
-                            if (newlyPushSent) it[pushReminderSentAt] = now
-                            if (newlyEmailSent) it[emailReminderSentAt] = now
-                            it[updatedAt] = now
-                        }
-                    }
-                    consoleLog.info("[ScoutingReminderScheduler] Sent reminders for assignment $assignmentId to user ${userRow[Users.username]} for Match #$matchNumber")
-                }
+    /** Releases a claim whose send failed, so the next sweep tries again. */
+    private fun unclaim(assignmentId: UUID, sentAt: Column<Instant?>) {
+        runCatching {
+            transaction {
+                ScoutingAssignments.update({ ScoutingAssignments.id eq assignmentId }) { it[sentAt] = null }
             }
         }
     }

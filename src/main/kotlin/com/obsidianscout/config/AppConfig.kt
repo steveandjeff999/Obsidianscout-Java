@@ -47,7 +47,8 @@ data class AppConfig(
 data class QuorumFallbackConfig(
     val enabled: Boolean = false,
     val sqlite_file: String = "data/quorum_fallback.db",
-    val sync_interval_seconds: Long = 30L,
+    /** Each sync rewrites the mirror from scratch, so keep this well above a few seconds. */
+    val sync_interval_seconds: Long = 120L,
     val scouting_retention_days: Int = 7,
     val mirror_all_data: Boolean = false,
     val mirror_users: Boolean = true,

@@ -7,6 +7,9 @@
     // Server Polling and Sync State
     let lastSyncedTime = 0;
     let pollIntervalId = null;
+    // Board changes arrive as a push over the notification socket; the poll only catches changes made through
+    // another cluster node.
+    Obsidianscout.onInvalidate(["alliance-selection"], () => pollServer());
 
     // Selector Modal Context
     let targetAllianceNum = null;
@@ -284,7 +287,7 @@
             renderAlliances();
             updateRecommendations();
 
-            pollIntervalId = setInterval(pollServer, 3000);
+            pollIntervalId = setInterval(() => { if (!document.hidden) pollServer(); }, 15000);
 
         } catch (error) {
             console.error("Failed to load event teams:", error);

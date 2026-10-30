@@ -71,6 +71,8 @@ object WidgetPushService {
 
     /** Something changed for a whole team (drive-team tools, settings, chat). */
     fun notifyTeam(teamNumber: Int, program: String, vararg sections: String) {
+        // Open pages of the team refresh too.
+        com.obsidianscout.db.NotificationWebSocketManager.invalidateTeam(teamNumber, program, sections.toList())
         launchSafely {
             val holders = WidgetTokenService.activeHolders()
                 .filter { it.teamNumber == teamNumber && it.program.equals(program, ignoreCase = true) }
@@ -89,6 +91,7 @@ object WidgetPushService {
     /** Something changed for specific users (their assignments, their account). */
     fun notifyUsers(userIds: Collection<String>, vararg sections: String) {
         if (userIds.isEmpty()) return
+        com.obsidianscout.db.NotificationWebSocketManager.invalidateTeamsOf(userIds, sections.toList())
         val ids = userIds.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }.toSet()
         launchSafely {
             queue(WidgetTokenService.activeHolders().filter { it.userId in ids }, sections.toSet())

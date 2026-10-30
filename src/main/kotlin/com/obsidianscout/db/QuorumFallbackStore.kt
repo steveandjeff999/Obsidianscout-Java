@@ -93,6 +93,9 @@ object QuorumFallbackStore {
     private var syncJob: Job? = null
     private val isSyncing = AtomicBoolean(false)
 
+    private const val MIRRORED_CONFIG_REVISIONS = 500
+    private const val MIRRORED_REPORTED_ERRORS = 200
+
     @Volatile
     var lastSyncInstant: Instant? = null
 
@@ -369,7 +372,8 @@ object QuorumFallbackStore {
 
             // 1. Read datasets from CockroachDB based on configured categories
             val usersList = if (config.mirror_users || isMirrorAll) {
-                DatabaseFactory.readTransaction { Users.selectAll().toList() }
+                // Profile pictures (up to 1 MB each) are left out: fallback reads can live without avatars.
+                DatabaseFactory.readTransaction { Users.select(Users.columns - Users.profilePicture).toList() }
             } else emptyList()
 
             val userSessionsList = if (config.mirror_users || isMirrorAll) {
@@ -381,7 +385,10 @@ object QuorumFallbackStore {
             val pitConfigsList = DatabaseFactory.readTransaction { PitScoutingConfigs.selectAll().toList() }
             val qualConfigsList = DatabaseFactory.readTransaction { QualitativeScoutingConfigs.selectAll().toList() }
             val defaultConfigsList = DatabaseFactory.readTransaction { DefaultConfigs.selectAll().toList() }
-            val configRevisionsList = DatabaseFactory.readTransaction { ConfigRevisions.selectAll().toList() }
+            // History and error logs only grow; an outage needs the recent end of them, not every row ever written.
+            val configRevisionsList = DatabaseFactory.readTransaction {
+                ConfigRevisions.selectAll().orderBy(ConfigRevisions.createdAt, SortOrder.DESC).limit(MIRRORED_CONFIG_REVISIONS).toList()
+            }
             val appSettingsList = DatabaseFactory.readTransaction { AppSettings.selectAll().toList() }
             val bannersList = DatabaseFactory.readTransaction { Banners.selectAll().toList() }
 
@@ -389,7 +396,9 @@ object QuorumFallbackStore {
                 DatabaseFactory.readTransaction { AnalyticsReports.selectAll().toList() }
             } else emptyList()
 
-            val reportedErrorsList = DatabaseFactory.readTransaction { ReportedErrors.selectAll().toList() }
+            val reportedErrorsList = DatabaseFactory.readTransaction {
+                ReportedErrors.selectAll().orderBy(ReportedErrors.createdAt, SortOrder.DESC).limit(MIRRORED_REPORTED_ERRORS).toList()
+            }
 
             val alliancesList = if (config.mirror_alliances || isMirrorAll) {
                 DatabaseFactory.readTransaction { ScoutingAlliances.selectAll().toList() }
@@ -559,7 +568,7 @@ object QuorumFallbackStore {
                         it[role] = row[Users.role]
                         it[createdAt] = row[Users.createdAt]
                         it[email] = row[Users.email]
-                        it[profilePicture] = row[Users.profilePicture]
+                        it[profilePicture] = null
                         it[notificationPreference] = row[Users.notificationPreference]
                         it[tourProgress] = row[Users.tourProgress]
                         it[nodeAlertsEnabled] = row[Users.nodeAlertsEnabled]

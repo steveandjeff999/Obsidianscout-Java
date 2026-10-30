@@ -28,6 +28,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     let pollInterval = null;
+    let stopChatPush = null; // unsubscribes the push listener startPolling() adds
     let knownGroups = [];
     let isChatEnabled = true;
 
@@ -1039,12 +1040,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // Polling helpers
+    // New messages arrive as a push over the notification socket; the poll only catches changes made through
+    // another cluster node, so it can be slow.
+    function refreshChat() {
+        loadMessages();
+        loadGroupUnreads();
+    }
+
     function startPolling() {
         stopPolling();
         pollInterval = setInterval(() => {
-            loadMessages();
-            loadGroupUnreads();
-        }, 2000);
+            if (!document.hidden) refreshChat();
+        }, 10000);
+        stopChatPush = Obsidianscout.onInvalidate(["chat"], refreshChat);
     }
 
     function stopPolling() {
@@ -1052,7 +1060,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             clearInterval(pollInterval);
             pollInterval = null;
         }
+        if (stopChatPush) {
+            stopChatPush();
+            stopChatPush = null;
+        }
     }
+
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && pollInterval) refreshChat();
+    });
 
     // Initialize
     const isEnabled = await checkChatSettings();

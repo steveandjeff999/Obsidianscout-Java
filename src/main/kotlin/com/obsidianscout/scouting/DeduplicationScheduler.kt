@@ -2,6 +2,7 @@ package com.obsidianscout.scouting
 
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.ScoutingEntries
 import com.obsidianscout.db.PitScoutingEntries
@@ -19,13 +20,7 @@ object DeduplicationScheduler {
     
     fun start() {
         if (scope != null) return
-        val handler = CoroutineExceptionHandler { _, throwable ->
-            if (throwable is OutOfMemoryError || throwable.cause is OutOfMemoryError) {
-                log.error("[DeduplicationScheduler] OutOfMemoryError in coroutine. Triggering System.gc()", throwable)
-                System.gc()
-            }
-        }
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + handler)
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope?.launch {
             log.info("Background deduplication scheduler started")
             // Delay 1 minute after startup before running the first cleanup
@@ -33,14 +28,10 @@ object DeduplicationScheduler {
             while (isActive) {
                 try {
                     runCleanup()
-                } catch (e: Throwable) {
-                    if (e is OutOfMemoryError || e.cause is OutOfMemoryError) {
-                        log.error("[DeduplicationScheduler] OutOfMemoryError during cleanup. Triggering System.gc()", e)
-                        System.gc()
-                        delay(15_000L)
-                    } else {
-                        log.error("Failed to run background deduplication cleanup: ${e.message}", e)
-                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    log.error("Failed to run background deduplication cleanup: ${e.message}", e)
                 }
                 // Run every 30 minutes
                 delay(1_800_000L)
@@ -74,14 +65,21 @@ object DeduplicationScheduler {
 
         // Duplicates are re-submissions of the same form by the same scout (e.g. offline sync
         // posting twice). Entries from different scouts are kept even when their data matches.
-        val matchDeleted = dedupe(
-            rows = transaction {
-                ScoutingEntries.selectAll()
-                    .orderBy(ScoutingEntries.createdAt to SortOrder.ASC, ScoutingEntries.id to SortOrder.ASC)
-                    .toList()
+        val matchDeleted = dedupeTable(
+            table = ScoutingEntries,
+            idColumn = ScoutingEntries.id,
+            createdAt = ScoutingEntries.createdAt,
+            dataJson = ScoutingEntries.dataJson,
+            groupColumns = listOf(
+                ScoutingEntries.ownerTeamNumber, ScoutingEntries.program, ScoutingEntries.eventKey, ScoutingEntries.matchKey,
+                ScoutingEntries.targetTeamNumber, ScoutingEntries.isPrescout, ScoutingEntries.submittedByUserId
+            ),
+            keyWhere = { k ->
+                (ScoutingEntries.ownerTeamNumber eq k.ownerTeamNumber) and (ScoutingEntries.program eq k.program) and
+                    ScoutingEntries.eventKey.matches(k.eventKey) and ScoutingEntries.matchKey.matches(k.matchKey) and
+                    ScoutingEntries.targetTeamNumber.matches(k.targetTeamNumber) and (ScoutingEntries.isPrescout eq k.isPrescout) and
+                    (ScoutingEntries.submittedByUserId eq k.submittedByUserId)
             },
-            id = { it[ScoutingEntries.id].value },
-            dataJson = { it[ScoutingEntries.dataJson] },
             keyOf = { row ->
                 MatchGroupKey(
                     row[ScoutingEntries.ownerTeamNumber], row[ScoutingEntries.program], row[ScoutingEntries.eventKey],
@@ -93,14 +91,20 @@ object DeduplicationScheduler {
             recalculate = { key -> ScoutingService.recalculateDiscrepancies(key.eventKey, key.matchKey, key.targetTeamNumber, key.isPrescout) }
         )
 
-        val pitDeleted = dedupe(
-            rows = transaction {
-                PitScoutingEntries.selectAll()
-                    .orderBy(PitScoutingEntries.createdAt to SortOrder.ASC, PitScoutingEntries.id to SortOrder.ASC)
-                    .toList()
+        val pitDeleted = dedupeTable(
+            table = PitScoutingEntries,
+            idColumn = PitScoutingEntries.id,
+            createdAt = PitScoutingEntries.createdAt,
+            dataJson = PitScoutingEntries.dataJson,
+            groupColumns = listOf(
+                PitScoutingEntries.ownerTeamNumber, PitScoutingEntries.program, PitScoutingEntries.eventKey,
+                PitScoutingEntries.targetTeamNumber, PitScoutingEntries.isPrescout, PitScoutingEntries.submittedByUserId
+            ),
+            keyWhere = { k ->
+                (PitScoutingEntries.ownerTeamNumber eq k.ownerTeamNumber) and (PitScoutingEntries.program eq k.program) and
+                    PitScoutingEntries.eventKey.matches(k.eventKey) and PitScoutingEntries.targetTeamNumber.matches(k.targetTeamNumber) and
+                    (PitScoutingEntries.isPrescout eq k.isPrescout) and (PitScoutingEntries.submittedByUserId eq k.submittedByUserId)
             },
-            id = { it[PitScoutingEntries.id].value },
-            dataJson = { it[PitScoutingEntries.dataJson] },
             keyOf = { row ->
                 PitGroupKey(
                     row[PitScoutingEntries.ownerTeamNumber], row[PitScoutingEntries.program], row[PitScoutingEntries.eventKey],
@@ -112,14 +116,24 @@ object DeduplicationScheduler {
             recalculate = { key -> PitScoutingService.recalculateDiscrepancies(key.eventKey, key.targetTeamNumber, key.isPrescout) }
         )
 
-        val qualDeleted = dedupe(
-            rows = transaction {
-                QualitativeScoutingEntries.selectAll()
-                    .orderBy(QualitativeScoutingEntries.createdAt to SortOrder.ASC, QualitativeScoutingEntries.id to SortOrder.ASC)
-                    .toList()
+        val qualDeleted = dedupeTable(
+            table = QualitativeScoutingEntries,
+            idColumn = QualitativeScoutingEntries.id,
+            createdAt = QualitativeScoutingEntries.createdAt,
+            dataJson = QualitativeScoutingEntries.dataJson,
+            groupColumns = listOf(
+                QualitativeScoutingEntries.ownerTeamNumber, QualitativeScoutingEntries.program,
+                QualitativeScoutingEntries.eventKey, QualitativeScoutingEntries.matchKey,
+                QualitativeScoutingEntries.targetTeamNumber, QualitativeScoutingEntries.isPrescout,
+                QualitativeScoutingEntries.submittedByUserId
+            ),
+            keyWhere = { k ->
+                (QualitativeScoutingEntries.ownerTeamNumber eq k.ownerTeamNumber) and (QualitativeScoutingEntries.program eq k.program) and
+                    QualitativeScoutingEntries.eventKey.matches(k.eventKey) and QualitativeScoutingEntries.matchKey.matches(k.matchKey) and
+                    QualitativeScoutingEntries.targetTeamNumber.matches(k.targetTeamNumber) and
+                    (QualitativeScoutingEntries.isPrescout eq k.isPrescout) and
+                    (QualitativeScoutingEntries.submittedByUserId eq k.submittedByUserId)
             },
-            id = { it[QualitativeScoutingEntries.id].value },
-            dataJson = { it[QualitativeScoutingEntries.dataJson] },
             keyOf = { row ->
                 QualitativeGroupKey(
                     row[QualitativeScoutingEntries.ownerTeamNumber], row[QualitativeScoutingEntries.program],
@@ -134,6 +148,44 @@ object DeduplicationScheduler {
 
         log.info("Deduplication cleanup complete: deleted $matchDeleted match, $pitDeleted pit, $qualDeleted qualitative entries.")
     }
+
+    /**
+     * Dedupes one entry table without loading it whole: a GROUP BY finds the groups holding more than one entry, and
+     * only those groups' rows (with their JSON) are read, one group at a time.
+     */
+    private fun <K> dedupeTable(
+        table: Table,
+        idColumn: Column<EntityID<java.util.UUID>>,
+        createdAt: Column<java.time.Instant>,
+        dataJson: Column<String>,
+        groupColumns: List<Expression<*>>,
+        keyOf: (ResultRow) -> K,
+        keyWhere: (K) -> Op<Boolean>,
+        delete: (List<java.util.UUID>) -> Unit,
+        recalculate: (K) -> Unit
+    ): Int {
+        val entries = idColumn.count()
+        val keys = transaction {
+            table.select(groupColumns + entries)
+                .groupBy(*groupColumns.toTypedArray())
+                .having { entries greater 1L }
+                .map(keyOf)
+        }
+        var deleted = 0
+        for (key in keys) {
+            val rows = transaction {
+                table.select(idColumn, dataJson)
+                    .where { keyWhere(key) }
+                    .orderBy(createdAt to SortOrder.ASC, idColumn to SortOrder.ASC)
+                    .toList()
+            }
+            deleted += dedupe(rows, { it[idColumn].value }, { it[dataJson] }, { key }, delete, recalculate)
+        }
+        return deleted
+    }
+
+    /** `column = value`, or `column IS NULL` when [value] is null (SQL `= NULL` never matches). */
+    private fun <T : Any> Column<T?>.matches(value: T?): Op<Boolean> = if (value == null) isNull() else (this eq value)
 
     /**
      * Deletes later copies of identical entries within each group, keeping the earliest

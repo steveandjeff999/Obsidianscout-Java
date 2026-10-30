@@ -102,41 +102,63 @@ import com.obsidianscout.db.ScoutingAlliances
 import com.obsidianscout.db.ChatService
 import com.obsidianscout.db.ChatMessages
 
+/** A page with the shared sidebar and asset versions already applied. */
+private class RenderedPage(val html: String, val etag: String, val sourceStamp: String)
+
+/** fileName -> rendered page. Rebuilt only when the app version or a source file's modification time changes. */
+private val renderedPages = java.util.concurrent.ConcurrentHashMap<String, RenderedPage>()
+
+private val SIDEBAR_REGEX = Regex("""<aside class="sidebar">.*?</aside>""", setOf(RegexOption.DOT_MATCHES_ALL))
+
+/**
+ * What a page is built from: the app version plus the modification times of the page and base.html when they come
+ * from the static/ folder (classpath resources can't change while the server runs).
+ */
+private fun pageSourceStamp(fileName: String, version: String): String {
+    val fsFile = File("static/$fileName")
+    val fsBase = File("static/base.html")
+    return "$version|${fsFile.lastModified()}|${fsBase.lastModified()}"
+}
+
+private fun renderPage(fileName: String, version: String, stamp: String): RenderedPage? {
+    // Try filesystem first (native binary bundle with static/ folder next to binary)
+    val fsFile = File("static/$fileName")
+    val fsBase = File("static/base.html")
+    val html = (if (fsFile.exists()) fsFile.readText()
+        else Thread.currentThread().contextClassLoader.getResource("static/$fileName")?.readText()) ?: return null
+    val sidebar = if (fsBase.exists()) fsBase.readText().trim()
+        else Thread.currentThread().contextClassLoader.getResource("static/base.html")?.readText()?.trim()
+    val withSidebar = if (sidebar.isNullOrBlank()) html else html.replace(SIDEBAR_REGEX, sidebar)
+    val versioned = injectAssetVersioning(withSidebar, version)
+    val crc = java.util.zip.CRC32().apply { update(versioned.toByteArray()) }
+    return RenderedPage(versioned, "\"p-${java.lang.Long.toHexString(crc.value)}\"", stamp)
+}
+
 internal suspend fun ApplicationCall.respondStaticHtml(fileName: String, status: HttpStatusCode = HttpStatusCode.OK) {
-    val (html, sidebar) = measureSuspend("load-html", "Load HTML from Resource") {
+    val version = AppConfigLoader.load().current_version
+    val page = measureSuspend("load-html", "Load HTML (cached)") {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            // Try filesystem first (native binary bundle with static/ folder next to binary)
-            val fsFile = File("static/$fileName")
-            val fsBase = File("static/base.html")
-            val htmlContent = if (fsFile.exists()) fsFile.readText()
-                else Thread.currentThread().contextClassLoader.getResource("static/$fileName")?.readText()
-            val sidebarContent = if (fsBase.exists()) fsBase.readText().trim()
-                else Thread.currentThread().contextClassLoader.getResource("static/base.html")?.readText()?.trim()
-            htmlContent to sidebarContent
+            val stamp = pageSourceStamp(fileName, version)
+            renderedPages[fileName]?.takeIf { it.sourceStamp == stamp }
+                ?: renderPage(fileName, version, stamp)?.also { renderedPages[fileName] = it }
         }
     }
-    if (html == null) {
+    if (page == null) {
         respond(HttpStatusCode.NotFound)
         return
     }
-    val rendered = measure("render-sidebar", "Render HTML Sidebar") {
-        if (sidebar.isNullOrBlank()) {
-            html
-        } else {
-            html.replace(
-                Regex("""<aside class="sidebar">.*?</aside>""", setOf(RegexOption.DOT_MATCHES_ALL)),
-                sidebar
-            )
-        }
-    }
-    val currentVersion = AppConfigLoader.load().current_version
-    val versionedHtml = measure("inject-asset-version", "Inject Asset Versioning") {
-        injectAssetVersioning(rendered, currentVersion)
-    }
-    response.headers.append(HttpHeaders.CacheControl, "no-cache, must-revalidate")
     response.headers.append("CDN-Cache-Control", "no-cache")
     response.headers.append("Cloudflare-CDN-Cache-Control", "no-cache")
-    respondText(versionedHtml, ContentType.Text.Html, status)
+    if (status == HttpStatusCode.OK) {
+        response.headers.append(HttpHeaders.ETag, page.etag)
+        // A CDN that compresses the page weakens the ETag (W/"..."), so compare without that prefix.
+        val ifNoneMatch = request.headers[HttpHeaders.IfNoneMatch]
+        if (ifNoneMatch != null && ifNoneMatch.split(',').any { it.trim().removePrefix("W/") == page.etag }) {
+            respond(HttpStatusCode.NotModified)
+            return
+        }
+    }
+    respondText(page.html, ContentType.Text.Html, status)
 }
 
 private val ASSET_URL_REGEX = Regex(
@@ -267,12 +289,8 @@ fun Route.staticWebRoutes() {
         )
 
         get("/sw.js") {
-            call.response.headers.append(HttpHeaders.CacheControl, "no-cache, no-store, must-revalidate, max-age=0")
-            call.response.headers.append(HttpHeaders.Pragma, "no-cache")
-            call.response.headers.append(HttpHeaders.Expires, "0")
+            // Cache-Control, Pragma, Expires and the CDN no-store headers come from the interceptor in App.kt.
             call.response.headers.append("Service-Worker-Allowed", "/")
-            call.response.headers.append("CDN-Cache-Control", "no-store")
-            call.response.headers.append("Cloudflare-CDN-Cache-Control", "no-store")
             val swBytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val fsFile = File("static/sw.js")
                 if (fsFile.exists()) fsFile.readBytes()

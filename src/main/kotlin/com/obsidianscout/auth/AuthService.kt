@@ -623,6 +623,7 @@ object AuthService {
             }
 
             val updated = Users.selectAll().where { Users.id eq targetUuid }.first()
+            if (clearProfilePicture || newProfilePicture != null) com.obsidianscout.db.ChatService.forgetAvatar(targetUuid)
             if (newRole != null || newNonScoutingToolsEnabled != null || newTeamNumber != null) {
                 // Role or Non-Scouting Tools changed: the user's widgets may need to appear or go away.
                 com.obsidianscout.widgets.WidgetPushService.notifyUsers(listOf(targetUuid.toString()), "access")

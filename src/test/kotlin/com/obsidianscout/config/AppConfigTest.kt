@@ -143,7 +143,7 @@ class AppConfigTest {
         val config = AppConfig()
         assertEquals(false, config.quorum_fallback.enabled)
         assertEquals("data/quorum_fallback.db", config.quorum_fallback.sqlite_file)
-        assertEquals(30L, config.quorum_fallback.sync_interval_seconds)
+        assertEquals(120L, config.quorum_fallback.sync_interval_seconds)
         assertEquals(7, config.quorum_fallback.scouting_retention_days)
     }
 }

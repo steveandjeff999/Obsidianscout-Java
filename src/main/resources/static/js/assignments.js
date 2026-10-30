@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // State Variables
     let settings = {};
     let currentEventKey = "";
+    let stopAssignmentsPush = null; // unsubscribes the push listener startPolling() adds
     let events = [];
     let users = [];
     let matches = [];
@@ -908,16 +909,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // 5-Second Real-Time Polling
+    // Changes arrive as a push over the notification socket; the poll only catches changes made through another
+    // cluster node.
     function startPolling() {
         stopPolling();
-        pollIntervalId = setInterval(pollAssignments, 5000);
+        pollIntervalId = setInterval(pollAssignments, 20000);
+        stopAssignmentsPush = Obsidianscout.onInvalidate(["assignments", "schedule"], pollAssignments);
     }
 
     function stopPolling() {
         if (pollIntervalId) {
             clearInterval(pollIntervalId);
             pollIntervalId = null;
+        }
+        if (stopAssignmentsPush) {
+            stopAssignmentsPush();
+            stopAssignmentsPush = null;
         }
     }
 

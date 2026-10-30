@@ -6,6 +6,7 @@
 import { isPublicMode } from '../base/public-mode.js';
 import { request, getCachedData } from '../base/http.js';
 import { ensureDOMPurify, sanitizeBannerHtml } from '../utilities/sanitizer.js';
+import { onInvalidate } from '../services/notification-socket.js';
 
 let isDelegationInitialized = false;
 
@@ -135,9 +136,12 @@ export async function loadAndRenderBanners() {
     if (!mainContent) return;
 
     if (!window._bannerPeriodicTimer) {
+        // Banner changes arrive as a push over the notification socket; the poll covers the login page (no socket)
+        // and changes made through another cluster node.
         window._bannerPeriodicTimer = setInterval(() => {
-            loadAndRenderBanners();
-        }, 10000);
+            if (!document.hidden) loadAndRenderBanners();
+        }, 60000);
+        onInvalidate(["banners"], () => loadAndRenderBanners());
     }
 
     try {

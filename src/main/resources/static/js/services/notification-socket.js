@@ -19,9 +19,31 @@ const PENDING_KEY = "obsidianscout.slack.pending";
 const SEEN_KEY = "obsidianscout.slack.seen";
 const LAST_AT_KEY = "obsidianscout.slack.lastAt";
 const MAX_AGE_MS = 5 * 60 * 1000;
+const INVALIDATE_EVENT = "obsidianscout:invalidate";
 
 let channel = null;
 let started = false;
+
+/**
+ * Runs [handler] when the server says data under any of [topics] changed (e.g. "chat", "assignments",
+ * "alliance-selection", "banners", "access"). Calls arriving close together are combined into one. Pages keep a slow
+ * poll as well: invalidations only come from the node this browser's socket is on. Returns an unsubscribe function.
+ */
+export function onInvalidate(topics, handler, debounceMs = 300) {
+    const wanted = new Set(topics);
+    let timer = null;
+    const listener = (event) => {
+        const changed = (event.detail && event.detail.topics) || [];
+        if (!changed.some((t) => wanted.has(t))) return;
+        clearTimeout(timer);
+        timer = setTimeout(() => handler(changed), debounceMs);
+    };
+    window.addEventListener(INVALIDATE_EVENT, listener);
+    return () => {
+        clearTimeout(timer);
+        window.removeEventListener(INVALIDATE_EVENT, listener);
+    };
+}
 
 function readJson(key, fallback) {
     try {
@@ -58,6 +80,10 @@ function flush() {
 }
 
 function receive(n) {
+    if (n && n.type === "invalidate" && Array.isArray(n.topics)) {
+        window.dispatchEvent(new CustomEvent(INVALIDATE_EVENT, { detail: { topics: n.topics } }));
+        return;
+    }
     if (!n || n.type !== "slack_notification" || !n.id) return;
     const seen = readJson(SEEN_KEY, []);
     if (seen.includes(n.id)) return;

@@ -270,6 +270,7 @@ fun Route.bannerRoutes() {
                     }
 
                     val created = com.obsidianscout.db.BannerService.create(request, defaultProgram = session.program)
+                    com.obsidianscout.db.NotificationWebSocketManager.invalidateAll(listOf("banners"))
                     call.respond(created)
                 }
                 put("/{id}") {
@@ -310,6 +311,7 @@ fun Route.bannerRoutes() {
 
                     val updated = com.obsidianscout.db.BannerService.update(id, request)
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Banner not found")
+                    com.obsidianscout.db.NotificationWebSocketManager.invalidateAll(listOf("banners"))
                     call.respond(updated)
                 }
                 delete("/{id}") {
@@ -336,6 +338,7 @@ fun Route.bannerRoutes() {
 
                     val deleted = com.obsidianscout.db.BannerService.delete(id)
                     if (deleted) {
+                        com.obsidianscout.db.NotificationWebSocketManager.invalidateAll(listOf("banners"))
                         call.respond(HttpStatusCode.NoContent)
                     } else {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Banner not found")

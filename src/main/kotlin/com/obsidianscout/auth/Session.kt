@@ -60,6 +60,18 @@ data class UserSession(
 
 class ApiException(val status: HttpStatusCode, override val message: String) : RuntimeException(message)
 
+/**
+ * The user columns a session check needs. Leaves out the profile picture (up to 1 MB of base64) and the password
+ * hash: this runs on every authenticated request.
+ */
+private val lastNotSignedInLog = java.util.concurrent.atomic.AtomicLong(0L)
+
+private val sessionUserColumns = listOf(
+    Users.id, Users.username, Users.teamNumber, Users.program, Users.role, Users.email,
+    Users.notificationPreference, Users.tourProgress, Users.nodeAlertsEnabled, Users.bugReportPreference,
+    Users.localAiEnabled, Users.nonScoutingToolsEnabled
+)
+
 suspend fun ApplicationCall.requireSession(): UserSession {
     // Public data requests run as the owner team, whoever (if anyone) is signed in.
     attributes.getOrNull(com.obsidianscout.publicdata.PublicViewContext.AttributeKey)?.let { publicView ->
@@ -76,7 +88,10 @@ suspend fun ApplicationCall.requireSession(): UserSession {
     if (session == null) {
         val cookieHeader = request.headers["Cookie"]
         val sessionCookie = request.cookies["obsidian_session"]
-        application.environment.log.warn("[requireSession] 401 Not signed in on ${request.httpMethod.value} ${request.uri}. Cookie header: ${if (cookieHeader != null) "present (len=${cookieHeader.length}, has_session=${cookieHeader.contains("obsidian_session")})" else "null"}, sessionCookie: ${sessionCookie != null}")
+        // A signed-out tab keeps polling, so this would otherwise log on every poll.
+        val now = System.currentTimeMillis()
+        val last = lastNotSignedInLog.get()
+        if (now - last >= 10_000L && lastNotSignedInLog.compareAndSet(last, now)) application.environment.log.warn("[requireSession] 401 Not signed in on ${request.httpMethod.value} ${request.uri}. Cookie header: ${if (cookieHeader != null) "present (len=${cookieHeader.length}, has_session=${cookieHeader.contains("obsidian_session")})" else "null"}, sessionCookie: ${sessionCookie != null}")
         throw ApiException(HttpStatusCode.Unauthorized, "Not signed in")
     }
     if (DatabaseFactory.isReady) {
@@ -90,7 +105,7 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         if (com.obsidianscout.db.orchestration.CockroachOrchestrator.isQuorumLost) {
             val userRow = runCatching {
                 com.obsidianscout.db.readTransaction {
-                    Users.selectAll().where { Users.id eq userUuid }.firstOrNull()
+                    Users.select(sessionUserColumns).where { Users.id eq userUuid }.firstOrNull()
                 }
             }.getOrNull()
 
@@ -141,7 +156,7 @@ suspend fun ApplicationCall.requireSession(): UserSession {
 
         val (userRow, sessionRow) = try {
             com.obsidianscout.db.readTransaction {
-                val row = Users.selectAll().where { Users.id eq userUuid }.firstOrNull()
+                val row = Users.select(sessionUserColumns).where { Users.id eq userUuid }.firstOrNull()
                 val activeSession = if (!session.sessionId.isNullOrBlank()) {
                     val sUuid = runCatching { UUID.fromString(session.sessionId) }.getOrNull()
                     if (sUuid != null) {
@@ -188,7 +203,6 @@ suspend fun ApplicationCall.requireSession(): UserSession {
         val dbUsername = userRow[Users.username]
         val dbProgram = userRow[Users.program]
         val dbEmail = userRow[Users.email]
-        val dbProfilePicture = userRow[Users.profilePicture]
         val dbNotificationPreference = userRow[Users.notificationPreference]
         val dbTourProgress = userRow[Users.tourProgress]
         val dbNodeAlertsEnabled = userRow[Users.nodeAlertsEnabled]

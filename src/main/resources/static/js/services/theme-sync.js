@@ -7,9 +7,12 @@
 import { request } from '../base/http.js';
 import { checkLoginStatus } from '../base/auth.js';
 import { applyCustomTheme } from '../layout/theme.js';
+import { onInvalidate } from './notification-socket.js';
 
 const THEME_STORAGE_KEY = "obsidian-custom-theme-config";
-const THEME_POLL_INTERVAL_MS = 15000;
+// Settings saves arrive as an "access" push over the notification socket; the poll catches saves made through
+// another cluster node.
+const THEME_POLL_INTERVAL_MS = 60000;
 
 export async function initThemeSync() {
     const page = document.body.dataset.page;
@@ -49,6 +52,9 @@ export async function initThemeSync() {
     }
 
     pollInterval = setInterval(refreshTheme, THEME_POLL_INTERVAL_MS);
+    onInvalidate(["access"], () => {
+        if (pollInterval) refreshTheme();
+    });
 
     // Catch up as soon as a backgrounded tab is looked at again.
     document.addEventListener("visibilitychange", () => {

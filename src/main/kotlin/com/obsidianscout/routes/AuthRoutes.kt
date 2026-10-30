@@ -815,6 +815,11 @@ fun Route.authRoutes() {
                 }
                 val image = row[com.obsidianscout.db.Users.profilePicture]?.let { AuthService.decodeProfilePicture(it) }
                     ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Not found")
+                // Chat links to ?v=<picture hash>, so a new picture gets a new URL and this one never changes.
+                // (Without ?v= the interceptor in App.kt has already set the usual API no-cache header.)
+                if (call.request.queryParameters["v"] != null) {
+                    call.response.headers.append(HttpHeaders.CacheControl, "private, max-age=31536000, immutable")
+                }
                 call.respondBytes(image.second, ContentType.parse(image.first))
             }
 

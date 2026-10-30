@@ -120,6 +120,11 @@ private suspend fun ApplicationCall.requireChatAdmin(): UserSession {
     return session
 }
 
+/** Tells the team's open chat pages to reload now instead of waiting for their next poll. */
+private fun chatChanged(session: UserSession) {
+    com.obsidianscout.db.NotificationWebSocketManager.invalidateTeam(session.teamNumber, session.program, listOf("chat"))
+}
+
 fun Route.chatRoutes() {
             route("/chat") {
                 get("/messages") {
@@ -168,6 +173,7 @@ fun Route.chatRoutes() {
                     try {
                         val updated = ChatService.editMessage(id, session.userId, session.teamNumber, trimmedContent)
                             ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
+                        chatChanged(session)
                         call.respond(updated)
                     } catch (e: IllegalArgumentException) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, e.message ?: "Cannot edit message")
@@ -182,6 +188,7 @@ fun Route.chatRoutes() {
                         if (!deleted) {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
                         }
+                        chatChanged(session)
                         call.respond(buildJsonObject { put("success", true) })
                     } catch (e: IllegalArgumentException) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, e.message ?: "Cannot delete message")
@@ -195,6 +202,7 @@ fun Route.chatRoutes() {
                     try {
                         val updated = ChatService.toggleReaction(id, session.username, request.emoji, session.teamNumber, session.program)
                             ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
+                        chatChanged(session)
                         call.respond(updated)
                     } catch (e: IllegalArgumentException) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, e.message ?: "Cannot react to your own message")
@@ -236,6 +244,7 @@ fun Route.chatRoutes() {
                             allowedUserIds = request.allowedUserIds,
                             userRole = session.role
                         )
+                        chatChanged(session)
                         call.respond(buildJsonObject { put("success", success) })
                     } catch (e: IllegalArgumentException) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, e.message ?: "Cannot update permissions")
@@ -247,6 +256,7 @@ fun Route.chatRoutes() {
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing channel name")
                     try {
                         val success = ChatService.clearGroupMessages(session.teamNumber, session.program, groupName, session.role)
+                        chatChanged(session)
                         call.respond(buildJsonObject { put("success", success) })
                     } catch (e: IllegalArgumentException) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, e.message ?: "Cannot clear channel")
@@ -263,6 +273,7 @@ fun Route.chatRoutes() {
                         allowedRoles = request.allowedRoles,
                         allowedUserIds = request.allowedUserIds
                     )
+                    chatChanged(session)
                     call.respond(buildJsonObject {
                         put("success", success)
                         put("groupName", request.groupName)
@@ -277,6 +288,7 @@ fun Route.chatRoutes() {
                         if (!deleted) {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Channel not found")
                         }
+                        chatChanged(session)
                         call.respond(buildJsonObject { put("success", true) })
                     } catch (e: IllegalArgumentException) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, e.message ?: "Cannot delete channel")
@@ -334,7 +346,7 @@ fun Route.chatRoutes() {
                 val session = runCatching { call.requireSession() }.getOrNull() ?: return@webSocket this.close(
                     CloseReason(CloseReason.Codes.VIOLATED_POLICY, "No session")
                 )
-                com.obsidianscout.db.NotificationWebSocketManager.registerSession(session.userId, this)
+                com.obsidianscout.db.NotificationWebSocketManager.registerSession(session.userId, this, session.teamNumber, session.program)
                 try {
                     for (frame in incoming) {
                         // Keep-alive loop
