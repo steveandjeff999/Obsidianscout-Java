@@ -347,16 +347,16 @@ object AllianceService {
         }
 
         transaction {
-            // Enforce program matching: if the partner team is already registered under a different program, throw
-            val existingPartnerProgram = Users
+            // Enforce program matching: if the partner team is already registered only under a different program, throw
+            val partnerPrograms = Users
                 .select(Users.program)
                 .where { Users.teamNumber eq partnerTeamNumber }
                 .map { it[Users.program] }
-                .firstOrNull()
-            if (existingPartnerProgram != null && existingPartnerProgram != session.program) {
+                .toSet()
+            if (partnerPrograms.isNotEmpty() && session.program !in partnerPrograms) {
                 throw ApiException(
                     HttpStatusCode.BadRequest,
-                    "Team $partnerTeamNumber is registered as an $existingPartnerProgram team and cannot be invited to this ${session.program} alliance"
+                    "Team $partnerTeamNumber is registered as an ${partnerPrograms.first()} team and cannot be invited to this ${session.program} alliance"
                 )
             }
 
@@ -413,6 +413,7 @@ object AllianceService {
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceUuid) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program) and
                     (AllianceMemberships.status eq STATUS_INVITED)
                 }
                 .firstOrNull()
@@ -429,7 +430,8 @@ object AllianceService {
 
                 AllianceMemberships.update({
                     (AllianceMemberships.allianceId eq allianceUuid) and
-                    (AllianceMemberships.teamNumber eq session.teamNumber)
+                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program)
                 }) {
                     it[status] = STATUS_ACCEPTED
                     it[respondedAt] = Instant.now()
@@ -438,7 +440,8 @@ object AllianceService {
             } else {
                 AllianceMemberships.update({
                     (AllianceMemberships.allianceId eq allianceUuid) and
-                    (AllianceMemberships.teamNumber eq session.teamNumber)
+                    (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program)
                 }) {
                     it[status] = STATUS_DECLINED
                     it[respondedAt] = Instant.now()
@@ -456,18 +459,20 @@ object AllianceService {
     fun removeMember(session: UserSession, allianceId: String, targetTeamNumber: Int) {
         val allianceUuid = UUID.fromString(allianceId)
         transaction {
-            ScoutingAlliances.selectAll().where { ScoutingAlliances.id eq allianceUuid }.firstOrNull()
+            val allianceRow = ScoutingAlliances.selectAll().where { ScoutingAlliances.id eq allianceUuid }.firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Alliance not found")
+            val allianceProgram = allianceRow[ScoutingAlliances.program]
 
             // Check if caller is admin in the alliance
             val isCallerAdmin = AllianceMemberships
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceUuid) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program) and
                     (AllianceMemberships.status eq STATUS_ADMIN)
                 }
                 .any()
-            val isSelf = targetTeamNumber == session.teamNumber
+            val isSelf = targetTeamNumber == session.teamNumber && allianceProgram == session.program
 
             if (!isCallerAdmin && !isSelf) {
                 throw ApiException(HttpStatusCode.Forbidden, "Only alliance admins can remove other members")
@@ -477,7 +482,8 @@ object AllianceService {
             val targetMembership = AllianceMemberships
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceUuid) and
-                    (AllianceMemberships.teamNumber eq targetTeamNumber)
+                    (AllianceMemberships.teamNumber eq targetTeamNumber) and
+                    (AllianceMemberships.program eq allianceProgram)
                 }
                 .firstOrNull() ?: throw ApiException(HttpStatusCode.NotFound, "Member not found")
 
@@ -496,7 +502,8 @@ object AllianceService {
 
             AllianceMemberships.deleteWhere {
                 (AllianceMemberships.allianceId eq allianceUuid) and
-                (AllianceMemberships.teamNumber eq targetTeamNumber)
+                (AllianceMemberships.teamNumber eq targetTeamNumber) and
+                (AllianceMemberships.program eq allianceProgram)
             }
             clearEffectiveSettingsCache()
         }
@@ -532,6 +539,19 @@ object AllianceService {
         val now = Instant.now()
 
         return transaction {
+            val isAcceptedPartner = AllianceMemberships
+                .selectAll().where {
+                    (AllianceMemberships.allianceId eq allianceUuid) and
+                    (AllianceMemberships.teamNumber eq sourceTeamNumber) and
+                    (AllianceMemberships.program eq session.program) and
+                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                    (AllianceMemberships.disabled eq false)
+                }
+                .any()
+            if (!isAcceptedPartner) {
+                throw ApiException(HttpStatusCode.Forbidden, "Source team is not an accepted member of this alliance")
+            }
+
             var skippedDuplicates = 0
 
             val importedMatch = if (includeMatchScouting) {
@@ -811,7 +831,11 @@ object AllianceService {
     fun getAlliancePartnerTeams(teamNumber: Int, program: String = "FRC"): Set<Int> {
         // Public data is the owner team's own entries only: partners never agreed to publish theirs.
         if (com.obsidianscout.publicdata.PublicViewContext.current() != null) return emptySet()
-        return queryAlliancePartnerTeams(teamNumber, program)
+        return try {
+            queryAlliancePartnerTeams(teamNumber, program)
+        } catch (_: Throwable) {
+            emptySet()
+        }
     }
 
     private fun queryAlliancePartnerTeams(teamNumber: Int, program: String): Set<Int> = readTransaction {
@@ -846,29 +870,34 @@ object AllianceService {
      * Checks if a team has an active (ACCEPTED or ADMIN) alliance membership
      * and returns the alliance ID.
      */
-    fun getActiveAllianceId(teamNumber: Int, program: String = "FRC"): UUID? = readTransaction {
-        AllianceMemberships
-            .selectAll().where {
-                (AllianceMemberships.teamNumber eq teamNumber) and
-                (AllianceMemberships.program eq program) and
-                (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
-                (AllianceMemberships.disabled eq false) and
-                (AllianceMemberships.active eq true)
-            }
-            .firstOrNull()
-            ?.get(AllianceMemberships.allianceId)
-            ?.value
+    fun getActiveAllianceId(teamNumber: Int, program: String = "FRC"): UUID? = try {
+        readTransaction {
+            AllianceMemberships
+                .selectAll().where {
+                    (AllianceMemberships.teamNumber eq teamNumber) and
+                    (AllianceMemberships.program eq program) and
+                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                    (AllianceMemberships.disabled eq false) and
+                    (AllianceMemberships.active eq true)
+                }
+                .firstOrNull()
+                ?.get(AllianceMemberships.allianceId)
+                ?.value
+        }
+    } catch (_: Throwable) {
+        null
     }
 
     /**
      * Checks if the team is an ADMIN in the alliance.
      */
-    fun isAllianceAdmin(teamNumber: Int, allianceId: UUID): Boolean = readTransaction {
+    fun isAllianceAdmin(teamNumber: Int, allianceId: UUID, program: String? = null): Boolean = readTransaction {
         AllianceMemberships
             .selectAll().where {
-                (AllianceMemberships.allianceId eq allianceId) and
-                (AllianceMemberships.teamNumber eq teamNumber) and
-                (AllianceMemberships.status eq STATUS_ADMIN)
+                val base = (AllianceMemberships.allianceId eq allianceId) and
+                    (AllianceMemberships.teamNumber eq teamNumber) and
+                    (AllianceMemberships.status eq STATUS_ADMIN)
+                if (program != null) base and (AllianceMemberships.program eq program) else base
             }
             .any()
     }
@@ -883,7 +912,8 @@ object AllianceService {
             val membership = AllianceMemberships
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceUuid) and
-                    (AllianceMemberships.teamNumber eq targetTeamNumber)
+                    (AllianceMemberships.teamNumber eq targetTeamNumber) and
+                    (AllianceMemberships.program eq session.program)
                 }
                 .firstOrNull()
                 ?: throw ApiException(HttpStatusCode.NotFound, "Member not found")
@@ -895,7 +925,8 @@ object AllianceService {
             
             AllianceMemberships.update({
                 (AllianceMemberships.allianceId eq allianceUuid) and
-                (AllianceMemberships.teamNumber eq targetTeamNumber)
+                (AllianceMemberships.teamNumber eq targetTeamNumber) and
+                (AllianceMemberships.program eq session.program)
             }) {
                 it[status] = STATUS_ADMIN
             }
@@ -913,6 +944,7 @@ object AllianceService {
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceUuid) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program) and
                     (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED))
                 }
                 .any()
@@ -934,6 +966,7 @@ object AllianceService {
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceUuid) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program) and
                     (AllianceMemberships.disabled eq false) and
                     (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED))
                 }
@@ -952,7 +985,8 @@ object AllianceService {
 
             AllianceMemberships.update({
                 (AllianceMemberships.allianceId eq allianceUuid) and
-                (AllianceMemberships.teamNumber eq session.teamNumber)
+                (AllianceMemberships.teamNumber eq session.teamNumber) and
+                (AllianceMemberships.program eq session.program)
             }) {
                 it[AllianceMemberships.active] = active
             }
@@ -974,6 +1008,7 @@ object AllianceService {
                 .selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
                     (AllianceMemberships.teamNumber eq session.teamNumber) and
+                    (AllianceMemberships.program eq session.program) and
                     (AllianceMemberships.status eq STATUS_ADMIN)
                 }
                 .any()
@@ -1209,7 +1244,7 @@ object AllianceService {
             if (tbaKey.isBlank() || firstUsername.isBlank() || firstKey.isBlank()) {
                 for (memberTeam in memberTeamNumbers) {
                     if (memberTeam == teamNumber) continue
-                    val memberSettings = com.obsidianscout.integrations.SettingsService.getSettings(memberTeam)
+                    val memberSettings = com.obsidianscout.integrations.SettingsService.getSettings(memberTeam, program)
                     if (tbaKey.isBlank() && memberSettings.apiKeys.tbaKey.isNotBlank()) {
                         tbaKey = memberSettings.apiKeys.tbaKey
                     }

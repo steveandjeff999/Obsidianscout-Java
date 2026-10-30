@@ -67,27 +67,47 @@ object ScoutingReminderScheduler {
 
         // Only assignments whose match starts between 15 minutes ago and 2 hours from now, with a reminder still unsent.
         val due = readTransaction {
-            ScoutingAssignments
-                .join(ApiMatches, JoinType.INNER, ScoutingAssignments.matchKey, ApiMatches.matchKey)
+            val pending = ScoutingAssignments
                 .select(
                     ScoutingAssignments.id, ScoutingAssignments.matchKey, ScoutingAssignments.eventKey,
                     ScoutingAssignments.ownerTeamNumber, ScoutingAssignments.program,
                     ScoutingAssignments.assignedUserId, ScoutingAssignments.reminderMinutesBefore,
                     ScoutingAssignments.pushReminderSentAt, ScoutingAssignments.emailReminderSentAt,
                     ScoutingAssignments.matchNumber, ScoutingAssignments.targetTeamNumber,
-                    ScoutingAssignments.assignmentType, ApiMatches.scheduledTime, ApiMatches.matchNumber
+                    ScoutingAssignments.assignmentType
                 )
                 .where {
                     (ScoutingAssignments.status eq "PENDING") and
-                    (ApiMatches.scheduledTime greaterEq (nowEpochSec - 900)) and
-                    (ApiMatches.scheduledTime lessEq (nowEpochSec + 7200)) and
+                    ScoutingAssignments.matchKey.isNotNull() and
                     (ScoutingAssignments.pushReminderSentAt.isNull() or ScoutingAssignments.emailReminderSentAt.isNull())
                 }
                 .toList()
+            if (pending.isEmpty()) return@readTransaction emptyList()
+
+            val minTime = nowEpochSec - 900
+            val maxTime = nowEpochSec + 7200
+            val matchesByTeam = pending.groupBy { it[ScoutingAssignments.ownerTeamNumber] to it[ScoutingAssignments.program] }
+                .mapValues { (scope, rows) ->
+                    val keys = rows.mapNotNull { it[ScoutingAssignments.matchKey] }.distinct()
+                    val matchRows = runCatching {
+                        com.obsidianscout.integrations.TeamCacheOverrideService.matchRowsByKeys(keys, scope.first, scope.second)
+                    }.getOrElse {
+                        ApiMatches.selectAll().where { ApiMatches.matchKey inList keys }.toList()
+                    }
+                    matchRows.associateBy { it[ApiMatches.matchKey].lowercase().trim() }
+                }
+
+            pending.mapNotNull { row ->
+                val mKey = row[ScoutingAssignments.matchKey]?.lowercase()?.trim() ?: return@mapNotNull null
+                val scope = row[ScoutingAssignments.ownerTeamNumber] to row[ScoutingAssignments.program]
+                val matchRow = matchesByTeam[scope]?.get(mKey) ?: return@mapNotNull null
+                val sched = matchRow[ApiMatches.scheduledTime] ?: return@mapNotNull null
+                if (sched in minTime..maxTime) row to matchRow else null
+            }
         }
         if (due.isEmpty()) return
 
-        val userIds = due.map { it[ScoutingAssignments.assignedUserId].value }.distinct()
+        val userIds = due.map { (assignment, _) -> assignment[ScoutingAssignments.assignedUserId].value }.distinct()
         val usersMap = readTransaction {
             Users.select(Users.id, Users.username, Users.email)
                 .where { Users.id inList userIds }
@@ -98,9 +118,9 @@ object ScoutingReminderScheduler {
         // Cache team settings by (teamNumber, program)
         val teamSettingsMap = mutableMapOf<Pair<Int, String>, com.obsidianscout.integrations.ApiSettings>()
 
-        for (assignment in due) {
+        for ((assignment, matchRow) in due) {
             val mKey = assignment[ScoutingAssignments.matchKey] ?: continue
-            val scheduledTimeSec = assignment[ApiMatches.scheduledTime] ?: continue
+            val scheduledTimeSec = matchRow[ApiMatches.scheduledTime] ?: continue
             val diffSec = scheduledTimeSec - nowEpochSec
 
             val teamNumber = assignment[ScoutingAssignments.ownerTeamNumber]
@@ -119,7 +139,7 @@ object ScoutingReminderScheduler {
             val userRow = usersMap[userUuid] ?: continue
             val assignmentId = assignment[ScoutingAssignments.id].value
 
-            val matchNumber = assignment[ScoutingAssignments.matchNumber] ?: assignment[ApiMatches.matchNumber] ?: 0
+            val matchNumber = assignment[ScoutingAssignments.matchNumber] ?: matchRow[ApiMatches.matchNumber] ?: 0
             val targetTeam = assignment[ScoutingAssignments.targetTeamNumber]
             val type = assignment[ScoutingAssignments.assignmentType]
             val eventKey = assignment[ScoutingAssignments.eventKey]

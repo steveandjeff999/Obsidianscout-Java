@@ -554,7 +554,7 @@ object BackupService {
                 }
             } else emptyList()
 
-            val chatMessagesQuery = if (scope == "global") ChatMessages.selectAll() else ChatMessages.selectAll().where { ChatMessages.teamNumber eq teamNumber }
+            val chatMessagesQuery = if (scope == "global") ChatMessages.selectAll() else ChatMessages.selectAll().where { (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.program eq program) }
             val chatMessages = if (scope == "global" || type == "entire") {
                 chatMessagesQuery.map { row ->
                     val userId = row[ChatMessages.userId].value

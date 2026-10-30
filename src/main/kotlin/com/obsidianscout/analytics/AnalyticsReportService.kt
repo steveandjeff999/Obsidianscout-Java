@@ -105,10 +105,10 @@ object AnalyticsReportService {
         val query = if (session.role == UserRole.SUPERADMIN) {
             AnalyticsReports.selectAll()
         } else {
+            val isTeamAdmin = session.role.isAtLeast(UserRole.ADMIN)
             AnalyticsReports.selectAll().where {
                 (AnalyticsReports.program eq program) and (
-                    (AnalyticsReports.ownerTeamNumber eq userTeam) or
-                    (AnalyticsReports.isShared eq true) or
+                    ((AnalyticsReports.ownerTeamNumber eq userTeam) and (if (isTeamAdmin) Op.TRUE else (AnalyticsReports.isShared eq true))) or
                     (userUuid?.let { AnalyticsReports.userId eq EntityID(it, Users) } ?: Op.FALSE)
                 )
             }
@@ -157,11 +157,11 @@ object AnalyticsReportService {
         val isShared = row[AnalyticsReports.isShared]
 
         val isSameProgram = row[AnalyticsReports.program] == session.program
+        val isTeamAdmin = session.role.isAtLeast(UserRole.ADMIN)
         val canView = session.role == UserRole.SUPERADMIN ||
                 (isSameProgram && (
-                    reportOwnerTeam == session.teamNumber ||
-                    (userUuid != null && reportUserId == userUuid) ||
-                    isShared
+                    (reportOwnerTeam == session.teamNumber && (isShared || isTeamAdmin)) ||
+                    (userUuid != null && reportUserId == userUuid)
                 ))
 
         if (!canView) {

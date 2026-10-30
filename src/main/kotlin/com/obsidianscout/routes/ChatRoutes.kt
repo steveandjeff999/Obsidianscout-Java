@@ -1,4 +1,4 @@
-﻿package com.obsidianscout.routes
+package com.obsidianscout.routes
 
 import com.obsidianscout.auth.clientIp
 import org.jetbrains.exposed.v1.core.*
@@ -104,7 +104,7 @@ import com.obsidianscout.db.ChatMessages
 
 private suspend fun ApplicationCall.requireChatSession(): UserSession {
     val session = requireSession()
-    val settings = SettingsService.getSettings(session.teamNumber)
+    val settings = SettingsService.getSettings(session.teamNumber, session.program)
     if (!settings.chatEnabled) {
         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Chat is disabled by team admin")
     }
@@ -113,7 +113,7 @@ private suspend fun ApplicationCall.requireChatSession(): UserSession {
 
 private suspend fun ApplicationCall.requireChatAdmin(): UserSession {
     val session = requireAdmin()
-    val settings = SettingsService.getSettings(session.teamNumber)
+    val settings = SettingsService.getSettings(session.teamNumber, session.program)
     if (!settings.chatEnabled) {
         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Chat is disabled by team admin")
     }
@@ -171,7 +171,7 @@ fun Route.chatRoutes() {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Message content cannot be empty")
                     }
                     try {
-                        val updated = ChatService.editMessage(id, session.userId, session.teamNumber, trimmedContent)
+                        val updated = ChatService.editMessage(id, session.userId, session.teamNumber, trimmedContent, session.program)
                             ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
                         chatChanged(session)
                         call.respond(updated)
@@ -184,7 +184,7 @@ fun Route.chatRoutes() {
                     val id = call.parameters["id"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing or invalid message id")
                     try {
-                        val deleted = ChatService.deleteMessage(id, session.userId, session.role, session.teamNumber)
+                        val deleted = ChatService.deleteMessage(id, session.userId, session.role, session.teamNumber, session.program)
                         if (!deleted) {
                             throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "Message not found")
                         }

@@ -473,7 +473,7 @@ object MatchCanonical {
         remapOwnerScoped(MatchPlans, MatchPlans.ownerKey, MatchPlans.eventKey, MatchPlans.matchKey, MatchPlans.updatedAt, oldKey, newKey, "Match plan", owners)
         remapOwnerScoped(MatchChecklists, MatchChecklists.ownerKey, MatchChecklists.eventKey, MatchChecklists.matchKey, MatchChecklists.updatedAt, oldKey, newKey, "Match checklist", owners)
         com.obsidianscout.scouting.BatteryTrackerService.remapMatchKey(oldKey, newKey, owners)
-        com.obsidianscout.scouting.MatchPredictionService.remapMatchKey(oldKey, newKey, teamNumber)
+        com.obsidianscout.scouting.MatchPredictionService.remapMatchKey(oldKey, newKey, teamNumber, program)
     }
 
     /** Rows unique per (owner, event, match): re-key to [newKey], keeping the newer row on a clash. */

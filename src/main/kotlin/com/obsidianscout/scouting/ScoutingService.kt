@@ -82,7 +82,7 @@ object ScoutingService {
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            resolveEntriesList(buildRecords(query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).toList()), session.teamNumber, all)
+            resolveEntriesList(buildRecords(query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).toList(), session.teamNumber, session.program), session.teamNumber, all)
         }
     }
 
@@ -98,7 +98,7 @@ object ScoutingService {
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { ScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            resolveEntriesList(buildRecords(query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).toList()), session.teamNumber, all)
+            resolveEntriesList(buildRecords(query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).toList(), session.teamNumber, session.program), session.teamNumber, all)
         }
     }
 
@@ -121,16 +121,20 @@ object ScoutingService {
             if (since != null) {
                 query.andWhere { EntrySync.changedSince(ScoutingEntries.updatedAt, ScoutingEntries.createdAt, since) }
             }
-            buildRecords(query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).toList())
+            buildRecords(query.orderBy(ScoutingEntries.createdAt, SortOrder.DESC).toList(), session.teamNumber, session.program)
         }
     }
 
     /** Turns rows into records. Call inside a transaction. */
-    private fun buildRecords(rows: List<ResultRow>): List<ScoutingEntryRecord> {
+    private fun buildRecords(rows: List<ResultRow>, teamNumber: Int = 0, program: String = "FRC"): List<ScoutingEntryRecord> {
         val matchKeys = rows.mapNotNull { it[ScoutingEntries.matchKey] }.distinct()
         val matchTimes = if (matchKeys.isNotEmpty()) {
-            com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
-                .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
+            val matchRows = runCatching {
+                com.obsidianscout.integrations.TeamCacheOverrideService.matchRowsByKeys(matchKeys, teamNumber, program)
+            }.getOrElse {
+                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }.toList()
+            }
+            matchRows.associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
         } else {
             emptyMap()
         }
@@ -197,36 +201,40 @@ object ScoutingService {
 
             if (entries.isEmpty()) return@transaction
 
-            val hasDiscrepancyVal: Boolean
-            val conflictingTeamsVal: String
+            val now = Instant.now()
+            for ((prog, progEntries) in entries.groupBy { it[ScoutingEntries.program] }) {
+                for ((ownerTeam, teamRows) in progEntries.groupBy { it[ScoutingEntries.ownerTeamNumber] }) {
+                    val visibleTeams = AllianceService.getAlliancePartnerTeams(ownerTeam, prog) + ownerTeam
+                    val cohort = progEntries.filter { it[ScoutingEntries.ownerTeamNumber] in visibleTeams }
 
-            if (entries.size <= 1) {
-                hasDiscrepancyVal = false
-                conflictingTeamsVal = ""
-            } else {
-                val firstData = JsonSupport.json.parseToJsonElement(entries.first()[ScoutingEntries.dataJson]).jsonObject
-                val allAgree = entries.all { row ->
-                    val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
-                    JsonSupport.scoutingDataAgrees(data, firstData)
-                }
-                if (allAgree) {
-                    hasDiscrepancyVal = false
-                    conflictingTeamsVal = ""
-                } else {
-                    hasDiscrepancyVal = true
-                    conflictingTeamsVal = entries.map { it[ScoutingEntries.ownerTeamNumber] }.distinct().sorted().joinToString(",")
-                }
-            }
+                    val hasDiscrepancyVal: Boolean
+                    val conflictingTeamsVal: String
 
-            ScoutingEntries.update({
-                (ScoutingEntries.eventKey eq eventKey) and
-                (ScoutingEntries.matchKey eq matchKey) and
-                (ScoutingEntries.targetTeamNumber eq targetTeamNumber) and
-                (ScoutingEntries.isPrescout eq isPrescout)
-            }) {
-                it[hasDiscrepancy] = hasDiscrepancyVal
-                it[conflictingTeams] = conflictingTeamsVal
-                it[ScoutingEntries.updatedAt] = Instant.now()
+                    if (cohort.size <= 1) {
+                        hasDiscrepancyVal = false
+                        conflictingTeamsVal = ""
+                    } else {
+                        val firstData = JsonSupport.json.parseToJsonElement(cohort.first()[ScoutingEntries.dataJson]).jsonObject
+                        val allAgree = cohort.all { row ->
+                            val data = JsonSupport.json.parseToJsonElement(row[ScoutingEntries.dataJson]).jsonObject
+                            JsonSupport.scoutingDataAgrees(data, firstData)
+                        }
+                        if (allAgree) {
+                            hasDiscrepancyVal = false
+                            conflictingTeamsVal = ""
+                        } else {
+                            hasDiscrepancyVal = true
+                            conflictingTeamsVal = cohort.map { it[ScoutingEntries.ownerTeamNumber] }.distinct().sorted().joinToString(",")
+                        }
+                    }
+
+                    val rowIds = teamRows.map { it[ScoutingEntries.id].value }
+                    ScoutingEntries.update({ ScoutingEntries.id inList rowIds }) {
+                        it[hasDiscrepancy] = hasDiscrepancyVal
+                        it[conflictingTeams] = conflictingTeamsVal
+                        it[ScoutingEntries.updatedAt] = now
+                    }
+                }
             }
         }
     }
@@ -293,10 +301,12 @@ object ScoutingService {
             val mKey = duplicate[ScoutingEntries.matchKey]
             val matchPlayedTime = transaction {
                 mKey?.let { mk ->
-                    com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mk }
-                        .limit(1)
-                        .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
-                        .firstOrNull()
+                    val matchRow = runCatching {
+                        com.obsidianscout.integrations.TeamCacheOverrideService.matchRow(mk, session.teamNumber, session.program)
+                    }.getOrElse {
+                        com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mk }.limit(1).firstOrNull()
+                    }
+                    matchRow?.let { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
                 }
             }
             val conflictStr = duplicate[ScoutingEntries.conflictingTeams]
@@ -349,10 +359,12 @@ object ScoutingService {
 
         val matchPlayedTime = transaction {
             meta.matchKey.let { mKey ->
-                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mKey }
-                    .limit(1)
-                    .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
-                    .firstOrNull()
+                val matchRow = runCatching {
+                    com.obsidianscout.integrations.TeamCacheOverrideService.matchRow(mKey, session.teamNumber, session.program)
+                }.getOrElse {
+                    com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mKey }.limit(1).firstOrNull()
+                }
+                matchRow?.let { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
             }
         }
 
@@ -426,15 +438,15 @@ object ScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Scouting entry not found")
 
             val ownerTeam = row[ScoutingEntries.ownerTeamNumber]
+            val entryProgram = row[ScoutingEntries.program]
             val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
             val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
-                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)
+                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId, session.program)
 
             val hasPermission = session.role == UserRole.SUPERADMIN ||
-                                ownerTeam == session.teamNumber ||
-                                isAllianceAdmin
+                                (entryProgram == session.program && (ownerTeam == session.teamNumber || isAllianceAdmin))
 
             if (!hasPermission) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to edit this entry")
@@ -463,10 +475,12 @@ object ScoutingService {
             val data = JsonSupport.json.parseToJsonElement(updatedRow[ScoutingEntries.dataJson]).jsonObject
             val mKey = updatedRow[ScoutingEntries.matchKey]
             val matchPlayedTime = mKey?.let { mk ->
-                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mk }
-                    .limit(1)
-                    .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
-                    .firstOrNull()
+                val matchRow = runCatching {
+                    com.obsidianscout.integrations.TeamCacheOverrideService.matchRow(mk, session.teamNumber, session.program)
+                }.getOrElse {
+                    com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mk }.limit(1).firstOrNull()
+                }
+                matchRow?.let { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
             }
             val conflictStr = updatedRow[ScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
@@ -497,15 +511,15 @@ object ScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Scouting entry not found")
 
             val ownerTeam = row[ScoutingEntries.ownerTeamNumber]
+            val entryProgram = row[ScoutingEntries.program]
             val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
             val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
-                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)
+                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId, session.program)
 
             val hasPermission = session.role == UserRole.SUPERADMIN ||
-                                ownerTeam == session.teamNumber ||
-                                isAllianceAdmin
+                                (entryProgram == session.program && (ownerTeam == session.teamNumber || isAllianceAdmin))
 
             if (!hasPermission) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to delete this entry")

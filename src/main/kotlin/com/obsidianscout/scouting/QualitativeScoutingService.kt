@@ -79,7 +79,7 @@ object QualitativeScoutingService {
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            resolveEntriesList(buildRecords(query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList()), session.teamNumber, all)
+            resolveEntriesList(buildRecords(query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList(), session.teamNumber, session.program), session.teamNumber, all)
         }
     }
 
@@ -95,7 +95,7 @@ object QualitativeScoutingService {
                 val visibleTeams = partnerTeams + session.teamNumber
                 query.andWhere { QualitativeScoutingEntries.ownerTeamNumber inList visibleTeams }
             }
-            resolveEntriesList(buildRecords(query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList()), session.teamNumber, all)
+            resolveEntriesList(buildRecords(query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList(), session.teamNumber, session.program), session.teamNumber, all)
         }
     }
 
@@ -118,16 +118,20 @@ object QualitativeScoutingService {
             if (since != null) {
                 query.andWhere { EntrySync.changedSince(QualitativeScoutingEntries.updatedAt, QualitativeScoutingEntries.createdAt, since) }
             }
-            buildRecords(query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList())
+            buildRecords(query.orderBy(QualitativeScoutingEntries.createdAt, SortOrder.DESC).toList(), session.teamNumber, session.program)
         }
     }
 
     /** Turns rows into records. Call inside a transaction. */
-    private fun buildRecords(rows: List<ResultRow>): List<QualitativeScoutingEntryRecord> {
+    private fun buildRecords(rows: List<ResultRow>, teamNumber: Int = 0, program: String = "FRC"): List<QualitativeScoutingEntryRecord> {
         val matchKeys = rows.mapNotNull { it[QualitativeScoutingEntries.matchKey] }.distinct()
         val matchTimes = if (matchKeys.isNotEmpty()) {
-            com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }
-                .associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
+            val matchRows = runCatching {
+                com.obsidianscout.integrations.TeamCacheOverrideService.matchRowsByKeys(matchKeys, teamNumber, program)
+            }.getOrElse {
+                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey inList matchKeys }.toList()
+            }
+            matchRows.associate { it[com.obsidianscout.db.ApiMatches.matchKey] to (it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime]) }
         } else {
             emptyMap()
         }
@@ -194,36 +198,40 @@ object QualitativeScoutingService {
 
             if (entries.isEmpty()) return@transaction
 
-            val hasDiscrepancyVal: Boolean
-            val conflictingTeamsVal: String
+            val now = Instant.now()
+            for ((prog, progEntries) in entries.groupBy { it[QualitativeScoutingEntries.program] }) {
+                for ((ownerTeam, teamRows) in progEntries.groupBy { it[QualitativeScoutingEntries.ownerTeamNumber] }) {
+                    val visibleTeams = AllianceService.getAlliancePartnerTeams(ownerTeam, prog) + ownerTeam
+                    val cohort = progEntries.filter { it[QualitativeScoutingEntries.ownerTeamNumber] in visibleTeams }
 
-            if (entries.size <= 1) {
-                hasDiscrepancyVal = false
-                conflictingTeamsVal = ""
-            } else {
-                val firstData = JsonSupport.json.parseToJsonElement(entries.first()[QualitativeScoutingEntries.dataJson]).jsonObject
-                val allAgree = entries.all { row ->
-                    val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
-                    JsonSupport.scoutingDataAgrees(data, firstData)
-                }
-                if (allAgree) {
-                    hasDiscrepancyVal = false
-                    conflictingTeamsVal = ""
-                } else {
-                    hasDiscrepancyVal = true
-                    conflictingTeamsVal = entries.map { it[QualitativeScoutingEntries.ownerTeamNumber] }.distinct().sorted().joinToString(",")
-                }
-            }
+                    val hasDiscrepancyVal: Boolean
+                    val conflictingTeamsVal: String
 
-            QualitativeScoutingEntries.update({
-                (QualitativeScoutingEntries.eventKey eq eventKey) and
-                (QualitativeScoutingEntries.matchKey eq matchKey) and
-                (QualitativeScoutingEntries.targetTeamNumber eq targetTeamNumber) and
-                (QualitativeScoutingEntries.isPrescout eq isPrescout)
-            }) {
-                it[hasDiscrepancy] = hasDiscrepancyVal
-                it[conflictingTeams] = conflictingTeamsVal
-                it[QualitativeScoutingEntries.updatedAt] = Instant.now()
+                    if (cohort.size <= 1) {
+                        hasDiscrepancyVal = false
+                        conflictingTeamsVal = ""
+                    } else {
+                        val firstData = JsonSupport.json.parseToJsonElement(cohort.first()[QualitativeScoutingEntries.dataJson]).jsonObject
+                        val allAgree = cohort.all { row ->
+                            val data = JsonSupport.json.parseToJsonElement(row[QualitativeScoutingEntries.dataJson]).jsonObject
+                            JsonSupport.scoutingDataAgrees(data, firstData)
+                        }
+                        if (allAgree) {
+                            hasDiscrepancyVal = false
+                            conflictingTeamsVal = ""
+                        } else {
+                            hasDiscrepancyVal = true
+                            conflictingTeamsVal = cohort.map { it[QualitativeScoutingEntries.ownerTeamNumber] }.distinct().sorted().joinToString(",")
+                        }
+                    }
+
+                    val rowIds = teamRows.map { it[QualitativeScoutingEntries.id].value }
+                    QualitativeScoutingEntries.update({ QualitativeScoutingEntries.id inList rowIds }) {
+                        it[hasDiscrepancy] = hasDiscrepancyVal
+                        it[conflictingTeams] = conflictingTeamsVal
+                        it[QualitativeScoutingEntries.updatedAt] = now
+                    }
+                }
             }
         }
     }
@@ -290,10 +298,12 @@ object QualitativeScoutingService {
             val mKey = duplicate[QualitativeScoutingEntries.matchKey]
             val matchPlayedTime = transaction {
                 mKey?.let { mk ->
-                    com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mk }
-                        .limit(1)
-                        .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
-                        .firstOrNull()
+                    val matchRow = runCatching {
+                        com.obsidianscout.integrations.TeamCacheOverrideService.matchRow(mk, session.teamNumber, session.program)
+                    }.getOrElse {
+                        com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mk }.limit(1).firstOrNull()
+                    }
+                    matchRow?.let { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
                 }
             }
             val conflictStr = duplicate[QualitativeScoutingEntries.conflictingTeams]
@@ -344,10 +354,12 @@ object QualitativeScoutingService {
 
         val matchPlayedTime = transaction {
             meta.matchKey.let { mKey ->
-                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mKey }
-                    .limit(1)
-                    .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
-                    .firstOrNull()
+                val matchRow = runCatching {
+                    com.obsidianscout.integrations.TeamCacheOverrideService.matchRow(mKey, session.teamNumber, session.program)
+                }.getOrElse {
+                    com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mKey }.limit(1).firstOrNull()
+                }
+                matchRow?.let { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
             }
         }
 
@@ -420,15 +432,15 @@ object QualitativeScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Qualitative scouting entry not found")
 
             val ownerTeam = row[QualitativeScoutingEntries.ownerTeamNumber]
+            val entryProgram = row[QualitativeScoutingEntries.program]
             val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
             val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
-                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)
+                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId, session.program)
 
             val hasPermission = session.role == UserRole.SUPERADMIN ||
-                                ownerTeam == session.teamNumber ||
-                                isAllianceAdmin
+                                (entryProgram == session.program && (ownerTeam == session.teamNumber || isAllianceAdmin))
 
             if (!hasPermission) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to edit this entry")
@@ -456,10 +468,12 @@ object QualitativeScoutingService {
             val data = JsonSupport.json.parseToJsonElement(updatedRow[QualitativeScoutingEntries.dataJson]).jsonObject
             val mKey = updatedRow[QualitativeScoutingEntries.matchKey]
             val matchPlayedTime = mKey?.let { mk ->
-                com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mk }
-                    .limit(1)
-                    .map { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
-                    .firstOrNull()
+                val matchRow = runCatching {
+                    com.obsidianscout.integrations.TeamCacheOverrideService.matchRow(mk, session.teamNumber, session.program)
+                }.getOrElse {
+                    com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.matchKey eq mk }.limit(1).firstOrNull()
+                }
+                matchRow?.let { it[com.obsidianscout.db.ApiMatches.actualTime] ?: it[com.obsidianscout.db.ApiMatches.scheduledTime] }
             }
             val conflictStr = updatedRow[QualitativeScoutingEntries.conflictingTeams]
             val conflicting = if (conflictStr.isBlank()) emptyList() else conflictStr.split(",").mapNotNull { it.toIntOrNull() }
@@ -490,15 +504,15 @@ object QualitativeScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Qualitative scouting entry not found")
 
             val ownerTeam = row[QualitativeScoutingEntries.ownerTeamNumber]
+            val entryProgram = row[QualitativeScoutingEntries.program]
             val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
             val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
-                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)
+                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId, session.program)
 
             val hasPermission = session.role == UserRole.SUPERADMIN ||
-                                ownerTeam == session.teamNumber ||
-                                isAllianceAdmin
+                                (entryProgram == session.program && (ownerTeam == session.teamNumber || isAllianceAdmin))
 
             if (!hasPermission) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to delete this entry")

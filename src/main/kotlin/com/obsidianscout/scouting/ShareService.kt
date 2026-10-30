@@ -523,7 +523,7 @@ object ShareService {
             allowedList.add(ownerTeam)
 
             val userTeam = session?.teamNumber
-            if (userTeam == null || !allowedList.contains(userTeam)) {
+            if (userTeam == null || session.program != program || !allowedList.contains(userTeam)) {
                 return ResolvedSharePayload(
                     token = token,
                     title = row[SharedLinks.title],

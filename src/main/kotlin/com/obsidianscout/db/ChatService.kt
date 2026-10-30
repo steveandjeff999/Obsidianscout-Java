@@ -399,8 +399,13 @@ object ChatService {
             (ChatMessages.groupName eq sanitized)
         }
 
-        UserChatLastRead.deleteWhere {
-            UserChatLastRead.groupName eq sanitized
+        val teamUserIds = Users.select(Users.id).where {
+            (Users.teamNumber eq teamNumber) and (Users.program eq program)
+        }.map { it[Users.id] }
+        if (teamUserIds.isNotEmpty()) {
+            UserChatLastRead.deleteWhere {
+                (UserChatLastRead.groupName eq sanitized) and (UserChatLastRead.userId inList teamUserIds)
+            }
         }
 
         true
@@ -438,8 +443,13 @@ object ChatService {
             (ChatMessages.groupName eq sanitized)
         }
 
-        UserChatLastRead.deleteWhere {
-            UserChatLastRead.groupName eq sanitized
+        val teamUserIds = Users.select(Users.id).where {
+            (Users.teamNumber eq teamNumber) and (Users.program eq program)
+        }.map { it[Users.id] }
+        if (teamUserIds.isNotEmpty()) {
+            UserChatLastRead.deleteWhere {
+                (UserChatLastRead.groupName eq sanitized) and (UserChatLastRead.userId inList teamUserIds)
+            }
         }
 
         true
@@ -512,12 +522,12 @@ object ChatService {
         )
     }
 
-    fun editMessage(id: String, userId: String, teamNumber: Int, newContent: String): ChatMessageDto? = transaction {
+    fun editMessage(id: String, userId: String, teamNumber: Int, newContent: String, program: String = "FRC"): ChatMessageDto? = transaction {
         val msgUuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction null
         val userUuid = runCatching { UUID.fromString(userId) }.getOrNull() ?: return@transaction null
 
         val row = ChatMessages.selectAll().where {
-            (ChatMessages.id eq msgUuid) and (ChatMessages.teamNumber eq teamNumber)
+            (ChatMessages.id eq msgUuid) and (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.program eq program)
         }.firstOrNull() ?: return@transaction null
 
         if (row[ChatMessages.userId].value != userUuid) {
@@ -571,12 +581,12 @@ object ChatService {
             }
     }
 
-    fun deleteMessage(id: String, userId: String, userRole: UserRole, teamNumber: Int): Boolean = transaction {
+    fun deleteMessage(id: String, userId: String, userRole: UserRole, teamNumber: Int, program: String = "FRC"): Boolean = transaction {
         val msgUuid = runCatching { UUID.fromString(id) }.getOrNull() ?: return@transaction false
         val userUuid = runCatching { UUID.fromString(userId) }.getOrNull() ?: return@transaction false
 
         val row = ChatMessages.selectAll().where {
-            (ChatMessages.id eq msgUuid) and (ChatMessages.teamNumber eq teamNumber)
+            (ChatMessages.id eq msgUuid) and (ChatMessages.teamNumber eq teamNumber) and (ChatMessages.program eq program)
         }.firstOrNull() ?: return@transaction false
 
         val isOwner = row[ChatMessages.userId].value == userUuid

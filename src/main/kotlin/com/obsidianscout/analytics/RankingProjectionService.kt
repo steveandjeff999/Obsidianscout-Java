@@ -460,7 +460,7 @@ object RankingProjectionService {
 
         // TBA's score breakdown carries the RP each alliance earned (bonus RPs included).
         val (officialRp, eventYear) = readTransaction {
-            val rpByMatch = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }.associate { row ->
+            val rpByMatch = TeamCacheOverrideService.matchRows(eventKey, session.teamNumber, session.program).associate { row ->
                 row[ApiMatches.matchKey] to readAllianceRp(row[ApiMatches.dataJson])
             }
             val year = TeamCacheOverrideService.eventRow(eventKey, session.teamNumber, session.program)?.get(ApiEvents.year)

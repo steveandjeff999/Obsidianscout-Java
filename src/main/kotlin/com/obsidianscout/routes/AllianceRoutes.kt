@@ -1,4 +1,4 @@
-﻿package com.obsidianscout.routes
+package com.obsidianscout.routes
 
 import com.obsidianscout.auth.clientIp
 import org.jetbrains.exposed.v1.core.*
@@ -236,7 +236,7 @@ fun Route.allianceRoutes() {
                     }
                     val kind = com.obsidianscout.collab.ConfigCollabScope.normalizeKind(call.parameters["kind"])
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Invalid kind")
-                    if (!AllianceService.isAllianceAdmin(session.teamNumber, idUuid)) {
+                    if (!AllianceService.isAllianceAdmin(session.teamNumber, idUuid, session.program)) {
                         throw com.obsidianscout.auth.ApiException(HttpStatusCode.Forbidden, "Only alliance admins can edit alliance forms")
                     }
                     val body = call.receiveText()

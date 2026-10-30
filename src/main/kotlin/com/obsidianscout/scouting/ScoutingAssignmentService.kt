@@ -1998,58 +1998,91 @@ object ScoutingAssignmentService {
 
                 if (pendingAsgns.isEmpty()) return@transaction
 
-                // Load all existing match scouting data keys for this event
+                // Load all existing match scouting data for this event
                 val matchEntries = ScoutingEntries.selectAll().where {
                     (ScoutingEntries.program eq program) and
                     (ScoutingEntries.eventKey.lowerCase() eq eventClean)
                 }.toList()
-                val matchEntryKeys = matchEntries.mapNotNull { row ->
-                    val mKey = row[ScoutingEntries.matchKey]?.trim()?.lowercase()
-                    val mNum = row[ScoutingEntries.matchNumber]
-                    val tNum = row[ScoutingEntries.targetTeamNumber]
-                    if (tNum != null) {
-                        setOfNotNull(
-                            mKey?.let { "K:${it}:${tNum}" },
-                            mNum?.let { "N:${it}:${tNum}" }
-                        )
-                    } else null
-                }.flatten().toSet()
 
                 // Load all existing pit scouting data for this event
                 val pitEntries = PitScoutingEntries.selectAll().where {
                     (PitScoutingEntries.program eq program) and
                     (PitScoutingEntries.eventKey.lowerCase() eq eventClean)
                 }.toList()
-                val pitTeams = pitEntries.mapNotNull { it[PitScoutingEntries.targetTeamNumber] }.toSet()
 
                 // Load all existing qualitative scouting data for this event
                 val qualEntries = QualitativeScoutingEntries.selectAll().where {
                     (QualitativeScoutingEntries.program eq program) and
                     (QualitativeScoutingEntries.eventKey.lowerCase() eq eventClean)
                 }.toList()
-                val qualEntryKeys = qualEntries.mapNotNull { row ->
-                    val mKey = row[QualitativeScoutingEntries.matchKey]?.trim()?.lowercase()
-                    val mNum = row[QualitativeScoutingEntries.matchNumber]
-                    val tNum = row[QualitativeScoutingEntries.targetTeamNumber]
-                    if (tNum != null) {
-                        setOfNotNull(
-                            mKey?.let { "K:${it}:${tNum}" },
-                            mNum?.let { "N:${it}:${tNum}" }
-                        )
-                    } else null
-                }.flatten().toSet()
 
-                // Load match alliances for qualitative alliance resolution
-                val matchesForEvent = ApiMatches.selectAll().where { ApiMatches.eventKey.lowerCase() eq eventClean }.associate { row ->
-                    val mKey = row[ApiMatches.matchKey].trim().lowercase()
-                    val red = row[ApiMatches.redTeams].split(",").mapNotNull { it.replace(Regex("^(frc|ftc)", RegexOption.IGNORE_CASE), "").trim().toIntOrNull() }.toSet()
-                    val blue = row[ApiMatches.blueTeams].split(",").mapNotNull { it.replace(Regex("^(frc|ftc)", RegexOption.IGNORE_CASE), "").trim().toIntOrNull() }.toSet()
-                    mKey to Pair(red, blue)
+                // Cache visible teams, entry keys, and match alliances per assignment owner team
+                val visibleTeamsByOwner = mutableMapOf<Int, Set<Int>>()
+                fun visibleTeamsFor(ownerTeam: Int): Set<Int> = visibleTeamsByOwner.getOrPut(ownerTeam) {
+                    AllianceService.getAlliancePartnerTeams(ownerTeam, program) + ownerTeam
+                }
+
+                val matchKeysByOwner = mutableMapOf<Int, Set<String>>()
+                fun matchKeysFor(ownerTeam: Int): Set<String> = matchKeysByOwner.getOrPut(ownerTeam) {
+                    val visible = visibleTeamsFor(ownerTeam)
+                    matchEntries.asSequence()
+                        .filter { it[ScoutingEntries.ownerTeamNumber] in visible }
+                        .mapNotNull { row ->
+                            val mKey = row[ScoutingEntries.matchKey]?.trim()?.lowercase()
+                            val mNum = row[ScoutingEntries.matchNumber]
+                            val tNum = row[ScoutingEntries.targetTeamNumber]
+                            if (tNum != null) {
+                                setOfNotNull(
+                                    mKey?.let { "K:${it}:${tNum}" },
+                                    mNum?.let { "N:${it}:${tNum}" }
+                                )
+                            } else null
+                        }.flatten().toSet()
+                }
+
+                val pitTeamsByOwner = mutableMapOf<Int, Set<Int>>()
+                fun pitTeamsFor(ownerTeam: Int): Set<Int> = pitTeamsByOwner.getOrPut(ownerTeam) {
+                    val visible = visibleTeamsFor(ownerTeam)
+                    pitEntries.asSequence()
+                        .filter { it[PitScoutingEntries.ownerTeamNumber] in visible }
+                        .mapNotNull { it[PitScoutingEntries.targetTeamNumber] }
+                        .toSet()
+                }
+
+                val qualKeysByOwner = mutableMapOf<Int, Set<String>>()
+                fun qualKeysFor(ownerTeam: Int): Set<String> = qualKeysByOwner.getOrPut(ownerTeam) {
+                    val visible = visibleTeamsFor(ownerTeam)
+                    qualEntries.asSequence()
+                        .filter { it[QualitativeScoutingEntries.ownerTeamNumber] in visible }
+                        .mapNotNull { row ->
+                            val mKey = row[QualitativeScoutingEntries.matchKey]?.trim()?.lowercase()
+                            val mNum = row[QualitativeScoutingEntries.matchNumber]
+                            val tNum = row[QualitativeScoutingEntries.targetTeamNumber]
+                            if (tNum != null) {
+                                setOfNotNull(
+                                    mKey?.let { "K:${it}:${tNum}" },
+                                    mNum?.let { "N:${it}:${tNum}" }
+                                )
+                            } else null
+                        }.flatten().toSet()
+                }
+
+                val matchesByOwner = mutableMapOf<Int, Map<String, Pair<Set<Int>, Set<Int>>>>()
+                fun matchesFor(ownerTeam: Int): Map<String, Pair<Set<Int>, Set<Int>>> = matchesByOwner.getOrPut(ownerTeam) {
+                    val rows = runCatching { TeamCacheOverrideService.matchRows(eventClean, ownerTeam, program) }
+                        .getOrElse { ApiMatches.selectAll().where { ApiMatches.eventKey.lowerCase() eq eventClean }.toList() }
+                    rows.associate { row ->
+                        val mKey = row[ApiMatches.matchKey].trim().lowercase()
+                        val red = row[ApiMatches.redTeams].split(",").mapNotNull { it.replace(Regex("^(frc|ftc)", RegexOption.IGNORE_CASE), "").trim().toIntOrNull() }.toSet()
+                        val blue = row[ApiMatches.blueTeams].split(",").mapNotNull { it.replace(Regex("^(frc|ftc)", RegexOption.IGNORE_CASE), "").trim().toIntOrNull() }.toSet()
+                        mKey to Pair(red, blue)
+                    }
                 }
 
                 val idsToComplete = mutableListOf<UUID>()
 
                 for (a in pendingAsgns) {
+                    val ownerTeam = a[ScoutingAssignments.ownerTeamNumber]
                     val type = a[ScoutingAssignments.assignmentType]
                     val mKey = a[ScoutingAssignments.matchKey]?.trim()?.lowercase()
                     val mNum = a[ScoutingAssignments.matchNumber]
@@ -2058,6 +2091,7 @@ object ScoutingAssignmentService {
 
                     if (type == "MATCH") {
                         if (tNum != null) {
+                            val matchEntryKeys = matchKeysFor(ownerTeam)
                             val matchByKey = mKey?.let { matchEntryKeys.contains("K:${it}:${tNum}") } ?: false
                             val matchByNum = mNum?.let { matchEntryKeys.contains("N:${it}:${tNum}") } ?: false
                             if (matchByKey || matchByNum) {
@@ -2065,10 +2099,11 @@ object ScoutingAssignmentService {
                             }
                         }
                     } else if (type == "PIT") {
-                        if (tNum != null && pitTeams.contains(tNum)) {
+                        if (tNum != null && pitTeamsFor(ownerTeam).contains(tNum)) {
                             idsToComplete.add(a[ScoutingAssignments.id].value)
                         }
                     } else if (type == "QUALITATIVE") {
+                        val qualEntryKeys = qualKeysFor(ownerTeam)
                         if (tNum != null) {
                             val qualByKey = mKey?.let { qualEntryKeys.contains("K:${it}:${tNum}") } ?: false
                             val qualByNum = mNum?.let { qualEntryKeys.contains("N:${it}:${tNum}") } ?: false
@@ -2076,7 +2111,7 @@ object ScoutingAssignmentService {
                                 idsToComplete.add(a[ScoutingAssignments.id].value)
                             }
                         } else if (alliance != null && mKey != null) {
-                            val allianceTeams = matchesForEvent[mKey]?.let {
+                            val allianceTeams = matchesFor(ownerTeam)[mKey]?.let {
                                 if (alliance == "RED") it.first else if (alliance == "BLUE") it.second else null
                             }
                             if (allianceTeams != null && allianceTeams.isNotEmpty()) {
@@ -2126,7 +2161,9 @@ object ScoutingAssignmentService {
         val now = Instant.now()
 
         val completedFor = transaction {
+            val visibleTeams = AllianceService.getAlliancePartnerTeams(ownerTeam, program) + ownerTeam
             val query = ScoutingAssignments.selectAll().where {
+                (ScoutingAssignments.ownerTeamNumber inList visibleTeams) and
                 (ScoutingAssignments.program eq program) and
                 (ScoutingAssignments.eventKey.lowerCase() eq eventKey.trim().lowercase()) and
                 (ScoutingAssignments.assignmentType eq typeClean) and

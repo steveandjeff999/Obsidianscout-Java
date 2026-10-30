@@ -180,35 +180,40 @@ object PitScoutingService {
 
             if (entries.isEmpty()) return@transaction
 
-            val hasDiscrepancyVal: Boolean
-            val conflictingTeamsVal: String
+            val now = Instant.now()
+            for ((prog, progEntries) in entries.groupBy { it[PitScoutingEntries.program] }) {
+                for ((ownerTeam, teamRows) in progEntries.groupBy { it[PitScoutingEntries.ownerTeamNumber] }) {
+                    val visibleTeams = AllianceService.getAlliancePartnerTeams(ownerTeam, prog) + ownerTeam
+                    val cohort = progEntries.filter { it[PitScoutingEntries.ownerTeamNumber] in visibleTeams }
 
-            if (entries.size <= 1) {
-                hasDiscrepancyVal = false
-                conflictingTeamsVal = ""
-            } else {
-                val firstData = JsonSupport.json.parseToJsonElement(entries.first()[PitScoutingEntries.dataJson]).jsonObject
-                val allAgree = entries.all { row ->
-                    val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
-                    JsonSupport.scoutingDataAgrees(data, firstData)
-                }
-                if (allAgree) {
-                    hasDiscrepancyVal = false
-                    conflictingTeamsVal = ""
-                } else {
-                    hasDiscrepancyVal = true
-                    conflictingTeamsVal = entries.map { it[PitScoutingEntries.ownerTeamNumber] }.distinct().sorted().joinToString(",")
-                }
-            }
+                    val hasDiscrepancyVal: Boolean
+                    val conflictingTeamsVal: String
 
-            PitScoutingEntries.update({
-                (PitScoutingEntries.eventKey eq eventKey) and
-                (PitScoutingEntries.targetTeamNumber eq targetTeamNumber) and
-                (PitScoutingEntries.isPrescout eq isPrescout)
-            }) {
-                it[hasDiscrepancy] = hasDiscrepancyVal
-                it[conflictingTeams] = conflictingTeamsVal
-                it[PitScoutingEntries.updatedAt] = Instant.now()
+                    if (cohort.size <= 1) {
+                        hasDiscrepancyVal = false
+                        conflictingTeamsVal = ""
+                    } else {
+                        val firstData = JsonSupport.json.parseToJsonElement(cohort.first()[PitScoutingEntries.dataJson]).jsonObject
+                        val allAgree = cohort.all { row ->
+                            val data = JsonSupport.json.parseToJsonElement(row[PitScoutingEntries.dataJson]).jsonObject
+                            JsonSupport.scoutingDataAgrees(data, firstData)
+                        }
+                        if (allAgree) {
+                            hasDiscrepancyVal = false
+                            conflictingTeamsVal = ""
+                        } else {
+                            hasDiscrepancyVal = true
+                            conflictingTeamsVal = cohort.map { it[PitScoutingEntries.ownerTeamNumber] }.distinct().sorted().joinToString(",")
+                        }
+                    }
+
+                    val rowIds = teamRows.map { it[PitScoutingEntries.id].value }
+                    PitScoutingEntries.update({ PitScoutingEntries.id inList rowIds }) {
+                        it[hasDiscrepancy] = hasDiscrepancyVal
+                        it[conflictingTeams] = conflictingTeamsVal
+                        it[PitScoutingEntries.updatedAt] = now
+                    }
+                }
             }
         }
     }
@@ -380,15 +385,15 @@ object PitScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Pit scouting entry not found")
 
             val ownerTeam = row[PitScoutingEntries.ownerTeamNumber]
+            val entryProgram = row[PitScoutingEntries.program]
             val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
             val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
-                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)
+                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId, session.program)
 
             val hasPermission = session.role == UserRole.SUPERADMIN ||
-                                ownerTeam == session.teamNumber ||
-                                isAllianceAdmin
+                                (entryProgram == session.program && (ownerTeam == session.teamNumber || isAllianceAdmin))
 
             if (!hasPermission) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to edit this entry")
@@ -437,15 +442,15 @@ object PitScoutingService {
                 ?: throw ApiException(HttpStatusCode.NotFound, "Pit scouting entry not found")
 
             val ownerTeam = row[PitScoutingEntries.ownerTeamNumber]
+            val entryProgram = row[PitScoutingEntries.program]
             val callerActiveAllianceId = AllianceService.getActiveAllianceId(session.teamNumber, session.program)
             val entryActiveAllianceId = AllianceService.getActiveAllianceId(ownerTeam, session.program)
             val isAllianceAdmin = callerActiveAllianceId != null && 
                                   callerActiveAllianceId == entryActiveAllianceId && 
-                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId)
+                                  AllianceService.isAllianceAdmin(session.teamNumber, callerActiveAllianceId, session.program)
 
             val hasPermission = session.role == UserRole.SUPERADMIN ||
-                                ownerTeam == session.teamNumber ||
-                                isAllianceAdmin
+                                (entryProgram == session.program && (ownerTeam == session.teamNumber || isAllianceAdmin))
 
             if (!hasPermission) {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to delete this entry")

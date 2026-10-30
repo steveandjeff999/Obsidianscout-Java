@@ -337,7 +337,7 @@ object MatchPredictionService {
             }
             val matchKeys = picks.map { it.matchKey }.distinct()
             val matches = matchKeys.chunked(500).flatMap { chunk ->
-                ApiMatches.selectAll().where { ApiMatches.matchKey inList chunk }.map(::rowToMatchInfo)
+                TeamCacheOverrideService.matchRowsByKeys(chunk, session.teamNumber, session.program).map(::rowToMatchInfo)
             }.associateBy { it.matchKey }
             // Picks belong to whoever made them, so name everyone who did, even if they've since changed team.
             val userIds = picks.map { it.userId }.distinct().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
@@ -345,14 +345,14 @@ object MatchPredictionService {
                 Users.select(Users.id, Users.username, Users.role).where { Users.id inList chunk }
                     .map { LeaderboardUser(it[Users.id].value.toString(), it[Users.username], it[Users.role]) }
             }
-            aggregate(event, season, users, picks, matches, loadEventNames())
+            aggregate(event, season, users, picks, matches, loadEventNames(session.teamNumber, session.program))
         }
     }
 
     fun leaderboardOptions(session: UserSession): PredictionLeaderboardOptions {
         requireEnabled(session)
         return readTransaction {
-            val names = loadEventNames()
+            val names = loadEventNames(session.teamNumber, session.program)
             val picks = loadTeamPicks(session.teamNumber, session.program)
             val events = picks.map { it.eventKey.lowercase() }.distinct()
                 .map { ScouterReportEvent(it, names[it], ScouterReportService.resolveYear(it, emptyMap(), null)) }
@@ -376,8 +376,18 @@ object MatchPredictionService {
             )
         }
 
-    private fun loadEventNames(): Map<String, String> =
-        ApiEvents.select(ApiEvents.eventKey, ApiEvents.name).associate { it[ApiEvents.eventKey].lowercase() to it[ApiEvents.name] }
+    private fun loadEventNames(teamNumber: Int, program: String): Map<String, String> {
+        val baseEvents = ApiEvents.select(ApiEvents.eventKey, ApiEvents.name, ApiEvents.year).map {
+            com.obsidianscout.routes.EventRecord(
+                eventKey = it[ApiEvents.eventKey],
+                name = it[ApiEvents.name],
+                year = it[ApiEvents.year]
+            )
+        }
+        return TeamCacheOverrideService.eventOverlay(teamNumber, program)
+            .apply(baseEvents, null)
+            .associate { it.eventKey.lowercase() to it.name }
+    }
 
     private fun round1(v: Double): Double = Math.round(v * 10.0) / 10.0
 
@@ -385,10 +395,13 @@ object MatchPredictionService {
     // Called by MatchCanonical / EventTeamCanonical so picks follow a match or event when its key changes.
 
     /** Points picks on [oldKey] at [newKey]; a scout with picks on both keeps the newer one. Must run inside a transaction. */
-    fun remapMatchKey(oldKey: String, newKey: String, ownerTeam: Int? = null) {
+    fun remapMatchKey(oldKey: String, newKey: String, ownerTeam: Int? = null, program: String? = null) {
         if (oldKey == newKey) return
         MatchPredictions.selectAll().where { MatchPredictions.matchKey eq oldKey }.toList()
-            .filter { ownerTeam == null || it[MatchPredictions.ownerTeamNumber] == ownerTeam }
+            .filter {
+                (ownerTeam == null || it[MatchPredictions.ownerTeamNumber] == ownerTeam) &&
+                    (program == null || it[MatchPredictions.program].equals(program, ignoreCase = true))
+            }
             .forEach { row ->
             val clash = MatchPredictions.selectAll().where {
                 (MatchPredictions.userId eq row[MatchPredictions.userId]) and (MatchPredictions.matchKey eq newKey)

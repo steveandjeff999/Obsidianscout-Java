@@ -1222,21 +1222,49 @@ object IntegrationService {
                         teamAllowedKeys.addAll(allianceEvents)
                     }
 
+                    val overlay = if (activeScoutingTeam != null && activeScoutingTeam > 0) {
+                        TeamCacheOverrideService.eventOverlay(activeScoutingTeam, program)
+                    } else null
+                    if (overlay != null) {
+                        teamAllowedKeys.addAll(overlay.visibleKeys)
+                        teamAllowedKeys.removeAll(overlay.hiddenKeys)
+                    }
+
                     val validEventKeys = teamAllowedKeys.filter { it.isNotBlank() }
                     val eventsCount = validEventKeys.size
 
                     val teamsCount = if (normalizedActiveKey.isNotBlank()) {
-                        ApiTeams.selectAll().where { ApiTeams.eventKey eq normalizedActiveKey }.count().toInt()
+                        if (activeScoutingTeam != null && activeScoutingTeam > 0) {
+                            TeamCacheOverrideService.teamRows(normalizedActiveKey, activeScoutingTeam, program).size
+                        } else {
+                            ApiTeams.selectAll().where { ApiTeams.eventKey eq normalizedActiveKey }.count().toInt()
+                        }
                     } else if (validEventKeys.isNotEmpty()) {
-                        ApiTeams.select(ApiTeams.teamNumber).where { ApiTeams.eventKey inList validEventKeys }.map { it[ApiTeams.teamNumber] }.distinct().size
+                        if (activeScoutingTeam != null && activeScoutingTeam > 0) {
+                            validEventKeys.flatMap { ek ->
+                                TeamCacheOverrideService.teamRows(ek, activeScoutingTeam, program).map { it[ApiTeams.teamNumber] }
+                            }.distinct().size
+                        } else {
+                            ApiTeams.select(ApiTeams.teamNumber).where { ApiTeams.eventKey inList validEventKeys }.map { it[ApiTeams.teamNumber] }.distinct().size
+                        }
                     } else {
                         0
                     }
 
                     val matchesCount = if (normalizedActiveKey.isNotBlank()) {
-                        ApiMatches.selectAll().where { ApiMatches.eventKey eq normalizedActiveKey }.count().toInt()
+                        if (activeScoutingTeam != null && activeScoutingTeam > 0) {
+                            TeamCacheOverrideService.matchRows(normalizedActiveKey, activeScoutingTeam, program).size
+                        } else {
+                            ApiMatches.selectAll().where { ApiMatches.eventKey eq normalizedActiveKey }.count().toInt()
+                        }
                     } else if (validEventKeys.isNotEmpty()) {
-                        ApiMatches.select(ApiMatches.id).where { ApiMatches.eventKey inList validEventKeys }.count().toInt()
+                        if (activeScoutingTeam != null && activeScoutingTeam > 0) {
+                            validEventKeys.sumOf { ek ->
+                                TeamCacheOverrideService.matchRows(ek, activeScoutingTeam, program).size
+                            }
+                        } else {
+                            ApiMatches.select(ApiMatches.id).where { ApiMatches.eventKey inList validEventKeys }.count().toInt()
+                        }
                     } else {
                         0
                     }

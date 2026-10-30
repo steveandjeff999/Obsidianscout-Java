@@ -1,4 +1,4 @@
-﻿package com.obsidianscout.routes
+package com.obsidianscout.routes
 
 import com.obsidianscout.auth.clientIp
 import org.jetbrains.exposed.v1.core.*
@@ -354,8 +354,8 @@ fun Route.scoutingRoutes() {
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
                     val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
                     val (cachedTeams, cachedMatches) = com.obsidianscout.db.readTransaction {
-                        val teamCount = com.obsidianscout.db.ApiTeams.selectAll().where { com.obsidianscout.db.ApiTeams.eventKey eq eventKey }.count().toInt()
-                        val matchCount = com.obsidianscout.db.ApiMatches.selectAll().where { com.obsidianscout.db.ApiMatches.eventKey eq eventKey }.count().toInt()
+                        val teamCount = com.obsidianscout.integrations.TeamCacheOverrideService.teamRows(eventKey, session.teamNumber, session.program).size
+                        val matchCount = com.obsidianscout.integrations.TeamCacheOverrideService.matchRows(eventKey, session.teamNumber, session.program).size
                         Pair(teamCount, matchCount)
                     }
                     com.obsidianscout.integrations.SyncScheduler.enqueueCustomEventDataSync(session.teamNumber, settings, eventKey)

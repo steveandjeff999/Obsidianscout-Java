@@ -696,13 +696,16 @@ object AuthService {
         // Perform updates and deletion in a transaction
         transaction {
             // Ensure the team-specific "Deleted User" placeholder exists
-            val deletedUserEntityId = Users.selectAll().where { (Users.username eq "Deleted User") and (Users.teamNumber eq targetTeam) }
+            val deletedUserEntityId = Users.selectAll().where {
+                (Users.username eq "Deleted User") and (Users.teamNumber eq targetTeam) and (Users.program eq targetProgram)
+            }
                 .limit(1)
                 .firstOrNull()
                 ?.let { it[Users.id] }
                 ?: Users.insertAndGetId {
                     it[username] = "Deleted User"
                     it[teamNumber] = targetTeam
+                    it[program] = targetProgram
                     it[passwordHash] = "DELETED_USER_PLACEHOLDER"
                     it[role] = UserRole.SCOUT.name
                     it[createdAt] = Instant.now()

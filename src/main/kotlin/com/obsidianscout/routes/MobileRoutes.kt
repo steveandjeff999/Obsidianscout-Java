@@ -1592,15 +1592,14 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val eventKeys = events.map { it.eventKey }
                 val (teamCountsMap, eventDbIdsMap) = if (eventKeys.isNotEmpty()) {
                     transaction {
-                        val counts = ApiTeams.selectAll()
-                            .where { ApiTeams.eventKey inList eventKeys }
-                            .map { it[ApiTeams.eventKey] }
-                            .groupBy { it }
-                            .mapValues { it.value.size }
+                        val counts = eventKeys.associateWith { ek ->
+                            TeamCacheOverrideService.teamRows(ek, session.teamNumber, session.program).size
+                        }
 
-                        val dbIds = ApiEvents.selectAll()
-                            .where { ApiEvents.eventKey inList eventKeys }
-                            .associate { it[ApiEvents.eventKey] to it[ApiEvents.id].value }
+                        val dbIds = eventKeys.mapNotNull { ek ->
+                            TeamCacheOverrideService.eventRow(ek, session.teamNumber, session.program)
+                                ?.get(ApiEvents.id)?.value?.let { ek to it }
+                        }.toMap()
 
                         counts to dbIds
                     }
@@ -2035,8 +2034,10 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     val eventKeys = uniqueTeams.map { it.first }.distinct()
                     val teamNumbers = uniqueTeams.map { it.second }.distinct()
                     val teams = if (uniqueTeams.isNotEmpty()) {
-                        ApiTeams.selectAll()
-                            .where { (ApiTeams.eventKey inList eventKeys) and (ApiTeams.teamNumber inList teamNumbers) }
+                        eventKeys.flatMap { ek ->
+                            TeamCacheOverrideService.teamRows(ek, session.teamNumber, session.program)
+                        }
+                            .filter { it[ApiTeams.teamNumber] in teamNumbers }
                             .associate { (it[ApiTeams.eventKey] to it[ApiTeams.teamNumber]) to it[ApiTeams.id].value }
                     } else emptyMap()
 
@@ -2652,6 +2653,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         val membershipId = AllianceMemberships.selectAll().where {
                             (AllianceMemberships.allianceId eq UUID.fromString(item.id)) and
                             (AllianceMemberships.teamNumber eq session.teamNumber) and
+                            (AllianceMemberships.program eq session.program) and
                             (AllianceMemberships.status eq "INVITED")
                         }.firstOrNull()?.get(AllianceMemberships.id)?.value?.toString() ?: item.id
                         
@@ -2747,7 +2749,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val messages = if (type == "dm") {
                     if (otherUserId != null) {
                         val otherUser = readTransaction {
-                            AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber)
+                            AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber, programFilter = session.program)
                                 .find { it.id == otherUserId }
                         } ?: throw MobileApiException(HttpStatusCode.NotFound, "User not found", "USER_NOT_FOUND")
 
@@ -2777,7 +2779,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
             get("/chat/members") {
                 val session = call.requireMobileSession(secret)
                 val users = readTransaction {
-                    AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = session.teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = session.teamNumber)
+                    AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = session.teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = session.teamNumber, programFilter = session.program)
                 }.filter { it.username != session.username }
 
                 val mapped = users.map { u ->
@@ -2805,7 +2807,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 if (req.recipientId != null) {
                     val otherUser = readTransaction {
-                        AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber)
+                        AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber, programFilter = session.program)
                             .find { it.id == req.recipientId }
                     } ?: throw MobileApiException(HttpStatusCode.NotFound, "Recipient not found", "USER_NOT_IN_SCOPE")
 
@@ -2866,7 +2868,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                             val last = messages.last()
                             val otherUserStr = file.name.removeSuffix("_chat_history.json").split("_").find { it != session.username } ?: ""
                             val otherUser = readTransaction {
-                                AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber)
+                                AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber, programFilter = session.program)
                                     .find { it.username == otherUserStr }
                             }
                             if (otherUser != null) {
@@ -2970,7 +2972,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     loadMessages(file)
                 } else {
                     val otherUser = transaction {
-                        AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber)
+                        AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber, programFilter = session.program)
                             .find { it.id == conversationId }
                     }
                     if (otherUser != null) {
@@ -3078,7 +3080,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val groupName = req.group.trim().replace("/", "_").replace("\\", "_")
                 
                 val teamUsers = transaction {
-                    AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber)
+                    AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = teamNumber, programFilter = session.program)
                 }.map { it.username }.toSet()
 
                 val validMembers = req.members.filter { teamUsers.contains(it) }
@@ -3128,7 +3130,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
 
                 val teamUsers = transaction {
-                    AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = session.teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = session.teamNumber)
+                    AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = session.teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = session.teamNumber, programFilter = session.program)
                 }.map { it.username }.toSet()
 
                 val validAdd = req.members.filter { teamUsers.contains(it) }
@@ -3460,10 +3462,13 @@ fun resolveEventKey(eventId: String?, teamNumber: Int, program: String = "FRC"):
     }
     val trimmed = eventId.trim().lowercase()
 
-    // `/events` hands out the ApiEvents UUID as the event id; checked first, since a UUID can start with four digits.
+    // `/events` hands out the ApiEvents UUID (or TeamCacheOverrides UUID for a custom event) as the event id; checked first, since a UUID can start with four digits.
     runCatching { UUID.fromString(trimmed) }.getOrNull()?.let { uuid ->
-        readTransaction { ApiEvents.selectAll().where { ApiEvents.id eq uuid }.firstOrNull()?.get(ApiEvents.eventKey) }
-            ?.let { return it }
+        readTransaction {
+            val sharedKey = ApiEvents.selectAll().where { ApiEvents.id eq uuid }.firstOrNull()?.get(ApiEvents.eventKey)
+            val key = sharedKey ?: TeamCacheOverrideService.ownEventRow(uuid, teamNumber, program)?.get(ApiEvents.eventKey)
+            key?.takeUnless { it.lowercase() in TeamCacheOverrideService.eventOverlay(teamNumber, program).hiddenKeys }
+        }?.let { return it }
     }
 
     // If the trimmed string looks like a complete event key, return it directly.
@@ -3531,7 +3536,9 @@ fun resolveMobileMatch(session: UserSession, matchId: String?, matchKey: String?
     val raw = matchId?.trim().orEmpty()
     runCatching { UUID.fromString(raw) }.getOrNull()?.let { uuid ->
         val row = readTransaction {
-            ApiMatches.selectAll().where { ApiMatches.id eq uuid }.firstOrNull() ?: TeamCacheOverrideService.ownMatchRow(uuid, session.teamNumber, session.program)
+            ApiMatches.selectAll().where { ApiMatches.id eq uuid }.firstOrNull()
+                ?.let { TeamCacheOverrideService.patchMatchRow(it, session.teamNumber, session.program) }
+                ?: TeamCacheOverrideService.ownMatchRow(uuid, session.teamNumber, session.program)
         } ?: return null
         return row[ApiMatches.matchKey] to (row[ApiMatches.matchNumber] ?: 0)
     }

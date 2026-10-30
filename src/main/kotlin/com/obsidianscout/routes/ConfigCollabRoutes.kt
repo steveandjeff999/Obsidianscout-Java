@@ -138,10 +138,11 @@ fun Route.allianceConfigCollabRoute() {
                 AllianceMemberships.selectAll().where {
                     (AllianceMemberships.allianceId eq allianceId) and
                         (AllianceMemberships.teamNumber eq session.teamNumber) and
+                        (AllianceMemberships.program eq session.program) and
                         (AllianceMemberships.status inList listOf("ADMIN", "ACCEPTED"))
                 }.any()
             }
-            member to (member && AllianceService.isAllianceAdmin(session.teamNumber, allianceId))
+            member to (member && AllianceService.isAllianceAdmin(session.teamNumber, allianceId, session.program))
         }
         if (!isMember) return@webSocket reject("Not a member")
 

@@ -249,7 +249,7 @@ object ScouterReportService {
                 .where { Users.id inList strayIds }
                 .map { ReportUser(it[Users.id].value.toString(), it[Users.username], it[Users.role]) }
 
-            val (eventYears, eventNames) = loadEventInfo()
+            val (eventYears, eventNames) = loadEventInfo(teamNumber, program)
             aggregate(
                 scope, eventKey, year, teamNumber, program, includePrescout,
                 users + strayUsers, entries, assignments, eventYears, eventNames
@@ -258,7 +258,7 @@ object ScouterReportService {
     }
 
     fun listOptions(teamNumber: Int, program: String): ScouterReportOptions = readTransaction {
-        val (eventYears, eventNames) = loadEventInfo()
+        val (eventYears, eventNames) = loadEventInfo(teamNumber, program)
         val entries = loadEntries(teamNumber, program)
         val keys = entries.mapNotNull { it.eventKey?.trim()?.lowercase()?.takeIf { k -> k.isNotEmpty() } }.distinct()
         val events = keys.map { ScouterReportEvent(it, eventNames[it], resolveYear(it, eventYears, null)) }
@@ -267,10 +267,19 @@ object ScouterReportService {
         ScouterReportOptions(years, events)
     }
 
-    private fun loadEventInfo(): Pair<Map<String, Int>, Map<String, String>> {
-        val rows = ApiEvents.select(ApiEvents.eventKey, ApiEvents.year, ApiEvents.name).toList()
-        return rows.associate { it[ApiEvents.eventKey].lowercase() to it[ApiEvents.year] } to
-            rows.associate { it[ApiEvents.eventKey].lowercase() to it[ApiEvents.name] }
+    private fun loadEventInfo(teamNumber: Int, program: String): Pair<Map<String, Int>, Map<String, String>> {
+        val baseEvents = ApiEvents.select(ApiEvents.eventKey, ApiEvents.year, ApiEvents.name).map {
+            com.obsidianscout.routes.EventRecord(
+                eventKey = it[ApiEvents.eventKey],
+                name = it[ApiEvents.name],
+                year = it[ApiEvents.year]
+            )
+        }
+        val merged = runCatching {
+            com.obsidianscout.integrations.TeamCacheOverrideService.eventOverlay(teamNumber, program).apply(baseEvents, null)
+        }.getOrDefault(baseEvents)
+        return merged.associate { it.eventKey.lowercase() to it.year } to
+            merged.associate { it.eventKey.lowercase() to it.name }
     }
 
     private fun loadEntries(teamNumber: Int, program: String): List<ReportEntry> {

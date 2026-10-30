@@ -308,6 +308,15 @@ object TeamCacheOverrideService {
         TeamCacheOverrides.selectAll().where { (TeamCacheOverrides.id eq id) and scope(team, program, KIND_MATCH) }
             .limit(1).firstOrNull()?.let { matchRowOf(null, toOverride(it)) }
 
+    fun ownEventRow(id: UUID, team: Int, program: String): ResultRow? =
+        TeamCacheOverrides.selectAll().where { (TeamCacheOverrides.id eq id) and scope(team, program, KIND_EVENT) }
+            .limit(1).firstOrNull()?.takeUnless { it[TeamCacheOverrides.removed] }?.let { eventRowOf(null, toOverride(it)) }
+
+    fun patchMatchRow(shared: ResultRow, team: Int, program: String): ResultRow? {
+        val key = shared[ApiMatches.matchKey].lowercase().trim()
+        return overlay(listOf(shared), overridesForRecords(team, program, KIND_MATCH, listOf(key)), { it[ApiMatches.matchKey] }, ::matchRowOf, addOwn = false).firstOrNull()
+    }
+
     /** What a team changed in the event list: applied to the list, and the keys it adds to or hides from it. */
     class EventOverlay internal constructor(private val overrides: List<Override>, editedEvents: Set<String>) {
         /** Events on this team's list because of its changes, including any it edited a team or match in. */
@@ -666,17 +675,17 @@ object TeamCacheOverrideService {
         }
 
         buildSet {
-            ScoutingEntries.select(ScoutingEntries.matchKey).where { (ScoutingEntries.matchKey like "$prefix%") and (ScoutingEntries.ownerTeamNumber eq team) }
+            ScoutingEntries.select(ScoutingEntries.matchKey).where { (ScoutingEntries.matchKey like "$prefix%") and (ScoutingEntries.ownerTeamNumber eq team) and (ScoutingEntries.program eq prog) }
                 .forEach { row -> row[ScoutingEntries.matchKey]?.let { add(it) } }
-            QualitativeScoutingEntries.select(QualitativeScoutingEntries.matchKey).where { (QualitativeScoutingEntries.matchKey like "$prefix%") and (QualitativeScoutingEntries.ownerTeamNumber eq team) }
+            QualitativeScoutingEntries.select(QualitativeScoutingEntries.matchKey).where { (QualitativeScoutingEntries.matchKey like "$prefix%") and (QualitativeScoutingEntries.ownerTeamNumber eq team) and (QualitativeScoutingEntries.program eq prog) }
                 .forEach { row -> row[QualitativeScoutingEntries.matchKey]?.let { add(it) } }
-            ScoutingAssignments.select(ScoutingAssignments.matchKey).where { (ScoutingAssignments.matchKey like "$prefix%") and (ScoutingAssignments.ownerTeamNumber eq team) }
+            ScoutingAssignments.select(ScoutingAssignments.matchKey).where { (ScoutingAssignments.matchKey like "$prefix%") and (ScoutingAssignments.ownerTeamNumber eq team) and (ScoutingAssignments.program eq prog) }
                 .forEach { row -> row[ScoutingAssignments.matchKey]?.let { add(it) } }
             MatchPlans.select(MatchPlans.matchKey).where { (MatchPlans.matchKey like "$prefix%") and (MatchPlans.ownerKey inList owners) }
                 .forEach { row -> add(row[MatchPlans.matchKey]) }
             MatchChecklists.select(MatchChecklists.matchKey).where { (MatchChecklists.matchKey like "$prefix%") and (MatchChecklists.ownerKey inList owners) }
                 .forEach { row -> add(row[MatchChecklists.matchKey]) }
-            MatchPredictions.select(MatchPredictions.matchKey).where { (MatchPredictions.matchKey like "$prefix%") and (MatchPredictions.ownerTeamNumber eq team) }
+            MatchPredictions.select(MatchPredictions.matchKey).where { (MatchPredictions.matchKey like "$prefix%") and (MatchPredictions.ownerTeamNumber eq team) and (MatchPredictions.program eq prog) }
                 .forEach { row -> add(row[MatchPredictions.matchKey]) }
         }.forEach { old -> MatchCanonical.remapMatchKeyForTeam(old, newKey + old.removePrefix(oldKey), team, prog) }
     }
