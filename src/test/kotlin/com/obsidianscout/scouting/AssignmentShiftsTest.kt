@@ -1,5 +1,6 @@
 package com.obsidianscout.scouting
 
+import com.obsidianscout.db.TeamCacheOverrides
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.ApiException
@@ -48,7 +49,7 @@ class AssignmentShiftsTest {
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
         transaction {
             SchemaUtils.create(
-                Users, AppSettings, ApiEvents, ApiTeams, ApiMatches, ScoutingAssignments,
+                Users, AppSettings, ApiEvents, ApiTeams, ApiMatches, TeamCacheOverrides, ScoutingAssignments,
                 ScoutingEntries, PitScoutingEntries, QualitativeScoutingEntries,
                 ScoutingAlliances, AllianceMemberships
             )

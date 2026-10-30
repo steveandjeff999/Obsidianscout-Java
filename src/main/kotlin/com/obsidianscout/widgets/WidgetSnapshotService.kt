@@ -1,5 +1,6 @@
 package com.obsidianscout.widgets
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import com.obsidianscout.analytics.PredictorService
 import com.obsidianscout.analytics.RankingProjectionService
 import com.obsidianscout.auth.UserSession
@@ -238,7 +239,7 @@ object WidgetSnapshotService {
         if (eventKey.isBlank()) return base
 
         val needsMatches = can("matches") || can("predictor") || can("battery-tracker") || can("match-checklist") || can("my-assignments")
-        val allMatches = if (needsMatches) runCatching { IntegrationService.listMatches(eventKey, session.program) }.getOrElse {
+        val allMatches = if (needsMatches) runCatching { IntegrationService.listMatches(eventKey, session.program, session.teamNumber) }.getOrElse {
             log.warn("[widgets] listMatches failed for $eventKey: ${it.message}")
             emptyList()
         } else emptyList()
@@ -248,7 +249,7 @@ object WidgetSnapshotService {
         val ours = ordered.filter { allianceOf(it, session.teamNumber) != null }
         val oursUnplayed = ours.filter { !isPlayed(it) }
 
-        val event = eventInfo(eventKey)
+        val event = eventInfo(eventKey, session)
         val predictions = if (can("predictor")) section("prediction") { predictions(session, eventKey, oursUnplayed) }.orEmpty() else emptyList()
         return base.copy(
             event = event,
@@ -315,8 +316,8 @@ object WidgetSnapshotService {
         matches = ordered.map { toWidget(it, team) },
     )
 
-    private fun eventInfo(eventKey: String): WidgetEvent = readTransaction {
-        val row = ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.limit(1).firstOrNull()
+    private fun eventInfo(eventKey: String, session: UserSession): WidgetEvent = readTransaction {
+        val row = TeamCacheOverrideService.eventRow(eventKey, session.teamNumber, session.program)
         WidgetEvent(
             key = eventKey,
             name = row?.get(ApiEvents.name)?.takeIf { it.isNotBlank() } ?: eventKey,

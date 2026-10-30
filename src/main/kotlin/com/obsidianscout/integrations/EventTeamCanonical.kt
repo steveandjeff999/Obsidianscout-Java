@@ -154,7 +154,7 @@ object EventTeamCanonical {
     private fun canonicalCode(code: String?): String = canonicalTbaEventCode(code.orEmpty())
 
     /** True when a stored event row is the same event as [targetKey] (same year, same code). */
-    private fun sameEvent(row: ResultRow, targetKey: String, targetYear: Int, targetCode: String?): Boolean {
+    internal fun sameEvent(row: ResultRow, targetKey: String, targetYear: Int, targetCode: String?): Boolean {
         val rowKey = row[ApiEvents.eventKey]
         if (rowKey == targetKey) return false
         if (canonicalTbaEventKey(row[ApiEvents.year], rowKey) == targetKey) return true
@@ -170,6 +170,7 @@ object EventTeamCanonical {
     fun adoptManualEvents(targetKey: String, year: Int, code: String?) {
         val key = targetKey.lowercase().trim()
         if (key.isBlank()) return
+        TeamCacheOverrideService.adoptOwnEvents(listOf(Triple(key, year, code)))
         ApiEvents.selectAll().where { ApiEvents.dataJson like "%\"manual\":true%" }.toList()
             .filter { isManualEvent(it) && sameEvent(it, key, year, code) }
             .forEach { manual ->
@@ -185,6 +186,7 @@ object EventTeamCanonical {
      */
     fun adoptManualEventsInto(targets: List<Triple<String, Int, String?>>) {
         if (targets.isEmpty()) return
+        TeamCacheOverrideService.adoptOwnEvents(targets)
         val manuals = ApiEvents.selectAll().where { ApiEvents.dataJson like "%\"manual\":true%" }.toList()
             .filter { isManualEvent(it) }
         if (manuals.isEmpty()) return
@@ -237,20 +239,7 @@ object EventTeamCanonical {
         ScoutingAlliances.update({ ScoutingAlliances.eventKey eq oldKey }) { it[ScoutingAlliances.eventKey] = newKey }
         SharedLinks.update({ SharedLinks.targetEventKey eq oldKey }) { it[SharedLinks.targetEventKey] = newKey }
 
-        // Unique per (owner, event): keep the newer selection.
-        AllianceSelections.selectAll().where { AllianceSelections.eventKey eq oldKey }.toList().forEach { row ->
-            val clash = AllianceSelections.selectAll().where {
-                (AllianceSelections.ownerKey eq row[AllianceSelections.ownerKey]) and (AllianceSelections.eventKey eq newKey)
-            }.limit(1).firstOrNull()
-            when {
-                clash == null -> AllianceSelections.update({ AllianceSelections.id eq row[AllianceSelections.id] }) { it[AllianceSelections.eventKey] = newKey }
-                row[AllianceSelections.updatedAt] > clash[AllianceSelections.updatedAt] -> {
-                    AllianceSelections.deleteWhere { AllianceSelections.id eq clash[AllianceSelections.id] }
-                    AllianceSelections.update({ AllianceSelections.id eq row[AllianceSelections.id] }) { it[AllianceSelections.eventKey] = newKey }
-                }
-                else -> AllianceSelections.deleteWhere { AllianceSelections.id eq row[AllianceSelections.id] }
-            }
-        }
+        moveSelections(oldKey, newKey)
 
         // API-derived cache, unique per event: the synced event's copy is authoritative.
         if (EpaOprHistoryCache.selectAll().where { EpaOprHistoryCache.eventKey eq newKey }.any()) {
@@ -265,6 +254,8 @@ object EventTeamCanonical {
         moveOwnerScoped(MatchChecklists, MatchChecklists.ownerKey, MatchChecklists.eventKey, MatchChecklists.matchKey, MatchChecklists.updatedAt, oldKey, newKey)
         com.obsidianscout.scouting.BatteryTrackerService.moveEvent(oldKey, newKey)
         com.obsidianscout.scouting.MatchPredictionService.moveEvent(oldKey, newKey)
+
+        TeamCacheOverrideService.moveEvent(oldKey, newKey)
 
         // Matches: move, then let match dedup re-key to `{newKey}_…` and merge with any API copy.
         ApiMatches.update({ ApiMatches.eventKey eq oldKey }) { it[ApiMatches.eventKey] = newKey }
@@ -283,17 +274,37 @@ object EventTeamCanonical {
         }
     }
 
+    /** Pick lists are unique per (owner, event): keep the newer selection. [owners] limits the move to those owners. */
+    internal fun moveSelections(oldKey: String, newKey: String, owners: Collection<String>? = null) {
+        AllianceSelections.selectAll().where { AllianceSelections.eventKey eq oldKey }.toList()
+            .filter { owners == null || it[AllianceSelections.ownerKey] in owners }
+            .forEach { row ->
+                val clash = AllianceSelections.selectAll().where {
+                    (AllianceSelections.ownerKey eq row[AllianceSelections.ownerKey]) and (AllianceSelections.eventKey eq newKey)
+                }.limit(1).firstOrNull()
+                when {
+                    clash == null -> AllianceSelections.update({ AllianceSelections.id eq row[AllianceSelections.id] }) { it[AllianceSelections.eventKey] = newKey }
+                    row[AllianceSelections.updatedAt] > clash[AllianceSelections.updatedAt] -> {
+                        AllianceSelections.deleteWhere { AllianceSelections.id eq clash[AllianceSelections.id] }
+                        AllianceSelections.update({ AllianceSelections.id eq row[AllianceSelections.id] }) { it[AllianceSelections.eventKey] = newKey }
+                    }
+                    else -> AllianceSelections.deleteWhere { AllianceSelections.id eq row[AllianceSelections.id] }
+                }
+            }
+    }
+
     /** Rows scoped to (owner, event, match): move to [newKey], keeping the newer row on a clash. */
-    private fun moveOwnerScoped(
+    internal fun moveOwnerScoped(
         table: org.jetbrains.exposed.v1.core.dao.id.java.UUIDTable,
         owner: Column<String>,
         event: Column<String>,
         match: Column<String>,
         updatedAt: Column<java.time.Instant>,
         oldKey: String,
-        newKey: String
+        newKey: String,
+        owners: Collection<String>? = null
     ) {
-        table.selectAll().where { event eq oldKey }.toList().forEach { row ->
+        table.selectAll().where { event eq oldKey }.toList().filter { owners == null || it[owner] in owners }.forEach { row ->
             val clash = table.selectAll().where {
                 (owner eq row[owner]) and (event eq newKey) and (match eq row[match])
             }.limit(1).firstOrNull()
@@ -359,6 +370,9 @@ object EventTeamCanonical {
     fun repairAll(): Int = transaction {
         var changed = 0
         val events = ApiEvents.selectAll().toList()
+        TeamCacheOverrideService.adoptOwnEvents(
+            events.filterNot { isManualEvent(it) }.map { Triple(it[ApiEvents.eventKey], it[ApiEvents.year], it[ApiEvents.eventCode]) }
+        )
         events.filter { isManualEvent(it) }.forEach { manual ->
             val manualKey = manual[ApiEvents.eventKey]
             val twin = events.firstOrNull { other ->

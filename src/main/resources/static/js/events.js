@@ -164,7 +164,7 @@ async function loadEvents(year, cachedOnly) {
             body.querySelectorAll('[data-action="delete"]').forEach(btn => {
                 btn.addEventListener("click", async () => {
                     const key = btn.getAttribute("data-key");
-                    if (confirm(t("events.confirm_delete", "Are you SURE you want to delete this event? This will permanently delete all associated teams, matches, and scouting entries!"))) {
+                    if (confirm(t("events.confirm_delete_team", "Are you SURE you want to delete this event? It will be removed for your team, and your team's scouting entries for it will be permanently deleted. Other teams are not affected."))) {
                         try {
                             await Obsidianscout.request(`/api/events?eventKey=${key}`, { method: "DELETE" });
                             Obsidianscout.showToast(t("events.deleted_success", "Event deleted successfully"), "success");

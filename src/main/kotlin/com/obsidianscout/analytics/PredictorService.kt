@@ -1,5 +1,6 @@
 package com.obsidianscout.analytics
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserSession
@@ -43,10 +44,7 @@ object PredictorService {
     suspend fun predict(session: UserSession, matchKey: String, forcePrescout: Boolean = false, eventKeyParam: String? = null): MatchPredictionResponse {
         val matchKeyLower = matchKey.lowercase().trim()
         val eventKey = readTransaction {
-            ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKeyLower }
-                .limit(1)
-                .map { it[ApiMatches.eventKey] }
-                .firstOrNull()
+            TeamCacheOverrideService.matchRow(matchKeyLower, session.teamNumber, session.program)?.get(ApiMatches.eventKey)
         }
 
         if (eventKey == null) {
@@ -56,7 +54,7 @@ object PredictorService {
         val isFtc = session.program.equals("FTC", ignoreCase = true)
         val needsStatsSync = readTransaction {
             val settings = com.obsidianscout.scouting.AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-            val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
+            val allTeams = TeamCacheOverrideService.teamRows(eventKey, session.teamNumber, session.program)
             val checkEpa = !isFtc && settings.useStatboticsEpa && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.epa] == null || it[ApiTeams.epa] == 0.0 }
             val checkExp = !isFtc && settings.useMatch13Exp && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.match13Exp] == null || it[ApiTeams.match13Exp] == 0.0 }
             val checkOpr = settings.useTbaOpr && allTeams.isNotEmpty() && allTeams.all { it[ApiTeams.opr] == null || it[ApiTeams.opr] == 0.0 }
@@ -73,9 +71,7 @@ object PredictorService {
         }
 
         return readTransaction {
-            val matchRow = ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKey.lowercase() }
-                .limit(1)
-                .firstOrNull()
+            val matchRow = TeamCacheOverrideService.matchRow(matchKey, session.teamNumber, session.program)
                 ?: throw ApiException(HttpStatusCode.NotFound, "Match not found")
 
             val redTeamKeys = JsonSupport.json.decodeFromString(
@@ -97,7 +93,7 @@ object PredictorService {
             val useMatch13Exp = !isFtc && settings.useMatch13Exp
             val useTbaOpr = settings.useTbaOpr
 
-            val allTeamsInEvent = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKey }.toList()
+            val allTeamsInEvent = TeamCacheOverrideService.teamRows(eventKey, session.teamNumber, session.program)
             val bbotMappings = com.obsidianscout.integrations.IntegrationService.getBBotMappings(eventKey)
             
             val teamKeyByNumber = mutableMapOf<Int, String>()
@@ -155,9 +151,7 @@ object PredictorService {
                 }
             }
 
-            val teamRows = ApiTeams.selectAll().where {
-                (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamNumber inList teamNumbers)
-            }.toList()
+            val teamRows = TeamCacheOverrideService.teamRows(eventKey, session.teamNumber, session.program).filter { it[ApiTeams.teamNumber] in teamNumbers }
             
             val teamInfoMap = mutableMapOf<String, org.jetbrains.exposed.v1.core.ResultRow>()
             teamRows.forEach { row ->
@@ -345,8 +339,7 @@ object PredictorService {
         val eventKeyLower = eventKeyParam.lowercase().trim()
 
         return readTransaction {
-            val matches = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKeyLower }
-                .toList()
+            val matches = TeamCacheOverrideService.matchRows(eventKeyLower, session.teamNumber, session.program)
                 .sortedWith(
                     compareBy(
                         { compLevelRank(it[ApiMatches.compLevel]) },
@@ -384,7 +377,7 @@ object PredictorService {
                     ?: "").lowercase().trim()
             }
 
-            val allTeamsInEvent = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyLower }.toList()
+            val allTeamsInEvent = TeamCacheOverrideService.teamRows(eventKeyLower, session.teamNumber, session.program)
             val bbotMappings = com.obsidianscout.integrations.IntegrationService.getBBotMappings(eventKeyLower)
 
             val teamKeyByNumber = mutableMapOf<Int, String>()

@@ -92,6 +92,7 @@ object SnapshotService {
         ApiEvents,
         ApiTeams,
         ApiMatches,
+        TeamCacheOverrides,
         ScoutingAlliances,
         AllianceMemberships,
         AllianceSelections,
@@ -267,6 +268,7 @@ object SnapshotService {
             val clusterLocksList = DatabaseFactory.readTransaction { ClusterNotificationLocks.selectAll().toList() }
             val analyticsReportsList = DatabaseFactory.readTransaction { AnalyticsReports.selectAll().toList() }
             val reportedErrorsList = DatabaseFactory.readTransaction { ReportedErrors.selectAll().toList() }
+            val teamCacheOverridesList = DatabaseFactory.readTransaction { TeamCacheOverrides.selectAll().toList() }
             val slackIntegrationsList = DatabaseFactory.readTransaction { SlackIntegrations.selectAll().toList() }
             val slackPreferencesList = DatabaseFactory.readTransaction { SlackUserPreferences.selectAll().toList() }
 
@@ -595,6 +597,8 @@ object SnapshotService {
                     }
                 }
 
+                copyRows(TeamCacheOverrides, teamCacheOverridesList)
+
                 // Slack: tokens stay encrypted; cluster_secrets (copied below) holds the key that opens them.
                 copyRows(SlackIntegrations, slackIntegrationsList)
                 copyRows(SlackUserPreferences, slackPreferencesList)
@@ -783,6 +787,8 @@ object SnapshotService {
             val locks: List<ResultRow> = transaction(snapshotDb) { ClusterNotificationLocks.selectAll().toList() }
             val reports: List<ResultRow> = transaction(snapshotDb) { AnalyticsReports.selectAll().toList() }
             val errors: List<ResultRow> = transaction(snapshotDb) { ReportedErrors.selectAll().toList() }
+            // Empty when the snapshot predates team cache overrides (the table is missing from the file).
+            val teamCacheOverrides: List<ResultRow> = runCatching { transaction(snapshotDb) { TeamCacheOverrides.selectAll().toList() } }.getOrDefault(emptyList())
             // Null when the snapshot predates the Slack integration (the table is missing from the file).
             val slackIntegrations: List<ResultRow>? = runCatching { transaction(snapshotDb) { SlackIntegrations.selectAll().toList() } }.getOrNull()
             val slackPreferences: List<ResultRow> = runCatching { transaction(snapshotDb) { SlackUserPreferences.selectAll().toList() } }.getOrDefault(emptyList())
@@ -821,6 +827,7 @@ object SnapshotService {
                 AppSettings.deleteAll()
                 ApiTeams.deleteAll()
                 ApiMatches.deleteAll()
+                TeamCacheOverrides.deleteAll()
                 AllianceSelections.deleteAll()
                 EpaOprHistoryCache.deleteAll()
                 Banners.deleteAll()
@@ -1283,6 +1290,9 @@ object SnapshotService {
                     }
                 }
                 restoredCounts["analytics_reports"] = reports.size.toLong()
+
+                copyRows(TeamCacheOverrides, teamCacheOverrides)
+                restoredCounts["team_cache_overrides"] = teamCacheOverrides.size.toLong()
 
                 if (slackIntegrations != null) {
                     copyRows(SlackIntegrations, slackIntegrations)

@@ -446,6 +446,34 @@ object MatchCanonical {
         // Battery plans keep match keys inside their JSON.
         com.obsidianscout.scouting.BatteryTrackerService.remapMatchKey(oldKey, newKey)
         com.obsidianscout.scouting.MatchPredictionService.remapMatchKey(oldKey, newKey)
+        TeamCacheOverrideService.remapMatchKey(oldKey, newKey)
+    }
+
+    /** Owner keys a team's plans, checklists and battery rows are stored under. */
+    fun teamOwnerKeys(teamNumber: Int, program: String): List<String> =
+        listOf("team_$teamNumber", com.obsidianscout.scouting.MatchChecklistService.ownerKey(teamNumber, program))
+
+    /** [remapMatchKey] for one team's rows only, for a match key that changed for that team alone. */
+    fun remapMatchKeyForTeam(oldKey: String, newKey: String, teamNumber: Int, program: String) {
+        if (oldKey == newKey) {
+            return
+        }
+        ScoutingEntries.update({ (ScoutingEntries.matchKey eq oldKey) and (ScoutingEntries.ownerTeamNumber eq teamNumber) and (ScoutingEntries.program eq program) }) {
+            it[ScoutingEntries.matchKey] = newKey
+            it[ScoutingEntries.updatedAt] = java.time.Instant.now()
+        }
+        QualitativeScoutingEntries.update({ (QualitativeScoutingEntries.matchKey eq oldKey) and (QualitativeScoutingEntries.ownerTeamNumber eq teamNumber) and (QualitativeScoutingEntries.program eq program) }) {
+            it[QualitativeScoutingEntries.matchKey] = newKey
+            it[QualitativeScoutingEntries.updatedAt] = java.time.Instant.now()
+        }
+        ScoutingAssignments.update({ (ScoutingAssignments.matchKey eq oldKey) and (ScoutingAssignments.ownerTeamNumber eq teamNumber) and (ScoutingAssignments.program eq program) }) {
+            it[ScoutingAssignments.matchKey] = newKey
+        }
+        val owners = teamOwnerKeys(teamNumber, program).toSet()
+        remapOwnerScoped(MatchPlans, MatchPlans.ownerKey, MatchPlans.eventKey, MatchPlans.matchKey, MatchPlans.updatedAt, oldKey, newKey, "Match plan", owners)
+        remapOwnerScoped(MatchChecklists, MatchChecklists.ownerKey, MatchChecklists.eventKey, MatchChecklists.matchKey, MatchChecklists.updatedAt, oldKey, newKey, "Match checklist", owners)
+        com.obsidianscout.scouting.BatteryTrackerService.remapMatchKey(oldKey, newKey, owners)
+        com.obsidianscout.scouting.MatchPredictionService.remapMatchKey(oldKey, newKey, teamNumber)
     }
 
     /** Rows unique per (owner, event, match): re-key to [newKey], keeping the newer row on a clash. */
@@ -457,10 +485,12 @@ object MatchCanonical {
         updatedAt: Column<java.time.Instant>,
         oldKey: String,
         newKey: String,
-        label: String
+        label: String,
+        owners: Set<String>? = null
     ) {
         table.selectAll().where { match eq oldKey }.toList().forEach { row ->
             val ownerKey = row[owner]
+            if (owners != null && ownerKey !in owners) return@forEach
             val clash = table.selectAll().where {
                 (owner eq ownerKey) and (event eq row[event]) and (match eq newKey)
             }.limit(1).firstOrNull()

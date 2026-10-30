@@ -1,5 +1,6 @@
 package com.obsidianscout.scouting
 
+import com.obsidianscout.db.TeamCacheOverrides
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserRole
@@ -38,7 +39,7 @@ class ScoutingAssignmentServiceTest {
         transaction {
             SchemaUtils.create(
                 Users, ScoutingEntries, PitScoutingEntries, QualitativeScoutingEntries,
-                ApiMatches, ApiTeams, ScoutingAssignments
+                ApiMatches, TeamCacheOverrides, ApiTeams, ScoutingAssignments
             )
         }
     }

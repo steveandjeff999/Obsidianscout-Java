@@ -1,5 +1,6 @@
 package com.obsidianscout.integrations
 
+import com.obsidianscout.db.TeamCacheOverrides
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserRole
@@ -48,7 +49,7 @@ class ManualEventTeamMergeTest {
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
         transaction {
             SchemaUtils.create(
-                Users, ApiEvents, ApiTeams, ApiMatches, ScoutingEntries, PitScoutingEntries, QualitativeScoutingEntries,
+                Users, ApiEvents, ApiTeams, ApiMatches, TeamCacheOverrides, ScoutingEntries, PitScoutingEntries, QualitativeScoutingEntries,
                 ScoutingAssignments, MatchPlans, MatchChecklists, BatteryTrackers, MatchPredictions, AllianceSelections, EpaOprHistoryCache,
                 ScoutingAlliances, SharedLinks
             )
@@ -186,17 +187,39 @@ class ManualEventTeamMergeTest {
         }
     }
 
+    /** Manual rows made before team overrides existed still sit in the shared tables until the API adopts them. */
+    private fun legacyManualEvent(key: String, eventName: String) = transaction {
+        ApiEvents.insert {
+            it[eventKey] = key; it[year] = 2026; it[eventCode] = key.removePrefix("2026"); it[name] = eventName
+            it[dataJson] = "{\"manual\":true}"; it[updatedAt] = Instant.now()
+        }
+    }
+
+    private fun legacyManualTeam(event: String, key: String, number: Int, nick: String) = transaction {
+        ApiTeams.insert {
+            it[eventKey] = event; it[teamKey] = key; it[teamNumber] = number; it[name] = ""; it[nickname] = nick
+            it[dataJson] = "{}"; it[updatedAt] = Instant.now()
+        }
+    }
+
+    private fun legacyManualMatch(event: String, key: String, number: Int, red: List<String>, blue: List<String>) = transaction {
+        val serializer = kotlinx.serialization.builtins.ListSerializer(String.serializer())
+        ApiMatches.insert {
+            it[matchKey] = key; it[eventKey] = event; it[compLevel] = "qm"; it[setNumber] = 1; it[matchNumber] = number
+            it[redTeams] = com.obsidianscout.config.JsonSupport.json.encodeToString(serializer, red)
+            it[blueTeams] = com.obsidianscout.config.JsonSupport.json.encodeToString(serializer, blue)
+            it[dataJson] = "{}"; it[updatedAt] = Instant.now()
+        }
+    }
+
     // ── events ───────────────────────────────────────────────────────────────
 
     @Test
     fun manualEventMovesOntoSyncedKeyWithEverything() {
-        IntegrationService.saveEvent(EventRecord(eventKey = manualKey, name = "My manual event", year = 2026))
-        IntegrationService.saveTeam(TeamRecord(eventKey = manualKey, teamKey = "", teamNumber = 254, nickname = "Manual Poofs"))
-        val manualMatch = IntegrationService.saveMatch(
-            MatchRecord(matchKey = "", eventKey = manualKey, compLevel = "qm", matchNumber = 5, redTeams = listOf("254", "1", "2"), blueTeams = listOf("3", "4", "5"))
-        )
-        assertEquals("okok_qm5", manualMatch.matchKey)
-        childRows(manualKey, manualMatch.matchKey, Instant.now(), "manual")
+        legacyManualEvent(manualKey, "My manual event")
+        legacyManualTeam(manualKey, "frc254", 254, "Manual Poofs")
+        legacyManualMatch(manualKey, "okok_qm5", 5, listOf("frc254", "frc1", "frc2"), listOf("frc3", "frc4", "frc5"))
+        childRows(manualKey, "okok_qm5", Instant.now(), "manual")
 
         // What an API sync does: adopt the manual copy, then write the API event, team and match.
         transaction {
@@ -272,50 +295,20 @@ class ManualEventTeamMergeTest {
     }
 
     @Test
-    fun manuallyAddingAnAlreadySyncedEventSavesIntoIt() {
-        apiEventRow()
-        val saved = IntegrationService.saveEvent(EventRecord(eventKey = manualKey, name = "Renamed by hand", year = 2026))
-        assertEquals(apiKey, saved.eventKey)
-        transaction {
-            val row = ApiEvents.selectAll().single()
-            assertEquals(apiKey, row[ApiEvents.eventKey])
-            assertEquals("Renamed by hand", row[ApiEvents.name])
-            assertTrue(!row[ApiEvents.dataJson].contains("manual"), "synced row keeps its API JSON")
-        }
-    }
-
-    @Test
     fun customManualEventIsLeftAlone() {
         apiEventRow()
-        IntegrationService.saveEvent(EventRecord(eventKey = "scrimmage", name = "Fall scrimmage", year = 2026))
+        legacyManualEvent("scrimmage", "Fall scrimmage")
         transaction { EventTeamCanonical.adoptManualEvents(apiKey, 2026, "okok") }
         EventTeamCanonical.repairAll()
         transaction { assertEquals(setOf(apiKey, "scrimmage"), ApiEvents.selectAll().map { it[ApiEvents.eventKey] }.toSet()) }
     }
 
-    @Test
-    fun renameMovesChecklistsSharedLinksAndCanonicalizesMatchKeys() {
-        IntegrationService.saveEvent(EventRecord(eventKey = "scrim", name = "Scrim", year = 2026))
-        val match = IntegrationService.saveMatch(MatchRecord(matchKey = "", eventKey = "scrim", compLevel = "qm", matchNumber = 2, redTeams = listOf("1"), blueTeams = listOf("2")))
-        childRows("scrim", match.matchKey, Instant.now(), "x")
-
-        IntegrationService.renameEvent("scrim", EventRecord(eventKey = "2026scrim", name = "Scrim", year = 2026))
-
-        countByEvent().forEach { (table, byEvent) -> assertEquals(setOf("2026scrim"), byEvent.keys, "$table should all be on 2026scrim") }
-        assertEquals(setOf("2026scrim_qm2"), childMatchKeys())
-    }
-
     // ── teams ────────────────────────────────────────────────────────────────
 
     @Test
-    fun manualFtcTeamGetsFtcKeyAndMergesWithSyncedRow() {
-        val saved = IntegrationService.saveTeam(TeamRecord(eventKey = "2026ftcx", teamKey = "", teamNumber = 123, nickname = "Manual"), "FTC")
-        assertEquals("ftc123", saved.teamKey)
-        val match = IntegrationService.saveMatch(
-            MatchRecord(matchKey = "", eventKey = "2026ftcx", compLevel = "qm", matchNumber = 1, redTeams = listOf("123", "124"), blueTeams = listOf("125", "126")),
-            "FTC"
-        )
-        assertEquals(listOf("ftc123", "ftc124"), match.redTeams)
+    fun manualFtcTeamMergesWithSyncedRow() {
+        legacyManualTeam("2026ftcx", "ftc123", 123, "Manual")
+        legacyManualMatch("2026ftcx", "2026ftcx_qm1", 1, listOf("ftc123", "ftc124"), listOf("ftc125", "ftc126"))
 
         // Legacy row from the old frc default, then the API row arrives.
         transaction {
@@ -364,21 +357,6 @@ class ManualEventTeamMergeTest {
         transaction { EventTeamCanonical.deduplicateTeamsForEvent(apiKey) }
         transaction {
             assertEquals(setOf("frc254", "frc254b"), ApiTeams.selectAll().map { it[ApiTeams.teamKey] }.toSet())
-        }
-    }
-
-    @Test
-    fun savingManualTeamOverLegacyKeyUpdatesInsteadOfDuplicating() {
-        transaction {
-            ApiTeams.insert {
-                it[eventKey] = apiKey; it[teamKey] = "254"; it[teamNumber] = 254; it[nickname] = "Bare"; it[dataJson] = "{}"; it[updatedAt] = Instant.now()
-            }
-        }
-        IntegrationService.saveTeam(TeamRecord(eventKey = apiKey, teamKey = "frc254", teamNumber = 254, nickname = "Edited"))
-        transaction {
-            val row = ApiTeams.selectAll().single()
-            assertEquals("frc254", row[ApiTeams.teamKey])
-            assertEquals("Edited", row[ApiTeams.nickname])
         }
     }
 

@@ -121,11 +121,11 @@ object BatteryTrackerService {
      * Renames the entry for [oldKey] to [newKey] in every event plan. When both exist, the one with a
      * recorded `used` battery wins, otherwise the existing [newKey] entry is kept. Must run inside a transaction.
      */
-    fun remapMatchKey(oldKey: String, newKey: String) {
+    fun remapMatchKey(oldKey: String, newKey: String, owners: Set<String>? = null) {
         if (oldKey == newKey) return
         val needle = "\"$oldKey\""
         BatteryTrackers.selectAll().where { BatteryTrackers.eventKey neq "" }.toList()
-            .filter { it[BatteryTrackers.dataJson].contains(needle) }
+            .filter { it[BatteryTrackers.dataJson].contains(needle) && (owners == null || it[BatteryTrackers.ownerKey] in owners) }
             .forEach { row ->
                 val doc = parseObject(row[BatteryTrackers.dataJson]) ?: return@forEach
                 val matches = matchesOf(doc) ?: return@forEach
@@ -156,9 +156,11 @@ object BatteryTrackerService {
      * merged: per-match entries from both are kept, with the newer doc winning on the same match key.
      * Match keys inside are re-keyed afterwards by the match-key remap. Must run inside a transaction.
      */
-    fun moveEvent(oldKey: String, newKey: String) {
+    fun moveEvent(oldKey: String, newKey: String, owners: Collection<String>? = null) {
         if (oldKey == newKey || oldKey.isEmpty() || newKey.isEmpty()) return
-        BatteryTrackers.selectAll().where { BatteryTrackers.eventKey eq oldKey }.toList().forEach { row ->
+        BatteryTrackers.selectAll().where { BatteryTrackers.eventKey eq oldKey }.toList()
+            .filter { owners == null || it[BatteryTrackers.ownerKey] in owners }
+            .forEach { row ->
             val clash = BatteryTrackers.selectAll().where {
                 (BatteryTrackers.ownerKey eq row[BatteryTrackers.ownerKey]) and (BatteryTrackers.eventKey eq newKey)
             }.limit(1).firstOrNull()

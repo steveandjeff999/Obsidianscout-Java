@@ -1,5 +1,6 @@
 package com.obsidianscout.analytics
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.db.ApiEvents
@@ -454,7 +455,7 @@ object RankingProjectionService {
         val useOpr = settings.useTbaOpr
 
         val teams: List<TeamRecord> = IntegrationService.listTeams(eventKey, session)
-        val matches: List<MatchRecord> = IntegrationService.listMatches(eventKey, session.program)
+        val matches: List<MatchRecord> = IntegrationService.listMatches(eventKey, session.program, session.teamNumber)
             .filter { MatchCanonical.normalizeCompLevel(it.compLevel) == "qm" }
 
         // TBA's score breakdown carries the RP each alliance earned (bonus RPs included).
@@ -462,7 +463,7 @@ object RankingProjectionService {
             val rpByMatch = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }.associate { row ->
                 row[ApiMatches.matchKey] to readAllianceRp(row[ApiMatches.dataJson])
             }
-            val year = ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.firstOrNull()?.get(ApiEvents.year)
+            val year = TeamCacheOverrideService.eventRow(eventKey, session.teamNumber, session.program)?.get(ApiEvents.year)
             rpByMatch to year
         }
         val year = eventYear ?: eventKey.take(4).toIntOrNull() ?: java.time.Year.now().value

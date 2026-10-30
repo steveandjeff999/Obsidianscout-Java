@@ -1379,6 +1379,7 @@
   "events.add_manual": "Agregar evento manualmente",
   "events.cancel": "Cancelar",
   "events.confirm_delete": "¿Seguro que quieres eliminar este evento? Esto borrará permanentemente todos los equipos, partidos y entradas de scouting asociadas.",
+  "events.confirm_delete_team": "¿Seguro que quieres eliminar este evento? Se quitará para tu equipo y las entradas de scouting de tu equipo para este evento se borrarán permanentemente. Los demás equipos no se verán afectados.",
   "events.create_custom": "Crear evento personalizado",
   "events.dates": "Fechas",
   "events.delete_failed": "No se pudo eliminar el evento",

@@ -238,6 +238,7 @@ object DatabaseFactory {
                 ApiEvents,
                 ApiTeams,
                 ApiMatches,
+                TeamCacheOverrides,
                 ScoutingAlliances,
                 AllianceMemberships,
                 EpaOprHistoryCache,

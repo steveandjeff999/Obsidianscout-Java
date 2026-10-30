@@ -115,6 +115,7 @@ object QuorumFallbackStore {
         ApiEvents,
         ApiTeams,
         ApiMatches,
+        TeamCacheOverrides,
         ScoutingEntries,
         PitScoutingEntries,
         QualitativeScoutingEntries,
@@ -390,6 +391,7 @@ object QuorumFallbackStore {
                 ConfigRevisions.selectAll().orderBy(ConfigRevisions.createdAt, SortOrder.DESC).limit(MIRRORED_CONFIG_REVISIONS).toList()
             }
             val appSettingsList = DatabaseFactory.readTransaction { AppSettings.selectAll().toList() }
+            val teamCacheOverridesList = DatabaseFactory.readTransaction { TeamCacheOverrides.selectAll().toList() }
             val bannersList = DatabaseFactory.readTransaction { Banners.selectAll().toList() }
 
             val analyticsReportsList = if (config.mirror_custom_analytics || isMirrorAll) {
@@ -667,6 +669,23 @@ object QuorumFallbackStore {
                         it[program] = row[AppSettings.program]
                         it[settingsJson] = row[AppSettings.settingsJson]
                         it[updatedAt] = row[AppSettings.updatedAt]
+                    }
+                }
+
+                // Teams' changes to the event cache
+                TeamCacheOverrides.deleteAll()
+                for (row in teamCacheOverridesList) {
+                    TeamCacheOverrides.insert {
+                        it[id] = EntityID(row[TeamCacheOverrides.id].value, TeamCacheOverrides)
+                        it[teamNumber] = row[TeamCacheOverrides.teamNumber]
+                        it[program] = row[TeamCacheOverrides.program]
+                        it[kind] = row[TeamCacheOverrides.kind]
+                        it[eventKey] = row[TeamCacheOverrides.eventKey]
+                        it[recordKey] = row[TeamCacheOverrides.recordKey]
+                        it[removed] = row[TeamCacheOverrides.removed]
+                        it[created] = row[TeamCacheOverrides.created]
+                        it[patchJson] = row[TeamCacheOverrides.patchJson]
+                        it[updatedAt] = row[TeamCacheOverrides.updatedAt]
                     }
                 }
 

@@ -1,5 +1,6 @@
 package com.obsidianscout.analytics
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import com.obsidianscout.auth.UserSession
 import com.obsidianscout.db.ApiTeams
 import com.obsidianscout.db.readTransaction
@@ -31,10 +32,8 @@ object Match13Compare {
 
         val history = IntegrationService.getFullStatsHistory(settings, eventKey).match13History
         val teamRows = readTransaction {
-            ApiTeams.selectAll()
-                .where { ApiTeams.teamNumber inList teamNumbers }
-                .andWhere { ApiTeams.eventKey eq eventKey.lowercase() }
-                .toList()
+            TeamCacheOverrideService.teamRows(eventKey, session.teamNumber, session.program)
+                .filter { it[ApiTeams.teamNumber] in teamNumbers }
                 .associateBy { it[ApiTeams.teamNumber] }
         }
         val response = build(

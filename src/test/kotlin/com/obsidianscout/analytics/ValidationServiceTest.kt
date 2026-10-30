@@ -47,7 +47,7 @@ class ValidationServiceTest {
                 AppSettings,
                 ApiEvents,
                 ApiTeams,
-                ApiMatches,
+                ApiMatches, TeamCacheOverrides,
                 ScoutingAlliances,
                 AllianceMemberships,
                 ScoutingConfigs,

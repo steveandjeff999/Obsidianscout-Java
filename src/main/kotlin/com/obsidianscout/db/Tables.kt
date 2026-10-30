@@ -256,6 +256,32 @@ object ApiMatches : UUIDTable("api_matches") {
     }
 }
 
+/**
+ * One team's changes to the shared event cache. [ApiEvents], [ApiTeams] and [ApiMatches] are shared by every team and
+ * written only by API sync; any user edit lands here instead. [kind] is `event`, `team` or
+ * `match`, and [recordKey] is that record's event, team or match key. [patchJson] holds only the fields the team
+ * changed, so later API updates to every other field still reach them. A [removed] row hides the record from this
+ * team. A [created] record is one the team made itself, stored whole in [patchJson]. Once the API publishes the same
+ * record the API's values win and the team's copy only fills its blanks, for as long as the row stays [created]; an
+ * edit the team makes after that is an ordinary change and clears the flag.
+ */
+object TeamCacheOverrides : UUIDTable("team_cache_overrides") {
+    val teamNumber = integer("team_number")
+    val program = varchar("program", 8).default("FRC")
+    val kind = varchar("kind", 16)
+    val eventKey = varchar("event_key", 64)
+    val recordKey = varchar("record_key", 64)
+    val removed = bool("removed").default(false)
+    val created = bool("created").default(false)
+    val patchJson = text("patch_json").default("{}")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex("ux_team_cache_overrides_record", teamNumber, program, kind, eventKey, recordKey)
+        index("idx_team_cache_overrides_event", false, eventKey)
+    }
+}
+
 object ScoutingAlliances : UUIDTable("scouting_alliances") {
     val name = varchar("name", 128)
     val ownerTeamNumber = integer("owner_team_number")

@@ -1,5 +1,6 @@
 package com.obsidianscout.analytics
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserSession
@@ -113,7 +114,7 @@ object AnalyticsService {
             if (eventKey != null) {
                 query.andWhere { ApiTeams.eventKey eq eventKey.lowercase() }
             }
-            query.toList().associateBy { it[ApiTeams.teamNumber] }
+            TeamCacheOverrideService.patchTeamRows(query.toList(), session.teamNumber, session.program).associateBy { it[ApiTeams.teamNumber] }
         }
 
         val teamDataMap = mutableMapOf<String, TeamComparisonData>()

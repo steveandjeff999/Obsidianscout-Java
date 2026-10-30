@@ -1,5 +1,6 @@
 package com.obsidianscout.analytics
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.ApiException
@@ -46,7 +47,7 @@ object ValidationService {
             val useMatch13Exp = !isFtc && settings.useMatch13Exp
             val useTbaOpr = settings.useTbaOpr
 
-            val allTeamsInEvent = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyLower }.toList()
+            val allTeamsInEvent = TeamCacheOverrideService.teamRows(eventKeyLower, session.teamNumber, session.program)
             val bbotMappings = com.obsidianscout.integrations.IntegrationService.getBBotMappings(eventKeyLower)
 
             val teamKeyByNumber = mutableMapOf<Int, String>()
@@ -155,8 +156,7 @@ object ValidationService {
             }
 
             // Fetch matches
-            val matches = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKeyLower }
-                .toList()
+            val matches = TeamCacheOverrideService.matchRows(eventKeyLower, session.teamNumber, session.program)
                 .sortedWith(
                     compareBy(
                         { compLevelRank(it[ApiMatches.compLevel]) },

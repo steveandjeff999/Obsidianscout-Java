@@ -1,5 +1,6 @@
 package com.obsidianscout.analytics
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import com.obsidianscout.auth.ApiException
 import com.obsidianscout.auth.UserRole
 import com.obsidianscout.auth.UserSession
@@ -360,7 +361,7 @@ object AnalyticsReportService {
                     ApiTeams.selectAll().where { ApiTeams.teamNumber eq session.teamNumber }
                 }
             }
-            query.map { row ->
+            TeamCacheOverrideService.patchTeamRows(query.toList(), session.teamNumber, session.program).map { row ->
                 TeamAnalyticsSummary(
                     teamNumber = row[ApiTeams.teamNumber],
                     name = row[ApiTeams.name],

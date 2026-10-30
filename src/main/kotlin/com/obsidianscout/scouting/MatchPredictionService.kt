@@ -1,5 +1,6 @@
 package com.obsidianscout.scouting
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.ApiException
@@ -152,12 +153,12 @@ object MatchPredictionService {
         return MatchInfo(row[ApiMatches.matchKey], row[ApiMatches.eventKey], order, matchResult(row[ApiMatches.dataJson]))
     }
 
-    private fun loadMatch(matchKey: String): MatchInfo? = readTransaction {
-        ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKey }.limit(1).firstOrNull()?.let(::rowToMatchInfo)
+    private fun loadMatch(session: UserSession, matchKey: String): MatchInfo? = readTransaction {
+        TeamCacheOverrideService.matchRow(matchKey, session.teamNumber, session.program)?.let(::rowToMatchInfo)
     }
 
-    private fun loadMatchesForEvent(eventKey: String): List<MatchInfo> = readTransaction {
-        ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }.map(::rowToMatchInfo)
+    private fun loadMatchesForEvent(session: UserSession, eventKey: String): List<MatchInfo> = readTransaction {
+        TeamCacheOverrideService.matchRows(eventKey, session.teamNumber, session.program).map(::rowToMatchInfo)
     }
 
     private fun scoreOf(winner: String, result: String?): Boolean? = when (result) {
@@ -171,7 +172,7 @@ object MatchPredictionService {
         requireEnabled(session)
         val key = eventKey.trim().lowercase()
         if (!KEY_PATTERN.matches(key)) throw ApiException(HttpStatusCode.BadRequest, "Invalid eventKey")
-        val matches = loadMatchesForEvent(key)
+        val matches = loadMatchesForEvent(session, key)
         val picks = readTransaction {
             MatchPredictions.selectAll().where {
                 (MatchPredictions.userId eq session.userId) and (MatchPredictions.eventKey eq key)
@@ -209,7 +210,7 @@ object MatchPredictionService {
         if (winner.isNotEmpty() && winner != RED && winner != BLUE) {
             throw ApiException(HttpStatusCode.BadRequest, "predictedWinner must be red or blue")
         }
-        val match = loadMatch(matchKey) ?: throw ApiException(HttpStatusCode.NotFound, "Match not found")
+        val match = loadMatch(session, matchKey) ?: throw ApiException(HttpStatusCode.NotFound, "Match not found")
         if (match.locked) {
             throw ApiException(HttpStatusCode.Conflict, "Predictions for this match are locked")
         }
@@ -384,9 +385,11 @@ object MatchPredictionService {
     // Called by MatchCanonical / EventTeamCanonical so picks follow a match or event when its key changes.
 
     /** Points picks on [oldKey] at [newKey]; a scout with picks on both keeps the newer one. Must run inside a transaction. */
-    fun remapMatchKey(oldKey: String, newKey: String) {
+    fun remapMatchKey(oldKey: String, newKey: String, ownerTeam: Int? = null) {
         if (oldKey == newKey) return
-        MatchPredictions.selectAll().where { MatchPredictions.matchKey eq oldKey }.toList().forEach { row ->
+        MatchPredictions.selectAll().where { MatchPredictions.matchKey eq oldKey }.toList()
+            .filter { ownerTeam == null || it[MatchPredictions.ownerTeamNumber] == ownerTeam }
+            .forEach { row ->
             val clash = MatchPredictions.selectAll().where {
                 (MatchPredictions.userId eq row[MatchPredictions.userId]) and (MatchPredictions.matchKey eq newKey)
             }.limit(1).firstOrNull()

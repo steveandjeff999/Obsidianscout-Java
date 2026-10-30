@@ -1,5 +1,6 @@
 package com.obsidianscout.integrations
 
+import com.obsidianscout.db.TeamCacheOverrides
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserRole
@@ -44,7 +45,7 @@ class FtcTeamDataTest {
         transaction {
             SchemaUtils.create(
                 Users, AppSettings, ScoutingConfigs, PitScoutingConfigs, QualitativeScoutingConfigs, DefaultConfigs,
-                ApiEvents, ApiTeams, ApiMatches, ScoutingEntries, PitScoutingEntries, QualitativeScoutingEntries,
+                ApiEvents, ApiTeams, ApiMatches, TeamCacheOverrides, ScoutingEntries, PitScoutingEntries, QualitativeScoutingEntries,
                 ScoutingAlliances, AllianceMemberships
             )
         }

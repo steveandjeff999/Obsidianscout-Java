@@ -801,6 +801,11 @@ object StorageManagementService {
                 (EventInfoPosts.teamNumber eq teamNumber) and ((EventInfoPosts.program eq progUpper) or (EventInfoPosts.program eq progLower))
             }.toLong()
 
+            // Delete the team's changes to the event cache
+            deletedRecords += TeamCacheOverrides.deleteWhere {
+                (TeamCacheOverrides.teamNumber eq teamNumber) and ((TeamCacheOverrides.program eq progUpper) or (TeamCacheOverrides.program eq progLower))
+            }.toLong()
+
             // Delete Team Settings
             deletedRecords += AppSettings.deleteWhere {
                 (AppSettings.teamNumber eq teamNumber) and ((AppSettings.program eq progUpper) or (AppSettings.program eq progLower))

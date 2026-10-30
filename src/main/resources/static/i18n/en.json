@@ -1379,6 +1379,7 @@
   "events.add_manual": "Add Event Manually",
   "events.cancel": "Cancel",
   "events.confirm_delete": "Are you SURE you want to delete this event? This will permanently delete all associated teams, matches, and scouting entries!",
+  "events.confirm_delete_team": "Are you SURE you want to delete this event? It will be removed for your team, and your team's scouting entries for it will be permanently deleted. Other teams are not affected.",
   "events.create_custom": "Create Custom Event",
   "events.dates": "Dates",
   "events.delete_failed": "Failed to delete event",

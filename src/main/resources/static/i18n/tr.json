@@ -1379,6 +1379,7 @@
   "events.add_manual": "Etkinlik manuel ekle",
   "events.cancel": "İptal",
   "events.confirm_delete": "Bu etkinliği silmek istediğinizden EMİN misiniz? Bu, ilişkili tüm takımları, maçları ve scouting kayıtlarını kalıcı olarak siler!",
+  "events.confirm_delete_team": "Bu etkinliği silmek istediğinizden EMİN misiniz? Etkinlik takımınız için kaldırılacak ve takımınızın bu etkinlikteki scouting kayıtları kalıcı olarak silinecek. Diğer takımlar etkilenmez.",
   "events.create_custom": "Özel Etkinlik Oluştur",
   "events.dates": "Tarihler",
   "events.delete_failed": "Etkinlik silinemedi",

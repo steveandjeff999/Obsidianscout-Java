@@ -1,5 +1,6 @@
 package com.obsidianscout.routes
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import com.obsidianscout.auth.clientIp
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
@@ -1638,7 +1639,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val paged = records.drop(offset).take(limit)
 
                 val teamNumbers = paged.map { it.teamNumber }
-                val teamIdMap = mobileTeamIds(eventKey, teamNumbers, session.program)
+                val teamIdMap = mobileTeamIds(eventKey, teamNumbers, session)
 
                 val mapped = paged.map { t ->
                     val dbId = teamIdMap[t.teamNumber]?.toString() ?: t.teamNumber.toString()
@@ -1659,14 +1660,14 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val paged = records.drop(offset).take(limit)
 
                 val eventRow = transaction {
-                    ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.firstOrNull()
+                    TeamCacheOverrideService.eventRow(eventKey, session.teamNumber, session.program)
                 }
                 val eventDbId = eventRow?.get(ApiEvents.id)?.value?.toString() ?: ""
                 val eventName = eventRow?.get(ApiEvents.name) ?: "Configured Event"
                 val eventCode = eventRow?.get(ApiEvents.eventCode) ?: eventKey.removePrefix(session.teamNumber.toString())
 
                 val teamNumbers = paged.map { it.teamNumber }
-                val teamIdMap = mobileTeamIds(eventKey, teamNumbers, session.program)
+                val teamIdMap = mobileTeamIds(eventKey, teamNumbers, session)
 
                 val mapped = paged.map { t ->
                     val dbId = teamIdMap[t.teamNumber]?.toString() ?: t.teamNumber.toString()
@@ -1691,10 +1692,10 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 // The id is an ApiTeams UUID, or the team number `/teams` hands out for a team without a row.
                 val rowId = runCatching { UUID.fromString(id) }.getOrNull() ?: id.lowercase().removePrefix("frc").removePrefix("ftc")
                     .toIntOrNull()?.let { number ->
-                        mobileTeamIds(resolveEventKey(null, session.teamNumber, session.program), listOf(number), session.program)[number]
+                        mobileTeamIds(resolveEventKey(null, session.teamNumber, session.program), listOf(number), session)[number]
                     }
                 val teamRow = rowId?.let { uuid ->
-                    transaction { ApiTeams.selectAll().where { ApiTeams.id eq uuid }.firstOrNull() }
+                    transaction { mobileTeamRow(uuid, session) }
                 } ?: throw MobileApiException(HttpStatusCode.NotFound, "Team not found", "TEAM_NOT_FOUND")
 
                 val nickname = teamRow[ApiTeams.nickname] ?: teamRow[ApiTeams.name] ?: "Team ${teamRow[ApiTeams.teamNumber]}"
@@ -1721,7 +1722,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val teamNumber = call.request.queryParameters["team_number"]?.toIntOrNull()
 
                 val eventKey = resolveEventKey(eventIdParam, session.teamNumber, session.program)
-                var matches = IntegrationService.listMatches(eventKey, session.program)
+                var matches = IntegrationService.listMatches(eventKey, session.program, session.teamNumber)
 
                 if (!matchType.isNullOrBlank()) {
                     matches = matches.filter { mapMatchType(it.compLevel).equals(matchType, ignoreCase = true) }
@@ -1738,9 +1739,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val matchKeys = matches.map { it.matchKey }
                 val matchDbRows = if (matchKeys.isNotEmpty()) {
                     transaction {
-                        ApiMatches.selectAll()
-                            .where { ApiMatches.matchKey inList matchKeys }
-                            .toList()
+                        TeamCacheOverrideService.matchRowsByKeys(matchKeys, session.teamNumber, session.program)
                     }
                 } else {
                     emptyList()
@@ -1777,7 +1776,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val teamNumber = call.request.queryParameters["team_number"]?.toIntOrNull()
 
                 val eventKey = resolveEventKey(null, session.teamNumber, session.program)
-                var matches = IntegrationService.listMatches(eventKey, session.program)
+                var matches = IntegrationService.listMatches(eventKey, session.program, session.teamNumber)
 
                 if (!matchType.isNullOrBlank()) {
                     matches = matches.filter { mapMatchType(it.compLevel).equals(matchType, ignoreCase = true) }
@@ -1792,7 +1791,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
 
                 val eventRow = transaction {
-                    ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.firstOrNull()
+                    TeamCacheOverrideService.eventRow(eventKey, session.teamNumber, session.program)
                 }
                 val eventDbId = eventRow?.get(ApiEvents.id)?.value?.toString() ?: ""
                 val eventName = eventRow?.get(ApiEvents.name) ?: "Configured Event"
@@ -1801,9 +1800,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val matchKeys = matches.map { it.matchKey }
                 val matchDbRows = if (matchKeys.isNotEmpty()) {
                     transaction {
-                        ApiMatches.selectAll()
-                            .where { ApiMatches.matchKey inList matchKeys }
-                            .toList()
+                        TeamCacheOverrideService.matchRowsByKeys(matchKeys, session.teamNumber, session.program)
                     }
                 } else {
                     emptyList()
@@ -1849,7 +1846,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     if (req.matchId.isNullOrBlank() && req.matchKey.isNullOrBlank()) {
                         throw MobileApiException(HttpStatusCode.BadRequest, "Missing required field: match_id", "MISSING_FIELD")
                     }
-                    val (matchKey, matchNumber) = resolveMobileMatch(req.matchId, req.matchKey, req.matchNumber)
+                    val (matchKey, matchNumber) = resolveMobileMatch(session, req.matchId, req.matchKey, req.matchNumber)
                         ?: throw MobileApiException(HttpStatusCode.NotFound, "Match not found", "MATCH_NOT_FOUND")
                     val eventKey = req.eventKey?.takeIf { it.isNotBlank() } ?: mobileMatchEventKey(matchKey)
 
@@ -1908,7 +1905,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                     val team = resolveMobileTeam(req.teamId, req.teamNumber, req.eventKey, session)
                         ?: throw MobileApiException(HttpStatusCode.NotFound, "Team not found", "TEAM_NOT_FOUND")
-                    val (matchKey, matchNumber) = resolveMobileMatch(req.matchId, req.matchKey, req.matchNumber)
+                    val (matchKey, matchNumber) = resolveMobileMatch(session, req.matchId, req.matchKey, req.matchNumber)
                         ?: throw MobileApiException(HttpStatusCode.NotFound, "Match not found", "MATCH_NOT_FOUND")
 
                     val targetTeamNumber = team.teamNumber
@@ -1970,7 +1967,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         // Same resolution as /scouting/submit: ApiTeams/ApiMatches UUIDs, or team number / match key,
                         // scoped to the session's program.
                         val team = resolveMobileTeam(entry.teamId, entry.teamNumber, entry.eventKey, session)
-                        val match = resolveMobileMatch(entry.matchId, entry.matchKey, entry.matchNumber)
+                        val match = resolveMobileMatch(session, entry.matchId, entry.matchKey, entry.matchNumber)
 
                         if (team == null || match == null) {
                             failedCount++
@@ -2044,8 +2041,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     } else emptyMap()
 
                     val matches = if (uniqueMatchKeys.isNotEmpty()) {
-                        ApiMatches.selectAll()
-                            .where { ApiMatches.matchKey inList uniqueMatchKeys }
+                        TeamCacheOverrideService.matchRowsByKeys(uniqueMatchKeys, session.teamNumber, session.program)
                             .associate { it[ApiMatches.matchKey] to it[ApiMatches.id].value }
                     } else emptyMap()
 
@@ -2190,12 +2186,12 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
 
                 val eventRow = transaction {
-                    ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.firstOrNull()
+                    TeamCacheOverrideService.eventRow(eventKey, session.teamNumber, session.program)
                 }
                 val eventDbId = eventRow?.get(ApiEvents.id)?.value?.toString() ?: ""
 
                 val teamsList = IntegrationService.listTeams(eventKey, session)
-                val matchesList = IntegrationService.listMatches(eventKey, session.program)
+                val matchesList = IntegrationService.listMatches(eventKey, session.program, session.teamNumber)
                 
                 val scoutedEntries = ScoutingService.listEntries(session, includePrescout = false)
                 val config = ConfigService.getConfig(session.teamNumber, session.program)
@@ -2210,8 +2206,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val matchKeys = matchesList.map { it.matchKey }
                 val matchIdMap = if (matchKeys.isNotEmpty()) {
                     transaction {
-                        ApiMatches.selectAll()
-                            .where { ApiMatches.matchKey inList matchKeys }
+                        TeamCacheOverrideService.matchRowsByKeys(matchKeys, session.teamNumber, session.program)
                             .associate { it[ApiMatches.matchKey] to it[ApiMatches.id].value }
                     }
                 } else {
@@ -2299,7 +2294,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
 
                 val eventKey = resolveEventKey(eventIdParam, session.teamNumber, session.program)
                 val eventRow = transaction {
-                    ApiEvents.selectAll().where { ApiEvents.eventKey eq eventKey }.firstOrNull()
+                    TeamCacheOverrideService.eventRow(eventKey, session.teamNumber, session.program)
                 } ?: throw MobileApiException(HttpStatusCode.NotFound, "Event not found", "EVENT_NOT_FOUND")
 
                 val eventDbId = eventRow[ApiEvents.id].value.toString()
@@ -3496,16 +3491,21 @@ private fun ResultRow.isProgramTeam(program: String): Boolean =
  * event share the key. Teams with no row are missing; `/teams` then hands out the team number as the id, which
  * [resolveMobileTeam] accepts.
  */
-fun mobileTeamIds(eventKey: String, teamNumbers: List<Int>, program: String): Map<Int, UUID> {
+fun mobileTeamIds(eventKey: String, teamNumbers: List<Int>, session: UserSession): Map<Int, UUID> {
     if (teamNumbers.isEmpty()) return emptyMap()
     return readTransaction {
-        ApiTeams.selectAll()
-            .where { (ApiTeams.eventKey eq eventKey) and (ApiTeams.teamNumber inList teamNumbers) }
-            .toList()
+        TeamCacheOverrideService.teamRows(eventKey, session.teamNumber, session.program)
+            .filter { it[ApiTeams.teamNumber] in teamNumbers }
             .groupBy { it[ApiTeams.teamNumber] }
-            .mapValues { (_, rows) -> (rows.firstOrNull { it.isProgramTeam(program) } ?: rows.first())[ApiTeams.id].value }
+            .mapValues { (_, rows) -> (rows.firstOrNull { it.isProgramTeam(session.program) } ?: rows.first())[ApiTeams.id].value }
     }
 }
+
+/** A team by mobile id: a shared row with this team's changes, or a team this team added itself. */
+private fun mobileTeamRow(id: UUID, session: UserSession): ResultRow? =
+    ApiTeams.selectAll().where { ApiTeams.id eq id }.firstOrNull()
+        ?.let { TeamCacheOverrideService.patchTeamRows(listOf(it), session.teamNumber, session.program).firstOrNull() }
+        ?: TeamCacheOverrideService.ownTeamRow(id, session.teamNumber, session.program)
 
 /** Team number and event key for a submission. */
 data class MobileTeamRef(val teamNumber: Int, val eventKey: String)
@@ -3518,7 +3518,7 @@ data class MobileTeamRef(val teamNumber: Int, val eventKey: String)
 fun resolveMobileTeam(teamId: String?, teamNumber: Int?, eventKey: String?, session: UserSession): MobileTeamRef? {
     val raw = teamId?.trim().orEmpty()
     runCatching { UUID.fromString(raw) }.getOrNull()?.let { uuid ->
-        val row = readTransaction { ApiTeams.selectAll().where { ApiTeams.id eq uuid }.firstOrNull() } ?: return null
+        val row = readTransaction { mobileTeamRow(uuid, session) } ?: return null
         return MobileTeamRef(row[ApiTeams.teamNumber], eventKey?.takeIf { it.isNotBlank() } ?: row[ApiTeams.eventKey])
     }
     val number = teamNumber ?: raw.lowercase().removePrefix("frc").removePrefix("ftc").toIntOrNull() ?: return null
@@ -3527,15 +3527,17 @@ fun resolveMobileTeam(teamId: String?, teamNumber: Int?, eventKey: String?, sess
 }
 
 /** Match key and number for a submission: an ApiMatches UUID (from `/matches`), or a match key sent directly. */
-fun resolveMobileMatch(matchId: String?, matchKey: String?, matchNumber: Int?): Pair<String, Int>? {
+fun resolveMobileMatch(session: UserSession, matchId: String?, matchKey: String?, matchNumber: Int?): Pair<String, Int>? {
     val raw = matchId?.trim().orEmpty()
     runCatching { UUID.fromString(raw) }.getOrNull()?.let { uuid ->
-        val row = readTransaction { ApiMatches.selectAll().where { ApiMatches.id eq uuid }.firstOrNull() } ?: return null
+        val row = readTransaction {
+            ApiMatches.selectAll().where { ApiMatches.id eq uuid }.firstOrNull() ?: TeamCacheOverrideService.ownMatchRow(uuid, session.teamNumber, session.program)
+        } ?: return null
         return row[ApiMatches.matchKey] to (row[ApiMatches.matchNumber] ?: 0)
     }
     val key = matchKey?.trim()?.takeIf { it.isNotEmpty() } ?: raw.takeIf { it.contains('_') } ?: return null
     val number = matchNumber ?: readTransaction {
-        ApiMatches.selectAll().where { ApiMatches.matchKey eq key }.firstOrNull()?.get(ApiMatches.matchNumber)
+        TeamCacheOverrideService.matchRow(key, session.teamNumber, session.program)?.get(ApiMatches.matchNumber)
     } ?: parseMatchKey(key).second
     return key to number
 }

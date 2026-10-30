@@ -81,9 +81,9 @@ class MobileSubmissionResolutionTest {
 
     @Test
     fun teamIdsComeFromTheSessionsOwnProgram() {
-        assertEquals(frcTeamId, mobileTeamIds(eventKey, listOf(1234), "FRC")[1234])
-        assertEquals(ftcTeamId, mobileTeamIds(eventKey, listOf(1234), "FTC")[1234])
-        assertTrue(mobileTeamIds(eventKey, listOf(4321), "FTC").isEmpty())
+        assertEquals(frcTeamId, mobileTeamIds(eventKey, listOf(1234), session("FRC"))[1234])
+        assertEquals(ftcTeamId, mobileTeamIds(eventKey, listOf(1234), session("FTC"))[1234])
+        assertTrue(mobileTeamIds(eventKey, listOf(4321), session("FTC")).isEmpty())
     }
 
     @Test
@@ -103,13 +103,13 @@ class MobileSubmissionResolutionTest {
 
     @Test
     fun matchesResolveByUuidOrByKey() {
-        assertEquals("${eventKey}_qm12" to 12, resolveMobileMatch(matchId.toString(), null, null))
+        assertEquals("${eventKey}_qm12" to 12, resolveMobileMatch(session("FRC"), matchId.toString(), null, null))
         // `/matches` hands out the key as the id for a match without an ApiMatches row.
-        assertEquals("${eventKey}_qm7" to 7, resolveMobileMatch("${eventKey}_qm7", null, null))
-        assertEquals("${eventKey}_qm7" to 9, resolveMobileMatch(null, "${eventKey}_qm7", 9))
-        assertEquals("${eventKey}_qm12" to 12, resolveMobileMatch(null, "${eventKey}_qm12", null))
-        assertNull(resolveMobileMatch(UUID.randomUUID().toString(), null, null))
-        assertNull(resolveMobileMatch("", null, null))
+        assertEquals("${eventKey}_qm7" to 7, resolveMobileMatch(session("FRC"), "${eventKey}_qm7", null, null))
+        assertEquals("${eventKey}_qm7" to 9, resolveMobileMatch(session("FRC"), null, "${eventKey}_qm7", 9))
+        assertEquals("${eventKey}_qm12" to 12, resolveMobileMatch(session("FRC"), null, "${eventKey}_qm12", null))
+        assertNull(resolveMobileMatch(session("FRC"), UUID.randomUUID().toString(), null, null))
+        assertNull(resolveMobileMatch(session("FRC"), "", null, null))
     }
 
     @Test

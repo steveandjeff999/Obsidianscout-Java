@@ -1,5 +1,6 @@
 package com.obsidianscout.scouting
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.ApiException
@@ -457,8 +458,8 @@ object ScoutingAssignmentService {
      * shifted by how far ahead or behind the event is running, so shifts follow the field rather than the
      * printed schedule.
      */
-    private fun expectedStarts(eventKey: String, program: String): Map<String, ExpectedStart> =
-        IntegrationService.listMatches(eventKey.trim().lowercase(), program).mapNotNull { m ->
+    private fun expectedStarts(eventKey: String, program: String, teamNumber: Int): Map<String, ExpectedStart> =
+        IntegrationService.listMatches(eventKey.trim().lowercase(), program, teamNumber).mapNotNull { m ->
             val played = m.redScore != null || m.blueScore != null ||
                 (m.actualTime != null && m.actualTime > 0 && m.actualTime != m.scheduledTime)
             val raw = (if (played) m.actualTime else m.predictedTime ?: m.scheduledTime)?.takeIf { it > 0 }
@@ -526,7 +527,7 @@ object ScoutingAssignmentService {
             )
             val rows = mutableListOf<NewRow>()
 
-            ApiMatches.selectAll().where { ApiMatches.matchKey inList matchKeys }.forEach { m ->
+            TeamCacheOverrideService.matchRowsByKeys(matchKeys, teamNumber, prog).forEach { m ->
                 val mKey = m[ApiMatches.matchKey]
                 val inMatch = existing.filter { it[ScoutingAssignments.matchKey]?.equals(mKey, ignoreCase = true) == true }
                 val busy = inMatch.map { it[ScoutingAssignments.assignedUserId].value }.toMutableSet()
@@ -628,7 +629,7 @@ object ScoutingAssignmentService {
                 seatsOf(shift, type, allianceWide)?.getOrNull(i)?.trim()?.lowercase()?.ifBlank { null }
 
             var moved = 0
-            ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKey }.forEach { m ->
+            TeamCacheOverrideService.matchRows(eventKey, teamNumber, prog).forEach { m ->
                 val mKey = m[ApiMatches.matchKey].lowercase()
                 val shift = target[mKey] ?: return@forEach
                 val rows = byMatch[mKey] ?: return@forEach
@@ -676,7 +677,7 @@ object ScoutingAssignmentService {
         var moved = 0
         settings.assignmentShifts.filter { it.id in shiftIds }.groupBy { it.eventKey.lowercase() }.forEach { (eventKey, shifts) ->
             val zone = eventZone(eventKey, settings.timezone)
-            val starts = expectedStarts(eventKey, program)
+            val starts = expectedStarts(eventKey, program, teamNumber)
             // Every shift of the event, so a match can move to a neighbour that isn't being applied right now
             val eventShifts = settings.assignmentShifts.filter { it.eventKey.lowercase() == eventKey }
             moved += rebalanceShifts(teamNumber, program, eventKey, eventShifts, zone, starts)
@@ -743,7 +744,7 @@ object ScoutingAssignmentService {
         if (shifts.isEmpty()) return AssignmentShiftsResponse(createdCount = createdCount)
 
         val zone = eventZone(key, settings.timezone)
-        val starts = expectedStarts(key, session.program)
+        val starts = expectedStarts(key, session.program, session.teamNumber)
         val userIds = shifts.flatMap { shiftScouterIds(it) }.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }.distinct()
         val names = if (userIds.isEmpty()) emptyMap() else readTransaction {
             Users.selectAll().where { Users.id inList userIds }.associate { it[Users.id].value.toString() to it[Users.username] }
@@ -936,9 +937,7 @@ object ScoutingAssignmentService {
             val itemsToInsert = mutableListOf<BulkItem>()
 
             if (typeUpper == "PIT_AUTO" || typeUpper == "PIT") {
-                val allTeams = ApiTeams.selectAll().where { ApiTeams.eventKey eq eventKeyClean }
-                    .orderBy(ApiTeams.teamNumber to SortOrder.ASC)
-                    .toList()
+                val allTeams = TeamCacheOverrideService.teamRows(eventKeyClean, session.teamNumber, session.program)
 
                 if (allTeams.isEmpty()) {
                     throw ApiException(HttpStatusCode.BadRequest, "No teams found for event $eventKeyClean.")
@@ -1001,8 +1000,7 @@ object ScoutingAssignmentService {
                 }
             } else {
                 // Match or Qualitative Assignment
-                val allMatchesQuery = ApiMatches.selectAll().where { ApiMatches.eventKey eq eventKeyClean }
-                val rawMatches = allMatchesQuery.toList()
+                val rawMatches = TeamCacheOverrideService.matchRows(eventKeyClean, session.teamNumber, session.program)
                 if (rawMatches.isEmpty()) {
                     throw ApiException(HttpStatusCode.BadRequest, "No matches found for event $eventKeyClean.")
                 }
@@ -2157,7 +2155,7 @@ object ScoutingAssignmentService {
 
                 var teamAlliance: String? = allianceColor?.trim()?.uppercase()
                 if (teamAlliance == null && !matchKey.isNullOrBlank() && targetTeamNumber != null) {
-                    val matchRow = ApiMatches.selectAll().where { ApiMatches.matchKey eq matchKey.trim() }.firstOrNull()
+                    val matchRow = TeamCacheOverrideService.matchRow(matchKey.trim(), ownerTeam, program)
                     if (matchRow != null) {
                         val red = matchRow[ApiMatches.redTeams].split(",").mapNotNull { it.replace(Regex("^(frc|ftc)", RegexOption.IGNORE_CASE), "").trim().toIntOrNull() }
                         val blue = matchRow[ApiMatches.blueTeams].split(",").mapNotNull { it.replace(Regex("^(frc|ftc)", RegexOption.IGNORE_CASE), "").trim().toIntOrNull() }
@@ -2205,7 +2203,7 @@ object ScoutingAssignmentService {
         val eKey = row[ScoutingAssignments.eventKey].trim().lowercase()
 
         val matchTiming = if (!mKey.isNullOrBlank()) {
-            ApiMatches.selectAll().where { ApiMatches.matchKey eq mKey }.firstOrNull()?.let {
+            TeamCacheOverrideService.matchRow(mKey, row[ScoutingAssignments.ownerTeamNumber], row[ScoutingAssignments.program])?.let {
                 val sched = it[ApiMatches.scheduledTime]
                 val act = it[ApiMatches.actualTime]
                 val offset = if (act != null && sched != null && act > 0 && act != sched) (act - sched) else 0L
@@ -2220,7 +2218,7 @@ object ScoutingAssignmentService {
 
         val tNum = row[ScoutingAssignments.targetTeamNumber]
         val targetTeamNickname = if (tNum != null && eKey.isNotBlank()) {
-            ApiTeams.selectAll().where { (ApiTeams.eventKey eq eKey) and (ApiTeams.teamNumber eq tNum) }.firstOrNull()?.let {
+            TeamCacheOverrideService.teamRows(eKey, row[ScoutingAssignments.ownerTeamNumber], row[ScoutingAssignments.program]).firstOrNull { it[ApiTeams.teamNumber] == tNum }?.let {
                 it[ApiTeams.nickname] ?: it[ApiTeams.name]
             }
         } else null
@@ -2345,9 +2343,13 @@ object ScoutingAssignmentService {
             .map { it.trim().lowercase() }
             .filter { it.isNotBlank() }
             .distinct()
+        // Timing and nicknames follow each owning team's own view of the event.
+        val owners = rows.mapNotNull { row ->
+            runCatching { row[ScoutingAssignments.ownerTeamNumber] to row[ScoutingAssignments.program] }.getOrNull()
+        }.distinct()
 
         val matchTimingMap: Map<String, MatchTiming> = if (matchKeys.isNotEmpty()) {
-            ApiMatches.selectAll().where { ApiMatches.matchKey inList matchKeys }.associate { row ->
+            owners.flatMap { (owner, program) -> TeamCacheOverrideService.matchRowsByKeys(matchKeys, owner, program) }.associate { row ->
                 val mKey = row[ApiMatches.matchKey].trim().lowercase()
                 val sched = row[ApiMatches.scheduledTime]
                 val act = row[ApiMatches.actualTime]
@@ -2373,7 +2375,8 @@ object ScoutingAssignmentService {
         val teamNicknames = if (eventTeamPairs.isNotEmpty()) {
             val events = eventTeamPairs.map { it.first }.distinct()
             val teams = eventTeamPairs.map { it.second }.distinct()
-            ApiTeams.selectAll().where { (ApiTeams.eventKey inList events) and (ApiTeams.teamNumber inList teams) }
+            val shared = ApiTeams.selectAll().where { (ApiTeams.eventKey inList events) and (ApiTeams.teamNumber inList teams) }.toList()
+            owners.flatMap { (owner, program) -> TeamCacheOverrideService.patchTeamRows(shared, owner, program) }
                 .associate { Pair(it[ApiTeams.eventKey].trim().lowercase(), it[ApiTeams.teamNumber]) to (it[ApiTeams.nickname] ?: it[ApiTeams.name]) }
         } else emptyMap()
 

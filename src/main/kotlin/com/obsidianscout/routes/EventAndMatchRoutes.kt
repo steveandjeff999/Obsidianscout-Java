@@ -1,5 +1,6 @@
 ﻿package com.obsidianscout.routes
 
+import com.obsidianscout.integrations.TeamCacheOverrideService
 import com.obsidianscout.auth.clientIp
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
@@ -109,7 +110,7 @@ fun Route.eventAndMatchRoutes() {
                     val eventKeyParam = call.request.queryParameters["eventKey"]
                     if (!eventKeyParam.isNullOrBlank()) {
                         val settings = AllianceService.getEffectiveSettings(session.teamNumber, session.program)
-                        var event = IntegrationService.getEvent(eventKeyParam)
+                        var event = IntegrationService.getEvent(eventKeyParam, session.teamNumber, session.program)
                         // Public visitors only see what's cached: they mustn't spend the team's API keys.
                         if (!session.publicView && (event == null || event.timezone.isNullOrBlank() || event.timezone == "UTC")) {
                             try {
@@ -155,22 +156,22 @@ fun Route.eventAndMatchRoutes() {
                     call.respond(events)
                 }
                 post {
-                    call.requireAdmin()
+                    val session = call.requireAdmin()
                     val request = call.receive<EventRecord>()
-                    val saved = IntegrationService.saveEvent(request)
+                    val saved = TeamCacheOverrideService.saveEvent(session, request)
                     call.respond(saved)
                 }
                 put {
-                    call.requireAdmin()
+                    val session = call.requireAdmin()
                     val request = call.receive<EventRenameRequest>()
-                    val updated = IntegrationService.renameEvent(request.oldKey, request.event)
+                    val updated = TeamCacheOverrideService.renameEvent(session, request.oldKey, request.event)
                     call.respond(updated)
                 }
                 delete {
-                    call.requireAdmin()
+                    val session = call.requireAdmin()
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
-                    val success = IntegrationService.deleteEvent(eventKey)
+                    val success = TeamCacheOverrideService.deleteEvent(session, eventKey)
                     call.respond(mapOf("success" to success))
                 }
             }
@@ -187,16 +188,16 @@ fun Route.eventAndMatchRoutes() {
                 post {
                     val session = call.requireAdmin()
                     val request = call.receive<TeamRecord>()
-                    val saved = IntegrationService.saveTeam(request, session.program)
+                    val saved = TeamCacheOverrideService.saveTeam(session, request)
                     call.respond(saved)
                 }
                 delete {
-                    call.requireAdmin()
+                    val session = call.requireAdmin()
                     val eventKey = call.request.queryParameters["eventKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing eventKey parameter")
                     val teamKey = call.request.queryParameters["teamKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing teamKey parameter")
-                    val success = IntegrationService.deleteTeam(eventKey, teamKey)
+                    val success = TeamCacheOverrideService.deleteTeam(session, eventKey, teamKey)
                     call.respond(mapOf("success" to success))
                 }
             }
@@ -208,7 +209,7 @@ fun Route.eventAndMatchRoutes() {
                         ?: AllianceService.getEffectiveSettings(session.teamNumber, session.program).resolvedEventKey()
                     val eventKeyLower = eventKey.lowercase().trim()
                     // Serve what's cached; syncing happens on settings change and via SyncScheduler.
-                    call.respond(IntegrationService.listMatches(eventKeyLower, session.program))
+                    call.respond(IntegrationService.listMatches(eventKeyLower, session.program, session.teamNumber))
                 }
                 get("/predict") {
                     val session = call.requireSession()
@@ -242,14 +243,14 @@ fun Route.eventAndMatchRoutes() {
                 post {
                     val session = call.requireAdmin()
                     val request = call.receive<MatchRecord>()
-                    val saved = IntegrationService.saveMatch(request, session.program)
+                    val saved = TeamCacheOverrideService.saveMatch(session, request)
                     call.respond(saved)
                 }
                 delete {
-                    call.requireAdmin()
+                    val session = call.requireAdmin()
                     val matchKey = call.request.queryParameters["matchKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing matchKey parameter")
-                    val success = IntegrationService.deleteMatch(matchKey)
+                    val success = TeamCacheOverrideService.deleteMatch(session, matchKey)
                     call.respond(mapOf("success" to success))
                 }
             }

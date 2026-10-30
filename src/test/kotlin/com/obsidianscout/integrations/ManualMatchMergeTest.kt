@@ -1,5 +1,6 @@
 package com.obsidianscout.integrations
 
+import com.obsidianscout.db.TeamCacheOverrides
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.UserRole
@@ -41,7 +42,7 @@ class ManualMatchMergeTest {
         if (testDbFile.exists()) testDbFile.delete()
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
         transaction {
-            SchemaUtils.create(Users, ApiMatches, ScoutingEntries, QualitativeScoutingEntries, ScoutingAssignments, MatchPlans, MatchChecklists, BatteryTrackers, MatchPredictions)
+            SchemaUtils.create(Users, ApiMatches, TeamCacheOverrides, ScoutingEntries, QualitativeScoutingEntries, ScoutingAssignments, MatchPlans, MatchChecklists, BatteryTrackers, MatchPredictions)
             userId = Users.insertAndGetId {
                 it[username] = "admin"
                 it[passwordHash] = "hash"
@@ -188,35 +189,6 @@ class ManualMatchMergeTest {
             assertEquals(canonicalKey, plan[MatchPlans.matchKey])
             assertEquals("""{"from":"new"}""", plan[MatchPlans.planJson])
         }
-    }
-
-    @Test
-    fun saveMatchUsesCanonicalKeyAndMergesIntoExistingApiMatch() {
-        insertMatchRow(canonicalKey, """{"scoreRedFinal":50}""")
-
-        val saved = IntegrationService.saveMatch(
-            MatchRecord(matchKey = "", eventKey = event, compLevel = "Qualification", matchNumber = 5, redTeams = red, blueTeams = blue)
-        )
-
-        assertEquals(canonicalKey, saved.matchKey)
-        assertEquals("qm", saved.compLevel)
-        transaction { assertEquals(1, ApiMatches.selectAll().count()) }
-    }
-
-    @Test
-    fun saveMatchEditRekeysLegacyRowAndChildren() {
-        insertMatchRow(legacyKey, "{}")
-        insertChildRows(legacyKey)
-
-        val saved = IntegrationService.saveMatch(
-            MatchRecord(matchKey = legacyKey, eventKey = event, compLevel = "qm", matchNumber = 5, redTeams = red, blueTeams = blue)
-        )
-
-        assertEquals(canonicalKey, saved.matchKey)
-        transaction {
-            assertEquals(listOf(canonicalKey), ApiMatches.selectAll().map { it[ApiMatches.matchKey] })
-        }
-        assertEquals(List(4) { canonicalKey }, childKeys())
     }
 
     @Test

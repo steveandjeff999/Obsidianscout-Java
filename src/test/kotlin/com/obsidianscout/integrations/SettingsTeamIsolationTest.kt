@@ -1,5 +1,6 @@
 package com.obsidianscout.integrations
 
+import com.obsidianscout.db.TeamCacheOverrides
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import com.obsidianscout.auth.AuthService
@@ -40,7 +41,7 @@ class SettingsTeamIsolationTest {
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
         transaction {
             SchemaUtils.create(
-                Users, AppSettings, ApiEvents, ApiTeams, ApiMatches,
+                Users, AppSettings, ApiEvents, ApiTeams, ApiMatches, TeamCacheOverrides,
                 ScoutingEntries, PitScoutingEntries, QualitativeScoutingEntries,
                 ScoutingAlliances, AllianceMemberships
             )

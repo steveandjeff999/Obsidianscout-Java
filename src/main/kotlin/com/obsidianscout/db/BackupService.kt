@@ -270,7 +270,10 @@ data class ObsidianDbBackup(
 
     // Slack (team settings; "entire" and global backups)
     val slackIntegrations: List<com.obsidianscout.slack.SlackIntegrationBackupDto> = emptyList(),
-    val slackUserPreferences: List<com.obsidianscout.slack.SlackUserPreferenceBackupDto> = emptyList()
+    val slackUserPreferences: List<com.obsidianscout.slack.SlackUserPreferenceBackupDto> = emptyList(),
+
+    // Teams' changes to the event cache ("entire" and global backups)
+    val teamCacheOverrides: List<com.obsidianscout.integrations.TeamCacheOverrideBackupDto> = emptyList()
 )
 
 @Serializable
@@ -315,6 +318,7 @@ data class ImportReport(
     val passwordResetTokensSkipped: Int = 0,
     val slackIntegrationsImported: Int = 0,
     val slackPreferencesImported: Int = 0,
+    val teamCacheOverridesImported: Int = 0,
     val message: String = ""
 )
 
@@ -690,6 +694,9 @@ object BackupService {
             } else emptyList()
 
             val slackTeam = if (scope == "global") null else teamNumber
+            val teamCacheOverrides = if (scope == "global" || type == "entire") {
+                com.obsidianscout.integrations.TeamCacheOverrideService.exportBackup(slackTeam, program)
+            } else emptyList()
             val slackIntegrations = if (scope == "global" || type == "entire") {
                 com.obsidianscout.slack.SlackBackup.exportIntegrations(slackKey, slackTeam, program)
             } else emptyList()
@@ -722,7 +729,8 @@ object BackupService {
                 userChatLastReads = userChatLastReads,
                 passwordResetTokens = passwordResetTokens,
                 slackIntegrations = slackIntegrations,
-                slackUserPreferences = slackUserPreferences
+                slackUserPreferences = slackUserPreferences,
+                teamCacheOverrides = teamCacheOverrides
             )
         }
     }
@@ -1372,6 +1380,10 @@ object BackupService {
                 }
             }
 
+            val teamCacheOverridesImported = com.obsidianscout.integrations.TeamCacheOverrideService.importBackup(
+                backup.teamCacheOverrides, ::getTargetTeam, ::programFor
+            )
+
             // 15. Slack connection and personal preferences (need the users imported above)
             var slackIntegrationsImported = 0
             var slackPreferencesImported = 0
@@ -1427,6 +1439,7 @@ object BackupService {
                 passwordResetTokensSkipped = passwordResetTokensSkipped,
                 slackIntegrationsImported = slackIntegrationsImported,
                 slackPreferencesImported = slackPreferencesImported,
+                teamCacheOverridesImported = teamCacheOverridesImported,
                 message = "Backup imported successfully"
             )
         }.also { report ->
@@ -1651,6 +1664,12 @@ object BackupService {
             files["password_reset_tokens.csv"] = CSVHelper.toCSV(tokenHeaders, tokenRows)
         }
 
+        if (backup.teamCacheOverrides.isNotEmpty()) {
+            files[com.obsidianscout.integrations.TeamCacheOverrideService.CSV_FILE] = CSVHelper.toCSV(
+                com.obsidianscout.integrations.TeamCacheOverrideService.csvHeaders,
+                backup.teamCacheOverrides.map(com.obsidianscout.integrations.TeamCacheOverrideService::csvRow)
+            )
+        }
         if (backup.slackIntegrations.isNotEmpty()) {
             files[com.obsidianscout.slack.SlackBackup.INTEGRATIONS_CSV] = CSVHelper.toCSV(
                 com.obsidianscout.slack.SlackBackup.integrationHeaders,
@@ -1960,6 +1979,9 @@ object BackupService {
             }
         } ?: emptyList()
 
+        val teamCacheOverrides = files[com.obsidianscout.integrations.TeamCacheOverrideService.CSV_FILE]?.let { content ->
+            CSVHelper.parseCSV(content).mapNotNull(com.obsidianscout.integrations.TeamCacheOverrideService::fromCsv)
+        } ?: emptyList()
         val slackIntegrations = files[com.obsidianscout.slack.SlackBackup.INTEGRATIONS_CSV]?.let { content ->
             CSVHelper.parseCSV(content).mapNotNull(com.obsidianscout.slack.SlackBackup::integrationFromCsv)
         } ?: emptyList()
@@ -1993,7 +2015,8 @@ object BackupService {
             userChatLastReads = userChatLastReads,
             passwordResetTokens = passwordResetTokens,
             slackIntegrations = slackIntegrations,
-            slackUserPreferences = slackUserPreferences
+            slackUserPreferences = slackUserPreferences,
+            teamCacheOverrides = teamCacheOverrides
         )
 
         return importBackup(targetTeamNumber, backup, currentUserId, isSuperAdmin, targetProgram)
