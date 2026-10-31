@@ -276,6 +276,35 @@ object TeamCacheOverrideService {
         ).sortedBy { it[ApiTeams.teamNumber] }
     }
 
+    /** How many teams [teamRows] would list for each of [eventKeys], without a query per event. */
+    fun teamCounts(eventKeys: Collection<String>, team: Int, program: String): Map<String, Int> {
+        val keys = eventKeys.map { it.lowercase().trim() }.distinct()
+        val sharedByEvent = keys.chunked(500).flatMap { chunk ->
+            ApiTeams.select(ApiTeams.eventKey, ApiTeams.teamKey).where { ApiTeams.eventKey inList chunk }.toList()
+        }.groupBy({ it[ApiTeams.eventKey].lowercase().trim() }, { it[ApiTeams.teamKey].lowercase().trim() })
+        val overridesByEvent = keys.chunked(500).flatMap { overridesForEvents(team, program, KIND_TEAM, it) }.groupBy { it.eventKey }
+        return eventKeys.associateWith { eventKey ->
+            val key = eventKey.lowercase().trim()
+            val shared = sharedByEvent[key].orEmpty()
+            val overrides = overridesByEvent[key].orEmpty()
+            val hidden = overrides.filter { it.removed }.map { it.recordKey }.toSet()
+            shared.count { it !in hidden } + overrides.count { !it.removed && it.recordKey !in shared }
+        }
+    }
+
+    /** [eventRow] for each of [eventKeys] that has one, without a query per event. */
+    fun eventRows(eventKeys: Collection<String>, team: Int, program: String): Map<String, ResultRow> {
+        val keys = eventKeys.map { it.lowercase().trim() }.distinct()
+        val shared = keys.chunked(500).flatMap { chunk -> ApiEvents.selectAll().where { ApiEvents.eventKey inList chunk }.toList() }
+            .associateBy { it[ApiEvents.eventKey].lowercase().trim() }
+        val overrides = keys.chunked(500).flatMap { overridesForEvents(team, program, KIND_EVENT, it) }.associateBy { it.eventKey }
+        return eventKeys.mapNotNull { eventKey ->
+            val key = eventKey.lowercase().trim()
+            val row = overrides[key]?.takeUnless { it.removed }?.let { eventRowOf(shared[key], it) } ?: shared[key]
+            row?.let { eventKey to it }
+        }.toMap()
+    }
+
     /** Applies this team's changes to team rows it already selected (records it added itself are not appended). */
     fun patchTeamRows(rows: List<ResultRow>, team: Int, program: String): List<ResultRow> {
         val events = rows.map { it[ApiTeams.eventKey].lowercase().trim() }.distinct()
@@ -528,17 +557,22 @@ object TeamCacheOverrideService {
             val pitIds = PitScoutingEntries.select(PitScoutingEntries.id)
                 .where { (PitScoutingEntries.eventKey eq key) and (PitScoutingEntries.ownerTeamNumber eq team) and (PitScoutingEntries.program eq program) }
                 .map { it[PitScoutingEntries.id].value.toString() }
+            val qualIds = QualitativeScoutingEntries.select(QualitativeScoutingEntries.id)
+                .where { (QualitativeScoutingEntries.eventKey eq key) and (QualitativeScoutingEntries.ownerTeamNumber eq team) and (QualitativeScoutingEntries.program eq program) }
+                .map { it[QualitativeScoutingEntries.id].value.toString() }
             ScoutingEntries.deleteWhere { (ScoutingEntries.eventKey eq key) and (ScoutingEntries.ownerTeamNumber eq team) and (ScoutingEntries.program eq program) }
             PitScoutingEntries.deleteWhere { (PitScoutingEntries.eventKey eq key) and (PitScoutingEntries.ownerTeamNumber eq team) and (PitScoutingEntries.program eq program) }
             EntrySync.recordDeletions(EntrySync.KIND_MATCH, matchIds, team, program)
+            QualitativeScoutingEntries.deleteWhere { (QualitativeScoutingEntries.eventKey eq key) and (QualitativeScoutingEntries.ownerTeamNumber eq team) and (QualitativeScoutingEntries.program eq program) }
             EntrySync.recordDeletions(EntrySync.KIND_PIT, pitIds, team, program)
+            EntrySync.recordDeletions(EntrySync.KIND_QUAL, qualIds, team, program)
 
             val cleared = TeamCacheOverrides.deleteWhere {
                 (TeamCacheOverrides.teamNumber eq team) and (TeamCacheOverrides.program eq program) and (TeamCacheOverrides.eventKey eq key)
             }
             val shared = sharedEvent(key)
             if (shared != null) store(team, program, KIND_EVENT, key, key, emptyPatch, removed = true)
-            shared != null || cleared > 0 || matchIds.isNotEmpty() || pitIds.isNotEmpty()
+            shared != null || cleared > 0 || matchIds.isNotEmpty() || pitIds.isNotEmpty() || qualIds.isNotEmpty()
         }
     }
 

@@ -153,6 +153,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
+    /** Waits for the server to go down and answer again. Servers restart in turn, so this one can take a few minutes. */
+    async function waitForServerRestart() {
+        const isUp = () => fetch("/api/health", { cache: "no-store" }).then(res => res.ok, () => false);
+        const giveUpAt = Date.now() + 10 * 60 * 1000;
+        let wentDown = false;
+        while (Date.now() < giveUpAt) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const up = await isUp();
+            if (up && wentDown) return true;
+            if (!up) wentDown = true;
+        }
+        return false;
+    }
+
     // Reset Database logic
     const btnResetDatabase = document.getElementById("btn-reset-database");
     const resetPasswordConfirm = document.getElementById("reset-password-confirm");
@@ -178,8 +192,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
 
                 if (res.success) {
-                    alert("Database reset completed successfully!");
-                    window.location.reload();
+                    alert(`Database reset completed successfully! ${res.message}`);
+                    Obsidianscout.setButtonLoading(btnResetDatabase, true, "Restarting server...");
+                    if (await waitForServerRestart()) {
+                        window.location.reload();
+                    } else {
+                        alert("The server hasn't come back yet. If it wasn't started with its run script, start it again yourself.");
+                    }
                 } else {
                     alert("Failed to reset database: " + (res.error || "Unknown error"));
                 }

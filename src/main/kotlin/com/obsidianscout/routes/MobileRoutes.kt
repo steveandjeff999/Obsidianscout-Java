@@ -1596,14 +1596,9 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val eventKeys = events.map { it.eventKey }
                 val (teamCountsMap, eventDbIdsMap) = if (eventKeys.isNotEmpty()) {
                     transaction {
-                        val counts = eventKeys.associateWith { ek ->
-                            TeamCacheOverrideService.teamRows(ek, session.teamNumber, session.program).size
-                        }
-
-                        val dbIds = eventKeys.mapNotNull { ek ->
-                            TeamCacheOverrideService.eventRow(ek, session.teamNumber, session.program)
-                                ?.get(ApiEvents.id)?.value?.let { ek to it }
-                        }.toMap()
+                        val counts = TeamCacheOverrideService.teamCounts(eventKeys, session.teamNumber, session.program)
+                        val dbIds = TeamCacheOverrideService.eventRows(eventKeys, session.teamNumber, session.program)
+                            .mapValues { (_, row) -> row[ApiEvents.id].value }
 
                         counts to dbIds
                     }
@@ -2770,6 +2765,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                     val groupName = call.request.queryParameters["group"]
                     if (type == "group" && !groupName.isNullOrBlank()) {
                         val sanitizedGroup = groupName.trim().replace("/", "_").replace("\\", "_")
+                        requireMobileGroupAccess(session, sanitizedGroup)
                         val groupFile = chatFile("instance/chat/groups/$program/$teamNumber/${sanitizedGroup}_group_chat_history.json")
                         loadMessages(groupFile)
                     } else {
@@ -2845,6 +2841,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                         chatFile("instance/chat/groups/${session.program}/$teamNumber/alliance_${activeAllianceId}_group_chat_history.json")
                     } else {
                         val groupName = req.group!!.trim().replace("/", "_").replace("\\", "_")
+                        requireMobileGroupAccess(session, groupName)
                         chatFile("instance/chat/groups/${session.program}/$teamNumber/${groupName}_group_chat_history.json")
                     }
 
@@ -3100,8 +3097,14 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 }
 
                 val membersFile = chatFile("instance/chat/groups/$program/$teamNumber/${groupName}_members.json")
+                // Saving over an existing list would let anyone on the team take the group's history.
+                if (membersFile.exists()) {
+                    throw MobileApiException(HttpStatusCode.Conflict, "A group with this name already exists", "GROUP_EXISTS")
+                }
+                // The creator is always in the group, or they couldn't open what they just made.
+                val groupMembers = (validMembers + session.username).distinct()
                 membersFile.parentFile.mkdirs()
-                membersFile.writeText(JsonSupport.json.encodeToString(validMembers))
+                membersFile.writeText(JsonSupport.json.encodeToString(groupMembers))
 
                 val histFile = chatFile("instance/chat/groups/$program/$teamNumber/${groupName}_group_chat_history.json")
                 if (!histFile.exists()) {
@@ -3111,7 +3114,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 call.respond(
                     HttpStatusCode.Created,
                     MobileCreateGroupResponse(
-                        group = MobileGroupDetail(groupName, validMembers)
+                        group = MobileGroupDetail(groupName, groupMembers)
                     )
                 )
             }
@@ -3124,6 +3127,7 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 if (!file.exists()) {
                     throw MobileApiException(HttpStatusCode.NotFound, "Group not found", "NOT_FOUND")
                 }
+                requireMobileGroupAccess(session, group)
                 val members = JsonSupport.json.decodeFromString<List<String>>(file.readText())
                 call.respond(MobileGroupMembersResponse(members = members))
             }
@@ -3134,11 +3138,11 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val file = chatFile("instance/chat/groups/${session.program}/${session.teamNumber}/${group}_members.json")
                 val req = call.receive<MobileManageGroupMembersRequest>()
 
-                val currentMembers = if (file.exists()) {
-                    JsonSupport.json.decodeFromString<List<String>>(file.readText())
-                } else {
-                    emptyList()
+                if (!file.exists()) {
+                    throw MobileApiException(HttpStatusCode.NotFound, "Group not found", "NOT_FOUND")
                 }
+                requireMobileGroupAccess(session, group)
+                val currentMembers = JsonSupport.json.decodeFromString<List<String>>(file.readText())
 
                 val teamUsers = transaction {
                     AuthService.listUsers(UserSession(userId = "", username = "system", teamNumber = session.teamNumber, role = UserRole.SUPERADMIN, program = session.program), teamFilter = session.teamNumber, programFilter = session.program)
@@ -3159,16 +3163,20 @@ fun Application.configureMobileRoutes(appConfig: AppConfig) {
                 val file = chatFile("instance/chat/groups/${session.program}/${session.teamNumber}/${group}_members.json")
                 val req = try { call.receive<MobileManageGroupMembersRequest>() } catch (_: Exception) { MobileManageGroupMembersRequest() }
 
-                val currentMembers = if (file.exists()) {
-                    JsonSupport.json.decodeFromString<List<String>>(file.readText())
-                } else {
-                    emptyList()
+                if (!file.exists()) {
+                    throw MobileApiException(HttpStatusCode.NotFound, "Group not found", "NOT_FOUND")
                 }
+                val currentMembers = JsonSupport.json.decodeFromString<List<String>>(file.readText())
 
                 val listToRemove = if (req.members.isEmpty()) {
                     listOf(session.username)
                 } else {
                     req.members
+                }
+
+                // Anyone may leave; removing someone else takes the same access as reading the group.
+                if (listToRemove.any { it != session.username }) {
+                    requireMobileGroupAccess(session, group)
                 }
 
                 val newMembersList = currentMembers.filter { m -> !listToRemove.contains(m) }
@@ -3701,6 +3709,22 @@ fun loadChatState(file: File): ChatState {
         JsonSupport.json.decodeFromString<ChatState>(file.readText())
     } catch (_: Exception) {
         ChatState()
+    }
+}
+
+/** A named group's messages and member list are for its members and team admins. A group with no member list isn't restricted. */
+internal fun canAccessMobileGroup(members: List<String>?, username: String, role: UserRole): Boolean =
+    members == null || username in members || role.isAtLeast(UserRole.ADMIN)
+
+private fun requireMobileGroupAccess(session: UserSession, groupName: String) {
+    val membersFile = chatFile("instance/chat/groups/${session.program}/${session.teamNumber}/${groupName}_members.json")
+    val members = if (membersFile.exists()) {
+        runCatching { JsonSupport.json.decodeFromString<List<String>>(membersFile.readText()) }.getOrDefault(emptyList())
+    } else {
+        null
+    }
+    if (!canAccessMobileGroup(members, session.username, session.role)) {
+        throw MobileApiException(HttpStatusCode.Forbidden, "You are not a member of this group", "USER_NOT_IN_SCOPE")
     }
 }
 

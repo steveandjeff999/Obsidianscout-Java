@@ -61,7 +61,7 @@ function updateThemeToggleUI(isDark) {
     const icon = document.getElementById('shared-theme-icon');
     const label = document.getElementById('shared-theme-label');
     if (icon) {
-        icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+        icon.textContent = isDark ? 'light_mode' : 'dark_mode';
     }
     if (label) {
         label.textContent = isDark ? t('shared_viewer.light_mode', 'Light Mode') : t('shared_viewer.dark_mode', 'Dark Mode');
@@ -246,10 +246,10 @@ function renderPayload(payload) {
 
     // Icon
     const icon = document.getElementById('view-icon');
-    if (payload.resourceType === 'graph') icon.className = 'fas fa-chart-line';
-    else if (payload.resourceType.includes('predictor')) icon.className = 'fas fa-brain';
-    else if (payload.resourceType === 'custom_analytics') icon.className = 'fas fa-chart-pie';
-    else icon.className = 'fas fa-table';
+    if (payload.resourceType === 'graph') icon.textContent = 'show_chart';
+    else if (payload.resourceType.includes('predictor')) icon.textContent = 'psychology';
+    else if (payload.resourceType === 'custom_analytics') icon.textContent = 'pie_chart';
+    else icon.textContent = 'table_chart';
 
     // Parse Data
     let queryConfig = {};

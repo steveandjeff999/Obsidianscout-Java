@@ -71,6 +71,9 @@ data class AutoBackupNodeStatusDto(
 
 object SnapshotService {
 
+    /** Far above a JSON backup's limit: a snapshot is the whole database, and a restore is no time to be refused. */
+    const val MAX_UPLOAD_BYTES = 10L * 1024 * 1024 * 1024
+
     private val isSnapshotInProgress = AtomicBoolean(false)
     private val isRestoreInProgress = AtomicBoolean(false)
 

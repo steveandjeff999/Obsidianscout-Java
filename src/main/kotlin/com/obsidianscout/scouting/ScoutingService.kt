@@ -8,6 +8,7 @@ import com.obsidianscout.auth.UserSession
 import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.config.ScoutingConfig
 import com.obsidianscout.db.ScoutingEntries
+import com.obsidianscout.routes.ResolveConflictRequest
 import com.obsidianscout.routes.ScoutingEntryRequest
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.Serializable
@@ -539,6 +540,53 @@ object ScoutingService {
 
             // Recalculate discrepancies
             recalculateDiscrepancies(eventKey, matchKey, targetTeamNumber, isPrescout)
+        }
+    }
+
+    fun resolveConflict(session: UserSession, request: ResolveConflictRequest, config: ScoutingConfig) =
+        applyConflictResolution(
+            request,
+            keptEntryExists = { id -> ScoutingEntries.select(ScoutingEntries.id).where { ScoutingEntries.id eq id }.any() },
+            save = { updateEntry(session, request.keepId, it, config) },
+            delete = { deleteEntry(session, it) }
+        )
+}
+
+/**
+ * Saves the kept entry and deletes the others as one change, using the same permission checks as a single edit or
+ * delete. If any part is refused nothing changes, so a partner's entry can't leave a discrepancy half resolved.
+ * An entry that's gone is a 409: to a client, 404 and 405 here mean a server without this route.
+ */
+internal fun applyConflictResolution(
+    request: ResolveConflictRequest,
+    keptEntryExists: (UUID) -> Boolean,
+    save: (ScoutingEntryRequest) -> Unit,
+    delete: (String) -> Unit
+) {
+    val keepId = runCatching { UUID.fromString(request.keepId) }.getOrElse {
+        throw ApiException(HttpStatusCode.BadRequest, "Invalid entry ID format")
+    }
+    val others = request.deleteIds.filterNot { it.equals(request.keepId, ignoreCase = true) }.distinct()
+    if (request.data == null && others.isEmpty()) {
+        throw ApiException(HttpStatusCode.BadRequest, "Nothing to resolve")
+    }
+    try {
+        transaction {
+            if (!keptEntryExists(keepId)) throw ApiException(HttpStatusCode.NotFound, "Scouting entry not found")
+            request.data?.let { save(ScoutingEntryRequest(it)) }
+            others.forEach(delete)
+        }
+    } catch (e: ApiException) {
+        throw when (e.status) {
+            HttpStatusCode.Forbidden -> ApiException(
+                HttpStatusCode.Forbidden,
+                "You can't resolve this discrepancy because it includes an entry you can't change. Partner teams' entries need the alliance admin. Nothing was changed."
+            )
+            HttpStatusCode.NotFound -> ApiException(
+                HttpStatusCode.Conflict,
+                "These entries changed since you opened them. Refresh and try again. Nothing was changed."
+            )
+            else -> e
         }
     }
 }

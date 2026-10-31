@@ -187,6 +187,13 @@ fun Route.scoutingRoutes() {
                     val entry = ScoutingService.createEntry(session, request, config)
                     call.respond(entry)
                 }
+                post("/resolve") {
+                    val session = call.requireSession()
+                    val request = call.receive<ResolveConflictRequest>()
+                    val config = ConfigService.getConfig(session.teamNumber, session.program)
+                    ScoutingService.resolveConflict(session, request, config)
+                    call.respond(HttpStatusCode.NoContent)
+                }
                 put("/{id}") {
                     val session = call.requireSession()
                     val id = call.parameters["id"]
@@ -219,6 +226,13 @@ fun Route.scoutingRoutes() {
                     val config = ConfigService.getPitConfig(session.teamNumber, session.program)
                     val entry = PitScoutingService.createEntry(session, request, config)
                     call.respond(entry)
+                }
+                post("/resolve") {
+                    val session = call.requireSession()
+                    val request = call.receive<ResolveConflictRequest>()
+                    val config = ConfigService.getPitConfig(session.teamNumber, session.program)
+                    PitScoutingService.resolveConflict(session, request, config)
+                    call.respond(HttpStatusCode.NoContent)
                 }
                 put("/{id}") {
                     val session = call.requireSession()
@@ -283,6 +297,13 @@ fun Route.scoutingRoutes() {
                         results.add(QualitativeScoutingService.createEntry(session, ScoutingEntryRequest(entryData), config))
                     }
                     call.respond(results)
+                }
+                post("/resolve") {
+                    val session = call.requireSession()
+                    val request = call.receive<ResolveConflictRequest>()
+                    val config = ConfigService.getQualitativeConfig(session.teamNumber, session.program)
+                    QualitativeScoutingService.resolveConflict(session, request, config)
+                    call.respond(HttpStatusCode.NoContent)
                 }
                 put("/{id}") {
                     val session = call.requireSession()

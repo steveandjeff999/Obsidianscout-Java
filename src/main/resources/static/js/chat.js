@@ -58,6 +58,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const channelDeleteHint = document.getElementById("channel-delete-hint");
 
     let settingsTargetGroup = "";
+
+    // Creating a group takes an admin on the server.
+    if (!["ADMIN", "SUPERADMIN"].includes((me?.role || "").toUpperCase())) btnCreateGroup.style.display = "none";
     let teamMembersList = [];
     let selectedGroupRoles = [];
     let selectedGroupUserIds = [];

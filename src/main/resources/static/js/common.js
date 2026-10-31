@@ -148,6 +148,11 @@ import {
 } from './components/conflict-modal.js';
 
 import {
+    openEditEntryModal,
+    confirmAndDeleteEntry
+} from './components/edit-entry-modal.js';
+
+import {
     initTour,
     startTour,
     endTour,
@@ -421,6 +426,8 @@ window.Obsidianscout = {
     showLoadingSpinner,
     showRetryButton,
     openConflictResolutionModal,
+    openEditEntryModal,
+    confirmAndDeleteEntry,
     t,
     setLanguage,
     localize,
@@ -556,6 +563,8 @@ export {
     showLoadingSpinner,
     showRetryButton,
     openConflictResolutionModal,
+    openEditEntryModal,
+    confirmAndDeleteEntry,
     t,
     setLanguage,
     localize,
@@ -829,7 +838,29 @@ const FA_TO_MATERIAL = {
     "fa-circle-xmark": "cancel",
     "fa-forward-step": "skip_next",
     "fa-chevron-down": "expand_more",
-    "fa-up-right-and-down-left-from-center": "open_in_full"
+    "fa-up-right-and-down-left-from-center": "open_in_full",
+    "fa-arrow-up-right-from-square": "open_in_new",
+    "fa-chart-area": "area_chart",
+    "fa-chess": "strategy",
+    "fa-circle-notch": "progress_activity",
+    "fa-circle-stop": "stop_circle",
+    "fa-clipboard-check": "assignment_turned_in",
+    "fa-code-compare": "compare_arrows",
+    "fa-database": "database",
+    "fa-file-lines": "description",
+    "fa-floppy-disk": "save",
+    "fa-gauge-high": "speed",
+    "fa-gears": "settings",
+    "fa-id-card": "badge",
+    "fa-people-group": "groups",
+    "fa-robot": "smart_toy",
+    "fa-square-poll-vertical": "poll",
+    "fa-star-half-stroke": "star_half",
+    "fa-table-list": "table_rows",
+    "fa-toolbox": "home_repair_service",
+    "fa-trophy": "emoji_events",
+    "fa-volume-high": "volume_up",
+    "fa-wand-magic-sparkles": "auto_fix_high"
 };
 
 function upgradeElementToMaterial(el) {

@@ -1,5 +1,6 @@
 package com.obsidianscout.auth
 
+import com.obsidianscout.config.AppConfig
 import com.obsidianscout.config.AppConfigLoader
 import com.obsidianscout.db.PasskeyChallenges
 import com.obsidianscout.db.PasskeyCredentials
@@ -42,6 +43,15 @@ object PasskeyService {
     private val cborConverter = objectConverter.cborConverter
     private val webAuthnManager = WebAuthnManager.createNonStrictWebAuthnManager(objectConverter)
     private val secureRandom = SecureRandom()
+    private val log = org.slf4j.LoggerFactory.getLogger(PasskeyService::class.java)
+
+    /** Hosts passkeys may use besides site_url: the names this server is configured to answer on. Never taken from a request. */
+    internal fun configuredHosts(appConfig: AppConfig): Set<String> {
+        val mdns = appConfig.server.mdns.takeIf { it.enabled }?.hostname?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        return (appConfig.server.https.additionalSans.map { it.trim().lowercase() } + listOfNotNull(mdns?.let { "$it.local" }))
+            .filter { it.isNotEmpty() }
+            .toSet()
+    }
 
     fun getEffectiveRpIdAndOrigin(clientOrigin: String? = null, hostHeader: String? = null): Pair<String, Origin> {
         val appConfig = AppConfigLoader.load()
@@ -57,7 +67,8 @@ object PasskeyService {
             val candidateLower = rawHost.lowercase()
             val isLocal = candidateLower == "localhost" || candidateLower == "127.0.0.1"
             val matchesSiteUrl = siteHost.isNotBlank() && (candidateLower == siteHost || candidateLower.endsWith(".$siteHost"))
-            if (rawHost.isNotBlank() && (isLocal || matchesSiteUrl)) {
+            val isConfiguredHost = candidateLower in configuredHosts(appConfig)
+            if (rawHost.isNotBlank() && (isLocal || matchesSiteUrl || isConfiguredHost)) {
                 val rpId = if (candidateLower == "127.0.0.1") "localhost" else (if (matchesSiteUrl) siteHost else rawHost)
                 val scheme = if (isLocal) {
                     parsed?.scheme?.takeIf { it.isNotBlank() } ?: "http"
@@ -69,6 +80,9 @@ object PasskeyService {
                 val portPart = if (port != null) ":$port" else ""
                 val originStr = "$scheme://$rawHost$portPart"
                 return Pair(rpId, Origin.create(originStr))
+            }
+            if (rawHost.isNotBlank()) {
+                log.warn("[Passkey] Request from '$rawHost' doesn't match site_url '${appConfig.getEffectiveSiteUrl()}'. Passkeys will fail there until site_url in config/app-config.json is set to this server's address.")
             }
         }
         val siteUrl = appConfig.getEffectiveSiteUrl()

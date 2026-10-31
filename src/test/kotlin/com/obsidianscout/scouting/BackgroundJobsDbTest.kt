@@ -44,6 +44,7 @@ class BackgroundJobsDbTest {
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
         transaction {
             SchemaUtils.create(
+                com.obsidianscout.db.ScoutingAlliances, com.obsidianscout.db.AllianceMemberships,
                 Users, AppSettings, ApiEvents, ApiTeams, ApiMatches, ScoutingAssignments, ScoutingEntries,
                 PitScoutingEntries, QualitativeScoutingEntries, EntryTombstones, ClusterNotificationLocks
             )

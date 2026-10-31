@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     let ui = {};
     const state = {
+        currentUser: me,
         settings: null,
         config: null,
         fields: [],
@@ -293,7 +294,10 @@ function renderRankingTable(state, ui) {
         const teamEntries = entriesForTeam(state, rowData.teamNumber);
         if (teamEntries.some(e => e.hasDiscrepancy)) {
             const warnSpan = document.createElement("span");
-            warnSpan.textContent = " ⚠️";
+            warnSpan.className = "material-symbols-outlined";
+            warnSpan.textContent = "warning";
+            warnSpan.style.fontSize = "1em";
+            warnSpan.style.marginLeft = "4px";
             warnSpan.style.color = "#eab308";
             warnSpan.style.fontWeight = "bold";
             warnSpan.title = "Discrepancy detected in qualitative scouting data for this team";
@@ -438,7 +442,10 @@ function renderEntrySection(state, ui) {
         tdTeam.textContent = teamLabel(state, entry.targetTeamNumber);
         if (entry.hasDiscrepancy) {
             const warnSpan = document.createElement("span");
-            warnSpan.textContent = " ⚠️";
+            warnSpan.className = "material-symbols-outlined";
+            warnSpan.textContent = "warning";
+            warnSpan.style.fontSize = "1em";
+            warnSpan.style.marginLeft = "4px";
             warnSpan.style.color = "#eab308";
             warnSpan.style.fontWeight = "bold";
             warnSpan.title = "Discrepancy detected between partner teams: " + (entry.conflictingTeams || []).join(", ");
@@ -478,6 +485,39 @@ function renderEntryDetail(state, ui, entry) {
     ui.entryTitle.textContent = `${teamLabel(state, entry.targetTeamNumber)} | ${matchLabel(entry)}`;
     ui.entryStatus.textContent = `${entry.pending ? "Pending" : "Synced"} | ${formatTimestamp(entry.createdAt)}`;
 
+    const canManageQual = state.currentUser && (Obsidianscout.isAdmin(state.currentUser.role) || Obsidianscout.isSuperAdmin(state.currentUser.role));
+    // A pending entry is only on this device: it has no server record to change yet.
+    if (canManageQual && !entry.pending) {
+        const actionRow = document.createElement("div");
+        actionRow.className = "row gap-8 mb-16 wrap align-center";
+        actionRow.style.cssText = "padding-bottom: 12px; border-bottom: 1px solid var(--border-color, #27272a);";
+        actionRow.innerHTML = `
+            <button id="btn-edit-qual-entry" class="btn secondary btn-sm" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+                <span class="material-symbols-outlined" style="font-size:16px;">edit</span> Edit Entry
+            </button>
+            <button id="btn-delete-qual-entry" class="btn danger btn-sm" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; background:rgba(239, 68, 68, 0.15); color:#f87171; border:1px solid rgba(239, 68, 68, 0.3);">
+                <span class="material-symbols-outlined" style="font-size:16px;">delete</span> Delete Entry
+            </button>
+        `;
+        actionRow.querySelector("#btn-edit-qual-entry").addEventListener("click", () => {
+            Obsidianscout.openEditEntryModal({
+                type: "qual",
+                fields: state.config ? state.config.fields || [] : [],
+                entry: entry,
+                onSaved: async () => {
+                    await refreshData(state, ui, { keepSelection: true });
+                }
+            });
+        });
+        actionRow.querySelector("#btn-delete-qual-entry").addEventListener("click", () => {
+            Obsidianscout.confirmAndDeleteEntry(entry, "qual", async () => {
+                state.selectedEntryId = null;
+                await refreshData(state, ui);
+            });
+        });
+        ui.entryDetail.appendChild(actionRow);
+    }
+
     if (entry.hasDiscrepancy) {
         const warnBanner = document.createElement("div");
         warnBanner.className = "sharing-notice mb-12";
@@ -495,9 +535,9 @@ function renderEntryDetail(state, ui, entry) {
                     <div style="font-size:0.85rem; margin-top:2px; color:#cbd5e1;">
                         Different qualitative scouting data exists for this match from partner teams: <strong>${(entry.conflictingTeams || []).join(", ")}</strong>.
                     </div>
-                    <button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                    ${canManageQual ? `<button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
                         <span class="material-symbols-outlined">bolt</span> Resolve Discrepancy
-                    </button>
+                    </button>` : ""}
                 </div>
             </div>
         `;

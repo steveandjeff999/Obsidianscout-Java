@@ -7489,6 +7489,33 @@
     "allPublicFields": true
   },
   {
+    "name": "com.obsidianscout.routes.ResolveConflictRequest$$serializer",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ResolveConflictRequest$Companion",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "com.obsidianscout.routes.ResolveConflictRequest",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
     "name": "com.obsidianscout.routes.ScoutingEntryRequest$$serializer",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
@@ -18440,6 +18467,15 @@
   },
   {
     "name": "com.obsidianscout.integrations.TeamCacheOverrideService",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true,
+    "allPublicFields": true
+  },
+  {
+    "name": "com.obsidianscout.scouting.ScoutingServiceKt",
     "allDeclaredConstructors": true,
     "allPublicConstructors": true,
     "allDeclaredMethods": true,

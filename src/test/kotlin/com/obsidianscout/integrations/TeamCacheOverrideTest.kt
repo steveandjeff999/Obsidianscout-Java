@@ -490,4 +490,60 @@ class TeamCacheOverrideTest {
         assertTrue(IntegrationService.listMatches(event, "FRC", 1111).isEmpty())
         assertEquals(1, IntegrationService.listMatches(event, "FRC", 2222).size)
     }
+
+    @Test
+    fun `batched team counts and event rows match the per event reads`() {
+        TeamCacheOverrideService.saveEvent(alpha, EventRecord("2026cust", "Team Scrimmage", 2026))
+        TeamCacheOverrideService.saveTeam(alpha, TeamRecord("2026cust", "frc9000", 9000))
+        TeamCacheOverrideService.saveTeam(alpha, TeamRecord(event, "frc9001", 9001))
+        TeamCacheOverrideService.deleteTeam(alpha, event, "frc1111")
+        TeamCacheOverrideService.saveEvent(alpha, EventRecord(event, "Alpha's Name", 2026))
+        val keys = listOf(event, "2026cust", "2026none")
+
+        transaction {
+            for (s in listOf(alpha, bravo)) {
+                val counts = TeamCacheOverrideService.teamCounts(keys, s.teamNumber, s.program)
+                val rows = TeamCacheOverrideService.eventRows(keys, s.teamNumber, s.program)
+                for (key in keys) {
+                    assertEquals(TeamCacheOverrideService.teamRows(key, s.teamNumber, s.program).size, counts[key], "$key for ${s.teamNumber}")
+                    val expected = TeamCacheOverrideService.eventRow(key, s.teamNumber, s.program)
+                    assertEquals(expected?.get(ApiEvents.name), rows[key]?.get(ApiEvents.name), "$key for ${s.teamNumber}")
+                    assertEquals(expected?.get(ApiEvents.id), rows[key]?.get(ApiEvents.id), "$key for ${s.teamNumber}")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `deleting an event removes the team's qualitative entries and only theirs`() {
+        val mine = UUID.randomUUID()
+        val theirs = UUID.randomUUID()
+        transaction {
+            val user = Users.insertAndGetId {
+                it[username] = "qual_owner"
+                it[teamNumber] = 1111
+                it[passwordHash] = "x"
+                it[role] = UserRole.SCOUT.name
+                it[createdAt] = Instant.now()
+            }
+            listOf(mine to 1111, theirs to 2222).forEach { (entryId, owner) ->
+                QualitativeScoutingEntries.insert {
+                    it[id] = entryId
+                    it[ownerTeamNumber] = owner
+                    it[targetTeamNumber] = 1
+                    it[eventKey] = event
+                    it[QualitativeScoutingEntries.matchKey] = this@TeamCacheOverrideTest.matchKey
+                    it[matchNumber] = 1
+                    it[dataJson] = "{}"
+                    it[submittedByUserId] = user
+                    it[createdAt] = Instant.now()
+                }
+            }
+        }
+
+        assertTrue(TeamCacheOverrideService.deleteEvent(alpha, event))
+
+        val left = transaction { QualitativeScoutingEntries.selectAll().map { it[QualitativeScoutingEntries.id].value } }
+        assertEquals(listOf(theirs), left)
+    }
 }

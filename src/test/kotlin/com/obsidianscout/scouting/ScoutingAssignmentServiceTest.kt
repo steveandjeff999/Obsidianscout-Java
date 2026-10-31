@@ -38,6 +38,7 @@ class ScoutingAssignmentServiceTest {
         Database.connect("jdbc:sqlite:${testDbFile.absolutePath}", driver = "org.sqlite.JDBC")
         transaction {
             SchemaUtils.create(
+                com.obsidianscout.db.ScoutingAlliances, com.obsidianscout.db.AllianceMemberships,
                 Users, ScoutingEntries, PitScoutingEntries, QualitativeScoutingEntries,
                 ApiMatches, TeamCacheOverrides, ApiTeams, ScoutingAssignments
             )

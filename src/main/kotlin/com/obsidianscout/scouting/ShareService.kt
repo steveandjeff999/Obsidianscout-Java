@@ -660,6 +660,11 @@ object ShareService {
                 throw ApiException(HttpStatusCode.Forbidden, "You do not have permission to update this link")
             }
 
+            val requestedScope = req.accessScope?.takeIf { it.isNotBlank() }?.lowercase()?.let { if (it == "pin_protected") "pin" else it }
+            if (requestedScope == "pin" && req.pin.isNullOrBlank() && target[SharedLinks.pinHash].isNullOrBlank()) {
+                throw ApiException(HttpStatusCode.BadRequest, "A PIN is required when access scope is PIN protected")
+            }
+
             SharedLinks.update({ SharedLinks.token eq token }) {
                 if (req.title != null && req.title.isNotBlank()) {
                     it[title] = req.title.trim().take(128)
@@ -667,10 +672,9 @@ object ShareService {
                 if (req.description != null) {
                     it[description] = req.description.take(1000)
                 }
-                if (req.accessScope != null && req.accessScope.isNotBlank()) {
-                    val newScope = req.accessScope.lowercase()
-                    it[accessScope] = newScope
-                    if (newScope != "pin" && req.pin == null) {
+                if (requestedScope != null) {
+                    it[accessScope] = requestedScope
+                    if (requestedScope != "pin" && req.pin == null) {
                         it[pinHash] = null
                     }
                 }

@@ -10,6 +10,7 @@ import com.obsidianscout.config.ScoutingConfig
 import com.obsidianscout.db.*
 import com.obsidianscout.integrations.TeamCacheOverrideService
 import com.obsidianscout.routes.EventRecord
+import com.obsidianscout.routes.ResolveConflictRequest
 import com.obsidianscout.routes.ScoutingEntryRequest
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.runBlocking
@@ -563,6 +564,109 @@ class TeamIsolationTest {
             val ftcPred = MatchPredictions.selectAll().where { MatchPredictions.userId eq ftc100.userId }.single()
             assertEquals("2026renamed", frcPred[MatchPredictions.eventKey])
             assertEquals("2026custom", ftcPred[MatchPredictions.eventKey])
+        }
+    }
+
+    private fun scoutingData(value: Int) =
+        parseJsonObj("""{"targetTeamNumber":254,"eventKey":"2026txhou","matchKey":"2026txhou_qm1","matchNumber":1,"a":$value}""")
+
+    private fun storedMatchEntries() = transaction {
+        ScoutingEntries.selectAll().associate { it[ScoutingEntries.id].value.toString() to parseJsonObj(it[ScoutingEntries.dataJson])["a"].toString() }
+    }
+
+    @Test
+    fun testResolvingAConflictSavesTheMergeAndDeletesTheOthersTogether() {
+        val admin = createUser("resolve_admin", 100, "FRC", UserRole.ADMIN)
+        val scout = createUser("resolve_scout", 100, "FRC", UserRole.SCOUT)
+        val config = ScoutingConfig(title = "Test", fields = emptyList())
+        val kept = ScoutingService.createEntry(admin, ScoutingEntryRequest(scoutingData(1)), config)
+        val other = ScoutingService.createEntry(scout, ScoutingEntryRequest(scoutingData(2)), config)
+
+        ScoutingService.resolveConflict(admin, ResolveConflictRequest(kept.id, scoutingData(3), listOf(other.id)), config)
+
+        assertEquals(mapOf(kept.id to "3"), storedMatchEntries())
+    }
+
+    @Test
+    fun testResolvingAConflictChangesNothingWhenAPartnerEntryIsRefused() {
+        val admin = createUser("resolve_admin", 100, "FRC", UserRole.ADMIN)
+        val partner = createUser("resolve_partner", 200, "FRC", UserRole.ADMIN)
+        val scout = createUser("resolve_scout", 100, "FRC", UserRole.SCOUT)
+        val config = ScoutingConfig(title = "Test", fields = emptyList())
+        val kept = ScoutingService.createEntry(admin, ScoutingEntryRequest(scoutingData(1)), config)
+        val own = ScoutingService.createEntry(scout, ScoutingEntryRequest(scoutingData(2)), config)
+        val theirs = ScoutingService.createEntry(partner, ScoutingEntryRequest(scoutingData(4)), config)
+        val before = storedMatchEntries()
+
+        val refused = assertFailsWith<ApiException> {
+            ScoutingService.resolveConflict(admin, ResolveConflictRequest(kept.id, scoutingData(3), listOf(own.id, theirs.id)), config)
+        }
+
+        assertEquals(HttpStatusCode.Forbidden, refused.status)
+        assertEquals(before, storedMatchEntries(), "the merge and the delete of the team's own entry are both undone")
+    }
+
+    @Test
+    fun testResolvingAConflictIsAConflictWhenAnEntryIsAlreadyGone() {
+        val admin = createUser("resolve_admin", 100, "FRC", UserRole.ADMIN)
+        val config = ScoutingConfig(title = "Test", fields = emptyList())
+        val kept = ScoutingService.createEntry(admin, ScoutingEntryRequest(scoutingData(1)), config)
+        val missing = UUID.randomUUID().toString()
+
+        for (request in listOf(ResolveConflictRequest(kept.id, deleteIds = listOf(missing)), ResolveConflictRequest(missing, deleteIds = listOf(kept.id)))) {
+            val failure = assertFailsWith<ApiException> { ScoutingService.resolveConflict(admin, request, config) }
+            assertEquals(HttpStatusCode.Conflict, failure.status)
+        }
+        assertEquals(mapOf(kept.id to "1"), storedMatchEntries())
+    }
+
+    @Test
+    fun testResolvingPitAndQualConflictsRollsBackToo() {
+        val admin = createUser("resolve_admin", 100, "FRC", UserRole.ADMIN)
+        val partner = createUser("resolve_partner", 200, "FRC", UserRole.ADMIN)
+        val config = ScoutingConfig(title = "Test", fields = emptyList())
+        val pitData = { value: Int -> parseJsonObj("""{"targetTeamNumber":254,"eventKey":"2026txhou","a":$value}""") }
+        val pit = PitScoutingService.createEntry(admin, ScoutingEntryRequest(pitData(1)), config)
+        val partnerPit = PitScoutingService.createEntry(partner, ScoutingEntryRequest(pitData(2)), config)
+        val qual = QualitativeScoutingService.createEntry(admin, ScoutingEntryRequest(scoutingData(1)), config)
+        val partnerQual = QualitativeScoutingService.createEntry(partner, ScoutingEntryRequest(scoutingData(2)), config)
+
+        assertFailsWith<ApiException> {
+            PitScoutingService.resolveConflict(admin, ResolveConflictRequest(pit.id, pitData(9), listOf(partnerPit.id)), config)
+        }
+        assertFailsWith<ApiException> {
+            QualitativeScoutingService.resolveConflict(admin, ResolveConflictRequest(qual.id, scoutingData(9), listOf(partnerQual.id)), config)
+        }
+
+        transaction {
+            assertEquals(2, PitScoutingEntries.selectAll().count())
+            assertEquals(2, QualitativeScoutingEntries.selectAll().count())
+            val savedPit = PitScoutingEntries.selectAll().first { it[PitScoutingEntries.id].value.toString() == pit.id }
+            assertEquals("1", parseJsonObj(savedPit[PitScoutingEntries.dataJson])["a"].toString())
+            val savedQual = QualitativeScoutingEntries.selectAll().first { it[QualitativeScoutingEntries.id].value.toString() == qual.id }
+            assertEquals("1", parseJsonObj(savedQual[QualitativeScoutingEntries.dataJson])["a"].toString())
+        }
+    }
+
+    @Test
+    fun testShareLinkKeepsItsPinWhenScopeIsSetToPinProtected(): Unit = runBlocking {
+        val admin = createUser("pin_admin", 301, "FRC", UserRole.ADMIN)
+        val request = CreateShareRequest(
+            title = "Pin Share",
+            resourceType = "event_overview",
+            targetEventKey = "2026txhou",
+            shareMode = "snapshot",
+            queryConfigJson = "{}",
+            snapshotDataJson = """{"teams":[]}"""
+        )
+        val pinned = ShareService.createShare(admin, request.copy(accessScope = "pin", pin = "4321"))
+        val updated = ShareService.updateShare(pinned.token, UpdateShareRequest(accessScope = "pin_protected"), admin)
+        assertEquals("pin", updated.accessScope)
+        assertEquals(true, updated.hasPin)
+
+        val open = ShareService.createShare(admin, request.copy(accessScope = "public"))
+        assertFailsWith<com.obsidianscout.auth.ApiException> {
+            ShareService.updateShare(open.token, UpdateShareRequest(accessScope = "pin"), admin)
         }
     }
 }

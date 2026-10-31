@@ -834,11 +834,7 @@ object AllianceService {
     fun getAlliancePartnerTeams(teamNumber: Int, program: String = "FRC"): Set<Int> {
         // Public data is the owner team's own entries only: partners never agreed to publish theirs.
         if (com.obsidianscout.publicdata.PublicViewContext.current() != null) return emptySet()
-        return try {
-            queryAlliancePartnerTeams(teamNumber, program)
-        } catch (_: Throwable) {
-            emptySet()
-        }
+        return queryAlliancePartnerTeams(teamNumber, program)
     }
 
     private fun queryAlliancePartnerTeams(teamNumber: Int, program: String): Set<Int> = readTransaction {
@@ -873,22 +869,18 @@ object AllianceService {
      * Checks if a team has an active (ACCEPTED or ADMIN) alliance membership
      * and returns the alliance ID.
      */
-    fun getActiveAllianceId(teamNumber: Int, program: String = "FRC"): UUID? = try {
-        readTransaction {
-            AllianceMemberships
-                .selectAll().where {
-                    (AllianceMemberships.teamNumber eq teamNumber) and
-                    (AllianceMemberships.program eq program) and
-                    (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
-                    (AllianceMemberships.disabled eq false) and
-                    (AllianceMemberships.active eq true)
-                }
-                .firstOrNull()
-                ?.get(AllianceMemberships.allianceId)
-                ?.value
-        }
-    } catch (_: Throwable) {
-        null
+    fun getActiveAllianceId(teamNumber: Int, program: String = "FRC"): UUID? = readTransaction {
+        AllianceMemberships
+            .selectAll().where {
+                (AllianceMemberships.teamNumber eq teamNumber) and
+                (AllianceMemberships.program eq program) and
+                (AllianceMemberships.status inList listOf(STATUS_ADMIN, STATUS_ACCEPTED)) and
+                (AllianceMemberships.disabled eq false) and
+                (AllianceMemberships.active eq true)
+            }
+            .firstOrNull()
+            ?.get(AllianceMemberships.allianceId)
+            ?.value
     }
 
     /**

@@ -9,6 +9,7 @@ import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.config.ScoutingConfig
 import com.obsidianscout.db.QualitativeScoutingEntries
 import com.obsidianscout.db.Users
+import com.obsidianscout.routes.ResolveConflictRequest
 import com.obsidianscout.routes.ScoutingEntryRequest
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.Serializable
@@ -533,6 +534,14 @@ object QualitativeScoutingService {
             recalculateDiscrepancies(eventKey, matchKey, targetTeamNumber, isPrescout)
         }
     }
+
+    fun resolveConflict(session: UserSession, request: ResolveConflictRequest, config: ScoutingConfig) =
+        applyConflictResolution(
+            request,
+            keptEntryExists = { id -> QualitativeScoutingEntries.select(QualitativeScoutingEntries.id).where { QualitativeScoutingEntries.id eq id }.any() },
+            save = { updateEntry(session, request.keepId, it, config) },
+            delete = { deleteEntry(session, it) }
+        )
 }
 
 private data class QualitativeScoutingMeta(

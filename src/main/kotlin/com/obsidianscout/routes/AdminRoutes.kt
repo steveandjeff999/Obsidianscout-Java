@@ -393,7 +393,10 @@ fun Route.adminRoutes() {
                         }
                     }
 
-                    call.respond(mapOf("success" to true))
+                    // The key's row is gone, so a copy left in memory would encrypt data nothing can read after a restart.
+                    com.obsidianscout.auth.ClusterSecretService.forgetDataEncryptionKey()
+                    // Every node still holds caches of what was just deleted, and presets only load at startup.
+                    call.respond(com.obsidianscout.admin.ClusterManagementService.restartAllProcesses())
                 }
 
                 post("/wipe-team-data") {
@@ -432,13 +435,16 @@ fun Route.adminRoutes() {
                         }
 
                         // Delete team's alliance selection data
-                        // Board rows are keyed "team_<n>_<program>" (legacy FRC rows "team_<n>"); pick lists have their own key.
+                        // Board rows are keyed "team_<n>_<program>"; pick lists have their own key. Legacy keys carry
+                        // no program and predate FTC, so they're FRC's: an FTC team must not delete them.
+                        val isFrc = session.program.equals("FRC", ignoreCase = true)
                         val ownerKeys = listOfNotNull(
                             "team_${session.teamNumber}_${session.program}",
-                            if (session.program.equals("FRC", ignoreCase = true)) "team_${session.teamNumber}" else null,
+                            if (isFrc) "team_${session.teamNumber}" else null,
                             "${session.program}_${session.teamNumber}",
-                            session.teamNumber.toString(),
-                            com.obsidianscout.scouting.AllianceSelectionService.pickListOwnerKey(session.teamNumber, session.program)
+                            if (isFrc) session.teamNumber.toString() else null,
+                            com.obsidianscout.scouting.AllianceSelectionService.pickListOwnerKey(session.teamNumber, session.program),
+                            com.obsidianscout.scouting.AllianceSelectionService.rankedPickListOwnerKey(session.teamNumber, session.program)
                         )
                         com.obsidianscout.db.AllianceSelections.deleteWhere {
                             com.obsidianscout.db.AllianceSelections.ownerKey inList ownerKeys
@@ -666,7 +672,7 @@ fun Route.adminRoutes() {
 
                     post("/restore-upload") {
                         call.requireSuperAdmin()
-                        val multipart = call.receiveMultipart()
+                        val multipart = call.receiveMultipart(formFieldLimit = com.obsidianscout.db.SnapshotService.MAX_UPLOAD_BYTES)
                         var uploadedFile: File? = null
                         while (true) {
                             val part = multipart.readPart() ?: break
@@ -674,19 +680,24 @@ fun Route.adminRoutes() {
                                 val tempFile = File.createTempFile("restore-upload-", ".db")
                                 var totalBytes = 0L
                                 val buffer = ByteArray(8192)
-                                part.streamProvider().use { input ->
-                                    tempFile.outputStream().use { output ->
-                                        while (true) {
-                                            val read = input.read(buffer)
-                                            if (read == -1) break
-                                            totalBytes += read
-                                            if (totalBytes > com.obsidianscout.db.BackupService.MAX_IMPORT_BYTES) {
-                                                tempFile.delete()
-                                                throw com.obsidianscout.auth.ApiException(HttpStatusCode.PayloadTooLarge, "Uploaded snapshot exceeds maximum size limit")
+                                try {
+                                    part.streamProvider().use { input ->
+                                        tempFile.outputStream().use { output ->
+                                            while (true) {
+                                                val read = input.read(buffer)
+                                                if (read == -1) break
+                                                totalBytes += read
+                                                if (totalBytes > com.obsidianscout.db.SnapshotService.MAX_UPLOAD_BYTES) {
+                                                    throw com.obsidianscout.auth.ApiException(HttpStatusCode.PayloadTooLarge, "Uploaded snapshot exceeds maximum size limit")
+                                                }
+                                                output.write(buffer, 0, read)
                                             }
-                                            output.write(buffer, 0, read)
                                         }
                                     }
+                                } catch (e: Throwable) {
+                                    // After the stream closes: Windows can't delete a file that's still open.
+                                    tempFile.delete()
+                                    throw e
                                 }
                                 uploadedFile = tempFile
                             }
@@ -785,6 +796,13 @@ fun Route.adminRoutes() {
                         call.requireSuperAdminOrClusterAuth()
                         val localIp = com.obsidianscout.admin.ClusterManagementService.getLocalTailscaleIp()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.rebootNode(localIp))
+                    }
+                    post("/nodes/local/restart-process") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val delayMs = (call.request.queryParameters["delayMs"]?.toLongOrNull() ?: 0L)
+                            .coerceIn(0L, com.obsidianscout.admin.ClusterManagementService.MAX_RESTART_DELAY_MS)
+                        com.obsidianscout.admin.ClusterManagementService.restartLocalProcess(delayMs)
+                        call.respond(HttpStatusCode.OK)
                     }
                     post("/nodes/local/reinstall-update") {
                         call.requireSuperAdminOrClusterAuth()

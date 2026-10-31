@@ -9,6 +9,7 @@ import com.obsidianscout.config.JsonSupport
 import com.obsidianscout.config.ScoutingConfig
 import com.obsidianscout.db.PitScoutingEntries
 import com.obsidianscout.db.Users
+import com.obsidianscout.routes.ResolveConflictRequest
 import com.obsidianscout.routes.ScoutingEntryRequest
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.Serializable
@@ -470,6 +471,14 @@ object PitScoutingService {
             recalculateDiscrepancies(eventKey, targetTeamNumber, isPrescout)
         }
     }
+
+    fun resolveConflict(session: UserSession, request: ResolveConflictRequest, config: ScoutingConfig) =
+        applyConflictResolution(
+            request,
+            keptEntryExists = { id -> PitScoutingEntries.select(PitScoutingEntries.id).where { PitScoutingEntries.id eq id }.any() },
+            save = { updateEntry(session, request.keepId, it, config) },
+            delete = { deleteEntry(session, it) }
+        )
 }
 
 private const val MAX_PIT_IMAGE_BYTES = 2L * 1024 * 1024

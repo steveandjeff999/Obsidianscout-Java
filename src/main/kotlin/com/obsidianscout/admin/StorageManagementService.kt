@@ -827,7 +827,16 @@ object StorageManagementService {
                 }.toLong()
             }
 
-            val ownerKeys = listOf("$progUpper:$teamNumber", "$progLower:$teamNumber", "$teamNumber")
+            // Board rows are keyed "team_<n>_<program>"; pick lists have their own keys. Legacy keys carry no program
+            // and predate FTC, so they're FRC's: an FTC team with the same number must not delete them.
+            val ownerKeys = listOf(progUpper, progLower).flatMap { prog ->
+                listOf(
+                    "team_${teamNumber}_$prog",
+                    "${prog}_$teamNumber",
+                    com.obsidianscout.scouting.AllianceSelectionService.pickListOwnerKey(teamNumber, prog),
+                    com.obsidianscout.scouting.AllianceSelectionService.rankedPickListOwnerKey(teamNumber, prog)
+                )
+            } + (if (progUpper == "FRC") listOf("team_$teamNumber", "$teamNumber") else emptyList())
 
             deletedRecords += ScoutingAssignments.deleteWhere {
                 (ScoutingAssignments.ownerTeamNumber eq teamNumber) and ((ScoutingAssignments.program eq progUpper) or (ScoutingAssignments.program eq progLower))

@@ -523,16 +523,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     function updateHeaderSortIndicators() {
         document.querySelectorAll("#user-table th.sortable").forEach((th) => {
             const col = th.getAttribute("data-sort");
-            const indicator = th.querySelector(".sort-indicator i");
+            const indicator = th.querySelector(".sort-indicator .material-symbols-outlined");
             if (col === currentSortBy) {
                 th.classList.add("sorted");
                 if (indicator) {
-                    indicator.className = currentSortDir === "asc" ? "fa-solid fa-arrow-up" : "fa-solid fa-arrow-down";
+                    indicator.textContent = currentSortDir === "asc" ? "arrow_upward" : "arrow_downward";
                 }
             } else {
                 th.classList.remove("sorted");
                 if (indicator) {
-                    indicator.className = "fa-solid fa-sort";
+                    indicator.textContent = "unfold_more";
                 }
             }
         });

@@ -665,6 +665,61 @@ object ClusterManagementService {
         }
     }
 
+    /**
+     * Ends this server's process, and the run script starts it again. [rebootNode] can't replace this on CockroachDB: it
+     * restarts the database and keeps the app running, so everything held in memory would survive.
+     */
+    fun restartLocalProcess(delayMs: Long) {
+        ServerLogService.appendLog("WARN", "ClusterManagementService", "This server's process will restart in ${delayMs / 1000}s.")
+        CoroutineScope(Dispatchers.IO).launch {
+            delay(delayMs)
+            exitProcess(0)
+        }
+    }
+
+    /** When each node restarts: one at a time so CockroachDB can keep quorum, with the local node last (the final entry). */
+    internal fun processRestartDelays(peerCount: Int): List<Long> =
+        List(peerCount + 1) { FIRST_RESTART_DELAY_MS + it * RESTART_SPACING_MS }
+
+    /** Restarts every node's process. An unreachable node is reported in the message and doesn't stop the others. */
+    suspend fun restartAllProcesses(): ActionResultResponse = withContext(Dispatchers.IO) {
+        val peers = try {
+            getClusterNodes().nodes.filterNot { it.isLocal }
+        } catch (e: Exception) {
+            ServerLogService.appendLog("WARN", "ClusterManagementService", "Could not list cluster nodes for restart: ${e.message}")
+            emptyList()
+        }
+        val delays = processRestartDelays(peers.size)
+        val unreachable = peers.zip(delays).filterNot { (node, delayMs) -> requestPeerProcessRestart(node.ip, delayMs) }.map { it.first.ip }
+        restartLocalProcess(delays.last())
+
+        val failed = if (unreachable.isEmpty()) "" else " Restart these servers yourself: ${unreachable.joinToString(", ")}."
+        ActionResultResponse(
+            success = true,
+            message = "Restarting ${peers.size - unreachable.size + 1} of ${peers.size + 1} servers.$failed",
+            targetIp = "all-nodes"
+        )
+    }
+
+    private fun requestPeerProcessRestart(ip: String, delayMs: Long): Boolean = try {
+        val appPort = AppConfigLoader.load().server.port
+        val req = buildSignedClusterRequest("http://$ip:$appPort/api/admin/cluster/nodes/local/restart-process?delayMs=$delayMs", "POST")
+            .timeout(Duration.ofSeconds(5))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build()
+        getHttpClient().send(req, HttpResponse.BodyHandlers.ofString()).statusCode() == 200
+    } catch (e: Exception) {
+        if (e.message?.contains("selector manager closed") == true) {
+            resetHttpClient()
+        }
+        ServerLogService.appendLog("WARN", "ClusterManagementService", "Could not ask $ip to restart: ${e.message}")
+        false
+    }
+
+    private const val FIRST_RESTART_DELAY_MS = 3_000L
+    private const val RESTART_SPACING_MS = 30_000L
+    internal const val MAX_RESTART_DELAY_MS = 30L * 60 * 1000
+
     suspend fun forceReinstallUpdateNode(targetIp: String): ActionResultResponse = withContext(Dispatchers.IO) {
         val localIp = getLocalTailscaleIp()
         val isLocal = (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank())

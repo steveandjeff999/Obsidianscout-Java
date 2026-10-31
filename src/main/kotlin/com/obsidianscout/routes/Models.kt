@@ -301,6 +301,14 @@ data class NodeAlertsEnrollmentResponse(
     val message: String
 )
 
+/** Settles a discrepancy: keeps [keepId], saved with [data] when merging, and deletes [deleteIds]. */
+@Serializable
+data class ResolveConflictRequest(
+    val keepId: String,
+    val data: JsonObject? = null,
+    val deleteIds: List<String> = emptyList()
+)
+
 @Serializable
 data class ScoutingEntryRequest(
     val data: JsonObject,

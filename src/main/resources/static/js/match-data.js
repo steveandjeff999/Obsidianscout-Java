@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireThemeToggle();
 
     const state = {
+        currentUser: me,
         settings: null,
         eventKey: "",
         events: [],
@@ -434,7 +435,10 @@ function renderTableAndDetail(state) {
         tdTeam.textContent = teamLabel;
         if (row.hasDiscrepancy) {
             const warnSpan = document.createElement("span");
-            warnSpan.textContent = " ⚠️";
+            warnSpan.className = "material-symbols-outlined";
+            warnSpan.textContent = "warning";
+            warnSpan.style.fontSize = "1em";
+            warnSpan.style.marginLeft = "4px";
             warnSpan.style.color = "#eab308";
             warnSpan.style.fontWeight = "bold";
             warnSpan.title = "Discrepancy detected between partner teams: " + (row.conflictingTeams || []).join(", ");
@@ -490,6 +494,38 @@ function renderDetail(state, entry) {
     title.textContent = `${matchLabel}: ${teamLabel}`;
     status.textContent = `Scouted by ${Obsidianscout.formatScouter(entry)}`;
 
+    const canManageMatch = state.currentUser && (Obsidianscout.isAdmin(state.currentUser.role) || Obsidianscout.isSuperAdmin(state.currentUser.role));
+    if (canManageMatch) {
+        const actionRow = document.createElement("div");
+        actionRow.className = "row gap-8 mb-16 wrap align-center";
+        actionRow.style.cssText = "padding-bottom: 12px; border-bottom: 1px solid var(--border-color, #27272a);";
+        actionRow.innerHTML = `
+            <button id="btn-edit-match-entry" class="btn secondary btn-sm" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+                <span class="material-symbols-outlined" style="font-size:16px;">edit</span> Edit Entry
+            </button>
+            <button id="btn-delete-match-entry" class="btn danger btn-sm" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; background:rgba(239, 68, 68, 0.15); color:#f87171; border:1px solid rgba(239, 68, 68, 0.3);">
+                <span class="material-symbols-outlined" style="font-size:16px;">delete</span> Delete Entry
+            </button>
+        `;
+        actionRow.querySelector("#btn-edit-match-entry").addEventListener("click", () => {
+            Obsidianscout.openEditEntryModal({
+                type: "match",
+                fields: state.config ? state.config.fields || [] : [],
+                entry: entry,
+                onSaved: async () => {
+                    if (typeof state.reload === 'function') await state.reload();
+                }
+            });
+        });
+        actionRow.querySelector("#btn-delete-match-entry").addEventListener("click", () => {
+            Obsidianscout.confirmAndDeleteEntry(entry, "match", async () => {
+                state.selectedEntryId = null;
+                if (typeof state.reload === 'function') await state.reload();
+            });
+        });
+        container.appendChild(actionRow);
+    }
+
     if (entry.hasDiscrepancy) {
         const warnBanner = document.createElement("div");
         warnBanner.className = "sharing-notice mb-12";
@@ -501,15 +537,15 @@ function renderDetail(state, entry) {
         warnBanner.style.border = "1px solid #eab308";
         warnBanner.innerHTML = `
             <div style="display:flex; align-items:flex-start; gap:10px;">
-                <span class="icon" style="font-size:1.2rem;">⚠️</span>
+                <span class="icon" style="font-size:1.2rem;"><span class="material-symbols-outlined">warning</span></span>
                 <div style="flex:1;">
                     <div style="font-weight:700; color:#fbbf24;">Discrepancy Detected</div>
                     <div style="font-size:0.85rem; margin-top:2px; color:#cbd5e1;">
                         Different scouting data exists for this entry from partner teams: <strong>${(entry.conflictingTeams || []).join(", ")}</strong>.
                     </div>
-                    <button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
-                        ⚡ Resolve Discrepancy
-                    </button>
+                    ${canManageMatch ? `<button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                        <span class="material-symbols-outlined">bolt</span> Resolve Discrepancy
+                    </button>` : ""}
                 </div>
             </div>
         `;

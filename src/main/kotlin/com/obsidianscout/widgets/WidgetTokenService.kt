@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -76,6 +77,19 @@ object WidgetTokenService {
         val sessionUuid = sessionId?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: return
         lastResolved.values.removeIf { it.resolved.session.sessionId == sessionUuid.toString() }
         transaction { WidgetTokens.deleteWhere { WidgetTokens.sessionId eq sessionUuid } }
+    }
+
+    /** Ends all of a user's widget tokens, or all but the ones belonging to [keepSessionId]. */
+    fun revokeForUser(userId: UUID, keepSessionId: UUID? = null) {
+        val user = userId.toString()
+        val keep = keepSessionId?.toString()
+        lastResolved.values.removeIf { it.resolved.session.userId == user && (keep == null || it.resolved.session.sessionId != keep) }
+        transaction {
+            WidgetTokens.deleteWhere {
+                if (keepSessionId == null) WidgetTokens.userId eq userId
+                else (WidgetTokens.userId eq userId) and (WidgetTokens.sessionId neq keepSessionId)
+            }
+        }
     }
 
     /**

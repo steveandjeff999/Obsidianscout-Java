@@ -98,6 +98,29 @@ class WidgetTokenServiceTest {
     }
 
     @Test
+    fun loggingOutOtherDevicesKeepsThisDevicesTokenAndEndsTheOthers() {
+        val otherSession = UUID.randomUUID()
+        transaction {
+            UserSessions.insert {
+                it[id] = otherSession
+                it[UserSessions.userId] = this@WidgetTokenServiceTest.userId
+                it[clientType] = "mobile"
+                it[createdAt] = Instant.now()
+                it[lastActiveAt] = Instant.now()
+                it[expiresAt] = Instant.now().plus(Duration.ofDays(7))
+            }
+        }
+        val mine = WidgetTokenService.issue(session(), "android")
+        val theirs = WidgetTokenService.issue(session().copy(sessionId = otherSession.toString()), "ios")
+        assertNotNull(WidgetTokenService.resolve(theirs.token))
+
+        AuthService.revokeAllOtherSessions(userId, sessionId.toString())
+
+        assertNotNull(WidgetTokenService.resolve(mine.token))
+        assertNull(WidgetTokenService.resolve(theirs.token))
+    }
+
+    @Test
     fun reissuingReplacesTheOldTokenAndBadTokensFail() {
         val first = WidgetTokenService.issue(session(), "android")
         val second = WidgetTokenService.issue(session(), "android")

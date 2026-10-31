@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireThemeToggle();
 
     const state = {
+        currentUser: me,
         settings: null,
         config: null,
         fields: [],
@@ -63,7 +64,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             state.fields = buildDisplayFields((state.config && state.config.fields) || []);
             state.entries = (Array.isArray(entries) ? entries : []).map(e => {
                 if (e.isPrescout) {
-                    return { ...e, eventKey: "prescout" };
+                    return { ...e, eventKey: "prescout", rawEventKey: e.eventKey };
                 }
                 return e;
             });
@@ -199,7 +200,10 @@ function renderTable(state) {
         tdTeam.textContent = teamLabel(rowData);
         if (rowData.entry && rowData.entry.hasDiscrepancy) {
             const warnSpan = document.createElement("span");
-            warnSpan.textContent = " ⚠️";
+            warnSpan.className = "material-symbols-outlined";
+            warnSpan.textContent = "warning";
+            warnSpan.style.fontSize = "1em";
+            warnSpan.style.marginLeft = "4px";
             warnSpan.style.color = "#eab308";
             warnSpan.style.fontWeight = "bold";
             warnSpan.title = "Discrepancy detected between partner teams: " + (rowData.entry.conflictingTeams || []).join(", ");
@@ -242,6 +246,37 @@ function renderDetail(state) {
     title.textContent = teamLabel(selected);
     status.textContent = selected.entry ? `${(window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('pitdata.updated','Updated') : 'Updated'} ${formatDateTime(selected.entry.createdAt)}` : ((window.Obsidianscout && typeof Obsidianscout.t === 'function') ? Obsidianscout.t('pitdata.needs_pit','Needs pit scouting') : 'Needs pit scouting');
 
+    const canManagePit = state.currentUser && (Obsidianscout.isAdmin(state.currentUser.role) || Obsidianscout.isSuperAdmin(state.currentUser.role));
+    if (canManagePit && selected.entry) {
+        const actionRow = document.createElement("div");
+        actionRow.className = "row gap-8 mb-16 wrap align-center";
+        actionRow.style.cssText = "padding-bottom: 12px; border-bottom: 1px solid var(--border-color, #27272a);";
+        actionRow.innerHTML = `
+            <button id="btn-edit-pit-entry" class="btn secondary btn-sm" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+                <span class="material-symbols-outlined" style="font-size:16px;">edit</span> Edit Entry
+            </button>
+            <button id="btn-delete-pit-entry" class="btn danger btn-sm" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; background:rgba(239, 68, 68, 0.15); color:#f87171; border:1px solid rgba(239, 68, 68, 0.3);">
+                <span class="material-symbols-outlined" style="font-size:16px;">delete</span> Delete Entry
+            </button>
+        `;
+        actionRow.querySelector("#btn-edit-pit-entry").addEventListener("click", () => {
+            Obsidianscout.openEditEntryModal({
+                type: "pit",
+                fields: state.config ? state.config.fields || [] : [],
+                entry: selected.entry,
+                onSaved: async () => {
+                    if (typeof state.reload === 'function') await state.reload();
+                }
+            });
+        });
+        actionRow.querySelector("#btn-delete-pit-entry").addEventListener("click", () => {
+            Obsidianscout.confirmAndDeleteEntry(selected.entry, "pit", async () => {
+                if (typeof state.reload === 'function') await state.reload();
+            });
+        });
+        detail.appendChild(actionRow);
+    }
+
     if (selected.entry && selected.entry.hasDiscrepancy) {
         const warnBanner = document.createElement("div");
         warnBanner.className = "sharing-notice mb-12";
@@ -259,9 +294,9 @@ function renderDetail(state) {
                     <div style="font-size:0.85rem; margin-top:2px; color:#cbd5e1;">
                         Different pit scouting data exists for this team from partner teams: <strong>${(selected.entry.conflictingTeams || []).join(", ")}</strong>.
                     </div>
-                    <button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                    ${canManagePit ? `<button id="btn-resolve-conflict" class="btn primary btn-sm" style="margin-top:8px; background:#eab308; color:#0f172a; font-weight:700; border:none; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
                         <span class="material-symbols-outlined">bolt</span> Resolve Discrepancy
-                    </button>
+                    </button>` : ""}
                 </div>
             </div>
         `;

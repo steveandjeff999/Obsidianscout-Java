@@ -292,4 +292,80 @@ class StorageManagementServiceTest {
         val reclaimRes = StorageManagementService.reclaimDiskSpace()
         assertTrue(reclaimRes.success)
     }
+
+    @Test
+    fun deleteTeamDataRemovesEveryOwnerKeyedRowAndLeavesOtherTeams() {
+        val now = Instant.now()
+        val selectionKeys = listOf(
+            "team_254_FRC",
+            "team_254",
+            com.obsidianscout.scouting.AllianceSelectionService.pickListOwnerKey(254, "FRC"),
+            com.obsidianscout.scouting.AllianceSelectionService.rankedPickListOwnerKey(254, "FRC")
+        )
+        transaction {
+            (selectionKeys + "team_1678_FRC").forEach { key ->
+                AllianceSelections.insert {
+                    it[ownerKey] = key
+                    it[eventKey] = "2026test"
+                    it[selectionJson] = "{}"
+                    it[updatedAt] = now
+                }
+            }
+            listOf("team_254_FRC", "team_1678_FRC").forEach { key ->
+                MatchPlans.insert {
+                    it[ownerKey] = key
+                    it[eventKey] = "2026test"
+                    it[matchKey] = "2026test_qm1"
+                    it[planJson] = "{}"
+                    it[updatedAt] = now
+                }
+                MatchChecklists.insert {
+                    it[ownerKey] = key
+                    it[eventKey] = "2026test"
+                    it[matchKey] = "2026test_qm1"
+                    it[dataJson] = "{}"
+                    it[updatedAt] = now
+                }
+                BatteryTrackers.insert {
+                    it[ownerKey] = key
+                    it[eventKey] = "2026test"
+                    it[dataJson] = "{}"
+                    it[updatedAt] = now
+                }
+            }
+        }
+
+        assertTrue(StorageManagementService.deleteTeamData(254, "FRC").success)
+
+        transaction {
+            assertEquals(listOf("team_1678_FRC"), AllianceSelections.selectAll().map { it[AllianceSelections.ownerKey] })
+            assertEquals(listOf("team_1678_FRC"), MatchPlans.selectAll().map { it[MatchPlans.ownerKey] })
+            assertEquals(listOf("team_1678_FRC"), MatchChecklists.selectAll().map { it[MatchChecklists.ownerKey] })
+            assertEquals(listOf("team_1678_FRC"), BatteryTrackers.selectAll().map { it[BatteryTrackers.ownerKey] })
+        }
+    }
+
+    @Test
+    fun legacyOwnerKeysBelongToFrcNotAnFtcTeamWithTheSameNumber() {
+        val now = Instant.now()
+        fun insertSelections(vararg keys: String) = transaction {
+            keys.forEach { key ->
+                AllianceSelections.insert {
+                    it[ownerKey] = key
+                    it[eventKey] = "2026test"
+                    it[selectionJson] = "{}"
+                    it[updatedAt] = now
+                }
+            }
+        }
+        fun remaining() = transaction { AllianceSelections.selectAll().map { it[AllianceSelections.ownerKey] }.toSet() }
+
+        insertSelections("team_254_FTC", "team_254_FRC", "team_254", "254")
+
+        assertTrue(StorageManagementService.deleteTeamData(254, "FTC").success)
+        assertEquals(setOf("team_254_FRC", "team_254", "254"), remaining())
+
+        assertTrue(StorageManagementService.deleteTeamData(254, "FRC").success)
+        assertEquals(emptySet(), remaining())
+    }
 }

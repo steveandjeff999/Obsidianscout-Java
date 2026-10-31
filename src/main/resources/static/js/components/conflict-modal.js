@@ -56,7 +56,7 @@ export function openConflictResolutionModal(options) {
         }
     });
     // 2. Ensure meta fields
-    if (primary.eventKey) consensusData.eventKey = primary.eventKey;
+    if (primary.rawEventKey || primary.eventKey) consensusData.eventKey = primary.rawEventKey || primary.eventKey;
     if (primary.matchKey) consensusData.matchKey = primary.matchKey;
     if (primary.matchNumber !== undefined) consensusData.matchNumber = primary.matchNumber;
     if (primary.targetTeamNumber !== undefined) consensusData.targetTeamNumber = primary.targetTeamNumber;
@@ -238,23 +238,34 @@ export function openConflictResolutionModal(options) {
         statusMsg.textContent = text;
     };
 
+    const cleanEntryId = (rawId) => {
+        let cleanId = String(rawId || '');
+        ['match-', 'pit-', 'qual-', 'qualitative-'].forEach(p => {
+            if (cleanId.toLowerCase().startsWith(p)) cleanId = cleanId.substring(p.length);
+        });
+        return cleanId;
+    };
+
+    // One request, so a refused entry can't leave the discrepancy half resolved.
+    const resolveOnServer = (keepId, data) => request(`/api/${endpointPrefix}/resolve`, {
+        method: 'POST',
+        json: {
+            keepId,
+            ...(data ? { data } : {}),
+            deleteIds: conflictingEntries
+                .map(entry => cleanEntryId(entry.originalId || entry.id))
+                .filter(id => id && id !== keepId)
+        }
+    });
+
     // Keep Single Entry
     actionsCard.querySelectorAll('.btn-keep-single').forEach(btn => {
         btn.addEventListener('click', async () => {
-            const winningId = btn.getAttribute('data-id');
+            const winningId = cleanEntryId(btn.getAttribute('data-id'));
             btn.disabled = true;
             showStatus('Resolving conflict...');
             try {
-                for (const entry of conflictingEntries) {
-                    const rawId = entry.originalId || entry.id || '';
-                    let cleanId = String(rawId);
-                    ['match-', 'pit-', 'qual-', 'qualitative-'].forEach(p => {
-                        if (cleanId.toLowerCase().startsWith(p)) cleanId = cleanId.substring(p.length);
-                    });
-                    if (rawId && rawId !== winningId && cleanId !== winningId) {
-                        await request(`/api/${endpointPrefix}/${cleanId}`, { method: 'DELETE' });
-                    }
-                }
+                await resolveOnServer(winningId);
                 showToast('Conflict resolved successfully!', 'success');
                 closeModal();
                 if (typeof onResolved === 'function') onResolved();
@@ -271,28 +282,7 @@ export function openConflictResolutionModal(options) {
         consensusBtn.disabled = true;
         showStatus('Saving merged consensus entry...');
         try {
-            let primaryCleanId = String(primary.originalId || primary.id || '');
-            ['match-', 'pit-', 'qual-', 'qualitative-'].forEach(p => {
-                if (primaryCleanId.toLowerCase().startsWith(p)) primaryCleanId = primaryCleanId.substring(p.length);
-            });
-
-            // Update primary entry
-            await request(`/api/${endpointPrefix}/${primaryCleanId}`, {
-                method: 'PUT',
-                json: { data: consensusData }
-            });
-
-            // Delete other conflicting entries
-            for (let i = 1; i < conflictingEntries.length; i++) {
-                const entry = conflictingEntries[i];
-                let cleanId = String(entry.originalId || entry.id || '');
-                ['match-', 'pit-', 'qual-', 'qualitative-'].forEach(p => {
-                    if (cleanId.toLowerCase().startsWith(p)) cleanId = cleanId.substring(p.length);
-                });
-                if (cleanId && cleanId !== primaryCleanId) {
-                    await request(`/api/${endpointPrefix}/${cleanId}`, { method: 'DELETE' });
-                }
-            }
+            await resolveOnServer(cleanEntryId(primary.originalId || primary.id), consensusData);
 
             showToast('Consensus merged entry saved!', 'success');
             closeModal();
