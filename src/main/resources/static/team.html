@@ -10,7 +10,9 @@
 
     <title>ObsidianScout | Team Profile</title>
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <link rel="stylesheet" href="/css/app.css" />
     <link rel="manifest" href="/manifest.json" />
 </head>
@@ -28,15 +30,13 @@
         })();
     </script>
 
-    <div class="orb orb-2"></div>
-
     <div class="app-shell">
         <aside class="sidebar"></aside>
 
         <main class="main-content">
             <!-- Back button -->
             <div class="team-back-btn" id="back-btn">
-                <i class="fa-solid fa-arrow-left"></i>
+                <span class="material-symbols-outlined">arrow_back</span>
                 <span data-i18n="team.back_to_teams">Back to Teams</span>
             </div>
 
@@ -52,13 +52,13 @@
             <div id="not-found-container" class="hidden">
                 <div class="card" style="text-align: center; padding: 48px 24px; max-width: 600px; margin: 0 auto;">
                     <div style="margin-bottom: 20px; line-height: 1;">
-                        <i class="fa-solid fa-magnifying-glass fa-search" style="font-size: 48px; color: var(--accent); opacity: 0.9;"></i>
+                        <span class="material-symbols-outlined" style="font-size: 48px; color: var(--accent); opacity: 0.9;">search</span>
                     </div>
                     <h2 id="not-found-title" style="margin: 0 0 12px; font-size: 24px; font-weight: 700;" data-i18n="team.team_not_found">Team Not Found</h2>
                     <p id="not-found-desc" style="color: var(--muted); margin: 0 0 24px; font-size: 15px; line-height: 1.5;" data-i18n="team.team_not_found_desc">Team was not found at this event.</p>
                     <div>
                         <a href="/teams" id="not-found-back-link" class="btn" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none;">
-                            <i class="fa-solid fa-arrow-left"></i>
+                            <span class="material-symbols-outlined">arrow_back</span>
                             <span data-i18n="team.back_to_teams">Back to Teams</span>
                         </a>
                     </div>

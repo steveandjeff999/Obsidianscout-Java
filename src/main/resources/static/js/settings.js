@@ -568,12 +568,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         function getDeviceIcon(clientType, deviceName) {
             const name = (deviceName || "").toLowerCase();
             if (clientType === "mobile" || name.includes("iphone") || name.includes("ipad") || name.includes("android") || name.includes("mobile")) {
-                return '<i class="fa-solid fa-mobile-screen"></i>';
+                return '<span class="material-symbols-outlined">smartphone</span>';
             }
             if (name.includes("windows") || name.includes("mac") || name.includes("linux") || name.includes("chromeos")) {
-                return '<i class="fa-solid fa-laptop"></i>';
+                return '<span class="material-symbols-outlined">laptop</span>';
             }
-            return '<i class="fa-solid fa-globe"></i>';
+            return '<span class="material-symbols-outlined">public</span>';
         }
 
         async function loadSessions() {
@@ -624,9 +624,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                                     ${s.isCurrent ? `<span style="background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 600;">This Device (Active)</span>` : ""}
                                 </div>
                                 <div style="font-size: 13px; color: var(--text-muted, #888); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 12px;">
-                                    ${escapedIp ? `<span><i class="fa-solid fa-globe"></i> ${escapedIp}</span>` : ""}
-                                    <span><i class="fa-solid fa-clock"></i> Last active: ${lastActive}</span>
-                                    ${createdAt ? `<span><i class="fa-solid fa-calendar-days"></i> Signed in: ${createdAt}</span>` : ""}
+                                    ${escapedIp ? `<span><span class="material-symbols-outlined">public</span> ${escapedIp}</span>` : ""}
+                                    <span><span class="material-symbols-outlined">schedule</span> Last active: ${lastActive}</span>
+                                    ${createdAt ? `<span><span class="material-symbols-outlined">calendar_today</span> Signed in: ${createdAt}</span>` : ""}
                                 </div>
                             </div>
                         </div>
@@ -676,7 +676,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             cleanupDuplicatesBtn.addEventListener("click", async () => {
                 try {
                     cleanupDuplicatesBtn.disabled = true;
-                    cleanupDuplicatesBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Cleaning...`;
+                    cleanupDuplicatesBtn.innerHTML = `<span class="material-symbols-outlined fa-spin" style="">progress_activity</span> Cleaning...`;
                     const res = await Obsidianscout.request("/api/user/sessions?duplicatesOnly=true", {
                         method: "DELETE"
                     });
@@ -691,7 +691,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     Obsidianscout.showToast(err.message || "Failed to clean duplicate sessions", "error");
                 } finally {
                     cleanupDuplicatesBtn.disabled = false;
-                    cleanupDuplicatesBtn.innerHTML = `<i class="fa-solid fa-broom"></i> Clean Up Duplicates`;
+                    cleanupDuplicatesBtn.innerHTML = `<span class="material-symbols-outlined">cleaning_services</span> Clean Up Duplicates`;
                 }
             });
         }
@@ -757,15 +757,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         function getPasskeyIcon(name) {
             const n = (name || "").toLowerCase();
             if (n.includes("yubikey") || n.includes("titan") || n.includes("fido") || n.includes("key")) {
-                return '<i class="fa-solid fa-key" style="color: var(--primary);"></i>';
+                return '<span class="material-symbols-outlined" style="color: var(--primary);">key</span>';
             }
             if (n.includes("iphone") || n.includes("ipad") || n.includes("android") || n.includes("phone") || n.includes("mobile")) {
-                return '<i class="fa-solid fa-mobile-screen" style="color: var(--primary);"></i>';
+                return '<span class="material-symbols-outlined" style="color: var(--primary);">smartphone</span>';
             }
             if (n.includes("mac") || n.includes("windows") || n.includes("pc") || n.includes("laptop") || n.includes("desktop") || n.includes("linux") || n.includes("chromebook")) {
-                return '<i class="fa-solid fa-laptop" style="color: var(--primary);"></i>';
+                return '<span class="material-symbols-outlined" style="color: var(--primary);">laptop</span>';
             }
-            return '<i class="fa-solid fa-fingerprint" style="color: var(--primary);"></i>';
+            return '<span class="material-symbols-outlined" style="color: var(--primary);">fingerprint</span>';
         }
 
         async function loadPasskeys() {
@@ -797,7 +797,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         </div>
                         <div>
                             <button class="btn ghost delete-passkey-btn" data-id="${c.id}" style="color: #dc3545; border-color: rgba(220,53,69,0.3); padding: 6px 12px; font-size: 12px;">
-                                <i class="fa-solid fa-trash"></i> Remove
+                                <span class="material-symbols-outlined">delete</span> Remove
                             </button>
                         </div>
                     </div>

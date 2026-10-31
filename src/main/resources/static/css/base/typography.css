@@ -5,7 +5,7 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     letter-spacing: -0.025em;
     font-weight: 700;
     color: var(--text-primary);
@@ -63,4 +63,19 @@ a {
 
 .text-primary-accent {
     color: var(--accent);
+}
+
+/* Tabular figures for telemetry, timers, match keys & scouting metrics */
+.table td,
+.table th,
+.metric-value,
+.metric-num,
+.stat-number,
+.dashboard-kpi-card,
+.match-number,
+.team-number,
+.dashboard-badge,
+.status-badge {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
 }

@@ -1250,8 +1250,6 @@
             }
         })();
     </script>
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
 
     <div class="app-shell">
         <aside class="sidebar"></aside>
@@ -1297,8 +1295,8 @@
                             <div class="toolbar-divider"></div>
 
                             <div class="toolbar-group">
-                                <button class="tool-btn active" id="tool-pen" type="button" title="Pen (Draw)"><i class="fa-solid fa-pen"></i> Pen</button>
-                                <button class="tool-btn" id="tool-eraser" type="button" title="Eraser"><i class="fa-solid fa-eraser"></i> Eraser</button>
+                                <button class="tool-btn active" id="tool-pen" type="button" title="Pen (Draw)"><span class="material-symbols-outlined">edit</span> Pen</button>
+                                <button class="tool-btn" id="tool-eraser" type="button" title="Eraser"><span class="material-symbols-outlined">ink_eraser</span> Eraser</button>
                             </div>
 
                             <div class="toolbar-divider"></div>
@@ -1327,12 +1325,12 @@
                             <div class="toolbar-divider"></div>
 
                             <div class="toolbar-group">
-                                <button class="tool-btn" id="undo-canvas-btn" type="button" title="Undo (Ctrl+Z)"><i class="fa-solid fa-rotate-left"></i> Undo</button>
-                                <button class="tool-btn" id="redo-canvas-btn" type="button" title="Redo (Ctrl+Y)"><i class="fa-solid fa-rotate-right"></i> Redo</button>
-                                <button class="tool-btn" id="clear-canvas-btn" type="button" title="Clear All Drawings"><i class="fa-solid fa-trash-can"></i> Clear</button>
-                                <button class="tool-btn" id="fullscreen-btn" type="button" title="Toggle Fullscreen Field"><i class="fa-solid fa-expand"></i> Fullscreen</button>
-                                <button class="tool-btn" id="download-canvas-btn" type="button" title="Export Plan as Image"><i class="fa-solid fa-download"></i> Export</button>
-                                <span class="save-status-badge" id="save-status-indicator" title="Auto-save status"><i class="fa-solid fa-cloud"></i> Saved</span>
+                                <button class="tool-btn" id="undo-canvas-btn" type="button" title="Undo (Ctrl+Z)"><span class="material-symbols-outlined">undo</span> Undo</button>
+                                <button class="tool-btn" id="redo-canvas-btn" type="button" title="Redo (Ctrl+Y)"><span class="material-symbols-outlined">redo</span> Redo</button>
+                                <button class="tool-btn" id="clear-canvas-btn" type="button" title="Clear All Drawings"><span class="material-symbols-outlined">delete</span> Clear</button>
+                                <button class="tool-btn" id="fullscreen-btn" type="button" title="Toggle Fullscreen Field"><span class="material-symbols-outlined">fullscreen</span> Fullscreen</button>
+                                <button class="tool-btn" id="download-canvas-btn" type="button" title="Export Plan as Image"><span class="material-symbols-outlined">download</span> Export</button>
+                                <span class="save-status-badge" id="save-status-indicator" title="Auto-save status"><span class="material-symbols-outlined">cloud_done</span> Saved</span>
                             </div>
                         </div>
                     </div>
@@ -1373,11 +1371,11 @@
                                 <div class="stylus-quick-popup" id="stylus-quick-popup" style="display: none;">
                                     <div class="stylus-popup-header">
                                         <span>Quick Tools</span>
-                                        <i class="fa-solid fa-pen-nib"></i>
+                                        <span class="material-symbols-outlined">edit</span>
                                     </div>
                                     <div class="stylus-popup-tools">
-                                        <button type="button" class="stylus-popup-tool-btn active" id="popup-tool-pen"><i class="fa-solid fa-pen"></i> Pen</button>
-                                        <button type="button" class="stylus-popup-tool-btn" id="popup-tool-eraser"><i class="fa-solid fa-eraser"></i> Eraser</button>
+                                        <button type="button" class="stylus-popup-tool-btn active" id="popup-tool-pen"><span class="material-symbols-outlined">edit</span> Pen</button>
+                                        <button type="button" class="stylus-popup-tool-btn" id="popup-tool-eraser"><span class="material-symbols-outlined">ink_eraser</span> Eraser</button>
                                     </div>
                                     <div class="stylus-popup-swatches">
                                         <button type="button" class="stylus-popup-swatch active" data-color="#ffffff" style="background:#ffffff;" title="White"></button>
@@ -1439,7 +1437,7 @@
                     <!-- Blue Alliance Stats Row -->
                     <div class="alliance-stats-group">
                         <div class="alliance-stats-title blue">
-                            <span><i class="fa-solid fa-shield-halved"></i> Blue Alliance</span>
+                            <span><span class="material-symbols-outlined">shield</span> Blue Alliance</span>
                         </div>
                         <div class="team-cards-grid" id="blue-team-cards"></div>
                     </div>
@@ -1447,7 +1445,7 @@
                     <!-- Red Alliance Stats Row -->
                     <div class="alliance-stats-group">
                         <div class="alliance-stats-title red">
-                            <span><i class="fa-solid fa-shield-halved"></i> Red Alliance</span>
+                            <span><span class="material-symbols-outlined">shield</span> Red Alliance</span>
                         </div>
                         <div class="team-cards-grid" id="red-team-cards"></div>
                     </div>
@@ -1465,7 +1463,7 @@
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <div id="graph-modal-datasource-pills" class="graph-datasource-pills"></div>
                                 <button type="button" class="btn ghost btn-sm graphs-fullscreen-close" aria-label="Close fullscreen graph">
-                                    <i class="fa-solid fa-xmark" style="font-size: 1.1rem;"></i>
+                                    <span class="material-symbols-outlined" style="font-size: 1.1rem;">close</span>
                                 </button>
                             </div>
                         </div>

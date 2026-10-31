@@ -1,7 +1,7 @@
 .status-badge {
     display: inline-flex;
     align-items: center;
-    border-radius: var(--radius-pill);
+    border-radius: 5px;
     padding: 3px 10px;
     font-size: 11.5px;
     font-weight: 700;
@@ -49,8 +49,8 @@
     font-weight: 600;
     max-width: 90vw;
     word-break: break-word;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 .toast.info {
@@ -667,7 +667,7 @@ body.theme-dark .save-receipt-danger  { background: #3b0d0d; color: #fee2e2; bor
     height: 18px;
     padding: 0 5px;
     margin-left: 6px;
-    border-radius: var(--radius-pill);
+    border-radius: 5px;
     background: var(--danger);
     color: #fff;
     font-size: 11px;
@@ -702,7 +702,7 @@ body.theme-dark .save-receipt-danger  { background: #3b0d0d; color: #fee2e2; bor
     gap: 8px;
     max-width: calc(100vw - 32px);
     padding: 8px 12px;
-    border-radius: var(--radius-pill);
+    border-radius: 5px;
     background: #fffbeb;
     color: #92400e;
     border: 1px solid #f59e0b;

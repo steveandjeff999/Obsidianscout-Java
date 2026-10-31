@@ -14,7 +14,9 @@
     <title>ObsidianScout | Settings</title>
 
     <link rel="stylesheet" href="/css/app.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
 
     <link rel="manifest" href="/manifest.json" />
 </head>
@@ -32,8 +34,6 @@
             }
         })();
     </script>
-
-    <div class="orb orb-2"></div>
 
     <div class="orb orb-3"></div>
 
@@ -58,7 +58,7 @@
                                 <input type="file" id="personal-avatar-input" accept="image/*" style="display:none" aria-label="Upload profile picture" />
                             </div>
                             <div class="profile-pic-actions">
-                                <label for="personal-avatar-input" class="profile-pic-label" data-i18n="config.upload_photo"><i class="fa-solid fa-camera"></i> Upload photo</label>
+                                <label for="personal-avatar-input" class="profile-pic-label" data-i18n="config.upload_photo"><span class="material-symbols-outlined">photo_camera</span> Upload photo</label>
                                 <button type="button" id="personal-avatar-remove" class="profile-pic-remove" data-i18n="config.remove">Remove</button>
                                 <p class="profile-pic-hint" data-i18n="config.auto_resized_to_9696_px">Auto-resized to 96×96 px</p>
                             </div>
@@ -282,7 +282,7 @@
 
                 <div id="personal-local-ai-panel" class="card soft mt-16 hidden" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 16px; border-radius: 12px;">
                     <h4 style="margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
-                        <i class="fa-solid fa-microchip" style="color: var(--accent);"></i> <span data-i18n="ai.settings.models_title">AI models on this device</span>
+                        <span class="material-symbols-outlined" style="color: var(--accent);">memory</span> <span data-i18n="ai.settings.models_title">AI models on this device</span>
                     </h4>
                     <div id="personal-local-ai-models"></div>
                 </div>
@@ -290,7 +290,7 @@
                 <div class="card soft mt-16" style="border: 1px solid var(--border-color, rgba(255,255,255,0.1)); padding: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
                     <div>
                         <h4 style="margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
-                            <i class="fa-solid fa-graduation-cap" style="color: var(--accent);"></i> Interactive Feature Tutorials &amp; Progress Hub
+                            <span class="material-symbols-outlined" style="color: var(--accent);">school</span> Interactive Feature Tutorials &amp; Progress Hub
                         </h4>
                         <p class="notice mt-4" style="margin-bottom: 0;">
                             Browse all feature tutorials, track your learning progress, and launch in-depth walkthroughs adapted to your permissions.
@@ -298,7 +298,7 @@
                     </div>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <a href="/tutorials" class="btn" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; text-decoration: none;">
-                            <i class="fa-solid fa-book-open"></i> Open Tutorials Hub
+                            <span class="material-symbols-outlined">menu_book</span> Open Tutorials Hub
                         </a>
                     </div>
                 </div>
@@ -374,7 +374,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
                         <div>
                             <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">
-                                <i class="fa-solid fa-key"></i> Passkeys &amp; Biometrics
+                                <span class="material-symbols-outlined">key</span> Passkeys &amp; Biometrics
                             </h2>
                             <p class="notice mt-6" style="margin-bottom: 0;">
                                 Sign in instantly and securely using your device's fingerprint, Face ID, Windows Hello, or security key.
@@ -382,7 +382,7 @@
                         </div>
                         <div>
                             <button id="add-passkey-btn" class="btn" type="button" style="padding: 8px 16px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                                <i class="fa-solid fa-plus"></i> Add Passkey
+                                <span class="material-symbols-outlined">add</span> Add Passkey
                             </button>
                         </div>
                     </div>
@@ -401,7 +401,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
                         <div>
                             <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">
-                                <i class="fa-solid fa-mobile-screen"></i> Logged-in Devices &amp; Authorizations
+                                <span class="material-symbols-outlined">smartphone</span> Logged-in Devices &amp; Authorizations
                             </h2>
                             <p class="notice mt-6" style="margin-bottom: 0;">
                                 Manage active sessions and devices authorized to access your account. Revoke access from unrecognized or obsolete devices.
@@ -409,7 +409,7 @@
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             <button id="cleanup-duplicate-sessions-btn" class="btn outline" type="button" style="padding: 8px 16px; font-size: 13px;">
-                                <i class="fa-solid fa-broom"></i> Clean Up Duplicates
+                                <span class="material-symbols-outlined">cleaning_services</span> Clean Up Duplicates
                             </button>
                             <button id="revoke-other-sessions-btn" class="btn warning" type="button" style="padding: 8px 16px; font-size: 13px;">
                                 Revoke All Other Devices

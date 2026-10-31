@@ -646,24 +646,24 @@
         badge.className = "save-status-badge";
         if (status === "saving") {
             badge.classList.add("saving");
-            badge.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+            badge.innerHTML = '<span class="material-symbols-outlined fa-spin" style="">progress_activity</span> Saving...';
             badge.title = "Saving match plan to cloud...";
         } else if (status === "saved") {
             badge.classList.add("saved");
-            badge.innerHTML = '<i class="fa-solid fa-cloud"></i> Saved';
+            badge.innerHTML = '<span class="material-symbols-outlined">cloud_done</span> Saved';
             badge.title = "Saved to cloud and device";
         } else if (status === "offline") {
             badge.classList.add("offline");
-            badge.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Saved locally';
+            badge.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span> Saved locally';
             badge.title = "Saved to device. Will sync to cloud when connection is restored. Click to sync now.";
         } else if (status === "retrying") {
             badge.classList.add("retrying");
             const attemptText = attempt ? ` (${attempt})` : "";
-            badge.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i> Retrying${attemptText}`;
+            badge.innerHTML = `<span class="material-symbols-outlined fa-spin" style="">sync</span> Retrying${attemptText}`;
             badge.title = "Weak connection. Retrying sync automatically. Click to retry now.";
         } else if (status === "error") {
             badge.classList.add("error");
-            badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Save failed (tap to retry)';
+            badge.innerHTML = '<span class="material-symbols-outlined">warning</span> Save failed (tap to retry)';
             badge.title = "Cloud save failed. Click to retry now.";
         }
     }
@@ -1694,7 +1694,7 @@
 
             const onFullscreenChange = () => {
                 const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                fullscreenBtn.innerHTML = isFs ? '<i class="fa-solid fa-compress"></i> Exit' : '<i class="fa-solid fa-expand"></i> Fullscreen';
+                fullscreenBtn.innerHTML = isFs ? '<span class="material-symbols-outlined">fullscreen_exit</span> Exit' : '<span class="material-symbols-outlined">fullscreen</span> Fullscreen';
                 setTimeout(() => {
                     resizeCanvas();
                     renderCanvas();
@@ -2295,11 +2295,11 @@
                         ${effectiveUseExp ? `<button type="button" class="graph-datasource-btn ${currentDatasource === 'match13' ? 'active' : ''}" data-source="match13" data-team="${teamNumber}">Match 13</button>` : ''}
                     </div>
                     <button type="button" class="graph-fullscreen-btn-inline" id="btn-fullscreen-${uniqueTabId}" title="View graph in fullscreen">
-                        <i class="fa-solid fa-expand"></i> Fullscreen
+                        <span class="material-symbols-outlined">fullscreen</span> Fullscreen
                     </button>
                 </div>
                 <div id="graph-container-${uniqueTabId}" class="team-graph-container" title="Click to view fullscreen"></div>
-                <div class="graph-click-hint"><i class="fa-solid fa-up-right-and-down-left-from-center"></i> Click graph to enlarge</div>
+                <div class="graph-click-hint"><span class="material-symbols-outlined">open_in_full</span> Click graph to enlarge</div>
             </div>
         `;
 
@@ -2704,7 +2704,7 @@
         if (!dataSeries.x || dataSeries.x.length === 0) {
             container.innerHTML = `
                 <div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); font-size: 0.75rem; font-style: italic; gap: 4px;">
-                    <i class="fa-solid fa-chart-line" style="font-size: 1.2rem; opacity: 0.4;"></i>
+                    <span class="material-symbols-outlined" style="font-size: 1.2rem; opacity: 0.4;">show_chart</span>
                     <span>No ${dataSeries.label} data recorded for Team #${teamNumber}.</span>
                 </div>
             `;
@@ -2848,7 +2848,7 @@
             if (!dataSeries.x || dataSeries.x.length === 0) {
                 chartContainer.innerHTML = `
                     <div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); font-size: 1rem; font-style: italic; gap: 8px;">
-                        <i class="fa-solid fa-chart-line" style="font-size: 2.2rem; opacity: 0.35;"></i>
+                        <span class="material-symbols-outlined" style="font-size: 2.2rem; opacity: 0.35;">show_chart</span>
                         <span>No ${dataSeries.label} data recorded for Team #${teamNumber} at this event.</span>
                     </div>
                 `;

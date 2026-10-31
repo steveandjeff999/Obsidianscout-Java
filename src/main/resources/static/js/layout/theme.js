@@ -114,10 +114,11 @@ export function applyCustomTheme(themeOrSettings) {
                 const bgParsed = parseHexColor(theme.darkBg);
                 if (bgParsed) {
                     // Elevate dark background by blending with 8% white and subtle accent tint
-                    let elevated = blendRgb(bgParsed, { r: 255, g: 255, b: 255 }, 0.08);
+                    let elevated = blendRgb(bgParsed, { r: 255, g: 255, b: 255 }, 0.04);
                     const accParsed = parseHexColor(theme.darkAccent);
                     if (accParsed) {
-                        elevated = blendRgb(elevated, accParsed, 0.04);
+                        // Keep surfaces clean without clashing accent tint
+                    // elevated = blendRgb(elevated, accParsed, 0.02);
                     }
                     surfaceColor = elevated;
                 }

@@ -755,7 +755,133 @@ function isPageOlderThanWorker(worker) {
     });
 }
 
+// Map Font Awesome icon class names to Google Material Symbols ligatures
+const FA_TO_MATERIAL = {
+    "fa-copy": "content_copy",
+    "fa-download": "download",
+    "fa-bell": "notifications",
+    "fa-bolt": "bolt",
+    "fa-shield-halved": "shield",
+    "fa-camera": "photo_camera",
+    "fa-rotate": "refresh",
+    "fa-arrows-rotate": "sync",
+    "fa-sync-alt": "sync",
+    "fa-rotate-right": "redo",
+    "fa-rotate-left": "undo",
+    "fa-triangle-exclamation": "warning",
+    "fa-exclamation-triangle": "warning",
+    "fa-exclamation-circle": "error",
+    "fa-pen": "edit",
+    "fa-pen-nib": "edit",
+    "fa-eraser": "ink_eraser",
+    "fa-trash": "delete",
+    "fa-trash-can": "delete",
+    "fa-cloud": "cloud_done",
+    "fa-cloud-arrow-up": "cloud_upload",
+    "fa-gamepad": "sports_esports",
+    "fa-spinner": "progress_activity",
+    "fa-lock": "lock",
+    "fa-unlock": "lock_open",
+    "fa-share-alt": "share",
+    "fa-link": "link",
+    "fa-bars": "menu",
+    "fa-globe": "public",
+    "fa-chart-bar": "bar_chart",
+    "fa-chart-column": "bar_chart",
+    "fa-chart-pie": "pie_chart",
+    "fa-chart-line": "show_chart",
+    "fa-fire": "local_fire_department",
+    "fa-circle-info": "info",
+    "fa-envelope-open-text": "mail",
+    "fa-handshake": "handshake",
+    "fa-folder-open": "folder_open",
+    "fa-qrcode": "qr_code_2",
+    "fa-magnifying-glass": "search",
+    "fa-search": "search",
+    "fa-expand": "fullscreen",
+    "fa-compress": "fullscreen_exit",
+    "fa-moon": "dark_mode",
+    "fa-sun": "light_mode",
+    "fa-users": "group",
+    "fa-users-gear": "manage_accounts",
+    "fa-user": "person",
+    "fa-calendar-alt": "calendar_today",
+    "fa-calendar-days": "calendar_today",
+    "fa-clock": "schedule",
+    "fa-arrow-left": "arrow_back",
+    "fa-arrow-up": "arrow_upward",
+    "fa-arrow-down": "arrow_downward",
+    "fa-sort": "unfold_more",
+    "fa-mobile-screen": "smartphone",
+    "fa-laptop": "laptop",
+    "fa-key": "key",
+    "fa-broom": "cleaning_services",
+    "fa-tv": "tv",
+    "fa-thumbtack": "push_pin",
+    "fa-scroll": "history_edu",
+    "fa-fingerprint": "fingerprint",
+    "fa-inbox": "inbox",
+    "fa-brain": "psychology",
+    "fa-table": "table_chart",
+    "fa-file-import": "file_open",
+    "fa-xmark": "close",
+    "fa-circle-check": "check_circle",
+    "fa-circle-xmark": "cancel",
+    "fa-forward-step": "skip_next",
+    "fa-chevron-down": "expand_more",
+    "fa-up-right-and-down-left-from-center": "open_in_full"
+};
+
+function upgradeElementToMaterial(el) {
+    if (!el || el.nodeType !== 1) return;
+    // Keep Font Awesome for brands (Apple, Slack, etc.)
+    if (el.classList.contains("fa-brands") || el.classList.contains("fab")) return;
+
+    for (const cls of Array.from(el.classList)) {
+        if (FA_TO_MATERIAL[cls]) {
+            const materialName = FA_TO_MATERIAL[cls];
+            const isSpinning = el.classList.contains("fa-spin");
+            const extraClasses = Array.from(el.classList)
+                .filter(c => !c.startsWith("fa-") && c !== "fa" && c !== "fas" && c !== "far" && c !== "fa-solid" && c !== "fa-regular")
+                .join(" ");
+
+            el.className = `material-symbols-outlined${isSpinning ? " fa-spin" : ""}${extraClasses ? " " + extraClasses : ""}`;
+            el.textContent = materialName;
+            el.setAttribute("aria-hidden", "true");
+            break;
+        }
+    }
+}
+
+export function initMaterialIcons(root = document) {
+    try {
+        const icons = root.querySelectorAll ? root.querySelectorAll("i[class*='fa-'], span[class*='fa-']") : [];
+        icons.forEach(upgradeElementToMaterial);
+
+        if (!window._obsidianMaterialObserver && typeof MutationObserver !== "undefined" && document.body) {
+            window._obsidianMaterialObserver = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType === 1) {
+                            if (node.matches && node.matches("i[class*='fa-'], span[class*='fa-']")) {
+                                upgradeElementToMaterial(node);
+                            }
+                            if (node.querySelectorAll) {
+                                node.querySelectorAll("i[class*='fa-'], span[class*='fa-']").forEach(upgradeElementToMaterial);
+                            }
+                        }
+                    }
+                }
+            });
+            window._obsidianMaterialObserver.observe(document.body, { childList: true, subtree: true });
+        }
+    } catch (e) {
+        console.warn("[Icons] Material icons upgrade error:", e);
+    }
+}
+
 async function onDOMContentLoaded() {
+    initMaterialIcons();
     // Migrate legacy HTTP caches from localStorage to IndexedDB to free 5MB quota
     try {
         migrateLocalStorageToIdb();
@@ -960,12 +1086,14 @@ async function onDOMContentLoaded() {
 
 if (document.readyState === 'loading') {
     document.addEventListener("DOMContentLoaded", () => {
+        initMaterialIcons();
         injectLiquidGlassSVG();
         loadAndRenderBanners();
         initHapticDelegation();
         onDOMContentLoaded();
     });
 } else {
+    initMaterialIcons();
     injectLiquidGlassSVG();
     loadAndRenderBanners();
     initHapticDelegation();

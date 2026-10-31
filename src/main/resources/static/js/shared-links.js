@@ -53,7 +53,7 @@ async function fetchAndRenderShares() {
     tbody.innerHTML = `
         <tr>
             <td colspan="8" style="text-align: center; padding: 40px; color: var(--muted);">
-                <i class="fas fa-spinner fa-spin"></i> Loading shared links...
+                <span class="material-symbols-outlined fa-spin" style="">progress_activity</span> Loading shared links...
             </td>
         </tr>
     `;
@@ -68,7 +68,7 @@ async function fetchAndRenderShares() {
         tbody.innerHTML = `
             <tr>
                 <td colspan="8" style="text-align: center; padding: 40px; color: var(--danger, #ef4444);">
-                    <i class="fas fa-exclamation-circle"></i> Failed to load shared links. ${err.message || ''}
+                    <span class="material-symbols-outlined">error</span> Failed to load shared links. ${err.message || ''}
                 </td>
             </tr>
         `;
@@ -128,7 +128,7 @@ function renderTable(shares) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="8" style="text-align: center; padding: 40px; color: var(--muted);">
-                    <i class="fas fa-inbox fa-2x mb-8" style="opacity: 0.5;"></i>
+                    <span class="material-symbols-outlined fa-2x mb-8" style="opacity: 0.5;">inbox</span>
                     <p style="margin: 0;">No shared links found matching criteria.</p>
                 </td>
             </tr>
@@ -148,7 +148,7 @@ function renderTable(shares) {
 
         let scopeBadge = `<span class="share-badge share-badge-${s.accessScope}">${t('shares.scope_' + s.accessScope, s.accessScope.toUpperCase())}</span>`;
         if (s.hasPin) {
-            scopeBadge += ` <i class="fas fa-lock" style="font-size: 0.75rem; color: #eab308;" title="PIN Protected"></i>`;
+            scopeBadge += ` <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #eab308;" title="PIN Protected">lock</span>`;
         }
 
         const typeLabels = {

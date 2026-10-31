@@ -137,7 +137,7 @@ Name:           obsidianscout-server
 Version:        ${RPM_VER}
 Release:        1
 Summary:        ObsidianScout High-Performance Scouting Server
-License:        Proprietary
+License:        GPLv3
 BuildArch:      ${RPM_ARCH}
 AutoReqProv:    no
 

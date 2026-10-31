@@ -239,7 +239,7 @@ function renderPredictionsList() {
         const matchLink = document.createElement("a");
         matchLink.href = "#";
         matchLink.className = "match-link";
-        matchLink.innerHTML = `${match.label} <span style="font-size: 0.75rem; font-weight: normal; text-decoration: none;"><i class="fa-solid fa-magnifying-glass"></i></span>`;
+        matchLink.innerHTML = `${match.label} <span style="font-size: 0.75rem; font-weight: normal; text-decoration: none;"><span class="material-symbols-outlined">search</span></span>`;
         matchLink.addEventListener("click", (e) => {
             e.preventDefault();
             openPredictorModal(match.matchKey, match.label);

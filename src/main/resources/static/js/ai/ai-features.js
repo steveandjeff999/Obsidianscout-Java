@@ -224,7 +224,7 @@ export async function mountSummaryCard(container, { teamNumber, eventKey }) {
     card.dataset.team = String(teamNumber);
     card.innerHTML = `
         <div class="ai-summary-head">
-            <strong><i class="fa-solid fa-wand-magic-sparkles"></i> ${t("ai.summary.title", "AI summary of scout notes")}</strong>
+            <strong><span class="material-symbols-outlined">auto_awesome</span> ${t("ai.summary.title", "AI summary of scout notes")}</strong>
             <div class="ai-summary-actions"></div>
         </div>
         <div class="ai-summary-body ai-markdown"></div>
@@ -317,7 +317,7 @@ function attachTidy(textarea) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn ghost btn-sm";
-    btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> ${t("ai.tidy.button", "Tidy note")}`;
+    btn.innerHTML = `<span class="material-symbols-outlined">auto_awesome</span> ${t("ai.tidy.button", "Tidy note")}`;
     bar.appendChild(btn);
     textarea.insertAdjacentElement("afterend", bar);
 
@@ -458,7 +458,7 @@ function askLink(question, eventKey) {
     const a = document.createElement("a");
     a.className = "btn ghost btn-sm";
     a.href = `/assistant?q=${encodeURIComponent(question)}${eventKey ? `&event=${encodeURIComponent(eventKey)}` : ""}`;
-    a.innerHTML = `<i class="fa-solid fa-robot"></i> `;
+    a.innerHTML = `<span class="material-symbols-outlined">smart_toy</span> `;
     a.appendChild(document.createTextNode(t("ai.ask_assistant", "Ask the assistant")));
     return a;
 }

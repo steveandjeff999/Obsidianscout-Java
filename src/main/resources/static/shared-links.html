@@ -11,7 +11,9 @@
 
     <link rel="stylesheet" href="/css/app.css" />
     <link rel="stylesheet" href="/css/share-modal.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <link rel="manifest" href="/manifest.json" />
 </head>
 
@@ -28,9 +30,6 @@
             }
         })();
     </script>
-
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
 
     <div class="app-shell">
         <aside class="sidebar"></aside>
@@ -120,7 +119,7 @@
                         <tbody id="shares-table-body">
                             <tr>
                                 <td colspan="8" style="text-align: center; padding: 40px; color: var(--muted);">
-                                    <i class="fas fa-spinner fa-spin"></i> <span data-i18n="shares.loading">Loading shared links...</span>
+                                    <span class="material-symbols-outlined fa-spin" style="">progress_activity</span> <span data-i18n="shares.loading">Loading shared links...</span>
                                 </td>
                             </tr>
                         </tbody>
@@ -134,7 +133,7 @@
     <div class="share-modal-overlay" id="qr-dialog-overlay">
         <div class="share-modal-dialog" style="max-width: 400px; text-align: center;">
             <div class="share-modal-header">
-                <h3 class="share-modal-title"><i class="fas fa-qrcode"></i> <span data-i18n="shares.view_qr">View QR Code</span></h3>
+                <h3 class="share-modal-title"><span class="material-symbols-outlined">qr_code_2</span> <span data-i18n="shares.view_qr">View QR Code</span></h3>
                 <button class="share-modal-close" id="qr-dialog-close">&times;</button>
             </div>
             <div class="share-modal-body">
@@ -143,7 +142,7 @@
                 <input type="text" id="dialog-qr-url" class="share-input mt-12" readonly style="font-size: 0.85rem;" />
             </div>
             <div class="share-modal-footer">
-                <button class="btn primary" id="dialog-qr-copy-btn" type="button"><i class="fas fa-copy"></i> <span data-i18n="shares.copy_link">Copy Link</span></button>
+                <button class="btn primary" id="dialog-qr-copy-btn" type="button"><span class="material-symbols-outlined">content_copy</span> <span data-i18n="shares.copy_link">Copy Link</span></button>
             </div>
         </div>
     </div>

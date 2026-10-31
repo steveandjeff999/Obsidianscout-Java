@@ -28,7 +28,7 @@ export function initShareModal() {
         <div class="share-modal-dialog">
             <div class="share-modal-header">
                 <h3 class="share-modal-title">
-                    <i class="fas fa-share-alt" style="color: var(--accent, #6366f1);"></i>
+                    <span class="material-symbols-outlined" style="color: var(--accent, #6366f1);">share</span>
                     <span id="share-modal-title-text" data-i18n="share_modal.title">Share Data & Visuals</span>
                 </h3>
                 <button class="share-modal-close" id="share-modal-close-btn" title="Close">&times;</button>
@@ -49,15 +49,15 @@ export function initShareModal() {
                     <label class="share-field-label" data-i18n="share_modal.access_scope">Access Scope</label>
                     <div class="share-radio-grid">
                         <div class="share-radio-card active" data-scope="public">
-                            <div class="share-radio-title"><i class="fas fa-globe"></i> <span data-i18n="shares.scope_public">Public</span></div>
+                            <div class="share-radio-title"><span class="material-symbols-outlined">public</span> <span data-i18n="shares.scope_public">Public</span></div>
                             <div class="share-radio-desc" data-i18n="share_modal.scope_public_desc">Anyone with the shared link can view data.</div>
                         </div>
                         <div class="share-radio-card" data-scope="alliance">
-                            <div class="share-radio-title"><i class="fas fa-users-gear"></i> <span data-i18n="shares.scope_alliance">Selected Team(s)</span></div>
+                            <div class="share-radio-title"><span class="material-symbols-outlined">manage_accounts</span> <span data-i18n="shares.scope_alliance">Selected Team(s)</span></div>
                             <div class="share-radio-desc" data-i18n="share_modal.scope_alliance_desc">Restricted to specific comma-separated team numbers.</div>
                         </div>
                         <div class="share-radio-card" data-scope="pin">
-                            <div class="share-radio-title"><i class="fas fa-lock"></i> <span data-i18n="shares.scope_pin">PIN Protected</span></div>
+                            <div class="share-radio-title"><span class="material-symbols-outlined">lock</span> <span data-i18n="shares.scope_pin">PIN Protected</span></div>
                             <div class="share-radio-desc" data-i18n="share_modal.scope_pin_desc">Securely hashed PIN using BCrypt with interactive PIN prompt modal on the shared viewer.</div>
                         </div>
                     </div>
@@ -94,11 +94,11 @@ export function initShareModal() {
                     <label class="share-field-label" data-i18n="share_modal.data_mode">Data Mode</label>
                     <div class="share-radio-grid">
                         <div class="share-radio-card active" data-mode="live_query">
-                            <div class="share-radio-title"><i class="fas fa-sync-alt"></i> <span data-i18n="share_modal.mode_live_title">Live Feed</span></div>
+                            <div class="share-radio-title"><span class="material-symbols-outlined">sync</span> <span data-i18n="share_modal.mode_live_title">Live Feed</span></div>
                             <div class="share-radio-desc" data-i18n="share_modal.mode_live_desc">Dynamic filtered data</div>
                         </div>
                         <div class="share-radio-card" data-mode="frozen_snapshot">
-                            <div class="share-radio-title"><i class="fas fa-camera"></i> <span data-i18n="share_modal.mode_snapshot_title">Snapshot</span></div>
+                            <div class="share-radio-title"><span class="material-symbols-outlined">photo_camera</span> <span data-i18n="share_modal.mode_snapshot_title">Snapshot</span></div>
                             <div class="share-radio-desc" data-i18n="share_modal.mode_snapshot_desc">Freeze current data state</div>
                         </div>
                     </div>
@@ -126,7 +126,7 @@ export function initShareModal() {
                     <label class="share-field-label" data-i18n="share_modal.created_title">Shareable Link Ready!</label>
                     <div class="share-url-row">
                         <input type="text" id="share-result-url" class="share-input" readonly />
-                        <button class="btn primary" id="share-copy-url-btn" type="button"><i class="fas fa-copy"></i> <span data-i18n="shares.copy_link">Copy</span></button>
+                        <button class="btn primary" id="share-copy-url-btn" type="button"><span class="material-symbols-outlined">content_copy</span> <span data-i18n="shares.copy_link">Copy</span></button>
                     </div>
                     <div class="share-qr-container" id="share-qr-box">
                         <div id="share-qr-render"></div>
@@ -138,7 +138,7 @@ export function initShareModal() {
             <div class="share-modal-footer">
                 <button class="btn ghost" id="share-cancel-btn" type="button">Cancel</button>
                 <button class="btn primary" id="share-generate-btn" type="button">
-                    <i class="fas fa-link"></i> <span data-i18n="share_modal.btn_create">Generate Shared URL</span>
+                    <span class="material-symbols-outlined">link</span> <span data-i18n="share_modal.btn_create">Generate Shared URL</span>
                 </button>
                 <button class="btn primary" id="share-done-btn" type="button" style="display: none;" data-i18n="share_modal.btn_done">Done</button>
             </div>
@@ -251,7 +251,7 @@ function bindModalEvents() {
         }
 
         generateBtn.disabled = true;
-        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Link...';
+        generateBtn.innerHTML = '<span class="material-symbols-outlined fa-spin" style="">progress_activity</span> Creating Link...';
 
         try {
             const payload = typeof currentPayloadProvider === 'function' ? await currentPayloadProvider() : currentPayloadProvider;
@@ -301,7 +301,7 @@ function bindModalEvents() {
             showToast(err.message || 'Failed to create share link', 'error');
         } finally {
             generateBtn.disabled = false;
-            generateBtn.innerHTML = '<i class="fas fa-link"></i> Generate Shared URL';
+            generateBtn.innerHTML = '<span class="material-symbols-outlined">link</span> Generate Shared URL';
         }
     });
 }

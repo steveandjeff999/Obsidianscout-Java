@@ -165,7 +165,7 @@ function showPinGate(token, msg) {
     }
 
     if (submitBtn) {
-        submitBtn.innerHTML = `<i class="fas fa-unlock"></i> <span>${t('shared_viewer.unlock_data', 'Unlock Data')}</span>`;
+        submitBtn.innerHTML = `<span class="material-symbols-outlined">lock_open</span> <span>${t('shared_viewer.unlock_data', 'Unlock Data')}</span>`;
     }
 
     const doSubmit = async () => {
@@ -175,10 +175,10 @@ function showPinGate(token, msg) {
             return;
         }
         submitBtn.disabled = true;
-        submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${t('shared_viewer.checking', 'Checking...')}`;
+        submitBtn.innerHTML = `<span class="material-symbols-outlined fa-spin" style="">progress_activity</span> ${t('shared_viewer.checking', 'Checking...')}`;
         await loadSharedPayload(token, pinVal);
         submitBtn.disabled = false;
-        submitBtn.innerHTML = `<i class="fas fa-unlock"></i> <span>${t('shared_viewer.unlock_data', 'Unlock Data')}</span>`;
+        submitBtn.innerHTML = `<span class="material-symbols-outlined">lock_open</span> <span>${t('shared_viewer.unlock_data', 'Unlock Data')}</span>`;
     };
 
     submitBtn.onclick = doSubmit;
@@ -196,7 +196,7 @@ function showError(msg) {
     banner.style.borderLeft = '4px solid var(--danger, #ef4444)';
     banner.innerHTML = `
         <div style="display: flex; align-items: center; gap: 12px; padding: 20px;">
-            <i class="fas fa-exclamation-triangle fa-2x" style="color: var(--danger, #ef4444);"></i>
+            <span class="material-symbols-outlined fa-2x" style="color: var(--danger, #ef4444);">warning</span>
             <div>
                 <h3 style="margin: 0 0 6px 0;">Access Notice</h3>
                 <p style="margin: 0; color: var(--muted);">${msg}</p>

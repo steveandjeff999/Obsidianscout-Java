@@ -771,10 +771,10 @@
                         </div>
                     </div>
                     <div class="server-actions-col">
-                        <button class="btn-action logs btn-server-logs" data-ip="${escapeHtml(node.ip)}" type="button"><i class="fa-solid fa-magnifying-glass"></i> View Logs</button>
-                        <button class="btn-action config btn-server-config" data-ip="${escapeHtml(node.ip)}" type="button"><i class="fa-solid fa-gear"></i> Edit app-config.json</button>
+                        <button class="btn-action logs btn-server-logs" data-ip="${escapeHtml(node.ip)}" type="button"><span class="material-symbols-outlined">search</span> View Logs</button>
+                        <button class="btn-action config btn-server-config" data-ip="${escapeHtml(node.ip)}" type="button"><span class="material-symbols-outlined">settings</span> Edit app-config.json</button>
                         <button class="btn-action reinstall btn-server-reinstall" data-ip="${escapeHtml(node.ip)}" type="button"><i class="fa-solid fa-rotate"></i> Force Reinstall</button>
-                        <button class="btn-action reboot btn-server-reboot" data-ip="${escapeHtml(node.ip)}" type="button"><i class="fa-solid fa-triangle-exclamation"></i> Reboot</button>
+                        <button class="btn-action reboot btn-server-reboot" data-ip="${escapeHtml(node.ip)}" type="button"><span class="material-symbols-outlined">warning</span> Reboot</button>
                     </div>
                 </div>
             `;
@@ -1211,7 +1211,7 @@
             configBtn.style.padding = "4px 8px";
             configBtn.style.fontSize = "11px";
             configBtn.style.marginRight = "6px";
-            configBtn.innerHTML = '<i class="fa-solid fa-gear"></i> Configure';
+            configBtn.innerHTML = '<span class="material-symbols-outlined">settings</span> Configure';
             configBtn.addEventListener("click", () => {
                 openConfigureQuorumFallbackModal(node);
             });
@@ -1221,7 +1221,7 @@
             inspectBtn.style.padding = "4px 8px";
             inspectBtn.style.fontSize = "11px";
             inspectBtn.style.marginRight = "6px";
-            inspectBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Inspect DB';
+            inspectBtn.innerHTML = '<span class="material-symbols-outlined">search</span> Inspect DB';
             inspectBtn.disabled = !node.enabled && node.databaseSizeBytes === 0;
             inspectBtn.addEventListener("click", () => {
                 openInspectQuorumFallbackModal(node.nodeIp);
@@ -1269,7 +1269,7 @@
             if (anyActive) {
                 globalPill.style.background = "rgba(239, 68, 68, 0.2)";
                 globalPill.style.color = "#f87171";
-                globalPill.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Active (Quorum Lost / Offline Reads)';
+                globalPill.innerHTML = '<span class="material-symbols-outlined">warning</span> Active (Quorum Lost / Offline Reads)';
             } else if (allEnabled) {
                 globalPill.style.background = "rgba(16, 185, 129, 0.2)";
                 globalPill.style.color = "#34d399";
@@ -1539,7 +1539,7 @@
             <!-- Mirrored Events (±1 Week Window) -->
             <div style="margin-bottom: 20px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h3 style="font-size: 14px; color: #fbbf24; margin: 0;"><i class="fa-solid fa-calendar-days"></i> Mirrored Events (±1 Week Competition Window)</h3>
+                    <h3 style="font-size: 14px; color: #fbbf24; margin: 0;"><span class="material-symbols-outlined">calendar_today</span> Mirrored Events (±1 Week Competition Window)</h3>
                     <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; font-size: 11px;">${activeEvents.length} events</span>
                 </div>
                 <p style="font-size: 12px; color: #94a3b8; margin: 0 0 10px 0;">
@@ -1745,7 +1745,7 @@
                 btnDelete.style.padding = "4px 8px";
                 btnDelete.style.fontSize = "12px";
                 btnDelete.style.color = "var(--danger)";
-                btnDelete.innerHTML = '<i class="fa-solid fa-trash"></i>';
+                btnDelete.innerHTML = '<span class="material-symbols-outlined">delete</span>';
                 btnDelete.title = "Delete Snapshot";
                 btnDelete.addEventListener("click", async () => {
                     if (confirm(`Delete snapshot file "${s.fileName}"?`)) {
@@ -1925,7 +1925,7 @@
             btnNodeConfig.style.padding = "4px 8px";
             btnNodeConfig.style.fontSize = "11px";
             btnNodeConfig.style.marginRight = "6px";
-            btnNodeConfig.innerHTML = '<i class="fa-solid fa-gear"></i> Configure';
+            btnNodeConfig.innerHTML = '<span class="material-symbols-outlined">settings</span> Configure';
             btnNodeConfig.title = `Configure auto-backup & retention for ${n.nodeIp}`;
             btnNodeConfig.addEventListener("click", () => {
                 openNodeBackupConfigModal(n);

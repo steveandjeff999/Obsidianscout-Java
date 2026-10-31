@@ -609,7 +609,7 @@ function tableCard(title, table) {
     const csv = document.createElement("button");
     csv.type = "button";
     csv.className = "btn ghost btn-sm";
-    csv.innerHTML = `<i class="fa-solid fa-download"></i> CSV`;
+    csv.innerHTML = `<span class="material-symbols-outlined">download</span> CSV`;
     csv.addEventListener("click", () => downloadCsv(title || "assistant-data", table));
     head.append(label, csv);
     const wrap = document.createElement("div");

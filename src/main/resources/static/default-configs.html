@@ -10,7 +10,9 @@
 
     <title>ObsidianScout | Manage Default Configs</title>
     <link rel="stylesheet" href="/css/app.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <link rel="manifest" href="/manifest.json" />
 
     <style>
@@ -239,8 +241,6 @@
             }
         })();
     </script>
-
-    <div class="orb orb-2"></div>
     <div class="orb orb-3"></div>
 
     <div class="app-shell">
@@ -328,7 +328,7 @@
 
                 <!-- Editor Sub-Tabs -->
                 <div class="editor-tabs">
-                    <button type="button" id="tab-visual" class="editor-tab-btn active"><i class="fa-solid fa-bolt"></i> Simple / Visual Editor</button>
+                    <button type="button" id="tab-visual" class="editor-tab-btn active"><span class="material-symbols-outlined">bolt</span> Simple / Visual Editor</button>
                     <button type="button" id="tab-raw" class="editor-tab-btn">{ } Raw JSON Editor</button>
                 </div>
 
@@ -439,7 +439,7 @@
                             </div>
                         </div>
                         <div class="preset-actions">
-                            ${!p.isDefault ? `<button class="btn ghost btn-sm" style="color:var(--accent); font-weight:600;" onclick="setActivePreset('${p.id}')"><i class="fa-solid fa-star"></i> Set Active</button>` : ''}
+                            ${!p.isDefault ? `<button class="btn ghost btn-sm" style="color:var(--accent); font-weight:600;" onclick="setActivePreset('${p.id}')"><span class="material-symbols-outlined">star</span> Set Active</button>` : ''}
                             <button class="btn ghost btn-sm" onclick="editPreset('${p.id}')">Edit</button>
                             <button class="btn ghost btn-sm" onclick="duplicatePreset('${p.id}')">Duplicate</button>
                             <button class="btn ghost btn-sm" style="color:#ef4444;" onclick="deletePreset('${p.id}', '${escapeHtml(p.name)}')">Delete</button>
@@ -745,10 +745,10 @@
                         <div class="visual-field-header">
                             <strong>Field #${idx + 1}: ${escapeHtml(labelVal || field.id || 'Untitled')}</strong>
                             <div style="display: flex; gap: 6px; align-items: center;">
-                                <button type="button" class="btn ghost btn-sm" title="Duplicate Field" onclick="duplicateVisualField(${idx})"><i class="fa-solid fa-copy"></i> Duplicate</button>
+                                <button type="button" class="btn ghost btn-sm" title="Duplicate Field" onclick="duplicateVisualField(${idx})"><span class="material-symbols-outlined">content_copy</span> Duplicate</button>
                                 <button type="button" class="btn ghost btn-sm" title="Move Up" onclick="moveVisualField(${idx}, -1)" ${idx === 0 ? 'disabled' : ''}>⬆</button>
                                 <button type="button" class="btn ghost btn-sm" title="Move Down" onclick="moveVisualField(${idx}, 1)" ${idx === fields.length - 1 ? 'disabled' : ''}>⬇</button>
-                                <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" title="Delete Field" onclick="removeVisualField(${idx})"><i class="fa-solid fa-trash"></i></button>
+                                <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" title="Delete Field" onclick="removeVisualField(${idx})"><span class="material-symbols-outlined">delete</span></button>
                             </div>
                         </div>
 
@@ -866,7 +866,7 @@
                                             ${supportsPts ? `
                                             <input type="number" step="any" class="input" value="${optPts}" placeholder="Pts" oninput="updateSelectOption(${idx}, ${optIdx}, 'points', Number(this.value))" title="Point Value" />
                                             ` : ''}
-                                            <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" title="Delete Option" onclick="removeSelectOption(${idx}, ${optIdx})"><i class="fa-solid fa-trash"></i></button>
+                                            <button type="button" class="btn ghost btn-sm" style="color:#ef4444;" title="Delete Option" onclick="removeSelectOption(${idx}, ${optIdx})"><span class="material-symbols-outlined">delete</span></button>
                                         </div>
                                     `;
                                 }).join('') : `<p class="notice" style="margin: 4px 0; font-size: 0.8rem;">No options defined. Click "+ Add Option" above.</p>`}

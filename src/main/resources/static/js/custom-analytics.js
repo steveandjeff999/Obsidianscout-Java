@@ -444,7 +444,7 @@
                 document.documentElement.requestFullscreen().catch(() => {});
             }
         } else {
-            if (btnKiosk) btnKiosk.innerHTML = '<i class="fa-solid fa-tv"></i> Kiosk';
+            if (btnKiosk) btnKiosk.innerHTML = '<span class="material-symbols-outlined">tv</span> Kiosk';
             if (kioskTimer) clearInterval(kioskTimer);
             if (document.exitFullscreen) {
                 document.exitFullscreen().catch(() => {});
@@ -465,7 +465,7 @@
         if (!banner) return;
         if (activeCrossFilterTeam !== null) {
             banner.style.display = "flex";
-            if (textEl) textEl.innerHTML = `<i class="fa-solid fa-thumbtack"></i> Interactive Cross-Filter Active: Team ${activeCrossFilterTeam}`;
+            if (textEl) textEl.innerHTML = `<span class="material-symbols-outlined">push_pin</span> Interactive Cross-Filter Active: Team ${activeCrossFilterTeam}`;
         } else {
             banner.style.display = "none";
         }

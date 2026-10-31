@@ -30,17 +30,15 @@ body.theme-dark .card.soft {
 }
 
 .card.glass {
-    background: var(--surface-glass, rgba(255, 255, 255, 0.7));
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--border-glass, rgba(255, 255, 255, 0.4));
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
 }
 
 body.theme-dark .card.glass {
-    background: var(--surface-glass, rgba(10, 10, 13, 0.85));
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--border-glass, rgba(255, 255, 255, 0.12));
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
 }
 
 .login-hero {

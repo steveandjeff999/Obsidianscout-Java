@@ -42,17 +42,17 @@ body.theme-dark .btn.primary {
 .btn.primary:hover {
     transform: translateY(-1px);
     background: var(--accent);
-    filter: brightness(1.1);
+    opacity: 0.94;
     color: var(--on-primary, #ffffff);
-    box-shadow: 0 4px 14px var(--accent-glow);
+    box-shadow: var(--shadow-sm);
 }
 
 body.theme-dark .btn:hover,
 body.theme-dark .btn.primary:hover {
     background: var(--accent);
-    filter: brightness(1.15);
+    opacity: 0.94;
     color: var(--on-primary, #ffffff);
-    box-shadow: 0 0 16px var(--accent-glow);
+    box-shadow: var(--shadow-sm);
 }
 
 .btn:active,

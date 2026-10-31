@@ -1350,7 +1350,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 </details>
             </div>
             <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
-                <a href="/schema-history?kind=${kind}" class="btn ghost" style="text-decoration: none; font-size: 12px;"><i class="fa-solid fa-scroll"></i> Schema History</a>
+                <a href="/schema-history?kind=${kind}" class="btn ghost" style="text-decoration: none; font-size: 12px;"><span class="material-symbols-outlined">history_edu</span> Schema History</a>
                 <div style="display: flex; gap: 10px;">
                     <button type="button" class="btn ghost btn-prompt-close">Dismiss / Later</button>
                     <button id="modal-btn-execute-migration" type="button" class="btn" style="font-weight: 600;">Migrate Records Now &rarr;</button>
@@ -1849,7 +1849,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const btnDel = document.createElement("button");
         btnDel.type = "button";
         btnDel.className = "btn-control-icon delete";
-        btnDel.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        btnDel.innerHTML = '<span class="material-symbols-outlined">delete</span>';
         btnDel.title = "Delete Field";
         btnDel.addEventListener("click", () => deleteField(index));
         controls.appendChild(btnDel);
@@ -2365,7 +2365,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 btnDelOpt.style.width = "32px";
                 btnDelOpt.style.height = "32px";
                 btnDelOpt.style.borderRadius = "8px";
-                btnDelOpt.innerHTML = '<i class="fa-solid fa-trash"></i>';
+                btnDelOpt.innerHTML = '<span class="material-symbols-outlined">delete</span>';
                 btnDelOpt.title = "Delete Option";
                 btnDelOpt.addEventListener("click", () => {
                     options.splice(optIdx, 1);

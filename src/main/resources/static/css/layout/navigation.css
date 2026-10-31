@@ -299,27 +299,34 @@ body.theme-dark .sidebar-toggle {
 .sidebar-link:hover svg,
 .sidebar-link:hover .sidebar-link-icon svg {
     opacity: 1;
-    transform: scale(1.08);
 }
 
 .sidebar-link.active {
-    background: var(--accent);
-    color: #ffffff;
-    box-shadow: 0 4px 14px var(--accent-glow);
-    font-weight: 700;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--accent);
+    box-shadow: none;
+    font-weight: 600;
 }
 
 .sidebar-link.active svg,
 .sidebar-link.active .sidebar-link-icon svg {
     opacity: 1;
-    stroke: currentColor;
+    stroke: var(--accent);
+    color: var(--accent);
 }
 
 body.theme-dark .sidebar-link.active {
-    background: var(--accent);
-    color: #09090b;
-    font-weight: 700;
-    box-shadow: 0 0 16px var(--accent-glow);
+    background: rgba(47, 104, 246, 0.15);
+    color: #58a6ff;
+    font-weight: 600;
+    box-shadow: none;
+}
+
+body.theme-dark .sidebar-link.active svg,
+body.theme-dark .sidebar-link.active .sidebar-link-icon svg {
+    opacity: 1;
+    stroke: #58a6ff;
+    color: #58a6ff;
 }
 
 .sidebar-footer {

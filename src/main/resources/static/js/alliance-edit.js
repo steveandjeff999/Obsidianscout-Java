@@ -884,7 +884,7 @@
         const btnDel = document.createElement("button");
         btnDel.type = "button";
         btnDel.className = "btn-control-icon delete";
-        btnDel.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        btnDel.innerHTML = '<span class="material-symbols-outlined">delete</span>';
         btnDel.title = "Delete Field";
         btnDel.addEventListener("click", () => deleteField(index));
         controls.appendChild(btnDel);

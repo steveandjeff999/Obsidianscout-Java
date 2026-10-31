@@ -152,7 +152,7 @@
 
         banner.innerHTML =
             `<div style="font-weight: 700; color: var(--warning); margin-bottom: 6px;">` +
-            `<i class="fa-solid fa-triangle-exclamation"></i> Duplicate or missing values in this config</div>` +
+            `<span class="material-symbols-outlined">warning</span> Duplicate or missing values in this config</div>` +
             `<ul style="margin: 0; padding-left: 18px;">${items.map((i) => `<li>${i}</li>`).join("")}</ul>` +
             `<div style="margin-top: 6px;">Give each field and each dropdown option its own value before scouting starts.</div>`;
         banner.style.display = "";

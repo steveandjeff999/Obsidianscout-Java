@@ -156,8 +156,8 @@ body.theme-dark .connection-widget {
 }
 
 .connection-widget.online .status-dot {
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
+    background: #10b981;
+    box-shadow: none;
 }
 
 .connection-widget.offline .status-dot {
@@ -174,7 +174,7 @@ body.theme-dark .connection-widget {
 }
 
 .connection-widget.online .status-text {
-    color: var(--accent);
+    color: #10b981;
 }
 
 .connection-widget.offline .status-text {

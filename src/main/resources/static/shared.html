@@ -11,7 +11,9 @@
 
     <link rel="stylesheet" href="/css/app.css" />
     <link rel="stylesheet" href="/css/share-modal.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <script defer src="/vendor/plotly-2.32.0.min.js"></script>
     <link rel="manifest" href="/manifest.json" />
 
@@ -96,8 +98,6 @@
 </head>
 
 <body data-page="shared">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
 
     <div class="shared-view-container">
         <!-- Status / Error Banner -->
@@ -105,14 +105,14 @@
 
         <!-- PIN Protection Gate -->
         <div id="shared-pin-gate" class="card shared-content-card pin-gate-box" style="display: none;">
-            <i class="fas fa-lock pin-gate-icon"></i>
+            <span class="material-symbols-outlined pin-gate-icon">lock</span>
             <h2 style="margin: 0;" data-i18n="shared_viewer.pin_required_title">Protected Share Link</h2>
             <p class="notice" id="pin-prompt-msg" data-i18n="shared_viewer.pin_prompt">This shared data is secured with a PIN code.</p>
             <div class="field mt-12">
                 <input type="password" id="pin-entry-input" class="share-input" placeholder="Enter PIN code..." data-i18n-placeholder="shared_viewer.pin_placeholder" style="text-align: center; font-size: 1.25rem; letter-spacing: 4px;" maxlength="16" />
             </div>
             <button class="btn primary mt-12" id="pin-submit-btn" type="button">
-                <i class="fas fa-unlock"></i> <span data-i18n="shared_viewer.pin_submit">Unlock Data</span>
+                <span class="material-symbols-outlined">lock_open</span> <span data-i18n="shared_viewer.pin_submit">Unlock Data</span>
             </button>
         </div>
 
@@ -121,12 +121,12 @@
             <div class="shared-header-card">
                 <div class="shared-header-top">
                     <h1 class="shared-title" id="view-title">
-                        <i class="fas fa-chart-pie" id="view-icon"></i>
+                        <span class="material-symbols-outlined" id="view-icon">pie_chart</span>
                         <span id="view-title-text">Shared Report</span>
                     </h1>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <button class="btn ghost btn-sm" id="shared-theme-toggle" type="button" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--border);" title="Toggle Dark / Light Mode">
-                            <i class="fas fa-moon" id="shared-theme-icon"></i>
+                            <span class="material-symbols-outlined" id="shared-theme-icon">dark_mode</span>
                             <span id="shared-theme-label">Dark Mode</span>
                         </button>
                         <span class="share-badge" id="view-scope-badge">Public</span>
@@ -136,15 +136,15 @@
                 <p id="view-desc" class="notice" style="margin: 0;"></p>
                 <div class="shared-meta-row">
                     <div class="shared-meta-item">
-                        <i class="fas fa-users"></i>
+                        <span class="material-symbols-outlined">group</span>
                         <span>Shared by Team <strong id="view-owner-team">--</strong> (<span id="view-program">FRC</span>)</span>
                     </div>
                     <div class="shared-meta-item" id="view-event-item">
-                        <i class="fas fa-calendar-alt"></i>
+                        <span class="material-symbols-outlined">calendar_today</span>
                         <span id="view-event-key">All Events</span>
                     </div>
                     <div class="shared-meta-item" id="view-expiry-item">
-                        <i class="fas fa-clock"></i>
+                        <span class="material-symbols-outlined">schedule</span>
                         <span id="view-expiry-text">Never Expires</span>
                     </div>
                 </div>
@@ -153,7 +153,7 @@
             <div class="shared-content-card" id="view-render-target">
                 <!-- Dynamically rendered chart, prediction matrix, data table, or BI studio output -->
                 <div id="view-loader" style="text-align: center; padding: 60px;">
-                    <i class="fas fa-spinner fa-spin fa-2x" style="color: var(--accent);"></i>
+                    <span class="material-symbols-outlined fa-spin" style="color: var(--accent);">progress_activity</span>
                     <p class="mt-12" style="color: var(--muted);">Loading shared data...</p>
                 </div>
             </div>

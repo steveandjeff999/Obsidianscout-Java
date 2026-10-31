@@ -11,22 +11,14 @@
     padding: 26px 28px;
     position: relative;
     overflow: hidden;
-    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--card-radius, var(--radius));
     transition: background var(--transition-smooth), border-color var(--transition-smooth);
 }
 
 .dashboard-hero::after {
-    content: '';
-    position: absolute;
-    top: -60px;
-    right: -40px;
-    width: 220px;
-    height: 220px;
-    background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
-    pointer-events: none;
-    opacity: 0.6;
+    display: none;
 }
 
 .dashboard-hero-main {
@@ -65,36 +57,39 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 10px;
-    border-radius: var(--radius-pill);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
-}
-
-.dashboard-badge.badge-program {
-    background: rgba(37, 99, 235, 0.12);
-    color: var(--accent);
-    border: 1px solid rgba(37, 99, 235, 0.25);
-}
-
-.dashboard-badge.badge-team {
-    background: var(--surface-3);
-    color: var(--ink);
+    background: var(--surface-2);
+    color: var(--muted);
     border: 1px solid var(--border);
 }
 
+.dashboard-badge.badge-program {
+    background: rgba(56, 139, 253, 0.12);
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.25);
+}
+
+.dashboard-badge.badge-team {
+    background: var(--surface-2);
+    color: var(--ink);
+    border-color: var(--border);
+}
+
 .dashboard-badge.badge-role {
-    background: rgba(16, 185, 129, 0.12);
-    color: var(--success);
-    border: 1px solid rgba(16, 185, 129, 0.25);
+    background: var(--surface-2);
+    color: var(--ink);
+    border-color: var(--border);
 }
 
 .dashboard-badge.badge-event {
-    background: rgba(124, 58, 237, 0.12);
-    color: var(--accent-3);
-    border: 1px solid rgba(124, 58, 237, 0.25);
+    background: var(--surface-2);
+    color: var(--muted);
+    border-color: var(--border);
 }
 
 .dashboard-hero-actions {
@@ -117,13 +112,13 @@
     border: none;
     cursor: pointer;
     text-decoration: none;
-    box-shadow: 0 4px 14px var(--accent-glow);
+    box-shadow: var(--shadow-sm);
     transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
 }
 
 .dash-btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px var(--accent-glow);
+    box-shadow: var(--shadow-sm);
     opacity: 0.95;
     color: var(--on-primary, #ffffff);
 }
@@ -234,12 +229,41 @@
     flex-shrink: 0;
 }
 
-.dashboard-kpi-icon.icon-blue { background: rgba(37, 99, 235, 0.1); color: #2563eb; }
-.dashboard-kpi-icon.icon-green { background: rgba(16, 185, 129, 0.1); color: #10b981; }
-.dashboard-kpi-icon.icon-purple { background: rgba(124, 58, 237, 0.1); color: #7c3aed; }
-.dashboard-kpi-icon.icon-amber { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
-.dashboard-kpi-icon.icon-sky { background: rgba(2, 132, 199, 0.1); color: #0284c7; }
-.dashboard-kpi-icon.icon-rose { background: rgba(244, 63, 94, 0.1); color: #f43f5e; }
+.dashboard-kpi-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    flex-shrink: 0;
+    transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.dashboard-kpi-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.dashboard-kpi-card:hover .dashboard-kpi-icon {
+    color: var(--accent);
+    background: rgba(56, 139, 253, 0.1);
+    border-color: rgba(56, 139, 253, 0.25);
+}
+
+.dashboard-kpi-icon.icon-blue,
+.dashboard-kpi-icon.icon-green,
+.dashboard-kpi-icon.icon-purple,
+.dashboard-kpi-icon.icon-amber,
+.dashboard-kpi-icon.icon-sky,
+.dashboard-kpi-icon.icon-rose {
+    background: var(--surface-2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+}
 
 .dashboard-kpi-value {
     font-size: 32px;
@@ -353,7 +377,7 @@
     align-items: center;
     gap: 6px;
     padding: 5px 12px;
-    border-radius: var(--radius-pill);
+    border-radius: 6px;
     background: var(--surface-3);
     color: var(--muted);
     font-size: 12px;
@@ -530,13 +554,13 @@
 }
 
 .dash-sync-indicator {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    margin-top: 5px;
+    margin-top: 6px;
     flex-shrink: 0;
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
+    background: #10b981;
+    box-shadow: none;
 }
 
 .dash-sync-indicator.syncing {

@@ -104,7 +104,7 @@ export function parseThoughtAndContent(raw) {
 export function aiBadge() {
     const badge = document.createElement("span");
     badge.className = "ai-badge";
-    badge.innerHTML = `<i class="fa-solid fa-microchip"></i> ${esc(t("ai.badge", "Generated on this device by AI - may be inaccurate"))}`;
+    badge.innerHTML = `<span class="material-symbols-outlined">memory</span> ${esc(t("ai.badge", "Generated on this device by AI - may be inaccurate"))}`;
     return badge;
 }
 

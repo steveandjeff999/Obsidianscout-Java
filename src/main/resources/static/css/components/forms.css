@@ -132,7 +132,7 @@ body.theme-dark textarea:disabled {
 input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus, select:focus, textarea:focus {
     border-color: var(--accent);
     background: var(--surface);
-    box-shadow: 0 0 0 3px var(--accent-glow);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
     outline: none;
 }
 
@@ -141,7 +141,7 @@ body.theme-dark select:focus,
 body.theme-dark textarea:focus {
     background: var(--surface-2);
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-glow);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
 select {
