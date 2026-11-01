@@ -138,6 +138,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    let comparisonShown = false;
+    Obsidianscout.liveRefresh(["scouting", "rankings"], async () => {
+        if (comparisonShown) await runComparison();
+    }, { minIntervalMs: 10000, eventKey: () => state.currentEventKey });
+
     async function runComparison() {
         const t1 = team1Select?.value ? parseInt(team1Select.value, 10) : null;
         const t2 = team2Select?.value ? parseInt(team2Select.value, 10) : null;
@@ -163,6 +168,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
         Obsidianscout.showLoadingSpinner(resultsContainer, t("compare.comparing_teams", "Comparing teams..."));
+        comparisonShown = true;
+        const quiet = Obsidianscout.isQuietRefresh();
 
         try {
             const eventQuery = state.currentEventKey ? `&eventKey=${encodeURIComponent(state.currentEventKey)}` : "";
@@ -170,6 +177,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             renderComparisonResults(teams, response || {});
         } catch (e) {
+            if (quiet) throw e;
             resultsContainer.innerHTML = `<div class="card error">Error comparing teams: ${Obsidianscout.escapeHtml(e.message)}</div>`;
         }
     }

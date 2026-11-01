@@ -83,16 +83,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     await loadTeamProfile();
+    Obsidianscout.liveRefresh(["scouting", "pit-scouting", "qual-scouting", "schedule", "rankings"], loadTeamProfile, {
+        minIntervalMs: 10000,
+        eventKey: () => currentEventKey
+    });
 });
 
 async function loadTeamProfile() {
     const loadingContainer = document.getElementById("loading-container");
     const profileContainer = document.getElementById("profile-container");
     const notFoundContainer = document.getElementById("not-found-container");
+    const quiet = Obsidianscout.isQuietRefresh();
 
-    if (notFoundContainer) notFoundContainer.classList.add("hidden");
-    profileContainer.classList.add("hidden");
-    loadingContainer.classList.remove("hidden");
+    if (!quiet) {
+        if (notFoundContainer) notFoundContainer.classList.add("hidden");
+        profileContainer.classList.add("hidden");
+        loadingContainer.classList.remove("hidden");
+    }
 
     try {
         // Fetch Settings & Event Key
@@ -133,6 +140,7 @@ async function loadTeamProfile() {
         // Find current team
         const foundTeam = (teamsList || []).find(t => t.teamNumber === currentTeamNumber);
         if (!foundTeam) {
+            if (quiet) return;
             loadingContainer.classList.add("hidden");
             profileContainer.classList.add("hidden");
             if (notFoundContainer) {
@@ -180,7 +188,7 @@ async function loadTeamProfile() {
         renderPitDetails();
         renderMatches();
         renderScoutingRecords();
-        setupTabs();
+        if (!quiet) setupTabs();
 
     } catch (error) {
         console.error("Failed to load team profile:", error);

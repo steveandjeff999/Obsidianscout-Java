@@ -389,7 +389,7 @@ object ScoutingService {
                 username = session.username,
                 completenessPct = completeness
             )
-        }
+        }.also { entriesChanged(session) }
     }
 
     private fun extractMeta(data: JsonObject): ScoutingEntryMeta {
@@ -502,7 +502,7 @@ object ScoutingService {
                 conflictingTeams = conflicting,
                 completenessPct = completeness
             )
-        }
+        }.also { entriesChanged(session) }
     }
 
     fun deleteEntry(session: UserSession, entryId: String) {
@@ -541,6 +541,12 @@ object ScoutingService {
             // Recalculate discrepancies
             recalculateDiscrepancies(eventKey, matchKey, targetTeamNumber, isPrescout)
         }
+        entriesChanged(session)
+    }
+
+    /** Pages showing entries or analytics refresh, on this team and any team sharing its entries. */
+    private fun entriesChanged(session: UserSession) {
+        com.obsidianscout.db.NotificationWebSocketManager.invalidateTeamData(session.teamNumber, session.program, listOf("scouting"))
     }
 
     fun resolveConflict(session: UserSession, request: ResolveConflictRequest, config: ScoutingConfig) =

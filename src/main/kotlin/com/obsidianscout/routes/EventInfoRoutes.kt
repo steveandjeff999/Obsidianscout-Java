@@ -56,7 +56,9 @@ fun Route.eventInfoRoutes() {
         post {
             val session = call.requireAdmin()
             val request = call.receive<EventInfoPostRequest>()
-            call.respond(EventInfoService.create(session.teamNumber, session.program, currentEventKey(session), session.username, request))
+            val created = EventInfoService.create(session.teamNumber, session.program, currentEventKey(session), session.username, request)
+            com.obsidianscout.db.NotificationWebSocketManager.invalidateTeam(session.teamNumber, session.program, listOf("event-info"))
+            call.respond(created)
         }
 
         put("/{id}") {
@@ -65,6 +67,7 @@ fun Route.eventInfoRoutes() {
             val request = call.receive<EventInfoPostRequest>()
             val updated = EventInfoService.update(id, session.teamNumber, session.program, currentEventKey(session), request)
                 ?: throw ApiException(HttpStatusCode.NotFound, "Post not found")
+            com.obsidianscout.db.NotificationWebSocketManager.invalidateTeam(session.teamNumber, session.program, listOf("event-info"))
             call.respond(updated)
         }
 
@@ -73,6 +76,7 @@ fun Route.eventInfoRoutes() {
             if (!EventInfoService.delete(call.parameters["id"].orEmpty(), session.teamNumber, session.program)) {
                 throw ApiException(HttpStatusCode.NotFound, "Post not found")
             }
+            com.obsidianscout.db.NotificationWebSocketManager.invalidateTeam(session.teamNumber, session.program, listOf("event-info"))
             call.respond(HttpStatusCode.NoContent)
         }
 
@@ -131,6 +135,7 @@ fun Route.eventInfoRoutes() {
             if (!EventInfoService.deleteFile(call.parameters["fileId"].orEmpty(), session.teamNumber, session.program)) {
                 throw ApiException(HttpStatusCode.NotFound, "File not found")
             }
+            com.obsidianscout.db.NotificationWebSocketManager.invalidateTeam(session.teamNumber, session.program, listOf("event-info"))
             call.respond(HttpStatusCode.NoContent)
         }
     }

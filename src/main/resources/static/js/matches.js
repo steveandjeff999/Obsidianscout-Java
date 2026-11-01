@@ -1,4 +1,5 @@
 let currentEventKey = "";
+let pageTimezone = null;
 let currentUser = null;
 let originalTableCardHTML = "";
 let tableCard = null;
@@ -30,6 +31,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     originalTableCardHTML = tableCard.innerHTML;
 
     await initMatchesPage();
+    Obsidianscout.liveRefresh(["schedule"], () => loadMatches(currentEventKey, pageTimezone), { eventKey: () => currentEventKey });
 });
 
 async function initMatchesPage() {
@@ -40,6 +42,7 @@ async function initMatchesPage() {
         const settings = settingsResponse.settings;
         currentEventKey = Obsidianscout.resolveEventKey(settings);
         const timezone = settings.timezone;
+        pageTimezone = timezone;
 
         const isAdmin = Obsidianscout.isAdmin(currentUser.role);
 
@@ -209,6 +212,7 @@ async function loadMatches(eventKey, timezone) {
         return;
     }
 
+    const quiet = Obsidianscout.isQuietRefresh();
     const cacheKey = `/api/matches?eventKey=${eventKey}`;
     const cachedMatches = Obsidianscout.getCachedData ? Obsidianscout.getCachedData(cacheKey) : null;
     let hasRenderedCache = false;
@@ -216,7 +220,7 @@ async function loadMatches(eventKey, timezone) {
     if (Array.isArray(cachedMatches) && cachedMatches.length > 0) {
         renderMatchesTable(cachedMatches, eventKey, timezone);
         hasRenderedCache = true;
-    } else {
+    } else if (!quiet) {
         body.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>' + t("status.loading", t('matches.loading_matches', "Loading matches...")) + '</div></td></tr>';
     }
 
@@ -228,6 +232,7 @@ async function loadMatches(eventKey, timezone) {
             body.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 24px;">' + t("matches.no_matches", "Failed to load matches.") + '</td></tr>';
         }
     } catch (error) {
+        if (quiet) throw error;
         if (!hasRenderedCache) {
             body.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 24px;">
                 <div class="retry-error-text" style="margin-bottom: 12px;">${t("matches.load_failed", "Unable to load matches")}: ${error.message}</div>

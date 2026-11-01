@@ -3,6 +3,7 @@
  * Formatting helpers, timezone calculators, team key formatters, program resolver, and async UI state placeholders.
  */
 
+import { isQuietRefresh } from './quiet-refresh.js';
 import { safeGetItem } from '../base/storage.js';
 import { t } from '../base/i18n.js';
 import { request } from '../base/http.js';
@@ -186,7 +187,7 @@ export function formatTeam(teamKey, teamNumber) {
 }
 
 export function showLoadingSpinner(container, text) {
-    if (!container) return;
+    if (!container || isQuietRefresh()) return;
     const spinnerText = text || (typeof t === 'function' ? t('status.loading', 'Loading data...') : 'Loading data...');
     container.innerHTML = `
         <div class="spinner-container">
@@ -197,7 +198,7 @@ export function showLoadingSpinner(container, text) {
 }
 
 export function showRetryButton(container, message, onRetry) {
-    if (!container) return;
+    if (!container || isQuietRefresh()) return;
     const errMessage = message || (typeof t === 'function' ? t('status.load_failed', 'Failed to load data.') : 'Failed to load data.');
     const btnText = typeof t === 'function' ? t('btn.retry', 'Retry') : 'Retry';
     container.innerHTML = `

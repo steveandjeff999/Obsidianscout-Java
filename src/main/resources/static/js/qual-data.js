@@ -124,6 +124,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     await loadAllQualData();
+
+    Obsidianscout.liveRefresh(["qual-scouting"], async () => {
+        if (state.config) await refreshData(state, ui, { keepSelection: true });
+    });
 });
 
 async function refreshData(state, ui, options) {

@@ -8,7 +8,7 @@
  * socket owner asks the server for anything it missed.
  */
 
-import { request } from '../base/http.js';
+import { getActiveEventKey, request } from '../base/http.js';
 import { checkLoginStatus } from '../base/auth.js';
 import { isPublicMode } from '../base/public-mode.js';
 import { showSlackBanner } from '../components/slack-banner.js';
@@ -20,23 +20,36 @@ const SEEN_KEY = "obsidianscout.slack.seen";
 const LAST_AT_KEY = "obsidianscout.slack.lastAt";
 const MAX_AGE_MS = 5 * 60 * 1000;
 const INVALIDATE_EVENT = "obsidianscout:invalidate";
+const RECONNECTED_EVENT = "obsidianscout:socket-reconnected";
 
 let channel = null;
 let started = false;
 
 /**
  * Runs [handler] when the server says data under any of [topics] changed (e.g. "chat", "assignments",
- * "alliance-selection", "banners", "access"). Calls arriving close together are combined into one. Pages keep a slow
- * poll as well: invalidations only come from the node this browser's socket is on. Returns an unsubscribe function.
+ * "alliance-selection", "banners", "access", "scouting", "pit-scouting", "qual-scouting", "rankings"). Calls arriving
+ * close together are combined into one. A change to shared event data names its event and is dropped here unless it's
+ * the one the page is on: [getEventKey] when given, otherwise the team's active event. Returns an unsubscribe function.
  */
-export function onInvalidate(topics, handler, debounceMs = 300) {
+export function onInvalidate(topics, handler, debounceMs = 300, getEventKey = getActiveEventKey) {
     const wanted = new Set(topics);
+    const gathered = new Set();
     let timer = null;
     const listener = (event) => {
         const changed = (event.detail && event.detail.topics) || [];
         if (!changed.some((t) => wanted.has(t))) return;
-        clearTimeout(timer);
-        timer = setTimeout(() => handler(changed), debounceMs);
+        const changedEvent = event.detail.eventKey;
+        const shownEvent = changedEvent ? (getEventKey() || "") : "";
+        if (shownEvent && shownEvent.toLowerCase() !== changedEvent.toLowerCase()) return;
+        changed.forEach((t) => gathered.add(t));
+        // The wait starts at the first change and isn't restarted, so a steady stream of changes can't hold it off.
+        if (timer !== null) return;
+        timer = setTimeout(() => {
+            timer = null;
+            const topicsChanged = Array.from(gathered);
+            gathered.clear();
+            handler(topicsChanged);
+        }, debounceMs);
     };
     window.addEventListener(INVALIDATE_EVENT, listener);
     return () => {
@@ -81,7 +94,11 @@ function flush() {
 
 function receive(n) {
     if (n && n.type === "invalidate" && Array.isArray(n.topics)) {
-        window.dispatchEvent(new CustomEvent(INVALIDATE_EVENT, { detail: { topics: n.topics } }));
+        window.dispatchEvent(new CustomEvent(INVALIDATE_EVENT, { detail: { topics: n.topics, eventKey: n.eventKey } }));
+        return;
+    }
+    if (n && n.type === "reconnected") {
+        window.dispatchEvent(new CustomEvent(RECONNECTED_EVENT));
         return;
     }
     if (!n || n.type !== "slack_notification" || !n.id) return;
@@ -116,6 +133,7 @@ function runSocket() {
     return new Promise((resolve) => {
         let backoff = 5000;
         let stopped = false;
+        let everConnected = false;
         const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/ws/notifications`;
 
         const connect = () => {
@@ -130,6 +148,9 @@ function runSocket() {
             socket.addEventListener("open", () => {
                 backoff = 5000;
                 catchUp();
+                // Changes made while the socket was down were never announced.
+                if (everConnected) dispatch({ type: "reconnected" });
+                everConnected = true;
             });
             socket.addEventListener("message", (event) => {
                 try {
@@ -143,7 +164,8 @@ function runSocket() {
                     resolve();
                     return;
                 }
-                setTimeout(connect, backoff);
+                // Randomised so that everyone dropped by a server restart doesn't reconnect in step.
+                setTimeout(connect, backoff * (0.5 + Math.random()));
                 backoff = Math.min(backoff * 2, 60000);
             });
         };

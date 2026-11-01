@@ -64,6 +64,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Wire quick team lookup search
     setupTeamLookup();
 
+    Obsidianscout.liveRefresh(["scouting", "pit-scouting", "qual-scouting", "schedule", "rankings", "assignments"], async () => {
+        if (!document.getElementById("sync-status")) return;
+        await refreshSummary();
+        await refreshSyncStatus();
+        if (currentEventKey) await loadUpcomingMatches(currentEventKey);
+    }, { minIntervalMs: 10000 });
+
     // Setup background auto-sync refresh interval
     setInterval(async () => {
         if (document.hidden || !currentUser) {

@@ -1,4 +1,7 @@
 {
+  "common.last_updated": "Last updated",
+  "common.saved_data_from": "Showing saved data from",
+  "common.showing_saved_data": "Showing saved data",
   "review.download_json": "Download JSON",
   "review.show_qr": "Show QR Code",
   "review.copy_json": "Copy JSON",
@@ -1733,6 +1736,7 @@
   "nav.default_configs": "Default Configs",
   "nav.docs": "Docs",
   "nav.error-reports": "Error Reports",
+  "nav.load-profiler": "Load Profiler",
   "nav.error_reports": "Error Reports",
   "nav.event-predictor": "Event Predictor",
   "nav.event_predictor": "Event Predictor",

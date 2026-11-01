@@ -107,6 +107,25 @@ async function initGraphsPage({ config, entries, events, settings }) {
     initGraphTypeControls(state);
     wireGraphOptions(state);
     updateSelectionSummary(state);
+
+    Obsidianscout.liveRefresh(["scouting", "schedule", "rankings"], () => refreshGraphData(state), {
+        minIntervalMs: 10000,
+        eventKey: () => state.eventKey
+    });
+}
+
+/** New entries and stats reach the summary, the team list and any graphs on screen; the choices made here stay. */
+async function refreshGraphData(state) {
+    const entries = await Obsidianscout.request("/api/scouting?includePrescout=true");
+    state.entries = entries;
+    renderSummary(entries);
+    if (state.eventKey) {
+        await loadTeamsForEvent(state);
+    }
+    updateTeamList(state);
+    if (state.graphsShown) {
+        await generateGraphs(state);
+    }
 }
 
 function initMetricOptions(state) {
@@ -587,10 +606,18 @@ function updateTeamList(state) {
 }
 
 async function loadTeamsForEvent(state) {
-    state.eventTeams = new Set();
-    state.eventTeamsMap = new Map();
-    state.matches = [];
-    state.statsHistory = { oprs: {}, epaHistory: [], match13History: [] };
+    // A background refresh keeps what's on show until there's something to replace it with.
+    const quiet = Obsidianscout.isQuietRefresh();
+    const emptyStats = { oprs: {}, epaHistory: [], match13History: [] };
+    const keptTeams = quiet ? Array.from(state.eventTeamsMap.values()) : [];
+    const keptMatches = quiet ? state.matches : [];
+    const keptStats = quiet ? state.statsHistory : emptyStats;
+    if (!quiet) {
+        state.eventTeams = new Set();
+        state.eventTeamsMap = new Map();
+        state.matches = [];
+        state.statsHistory = emptyStats;
+    }
 
     const eventKeyToFetch = state.eventKey || (state.settings ? (Obsidianscout.resolveEventKey(state.settings) || "") : "") || "";
     if (!eventKeyToFetch && !state.eventKey) {
@@ -599,11 +626,13 @@ async function loadTeamsForEvent(state) {
     const targetKey = state.eventKey || eventKeyToFetch;
     try {
         const [teams, matches, statsHistory] = await Promise.all([
-            Obsidianscout.request(`/api/teams?eventKey=${encodeURIComponent(targetKey)}`).catch(() => []),
-            Obsidianscout.request(`/api/matches?eventKey=${encodeURIComponent(targetKey)}`).catch(() => []),
-            Obsidianscout.request(`/api/stats/history?eventKey=${encodeURIComponent(targetKey)}`).catch(() => ({ oprs: {}, epaHistory: [], match13History: [] }))
+            Obsidianscout.request(`/api/teams?eventKey=${encodeURIComponent(targetKey)}`).catch(() => keptTeams),
+            Obsidianscout.request(`/api/matches?eventKey=${encodeURIComponent(targetKey)}`).catch(() => keptMatches),
+            Obsidianscout.request(`/api/stats/history?eventKey=${encodeURIComponent(targetKey)}`).catch(() => keptStats)
         ]);
         if (Array.isArray(teams)) {
+            state.eventTeams = new Set();
+            state.eventTeamsMap = new Map();
             teams.forEach(team => {
                 if (team.teamNumber) {
                     state.eventTeams.add(Number(team.teamNumber));
@@ -612,7 +641,7 @@ async function loadTeamsForEvent(state) {
             });
         }
         state.matches = Array.isArray(matches) ? matches : [];
-        state.statsHistory = statsHistory || { oprs: {}, epaHistory: [], match13History: [] };
+        state.statsHistory = statsHistory || emptyStats;
     } catch (error) {
         console.error("Failed to load teams for event:", error);
     }
@@ -879,7 +908,8 @@ async function generateGraphs(state) {
         return;
     }
 
-    if (loading) {
+    state.graphsShown = true;
+    if (loading && !Obsidianscout.isQuietRefresh()) {
         loading.classList.remove("hidden");
     }
 

@@ -223,6 +223,7 @@ import { collectValidatedPayload, clearValidation } from './services/form-valida
 import { showSaveReceipt, hideSaveReceipt, signInUrl } from './components/save-receipt.js';
 import { queueReady, storageMode } from './services/queue-store.js';
 import { initStaleDataNotice } from './components/stale-data-notice.js';
+import { initLastUpdated } from './components/last-updated.js';
 
 import {
     saveDraft,
@@ -249,6 +250,10 @@ import {
     initNotificationSocket,
     onInvalidate
 } from './services/notification-socket.js';
+
+import { liveRefresh } from './services/live-refresh.js';
+
+import { isQuietRefresh } from './utilities/quiet-refresh.js';
 
 import {
     initThemeSync
@@ -322,6 +327,7 @@ console.log("[CommonJS] Script initialized and loaded (Modular Architecture).");
 initErrorReporter();
 // Before any page script asks for data, so a first answer from the offline cache is noticed too.
 initStaleDataNotice();
+initLastUpdated();
 
 export function showModal(modalIdOrEl) {
     const el = typeof modalIdOrEl === 'string' ? document.getElementById(modalIdOrEl) : modalIdOrEl;
@@ -341,6 +347,8 @@ export function hideModal(modalIdOrEl) {
 // Export public API to window.Obsidianscout
 window.Obsidianscout = {
     onInvalidate,
+    liveRefresh,
+    isQuietRefresh,
     showModal,
     hideModal,
     initErrorReporter,

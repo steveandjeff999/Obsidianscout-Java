@@ -92,11 +92,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         const tableCard = document.getElementById("table-card");
         const tbody = document.querySelector("#scouter-table tbody");
-        tbody.innerHTML = `<tr><td colspan="12" class="notice">${esc(t("scouter-report.loading", "Building report..."))}</td></tr>`;
+        const quiet = Obsidianscout.isQuietRefresh();
+        if (!quiet) {
+            tbody.innerHTML = `<tr><td colspan="12" class="notice">${esc(t("scouter-report.loading", "Building report..."))}</td></tr>`;
+        }
         try {
             report = await Obsidianscout.request(`/api/admin/scouter-report${queryString()}`);
-            expanded.clear();
+            if (!quiet) expanded.clear();
         } catch (error) {
+            if (quiet) throw error;
             report = null;
             Obsidianscout.showToast(error.message || "Failed to build report", "error");
         }
@@ -153,6 +157,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         syncScopeFields();
     }
     await load();
+    Obsidianscout.liveRefresh(["scouting", "pit-scouting", "qual-scouting", "assignments"], load, {
+        minIntervalMs: 15000,
+        eventKey: () => (scopeSelect.value === "event" ? eventSelect.value : "")
+    });
 });
 
 function scopeLabel(r) {

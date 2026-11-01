@@ -30,3 +30,20 @@
     gap: 26px;
     grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
 }
+
+/* Set by components/last-updated.js; lives here so pages that rebuild their content can't remove it. */
+.main-content[data-last-updated]::after {
+    content: attr(data-last-updated);
+    display: block;
+    min-height: 1.4em;
+    margin-top: 24px;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--muted);
+}
+
+@media print {
+    .main-content[data-last-updated]::after {
+        display: none;
+    }
+}

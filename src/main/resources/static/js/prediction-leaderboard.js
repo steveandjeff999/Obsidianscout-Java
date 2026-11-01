@@ -158,7 +158,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         } else {
             params.set("year", yearSelect.value);
         }
-        tbody.innerHTML = `<tr><td colspan="9" class="notice">${esc(t("leaderboard.loading", "Loading leaderboard..."))}</td></tr>`;
+        const quiet = Obsidianscout.isQuietRefresh();
+        if (!quiet) {
+            tbody.innerHTML = `<tr><td colspan="9" class="notice">${esc(t("leaderboard.loading", "Loading leaderboard..."))}</td></tr>`;
+        }
         try {
             render(await Obsidianscout.request(`/api/match-predictions/leaderboard?${params.toString()}`));
         } catch (error) {
@@ -166,6 +169,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 showOff();
                 return;
             }
+            if (quiet) throw error;
             render(null);
             Obsidianscout.showToast(error.message || "Failed to load leaderboard", "error");
         }
@@ -181,4 +185,5 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     syncScopeFields();
     await load();
+    Obsidianscout.liveRefresh(["schedule"], load, { minIntervalMs: 30000 });
 });

@@ -820,6 +820,43 @@ object ClusterManagementService {
         )
     }
 
+    /** [targetIp]'s load figures, or null when it can't be reached. */
+    private suspend fun getNodeLoadProfile(targetIp: String, minutes: Int): NodeLoadProfile? = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        if (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank()) {
+            return@withContext LoadProfiler.localProfile(minutes)
+        }
+        val appPort = AppConfigLoader.load().server.port
+        val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/load-profile?minutes=$minutes"
+        try {
+            val req = buildSignedClusterRequest(url, "GET")
+                .timeout(Duration.ofSeconds(5))
+                .GET()
+                .build()
+            val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+            if (resp.statusCode() == 200) JsonSupport.json.decodeFromString<NodeLoadProfile>(resp.body()) else null
+        } catch (e: Exception) {
+            if (e.message?.contains("selector manager closed") == true) {
+                resetHttpClient()
+            }
+            null
+        }
+    }
+
+    suspend fun getClusterLoadProfile(minutes: Int): ClusterLoadProfile = withContext(Dispatchers.IO) {
+        val window = minutes.coerceIn(1, LoadProfiler.WINDOW_MINUTES)
+        // A single server has no cluster to list, and is still worth profiling.
+        val ips = runCatching { getClusterNodes().nodes.map { it.ip } }.getOrDefault(emptyList()).ifEmpty { listOf("local") }
+        val results = coroutineScope {
+            ips.map { ip -> async { ip to getNodeLoadProfile(ip, window) } }.awaitAll()
+        }
+        ClusterLoadProfile(
+            windowMinutes = window,
+            nodes = results.mapNotNull { it.second },
+            unreachableNodes = results.filter { it.second == null }.map { it.first }
+        )
+    }
+
     suspend fun getAllClusterLogs(limit: Int = 500, filter: String? = null): ServerLogsPayload = withContext(Dispatchers.IO) {
         val cluster = getClusterNodes()
         val nodePayloads = coroutineScope {

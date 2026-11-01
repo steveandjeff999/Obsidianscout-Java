@@ -62,12 +62,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             state.config = config || {};
             state.fields = buildDisplayFields((state.config && state.config.fields) || []);
-            state.entries = (Array.isArray(entries) ? entries : []).map(e => {
-                if (e.isPrescout) {
-                    return { ...e, eventKey: "prescout", rawEventKey: e.eventKey };
-                }
-                return e;
-            });
+            state.entries = normalizeEntries(entries);
             state.events = normalizeEvents(events, state.eventKey, state.settings);
             state.quickFieldId = pickDefaultQuickField(state.fields);
 
@@ -81,7 +76,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     await loadAllPitData();
+
+    Obsidianscout.liveRefresh(["pit-scouting"], async () => {
+        if (!state.config) return;
+        state.entries = normalizeEntries(await Obsidianscout.request("/api/pit-scouting?includePrescout=true&all=true"));
+        renderAll(state);
+    });
 });
+
+function normalizeEntries(entries) {
+    return (Array.isArray(entries) ? entries : []).map(e => {
+        if (e.isPrescout) {
+            return { ...e, eventKey: "prescout", rawEventKey: e.eventKey };
+        }
+        return e;
+    });
+}
 
 const RESERVED_FIELDS = new Set(["eventKey", "targetTeamNumber"]);
 

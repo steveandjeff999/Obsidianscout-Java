@@ -21,6 +21,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     Obsidianscout.wireThemeToggle();
 
     await initProjectedRankingsPage();
+    // Every refresh re-runs the simulation on the server, so these stay well apart.
+    Obsidianscout.liveRefresh(["rankings", "schedule"], () => loadProjection(), {
+        minIntervalMs: 30000,
+        eventKey: () => currentEventKey
+    });
 });
 
 async function initProjectedRankingsPage() {
@@ -89,8 +94,11 @@ async function loadProjection({ fresh = false } = {}) {
     const simsSelect = document.getElementById("projection-sims");
     const simulations = simsSelect ? simsSelect.value : "2000";
     const seedParam = fresh ? `&seed=${Math.floor(Math.random() * 2147483647)}` : "";
-    body.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>${Obsidianscout.escapeHtml(t("projected.simulating", "Simulating remaining matches..."))}</div></td></tr>`;
-    if (runBtn) runBtn.disabled = true;
+    const quiet = Obsidianscout.isQuietRefresh();
+    if (!quiet) {
+        body.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>${Obsidianscout.escapeHtml(t("projected.simulating", "Simulating remaining matches..."))}</div></td></tr>`;
+        if (runBtn) runBtn.disabled = true;
+    }
 
     try {
         const data = await Obsidianscout.request(
@@ -100,6 +108,7 @@ async function loadProjection({ fresh = false } = {}) {
         renderProjection(data);
     } catch (error) {
         if (requestId !== projectionRequestId) return;
+        if (quiet) throw error;
         console.error("Failed to load ranking projection:", error);
         body.innerHTML = "";
         const row = document.createElement("tr");

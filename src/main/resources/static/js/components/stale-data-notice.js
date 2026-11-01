@@ -10,8 +10,8 @@ export const SERVED_FROM_CACHE_EVENT = "obsidianscout:served-from-cache";
 
 const PILL_ID = "stale-data-pill";
 // Session, settings and config requests happen on every page and aren't the data people are reading.
-const IGNORED = [/^\/api\/auth\//, /^\/api\/settings/, /^\/api\/(pit-|qual-)?config/, /^\/api\/version/, /^\/api\/banners/,
-    /^\/api\/chat/, /^\/api\/alliances\/invites/, /^\/api\/push/, /^\/api\/theme/];
+export const IGNORED_DATA_PATHS = [/^\/api\/auth\//, /^\/api\/settings/, /^\/api\/(pit-|qual-)?config/, /^\/api\/version/, /^\/api\/banners/,
+    /^\/api\/chat/, /^\/api\/alliances\/invites/, /^\/api\/push/, /^\/api\/theme/, /^\/api\/slack/, /^\/api\/notifications/];
 // Scouting forms have their own offline banner.
 const SKIP_PAGES = ["scout", "pit-scout", "qual-scout", "prescout-scout", "prescout-pit", "prescout-qual", "login", "landing", "docs", "contact"];
 
@@ -19,6 +19,7 @@ let _oldest = null;      // oldest known timestamp among copies shown
 let _unknownAge = false; // a copy whose age isn't known
 let _dismissed = false;
 let _started = false;
+let _pillState = null;
 
 function formatTime(ts) {
     const d = new Date(ts);
@@ -29,6 +30,7 @@ function formatTime(ts) {
 
 function render(state = "offline") {
     if (_dismissed || !document.body) return;
+    _pillState = state;
     let pill = document.getElementById(PILL_ID);
     if (!pill) {
         pill = document.createElement("div");
@@ -71,7 +73,7 @@ export function initStaleDataNotice() {
         if (SKIP_PAGES.includes(page)) return;
         const detail = e.detail || {};
         const path = String(detail.path || "").split("?")[0];
-        if (!path || IGNORED.some((re) => re.test(path))) return;
+        if (!path || IGNORED_DATA_PATHS.some((re) => re.test(path))) return;
         const ts = Number(detail.timestamp) || 0;
         // Copies read back from localStorage carry the read time, not the save time.
         if (!ts || Date.now() - ts < 3000) _unknownAge = true;
@@ -80,6 +82,14 @@ export function initStaleDataNotice() {
     });
     window.addEventListener("obsidianscout:connection-changed", (e) => {
         if (document.getElementById(PILL_ID) && e.detail && e.detail.online) render("online");
+    });
+    // A page that updates itself has caught up, so there's nothing left to refresh.
+    window.addEventListener("obsidianscout:live-refreshed", () => {
+        if (_pillState !== "online") return;
+        document.getElementById(PILL_ID)?.remove();
+        _pillState = null;
+        _oldest = null;
+        _unknownAge = false;
     });
 }
 

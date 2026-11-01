@@ -209,7 +209,8 @@ async function loadPredictorData() {
         const loadingState = document.getElementById("predictor-loading-state");
         const loadingText = document.getElementById("predictor-loading-text");
 
-        matchSelect.addEventListener("change", async () => {
+        const showPrediction = async () => {
+            const quiet = Obsidianscout.isQuietRefresh();
             const matchKey = matchSelect.value;
             if (!matchKey) {
                 workspace.classList.add("hidden");
@@ -220,10 +221,12 @@ async function loadPredictorData() {
             }
 
             try {
-                workspace.classList.add("hidden");
-                emptyState.classList.add("hidden");
+                if (!quiet) {
+                    workspace.classList.add("hidden");
+                    emptyState.classList.add("hidden");
+                }
                 
-                if (loadingState && loadingText) {
+                if (loadingState && loadingText && !quiet) {
                     const datasourceSelect = document.getElementById("datasource-select");
                     const selectedSource = (currentSettings && (currentSettings.useStatboticsEpa || currentSettings.useTbaOpr) && datasourceSelect) 
                         ? datasourceSelect.value 
@@ -244,12 +247,17 @@ async function loadPredictorData() {
                 if (loadingState) loadingState.classList.add("hidden");
                 workspace.classList.remove("hidden");
             } catch (err) {
+                if (quiet) throw err;
                 console.error("Prediction fetch failed", err);
                 if (loadingState) loadingState.classList.add("hidden");
                 emptyState.classList.remove("hidden");
                 Obsidianscout.showToast(err.message || "Failed to load prediction details", "error");
             }
-        });
+        };
+        matchSelect.addEventListener("change", showPrediction);
+        Obsidianscout.liveRefresh(["scouting", "schedule", "rankings"], async () => {
+            if (matchSelect.value) await showPrediction();
+        }, { minIntervalMs: 10000, eventKey: () => targetEventKey });
 
         const btnSharePrediction = document.getElementById("btn-share-prediction");
         if (btnSharePrediction) {

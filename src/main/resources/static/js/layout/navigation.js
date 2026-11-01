@@ -191,6 +191,7 @@ export const PAGE_SEARCH_KEYWORDS = {
     "cluster-management": ["server nodes", "cluster", "hosts", "servidores"],
     "storage-manager": ["database storage", "files", "backups", "disk", "almacenamiento"],
     "error-reports": ["crash logs", "client errors", "diagnostics", "reportes de errores"],
+    "load-profiler": ["server load", "performance", "requests", "metrics", "live refresh", "carga del servidor"],
     "fcm-settings": ["push notifications", "firebase", "fcm", "notificaciones"],
     "default-configs": ["schema presets", "game config", "form config", "configuraciones predeterminadas"],
     "settings": ["preferences", "config", "dark mode", "theme", "language", "color", "configuracion"],
@@ -226,7 +227,7 @@ export function updateSectionHeaderVisibility(sidebar) {
 export function adjustNavForRole(user) {
     if (!user || isPublicMode()) return;
     const role = user.role;
-    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "fcm-settings", "migration", "default-configs"];
+    const superAdminPages = ["cluster-management", "storage-manager", "error-reports", "load-profiler", "fcm-settings", "migration", "default-configs"];
 
     // Reset all standard links to visible first before applying role restrictions
     document.querySelectorAll('.sidebar-link[data-page]').forEach((link) => {

@@ -71,7 +71,8 @@ object DatabaseFactory {
         EntryTombstones,
         SlackIntegrations,
         SlackNotifications,
-        SlackUserPreferences
+        SlackUserPreferences,
+        LiveInvalidations
     )
     private val uuidMigratedTables = listOf(
         "users", "scouting_configs", "pit_scouting_configs",

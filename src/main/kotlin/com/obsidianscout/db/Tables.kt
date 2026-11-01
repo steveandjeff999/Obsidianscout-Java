@@ -564,6 +564,21 @@ object SlackIntegrations : UUIDTable("slack_integrations") {
     }
 }
 
+/** Invalidations on their way to other nodes' sockets (see LiveInvalidationRelay). Rows last a few minutes. */
+object LiveInvalidations : UUIDTable("live_invalidations") {
+    val originNode = varchar("origin_node", 36)
+    val teamNumber = integer("team_number").nullable()
+    val program = varchar("program", 8).default("")
+    val eventKey = varchar("event_key", 64).nullable()
+    /** Comma-separated topic names. */
+    val topics = text("topics")
+    val createdAt = timestamp("created_at")
+
+    init {
+        index("idx_live_invalidations_created", false, createdAt)
+    }
+}
+
 /**
  * Slack messages that matched a channel rule, with the users who should see them. Written once by the node holding
  * the team's Slack socket; every node tails it to push banners to its own WebSocket clients. Kept 7 days.

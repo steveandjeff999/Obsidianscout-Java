@@ -72,29 +72,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             state.config = matchConfig;
             state.events = normalizeEvents(events, state.eventKey, state.settings);
 
-            // Normalize match entries with calculated score
-            state.entries = (matchEntries || []).map(e => {
-                const totalScore = computeEntryTotalScore(matchConfig, e.data);
-                return {
-                    id: `match-${e.id}`,
-                    originalId: e.id,
-                    type: "Match",
-                    ownerTeamNumber: e.ownerTeamNumber,
-                    targetTeamNumber: e.targetTeamNumber,
-                    eventKey: e.isPrescout ? "prescout" : e.eventKey,
-                    rawEventKey: e.eventKey,
-                    isPrescout: e.isPrescout || false,
-                    matchNumber: e.matchNumber,
-                    matchKey: e.matchKey,
-                    createdAt: e.createdAt,
-                    matchPlayedTime: e.matchPlayedTime || null,
-                    data: e.data,
-                    hasDiscrepancy: e.hasDiscrepancy || false,
-                    conflictingTeams: e.conflictingTeams || [],
-                    totalScore: totalScore,
-                    completenessPct: e.completenessPct != null ? Math.round(e.completenessPct) : null
-                };
-            });
+            state.entries = normalizeEntries(matchEntries, matchConfig);
 
             // Parse URL parameters for deep-linking
             const urlParams = new URLSearchParams(window.location.search);
@@ -132,7 +110,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     await loadMatchScoutingData();
+
+    Obsidianscout.liveRefresh(["scouting"], async () => {
+        if (!state.config) return;
+        const matchEntries = await Obsidianscout.request("/api/scouting?includePrescout=true&all=true");
+        state.entries = normalizeEntries(matchEntries, state.config);
+        renderAll(state);
+    }, { eventKey: () => state.filters.eventKey });
 });
+
+/** Match entries in the shape this page uses, with their calculated score. */
+function normalizeEntries(matchEntries, config) {
+    return (matchEntries || []).map(e => {
+        const totalScore = computeEntryTotalScore(config, e.data);
+        return {
+            id: `match-${e.id}`,
+            originalId: e.id,
+            type: "Match",
+            ownerTeamNumber: e.ownerTeamNumber,
+            targetTeamNumber: e.targetTeamNumber,
+            eventKey: e.isPrescout ? "prescout" : e.eventKey,
+            rawEventKey: e.eventKey,
+            isPrescout: e.isPrescout || false,
+            matchNumber: e.matchNumber,
+            matchKey: e.matchKey,
+            createdAt: e.createdAt,
+            matchPlayedTime: e.matchPlayedTime || null,
+            data: e.data,
+            hasDiscrepancy: e.hasDiscrepancy || false,
+            conflictingTeams: e.conflictingTeams || [],
+            totalScore: totalScore,
+            completenessPct: e.completenessPct != null ? Math.round(e.completenessPct) : null
+        };
+    });
+}
 
 const RESERVED_FIELDS = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);
 

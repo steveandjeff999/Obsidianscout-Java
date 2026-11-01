@@ -38,6 +38,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     await loadEvents();
+
+    // Every refresh recalculates the whole event, so these stay well apart.
+    Obsidianscout.liveRefresh(["scouting", "schedule", "rankings"], async () => {
+        if (document.getElementById("event-select")?.value) await fetchPredictions();
+    }, {
+        minIntervalMs: 30000,
+        eventKey: () => document.getElementById("event-select")?.value || ""
+    });
 });
 
 async function loadEvents() {
@@ -165,11 +173,14 @@ async function fetchPredictions() {
         return;
     }
 
+    const quiet = Obsidianscout.isQuietRefresh();
     try {
-        emptyState.classList.add("hidden");
-        predictionsCard.classList.add("hidden");
-        
-        if (loadingState && loadingText) {
+        if (!quiet) {
+            emptyState.classList.add("hidden");
+            predictionsCard.classList.add("hidden");
+        }
+
+        if (loadingState && loadingText && !quiet) {
             const datasourceSelect = document.getElementById("datasource-select");
             const selectedSource = datasourceSelect ? datasourceSelect.value : "scouted";
             if (selectedSource === "epa" || selectedSource === "opr") {
@@ -189,6 +200,7 @@ async function fetchPredictions() {
         renderPredictionsList();
 
     } catch (error) {
+        if (quiet) throw error;
         console.error("Failed to fetch predictions:", error);
         if (loadingState) loadingState.classList.add("hidden");
         predictionsCard.classList.add("hidden");

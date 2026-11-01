@@ -195,6 +195,7 @@ export async function publicRequest(path, options = {}) {
         err.status = response.status;
         throw err;
     }
+    window.dispatchEvent(new CustomEvent("obsidianscout:data-fetched", { detail: { path } }));
     return data;
 }
 

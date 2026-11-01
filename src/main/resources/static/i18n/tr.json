@@ -1,4 +1,7 @@
 {
+  "common.last_updated": "Son güncelleme",
+  "common.saved_data_from": "Kayıtlı veriler gösteriliyor:",
+  "common.showing_saved_data": "Kayıtlı veriler gösteriliyor",
   "review.download_json": "JSON İndir",
   "review.show_qr": "QR Kodunu Göster",
   "review.copy_json": "JSON Kopyala",
@@ -1733,6 +1736,7 @@
   "nav.default_configs": "Varsayılan Yapılandırmalar",
   "nav.docs": "Belgeler",
   "nav.error-reports": "Hata Raporları",
+  "nav.load-profiler": "Yük Profili",
   "nav.error_reports": "Hata Raporları",
   "nav.event-predictor": "Etkinlik Tahmincisi",
   "nav.event_predictor": "Etkinlik Tahmincisi",

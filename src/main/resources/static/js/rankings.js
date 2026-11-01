@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     originalCardHTML = card.innerHTML;
 
     await initRankingsPage();
+    Obsidianscout.liveRefresh(["scouting", "rankings", "schedule"], loadRankings, { eventKey: () => currentEventKey });
 });
 
 let appSettings = null;
@@ -152,13 +153,17 @@ async function loadRankings() {
 
     const table = document.getElementById("rankings-table");
     const body = table.querySelector("tbody");
-    body.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading teams...</div></td></tr>';
+    const quiet = Obsidianscout.isQuietRefresh();
+    if (!quiet) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading teams...</div></td></tr>';
+    }
 
     try {
         const teams = await Obsidianscout.request(`/api/teams?eventKey=${currentEventKey}`);
         currentTeams = teams;
         renderTable();
     } catch (error) {
+        if (quiet) throw error;
         console.error("Failed to load teams:", error);
         Obsidianscout.showToast("Failed to load teams for event", "error");
         body.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 24px;">Failed to load teams.</td></tr>';

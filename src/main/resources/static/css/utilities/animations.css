@@ -126,3 +126,11 @@
         transition: none !important;
     }
 }
+
+/* Data swapped in by a background refresh appears as if it had always been there. */
+.live-refreshing *,
+.live-refreshing *::before,
+.live-refreshing *::after {
+    animation: none !important;
+    transition: none !important;
+}

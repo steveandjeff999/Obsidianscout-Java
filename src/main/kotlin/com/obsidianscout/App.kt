@@ -287,6 +287,28 @@ fun Application.module(appConfig: AppConfig) {
         }
     }
 
+    // Feeds the superadmin load profiler
+    intercept(io.ktor.server.application.ApplicationCallPipeline.Monitoring) {
+        val profiler = com.obsidianscout.admin.LoadProfiler
+        val path = call.request.path()
+        if (!profiler.tracks(path) || call.request.headers.contains(HttpHeaders.Upgrade)) return@intercept
+        val startedAt = System.nanoTime()
+        try {
+            proceed()
+        } finally {
+            if (!call.attributes.contains(profiler.ForwardedToPeer)) {
+                profiler.record(
+                    method = call.request.local.method.value,
+                    path = path,
+                    status = call.response.status()?.value ?: 500,
+                    micros = (System.nanoTime() - startedAt) / 1000,
+                    bodyBytes = call.attributes.getOrNull(profiler.BodyBytes) ?: 0L,
+                    live = call.request.headers.contains(profiler.LIVE_REFRESH_HEADER)
+                )
+            }
+        }
+    }
+
     // Response interceptor for ETags and 304 Not Modified on GET /api/ endpoints
     sendPipeline.intercept(ApplicationSendPipeline.Render) { message ->
         val call = context
@@ -294,6 +316,7 @@ fun Application.module(appConfig: AppConfig) {
         val method = call.request.local.method.value.uppercase()
         if (method == "GET" && path.startsWith("/api/") && message is OutgoingContent.ByteArrayContent) {
             val bytes = message.bytes()
+            call.attributes.put(com.obsidianscout.admin.LoadProfiler.BodyBytes, bytes.size.toLong())
             val crc = java.util.zip.CRC32()
             crc.update(bytes)
             val etag = "\"${java.lang.Long.toHexString(crc.value)}\""
@@ -451,6 +474,7 @@ fun Application.module(appConfig: AppConfig) {
         if (best.ip != localIp) {
             val forwarded = com.obsidianscout.admin.PeerLoadRouter.forwardRequest(best, call)
             if (forwarded) {
+                call.attributes.put(com.obsidianscout.admin.LoadProfiler.ForwardedToPeer, true)
                 finish()
                 return@intercept
             }
@@ -703,6 +727,7 @@ fun Application.module(appConfig: AppConfig) {
                 com.obsidianscout.db.QuorumFallbackStore.start()
                 com.obsidianscout.db.AutoBackupScheduler.start(appConfig)
                 com.obsidianscout.slack.SlackNotificationRelay.start()
+                com.obsidianscout.db.LiveInvalidationRelay.start()
                 com.obsidianscout.slack.SlackSocketSupervisor.start()
                 consoleLog.info("[Database] Background database initialization completed successfully.")
                 
@@ -727,6 +752,7 @@ fun Application.module(appConfig: AppConfig) {
         com.obsidianscout.auth.SessionCleanupScheduler.stop()
         com.obsidianscout.slack.SlackSocketSupervisor.stop()
         com.obsidianscout.slack.SlackNotificationRelay.stop()
+        com.obsidianscout.db.LiveInvalidationRelay.stop()
         com.obsidianscout.db.AutoBackupScheduler.stop()
         com.obsidianscout.db.QuorumFallbackStore.stop()
         com.obsidianscout.admin.PeerLoadRouter.stop()

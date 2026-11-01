@@ -119,6 +119,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     await loadAllScoutingData();
+
+    Obsidianscout.liveRefresh(["scouting", "pit-scouting", "qual-scouting"], async () => {
+        if (!state.configs.match) return;
+        const [matchEntries, pitEntries, qualEntries] = await Promise.all([
+            Obsidianscout.request("/api/scouting?includePrescout=true&all=true"),
+            Obsidianscout.request("/api/pit-scouting?includePrescout=true&all=true"),
+            Obsidianscout.request("/api/qual-scouting?includePrescout=true&all=true")
+        ]);
+        state.entries = mergeEntries(matchEntries || [], pitEntries || [], qualEntries || []);
+        renderAll(state);
+    }, { eventKey: () => state.filters.eventKey });
 });
 
 const RESERVED_FIELDS = new Set(["eventKey", "matchKey", "matchNumber", "targetTeamNumber"]);

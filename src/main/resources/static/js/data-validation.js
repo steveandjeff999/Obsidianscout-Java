@@ -24,6 +24,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     setupTabListeners();
     setupControlListeners();
     await loadEvents();
+
+    Obsidianscout.liveRefresh(["scouting", "schedule"], async () => {
+        if (document.getElementById("event-select")?.value) await fetchValidationData();
+    }, {
+        minIntervalMs: 10000,
+        eventKey: () => document.getElementById("event-select")?.value || ""
+    });
 });
 
 function setupControlListeners() {
@@ -127,9 +134,12 @@ async function fetchValidationData() {
     const threshold = document.getElementById("threshold-select").value || "15";
     const forcePrescout = document.getElementById("force-prescout").checked;
 
-    emptyState.classList.add("hidden");
-    validationCard.classList.add("hidden");
-    loadingState.classList.remove("hidden");
+    const quiet = Obsidianscout.isQuietRefresh();
+    if (!quiet) {
+        emptyState.classList.add("hidden");
+        validationCard.classList.add("hidden");
+        loadingState.classList.remove("hidden");
+    }
 
     try {
         const url = `/api/validation?eventKey=${encodeURIComponent(eventKey)}&threshold=${threshold}&forcePrescout=${forcePrescout}`;
@@ -142,6 +152,7 @@ async function fetchValidationData() {
         loadingState.classList.add("hidden");
         validationCard.classList.remove("hidden");
     } catch (error) {
+        if (quiet) throw error;
         console.error("Failed to fetch validation data:", error);
         loadingState.classList.add("hidden");
         emptyState.classList.remove("hidden");

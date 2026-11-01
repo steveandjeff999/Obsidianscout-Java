@@ -985,6 +985,16 @@ fun Route.adminRoutes() {
                         val filter = call.request.queryParameters["filter"]
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getAllClusterLogs(limit, filter))
                     }
+                    get("/load-profile") {
+                        call.requireSuperAdmin()
+                        val minutes = call.request.queryParameters["minutes"]?.toIntOrNull() ?: 15
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterLoadProfile(minutes))
+                    }
+                    get("/nodes/local/load-profile") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val minutes = call.request.queryParameters["minutes"]?.toIntOrNull() ?: 15
+                        call.respond(com.obsidianscout.admin.LoadProfiler.localProfile(minutes))
+                    }
 
                     // Quorum Fallback Mirror Management
                     get("/quorum-fallback") {

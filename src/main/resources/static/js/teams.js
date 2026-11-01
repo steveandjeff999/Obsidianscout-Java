@@ -30,6 +30,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     originalTableCardHTML = tableCard.innerHTML;
 
     await initTeamsPage();
+    Obsidianscout.liveRefresh(["schedule", "rankings"], () => loadTeams(currentEventKey), { eventKey: () => currentEventKey });
 });
 
 async function initTeamsPage() {
@@ -209,6 +210,7 @@ async function loadTeams(eventKey) {
         return;
     }
 
+    const quiet = Obsidianscout.isQuietRefresh();
     const cacheKey = `/api/teams?eventKey=${eventKey}`;
     const cachedTeams = Obsidianscout.getCachedData ? Obsidianscout.getCachedData(cacheKey) : null;
     let hasRenderedCache = false;
@@ -216,7 +218,7 @@ async function loadTeams(eventKey) {
     if (Array.isArray(cachedTeams) && cachedTeams.length > 0) {
         renderTeamsTable(cachedTeams, eventKey);
         hasRenderedCache = true;
-    } else {
+    } else if (!quiet) {
         body.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 24px;"><div class="spinner" style="margin: 0 auto 12px; width: 32px; height: 32px;"></div><div>Loading teams...</div></td></tr>';
     }
 
@@ -228,6 +230,7 @@ async function loadTeams(eventKey) {
             body.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 24px;">Failed to load teams.</td></tr>';
         }
     } catch (error) {
+        if (quiet) throw error;
         if (!hasRenderedCache) {
             body.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px;">
                 <div class="retry-error-text" style="margin-bottom: 12px;">Failed to load teams: ${error.message}</div>

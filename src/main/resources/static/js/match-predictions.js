@@ -205,4 +205,5 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     Obsidianscout.showLoadingSpinner(list, t("predictions.loading", "Loading matches..."));
     await load(true);
+    Obsidianscout.liveRefresh(["schedule"], () => load(true), { eventKey: () => eventKey });
 });

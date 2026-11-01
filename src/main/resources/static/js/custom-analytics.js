@@ -196,6 +196,12 @@
         bindEditorModals();
 
         await loadInitialData();
+
+        Obsidianscout.liveRefresh(["scouting", "pit-scouting", "qual-scouting", "schedule"], async () => {
+            if (!currentReport) return;
+            await fetchDataset(currentReport.slicers && currentReport.slicers.eventKey);
+            renderDashboard();
+        }, { minIntervalMs: 15000 });
     });
 
     async function loadInitialData() {

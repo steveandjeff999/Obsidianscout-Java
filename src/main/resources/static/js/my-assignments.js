@@ -69,6 +69,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             await loadData();
             wireEventListeners();
+            Obsidianscout.liveRefresh(["assignments", "schedule"], loadData, { eventKey: () => currentEventKey });
 
             // Start countdown timer
             if (countdownInterval) clearInterval(countdownInterval);
@@ -89,11 +90,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        // A background refresh keeps what's on show until there's something to replace it with.
+        const quiet = Obsidianscout.isQuietRefresh();
         try {
             const [myAsgnsRes, matchesRes, teamsRes] = await Promise.all([
-                Obsidianscout.request(`/api/assignments/my?eventKey=${encodeURIComponent(currentEventKey)}`).catch(() => []),
-                Obsidianscout.request(`/api/matches?eventKey=${encodeURIComponent(currentEventKey)}`).catch(() => []),
-                Obsidianscout.request(`/api/teams?eventKey=${encodeURIComponent(currentEventKey)}`).catch(() => [])
+                Obsidianscout.request(`/api/assignments/my?eventKey=${encodeURIComponent(currentEventKey)}`).catch(() => (quiet ? assignments : [])),
+                Obsidianscout.request(`/api/matches?eventKey=${encodeURIComponent(currentEventKey)}`).catch(() => (quiet ? matches : [])),
+                Obsidianscout.request(`/api/teams?eventKey=${encodeURIComponent(currentEventKey)}`).catch(() => (quiet ? teams : []))
             ]);
 
             let rawAsgns = Array.isArray(myAsgnsRes) ? myAsgnsRes : (myAsgnsRes.assignments || []);
@@ -134,6 +137,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             renderHeroBanner();
             renderAssignments();
         } catch (err) {
+            if (quiet) throw err;
             console.error("Failed to load assignments data:", err);
             Obsidianscout.showToast(Obsidianscout.t ? Obsidianscout.t("my_assignments.error_load", "Failed to fetch assignment list") : "Failed to fetch assignment list", "error");
         }

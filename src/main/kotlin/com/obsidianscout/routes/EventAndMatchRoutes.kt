@@ -159,6 +159,7 @@ fun Route.eventAndMatchRoutes() {
                     val session = call.requireAdmin()
                     val request = call.receive<EventRecord>()
                     val saved = TeamCacheOverrideService.saveEvent(session, request)
+                    com.obsidianscout.db.NotificationWebSocketManager.invalidateTeamData(session.teamNumber, session.program, listOf("schedule"))
                     call.respond(saved)
                 }
                 put {
@@ -189,6 +190,7 @@ fun Route.eventAndMatchRoutes() {
                     val session = call.requireAdmin()
                     val request = call.receive<TeamRecord>()
                     val saved = TeamCacheOverrideService.saveTeam(session, request)
+                    com.obsidianscout.db.NotificationWebSocketManager.invalidateTeamData(session.teamNumber, session.program, listOf("schedule"))
                     call.respond(saved)
                 }
                 delete {
@@ -198,6 +200,7 @@ fun Route.eventAndMatchRoutes() {
                     val teamKey = call.request.queryParameters["teamKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing teamKey parameter")
                     val success = TeamCacheOverrideService.deleteTeam(session, eventKey, teamKey)
+                    com.obsidianscout.db.NotificationWebSocketManager.invalidateTeamData(session.teamNumber, session.program, listOf("schedule"))
                     call.respond(mapOf("success" to success))
                 }
             }
@@ -244,6 +247,7 @@ fun Route.eventAndMatchRoutes() {
                     val session = call.requireAdmin()
                     val request = call.receive<MatchRecord>()
                     val saved = TeamCacheOverrideService.saveMatch(session, request)
+                    com.obsidianscout.db.NotificationWebSocketManager.invalidateTeamData(session.teamNumber, session.program, listOf("schedule", "rankings"))
                     call.respond(saved)
                 }
                 delete {
@@ -251,6 +255,7 @@ fun Route.eventAndMatchRoutes() {
                     val matchKey = call.request.queryParameters["matchKey"]
                         ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.BadRequest, "Missing matchKey parameter")
                     val success = TeamCacheOverrideService.deleteMatch(session, matchKey)
+                    com.obsidianscout.db.NotificationWebSocketManager.invalidateTeamData(session.teamNumber, session.program, listOf("schedule", "rankings"))
                     call.respond(mapOf("success" to success))
                 }
             }

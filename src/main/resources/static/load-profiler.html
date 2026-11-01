@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link rel="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ObsidianScout | Load Profiler</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+    <style>
+        .lp-controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .lp-field label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .lp-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .lp-stat {
+            background: var(--surface-2);
+            padding: 16px;
+            border-radius: var(--radius-sm, 12px);
+            border: 1px solid var(--border);
+        }
+
+        .lp-stat-label,
+        .lp-stat-detail {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .lp-stat-value {
+            font-size: 26px;
+            font-weight: 600;
+            color: var(--ink);
+            margin: 4px 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Checked with the data viz palette validator against --surface-2 in both themes. */
+        .lp-chart-card {
+            --lp-live: #eb6834;
+            --lp-other: #2a78d6;
+        }
+
+        body.theme-dark .lp-chart-card {
+            --lp-live: #d95926;
+            --lp-other: #3987e5;
+        }
+
+        .lp-legend {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+
+        .lp-swatch {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+            margin-right: 6px;
+        }
+
+        .lp-swatch-live { background: var(--lp-live); }
+        .lp-swatch-other { background: var(--lp-other); }
+
+        .lp-chart {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .lp-grid {
+            stroke: var(--border);
+            stroke-width: 1;
+        }
+
+        .lp-axis {
+            fill: var(--muted);
+            font-size: 11px;
+        }
+
+        .lp-bar-live { fill: var(--lp-live); }
+        .lp-bar-other { fill: var(--lp-other); }
+
+        .lp-hit {
+            fill: transparent;
+        }
+
+        .lp-hit:hover {
+            fill: var(--muted);
+            fill-opacity: 0.12;
+        }
+
+        .lp-tooltip {
+            position: absolute;
+            top: 12px;
+            z-index: 2;
+            background: var(--surface);
+            color: var(--ink);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.6;
+            pointer-events: none;
+            white-space: nowrap;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        .lp-number {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        .lp-route {
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 12px;
+            word-break: break-all;
+        }
+
+        .lp-section {
+            margin-top: 20px;
+        }
+    </style>
+    <link rel="manifest" href="/manifest.json" />
+</head>
+<body data-page="load-profiler">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+
+    <div class="app-shell">
+        <aside class="sidebar"></aside>
+
+        <main class="main-content">
+            <div id="superadmin-locked" class="card hidden">
+                <h2>Superadmin Access Required</h2>
+                <p class="notice">You must be logged in as a Superadmin (Site Admin) to view the Load Profiler.</p>
+                <div class="mt-16">
+                    <a href="/admin-settings" class="btn secondary">&larr; Return to Admin Settings</a>
+                </div>
+            </div>
+
+            <div id="load-panel">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <h1 style="margin: 0; font-size: 24px;">Load Profiler</h1>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
+                                What the servers are really doing, with pages updating themselves split from people using the site. Kept for the last hour; a restart clears it.
+                            </p>
+                        </div>
+                        <div class="lp-controls">
+                            <div class="lp-field">
+                                <label for="load-window">Window</label>
+                                <select id="load-window">
+                                    <option value="5">Last 5 minutes</option>
+                                    <option value="15" selected>Last 15 minutes</option>
+                                    <option value="60">Last hour</option>
+                                </select>
+                            </div>
+                            <div class="lp-field hidden" id="load-node-field">
+                                <label for="load-node">Node</label>
+                                <select id="load-node"></select>
+                            </div>
+                            <a href="/cluster-management" class="btn ghost" style="text-decoration: none;">&larr; Server Management</a>
+                        </div>
+                    </div>
+                    <p id="load-error" class="notice hidden" style="margin-top: 12px;"></p>
+                    <p id="load-unreachable" class="notice hidden" style="margin-top: 12px;"></p>
+                </div>
+
+                <div id="load-stats" class="lp-stats"></div>
+
+                <div class="card lp-chart-card">
+                    <h2 style="margin-top: 0; font-size: 18px;">Requests per minute</h2>
+                    <div class="lp-legend">
+                        <span><span class="lp-swatch lp-swatch-other"></span>Everything else</span>
+                        <span><span class="lp-swatch lp-swatch-live"></span>Live refresh</span>
+                    </div>
+                    <div id="load-chart" class="lp-chart">
+                        <div id="load-chart-tooltip" class="lp-tooltip hidden"></div>
+                    </div>
+                    <details class="lp-section">
+                        <summary>Show as a table</summary>
+                        <div class="table-scroll">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Minute</th>
+                                        <th class="lp-number">Requests</th>
+                                        <th class="lp-number">Live refresh</th>
+                                        <th class="lp-number">Server time</th>
+                                        <th class="lp-number">Data sent</th>
+                                        <th class="lp-number">Invalidations</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="load-minutes"></tbody>
+                            </table>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="card lp-section">
+                    <h2 style="margin-top: 0; font-size: 18px;">Heaviest routes</h2>
+                    <p class="notice">Sorted by total server time, so a slow route used a little ranks with a fast one used a lot.</p>
+                    <div class="table-scroll">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Route</th>
+                                    <th class="lp-number">Requests</th>
+                                    <th class="lp-number">Per minute</th>
+                                    <th class="lp-number">Live refresh</th>
+                                    <th class="lp-number">Average</th>
+                                    <th class="lp-number">Slowest</th>
+                                    <th class="lp-number">Server time</th>
+                                    <th class="lp-number">Data sent</th>
+                                </tr>
+                            </thead>
+                            <tbody id="load-routes"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card lp-section">
+                    <h2 style="margin-top: 0; font-size: 18px;">Invalidations by topic</h2>
+                    <p class="notice">The messages that tell open pages something changed. Each one can set off a refresh on every user it reaches.</p>
+                    <div class="table-scroll">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Topic</th>
+                                    <th class="lp-number">Messages</th>
+                                    <th class="lp-number">Users reached</th>
+                                </tr>
+                            </thead>
+                            <tbody id="load-topics"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/js/common.js"></script>
+    <script type="module" src="/js/load-profiler.js"></script>
+</body>
+</html>

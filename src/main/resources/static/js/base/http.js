@@ -17,6 +17,7 @@ import { isLowBandwidth, recordTransfer, recordStall } from './net-quality.js';
 import { schedule, priorityFor } from './request-scheduler.js';
 import { serveFromEntryStore, noteEntryWrite, clearEntryStore } from '../services/entry-store.js';
 import { isPublicMode, publicRequest } from './public-mode.js';
+import { isQuietRefresh } from '../utilities/quiet-refresh.js';
 
 export { isScoutingDataPath };
 
@@ -183,6 +184,15 @@ function announceSessionExpired(path) {
     try {
         if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
             window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { path } }));
+        }
+    } catch (e) { /* ignore */ }
+}
+
+/** The server answered a read, so the page is current as of now (components/last-updated.js listens). */
+function announceFetched(path) {
+    try {
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent("obsidianscout:data-fetched", { detail: { path } }));
         }
     } catch (e) { /* ignore */ }
 }
@@ -447,6 +457,8 @@ export async function request(path, options = {}) {
         credentials: "same-origin"
     };
     opts.headers["X-Requested-With"] = "XMLHttpRequest";
+    // Lets the load profiler tell a page updating itself from someone using the site.
+    if (isQuietRefresh()) opts.headers["X-Live-Refresh"] = "1";
     if (!opts.headers["Accept"]) {
         opts.headers["Accept"] = "application/json, text/plain, */*";
     }
@@ -499,6 +511,10 @@ export async function request(path, options = {}) {
             if (typeof window !== 'undefined' && window.Obsidianscout && typeof window.Obsidianscout.setServerOnline === 'function') {
                 window.Obsidianscout.setServerOnline(true);
             }
+        }
+
+        if (method === "GET" && (response.ok || response.status === 304)) {
+            announceFetched(path);
         }
 
         if (response.status === 304) {

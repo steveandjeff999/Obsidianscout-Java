@@ -487,6 +487,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function loadPosts() {
+        const quiet = Obsidianscout.isQuietRefresh();
         try {
             const res = await Obsidianscout.request("/api/event-info");
             posts = res.posts || [];
@@ -498,6 +499,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 : t("event_info.subtitle", "Announcements, images and files from your team's admins.");
             renderFeed();
         } catch (error) {
+            if (quiet) throw error;
             feed.innerHTML = "";
             const err = document.createElement("div");
             err.className = "card ei-empty";
@@ -508,4 +510,5 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     window.addEventListener("obsidianscout:languagechange", renderFeed);
     await loadPosts();
+    Obsidianscout.liveRefresh(["event-info"], loadPosts);
 });

@@ -35,6 +35,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     await loadAnalyticsData(grid);
+    Obsidianscout.liveRefresh(["scouting", "pit-scouting", "qual-scouting", "schedule"], () => loadAnalyticsData(grid), { minIntervalMs: 10000 });
 });
 
 async function loadAnalyticsData(grid) {

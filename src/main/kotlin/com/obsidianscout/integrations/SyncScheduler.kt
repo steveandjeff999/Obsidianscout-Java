@@ -383,6 +383,7 @@ object SyncScheduler {
                     }
                 }
                 recordSuccess(teamNumber, program, "Manual sync: ${counts.teams} teams, ${counts.matches} matches", counts)
+                announceEventChanges(eventKey, program)
                 log.info("Manual sync complete for team $teamNumber ($program): ${counts.teams} teams, ${counts.matches} matches")
             } catch (error: Exception) {
                 recordFailure(teamNumber, program, "Manual teams and matches sync failed", error)
@@ -508,6 +509,7 @@ object SyncScheduler {
                     "Auto-sync complete from $sources: ${counts.teams} teams, ${counts.matches} matches"
                 }
                 recordSuccess(teamNumber, program, summary, counts)
+                announceEventChanges(eventKey, program)
             } catch (error: Exception) {
                 log.warn("Auto-sync failed for team $teamNumber ($program): ${error.message}")
                 recordFailure(teamNumber, program, "Auto-sync failed", error)
@@ -556,6 +558,22 @@ object SyncScheduler {
         }
         ClusterLease.release(teamLeaseKey(teamNumber, program))
         persistStatus(teamNumber, program)
+    }
+
+    private val eventFingerprints = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    /** Open pages on [eventKey] refresh after a sync that changed its schedule or results, on any node. */
+    private fun announceEventChanges(eventKey: String, program: String) {
+        if (eventKey.isBlank()) return
+        val fingerprint = try {
+            com.obsidianscout.widgets.WidgetSnapshotService.scheduleFingerprint(IntegrationService.listMatches(eventKey, program))
+        } catch (e: Exception) {
+            log.debug("Could not check $eventKey for changes: ${e.message}")
+            return
+        }
+        if (eventFingerprints.put("$program:$eventKey", fingerprint) != fingerprint) {
+            com.obsidianscout.db.NotificationWebSocketManager.invalidateEvent(eventKey, listOf("schedule", "rankings"))
+        }
     }
 
     /** A source that failed while others succeeded is reported as the error, so a broken key gets noticed. */
@@ -610,6 +628,7 @@ object SyncScheduler {
                 }
                 val sources = getSourcesLabel(settings)
                 recordSuccess(teamNumber, program, "Custom event sync complete from $sources: $eventKey - ${counts.teams} teams, ${counts.matches} matches", counts)
+                announceEventChanges(eventKey, program)
                 log.info("Custom event sync complete from $sources for team $teamNumber ($program): $eventKey - ${counts.teams} teams, ${counts.matches} matches")
             } catch (error: Exception) {
                 recordFailure(teamNumber, program, "Custom event sync failed for $eventKey", error)
@@ -648,6 +667,7 @@ object SyncScheduler {
                     "Manual full sync complete from $sources: $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats",
                     counts
                 )
+                announceEventChanges(eventKey, program)
                 log.info("Manual full sync complete from $sources for team $teamNumber ($program): $eventsCount events, ${counts.teams} teams, ${counts.matches} matches, $statsCount stats")
             } catch (error: Exception) {
                 recordFailure(teamNumber, program, "Manual full sync failed", error)

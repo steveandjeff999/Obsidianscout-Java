@@ -41,6 +41,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     originalCardHTML = card.innerHTML;
 
     await initQualRankingsPage();
+
+    Obsidianscout.liveRefresh(["qual-scouting"], async () => {
+        if (!state.config) return;
+        const entries = await Obsidianscout.request("/api/qual-scouting?includePrescout=true");
+        state.entriesRaw = Array.isArray(entries) ? entries : [];
+        await loadTeamsAndEntries();
+    }, { eventKey: () => state.selectedEvent });
 });
 
 async function initQualRankingsPage() {
@@ -220,6 +227,7 @@ function setupRoleFilters() {
 }
 
 async function loadTeamsAndEntries() {
+    const quiet = Obsidianscout.isQuietRefresh();
     try {
         let teamsUrl = "/api/teams";
         if (state.selectedEvent && state.selectedEvent !== "all" && state.selectedEvent !== "prescout") {
@@ -241,6 +249,7 @@ async function loadTeamsAndEntries() {
 
         renderTable();
     } catch (error) {
+        if (quiet) throw error;
         console.error("Failed to load teams:", error);
         Obsidianscout.showToast("Failed to load teams for event", "error");
     }
