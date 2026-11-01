@@ -1,5 +1,7 @@
 package com.obsidianscout.scouting
 
+import com.obsidianscout.integrations.IntegrationService
+import com.obsidianscout.integrations.MatchCanonical
 import com.obsidianscout.integrations.TeamCacheOverrideService
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
@@ -37,7 +39,7 @@ data class MatchPredictionStatus(
     val predictedWinner: String? = null,
     /** "red", "blue" or "tie" once the match has a result. */
     val result: String? = null,
-    /** True once the match has a result; picks can no longer change. */
+    /** True once the match has a result or is assumed played; picks can no longer change. */
     val locked: Boolean = false,
     /** Whether the pick was right. Null without a pick, before the result, or on a tie. */
     val correct: Boolean? = null,
@@ -95,7 +97,8 @@ data class PredictionLeaderboardOptions(
 
 /**
  * The match predictions game. Before a match, each scout calls red or blue, from the match / qualitative scouting
- * forms or the Match Predictions page; picks lock once the match result syncs. The leaderboard ranks the team's scouts by
+ * forms or the Match Predictions page; picks lock once the match result syncs, or once a practice match is assumed
+ * played. The leaderboard ranks the team's scouts by
  * how often they were right, for one event or a whole season. Off unless a team admin turns on
  * [com.obsidianscout.integrations.ApiSettings.matchPredictionsEnabled].
  */
@@ -133,9 +136,17 @@ object MatchPredictionService {
     }
 
     /** [order] sorts an event's matches by when they were played (the sync falls back to the scheduled time). */
-    internal data class MatchInfo(val matchKey: String, val eventKey: String, val order: Long, val result: String?) {
-        // The APIs give no reliable "match started" signal before the result, so picks stay open until then.
-        val locked get() = result != null
+    internal data class MatchInfo(
+        val matchKey: String,
+        val eventKey: String,
+        val order: Long,
+        val result: String?,
+        val practice: Boolean = false,
+        val assumedPlayed: Boolean = false
+    ) {
+        // The APIs give no reliable "match started" signal before the result, so picks stay open until then,
+        // except practice matches once qualifications are underway: their results often never arrive.
+        val locked get() = result != null || assumedPlayed
     }
 
     internal data class Pick(
@@ -150,16 +161,32 @@ object MatchPredictionService {
 
     private fun rowToMatchInfo(row: ResultRow): MatchInfo {
         val order = row[ApiMatches.actualTime] ?: row[ApiMatches.scheduledTime] ?: Long.MAX_VALUE
-        return MatchInfo(row[ApiMatches.matchKey], row[ApiMatches.eventKey], order, matchResult(row[ApiMatches.dataJson]))
+        return MatchInfo(
+            row[ApiMatches.matchKey],
+            row[ApiMatches.eventKey],
+            order,
+            matchResult(row[ApiMatches.dataJson]),
+            practice = MatchCanonical.normalizeCompLevel(row[ApiMatches.compLevel]) == "practice"
+        )
+    }
+
+    /** Flags the unresulted practice matches that [IntegrationService.listMatches] counts as played. */
+    private fun withAssumedPlayed(session: UserSession, matches: List<MatchInfo>): List<MatchInfo> {
+        val assumed = matches.filter { it.practice && it.result == null }.map { it.eventKey }.distinct()
+            .flatMap { event -> IntegrationService.listMatches(event, session.program, session.teamNumber) }
+            .filter { it.assumedPlayed }
+            .map { it.matchKey }
+            .toSet()
+        return matches.map { if (it.matchKey in assumed) it.copy(assumedPlayed = true) else it }
     }
 
     private fun loadMatch(session: UserSession, matchKey: String): MatchInfo? = readTransaction {
         TeamCacheOverrideService.matchRow(matchKey, session.teamNumber, session.program)?.let(::rowToMatchInfo)
-    }
+    }?.let { withAssumedPlayed(session, listOf(it)).single() }
 
-    private fun loadMatchesForEvent(session: UserSession, eventKey: String): List<MatchInfo> = readTransaction {
+    private fun loadMatchesForEvent(session: UserSession, eventKey: String): List<MatchInfo> = withAssumedPlayed(session, readTransaction {
         TeamCacheOverrideService.matchRows(eventKey, session.teamNumber, session.program).map(::rowToMatchInfo)
-    }
+    })
 
     private fun scoreOf(winner: String, result: String?): Boolean? = when (result) {
         null, TIE -> null
@@ -292,7 +319,7 @@ object MatchPredictionService {
                     scored = scoredInOrder.size,
                     correct = correct,
                     ties = judged.count { it.second?.result == TIE },
-                    pending = judged.count { it.second?.result == null },
+                    pending = judged.count { it.second?.result == null && it.second?.assumedPlayed != true },
                     accuracyPct = if (scoredInOrder.isEmpty()) null else round1(correct * 100.0 / scoredInOrder.size),
                     currentStreak = run,
                     bestStreak = best,
@@ -336,9 +363,9 @@ object MatchPredictionService {
                 else ScouterReportService.resolveYear(p.eventKey, emptyMap(), p.updatedAt) == season
             }
             val matchKeys = picks.map { it.matchKey }.distinct()
-            val matches = matchKeys.chunked(500).flatMap { chunk ->
+            val matches = withAssumedPlayed(session, matchKeys.chunked(500).flatMap { chunk ->
                 TeamCacheOverrideService.matchRowsByKeys(chunk, session.teamNumber, session.program).map(::rowToMatchInfo)
-            }.associateBy { it.matchKey }
+            }).associateBy { it.matchKey }
             // Picks belong to whoever made them, so name everyone who did, even if they've since changed team.
             val userIds = picks.map { it.userId }.distinct().mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
             val users = userIds.chunked(500).flatMap { chunk ->

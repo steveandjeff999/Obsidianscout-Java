@@ -66,8 +66,8 @@
                     "points": 0.0
                 },
                 {
-                    "label": "Mechanum",
-                    "value": "o",
+                    "label": "Mecanum",
+                    "value": "m",
                     "points": 0.0
                 },
                 {

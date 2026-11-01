@@ -6,7 +6,9 @@ import com.obsidianscout.scouting.MatchPredictionService.Pick
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class MatchPredictionServiceTest {
 
@@ -102,6 +104,23 @@ class MatchPredictionServiceTest {
 
         // qm1-qm3 had a winner; the tie and the unplayed match don't count.
         assertEquals(3, board.matchesScored)
+    }
+
+    @Test
+    fun `an assumed played practice match locks without a result and stops waiting for one`() {
+        val key = "2026abc_practice1"
+        val assumed = MatchInfo(key, "2026abc", 0, null, practice = true, assumedPlayed = true)
+        assertTrue(assumed.locked)
+        assertFalse(MatchInfo(key, "2026abc", 0, null, practice = true).locked)
+
+        val board = MatchPredictionService.aggregate(
+            "2026abc", null, users, listOf(pick("a", key, "red")), mapOf(key to assumed), emptyMap()
+        )
+        val alice = board.rows.single()
+        assertEquals(1, alice.predictions)
+        assertEquals(0, alice.scored)
+        assertEquals(0, alice.pending)
+        assertNull(alice.rank)
     }
 
     @Test
