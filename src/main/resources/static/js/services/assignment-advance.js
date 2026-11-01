@@ -196,7 +196,7 @@ function isPlayed(a, matchIndex) {
     const m = a.matchKey ? matchIndex.get(norm(a.matchKey)) : null;
     if (!m) return false;
     const scored = (s) => typeof s === "number" && s >= 0;
-    return (m.actualTime != null && m.actualTime > 0) || (scored(m.redScore) && scored(m.blueScore));
+    return !!m.assumedPlayed || (m.actualTime != null && m.actualTime > 0) || (scored(m.redScore) && scored(m.blueScore));
 }
 
 /**

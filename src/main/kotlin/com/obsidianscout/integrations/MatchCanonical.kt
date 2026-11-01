@@ -72,6 +72,13 @@ object MatchCanonical {
         }
     }
 
+    /** Practice results often never reach the APIs, so practice counts as over after this many played quals. */
+    private const val QUALS_PLAYED_TO_END_PRACTICE = 3
+
+    /** Whether practice is over at an event, given the competition levels of its played matches. */
+    fun practiceIsOver(playedCompLevels: List<String>): Boolean =
+        playedCompLevels.count { normalizeCompLevel(it) == "qm" } >= QUALS_PLAYED_TO_END_PRACTICE
+
     /** Chronological order of competition levels within an event (practice first). */
     fun compLevelRank(compLevel: String): Int = when (normalizeCompLevel(compLevel)) {
         "practice" -> 0

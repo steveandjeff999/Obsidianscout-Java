@@ -370,7 +370,7 @@ async function loadUpcomingMatches(eventKey) {
         // Filter for matches that the API does NOT have a score for, and check scheduled/actual dates
         const upcomingMatches = matches.filter(m => {
             // Exclude matches that already have an API score
-            if (hasApiScore(m)) return false;
+            if (hasApiScore(m) || m.assumedPlayed) return false;
 
             // Check match time: if scheduled or actual time was more than 1 day in the past, it has already passed
             const matchTimestamp = (m.actualTime && m.actualTime > 0) ? m.actualTime : ((m.scheduledTime && m.scheduledTime > 0) ? m.scheduledTime : null);

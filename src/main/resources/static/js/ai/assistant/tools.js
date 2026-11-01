@@ -1318,11 +1318,12 @@ export const TOOLS = {
                     return red.includes(tNum) || blue.includes(tNum);
                 });
             }
+            const isUpcoming = (m) => (m.redScore === null || m.redScore === undefined || m.redScore < 0) && !m.assumedPlayed;
             if (args.unplayed_only) {
-                list = list.filter((m) => m.redScore === null || m.redScore === undefined || m.redScore < 0);
+                list = list.filter(isUpcoming);
             }
-            const completed = list.filter((m) => m.redScore !== null && m.redScore !== undefined && m.redScore >= 0);
-            const upcoming = list.filter((m) => m.redScore === null || m.redScore === undefined || m.redScore < 0);
+            const completed = list.filter((m) => !isUpcoming(m));
+            const upcoming = list.filter(isUpcoming);
             return {
                 facts: {
                     event: ctx.eventKey,
@@ -1336,7 +1337,7 @@ export const TOOLS = {
                         red_score: m.redScore,
                         blue_score: m.blueScore,
                         winner: m.winner || (m.redScore > m.blueScore ? "red" : (m.blueScore > m.redScore ? "blue" : undefined)),
-                        status: (m.redScore !== null && m.redScore >= 0) ? "completed" : "upcoming"
+                        status: isUpcoming(m) ? "upcoming" : "completed"
                     }))
                 },
                 table: {
@@ -1346,7 +1347,7 @@ export const TOOLS = {
                         const blue = (m.blueTeams || []).map(Data.teamNumberFromKey).filter(Boolean).join(", ");
                         const result = (m.redScore !== null && m.redScore !== undefined && m.redScore >= 0)
                             ? `${m.redScore} - ${m.blueScore} (${(m.winner || (m.redScore > m.blueScore ? "Red" : "Blue")).toUpperCase()})`
-                            : t("match.upcoming", "Upcoming");
+                            : (m.assumedPlayed ? "-" : t("match.upcoming", "Upcoming"));
                         return [Data.matchLabel(m), red || "-", blue || "-", result];
                     })
                 }
@@ -1413,7 +1414,7 @@ export const TOOLS = {
         description: "Get win probabilities and projected match scores for upcoming or specified matches at the event.",
         params: { match: "optional match number", team: "optional team number", n: "how many upcoming matches to predict (default 10)" },
         async run(ctx, args) {
-            let matches = (ctx.matches || []).filter((m) => m.redScore === null || m.redScore === undefined || m.redScore < 0);
+            let matches = (ctx.matches || []).filter((m) => (m.redScore === null || m.redScore === undefined || m.redScore < 0) && !m.assumedPlayed);
             if (args.match) {
                 const found = Data.findMatch(ctx, args.match);
                 if (found) matches = [found];

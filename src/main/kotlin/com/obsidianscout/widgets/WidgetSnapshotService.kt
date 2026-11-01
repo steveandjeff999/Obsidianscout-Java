@@ -285,11 +285,11 @@ object WidgetSnapshotService {
         else -> null
     }
 
-    /** Same rule as IntegrationService.listMatches: a score, or an actual time different from the schedule. */
+    /** Same rule as IntegrationService.listMatches: a score, an actual time different from the schedule, or assumed played. */
     fun isPlayed(m: MatchRecord): Boolean {
         val hasScore = (m.redScore ?: -1) >= 0 || (m.blueScore ?: -1) >= 0
         val act = m.actualTime
-        return hasScore || (act != null && act > 0 && m.scheduledTime != null && act != m.scheduledTime)
+        return m.assumedPlayed || hasScore || (act != null && act > 0 && m.scheduledTime != null && act != m.scheduledTime)
     }
 
     fun refOf(m: MatchRecord) = WidgetMatchRef(m.matchKey, m.compLevel, m.setNumber, m.matchNumber, m.label, m.predictedTime ?: m.scheduledTime)

@@ -464,7 +464,7 @@ object ScoutingAssignmentService {
                 (m.actualTime != null && m.actualTime > 0 && m.actualTime != m.scheduledTime)
             val raw = (if (played) m.actualTime else m.predictedTime ?: m.scheduledTime)?.takeIf { it > 0 }
                 ?: return@mapNotNull null
-            m.matchKey to ExpectedStart(if (raw < 100_000_000_000L) raw else raw / 1000, m.compLevel, played)
+            m.matchKey to ExpectedStart(if (raw < 100_000_000_000L) raw else raw / 1000, m.compLevel, played || m.assumedPlayed)
         }.toMap()
 
     /** Whether [start] falls in [shift]'s window, in the event's timezone. */

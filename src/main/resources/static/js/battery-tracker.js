@@ -514,7 +514,7 @@ function renderRotation() {
     }
     const slots = schedule();
     const usable = batteries().filter((b) => !b.retired);
-    const nextKey = state.matches.find((m) => slots[m.matchKey].source !== "used")?.matchKey;
+    const nextKey = state.matches.find((m) => !m.assumedPlayed && slots[m.matchKey].source !== "used")?.matchKey;
 
     el.rotation.innerHTML = `<ul class="battery-matches">${state.matches.map((m) => {
         const slot = slots[m.matchKey];

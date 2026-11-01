@@ -792,7 +792,7 @@ function renderMatchOptions() {
         onMatchSelected(target);
     } else {
         // Default to our next match without a finished checklist.
-        const next = visible.find((m) => !isMatchComplete(m.matchKey, state.eventCompletions[m.matchKey]));
+        const next = visible.find((m) => !m.assumedPlayed && !isMatchComplete(m.matchKey, state.eventCompletions[m.matchKey]));
         if (next && onlyOurs) {
             el.match.value = next.matchKey;
             onMatchSelected(next.matchKey);

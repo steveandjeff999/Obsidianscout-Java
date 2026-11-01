@@ -79,9 +79,9 @@ export const EXTRA_TOOLS = {
                 const expAgainst = r1(opponents.reduce((sum, x) => sum + strengthOf(ctx, x), 0));
                 return {
                     match: Data.matchLabel(m), alliance: color, partners, opponents,
-                    result: res ? `${res.result} ${res.score}` : undefined,
-                    expected: res ? undefined : `${expFor}-${expAgainst}`,
-                    win_chance: res ? undefined : `${winProbability(expFor, expAgainst)}%`
+                    result: res ? `${res.result} ${res.score}` : (m.assumedPlayed ? "played, no result" : undefined),
+                    expected: res || m.assumedPlayed ? undefined : `${expFor}-${expAgainst}`,
+                    win_chance: res || m.assumedPlayed ? undefined : `${winProbability(expFor, expAgainst)}%`
                 };
             });
             const upcoming = rows.filter((r) => !r.result);
@@ -431,13 +431,14 @@ export const EXTRA_TOOLS = {
         params: {},
         async run(ctx) {
             const played = ctx.matches.filter(isPlayed);
+            const matchesDone = played.length + ctx.matches.filter((m) => m.assumedPlayed && !isPlayed(m)).length;
             const total = totalMetric(ctx);
             const top = Data.rankTeams(ctx, total).filter((r) => r.avg !== null).slice(0, 3);
             const reports = ctx.entries.filter((e) => !e._prescout).length;
             const teamMatches = played.reduce((n, m) => { const s = sides(m); return n + s.red.length + s.blue.length; }, 0);
             const facts = {
-                event: ctx.eventKey || undefined, teams: ctx.stats.size, matches_scheduled: ctx.matches.length, matches_played: played.length,
-                matches_upcoming: ctx.matches.length - played.length, scouting_reports: reports,
+                event: ctx.eventKey || undefined, teams: ctx.stats.size, matches_scheduled: ctx.matches.length, matches_played: matchesDone,
+                matches_upcoming: ctx.matches.length - matchesDone, scouting_reports: reports,
                 scouting_coverage_pct: teamMatches ? Math.min(100, Math.round((reports / teamMatches) * 100)) : undefined,
                 [`top_by_${total.label}`]: top.map((r) => ({ team: r.teamNumber, avg: r1(r.avg) }))
             };

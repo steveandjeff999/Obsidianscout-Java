@@ -452,7 +452,9 @@ data class MatchRecord(
     val redScore: Int? = null,
     val blueScore: Int? = null,
     /** Match videos published by The Blue Alliance; empty when none are available. */
-    val videos: List<MatchVideo> = emptyList()
+    val videos: List<MatchVideo> = emptyList(),
+    /** A practice match with no result of its own that counts as played because qualifications are underway. */
+    val assumedPlayed: Boolean = false
 )
 
 @Serializable

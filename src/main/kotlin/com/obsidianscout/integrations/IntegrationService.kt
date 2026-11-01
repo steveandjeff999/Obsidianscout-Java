@@ -936,6 +936,7 @@ object IntegrationService {
                 val isPlayed = hasScore || reportedPlayed || (act != null && act > 0 && sched != null && act != sched)
                 MatchParsed(row, compLevel, setNumber, matchNumber, sched, act, rScore, bScore, isPlayed, videos)
             }
+            val practiceOver = MatchCanonical.practiceIsOver(parsedMatches.filter { it.isPlayed }.map { it.compLevel })
 
             val resolveTeams = { teamKeysJson: String ->
                 val rawKeys = decodeTeams(teamKeysJson)
@@ -1012,7 +1013,8 @@ object IntegrationService {
                     eventTimezone = eventTimezone,
                     redScore = m.rScore,
                     blueScore = m.bScore,
-                    videos = m.videos
+                    videos = m.videos,
+                    assumedPlayed = practiceOver && !m.isPlayed && MatchCanonical.normalizeCompLevel(m.compLevel) == "practice"
                 )
             }
         }

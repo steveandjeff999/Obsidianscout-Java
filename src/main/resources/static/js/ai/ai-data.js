@@ -547,7 +547,7 @@ export function findMatch(ctx, ref) {
     const raw = String(ref ?? "").trim().toLowerCase();
     if (!raw || raw === "next") {
         const ours = ctx.ourTeam;
-        const upcoming = ctx.matches.filter((m) => (m.redScore === null || m.redScore === undefined || m.redScore < 0) &&
+        const upcoming = ctx.matches.filter((m) => (m.redScore === null || m.redScore === undefined || m.redScore < 0) && !m.assumedPlayed &&
             (!ours || [...(m.redTeams || []), ...(m.blueTeams || [])].map(teamNumberFromKey).includes(ours)));
         return upcoming[0] || null;
     }

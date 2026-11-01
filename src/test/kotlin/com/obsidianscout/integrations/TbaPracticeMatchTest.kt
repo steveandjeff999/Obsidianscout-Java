@@ -5,6 +5,13 @@ import kotlin.test.assertEquals
 
 class TbaPracticeMatchTest {
 
+    @Test
+    fun testPracticeIsOverAfterThreePlayedQuals() {
+        assertEquals(false, MatchCanonical.practiceIsOver(listOf("practice", "practice", "qm", "qm")))
+        assertEquals(true, MatchCanonical.practiceIsOver(listOf("qm", "qm", "qm")))
+        assertEquals(true, MatchCanonical.practiceIsOver(listOf("Qualification", "qm", "qual", "practice")))
+    }
+
     private val tbaPractice = MatchSyncRecord(
         matchKey = "2026cttd_pm3",
         eventKey = "2026cttd",
