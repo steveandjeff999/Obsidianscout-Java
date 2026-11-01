@@ -68,7 +68,76 @@ document.addEventListener("DOMContentLoaded", async () => {
     const composer = document.getElementById("ei-composer");
     let posts = [];
     let canEdit = false;
-    let maxFileBytes = 10 * 1024 * 1024;
+    let maxFileBytes = 15 * 1024 * 1024;
+
+    async function compressFileGzip(file) {
+        if (typeof CompressionStream === "undefined") return null;
+        try {
+            const stream = file.stream().pipeThrough(new CompressionStream("gzip"));
+            const blob = await new Response(stream).blob();
+            const compressed = new File([blob], file.name, { type: file.type, lastModified: file.lastModified });
+            compressed.originalSize = file.size;
+            return compressed;
+        } catch (e) {
+            console.error("Gzip compression failed:", e);
+            return null;
+        }
+    }
+
+    async function compressImage(file) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                let width = img.width;
+                let height = img.height;
+                const maxDim = 3840;
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = Math.round((height * maxDim) / width);
+                        width = maxDim;
+                    } else {
+                        width = Math.round((width * maxDim) / height);
+                        height = maxDim;
+                    }
+                }
+                const canvas = document.createElement("canvas");
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) return resolve(null);
+                // JPEG has no alpha; without this, transparent areas turn black.
+                ctx.fillStyle = "#fff";
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob((blob) => {
+                    if (!blob) return resolve(null);
+                    const jpegName = `${file.name.replace(/\.[^.]+$/, "")}.jpg`;
+                    const compressed = new File([blob], jpegName, { type: "image/jpeg", lastModified: Date.now() });
+                    compressed.originalSize = file.size;
+                    resolve(compressed);
+                }, "image/jpeg", 0.85);
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                resolve(null);
+            };
+            img.src = url;
+        });
+    }
+
+    async function compressToFit(file, maxBytes) {
+        if (file.type && file.type.startsWith("image/") && file.type !== "image/gif" && file.type !== "image/svg+xml") {
+            try {
+                const imgCompressed = await compressImage(file);
+                if (imgCompressed && imgCompressed.size <= maxBytes) {
+                    return imgCompressed;
+                }
+            } catch (_) {}
+        }
+        return await compressFileGzip(file);
+    }
 
     // Pending file pickers (composer + edit modal) share this helper.
     function wirePicker(input, pendingEl, list) {
@@ -78,7 +147,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const chip = document.createElement("span");
                 chip.className = "ei-chip";
                 chip.innerHTML = ICONS.paperclip;
-                chip.appendChild(document.createTextNode(` ${file.name} (${formatSize(file.size)})`));
+                const sizeText = file.originalSize && file.originalSize !== file.size
+                    ? t("event_info.compressed_from", "{size} (compressed from {original})")
+                        .replace("{size}", formatSize(file.size)).replace("{original}", formatSize(file.originalSize))
+                    : formatSize(file.size);
+                chip.appendChild(document.createTextNode(` ${file.name} (${sizeText})`));
                 const rm = document.createElement("button");
                 rm.type = "button";
                 rm.innerHTML = ICONS.remove;
@@ -88,19 +161,32 @@ document.addEventListener("DOMContentLoaded", async () => {
                 pendingEl.appendChild(chip);
             });
         }
-        function add(files) {
+        // Compression is async, so files are queued in order and submit waits on settled().
+        let adding = Promise.resolve();
+        async function addAll(files) {
             for (const file of files) {
-                if (file.size > maxFileBytes) {
-                    Obsidianscout.showToast(t("event_info.err_too_large", "{name} is larger than {size}.")
-                        .replace("{name}", file.name).replace("{size}", formatSize(maxFileBytes)), "error");
-                    continue;
+                let toAdd = file;
+                if (toAdd.size > maxFileBytes) {
+                    const compressed = await compressToFit(file, maxFileBytes);
+                    if (compressed && compressed.size <= maxFileBytes) {
+                        toAdd = compressed;
+                    } else {
+                        Obsidianscout.showToast(t("event_info.err_too_large", "{name} is larger than {size}.")
+                            .replace("{name}", file.name).replace("{size}", formatSize(maxFileBytes)), "error");
+                        continue;
+                    }
                 }
-                list.push(file);
+                list.push(toAdd);
             }
             render();
         }
+        function add(files) {
+            // Copied now: the caller's FileList is emptied once this returns.
+            const queued = Array.from(files);
+            adding = adding.then(() => addAll(queued));
+        }
         input.addEventListener("change", () => { add(input.files); input.value = ""; });
-        return { add, render, clear() { list.length = 0; render(); } };
+        return { add, render, settled: () => adding, clear() { list.length = 0; render(); } };
     }
 
     async function uploadFiles(postId, files) {
@@ -137,14 +223,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     form.addEventListener("submit", async () => {
+        const submit = document.getElementById("ei-submit");
+        submit.disabled = true;
+        await picker.settled();
         const title = document.getElementById("ei-title").value.trim();
         const body = document.getElementById("ei-body").value.trim();
         if (!title && !body && pendingFiles.length === 0) {
+            submit.disabled = false;
             Obsidianscout.showToast(t("event_info.err_empty", "Add a title, an announcement or a file."), "error");
             return;
         }
-        const submit = document.getElementById("ei-submit");
-        submit.disabled = true;
         try {
             const created = await Obsidianscout.request("/api/event-info", {
                 method: "POST",
@@ -236,6 +324,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const save = document.getElementById("ei-edit-save");
         save.disabled = true;
         try {
+            await editPicker.settled();
             await Obsidianscout.request(`/api/event-info/${encodeURIComponent(editingPost.id)}`, {
                 method: "PUT",
                 json: {

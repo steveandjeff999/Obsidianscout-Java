@@ -2845,6 +2845,7 @@
   "event_info.empty": "Bu etkinlik için henüz bir şey paylaşılmadı.",
   "event_info.empty_admin": "Henüz gönderi yok. Duyuru, görsel ve dosya paylaşmak için yukarıdaki formu kullanın.",
   "event_info.err_too_large": "{name}, {size} boyutundan büyük.",
+  "event_info.compressed_from": "{size} ({original} boyutundan sıkıştırıldı)",
   "event_info.err_empty": "Bir başlık, duyuru veya dosya ekleyin.",
   "event_info.err_post": "Paylaşılamadı: ",
   "event_info.err_update": "Gönderi güncellenemedi: ",

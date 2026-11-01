@@ -17,10 +17,37 @@ import java.util.UUID
 /** Event Info page: announcements, images and files a team's admins share with their scouts. */
 object EventInfoService {
 
-    const val MAX_FILE_BYTES = 10L * 1024 * 1024
+    const val MAX_FILE_BYTES = 15L * 1024 * 1024
+    /** Cap on a file once gunzipped, so a tiny gzip can't exhaust memory on upload or on every download. */
+    const val MAX_UNCOMPRESSED_BYTES = 100L * 1024 * 1024
     const val MAX_FILES_PER_POST = 20
     private const val MAX_TITLE_CHARS = 200
     private const val MAX_BODY_CHARS = 20_000
+
+    fun isGzip(bytes: ByteArray): Boolean =
+        bytes.size >= 10 && (bytes[0].toInt() and 0xFF) == 0x1F && (bytes[1].toInt() and 0xFF) == 0x8B
+
+    fun isExplicitGzipFile(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.endsWith(".gz") || lower.endsWith(".tgz") || lower.endsWith(".gzip") || lower.endsWith(".svgz")
+    }
+
+    fun decompressGzip(bytes: ByteArray): ByteArray {
+        if (!isGzip(bytes)) return bytes
+        return try {
+            java.util.zip.GZIPInputStream(java.io.ByteArrayInputStream(bytes)).use { BackupService.readLimited(it, MAX_UNCOMPRESSED_BYTES) }
+        } catch (_: com.obsidianscout.auth.ApiException) {
+            throw IllegalStateException("Files must be ${MAX_UNCOMPRESSED_BYTES / (1024 * 1024)} MB or smaller once uncompressed")
+        } catch (_: Exception) {
+            bytes
+        }
+    }
+
+    fun compressGzip(bytes: ByteArray): ByteArray {
+        val baos = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(baos).use { it.write(bytes) }
+        return baos.toByteArray()
+    }
 
     /** Types the browser may show inline. Anything else is sent as a download so uploaded HTML/SVG can't run script. */
     private val INLINE_TYPES = setOf("image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf")
@@ -125,20 +152,42 @@ object EventInfoService {
         }
     }
 
-    /** Attaches [bytes] to the post. Images lose their EXIF/GPS metadata. Returns null when the post isn't the team's. */
+    /**
+     * Attaches [bytes] to the post, gzipped at rest when that saves space. A client may gzip a file to fit the upload
+     * limit; it is unwrapped first so images still lose their EXIF/GPS metadata. Returns null when the post isn't the team's.
+     */
     fun addFile(postId: String, teamNumber: Int, program: String, originalName: String, bytes: ByteArray): EventInfoFileDto? {
         val uuid = parse(postId) ?: return null
         val fileName = sanitizeFileName(originalName)
-        val imageFormat = ImageMetadataStripper.detect(bytes)
-        val (contentType, stored) = when {
-            imageFormat != null -> imageFormat.mime to (ImageMetadataStripper.strip(bytes, imageFormat) ?: bytes)
-            isGif(bytes) -> "image/gif" to bytes
+
+        val isUploadedGzip = isGzip(bytes) && !isExplicitGzipFile(fileName)
+        val inspectionBytes = if (isUploadedGzip) decompressGzip(bytes) else bytes
+        val imageFormat = ImageMetadataStripper.detect(inspectionBytes)
+
+        val (contentType, processedBytes) = when {
+            imageFormat != null -> {
+                val stripped = ImageMetadataStripper.strip(inspectionBytes, imageFormat) ?: inspectionBytes
+                imageFormat.mime to stripped
+            }
+            isGif(inspectionBytes) -> "image/gif" to inspectionBytes
             else -> {
                 val ext = fileName.substringAfterLast('.', "").lowercase()
                 // A file claiming to be an image but not decoding as one is served as a plain download.
-                (EXTENSION_TYPES[ext] ?: "application/octet-stream") to bytes
+                (EXTENSION_TYPES[ext] ?: "application/octet-stream") to inspectionBytes
             }
         }
+
+        val stored = if (isUploadedGzip) {
+            if (imageFormat != null) compressGzip(processedBytes) else bytes
+        } else if (processedBytes.size > 1024 && !isExplicitGzipFile(fileName)) {
+            val compressed = compressGzip(processedBytes)
+            if (compressed.size < processedBytes.size) compressed else processedBytes
+        } else {
+            processedBytes
+        }
+
+        val displaySize = processedBytes.size.toLong()
+
         return writeTransactionWithRetry {
             val owned = EventInfoPosts.selectAll().where {
                 (EventInfoPosts.id eq uuid) and (EventInfoPosts.teamNumber eq teamNumber) and (EventInfoPosts.program eq program)
@@ -155,12 +204,12 @@ object EventInfoService {
                 it[EventInfoFiles.program] = program
                 it[EventInfoFiles.fileName] = fileName
                 it[EventInfoFiles.contentType] = contentType
-                it[EventInfoFiles.sizeBytes] = stored.size.toLong()
+                it[EventInfoFiles.sizeBytes] = displaySize
                 it[EventInfoFiles.data] = Base64.getEncoder().encodeToString(stored)
                 it[EventInfoFiles.createdAt] = now
             }.value
             EventInfoPosts.update({ EventInfoPosts.id eq uuid }) { it[updatedAt] = now }
-            EventInfoFileDto(fileId.toString(), fileName, contentType, stored.size.toLong(), contentType.startsWith("image/"), fileUrl(fileId))
+            EventInfoFileDto(fileId.toString(), fileName, contentType, displaySize, contentType.startsWith("image/"), fileUrl(fileId))
         }
     }
 
@@ -168,10 +217,17 @@ object EventInfoService {
         val uuid = parse(fileId) ?: return null
         return readTransaction {
             EventInfoFiles.selectAll().where { EventInfoFiles.id eq uuid }.firstOrNull()?.let {
+                val rawBytes = Base64.getDecoder().decode(it[EventInfoFiles.data])
+                val decompressed = if (isGzip(rawBytes) && !isExplicitGzipFile(it[EventInfoFiles.fileName])) {
+                    // Rows from before the cap can exceed it; those are served as stored rather than failing.
+                    runCatching { decompressGzip(rawBytes) }.getOrDefault(rawBytes)
+                } else {
+                    rawBytes
+                }
                 StoredFile(
                     fileName = it[EventInfoFiles.fileName],
                     contentType = it[EventInfoFiles.contentType],
-                    bytes = Base64.getDecoder().decode(it[EventInfoFiles.data]),
+                    bytes = decompressed,
                     teamNumber = it[EventInfoFiles.teamNumber],
                     program = it[EventInfoFiles.program]
                 )
