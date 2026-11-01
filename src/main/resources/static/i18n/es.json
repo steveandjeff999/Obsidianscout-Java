@@ -2845,6 +2845,7 @@
   "event_info.empty": "Todavía no se ha publicado nada para este evento.",
   "event_info.empty_admin": "Aún no hay publicaciones. Usa el formulario de arriba para compartir anuncios, imágenes y archivos.",
   "event_info.err_too_large": "{name} supera {size}.",
+  "event_info.err_too_large_compressed": "{name} sigue ocupando {size} después de comprimirlo. El límite es {limit}.",
   "event_info.compressed_from": "{size} (comprimido desde {original})",
   "event_info.err_empty": "Añade un título, un anuncio o un archivo.",
   "event_info.err_post": "No se pudo publicar: ",

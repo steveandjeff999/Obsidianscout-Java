@@ -127,16 +127,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    /** Returns the smallest attempt, even if still over [maxBytes], or null when nothing could be tried. */
     async function compressToFit(file, maxBytes) {
+        let imgCompressed = null;
         if (file.type && file.type.startsWith("image/") && file.type !== "image/gif" && file.type !== "image/svg+xml") {
             try {
-                const imgCompressed = await compressImage(file);
+                imgCompressed = await compressImage(file);
                 if (imgCompressed && imgCompressed.size <= maxBytes) {
                     return imgCompressed;
                 }
             } catch (_) {}
         }
-        return await compressFileGzip(file);
+        const gzipped = await compressFileGzip(file);
+        if (imgCompressed && gzipped) return imgCompressed.size <= gzipped.size ? imgCompressed : gzipped;
+        return imgCompressed || gzipped;
     }
 
     // Pending file pickers (composer + edit modal) share this helper.
@@ -170,6 +174,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const compressed = await compressToFit(file, maxFileBytes);
                     if (compressed && compressed.size <= maxFileBytes) {
                         toAdd = compressed;
+                    } else if (compressed) {
+                        Obsidianscout.showToast(t("event_info.err_too_large_compressed", "{name} is still {size} after compression. The limit is {limit}.")
+                            .replace("{name}", file.name)
+                            .replace("{size}", formatSize(Math.min(compressed.size, file.size)))
+                            .replace("{limit}", formatSize(maxFileBytes)), "error");
+                        continue;
                     } else {
                         Obsidianscout.showToast(t("event_info.err_too_large", "{name} is larger than {size}.")
                             .replace("{name}", file.name).replace("{size}", formatSize(maxFileBytes)), "error");

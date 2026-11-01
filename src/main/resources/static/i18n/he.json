@@ -2845,6 +2845,7 @@
   "event_info.empty": "עדיין לא פורסם דבר עבור אירוע זה.",
   "event_info.empty_admin": "עדיין אין פרסומים. השתמשו בטופס למעלה כדי לשתף הודעות, תמונות וקבצים.",
   "event_info.err_too_large": "{name} גדול מ-{size}.",
+  "event_info.err_too_large_compressed": "{name} עדיין בגודל {size} לאחר הדחיסה. המגבלה היא {limit}.",
   "event_info.compressed_from": "{size} (נדחס מ-{original})",
   "event_info.err_empty": "הוסיפו כותרת, הודעה או קובץ.",
   "event_info.err_post": "הפרסום נכשל: ",
