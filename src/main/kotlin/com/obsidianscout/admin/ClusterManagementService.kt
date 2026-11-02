@@ -857,6 +857,66 @@ object ClusterManagementService {
         )
     }
 
+    /** [targetIp]'s analytics, or null when it can't be reached. */
+    private suspend fun getNodeAnalytics(targetIp: String): NodeAnalyticsSnapshot? = withContext(Dispatchers.IO) {
+        val localIp = getLocalTailscaleIp()
+        if (targetIp == localIp || targetIp == "127.0.0.1" || targetIp == "local" || targetIp.isBlank()) {
+            return@withContext ServerAnalyticsService.getLocalSnapshot()
+        }
+        val appPort = AppConfigLoader.load().server.port
+        val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/analytics"
+        try {
+            val req = buildSignedClusterRequest(url, "GET")
+                .timeout(Duration.ofSeconds(5))
+                .GET()
+                .build()
+            val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+            if (resp.statusCode() == 200) JsonSupport.json.decodeFromString<NodeAnalyticsSnapshot>(resp.body()) else null
+        } catch (e: Exception) {
+            if (e.message?.contains("selector manager closed") == true) {
+                resetHttpClient()
+            }
+            null
+        }
+    }
+
+    suspend fun getClusterAnalytics(): ClusterAnalyticsOverview = withContext(Dispatchers.IO) {
+        // A single server has no cluster to list, and is still worth watching.
+        val ips = runCatching { getClusterNodes().nodes.map { it.ip } }.getOrDefault(emptyList()).ifEmpty { listOf("local") }
+        val results = coroutineScope {
+            ips.map { ip -> async { ip to getNodeAnalytics(ip) } }.awaitAll()
+        }
+        val snapshots = results.mapNotNull { it.second }
+        ClusterAnalyticsOverview(
+            combined = ServerAnalyticsService.combineSnapshots(snapshots),
+            nodes = snapshots.map { it.overview },
+            unreachableNodes = results.filter { it.second == null }.map { it.first }
+        )
+    }
+
+    /** A cluster member's thread dump, or this node's without a [targetIp]. Null when it can't be reached or isn't a member. */
+    suspend fun getNodeThreadDump(targetIp: String?): String? = withContext(Dispatchers.IO) {
+        if (targetIp.isNullOrBlank() || targetIp == getLocalTailscaleIp()) {
+            return@withContext ServerAnalyticsService.getThreadDump()
+        }
+        if (getClusterNodes().nodes.none { it.ip == targetIp }) return@withContext null
+        val appPort = AppConfigLoader.load().server.port
+        val url = "http://$targetIp:$appPort/api/admin/cluster/nodes/local/thread-dump"
+        try {
+            val req = buildSignedClusterRequest(url, "GET")
+                .timeout(Duration.ofSeconds(10))
+                .GET()
+                .build()
+            val resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString())
+            if (resp.statusCode() == 200) resp.body() else null
+        } catch (e: Exception) {
+            if (e.message?.contains("selector manager closed") == true) {
+                resetHttpClient()
+            }
+            null
+        }
+    }
+
     suspend fun getAllClusterLogs(limit: Int = 500, filter: String? = null): ServerLogsPayload = withContext(Dispatchers.IO) {
         val cluster = getClusterNodes()
         val nodePayloads = coroutineScope {

@@ -114,7 +114,7 @@ internal fun checkForgotPasswordRateLimit(ip: String, identifier: String) {
     if (!com.obsidianscout.auth.LoginRateLimiter.checkAllowed(ip, key)) {
         throw com.obsidianscout.auth.ApiException(HttpStatusCode.TooManyRequests, "Too many requests. Please wait 60 seconds.")
     }
-    com.obsidianscout.auth.LoginRateLimiter.recordFailedAttempt(ip, key)
+    com.obsidianscout.auth.LoginRateLimiter.recordFailedAttempt(ip, key, isLogin = false)
 }
 
 fun Route.authRoutes() {

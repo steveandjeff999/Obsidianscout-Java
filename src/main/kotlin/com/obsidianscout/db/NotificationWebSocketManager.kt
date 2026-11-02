@@ -24,6 +24,7 @@ object NotificationWebSocketManager {
     fun registerSession(userId: String, session: DefaultWebSocketSession, teamNumber: Int, program: String) {
         activeSessions.computeIfAbsent(userId) { ConcurrentHashMap.newKeySet() }.add(session)
         socketTeams[userId] = teamNumber to program.uppercase()
+        com.obsidianscout.admin.ServerAnalyticsService.recordWebSocketConnect()
     }
 
     fun unregisterSession(userId: String, session: DefaultWebSocketSession) {
@@ -35,6 +36,7 @@ object NotificationWebSocketManager {
                 socketTeams.remove(userId)
             }
         }
+        com.obsidianscout.admin.ServerAnalyticsService.recordWebSocketDisconnect()
     }
 
     /*
@@ -112,16 +114,20 @@ object NotificationWebSocketManager {
             }
         }
         com.obsidianscout.admin.LoadProfiler.recordInvalidation(topics, reached)
+        com.obsidianscout.admin.ServerAnalyticsService.recordTopicBroadcast()
     }
 
     internal fun deliverToAll(topics: Collection<String>, eventKey: String? = null) {
         val payload = invalidationPayload(topics, eventKey)
         activeSessions.keys.forEach { sendToUser(it, payload) }
         com.obsidianscout.admin.LoadProfiler.recordInvalidation(topics, activeSessions.size)
+        com.obsidianscout.admin.ServerAnalyticsService.recordTopicBroadcast()
     }
 
     /** Users with a socket open on this node. */
     fun connectedUsers(): Int = activeSessions.size
+
+    fun connectedSocketsCount(): Int = activeSessions.values.sumOf { it.size }
 
     fun broadcastChatNotification(
         targetUserIds: List<String>,
@@ -153,6 +159,7 @@ object NotificationWebSocketManager {
                     session.send(Frame.Text(jsonPayload))
                 } catch (e: Exception) {
                     iterator.remove()
+                    com.obsidianscout.admin.ServerAnalyticsService.recordDroppedBroadcast()
                 }
             }
             if (sessions.isEmpty()) {

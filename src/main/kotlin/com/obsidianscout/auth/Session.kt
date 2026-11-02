@@ -6,6 +6,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.httpMethod
+import io.ktor.server.request.path
 import io.ktor.server.request.receive
 import io.ktor.server.request.uri
 import io.ktor.server.sessions.get
@@ -334,6 +335,11 @@ suspend fun ApplicationCall.requireSuperAdmin(): UserSession {
     val session = requireSession()
     if (session.publicView || session.role != UserRole.SUPERADMIN) {
         throw ApiException(HttpStatusCode.Forbidden, "Superadmin access required")
+    }
+    if (request.httpMethod != HttpMethod.Get && request.httpMethod != HttpMethod.Head) {
+        com.obsidianscout.admin.ServerAnalyticsService.recordSecurityAudit(
+            "ADMIN_ACTION", session.username, session.role.name, clientIp(), "${request.httpMethod.value} ${request.path()}"
+        )
     }
     return session
 }

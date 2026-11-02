@@ -990,6 +990,32 @@ fun Route.adminRoutes() {
                         val minutes = call.request.queryParameters["minutes"]?.toIntOrNull() ?: 15
                         call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterLoadProfile(minutes))
                     }
+                    get("/analytics/overview") {
+                        call.requireSuperAdmin()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.getClusterAnalytics())
+                    }
+                    get("/analytics/thread-dump") {
+                        call.requireSuperAdmin()
+                        val dump = com.obsidianscout.admin.ClusterManagementService.getNodeThreadDump(call.request.queryParameters["node"])
+                            ?: throw com.obsidianscout.auth.ApiException(HttpStatusCode.NotFound, "That node couldn't be reached")
+                        call.respondText(dump, ContentType.Text.Plain)
+                    }
+                    get("/metrics/prometheus") {
+                        call.requireSuperAdmin()
+                        call.respondText(
+                            com.obsidianscout.admin.ServerAnalyticsService.getPrometheusMetrics(),
+                            ContentType.parse("text/plain; version=0.0.4")
+                        )
+                    }
+                    // What one node hands the node answering a superadmin; the signed cluster call lands here.
+                    get("/nodes/local/analytics") {
+                        call.requireSuperAdminOrClusterAuth()
+                        call.respond(com.obsidianscout.admin.ServerAnalyticsService.getLocalSnapshot())
+                    }
+                    get("/nodes/local/thread-dump") {
+                        call.requireSuperAdminOrClusterAuth()
+                        call.respondText(com.obsidianscout.admin.ServerAnalyticsService.getThreadDump(), ContentType.Text.Plain)
+                    }
                     get("/nodes/local/load-profile") {
                         call.requireSuperAdminOrClusterAuth()
                         val minutes = call.request.queryParameters["minutes"]?.toIntOrNull() ?: 15

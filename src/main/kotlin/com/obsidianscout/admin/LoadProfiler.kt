@@ -113,9 +113,11 @@ object LoadProfiler {
     @Volatile
     private var trackingSinceMs = System.currentTimeMillis()
 
-    /** The profiler's own page is left out, along with sockets, which stay open for hours and aren't requests. */
+    /** The monitoring pages' own polling is left out, along with sockets, which stay open for hours and aren't requests. */
     fun tracks(path: String): Boolean =
-        path.startsWith("/api/") && !path.startsWith("/api/ws") && !path.endsWith("/load-profile")
+        path.startsWith("/api/") && !path.startsWith("/api/ws") && !path.endsWith("/load-profile") &&
+            !path.startsWith("/api/admin/cluster/analytics") && !path.startsWith("/api/admin/cluster/nodes/local/analytics") &&
+            !path.startsWith("/api/admin/cluster/nodes/local/thread-dump")
 
     fun record(
         method: String,

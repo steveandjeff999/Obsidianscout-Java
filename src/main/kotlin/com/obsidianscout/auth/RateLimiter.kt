@@ -84,9 +84,9 @@ object LoginRateLimiter {
     }
 
     /**
-     * Records a failed attempt for the given IP and username.
+     * Records a failed attempt for the given IP and username. [isLogin] is false for other requests sharing the limit.
      */
-    fun recordFailedAttempt(ip: String, username: String) {
+    fun recordFailedAttempt(ip: String, username: String, isLogin: Boolean = true) {
         val now = System.currentTimeMillis()
 
         if (ip.isNotBlank()) {
@@ -107,6 +107,7 @@ object LoginRateLimiter {
             }
             userWindow.count.incrementAndGet()
         }
+        if (isLogin) com.obsidianscout.admin.ServerAnalyticsService.recordAuthFailure(ip, username)
     }
 
     /**

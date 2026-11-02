@@ -305,6 +305,7 @@ fun Application.module(appConfig: AppConfig) {
                     bodyBytes = call.attributes.getOrNull(profiler.BodyBytes) ?: 0L,
                     live = call.request.headers.contains(profiler.LIVE_REFRESH_HEADER)
                 )
+                com.obsidianscout.admin.ServerAnalyticsService.recordRequest(call, (System.nanoTime() - startedAt) / 1000, call.response.status()?.value ?: 500)
             }
         }
     }
