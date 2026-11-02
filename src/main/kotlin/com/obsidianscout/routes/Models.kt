@@ -1221,7 +1221,15 @@ data class RedisNodeConfigDto(
     val minMemoryMb: Long = 64L,
     val maxMemoryMb: Long = 8192L,
     val isReady: Boolean = false,
-    val isHost: Boolean = false
+    val isHost: Boolean = false,
+    val canHostRedis: Boolean = false,
+    val installProgress: String? = null
+)
+
+@Serializable
+data class RedisInstallRequest(
+    val sudoPassword: String? = null,
+    val targetIp: String = "all"
 )
 
 @Serializable

@@ -27,16 +27,19 @@ object RedisCache {
         }
 
         // 1. Lock-free optimistic read
-        val cached = readFromRedis<T>(key)
+        val cached = readFromRedis<T>(key, countStats = false)
         if (cached != null) {
             hits.increment()
             return cached
         }
 
-        // 2. Cache miss: enter SingleFlight mutex per key
-        return SingleFlight.execute(key) {
+        // 2. Cache miss: enter SingleFlight mutex per key. Each request is counted once: a miss only if
+        // this request ran the loader, otherwise a hit (a waiter shares the leader's result).
+        var ranBlock = false
+        val result = SingleFlight.execute(key) {
+            ranBlock = true
             // Double-check: another coroutine may have populated the key while we were waiting
-            val doubleChecked = readFromRedis<T>(key)
+            val doubleChecked = readFromRedis<T>(key, countStats = false)
             if (doubleChecked != null) {
                 hits.increment()
                 stampedesAvoided.increment()
@@ -49,15 +52,31 @@ object RedisCache {
             writeToRedis(key, ttlSeconds, fresh)
             fresh
         }
+        if (!ranBlock) {
+            hits.increment()
+            stampedesAvoided.increment()
+        }
+        return result
     }
 
-    inline fun <reified T> readFromRedis(key: String): T? {
-        if (!RedisClusterCoordinator.isReady) return null
+    inline fun <reified T> readFromRedis(key: String, countStats: Boolean = true): T? {
+        if (!RedisClusterCoordinator.isReady) {
+            if (countStats) misses.increment()
+            return null
+        }
         return try {
-            RedisClusterCoordinator.getJedis().use { jedis ->
-                jedis.get(key)?.let { json.decodeFromString<T>(it) }
+            val raw = RedisClusterCoordinator.getJedis().use { jedis ->
+                jedis.get(key)
+            }
+            if (raw != null) {
+                if (countStats) hits.increment()
+                json.decodeFromString<T>(raw)
+            } else {
+                if (countStats) misses.increment()
+                null
             }
         } catch (e: Exception) {
+            if (countStats) misses.increment()
             log.debug("[RedisCache] Read failed for {}: {}", key, e.message)
             null
         }
@@ -152,6 +171,7 @@ object RedisCache {
         val cleanKey = eventKey.lowercase().trim()
         return try {
             RedisClusterCoordinator.getJedis().use { jedis ->
+                // Not counted in hits/misses: this is bookkeeping for a cache read, not a cache read itself.
                 jedis.get("obsidian:event:$cleanKey:v")?.toLongOrNull() ?: 1L
             }
         } catch (_: Exception) {

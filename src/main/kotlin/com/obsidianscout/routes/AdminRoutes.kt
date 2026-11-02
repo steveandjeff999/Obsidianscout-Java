@@ -1034,16 +1034,50 @@ fun Route.adminRoutes() {
                         val assessment = com.obsidianscout.cache.RedisMemoryAutoSizer.calculateOptimalMaxMemory()
 
                         var usedMemMb = 0L
+                        var usedMemBytes = 0L
+                        var usedMemoryHuman: String? = null
+                        var redisHits = 0L
+                        var redisMisses = 0L
+                        var redisEvictions = 0L
+                        var redisKeys = 0L
+
                         if (isReady) {
                             runCatching {
                                 com.obsidianscout.cache.RedisClusterCoordinator.getJedis().use { jedis ->
-                                    val info = jedis.info("memory")
-                                    val usedBytes = info.lineSequence()
+                                    val memInfo = jedis.info("memory")
+                                    usedMemBytes = memInfo.lineSequence()
                                         .firstOrNull { it.startsWith("used_memory:") }
                                         ?.substringAfter(":")?.trim()?.toLongOrNull() ?: 0L
-                                    usedMemMb = usedBytes / (1024 * 1024)
+                                    usedMemoryHuman = memInfo.lineSequence()
+                                        .firstOrNull { it.startsWith("used_memory_human:") }
+                                        ?.substringAfter(":")?.trim()
+                                    usedMemMb = (usedMemBytes + 524288L) / (1024 * 1024)
+
+                                    val statsInfo = jedis.info("stats")
+                                    redisHits = statsInfo.lineSequence()
+                                        .firstOrNull { it.startsWith("keyspace_hits:") }
+                                        ?.substringAfter(":")?.trim()?.toLongOrNull() ?: 0L
+                                    redisMisses = statsInfo.lineSequence()
+                                        .firstOrNull { it.startsWith("keyspace_misses:") }
+                                        ?.substringAfter(":")?.trim()?.toLongOrNull() ?: 0L
+                                    redisEvictions = statsInfo.lineSequence()
+                                        .firstOrNull { it.startsWith("evicted_keys:") }
+                                        ?.substringAfter(":")?.trim()?.toLongOrNull() ?: 0L
+
+                                    val keyspaceInfo = jedis.info("keyspace")
+                                    redisKeys = keyspaceInfo.lineSequence()
+                                        .firstOrNull { it.startsWith("db0:") }
+                                        ?.substringAfter("keys=")?.substringBefore(",")?.toLongOrNull() ?: 0L
                                 }
                             }
+                        }
+
+
+                        val displayHuman = usedMemoryHuman ?: if (usedMemBytes > 0) {
+                            if (usedMemBytes < 1024 * 1024) "${(usedMemBytes + 512) / 1024} KB"
+                            else "${"%.1f".format(usedMemBytes.toDouble() / (1024.0 * 1024.0))} MB"
+                        } else {
+                            "0 MB"
                         }
 
                         call.respond(
@@ -1053,11 +1087,18 @@ fun Route.adminRoutes() {
                                 put("can_host_redis", canHost)
                                 put("active_endpoint", activeEndpoint ?: "None")
                                 put("lease_holder", holder ?: "None")
+                                // This node's app-level counts. The Redis server's own counts are cluster-wide
+                                // and include internal lookups, so they are reported separately, never mixed in.
                                 put("hits", com.obsidianscout.cache.RedisCache.hits.sum())
                                 put("misses", com.obsidianscout.cache.RedisCache.misses.sum())
                                 put("stampedes_avoided", com.obsidianscout.cache.RedisCache.stampedesAvoided.sum())
-                                put("evictions", com.obsidianscout.cache.RedisCache.evictions.sum())
+                                put("evictions", redisEvictions)
+                                put("redis_server_hits", redisHits)
+                                put("redis_server_misses", redisMisses)
+                                put("total_keys", redisKeys)
+                                put("used_memory_bytes", usedMemBytes)
                                 put("used_memory_mb", usedMemMb)
+                                put("used_memory_human", displayHuman)
                                 putJsonObject("memory_assessment") {
                                     put("totalOsMb", assessment.totalOsMb)
                                     put("availableOsMb", assessment.availableOsMb)
@@ -1111,6 +1152,16 @@ fun Route.adminRoutes() {
                         call.requireSuperAdmin()
                         val req = call.receive<RedisConfigUpdateRequest>()
                         call.respond(com.obsidianscout.admin.ClusterManagementService.pushRedisConfigToCluster(req))
+                    }
+                    post("/redis/install") {
+                        call.requireSuperAdmin()
+                        val req = call.receive<com.obsidianscout.routes.RedisInstallRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.pushRedisInstallToCluster(req))
+                    }
+                    post("/nodes/local/redis/install") {
+                        call.requireSuperAdminOrClusterAuth()
+                        val req = call.receive<com.obsidianscout.routes.RedisInstallRequest>()
+                        call.respond(com.obsidianscout.admin.ClusterManagementService.applyLocalRedisInstall(req))
                     }
                     get("/nodes/local/redis/config") {
                         call.requireSuperAdminOrClusterAuth()

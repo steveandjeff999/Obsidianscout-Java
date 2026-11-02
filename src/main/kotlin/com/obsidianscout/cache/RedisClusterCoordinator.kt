@@ -31,6 +31,20 @@ object RedisClusterCoordinator {
     @Volatile var isReady: Boolean = false; private set
     @Volatile var isHost: Boolean = false; private set
     @Volatile var canHostRedis: Boolean = false; private set
+    val installProgress: String? get() = RedisOrchestrator.installProgress
+
+    /** Starts installing Redis in the background. Returns false if this node is not set up yet or an install is already running. */
+    fun triggerInstall(sudoPassword: String?): Boolean {
+        if (!::orchestrator.isInitialized || RedisOrchestrator.isInstalling) return false
+        scope.launch(Dispatchers.IO) {
+            if (orchestrator.runInstall(sudoPassword)) {
+                // Re-detect on the current orchestrator: a settings save may have rebuilt it mid-install.
+                canHostRedis = orchestrator.detectHostCapability(getEffectivePassword())
+                log.info("[RedisClusterCoordinator] Installation succeeded. Host capability now canHost={}", canHostRedis)
+            }
+        }
+        return true
+    }
     @Volatile var activeEndpoint: String? = null; private set // Format: "hostIp:port"
     @Volatile private var localPort: Int = DEFAULT_PORT
     @Volatile private var jedisPool: JedisPool? = null

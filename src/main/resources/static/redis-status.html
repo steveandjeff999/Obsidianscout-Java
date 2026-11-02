@@ -3,10 +3,14 @@
 <head>
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/obsidian/obsidian-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/assets/images/obsidian/obsidian-512.png" />
+    <link class="apple-touch-icon" href="/assets/images/obsidian/obsidian-192.png" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ObsidianScout | Redis Cache Status</title>
+    <title>ObsidianScout | Redis Cache Management</title>
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" />
+    <link rel="manifest" href="/manifest.json" />
     <style>
         .redis-card {
             background: var(--surface);
@@ -15,333 +19,665 @@
             padding: 24px;
             margin-bottom: 24px;
             box-shadow: var(--shadow);
+            transition: border-color var(--transition-fast);
         }
+
+        .feature-card-purple {
+            background: rgba(124, 58, 237, 0.04);
+            border: 1px solid rgba(124, 58, 237, 0.2);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+        body.theme-dark .feature-card-purple {
+            background: rgba(168, 85, 247, 0.07);
+            border-color: rgba(168, 85, 247, 0.25);
+        }
+
+        .feature-card-blue {
+            background: rgba(37, 99, 235, 0.04);
+            border: 1px solid rgba(37, 99, 235, 0.2);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+        body.theme-dark .feature-card-blue {
+            background: rgba(59, 130, 246, 0.07);
+            border-color: rgba(59, 130, 246, 0.25);
+        }
+
         .redis-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
             margin-bottom: 24px;
         }
+
         .metric-box {
             background: var(--surface-2);
             border: 1px solid var(--border);
             border-radius: var(--radius-sm);
-            padding: 16px;
+            padding: 18px;
+            transition: all var(--transition-fast);
         }
+
+        .metric-box:hover {
+            border-color: var(--accent);
+            background: var(--surface-3);
+        }
+
         .metric-title {
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 12px;
+            font-weight: 700;
             color: var(--muted);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 6px;
+            letter-spacing: 0.6px;
+            margin-bottom: 8px;
         }
+
         .metric-value {
             font-size: 26px;
-            font-weight: 700;
+            font-weight: 800;
             color: var(--ink);
+            line-height: 1.2;
         }
+
         .metric-sub {
             font-size: 13px;
             color: var(--muted);
-            margin-top: 4px;
+            margin-top: 6px;
         }
+
         .status-badge {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             padding: 6px 14px;
             border-radius: 999px;
             font-size: 13px;
             font-weight: 700;
         }
+
         .status-badge.active {
             background: rgba(16, 185, 129, 0.15);
             color: #10b981;
-            border: 1px solid #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.35);
         }
+
         .status-badge.degraded {
             background: rgba(239, 68, 68, 0.15);
             color: #ef4444;
-            border: 1px solid #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.35);
         }
+
+        .node-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .node-badge.local {
+            background: rgba(37, 99, 235, 0.12);
+            color: var(--accent);
+            border: 1px solid rgba(37, 99, 235, 0.25);
+        }
+        body.theme-dark .node-badge.local {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .node-badge.capable {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            text-transform: none;
+        }
+        body.theme-dark .node-badge.capable {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .node-badge.client-only {
+            background: rgba(245, 158, 11, 0.12);
+            color: #b45309;
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            text-transform: none;
+        }
+        body.theme-dark .node-badge.client-only {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+
+        .node-badge.progressing {
+            background: rgba(59, 130, 246, 0.15);
+            color: #2563eb;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            text-transform: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        body.theme-dark .node-badge.progressing {
+            background: rgba(59, 130, 246, 0.25);
+            color: #93c5fd;
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .node-badge.error {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            text-transform: none;
+        }
+        body.theme-dark .node-badge.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all var(--transition-fast);
+            user-select: none;
+            text-decoration: none;
+        }
+        .btn-action:hover {
+            transform: translateY(-1px);
+        }
+        .btn-action.logs {
+            background: rgba(37, 99, 235, 0.1);
+            color: #1d4ed8;
+            border-color: rgba(37, 99, 235, 0.25);
+        }
+        body.theme-dark .btn-action.logs {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        .btn-action.config {
+            background: rgba(124, 58, 237, 0.1);
+            color: #7c3aed;
+            border-color: rgba(124, 58, 237, 0.25);
+        }
+        body.theme-dark .btn-action.config {
+            background: rgba(168, 85, 247, 0.15);
+            color: #c084fc;
+            border-color: rgba(168, 85, 247, 0.3);
+        }
+        .btn-action.reboot {
+            background: rgba(239, 68, 68, 0.1);
+            color: #dc2626;
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+        body.theme-dark .btn-action.reboot {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+        .btn-action.success {
+            background: rgba(16, 185, 129, 0.1);
+            color: #059669;
+            border-color: rgba(16, 185, 129, 0.25);
+        }
+        body.theme-dark .btn-action.success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
         .memory-bar-container {
             width: 100%;
             height: 14px;
             background: var(--surface-3);
             border-radius: 999px;
             overflow: hidden;
-            margin: 10px 0;
+            margin: 14px 0 10px;
             border: 1px solid var(--border);
         }
+
         .memory-bar-fill {
             height: 100%;
-            background: linear-gradient(90deg, #10b981, #3b82f6);
+            background: linear-gradient(90deg, var(--accent) 0%, #3b82f6 100%);
             border-radius: 999px;
             transition: width 0.4s ease;
         }
+
         .action-btn-group {
             display: flex;
             gap: 12px;
             flex-wrap: wrap;
-            margin-top: 16px;
+            margin-top: 18px;
         }
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            border-radius: var(--radius-sm);
-            font-weight: 600;
-            cursor: pointer;
-        }
-        .btn-danger:hover {
-            opacity: 0.9;
-        }
+
         .cfg-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
             gap: 16px;
-            margin-bottom: 16px;
+            margin-top: 16px;
         }
+
+        .cfg-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
         .cfg-field label {
-            display: block;
-            font-size: 13px;
+            font-size: 13.5px;
             font-weight: 600;
-            color: var(--muted);
-            margin-bottom: 6px;
+            color: var(--ink);
         }
+
         .cfg-field input[type="text"],
+        .cfg-field input[type="password"],
         .cfg-field input[type="number"],
-        .cfg-field input[type="password"] {
-            width: 100%;
-            box-sizing: border-box;
+        .cfg-field select {
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 9px 12px;
+            background: var(--surface-2);
+            color: var(--ink);
+            font-size: 14px;
+            outline: none;
+            transition: border-color var(--transition-fast), background-color var(--transition-fast);
         }
+
+        .cfg-field input:focus,
+        .cfg-field select:focus {
+            border-color: var(--accent);
+            background: var(--surface);
+        }
+
         .cfg-field .hint {
             font-size: 12px;
             color: var(--muted);
-            margin-top: 4px;
+            line-height: 1.4;
         }
+
         .cfg-check {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 8px;
-            font-weight: 600;
+            gap: 10px;
             font-size: 14px;
+            font-weight: 600;
+            color: var(--ink);
+            cursor: pointer;
+            user-select: none;
         }
+
+        .cfg-check input[type="checkbox"] {
+            width: 17px;
+            height: 17px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
         .node-table-wrap {
+            margin-top: 24px;
             overflow-x: auto;
-            margin-top: 16px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--surface);
         }
+
         .node-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            font-size: 13.5px;
         }
-        .node-table th,
-        .node-table td {
-            text-align: left;
-            padding: 8px 10px;
-            border-bottom: 1px solid var(--border);
-            white-space: nowrap;
-        }
+
         .node-table th {
+            text-align: left;
+            padding: 12px 16px;
+            background: var(--surface-2);
+            border-bottom: 1px solid var(--border);
             color: var(--muted);
-            font-weight: 600;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 11.5px;
+            letter-spacing: 0.5px;
         }
+
+        .node-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            color: var(--ink);
+        }
+
+        .node-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .node-table tbody tr:hover {
+            background: var(--surface-2);
+        }
+
         .node-table td.mismatch {
-            color: #ef4444;
+            color: var(--danger);
             font-weight: 700;
         }
+
         .cfg-warning {
-            color: #ef4444;
+            color: var(--danger);
             font-weight: 600;
             font-size: 14px;
-            margin-top: 12px;
+            margin-top: 14px;
+            padding: 10px 14px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            border-radius: var(--radius-sm);
         }
+
         .cfg-results {
-            margin: 12px 0 0;
-            padding-left: 18px;
-            font-size: 14px;
+            margin: 14px 0 0;
+            padding-left: 20px;
+            font-size: 13.5px;
+            line-height: 1.6;
+        }
+
+        .spin-icon {
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
-<body>
-    <div class="app-layout">
+<body data-page="redis-status">
+    <script>
+        (function() {
+            try {
+                const saved = localStorage.getItem("obsidian-theme") || "light";
+                if (saved === "dark") {
+                    document.body.classList.add("theme-dark");
+                }
+            } catch (e) {
+                console.warn("Theme storage access failed:", e);
+            }
+        })();
+    </script>
+    <div class="orb orb-3"></div>
+
+    <div class="app-shell">
+        <!-- Sidebar Navigation (injected by common.js) -->
+        <aside class="sidebar"></aside>
+
         <main class="main-content">
-            <div class="content-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px;">
-                <div>
-                    <h1 style="margin: 0; font-size: 28px; font-weight: 800;">Redis Cache & Cluster Topology</h1>
-                    <p style="margin: 4px 0 0; color: var(--muted);">Real-time memory auto-sizing, leader election, and sub-millisecond cache telemetry</p>
-                </div>
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    <div id="statusBadge" class="status-badge degraded">Checking...</div>
-                    <button class="btn secondary" onclick="fetchStatus()">Refresh</button>
-                </div>
+            <div id="admin-locked" class="card hidden">
+                <h2>SuperAdmin Access Required</h2>
+                <p class="notice">You need superadmin privileges to access Redis cache & cluster management.</p>
             </div>
 
-            <!-- Top Level Metrics Grid -->
-            <div class="redis-grid">
-                <div class="metric-box">
-                    <div class="metric-title">Cache Hit Rate</div>
-                    <div class="metric-value" id="hitRate">- %</div>
-                    <div class="metric-sub" id="hitCount">0 hits / 0 misses</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-title">Stampedes Avoided</div>
-                    <div class="metric-value" id="stampedesAvoided">0</div>
-                    <div class="metric-sub">SingleFlight deduplicated DB loads</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-title">Active Role</div>
-                    <div class="metric-value" id="nodeRole" style="font-size: 20px;">STANDBY</div>
-                    <div class="metric-sub" id="hostEndpoint">Active Endpoint: None</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-title">Est. Database Latency Saved</div>
-                    <div class="metric-value" id="latencySaved" style="color: #10b981;">0 ms</div>
-                    <div class="metric-sub">~285 ms avg saved per hit</div>
-                </div>
-            </div>
-
-            <!-- Cluster Topology & Host Election Card -->
-            <div class="redis-card">
-                <h3 style="margin-top: 0; margin-bottom: 16px;">Cluster Topology & Autonomous Leader Election</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+            <div id="admin-panel" class="card">
+                <!-- Page Header with Navigation and Live Badge -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;">
                     <div>
-                        <div class="metric-title">Host Capability (can_host_redis)</div>
-                        <div id="canHostText" style="font-weight: 600; font-size: 15px;">Detecting...</div>
+                        <h1 style="margin: 0; font-size: 26px; font-weight: 800;">Redis Cache & Cluster Topology</h1>
+                        <p class="notice" style="margin-top: 4px; margin-bottom: 0;">Real-time memory auto-sizing, zero-downtime leader election, and sub-millisecond cache telemetry.</p>
                     </div>
-                    <div>
-                        <div class="metric-title">Active Redis Endpoint</div>
-                        <div id="activeEndpointText" style="font-weight: 600; font-size: 15px;">127.0.0.1:6379</div>
-                    </div>
-                    <div>
-                        <div class="metric-title">Host Node ID / Holder</div>
-                        <div id="leaseHolderText" style="font-weight: 600; font-size: 15px;">None</div>
-                    </div>
-                    <div>
-                        <div class="metric-title">Failover Mode</div>
-                        <div style="font-weight: 600; font-size: 15px; color: #10b981;">Hot Replica Promotion (Zero Restarts)</div>
+                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <a href="/cluster-management" class="btn-action config">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">dns</span> Server Management
+                        </a>
+                        <span id="statusBadge" class="status-badge degraded">Checking...</span>
+                        <button class="btn" type="button" onclick="fetchStatus()">Refresh</button>
                     </div>
                 </div>
-            </div>
 
-            <!-- Memory Auto-Sizing Diagnostics Card -->
-            <div class="redis-card">
-                <h3 style="margin-top: 0; margin-bottom: 8px;">OS Available RAM Dynamic Auto-Sizing</h3>
-                <p style="color: var(--muted); margin-top: 0; margin-bottom: 16px;">
-                    Redis maxmemory is automatically calculated on boot to allocate up to 40% of available RAM, clamped between 64 MB and 8 GB with allkeys-lru eviction.
-                </p>
-
-                <div class="memory-bar-container">
-                    <div class="memory-bar-fill" id="memoryBar" style="width: 0%;"></div>
-                </div>
-
-                <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 16px;">
-                    <span>Used Memory: <strong id="usedMemMb">0 MB</strong></span>
-                    <span>Configured MaxMemory: <strong id="maxMemMb">0 MB</strong></span>
-                    <span>Host Available RAM: <strong id="availRamMb">0 MB</strong></span>
-                    <span>Host Total RAM: <strong id="totalRamMb">0 MB</strong></span>
-                </div>
-            </div>
-
-            <!-- Management Controls -->
-            <div class="redis-card">
-                <h3 style="margin-top: 0; margin-bottom: 8px;">SuperAdmin Cache Management</h3>
-                <p style="color: var(--muted); margin-top: 0; margin-bottom: 16px;">
-                    Live controls to trigger immediate cache purges, simulate hot failovers, or recalculate memory sizing.
-                </p>
-
-                <div class="action-btn-group">
-                    <button class="btn secondary" onclick="purgeAll()">Purge All Caches</button>
-                    <button class="btn secondary" onclick="resyncMemory()">Recalculate RAM Sizer</button>
-                    <button class="btn-danger" onclick="triggerFailover()">Trigger Test Failover</button>
-                </div>
-                <div id="actionMsg" style="margin-top: 12px; font-weight: 600; font-size: 14px;"></div>
-            </div>
-
-            <!-- Redis Settings, saved to app-config.json on every node -->
-            <div class="redis-card">
-                <h3 style="margin-top: 0; margin-bottom: 8px;">Redis Settings (All Nodes)</h3>
-                <p style="color: var(--muted); margin-top: 0; margin-bottom: 16px;">
-                    Saving writes these settings to app-config.json on every node and restarts Redis on each one with them. The app keeps running; the cache is skipped for a few seconds while Redis comes back.
-                </p>
-
-                <form id="cfgForm" onsubmit="saveConfig(event)">
-                    <div class="cfg-grid">
-                        <div class="cfg-field">
-                            <label class="cfg-check"><input type="checkbox" id="cfgEnabled" /> Redis enabled</label>
-                            <div class="hint">Off sends every read straight to the database.</div>
-                        </div>
-                        <div class="cfg-field">
-                            <label class="cfg-check"><input type="checkbox" id="cfgRequirePassword" /> Require a password</label>
-                            <div class="hint">Off relies on Redis only listening on the tailnet.</div>
-                        </div>
-                        <div class="cfg-field">
-                            <label for="cfgPassword">Password</label>
-                            <input type="password" id="cfgPassword" autocomplete="new-password" placeholder="Leave blank to keep" />
-                            <div class="hint" id="cfgPasswordHint">Blank uses one derived from the cluster secret.</div>
-                        </div>
-                        <div class="cfg-field">
-                            <label class="cfg-check"><input type="checkbox" id="cfgClearPassword" /> Clear stored password</label>
-                            <div class="hint">Goes back to the derived password.</div>
-                        </div>
-                        <div class="cfg-field">
-                            <label for="cfgHost">External Redis host</label>
-                            <input type="text" id="cfgHost" placeholder="Blank = nodes elect a host" />
-                            <div class="hint">Only for a Redis you run yourself.</div>
-                        </div>
-                        <div class="cfg-field">
-                            <label for="cfgPort">Port</label>
-                            <input type="number" id="cfgPort" min="1" max="65535" />
-                        </div>
-                        <div class="cfg-field">
-                            <label for="cfgMaxPercent">Max share of free RAM (%)</label>
-                            <input type="number" id="cfgMaxPercent" min="1" max="95" step="1" />
-                        </div>
-                        <div class="cfg-field">
-                            <label for="cfgMinMb">Min memory (MB)</label>
-                            <input type="number" id="cfgMinMb" min="16" step="1" />
-                        </div>
-                        <div class="cfg-field">
-                            <label for="cfgMaxMb">Max memory (MB)</label>
-                            <input type="number" id="cfgMaxMb" min="16" step="1" />
+                <!-- Feature Card: Install Redis on Cluster Nodes -->
+                <div class="feature-card-blue" style="margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 17px; color: var(--accent); display: flex; align-items: center; gap: 8px;">
+                                <span class="material-symbols-outlined">download</span> Install &amp; Deploy Redis on Nodes
+                            </h3>
+                            <p class="notice" style="margin-top: 4px; margin-bottom: 0;">
+                                Automatically installs <code style="background: var(--surface); padding: 2px 6px; border-radius: 4px;">redis-server</code> via package managers (<code style="background: var(--surface); padding: 2px 6px; border-radius: 4px;">apt-get</code>, <code style="background: var(--surface); padding: 2px 6px; border-radius: 4px;">dnf</code>, <code style="background: var(--surface); padding: 2px 6px; border-radius: 4px;">yum</code>) on Linux, or through WSL/Docker on Windows.
+                            </p>
                         </div>
                     </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; align-items: flex-end; margin-top: 14px;">
+                        <div class="cfg-field">
+                            <label for="installTargetNode">Target Node</label>
+                            <select id="installTargetNode">
+                                <option value="all">All Cluster Nodes</option>
+                            </select>
+                            <div class="hint">Select an individual node or deploy to the whole cluster.</div>
+                        </div>
+                        <div class="cfg-field">
+                            <label for="installSudoPassword">Linux Sudo Password</label>
+                            <input type="password" id="installSudoPassword" placeholder="Enter sudo password (optional if root/WSL)" autocomplete="new-password" />
+                            <div class="hint">Transmitted over signed cluster HTTPS. Unneeded on Windows/WSL/root.</div>
+                        </div>
+                        <div>
+                            <button type="button" class="btn primary" id="btnInstallRedis" onclick="triggerRedisInstall()" style="height: 40px; display: inline-flex; align-items: center; gap: 8px;">
+                                <span class="material-symbols-outlined" style="font-size: 18px;">download</span> Install Redis on Target
+                            </button>
+                        </div>
+                    </div>
+                    <div id="installMsg" style="margin-top: 14px; font-weight: 600; font-size: 13.5px; display: none;"></div>
+                </div>
+
+                <!-- Top Level Metrics Grid -->
+                <div class="redis-grid">
+                    <div class="metric-box">
+                        <div class="metric-title">Cache Hit Rate</div>
+                        <div class="metric-value" id="hitRate">- %</div>
+                        <div class="metric-sub" id="hitCount">0 hits / 0 misses</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-title">Stampedes Avoided</div>
+                        <div class="metric-value" id="stampedesAvoided">0</div>
+                        <div class="metric-sub">SingleFlight deduplicated DB loads</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-title">Active Role</div>
+                        <div class="metric-value" id="nodeRole" style="font-size: 20px;">STANDBY</div>
+                        <div class="metric-sub" id="hostEndpoint">Active Endpoint: None</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-title">Est. Database Latency Saved</div>
+                        <div class="metric-value" id="latencySaved" style="color: var(--success, #10b981);">0 ms</div>
+                        <div class="metric-sub">~285 ms avg saved per hit</div>
+                    </div>
+                </div>
+
+                <!-- Cluster Topology & Host Election Card -->
+                <div class="redis-card">
+                    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 18px;">Cluster Topology & Autonomous Leader Election</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+                        <div>
+                            <div class="metric-title">Host Capability (can_host_redis)</div>
+                            <div id="canHostText" style="font-weight: 700; font-size: 15px;">Detecting...</div>
+                        </div>
+                        <div>
+                            <div class="metric-title">Active Redis Endpoint</div>
+                            <div id="activeEndpointText" style="font-weight: 700; font-size: 15px; font-family: monospace;">127.0.0.1:6379</div>
+                        </div>
+                        <div>
+                            <div class="metric-title">Host Node ID / Coordinator</div>
+                            <div id="leaseHolderText" style="font-weight: 700; font-size: 15px; font-family: monospace;">None</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memory Auto-Sizing Diagnostics Card -->
+                <div class="redis-card">
+                    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 18px;">OS-Aware Dynamic Memory Auto-Sizing</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+                        <div>
+                            <div class="metric-title">Total System RAM</div>
+                            <div id="totalRamMb" style="font-weight: 700; font-size: 16px;">- MB</div>
+                        </div>
+                        <div>
+                            <div class="metric-title">Available Host RAM</div>
+                            <div id="availRamMb" style="font-weight: 700; font-size: 16px;">- MB</div>
+                        </div>
+                        <div>
+                            <div class="metric-title">Configured MaxMemory</div>
+                            <div id="maxMemMb" style="font-weight: 700; font-size: 16px;">- MB</div>
+                        </div>
+                        <div>
+                            <div class="metric-title">Used Memory (Redis)</div>
+                            <div id="usedMemMb" style="font-weight: 700; font-size: 16px;">- MB</div>
+                        </div>
+                    </div>
+                    <div class="memory-bar-container">
+                        <div id="memoryBar" class="memory-bar-fill" style="width: 0%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--muted);">
+                        <span>0 MB</span>
+                        <span>Dynamic Eviction Threshold (<code style="font-size: 11px;">allkeys-lru</code>)</span>
+                    </div>
+                </div>
+
+                <!-- Cluster Controls Card -->
+                <div class="redis-card">
+                    <h3 style="margin-top: 0; margin-bottom: 8px; font-size: 18px;">Cluster Cache Actions</h3>
+                    <p class="notice" style="margin-top: 0; margin-bottom: 16px;">
+                        Administrative operations executed through CockroachDB lease coordination and Redis Pub/Sub invalidations.
+                    </p>
                     <div class="action-btn-group">
-                        <button type="submit" class="btn primary" id="cfgSaveBtn">Save to All Nodes</button>
-                        <button type="button" class="btn secondary" onclick="loadConfig(true)">Reload Settings</button>
+                        <button class="btn danger" type="button" onclick="purgeAll()">Purge Entire Cluster Cache</button>
+                        <button class="btn secondary" type="button" onclick="resyncMemory()">Recalculate Memory Limit</button>
+                        <button class="btn" type="button" onclick="triggerFailover()">Trigger Graceful Failover</button>
                     </div>
-                </form>
+                    <div id="actionMsg" style="margin-top: 14px; font-weight: 600; font-size: 14px;"></div>
+                </div>
 
-                <div id="cfgMsg" style="margin-top: 12px; font-weight: 600; font-size: 14px;"></div>
-                <ul id="cfgResults" class="cfg-results"></ul>
-                <div id="cfgMismatch" class="cfg-warning" style="display: none;"></div>
+                <!-- Redis Settings, saved to app-config.json on every node -->
+                <div class="redis-card">
+                    <h3 style="margin-top: 0; margin-bottom: 8px; font-size: 18px;">Redis Settings (All Nodes)</h3>
+                    <p class="notice" style="margin-top: 0; margin-bottom: 16px;">
+                        Saving writes these settings to <code style="background: var(--surface-2); padding: 2px 6px; border-radius: 4px;">app-config.json</code> on every node and restarts Redis on each one with them. The app keeps running; the cache is skipped for a few seconds while Redis comes back.
+                    </p>
 
-                <div class="node-table-wrap">
-                    <table class="node-table">
-                        <thead>
-                            <tr>
-                                <th>Node</th>
-                                <th>Enabled</th>
-                                <th>Password</th>
-                                <th>Host</th>
-                                <th>Port</th>
-                                <th>Memory</th>
-                                <th>State</th>
-                            </tr>
-                        </thead>
-                        <tbody id="nodeCfgBody">
-                            <tr><td colspan="7" style="color: var(--muted);">Loading...</td></tr>
-                        </tbody>
-                    </table>
+                    <form id="cfgForm" onsubmit="saveConfig(event)">
+                        <div class="cfg-grid">
+                            <div class="cfg-field">
+                                <label class="cfg-check"><input type="checkbox" id="cfgEnabled" /> Redis enabled</label>
+                                <div class="hint">Off sends every read straight to the database.</div>
+                            </div>
+                            <div class="cfg-field">
+                                <label class="cfg-check"><input type="checkbox" id="cfgRequirePassword" /> Require a password</label>
+                                <div class="hint">Off relies on Redis only listening on the tailnet.</div>
+                            </div>
+                            <div class="cfg-field">
+                                <label for="cfgPassword">Password</label>
+                                <input type="password" id="cfgPassword" autocomplete="new-password" placeholder="Leave blank to keep" />
+                                <div class="hint" id="cfgPasswordHint">Blank uses one derived from the cluster secret.</div>
+                            </div>
+                            <div class="cfg-field">
+                                <label class="cfg-check"><input type="checkbox" id="cfgClearPassword" /> Clear stored password</label>
+                                <div class="hint">Goes back to the derived password.</div>
+                            </div>
+                            <div class="cfg-field">
+                                <label for="cfgHost">External Redis host</label>
+                                <input type="text" id="cfgHost" placeholder="Blank = nodes elect a host" />
+                                <div class="hint">Only for a Redis you run yourself.</div>
+                            </div>
+                            <div class="cfg-field">
+                                <label for="cfgPort">Port</label>
+                                <input type="number" id="cfgPort" min="1" max="65535" />
+                            </div>
+                            <div class="cfg-field">
+                                <label for="cfgMaxPercent">Max share of free RAM (%)</label>
+                                <input type="number" id="cfgMaxPercent" min="1" max="95" step="1" />
+                            </div>
+                            <div class="cfg-field">
+                                <label for="cfgMinMb">Min memory (MB)</label>
+                                <input type="number" id="cfgMinMb" min="16" step="1" />
+                            </div>
+                            <div class="cfg-field">
+                                <label for="cfgMaxMb">Max memory (MB)</label>
+                                <input type="number" id="cfgMaxMb" min="16" step="1" />
+                            </div>
+                        </div>
+                        <div class="action-btn-group" style="margin-top: 24px;">
+                            <button type="submit" class="btn primary" id="cfgSaveBtn">Save to All Nodes</button>
+                            <button type="button" class="btn secondary" onclick="loadConfig(true)">Reload Settings</button>
+                        </div>
+                    </form>
+
+                    <div id="cfgMsg" style="margin-top: 14px; font-weight: 600; font-size: 14px;"></div>
+                    <ul id="cfgResults" class="cfg-results"></ul>
+                    <div id="cfgMismatch" class="cfg-warning" style="display: none;"></div>
+
+                    <!-- Cluster Nodes Table with Runtime & Download Progress -->
+                    <div class="node-table-wrap">
+                        <table class="node-table">
+                            <thead>
+                                <tr>
+                                    <th>Node</th>
+                                    <th>Capability</th>
+                                    <th>Enabled</th>
+                                    <th>State</th>
+                                    <th>Password</th>
+                                    <th>Host</th>
+                                    <th>Port</th>
+                                    <th>Memory</th>
+                                    <th>Download / Install Progress</th>
+                                </tr>
+                            </thead>
+                            <tbody id="nodeCfgBody">
+                                <tr><td colspan="9" style="color: var(--muted); text-align: center; padding: 20px;">Loading node configurations...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
+    <script type="module" src="/js/common.js"></script>
     <script>
+        const JSON_HEADERS = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+        let cfgDirty = false;
+        let installPollInterval = null;
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            try {
+                if (window.Obsidianscout) {
+                    Obsidianscout.initTheme();
+                    const me = await Obsidianscout.requireAuth();
+                    if (!me) return;
+                    Obsidianscout.setUserBadge(me);
+                    Obsidianscout.setActiveNav();
+                    Obsidianscout.adjustNavForRole(me);
+
+                    if (!Obsidianscout.isSuperAdmin(me.role)) {
+                        document.getElementById("admin-locked")?.classList.remove("hidden");
+                        document.getElementById("admin-panel")?.classList.add("hidden");
+                        return;
+                    }
+                }
+                document.getElementById("admin-locked")?.classList.add("hidden");
+                document.getElementById("admin-panel")?.classList.remove("hidden");
+            } catch (e) {
+                console.warn("Auth initialization notice:", e);
+            }
+
+            fetchStatus();
+            loadConfig(true);
+            setInterval(fetchStatus, 3000);
+            setInterval(() => loadConfig(false), 12000);
+        });
+
         async function fetchStatus() {
             try {
                 const res = await fetch('/api/admin/cluster/redis/status');
@@ -349,34 +685,39 @@
                 const data = await res.json();
                 renderStatus(data);
             } catch (err) {
-                document.getElementById('statusBadge').className = 'status-badge degraded';
-                document.getElementById('statusBadge').textContent = 'UNREACHABLE';
+                const badge = document.getElementById('statusBadge');
+                if (badge) {
+                    badge.className = 'status-badge degraded';
+                    badge.textContent = 'UNREACHABLE';
+                }
             }
         }
 
         function renderStatus(data) {
             const badge = document.getElementById('statusBadge');
-            if (data.is_ready) {
-                badge.className = 'status-badge active';
-                badge.textContent = 'ACTIVE (Cached)';
-            } else {
-                badge.className = 'status-badge degraded';
-                badge.textContent = 'DEGRADED (Direct DB Fallback)';
+            if (badge) {
+                if (data.is_ready) {
+                    badge.className = 'status-badge active';
+                    badge.textContent = 'ACTIVE (Cached)';
+                } else {
+                    badge.className = 'status-badge degraded';
+                    badge.textContent = 'DEGRADED (Direct DB Fallback)';
+                }
             }
 
-            // Hit rate
             const hits = data.hits || 0;
             const misses = data.misses || 0;
             const total = hits + misses;
-            const rate = total > 0 ? ((hits / total) * 100).toFixed(1) : '100.0';
+            const rate = total > 0 ? ((hits / total) * 100).toFixed(1) : (data.is_ready ? '100.0' : '0.0');
             document.getElementById('hitRate').textContent = rate + ' %';
-            document.getElementById('hitCount').textContent = hits.toLocaleString() + ' hits / ' + misses.toLocaleString() + ' misses';
+            document.getElementById('hitCount').textContent = hits.toLocaleString() + ' hits / ' + misses.toLocaleString() + ' misses (this node)';
             document.getElementById('stampedesAvoided').textContent = (data.stampedes_avoided || 0).toLocaleString();
 
             const estSavedMs = hits * 285;
-            document.getElementById('latencySaved').textContent = (estSavedMs / 1000).toFixed(1) + ' s saved';
+            document.getElementById('latencySaved').textContent = (estSavedMs >= 1000)
+                ? (estSavedMs / 1000).toFixed(1) + ' s saved'
+                : estSavedMs.toLocaleString() + ' ms saved';
 
-            // Topology
             const role = data.is_host ? 'MASTER (Host)' : 'STANDBY REPLICA';
             document.getElementById('nodeRole').textContent = role;
             document.getElementById('hostEndpoint').textContent = 'Endpoint: ' + (data.active_endpoint || 'None');
@@ -384,71 +725,71 @@
             document.getElementById('canHostText').textContent = data.can_host_redis ? 'YES (Runtime Ready)' : 'NO (Client Only)';
             document.getElementById('leaseHolderText').textContent = data.lease_holder || data.active_endpoint || 'None';
 
-            // Memory Auto-Sizing
             const mem = data.memory_assessment || {};
             const totalMb = mem.totalOsMb || 1;
             const availMb = mem.availableOsMb || 0;
             const maxMemMb = mem.recommendedRedisMb || 0;
-            const usedMb = data.used_memory_mb || 0;
+            const usedBytes = data.used_memory_bytes || (data.used_memory_mb ? data.used_memory_mb * 1024 * 1024 : 0);
+            const usedText = data.used_memory_human || (usedBytes > 0 
+                ? (usedBytes < 1048576 ? (usedBytes / 1024).toFixed(1) + ' KB' : (usedBytes / 1048576).toFixed(1) + ' MB')
+                : '0 MB');
 
             document.getElementById('totalRamMb').textContent = totalMb.toLocaleString() + ' MB';
             document.getElementById('availRamMb').textContent = availMb.toLocaleString() + ' MB';
             document.getElementById('maxMemMb').textContent = maxMemMb.toLocaleString() + ' MB';
-            document.getElementById('usedMemMb').textContent = usedMb.toLocaleString() + ' MB';
+            document.getElementById('usedMemMb').textContent = usedText;
 
-            const pct = maxMemMb > 0 ? Math.min(100, (usedMb / maxMemMb) * 100).toFixed(1) : 0;
-            document.getElementById('memoryBar').style.width = pct + '%';
+            const totalBytes = maxMemMb * 1024 * 1024;
+            const pct = totalBytes > 0 ? ((usedBytes / totalBytes) * 100).toFixed(2) : '0.00';
+            const displayPct = usedBytes > 0 ? Math.max(1.5, parseFloat(pct)) : 0;
+            document.getElementById('memoryBar').style.width = displayPct + '%';
         }
 
-        async function purgeAll() {
-            if (!confirm('Purge all keys across the Redis cluster?')) return;
-            const msg = document.getElementById('actionMsg');
-            msg.textContent = 'Purging cache...';
+        async function triggerRedisInstall() {
+            const btn = document.getElementById('btnInstallRedis');
+            const msg = document.getElementById('installMsg');
+            const targetSelect = document.getElementById('installTargetNode');
+            const targetIp = targetSelect.value;
+            const sudoPassword = document.getElementById('installSudoPassword').value.trim();
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="material-symbols-outlined spin-icon" style="font-size: 18px;">sync</span> Initiating...';
+            msg.style.display = 'block';
+            msg.style.color = 'var(--accent, #3b82f6)';
+            msg.textContent = 'Triggering background installation on ' + (targetIp === 'all' ? 'all nodes' : targetIp) + '...';
+
             try {
-                const res = await fetch('/api/admin/cluster/redis/purge', { method: 'POST' });
-                const json = await res.json();
-                msg.style.color = '#10b981';
-                msg.textContent = json.message || 'Cache purged successfully.';
-                fetchStatus();
+                const res = await fetch('/api/admin/cluster/redis/install', {
+                    method: 'POST',
+                    headers: JSON_HEADERS,
+                    body: JSON.stringify({ sudoPassword: sudoPassword || null, targetIp: targetIp })
+                });
+                const data = await res.json();
+                msg.style.color = 'var(--success, #10b981)';
+                msg.textContent = 'Installation started! Monitoring download and install progress below...';
+                startInstallPolling();
             } catch (err) {
-                msg.style.color = '#ef4444';
-                msg.textContent = 'Failed to purge: ' + err.message;
+                msg.style.color = 'var(--danger, #ef4444)';
+                msg.textContent = 'Failed to trigger install: ' + err.message;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px;">download</span> Install Redis on Target';
             }
         }
 
-        async function resyncMemory() {
-            const msg = document.getElementById('actionMsg');
-            msg.textContent = 'Recalculating memory...';
-            try {
-                const res = await fetch('/api/admin/cluster/redis/resize', { method: 'POST' });
-                const json = await res.json();
-                msg.style.color = '#10b981';
-                msg.textContent = 'Memory auto-sizer re-evaluated.';
-                fetchStatus();
-            } catch (err) {
-                msg.style.color = '#ef4444';
-                msg.textContent = 'Resize error: ' + err.message;
-            }
+        function startInstallPolling() {
+            if (installPollInterval) clearInterval(installPollInterval);
+            let pollCycles = 0;
+            installPollInterval = setInterval(async () => {
+                pollCycles++;
+                await loadConfig(false);
+                await fetchStatus();
+                if (pollCycles > 60) {
+                    clearInterval(installPollInterval);
+                    installPollInterval = null;
+                }
+            }, 1500);
         }
-
-        async function triggerFailover() {
-            if (!confirm('Trigger test failover? The local host will resign leadership to verify standby replica promotion.')) return;
-            const msg = document.getElementById('actionMsg');
-            msg.textContent = 'Resigning leadership...';
-            try {
-                const res = await fetch('/api/admin/cluster/redis/failover', { method: 'POST' });
-                const json = await res.json();
-                msg.style.color = '#10b981';
-                msg.textContent = json.message || 'Failover initiated.';
-                setTimeout(fetchStatus, 1500);
-            } catch (err) {
-                msg.style.color = '#ef4444';
-                msg.textContent = 'Failover error: ' + err.message;
-            }
-        }
-
-        const JSON_HEADERS = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
-        let cfgDirty = false;
 
         function passwordLabel(n) {
             if (!n.requirePassword) return 'None';
@@ -459,9 +800,19 @@
             return Math.round(n.maxMemoryPercent * 100) + '% (' + n.minMemoryMb + '-' + n.maxMemoryMb + ' MB)';
         }
 
-        function cell(text, mismatch) {
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function cell(text, mismatch, html) {
             const td = document.createElement('td');
-            td.textContent = text;
+            if (html) {
+                td.innerHTML = html;
+            } else {
+                td.textContent = text;
+            }
             if (mismatch) td.className = 'mismatch';
             return td;
         }
@@ -471,32 +822,95 @@
             body.replaceChildren();
             const reachable = nodes.filter(n => n.reachable);
             const ref = reachable.find(n => n.isLocal) || reachable[0];
-            const columns = [
-                n => n.enabled ? 'Yes' : 'No',
-                passwordLabel,
-                n => n.host || 'Auto',
-                n => String(n.port),
-                memoryLabel
-            ];
+
+            // Update Target Selector options
+            const targetSelect = document.getElementById('installTargetNode');
+            const currentSelected = targetSelect.value;
+            targetSelect.innerHTML = '<option value="all">All Cluster Nodes</option>';
+            for (const n of nodes) {
+                const opt = document.createElement('option');
+                opt.value = n.nodeIp;
+                opt.textContent = n.nodeIp + (n.isLocal ? ' (this node)' : '');
+                targetSelect.appendChild(opt);
+            }
+            targetSelect.value = currentSelected || 'all';
+
             let mismatches = 0;
 
             for (const n of nodes) {
                 const tr = document.createElement('tr');
-                tr.appendChild(cell(n.nodeIp + (n.isLocal ? ' (this node)' : '')));
+                
+                // 1. Node IP with badge
+                const ipLabel = escapeHtml(n.nodeIp) + (n.isLocal ? ' <span class="node-badge local">this node</span>' : '');
+                tr.appendChild(cell('', false, ipLabel));
+
                 if (!n.reachable) {
                     const td = cell('Unreachable: ' + (n.error || 'no response'), true);
-                    td.colSpan = 6;
+                    td.colSpan = 8;
                     tr.appendChild(td);
                 } else {
-                    let rowMismatch = false;
-                    for (const col of columns) {
-                        const differs = ref && col(n) !== col(ref);
-                        if (differs) rowMismatch = true;
-                        tr.appendChild(cell(col(n), differs));
+                    // 2. Host Capability
+                    const capHtml = n.canHostRedis
+                        ? '<span class="node-badge capable">Can Host</span>'
+                        : '<span class="node-badge client-only">Client Only</span>';
+                    tr.appendChild(cell('', false, capHtml));
+
+                    // 3. Enabled
+                    const enDiff = ref && n.enabled !== ref.enabled;
+                    if (enDiff) mismatches++;
+                    tr.appendChild(cell(n.enabled ? 'Yes' : 'No', enDiff));
+
+                    // 4. State
+                    let stateHtml;
+                    if (!n.enabled) {
+                        stateHtml = '<span style="color: var(--muted);">Off</span>';
+                    } else if (n.isReady) {
+                        stateHtml = n.isHost 
+                            ? '<span style="color: var(--success); font-weight: 700;">Host (Master)</span>' 
+                            : '<span style="color: var(--accent); font-weight: 600;">Standby Replica</span>';
+                    } else {
+                        stateHtml = '<span style="color: var(--danger); font-weight: 600;">Not connected</span>';
                     }
-                    if (rowMismatch) mismatches++;
-                    const state = !n.enabled ? 'Off' : (n.isReady ? (n.isHost ? 'Host' : 'Connected') : 'Not connected');
-                    tr.appendChild(cell(state));
+                    tr.appendChild(cell('', false, stateHtml));
+
+                    // 5. Password
+                    const pwDiff = ref && passwordLabel(n) !== passwordLabel(ref);
+                    if (pwDiff) mismatches++;
+                    tr.appendChild(cell(passwordLabel(n), pwDiff));
+
+                    // 6. Host
+                    const hostDiff = ref && (n.host || 'Auto') !== (ref.host || 'Auto');
+                    if (hostDiff) mismatches++;
+                    tr.appendChild(cell(n.host || 'Auto', hostDiff));
+
+                    // 7. Port
+                    const portDiff = ref && String(n.port) !== String(ref.port);
+                    if (portDiff) mismatches++;
+                    tr.appendChild(cell(String(n.port), portDiff));
+
+                    // 8. Memory
+                    const memDiff = ref && memoryLabel(n) !== memoryLabel(ref);
+                    if (memDiff) mismatches++;
+                    tr.appendChild(cell(memoryLabel(n), memDiff));
+
+                    // 9. Download & Install Progress
+                    let progressHtml = '';
+                    if (n.installProgress) {
+                        // Install progress can carry package-manager output, so it is escaped before going into HTML.
+                        const pText = escapeHtml(n.installProgress);
+                        if (pText.toLowerCase().includes('fail') || pText.toLowerCase().includes('error')) {
+                            progressHtml = `<span class="node-badge error"><span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">error</span> ${pText}</span>`;
+                        } else if (pText.toLowerCase().includes('installed') || pText.toLowerCase().includes('verified') || pText.toLowerCase().includes('ready')) {
+                            progressHtml = `<span class="node-badge capable"><span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">check_circle</span> ${pText}</span>`;
+                        } else {
+                            progressHtml = `<span class="node-badge progressing"><span class="material-symbols-outlined spin-icon" style="font-size: 13px; vertical-align: middle;">sync</span> ${pText}</span>`;
+                        }
+                    } else {
+                        progressHtml = n.canHostRedis
+                            ? '<span style="color: var(--success); font-size: 12.5px;"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">check</span> Ready to Host</span>'
+                            : '<span style="color: var(--muted); font-size: 12.5px;">Client Only (Needs Install)</span>';
+                    }
+                    tr.appendChild(cell('', false, progressHtml));
                 }
                 body.appendChild(tr);
             }
@@ -525,99 +939,135 @@
             document.getElementById('cfgMinMb').value = n.minMemoryMb;
             document.getElementById('cfgMaxMb').value = n.maxMemoryMb;
             syncPasswordFields();
-            cfgDirty = false;
         }
 
         function syncPasswordFields() {
-            const required = document.getElementById('cfgRequirePassword').checked;
-            document.getElementById('cfgPassword').disabled = !required;
-            document.getElementById('cfgClearPassword').disabled = !required;
+            const req = document.getElementById('cfgRequirePassword').checked;
+            document.getElementById('cfgPassword').disabled = !req;
+            document.getElementById('cfgClearPassword').disabled = !req;
         }
 
-        async function loadConfig(resetForm) {
+        async function loadConfig(forceFormUpdate) {
             try {
-                const res = await fetch('/api/admin/cluster/redis/config', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                if (!res.ok) throw new Error('Settings returned ' + res.status);
-                const nodes = await res.json();
-                const ref = renderNodeTable(nodes);
-                // Don't overwrite what someone is typing on the periodic refresh.
-                if (ref && (resetForm || !cfgDirty)) fillForm(ref);
+                const res = await fetch('/api/admin/cluster/redis/config', { headers: JSON_HEADERS });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                const ref = renderNodeTable(data.nodes || []);
+                if (ref && (forceFormUpdate || !cfgDirty)) {
+                    fillForm(ref);
+                    cfgDirty = false;
+                }
             } catch (err) {
                 const body = document.getElementById('nodeCfgBody');
                 body.replaceChildren();
                 const tr = document.createElement('tr');
-                const td = cell('Could not load settings: ' + err.message, true);
-                td.colSpan = 7;
+                const td = cell('Failed to load settings: ' + err.message, true);
+                td.colSpan = 9;
                 tr.appendChild(td);
                 body.appendChild(tr);
             }
         }
 
-        async function saveConfig(event) {
-            event.preventDefault();
+        async function saveConfig(ev) {
+            ev.preventDefault();
+            const btn = document.getElementById('cfgSaveBtn');
             const msg = document.getElementById('cfgMsg');
             const results = document.getElementById('cfgResults');
+            msg.textContent = 'Saving to all reachable nodes...';
+            msg.style.color = '';
             results.replaceChildren();
+            btn.disabled = true;
 
-            const minMb = parseInt(document.getElementById('cfgMinMb').value, 10);
-            const maxMb = parseInt(document.getElementById('cfgMaxMb').value, 10);
-            if (maxMb < minMb) {
-                msg.style.color = '#ef4444';
-                msg.textContent = 'Max memory must be at least the min memory.';
-                return;
-            }
-            if (!confirm('Save these Redis settings to every node? Redis restarts on each node.')) return;
-
-            const body = {
+            const percent = parseFloat(document.getElementById('cfgMaxPercent').value) / 100.0;
+            const payload = {
                 enabled: document.getElementById('cfgEnabled').checked,
                 requirePassword: document.getElementById('cfgRequirePassword').checked,
-                host: document.getElementById('cfgHost').value.trim(),
-                port: parseInt(document.getElementById('cfgPort').value, 10),
+                password: document.getElementById('cfgPassword').value,
                 clearPassword: document.getElementById('cfgClearPassword').checked,
-                maxMemoryPercent: parseInt(document.getElementById('cfgMaxPercent').value, 10) / 100,
-                minMemoryMb: minMb,
-                maxMemoryMb: maxMb
+                host: document.getElementById('cfgHost').value.trim(),
+                port: parseInt(document.getElementById('cfgPort').value, 10) || 6379,
+                maxMemoryPercent: isNaN(percent) ? 0.4 : percent,
+                minMemoryMb: parseInt(document.getElementById('cfgMinMb').value, 10) || 64,
+                maxMemoryMb: parseInt(document.getElementById('cfgMaxMb').value, 10) || 8192
             };
-            const password = document.getElementById('cfgPassword').value;
-            if (password) body.password = password;
 
-            const btn = document.getElementById('cfgSaveBtn');
-            btn.disabled = true;
-            msg.style.color = '';
-            msg.textContent = 'Saving to all nodes...';
             try {
-                const res = await fetch('/api/admin/cluster/redis/config', { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(body) });
-                if (!res.ok) throw new Error('Save returned ' + res.status);
-                const list = await res.json();
-                const failed = list.filter(r => !r.success).length;
-                msg.style.color = failed ? '#ef4444' : '#10b981';
-                msg.textContent = failed
-                    ? failed + ' of ' + list.length + ' node(s) did not save. Fix them and save again.'
-                    : 'Saved on all ' + list.length + ' node(s).';
-                for (const r of list) {
+                const res = await fetch('/api/admin/cluster/redis/config', {
+                    method: 'POST',
+                    headers: JSON_HEADERS,
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                msg.textContent = (data.failedCount === 0)
+                    ? 'Saved successfully across all ' + data.savedCount + ' reachable node(s).'
+                    : 'Saved to ' + data.savedCount + ' node(s), but failed on ' + data.failedCount + '.';
+                msg.style.color = data.failedCount === 0 ? 'var(--success, #10b981)' : 'var(--danger, #ef4444)';
+
+                for (const r of (data.results || [])) {
                     const li = document.createElement('li');
-                    li.textContent = r.targetIp + ': ' + r.message;
-                    li.style.color = r.success ? '' : '#ef4444';
+                    li.textContent = r.nodeIp + ': ' + (r.success ? 'Saved and restarted' : ('Failed - ' + (r.error || 'unknown error')));
+                    li.style.color = r.success ? '' : 'var(--danger, #ef4444)';
                     results.appendChild(li);
                 }
                 cfgDirty = false;
-                // Give each node a moment to restart Redis before re-reading.
                 setTimeout(() => { loadConfig(true); fetchStatus(); }, 3000);
             } catch (err) {
-                msg.style.color = '#ef4444';
+                msg.style.color = 'var(--danger, #ef4444)';
                 msg.textContent = 'Failed to save: ' + err.message;
             } finally {
                 btn.disabled = false;
             }
         }
 
+        async function purgeAll() {
+            if (!confirm('Purge all cached keys across the Redis cluster?')) return;
+            const msg = document.getElementById('actionMsg');
+            msg.textContent = 'Purging cache...';
+            try {
+                const res = await fetch('/api/admin/cluster/redis/purge', { method: 'POST' });
+                const json = await res.json();
+                msg.style.color = 'var(--success, #10b981)';
+                msg.textContent = json.message || 'Cache purged successfully.';
+                fetchStatus();
+            } catch (err) {
+                msg.style.color = 'var(--danger, #ef4444)';
+                msg.textContent = 'Failed to purge: ' + err.message;
+            }
+        }
+
+        async function resyncMemory() {
+            const msg = document.getElementById('actionMsg');
+            msg.textContent = 'Recalculating memory limits...';
+            try {
+                const res = await fetch('/api/admin/cluster/redis/resize', { method: 'POST' });
+                const json = await res.json();
+                msg.style.color = 'var(--success, #10b981)';
+                msg.textContent = 'Memory auto-sizer re-evaluated.';
+                fetchStatus();
+            } catch (err) {
+                msg.style.color = 'var(--danger, #ef4444)';
+                msg.textContent = 'Resize error: ' + err.message;
+            }
+        }
+
+        async function triggerFailover() {
+            if (!confirm('Trigger test failover? The local host will resign leadership to verify standby replica promotion.')) return;
+            const msg = document.getElementById('actionMsg');
+            msg.textContent = 'Resigning leadership...';
+            try {
+                const res = await fetch('/api/admin/cluster/redis/failover', { method: 'POST' });
+                const json = await res.json();
+                msg.style.color = 'var(--success, #10b981)';
+                msg.textContent = json.message || 'Failover initiated.';
+                setTimeout(fetchStatus, 1500);
+            } catch (err) {
+                msg.style.color = 'var(--danger, #ef4444)';
+                msg.textContent = 'Failover error: ' + err.message;
+            }
+        }
+
         document.getElementById('cfgForm').addEventListener('input', () => { cfgDirty = true; });
         document.getElementById('cfgRequirePassword').addEventListener('change', syncPasswordFields);
-
-        fetchStatus();
-        loadConfig(true);
-        setInterval(fetchStatus, 3000);
-        setInterval(() => loadConfig(false), 15000);
     </script>
 </body>
 </html>

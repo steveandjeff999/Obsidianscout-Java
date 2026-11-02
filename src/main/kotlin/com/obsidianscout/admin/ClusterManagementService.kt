@@ -1368,7 +1368,9 @@ object ClusterManagementService {
             minMemoryMb = redis.min_memory_mb,
             maxMemoryMb = redis.max_memory_mb,
             isReady = com.obsidianscout.cache.RedisClusterCoordinator.isReady,
-            isHost = com.obsidianscout.cache.RedisClusterCoordinator.isHost
+            isHost = com.obsidianscout.cache.RedisClusterCoordinator.isHost,
+            canHostRedis = com.obsidianscout.cache.RedisClusterCoordinator.canHostRedis,
+            installProgress = com.obsidianscout.cache.RedisClusterCoordinator.installProgress
         )
     }
 
@@ -1445,6 +1447,52 @@ object ClusterManagementService {
     }
 
     /** Applies [req] on every node. Each node merges it onto its own settings, so unset fields stay per node. */
+    suspend fun pushRedisInstallToCluster(req: com.obsidianscout.routes.RedisInstallRequest): List<ActionResultResponse> = withContext(Dispatchers.IO) {
+        val cluster = getClusterNodes()
+        val localIp = getLocalTailscaleIp()
+        val bodyBytes = JsonSupport.json.encodeToString(com.obsidianscout.routes.RedisInstallRequest.serializer(), req)
+            .toByteArray(StandardCharsets.UTF_8)
+
+        coroutineScope {
+            cluster.nodes.map { node ->
+                async {
+                    if (req.targetIp != "all" && req.targetIp != node.ip && !(req.targetIp == "local" && node.isLocal)) {
+                        return@async ActionResultResponse(true, "Skipped", node.ip)
+                    }
+                    if (node.isLocal || node.ip == localIp) {
+                        applyLocalRedisInstall(req)
+                    } else {
+                        val appPort = if (node.appPort > 0) node.appPort else AppConfigLoader.load().server.port
+                        val url = "http://${node.ip}:$appPort/api/admin/cluster/nodes/local/redis/install"
+                        try {
+                            val httpReq = buildSignedClusterRequest(url, "POST", bodyBytes)
+                                .timeout(Duration.ofSeconds(120))
+                                .header("Content-Type", "application/json")
+                                .POST(HttpRequest.BodyPublishers.ofByteArray(bodyBytes))
+                                .build()
+                            val resp = getHttpClient().send(httpReq, HttpResponse.BodyHandlers.ofString())
+                            if (resp.statusCode() == 200) {
+                                JsonSupport.json.decodeFromString<ActionResultResponse>(resp.body())
+                            } else {
+                                ActionResultResponse(false, "Remote server returned HTTP ${resp.statusCode()}", node.ip)
+                            }
+                        } catch (e: Exception) {
+                            ActionResultResponse(false, "Failed to trigger install on ${node.ip}: ${e.message}", node.ip)
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
+    fun applyLocalRedisInstall(req: com.obsidianscout.routes.RedisInstallRequest): ActionResultResponse {
+        val localIp = getLocalTailscaleIp()
+        if (!com.obsidianscout.cache.RedisClusterCoordinator.triggerInstall(req.sudoPassword)) {
+            return ActionResultResponse(false, "An install is already running on $localIp, or Redis is still starting up", localIp)
+        }
+        return ActionResultResponse(true, "Installation initiated on $localIp", localIp)
+    }
+
     suspend fun pushRedisConfigToCluster(req: com.obsidianscout.routes.RedisConfigUpdateRequest): List<ActionResultResponse> = withContext(Dispatchers.IO) {
         // Check it once here so a bad value fails up front instead of on every node.
         mergeRedisConfig(AppConfigLoader.load().redis, req).onFailure {
