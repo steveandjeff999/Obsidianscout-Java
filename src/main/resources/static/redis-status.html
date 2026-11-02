@@ -764,9 +764,17 @@
                     headers: JSON_HEADERS,
                     body: JSON.stringify({ sudoPassword: sudoPassword || null, targetIp: targetIp })
                 });
-                const data = await res.json();
-                msg.style.color = 'var(--success, #10b981)';
-                msg.textContent = 'Installation started! Monitoring download and install progress below...';
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                // One { success, message, targetIp } result per node; skipped nodes report success.
+                const list = await res.json();
+                const failed = list.filter(r => !r.success);
+                if (failed.length === 0) {
+                    msg.style.color = 'var(--success, #10b981)';
+                    msg.textContent = 'Installation started. Progress shows in the node table below.';
+                } else {
+                    msg.style.color = 'var(--danger, #ef4444)';
+                    msg.textContent = failed.map(r => r.targetIp + ': ' + r.message).join(' | ');
+                }
                 startInstallPolling();
             } catch (err) {
                 msg.style.color = 'var(--danger, #ef4444)';
@@ -952,7 +960,8 @@
                 const res = await fetch('/api/admin/cluster/redis/config', { headers: JSON_HEADERS });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
-                const ref = renderNodeTable(data.nodes || []);
+                // The server returns a plain array of nodes.
+                const ref = renderNodeTable(Array.isArray(data) ? data : (data.nodes || []));
                 if (ref && (forceFormUpdate || !cfgDirty)) {
                     fillForm(ref);
                     cfgDirty = false;
@@ -993,19 +1002,28 @@
 
             try {
                 const res = await fetch('/api/admin/cluster/redis/config', {
-                    method: 'POST',
+                    method: 'PUT',
                     headers: JSON_HEADERS,
                     body: JSON.stringify(payload)
                 });
-                const data = await res.json();
-                msg.textContent = (data.failedCount === 0)
-                    ? 'Saved successfully across all ' + data.savedCount + ' reachable node(s).'
-                    : 'Saved to ' + data.savedCount + ' node(s), but failed on ' + data.failedCount + '.';
-                msg.style.color = data.failedCount === 0 ? 'var(--success, #10b981)' : 'var(--danger, #ef4444)';
+                if (!res.ok) {
+                    const text = await res.text();
+                    let detail = text;
+                    try { const j = JSON.parse(text); detail = j.message || j.error || text; } catch (_) {}
+                    throw new Error('HTTP ' + res.status + (detail ? ' - ' + detail : ''));
+                }
+                // The server returns one { success, message, targetIp } result per node.
+                const list = await res.json();
+                const savedCount = list.filter(r => r.success).length;
+                const failedCount = list.length - savedCount;
+                msg.textContent = (failedCount === 0)
+                    ? 'Saved successfully across all ' + savedCount + ' reachable node(s).'
+                    : 'Saved to ' + savedCount + ' node(s), but failed on ' + failedCount + '.';
+                msg.style.color = failedCount === 0 ? 'var(--success, #10b981)' : 'var(--danger, #ef4444)';
 
-                for (const r of (data.results || [])) {
+                for (const r of list) {
                     const li = document.createElement('li');
-                    li.textContent = r.nodeIp + ': ' + (r.success ? 'Saved and restarted' : ('Failed - ' + (r.error || 'unknown error')));
+                    li.textContent = r.targetIp + ': ' + (r.success ? 'Saved and restarted' : ('Failed - ' + (r.message || 'unknown error')));
                     li.style.color = r.success ? '' : 'var(--danger, #ef4444)';
                     results.appendChild(li);
                 }
